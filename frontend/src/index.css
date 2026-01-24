@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #0f172a;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700;
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-white;
+  }
+
+  .badge {
+    @apply px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply bg-green-500/20 text-green-400 border border-green-500/30;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+  }
+
+  .badge-error {
+    @apply bg-red-500/20 text-red-400 border border-red-500/30;
+  }
+
+  .badge-info {
+    @apply bg-blue-500/20 text-blue-400 border border-blue-500/30;
+  }
+}
+
+/* Tool Call 스타일 - KAgent 스타일 */
+.prose details {
+  @apply my-2 rounded-lg border border-slate-600 bg-slate-800/50 overflow-hidden;
+}
+
+.prose details summary {
+  @apply px-4 py-2.5 cursor-pointer select-none font-medium text-slate-200 hover:bg-slate-700/50 transition-colors;
+  list-style: none;
+}
+
+.prose details summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose details summary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.2s;
+  font-size: 0.75rem;
+}
+
+.prose details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.prose details[open] summary {
+  @apply border-b border-slate-600;
+}
+
+/* 중첩된 details (Arguments, Results) */
+.prose details details {
+  @apply my-2 mx-4 rounded border border-slate-600/50 bg-slate-800/30;
+}
+
+.prose details details summary {
+  @apply px-3 py-2 text-sm;
+}
+
+/* 중첩된 details - 닫힌 상태 (기본) */
+.prose details details summary::before {
+  content: '▶' !important;
+  display: inline-block !important;
+  margin-right: 6px !important;
+  transition: transform 0.2s !important;
+  font-size: 0.65rem !important;
+  transform: rotate(0deg) !important;
+}
+
+/* 중첩된 details - 열린 상태 */
+.prose details details[open] > summary::before {
+  transform: rotate(90deg) !important;
+}
+
+/* 코드 블록 스타일 - 가로 스크롤 방지 */
+.prose details pre {
+  @apply my-2 mx-4 rounded bg-slate-900/50;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  word-wrap: break-word !important;
+  white-space: pre-wrap !important;
+}
+
+.prose details pre code {
+  word-wrap: break-word !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: break-word !important;
+}
+
+.prose details p {
+  @apply my-2 mx-4;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* 일반 코드 블록도 줄바꿈 */
+.prose pre {
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  word-wrap: break-word !important;
+  white-space: pre-wrap !important;
+}
+
+.prose code {
+  word-wrap: break-word !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: break-word !important;
+}
