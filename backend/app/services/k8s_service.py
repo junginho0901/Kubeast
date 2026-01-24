@@ -34,9 +34,26 @@ class K8sService:
             else:
                 config.load_kube_config()
             
-            self.v1 = client.CoreV1Api()
-            self.apps_v1 = client.AppsV1Api()
-            self.version_api = client.VersionApi()
+            # 연결 풀 크기 증설 (200명 동시 접속 대응)
+            # 기본 설정 복사 및 수정
+            c = client.Configuration.get_default_copy()
+            c.client_side_validation = False
+            
+            # ApiClient 생성 시 pool_maxsize 설정
+            api_client = client.ApiClient(configuration=c)
+            if hasattr(api_client, 'rest_client') and hasattr(api_client.rest_client, 'pool_manager'):
+                 api_client.rest_client.pool_manager.connection_pool_kw['maxsize'] = 200
+            
+            self.v1 = client.CoreV1Api(api_client=api_client)
+            self.apps_v1 = client.AppsV1Api(api_client=api_client)
+            self.version_api = client.VersionApi(api_client=api_client)
+            
+            # 간단한 메모리 캐시 (TTL 30초)
+            self._cache = {}
+            self._cache_ttl = 30  # seconds
+            self.v1 = client.CoreV1Api(api_client=api_client)
+            self.apps_v1 = client.AppsV1Api(api_client=api_client)
+            self.version_api = client.VersionApi(api_client=api_client)
             
             # 간단한 메모리 캐시 (TTL 30초)
             self._cache = {}
@@ -45,6 +62,20 @@ class K8sService:
             print(f"Warning: Kubernetes client initialization failed: {e}")
             self.v1 = None
             self.apps_v1 = None
+            
+    def get_fresh_core_v1_api(self):
+        """로그 스트리밍용 독립 CoreV1Api 클라이언트 생성 (연결 풀 고갈 방지)"""
+        try:
+            # 설정 로드
+            c = client.Configuration.get_default_copy()
+            c.client_side_validation = False
+            
+            # 새 ApiClient 생성 (새로운 연결 풀 할당)
+            new_api_client = client.ApiClient(configuration=c)
+            return client.CoreV1Api(api_client=new_api_client)
+        except Exception as e:
+            print(f"Error creating fresh CoreV1Api: {e}")
+            return self.v1  # 실패 시 기존 클라이언트 반환 (Fallback)
     
     def _get_cache(self, key: str):
         """캐시에서 데이터 가져오기"""

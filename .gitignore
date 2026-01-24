@@ -71,3 +71,4 @@ kubeconfig*.yaml
 
 # External dependencies
 kagent/
+argo-cd/
