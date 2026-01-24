@@ -15,9 +15,16 @@ from app.models.cluster import (
     ClusterOverview
 )
 import asyncio
+from collections import defaultdict
 
 router = APIRouter()
 k8s_service = K8sService()
+
+# WebSocket 연결 추적 (Pod별 활성 연결 관리)
+# Key: "namespace/pod_name", Value: list of WebSocket objects
+active_websocket_connections = defaultdict(list)
+MAX_CONNECTIONS_PER_POD = 2  # Pod당 최대 2개 연결 (초과 시 이전 연결 자동 종료)
+MAX_TOTAL_CONNECTIONS = 20  # 전체 최대 연결 수
 
 
 @router.get("/overview", response_model=ClusterOverview)
@@ -424,12 +431,45 @@ async def websocket_pod_logs(
     container: Optional[str] = Query(None),
     tail_lines: int = Query(100)
 ):
-    """WebSocket을 통한 실시간 로그 스트리밍"""
+    """WebSocket을 통한 실시간 로그 스트리밍 (자동 이전 연결 종료)"""
+    pod_key = f"{namespace}/{pod_name}"
+    
+    # 전체 연결 수 제한 체크
+    total_connections = sum(len(conns) for conns in active_websocket_connections.values())
+    if total_connections >= MAX_TOTAL_CONNECTIONS:
+        await websocket.close(code=1008, reason="Server connection limit reached")
+        return
+    
+    # 이전 연결 자동 종료 (새 연결 우선) - 백그라운드에서 비동기 처리
+    if len(active_websocket_connections[pod_key]) >= MAX_CONNECTIONS_PER_POD:
+        print(f"[WebSocket] Pod {pod_key}: Closing old connections (limit: {MAX_CONNECTIONS_PER_POD})")
+        # 오래된 연결부터 종료 (FIFO) - 블로킹 방지를 위해 백그라운드 태스크로 처리
+        while len(active_websocket_connections[pod_key]) >= MAX_CONNECTIONS_PER_POD:
+            old_ws = active_websocket_connections[pod_key].pop(0)
+            
+            async def close_old_connection(ws, key):
+                try:
+                    await ws.close(code=1000, reason="New connection established")
+                    print(f"[WebSocket] Closed old connection for {key}")
+                except Exception as e:
+                    print(f"[WebSocket] Error closing old connection: {e}")
+            
+            # 백그라운드에서 비동기 종료 (블로킹 방지)
+            asyncio.create_task(close_old_connection(old_ws, pod_key))
+    
+    # 새 연결 수락
     await websocket.accept()
+    active_websocket_connections[pod_key].append(websocket)
+    print(f"[WebSocket] New connection for {pod_key} (total: {len(active_websocket_connections[pod_key])})")
     
     resp = None
+    executor = None
     try:
         v1 = k8s_service.v1
+        
+        # 전용 ThreadPoolExecutor 생성 (리소스 격리)
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"log-{pod_name}")
         
         # Kubernetes API 호출
         resp = v1.read_namespaced_pod_log(
@@ -443,40 +483,75 @@ async def websocket_pod_logs(
         
         # 비동기로 로그 읽기 및 전송
         loop = asyncio.get_event_loop()
+        timeout_seconds = 60  # 1분 타임아웃 (리소스 절약)
         
         while True:
             try:
-                # 1KB씩 읽기 (비동기)
-                chunk = await loop.run_in_executor(None, resp.read, 1024)
+                # 타임아웃과 함께 읽기 (전용 executor 사용)
+                chunk = await asyncio.wait_for(
+                    loop.run_in_executor(executor, resp.read, 1024),
+                    timeout=timeout_seconds
+                )
                 
                 if not chunk:
                     break
                 
-                # WebSocket으로 전송
-                await websocket.send_bytes(chunk)
+                # WebSocket으로 전송 (타임아웃 추가)
+                await asyncio.wait_for(
+                    websocket.send_bytes(chunk),
+                    timeout=5.0
+                )
                 
+            except asyncio.TimeoutError:
+                # 타임아웃 발생 시 연결 종료
+                print(f"[WebSocket] Timeout for {pod_key}")
+                break
             except WebSocketDisconnect:
                 # 클라이언트 연결 끊김
+                print(f"[WebSocket] Client disconnected: {pod_key}")
                 break
             except Exception as e:
                 # 에러 발생 시 전송 후 종료
-                await websocket.send_text(f"Error: {str(e)}")
+                print(f"[WebSocket] Error streaming logs for {pod_key}: {e}")
+                try:
+                    await websocket.send_text(f"Error: {str(e)}")
+                except:
+                    pass
                 break
         
     except WebSocketDisconnect:
-        pass
+        print(f"[WebSocket] Disconnected during setup: {pod_key}")
     except Exception as e:
+        print(f"[WebSocket] Connection error for {pod_key}: {e}")
         try:
             await websocket.send_text(f"Connection Error: {str(e)}")
         except:
             pass
     finally:
-        # 연결 정리
+        # 연결 추적에서 제거
+        try:
+            active_websocket_connections[pod_key].remove(websocket)
+            if not active_websocket_connections[pod_key]:
+                del active_websocket_connections[pod_key]
+            print(f"[WebSocket] Removed connection for {pod_key}")
+        except (ValueError, KeyError):
+            pass
+        
+        # Kubernetes API 연결 정리
         if resp:
             try:
                 resp.release_conn()
-            except:
-                pass
+            except Exception as e:
+                print(f"[WebSocket] Error releasing connection: {e}")
+        
+        # ThreadPoolExecutor 정리
+        if executor:
+            try:
+                executor.shutdown(wait=False)
+            except Exception as e:
+                print(f"[WebSocket] Error shutting down executor: {e}")
+        
+        # WebSocket 종료
         try:
             await websocket.close()
         except:
