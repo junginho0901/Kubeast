@@ -18,6 +18,10 @@ export default defineConfig({
         target: 'http://backend:8000',
         changeOrigin: true,
       },
+      '/health': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+      },
       '/ws': {
         target: 'ws://backend:8000',
         ws: true,

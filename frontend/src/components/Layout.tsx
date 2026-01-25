@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { 
   LayoutDashboard, 
   Boxes, 
@@ -8,6 +9,7 @@ import {
   Activity,
   Layers
 } from 'lucide-react'
+import { api } from '@/services/api'
 
 const navigation = [
   { name: '대시보드', href: '/', icon: LayoutDashboard },
@@ -18,6 +20,26 @@ const navigation = [
 
 export default function Layout() {
   const location = useLocation()
+  const [clusterStatus, setClusterStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
+
+  useEffect(() => {
+    const checkClusterStatus = async () => {
+      try {
+        const health = await api.getHealth()
+        setClusterStatus(health.kubernetes === 'connected' ? 'connected' : 'disconnected')
+      } catch (error) {
+        setClusterStatus('disconnected')
+      }
+    }
+
+    // 초기 체크
+    checkClusterStatus()
+
+    // 5초마다 상태 체크
+    const interval = setInterval(checkClusterStatus, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -59,8 +81,22 @@ export default function Layout() {
           {/* Footer */}
           <div className="px-6 py-4 border-t border-slate-700">
             <div className="flex items-center gap-2 text-sm text-slate-400">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span>클러스터 연결됨</span>
+              {clusterStatus === 'checking' ? (
+                <>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span>연결 확인 중...</span>
+                </>
+              ) : clusterStatus === 'connected' ? (
+                <>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>클러스터 연결됨</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span>클러스터 연결 안 됨</span>
+                </>
+              )}
             </div>
           </div>
         </div>

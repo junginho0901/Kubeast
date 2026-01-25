@@ -261,4 +261,13 @@ export const api = {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/pods/${name}/describe`)
     return data
   },
+
+  // Health check
+  getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
+    // /health는 /api/v1가 아닌 루트에 있음
+    const { data } = await axios.get('/health', {
+      baseURL: '', // baseURL 무시하고 상대 경로 사용
+    })
+    return data
+  },
 }

@@ -42,10 +42,27 @@ async def root():
 @app.get("/health")
 async def health_check():
     """상세 헬스 체크"""
+    from app.services.k8s_service import K8sService
+    
+    # Kubernetes 연결 체크
+    kubernetes_status = "disconnected"
+    try:
+        k8s_service = K8sService()
+        # 간단한 API 호출로 연결 확인
+        k8s_service.v1.list_namespace(limit=1)
+        kubernetes_status = "connected"
+    except Exception as e:
+        kubernetes_status = f"error: {str(e)[:50]}"
+    
+    # OpenAI 설정 체크
+    openai_status = "not_configured"
+    if settings.OPENAI_API_KEY:
+        openai_status = "configured"
+    
     return {
-        "status": "healthy",
-        "kubernetes": "connected",  # TODO: 실제 K8s 연결 체크
-        "openai": "configured"  # TODO: 실제 OpenAI API 체크
+        "status": "healthy" if kubernetes_status == "connected" else "degraded",
+        "kubernetes": kubernetes_status,
+        "openai": openai_status
     }
 
 
