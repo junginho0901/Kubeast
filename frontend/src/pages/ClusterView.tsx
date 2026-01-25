@@ -11,7 +11,8 @@ import {
   X,
   FileCode,
   Terminal,
-  ChevronDown
+  ChevronDown,
+  Search
 } from 'lucide-react'
 
 interface PodDetail {
@@ -40,6 +41,7 @@ export default function ClusterView() {
   const [logs, setLogs] = useState<string>('')
   const [isStreamingLogs, setIsStreamingLogs] = useState(false)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
@@ -210,13 +212,21 @@ export default function ClusterView() {
     enabled: showManifest && !!selectedPod,
   })
 
-  // 노드별로 Pod 그룹화
-  const podsByNode = allPods?.reduce((acc, pod) => {
+  // 검색어로 Pod 필터링
+  const filteredPods = allPods?.filter(pod => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    return pod.name.toLowerCase().includes(query) || 
+           pod.namespace.toLowerCase().includes(query)
+  }) || []
+
+  // 노드별로 Pod 그룹화 (필터링된 Pod 기준)
+  const podsByNode = filteredPods.reduce((acc, pod) => {
     const nodeName = pod.node_name || 'Unscheduled'
     if (!acc[nodeName]) acc[nodeName] = []
     acc[nodeName].push(pod)
     return acc
-  }, {} as Record<string, any[]>) || {}
+  }, {} as Record<string, any[]>)
 
   const getHealthIcon = (status: string, phase: string) => {
     if (phase === 'Running' && status === 'Running') {
@@ -267,6 +277,25 @@ export default function ClusterView() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* 파드 이름 검색 */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="파드 이름 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors w-64"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+              >
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            )}
+          </div>
           {/* 네임스페이스 선택 - 커스텀 드롭다운 */}
           <div className="relative" ref={namespaceDropdownRef}>
             <button
@@ -333,8 +362,31 @@ export default function ClusterView() {
         <div className="text-slate-400">로딩 중...</div>
       ) : (
         <div className="space-y-6">
+          {/* 검색 결과 정보 */}
+          {searchQuery && (
+            <div className="text-sm text-slate-400">
+              검색 결과: <span className="text-white font-medium">{filteredPods.length}</span>개
+              {filteredPods.length !== (allPods?.length || 0) && (
+                <span className="ml-2">
+                  (전체 {allPods?.length || 0}개 중)
+                </span>
+              )}
+            </div>
+          )}
+          
+          {/* 검색 결과가 없을 때 */}
+          {searchQuery && filteredPods.length === 0 && (
+            <div className="card text-center py-12">
+              <Search className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">
+                "{searchQuery}"에 해당하는 Pod를 찾을 수 없습니다
+              </p>
+            </div>
+          )}
+
           {/* 노드별 Pod 표시 */}
-          {Object.entries(podsByNode).map(([nodeName, pods]) => (
+          {Object.keys(podsByNode).length > 0 ? (
+            Object.entries(podsByNode).map(([nodeName, pods]) => (
             <div key={nodeName} className="card">
               <div className="flex items-center gap-3 mb-4">
                 <Server className="w-6 h-6 text-cyan-400" />
@@ -366,7 +418,15 @@ export default function ClusterView() {
                 ))}
               </div>
             </div>
-          ))}
+            ))
+          ) : (
+            !searchQuery && (
+              <div className="card text-center py-12">
+                <Box className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-400">Pod가 없습니다</p>
+              </div>
+            )
+          )}
         </div>
       )}
 
