@@ -30,27 +30,27 @@ export default function Dashboard() {
   })
 
   // 네임스페이스 목록
-  const { data: namespaces } = useQuery({
+  const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
     queryKey: ['namespaces'],
     queryFn: api.getNamespaces,
     enabled: selectedResourceType === 'namespaces',
   })
 
   // 전체 Pod 목록
-  const { data: allPods } = useQuery({
+  const { data: allPods, isLoading: isLoadingPods } = useQuery({
     queryKey: ['all-pods'],
     queryFn: api.getAllPods,
     enabled: selectedResourceType === 'pods',
   })
 
   // 전체 Services 목록 (모든 네임스페이스)
-  const { data: allNamespaces } = useQuery({
+  const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
     queryFn: api.getNamespaces,
     enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments',
   })
 
-  const { data: allServices } = useQuery({
+  const { data: allServices, isLoading: isLoadingServices } = useQuery({
     queryKey: ['all-services'],
     queryFn: async () => {
       if (!allNamespaces) return []
@@ -63,7 +63,7 @@ export default function Dashboard() {
   })
 
   // 전체 Deployments 목록
-  const { data: allDeployments } = useQuery({
+  const { data: allDeployments, isLoading: isLoadingDeployments } = useQuery({
     queryKey: ['all-deployments'],
     queryFn: async () => {
       if (!allNamespaces) return []
@@ -76,15 +76,23 @@ export default function Dashboard() {
   })
 
   // 전체 PVC 목록
-  const { data: allPVCs } = useQuery({
+  const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
     queryKey: ['all-pvcs'],
     queryFn: () => api.getPVCs(),
     enabled: selectedResourceType === 'pvcs',
   })
 
-  // 노드 목록
+  // 노드 목록 (차트 표시용 - 항상 가져오기)
   const { data: nodes } = useQuery({
     queryKey: ['nodes'],
+    queryFn: api.getNodes,
+    staleTime: 30000,
+    refetchInterval: 60000,
+  })
+
+  // 노드 목록 (모달용)
+  const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
+    queryKey: ['modal-nodes'],
     queryFn: api.getNodes,
     enabled: selectedResourceType === 'nodes',
   })
@@ -123,8 +131,19 @@ export default function Dashboard() {
     if (selectedResourceType === 'services') return allServices?.length || 0
     if (selectedResourceType === 'deployments') return allDeployments?.length || 0
     if (selectedResourceType === 'pvcs') return allPVCs?.length || 0
-    if (selectedResourceType === 'nodes') return nodes?.length || 0
+    if (selectedResourceType === 'nodes') return modalNodes?.length || 0
     return 0
+  }
+
+  // 로딩 상태 확인
+  const isLoadingResource = () => {
+    if (selectedResourceType === 'namespaces') return isLoadingNamespaces
+    if (selectedResourceType === 'pods') return isLoadingPods
+    if (selectedResourceType === 'services') return isLoadingAllNamespaces || isLoadingServices
+    if (selectedResourceType === 'deployments') return isLoadingAllNamespaces || isLoadingDeployments
+    if (selectedResourceType === 'pvcs') return isLoadingPVCs
+    if (selectedResourceType === 'nodes') return isLoadingNodes
+    return false
   }
 
   if (isLoading) {
@@ -201,6 +220,20 @@ export default function Dashboard() {
       }))
     : []
 
+  // 노드 상태 차트 데이터
+  const nodeStatusData = nodes
+    ? nodes.reduce((acc: Record<string, number>, node) => {
+        const status = node.status || 'Unknown'
+        acc[status] = (acc[status] || 0) + 1
+        return acc
+      }, {})
+    : {}
+
+  const nodeStatusChartData = Object.entries(nodeStatusData).map(([name, value]) => ({
+    name,
+    value,
+  }))
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -259,25 +292,101 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Pod Status Chart */}
-      {podStatusData.length > 0 && (
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Pod Status Chart */}
+        {podStatusData.length > 0 && (
+          <div className="card">
+            <h2 className="text-xl font-bold text-white mb-4">Pod 상태</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={podStatusData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="name" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1e293b', 
+                    border: '1px solid #334155',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar dataKey="value" fill="#0ea5e9" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Node Status Chart */}
+        {nodeStatusChartData.length > 0 && (
+          <div className="card">
+            <h2 className="text-xl font-bold text-white mb-4">노드 상태</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={nodeStatusChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="name" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1e293b', 
+                    border: '1px solid #334155',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar 
+                  dataKey="value" 
+                  fill="#06b6d4"
+                  fillOpacity={0.8}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* 노드 상세 정보 - 별도 카드 */}
+      {nodes && nodes.length > 0 && (
         <div className="card">
-          <h2 className="text-xl font-bold text-white mb-4">Pod 상태</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={podStatusData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="name" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1e293b', 
-                  border: '1px solid #334155',
-                  borderRadius: '8px'
-                }}
-              />
-              <Bar dataKey="value" fill="#0ea5e9" />
-            </BarChart>
-          </ResponsiveContainer>
+          <h2 className="text-xl font-bold text-white mb-4">노드 목록</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
+            {nodes.map((node) => (
+              <div key={node.name} className="p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                <div className="flex items-start gap-2 mb-2">
+                  {node.status === 'Ready' ? (
+                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate" title={node.name}>
+                      {node.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-400">
+                    <span className="font-medium">Version:</span> {node.version || 'N/A'}
+                  </p>
+                  {node.roles && node.roles.length > 0 && (
+                    <p className="text-xs text-slate-400">
+                      <span className="font-medium">Roles:</span> {node.roles.join(', ')}
+                    </p>
+                  )}
+                  {node.internal_ip && (
+                    <p className="text-xs text-slate-400">
+                      <span className="font-medium">IP:</span> {node.internal_ip}
+                    </p>
+                  )}
+                </div>
+                <div className="mt-2">
+                  <span className={`badge text-xs ${
+                    node.status === 'Ready' ? 'badge-success' : 'badge-error'
+                  }`}>
+                    {node.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -327,8 +436,8 @@ export default function Dashboard() {
                 <div className="p-6 border-b border-slate-700 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {selectedStat && (
-                      <div className={`p-2 rounded-lg ${selectedStat.bgColor}`}>
-                        <Icon className={`w-5 h-5 ${selectedStat.color}`} />
+                      <div className={`p-2 rounded-lg ${selectedStat.bgColor || 'bg-slate-700'}`}>
+                        <Icon className={`w-5 h-5 ${selectedStat.color || 'text-white'}`} />
                       </div>
                     )}
                     <div>
@@ -336,7 +445,7 @@ export default function Dashboard() {
                         {selectedStat?.name || selectedResourceType}
                       </h2>
                       <p className="text-sm text-slate-400">
-                        총 {getResourceCount()}개
+                        {isLoadingResource() ? '로딩 중...' : `총 ${getResourceCount()}개`}
                       </p>
                     </div>
                   </div>
@@ -352,9 +461,17 @@ export default function Dashboard() {
 
             {/* 모달 내용 */}
             <div className="flex-1 overflow-y-auto p-6">
-              {selectedResourceType === 'namespaces' && (
-                <div className="space-y-2">
-                  {namespaces?.map((ns) => (
+              {isLoadingResource() ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
+                  <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
+                  <p className="text-slate-400">데이터를 불러오는 중...</p>
+                </div>
+              ) : (
+                <>
+                  {selectedResourceType === 'namespaces' && (
+                    <div className="space-y-2">
+                      {namespaces && namespaces.length > 0 ? (
+                        namespaces.map((ns) => (
                     <div key={ns.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -372,13 +489,19 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                        ))
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">네임스페이스가 없습니다</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-              {selectedResourceType === 'pods' && (
-                <div className="space-y-2">
-                  {allPods?.map((pod) => (
+                  {selectedResourceType === 'pods' && (
+                    <div className="space-y-2">
+                      {allPods && allPods.length > 0 ? (
+                        allPods.map((pod) => (
                     <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -404,13 +527,19 @@ export default function Dashboard() {
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                        ))
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">Pod가 없습니다</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-              {selectedResourceType === 'services' && (
-                <div className="space-y-2">
-                  {allServices?.map((svc) => (
+                  {selectedResourceType === 'services' && (
+                    <div className="space-y-2">
+                      {allServices && allServices.length > 0 ? (
+                        allServices.map((svc) => (
                     <div key={`${svc.namespace}-${svc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -422,13 +551,19 @@ export default function Dashboard() {
                         <span className="badge badge-info">{svc.type}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                        ))
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">Service가 없습니다</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-              {selectedResourceType === 'deployments' && (
-                <div className="space-y-2">
-                  {allDeployments?.map((deploy) => (
+                  {selectedResourceType === 'deployments' && (
+                    <div className="space-y-2">
+                      {allDeployments && allDeployments.length > 0 ? (
+                        allDeployments.map((deploy) => (
                     <div key={`${deploy.namespace}-${deploy.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -444,13 +579,19 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                        ))
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">Deployment가 없습니다</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-              {selectedResourceType === 'pvcs' && (
-                <div className="space-y-2">
-                  {allPVCs?.map((pvc) => (
+                  {selectedResourceType === 'pvcs' && (
+                    <div className="space-y-2">
+                      {allPVCs && allPVCs.length > 0 ? (
+                        allPVCs.map((pvc) => (
                     <div key={`${pvc.namespace}-${pvc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -466,32 +607,45 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {selectedResourceType === 'nodes' && (
-                <div className="space-y-2">
-                  {nodes?.map((node) => (
-                    <div key={node.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium text-white">{node.name}</h3>
-                          <p className="text-sm text-slate-400 mt-1">
-                            Version: {node.version || 'N/A'} | 
-                            Internal IP: {node.internal_ip || 'N/A'}
-                            {node.roles && node.roles.length > 0 && ` | Roles: ${node.roles.join(', ')}`}
-                          </p>
+                        ))
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">PVC가 없습니다</p>
                         </div>
-                        <span className={`badge ${
-                          node.status === 'Ready' ? 'badge-success' : 'badge-error'
-                        }`}>
-                          {node.status}
-                        </span>
-                      </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  {selectedResourceType === 'nodes' && (
+                    <div className="space-y-2">
+                      {modalNodes && modalNodes.length > 0 ? (
+                        modalNodes.map((node) => (
+                          <div key={node.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="font-medium text-white">{node.name}</h3>
+                                <p className="text-sm text-slate-400 mt-1">
+                                  Version: {node.version || 'N/A'} | 
+                                  Internal IP: {node.internal_ip || 'N/A'}
+                                  {node.roles && node.roles.length > 0 && ` | Roles: ${node.roles.join(', ')}`}
+                                </p>
+                              </div>
+                              <span className={`badge ${
+                                node.status === 'Ready' ? 'badge-success' : 'badge-error'
+                              }`}>
+                                {node.status}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">노드가 없습니다</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
