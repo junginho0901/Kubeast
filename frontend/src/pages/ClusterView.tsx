@@ -262,6 +262,10 @@ export default function ClusterView() {
       `/api/v1/cluster/namespaces/${pod.namespace}/pods/${pod.name}/describe`
     )
     const detail = await response.json()
+    console.log('Pod detail response:', detail) // 디버깅용
+    console.log('Phase:', detail.phase, 'Status:', detail.status)
+    console.log('Created at:', detail.created_at)
+    console.log('Node:', detail.node)
     setSelectedPod(detail)
     
     // 메인 컨테이너 찾기
@@ -306,7 +310,7 @@ export default function ClusterView() {
               placeholder="파드 이름 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors w-64"
+              className="h-10 pl-10 pr-4 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors w-64"
             />
             {searchQuery && (
               <button
@@ -321,7 +325,7 @@ export default function ClusterView() {
           <div className="relative" ref={namespaceDropdownRef}>
             <button
               onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+              className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
             >
               <span className="text-sm font-medium">
                 {selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace}
@@ -371,7 +375,7 @@ export default function ClusterView() {
           </div>
           <button
             onClick={() => refetch()}
-            className="btn btn-secondary flex items-center gap-2"
+            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" />
             새로고침
@@ -549,15 +553,26 @@ export default function ClusterView() {
                     </div>
                     <div>
                       <p className="text-sm text-slate-400">STATE</p>
-                      <p className="text-white font-medium">{selectedPod.phase}</p>
+                      <p className="text-white font-medium">{selectedPod.phase || selectedPod.status || 'Unknown'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-400">NODE</p>
-                      <p className="text-white font-medium">{selectedPod.node}</p>
+                      <p className="text-white font-medium">{selectedPod.node || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-400">CREATED AT</p>
-                      <p className="text-white font-medium">{selectedPod.created_at}</p>
+                      <p className="text-white font-medium">
+                        {selectedPod.created_at 
+                          ? new Date(selectedPod.created_at).toLocaleString('ko-KR', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })
+                          : 'N/A'}
+                      </p>
                     </div>
                   </div>
 
