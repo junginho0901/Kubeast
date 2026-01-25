@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kagent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-kagent}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - k8s-devops
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - KUBECONFIG_PATH=/app/kubeconfig.yaml
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kagent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kagent}
+    volumes:
+      - ./kubeconfig.yaml:/app/kubeconfig.yaml:ro
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    # extra_hosts: Uncomment and configure if needed
+    #   - "${K8S_API_HOST:-pd-dev-305-cmp.k8s-api}:${K8S_API_IP}"
+    networks:
+      - k8s-devops
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - VITE_WS_URL=ws://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - k8s-devops
+
+networks:
+  k8s-devops:
+    driver: bridge
+
+volumes:
+  postgres_data:

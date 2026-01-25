@@ -279,8 +279,11 @@ export default function ClusterView() {
       )
     }
     
-    setSelectedContainer(mainContainer?.name || detail.containers?.[0]?.name || '')
-    setShowLogs(false)
+    const containerName = mainContainer?.name || detail.containers?.[0]?.name || ''
+    setSelectedContainer(containerName)
+    
+    // 기본값을 Logs 탭으로 설정
+    setShowLogs(true)
     setShowManifest(false)
   }
 
