@@ -10,7 +10,8 @@ import {
   RefreshCw,
   X,
   FileCode,
-  Terminal
+  Terminal,
+  ChevronDown
 } from 'lucide-react'
 
 interface PodDetail {
@@ -38,8 +39,10 @@ export default function ClusterView() {
   const [showManifest, setShowManifest] = useState(false)
   const [logs, setLogs] = useState<string>('')
   const [isStreamingLogs, setIsStreamingLogs] = useState(false)
+  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
   // 네임스페이스 목록
   const { data: namespaces } = useQuery({
@@ -173,6 +176,26 @@ export default function ClusterView() {
     }
   }, [logs])
 
+  // 네임스페이스 드롭다운 외부 클릭 감지
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        namespaceDropdownRef.current &&
+        !namespaceDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsNamespaceDropdownOpen(false)
+      }
+    }
+
+    if (isNamespaceDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isNamespaceDropdownOpen])
+
   // Pod YAML 조회
   const { data: manifest } = useQuery({
     queryKey: ['pod-yaml', selectedPod?.namespace, selectedPod?.name],
@@ -244,19 +267,58 @@ export default function ClusterView() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 네임스페이스 선택 */}
-          <select
-            value={selectedNamespace}
-            onChange={(e) => setSelectedNamespace(e.target.value)}
-            className="px-4 py-2 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
-          >
-            <option value="all">전체 네임스페이스</option>
-            {namespaces?.map((ns) => (
-              <option key={ns.name} value={ns.name}>
-                {ns.name}
-              </option>
-            ))}
-          </select>
+          {/* 네임스페이스 선택 - 커스텀 드롭다운 */}
+          <div className="relative" ref={namespaceDropdownRef}>
+            <button
+              onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+            >
+              <span className="text-sm font-medium">
+                {selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace}
+              </span>
+              <ChevronDown 
+                className={`w-4 h-4 text-slate-400 transition-transform ${
+                  isNamespaceDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+            
+            {isNamespaceDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[400px] overflow-y-auto">
+                <button
+                  onClick={() => {
+                    setSelectedNamespace('all')
+                    setIsNamespaceDropdownOpen(false)
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
+                >
+                  {selectedNamespace === 'all' && (
+                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  )}
+                  <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
+                    전체 네임스페이스
+                  </span>
+                </button>
+                {namespaces?.map((ns) => (
+                  <button
+                    key={ns.name}
+                    onClick={() => {
+                      setSelectedNamespace(ns.name)
+                      setIsNamespaceDropdownOpen(false)
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
+                  >
+                    {selectedNamespace === ns.name && (
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    )}
+                    <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>
+                      {ns.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => refetch()}
             className="btn btn-secondary flex items-center gap-2"

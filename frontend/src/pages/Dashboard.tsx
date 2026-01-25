@@ -7,14 +7,20 @@ import {
   HardDrive,
   TrendingUp,
   AlertCircle,
-  RefreshCw 
+  RefreshCw,
+  X,
+  CheckCircle,
+  XCircle
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useState } from 'react'
 
+type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
+
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
   
   const { data: overview, isLoading } = useQuery({
     queryKey: ['cluster-overview'],
@@ -22,11 +28,103 @@ export default function Dashboard() {
     staleTime: 30000, // 30초 동안 캐시 유지
     refetchInterval: 60000, // 60초마다 갱신
   })
+
+  // 네임스페이스 목록
+  const { data: namespaces } = useQuery({
+    queryKey: ['namespaces'],
+    queryFn: api.getNamespaces,
+    enabled: selectedResourceType === 'namespaces',
+  })
+
+  // 전체 Pod 목록
+  const { data: allPods } = useQuery({
+    queryKey: ['all-pods'],
+    queryFn: api.getAllPods,
+    enabled: selectedResourceType === 'pods',
+  })
+
+  // 전체 Services 목록 (모든 네임스페이스)
+  const { data: allNamespaces } = useQuery({
+    queryKey: ['all-namespaces'],
+    queryFn: api.getNamespaces,
+    enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments',
+  })
+
+  const { data: allServices } = useQuery({
+    queryKey: ['all-services'],
+    queryFn: async () => {
+      if (!allNamespaces) return []
+      const services = await Promise.all(
+        allNamespaces.map(ns => api.getServices(ns.name))
+      )
+      return services.flat()
+    },
+    enabled: selectedResourceType === 'services' && !!allNamespaces,
+  })
+
+  // 전체 Deployments 목록
+  const { data: allDeployments } = useQuery({
+    queryKey: ['all-deployments'],
+    queryFn: async () => {
+      if (!allNamespaces) return []
+      const deployments = await Promise.all(
+        allNamespaces.map(ns => api.getDeployments(ns.name))
+      )
+      return deployments.flat()
+    },
+    enabled: selectedResourceType === 'deployments' && !!allNamespaces,
+  })
+
+  // 전체 PVC 목록
+  const { data: allPVCs } = useQuery({
+    queryKey: ['all-pvcs'],
+    queryFn: () => api.getPVCs(),
+    enabled: selectedResourceType === 'pvcs',
+  })
+
+  // 노드 목록
+  const { data: nodes } = useQuery({
+    queryKey: ['nodes'],
+    queryFn: api.getNodes,
+    enabled: selectedResourceType === 'nodes',
+  })
   
   const handleRefresh = async () => {
     setIsRefreshing(true)
     await queryClient.invalidateQueries({ queryKey: ['cluster-overview'] })
     setTimeout(() => setIsRefreshing(false), 500)
+  }
+
+  const handleStatClick = (type: ResourceType) => {
+    setSelectedResourceType(type)
+  }
+
+  const handleCloseModal = () => {
+    setSelectedResourceType(null)
+  }
+
+  // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
+  const getSelectedStat = () => {
+    const resourceTypeMap: Record<string, ResourceType> = {
+      '네임스페이스': 'namespaces',
+      'Pods': 'pods',
+      'Services': 'services',
+      'Deployments': 'deployments',
+      'PVCs': 'pvcs',
+      'Nodes': 'nodes',
+    }
+    return stats.find(s => resourceTypeMap[s.name] === selectedResourceType)
+  }
+
+  // 리소스 개수 가져오기
+  const getResourceCount = () => {
+    if (selectedResourceType === 'namespaces') return namespaces?.length || 0
+    if (selectedResourceType === 'pods') return allPods?.length || 0
+    if (selectedResourceType === 'services') return allServices?.length || 0
+    if (selectedResourceType === 'deployments') return allDeployments?.length || 0
+    if (selectedResourceType === 'pvcs') return allPVCs?.length || 0
+    if (selectedResourceType === 'nodes') return nodes?.length || 0
+    return 0
   }
 
   if (isLoading) {
@@ -130,19 +228,35 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat) => (
-          <div key={stat.name} className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-400">{stat.name}</p>
-                <p className="mt-2 text-3xl font-bold text-white">{stat.value}</p>
+        {stats.map((stat) => {
+          const resourceTypeMap: Record<string, ResourceType> = {
+            '네임스페이스': 'namespaces',
+            'Pods': 'pods',
+            'Services': 'services',
+            'Deployments': 'deployments',
+            'PVCs': 'pvcs',
+            'Nodes': 'nodes',
+          }
+          const resourceType = resourceTypeMap[stat.name]
+          
+          return (
+            <button
+              key={stat.name}
+              onClick={() => handleStatClick(resourceType)}
+              className="card hover:border-primary-500 transition-colors text-left cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-400">{stat.name}</p>
+                  <p className="mt-2 text-3xl font-bold text-white">{stat.value}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${stat.bgColor}`}>
+                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                </div>
               </div>
-              <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                <stat.icon className={`w-6 h-6 ${stat.color}`} />
-              </div>
-            </div>
-          </div>
-        ))}
+            </button>
+          )
+        })}
       </div>
 
       {/* Pod Status Chart */}
@@ -200,6 +314,189 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* 리소스 상세 모달 */}
+      {selectedResourceType && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col">
+            {/* 모달 헤더 */}
+            {(() => {
+              const selectedStat = getSelectedStat()
+              const Icon = selectedStat?.icon || Box
+              return (
+                <div className="p-6 border-b border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {selectedStat && (
+                      <div className={`p-2 rounded-lg ${selectedStat.bgColor}`}>
+                        <Icon className={`w-5 h-5 ${selectedStat.color}`} />
+                      </div>
+                    )}
+                    <div>
+                      <h2 className="text-xl font-bold text-white">
+                        {selectedStat?.name || selectedResourceType}
+                      </h2>
+                      <p className="text-sm text-slate-400">
+                        총 {getResourceCount()}개
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCloseModal}
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+              )
+            })()}
+
+            {/* 모달 내용 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {selectedResourceType === 'namespaces' && (
+                <div className="space-y-2">
+                  {namespaces?.map((ns) => (
+                    <div key={ns.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-white">{ns.name}</h3>
+                          <p className="text-sm text-slate-400 mt-1">
+                            Pods: {ns.resource_count?.pods || 0} | 
+                            Services: {ns.resource_count?.services || 0} | 
+                            Deployments: {ns.resource_count?.deployments || 0}
+                          </p>
+                        </div>
+                        <span className={`badge ${
+                          ns.status === 'Active' ? 'badge-success' : 'badge-warning'
+                        }`}>
+                          {ns.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedResourceType === 'pods' && (
+                <div className="space-y-2">
+                  {allPods?.map((pod) => (
+                    <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {pod.phase === 'Running' ? (
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-400" />
+                          )}
+                          <div>
+                            <h3 className="font-medium text-white">{pod.name}</h3>
+                            <p className="text-sm text-slate-400">{pod.namespace}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`badge ${
+                            pod.phase === 'Running' ? 'badge-success' : 'badge-warning'
+                          }`}>
+                            {pod.phase}
+                          </span>
+                          {pod.node_name && (
+                            <span className="text-xs text-slate-400">{pod.node_name}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedResourceType === 'services' && (
+                <div className="space-y-2">
+                  {allServices?.map((svc) => (
+                    <div key={`${svc.namespace}-${svc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-white">{svc.name}</h3>
+                          <p className="text-sm text-slate-400 mt-1">
+                            {svc.namespace} | Type: {svc.type} | Cluster IP: {svc.cluster_ip || 'None'}
+                          </p>
+                        </div>
+                        <span className="badge badge-info">{svc.type}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedResourceType === 'deployments' && (
+                <div className="space-y-2">
+                  {allDeployments?.map((deploy) => (
+                    <div key={`${deploy.namespace}-${deploy.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-white">{deploy.name}</h3>
+                          <p className="text-sm text-slate-400 mt-1">
+                            {deploy.namespace} | Replicas: {deploy.ready_replicas}/{deploy.replicas}
+                          </p>
+                        </div>
+                        <span className={`badge ${
+                          deploy.ready_replicas === deploy.replicas ? 'badge-success' : 'badge-warning'
+                        }`}>
+                          {deploy.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedResourceType === 'pvcs' && (
+                <div className="space-y-2">
+                  {allPVCs?.map((pvc) => (
+                    <div key={`${pvc.namespace}-${pvc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-white">{pvc.name}</h3>
+                          <p className="text-sm text-slate-400 mt-1">
+                            {pvc.namespace} | {pvc.capacity || 'N/A'} | {pvc.storage_class || 'N/A'}
+                          </p>
+                        </div>
+                        <span className={`badge ${
+                          pvc.status === 'Bound' ? 'badge-success' : 'badge-warning'
+                        }`}>
+                          {pvc.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedResourceType === 'nodes' && (
+                <div className="space-y-2">
+                  {nodes?.map((node) => (
+                    <div key={node.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-white">{node.name}</h3>
+                          <p className="text-sm text-slate-400 mt-1">
+                            Version: {node.version || 'N/A'} | 
+                            Internal IP: {node.internal_ip || 'N/A'}
+                            {node.roles && node.roles.length > 0 && ` | Roles: ${node.roles.join(', ')}`}
+                          </p>
+                        </div>
+                        <span className={`badge ${
+                          node.status === 'Ready' ? 'badge-success' : 'badge-error'
+                        }`}>
+                          {node.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
