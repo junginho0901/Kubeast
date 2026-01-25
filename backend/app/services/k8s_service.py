@@ -732,18 +732,49 @@ class K8sService:
             )
             
             # Pod 상세 정보 구성
+            # Phase 가져오기 (status.phase 또는 status가 없을 수 있음)
+            phase = None
+            if hasattr(pod.status, 'phase') and pod.status.phase:
+                phase = pod.status.phase
+            elif hasattr(pod.status, 'phase'):
+                phase = str(pod.status.phase) if pod.status.phase is not None else None
+            
+            # Created at 가져오기
+            created_at = None
+            if hasattr(pod.metadata, 'creation_timestamp') and pod.metadata.creation_timestamp:
+                try:
+                    if hasattr(pod.metadata.creation_timestamp, 'isoformat'):
+                        created_at = pod.metadata.creation_timestamp.isoformat()
+                    else:
+                        created_at = str(pod.metadata.creation_timestamp)
+                except Exception as e:
+                    print(f"[WARN] Failed to format creation_timestamp: {e}")
+                    created_at = str(pod.metadata.creation_timestamp)
+            
+            # Node 가져오기
+            node = None
+            if hasattr(pod.spec, 'node_name') and pod.spec.node_name:
+                node = pod.spec.node_name
+            
             describe_info = {
                 "name": pod.metadata.name,
                 "namespace": pod.metadata.namespace,
-                "status": pod.status.phase,
-                "node": pod.spec.node_name,
-                "start_time": str(pod.status.start_time) if pod.status.start_time else None,
+                "status": phase,
+                "phase": phase,  # 프론트엔드에서 사용하는 필드
+                "node": node,
+                "start_time": str(pod.status.start_time) if hasattr(pod.status, 'start_time') and pod.status.start_time else None,
+                "created_at": created_at,  # 프론트엔드에서 사용하는 필드 (ISO 형식)
                 "labels": pod.metadata.labels or {},
                 "annotations": pod.metadata.annotations or {},
                 "containers": [],
                 "conditions": [],
                 "events": []
             }
+            
+            # 디버깅용 로그
+            print(f"[DEBUG] describe_pod - name: {pod.metadata.name}, phase: {phase}, created_at: {created_at}, node: {node}")
+            print(f"[DEBUG] pod.status.phase type: {type(pod.status.phase) if hasattr(pod.status, 'phase') else 'N/A'}")
+            print(f"[DEBUG] pod.metadata.creation_timestamp: {pod.metadata.creation_timestamp if hasattr(pod.metadata, 'creation_timestamp') else 'N/A'}")
             
             # 컨테이너 정보
             if pod.status.container_statuses:
