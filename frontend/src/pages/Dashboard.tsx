@@ -206,7 +206,7 @@ export default function Dashboard() {
         node.name.toLowerCase().includes(query) ||
         (node.version && node.version.toLowerCase().includes(query)) ||
         (node.internal_ip && node.internal_ip.toLowerCase().includes(query)) ||
-        (node.roles && node.roles.some(role => role.toLowerCase().includes(query)))
+        (node.roles && node.roles.some((role: string) => role.toLowerCase().includes(query)))
       )
     }
 
