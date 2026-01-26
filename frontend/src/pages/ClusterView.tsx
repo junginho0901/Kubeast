@@ -42,12 +42,16 @@ export default function ClusterView() {
   const [logs, setLogs] = useState<string>('')
   const [isStreamingLogs, setIsStreamingLogs] = useState(false)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
+  const [isContainerDropdownOpen, setIsContainerDropdownOpen] = useState(false)
+  const [isTailLinesDropdownOpen, setIsTailLinesDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
+  const containerDropdownRef = useRef<HTMLDivElement>(null)
+  const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
 
   // 네임스페이스 목록
   const { data: namespaces } = useQuery({
@@ -196,6 +200,46 @@ export default function ClusterView() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isNamespaceDropdownOpen])
+
+  // 컨테이너 드롭다운 외부 클릭 감지
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerDropdownRef.current &&
+        !containerDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsContainerDropdownOpen(false)
+      }
+    }
+
+    if (isContainerDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isContainerDropdownOpen])
+
+  // 줄 수 드롭다운 외부 클릭 감지
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        tailLinesDropdownRef.current &&
+        !tailLinesDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsTailLinesDropdownOpen(false)
+      }
+    }
+
+    if (isTailLinesDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isTailLinesDropdownOpen])
 
   // Pod YAML 조회
   const { data: manifest } = useQuery({
@@ -688,34 +732,87 @@ export default function ClusterView() {
                 <div className="flex flex-col h-full">
                   {/* 컨테이너 선택 및 다운로드 - 고정 */}
                   <div className="flex items-end gap-4 pb-4 flex-shrink-0 border-b border-slate-700">
-                    <div className="flex-1">
+                    {/* 컨테이너 선택 - 커스텀 드롭다운 */}
+                    <div className="flex-1 relative" ref={containerDropdownRef}>
                       <label className="text-sm text-slate-400 mb-2 block">Container</label>
-                      <select
-                        value={selectedContainer}
-                        onChange={(e) => setSelectedContainer(e.target.value)}
-                        className="w-full h-10 px-4 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
+                      <button
+                        onClick={() => setIsContainerDropdownOpen(!isContainerDropdownOpen)}
+                        className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
                       >
-                        {selectedPod.containers?.map((container) => (
-                          <option key={container.name} value={container.name}>
-                            {container.name}
-                          </option>
-                        ))}
-                      </select>
+                        <span className="text-sm font-medium">
+                          {selectedContainer || '컨테이너 선택'}
+                        </span>
+                        <ChevronDown 
+                          className={`w-4 h-4 text-slate-400 transition-transform ${
+                            isContainerDropdownOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                      
+                      {isContainerDropdownOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[300px] overflow-y-auto">
+                          {selectedPod.containers?.map((container) => (
+                            <button
+                              key={container.name}
+                              onClick={() => {
+                                setSelectedContainer(container.name)
+                                setIsContainerDropdownOpen(false)
+                              }}
+                              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                            >
+                              {selectedContainer === container.name && (
+                                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                              )}
+                              <span className={selectedContainer === container.name ? 'font-medium' : ''}>
+                                {container.name}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-sm text-slate-400 mb-2 block">다운로드 줄 수</label>
-                      <select
-                        value={downloadTailLines}
-                        onChange={(e) => setDownloadTailLines(Number(e.target.value))}
-                        className="h-10 px-4 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
+
+                    {/* 다운로드 줄 수 선택 - 커스텀 드롭다운 */}
+                    <div className="relative" ref={tailLinesDropdownRef}>
+                      <label className="text-sm text-slate-400 mb-2 block">로그 다운로드 줄 수</label>
+                      <button
+                        onClick={() => setIsTailLinesDropdownOpen(!isTailLinesDropdownOpen)}
+                        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
                       >
-                        <option value={100}>100줄</option>
-                        <option value={500}>500줄</option>
-                        <option value={1000}>1000줄</option>
-                        <option value={5000}>5000줄</option>
-                        <option value={10000}>10000줄</option>
-                      </select>
+                        <span className="text-sm font-medium">
+                          {downloadTailLines}줄
+                        </span>
+                        <ChevronDown 
+                          className={`w-4 h-4 text-slate-400 transition-transform ${
+                            isTailLinesDropdownOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                      
+                      {isTailLinesDropdownOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50">
+                          {[100, 500, 1000, 5000, 10000].map((lines) => (
+                            <button
+                              key={lines}
+                              onClick={() => {
+                                setDownloadTailLines(lines)
+                                setIsTailLinesDropdownOpen(false)
+                              }}
+                              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                            >
+                              {downloadTailLines === lines && (
+                                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                              )}
+                              <span className={downloadTailLines === lines ? 'font-medium' : ''}>
+                                {lines}줄
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
+                    {/* 다운로드 버튼 */}
                     <div>
                       <label className="text-sm text-slate-400 mb-2 block invisible">다운로드</label>
                       <button
