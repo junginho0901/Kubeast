@@ -148,21 +148,9 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="space-y-8 animate-pulse">
-        <div>
-          <div className="h-10 bg-slate-700 rounded w-64 mb-2"></div>
-          <div className="h-4 bg-slate-700 rounded w-96"></div>
-        </div>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="card">
-              <div className="h-20 bg-slate-700 rounded"></div>
-            </div>
-          ))}
-        </div>
-        <div className="card">
-          <div className="h-80 bg-slate-700 rounded"></div>
-        </div>
+      <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
+        <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
+        <p className="text-slate-400">데이터를 불러오는 중...</p>
       </div>
     )
   }
