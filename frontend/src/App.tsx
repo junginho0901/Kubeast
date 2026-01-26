@@ -5,7 +5,6 @@ import Namespaces from './pages/Namespaces'
 import Resources from './pages/Resources'
 import Topology from './pages/Topology'
 import AIChat from './pages/AIChat'
-import Logs from './pages/Logs'
 import ClusterView from './pages/ClusterView'
 
 function App() {
@@ -19,7 +18,6 @@ function App() {
           <Route path="resources/:namespace" element={<Resources />} />
           <Route path="topology/:namespace" element={<Topology />} />
           <Route path="ai-chat" element={<AIChat />} />
-          <Route path="logs/:namespace/:pod" element={<Logs />} />
         </Route>
       </Routes>
     </BrowserRouter>

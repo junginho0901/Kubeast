@@ -1,21 +1,18 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { 
   Server, 
   Box, 
   Database, 
-  FileText, 
-  RefreshCw,
-  AlertCircle 
+  RefreshCw
 } from 'lucide-react'
 
 type ResourceType = 'services' | 'deployments' | 'pods' | 'pvcs'
 
 export default function Resources() {
   const { namespace } = useParams<{ namespace: string }>()
-  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<ResourceType>('deployments')
 
   const { data: services } = useQuery({
@@ -210,19 +207,6 @@ export default function Resources() {
                   <p className="text-xs text-slate-400">Ready</p>
                   <p className="text-sm text-white">{pod.ready}</p>
                 </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => navigate(`/logs/${namespace}/${pod.name}`)}
-                  className="btn btn-secondary text-sm flex items-center gap-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  로그 보기
-                </button>
-                <button className="btn btn-secondary text-sm flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  트러블슈팅
-                </button>
               </div>
             </div>
           ))}
