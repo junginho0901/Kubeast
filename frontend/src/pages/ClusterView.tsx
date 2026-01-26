@@ -12,7 +12,8 @@ import {
   FileCode,
   Terminal,
   ChevronDown,
-  Search
+  Search,
+  Download
 } from 'lucide-react'
 
 interface PodDetail {
@@ -42,6 +43,7 @@ export default function ClusterView() {
   const [isStreamingLogs, setIsStreamingLogs] = useState(false)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const [downloadLines, setDownloadLines] = useState<number>(100)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
@@ -254,6 +256,26 @@ export default function ClusterView() {
     } else {
       return <AlertCircle className="w-5 h-5 text-yellow-400" />
     }
+  }
+
+  const handleDownloadLogs = () => {
+    if (!logs || !selectedPod) return
+    
+    // 로그를 줄 단위로 분리
+    const logLines = logs.split('\n')
+    
+    // 지정한 줄 수만큼만 가져오기 (마지막 N줄)
+    const linesToDownload = downloadLines > 0 ? downloadLines : logLines.length
+    const downloadContent = logLines.slice(-linesToDownload).join('\n')
+    
+    // 파일로 다운로드
+    const blob = new Blob([downloadContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${selectedPod.name}-${selectedContainer}-logs-${linesToDownload}lines.txt`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handlePodClick = async (pod: any) => {
@@ -646,14 +668,14 @@ export default function ClusterView() {
 
               {showLogs && (
                 <div className="flex flex-col h-full">
-                  {/* 컨테이너 선택 - 고정 */}
-                  <div className="flex items-center gap-4 pb-4 flex-shrink-0 border-b border-slate-700">
+                  {/* 컨테이너 선택 및 다운로드 - 고정 */}
+                  <div className="flex items-end gap-4 pb-4 flex-shrink-0 border-b border-slate-700">
                     <div className="flex-1">
                       <label className="text-sm text-slate-400 mb-2 block">Container</label>
                       <select
                         value={selectedContainer}
                         onChange={(e) => setSelectedContainer(e.target.value)}
-                        className="w-full px-4 py-2 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
+                        className="w-full h-10 px-4 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
                       >
                         {selectedPod.containers?.map((container) => (
                           <option key={container.name} value={container.name}>
@@ -662,8 +684,31 @@ export default function ClusterView() {
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block">마지막 N줄</label>
+                      <select
+                        value={downloadLines}
+                        onChange={(e) => setDownloadLines(Number(e.target.value))}
+                        className="h-10 px-4 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
+                      >
+                        <option value={100}>100줄</option>
+                        <option value={500}>500줄</option>
+                        <option value={1000}>1000줄</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm text-slate-400 mb-2 block opacity-0">다운로드</label>
+                      <button
+                        onClick={handleDownloadLogs}
+                        disabled={!logs || logs.trim() === ''}
+                        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        다운로드
+                      </button>
+                    </div>
                     {isStreamingLogs && (
-                      <div className="flex items-center gap-2 text-green-400 text-sm mt-6">
+                      <div className="flex items-center gap-2 text-green-400 text-sm mb-2">
                         <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                         실시간 로그
                       </div>
