@@ -45,6 +45,7 @@ export default function ClusterView() {
   const [isContainerDropdownOpen, setIsContainerDropdownOpen] = useState(false)
   const [isTailLinesDropdownOpen, setIsTailLinesDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const [containerSearchQuery, setContainerSearchQuery] = useState<string>('')
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
@@ -314,6 +315,7 @@ export default function ClusterView() {
     console.log('Created at:', detail.created_at)
     console.log('Node:', detail.node)
     setSelectedPod(detail)
+    setContainerSearchQuery('') // 모달 열 때 검색어 초기화
     
     // 메인 컨테이너 찾기
     // 1. Pod 이름에서 해시값 제거 (예: app-7d8f9c-xyz -> app)
@@ -663,53 +665,101 @@ export default function ClusterView() {
 
                   {/* 컨테이너 상태 */}
                   <div>
-                    <h3 className="text-lg font-bold text-white mb-3">Container State</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-bold text-white">Container State</h3>
+                    </div>
+                    {/* 컨테이너 검색창 */}
+                    {selectedPod.containers && selectedPod.containers.length > 0 && (
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="컨테이너 검색..."
+                          value={containerSearchQuery}
+                          onChange={(e) => setContainerSearchQuery(e.target.value)}
+                          className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+                        />
+                        {containerSearchQuery && (
+                          <button
+                            onClick={() => setContainerSearchQuery('')}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+                          >
+                            <X className="w-4 h-4 text-slate-400" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <div className="space-y-3">
-                      {selectedPod.containers?.map((container) => {
-                        // state 객체에서 상태 추출
-                        let stateText = 'Unknown'
-                        let stateColor = 'text-slate-400'
-                        
-                        if (container.state && typeof container.state === 'object') {
-                          const state = container.state as any
-                          if (state.running) {
-                            stateText = 'Running'
-                            stateColor = 'text-green-400'
-                          } else if (state.waiting) {
-                            stateText = `Waiting: ${state.waiting.reason || 'Unknown'}`
-                            stateColor = 'text-yellow-400'
-                          } else if (state.terminated) {
-                            stateText = `Terminated: ${state.terminated.reason || 'Unknown'} (exit code: ${state.terminated.exit_code})`
-                            stateColor = 'text-red-400'
-                          }
-                        }
-                        
+                      {selectedPod.containers &&
+                      selectedPod.containers.filter((container) => {
+                        if (!containerSearchQuery.trim()) return true
+                        const query = containerSearchQuery.toLowerCase()
                         return (
-                          <div key={container.name} className="p-4 bg-slate-700 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                {container.ready ? (
-                                  <CheckCircle className="w-5 h-5 text-green-400" />
-                                ) : (
-                                  <XCircle className="w-5 h-5 text-red-400" />
-                                )}
-                                <span className="font-medium text-white">{container.name}</span>
-                              </div>
-                              <span className={`text-sm ${stateColor}`}>
-                                {stateText}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-400 truncate" title={container.image}>
-                              Image: {container.image}
-                            </p>
-                            {container.restart_count > 0 && (
-                              <p className="text-sm text-yellow-400 mt-1">
-                                Restarts: {container.restart_count}
-                              </p>
-                            )}
-                          </div>
+                          container.name.toLowerCase().includes(query) ||
+                          (container.image && container.image.toLowerCase().includes(query))
                         )
-                      })}
+                      }).length > 0 ? (
+                        selectedPod.containers
+                          .filter((container) => {
+                            if (!containerSearchQuery.trim()) return true
+                            const query = containerSearchQuery.toLowerCase()
+                            return (
+                              container.name.toLowerCase().includes(query) ||
+                              (container.image && container.image.toLowerCase().includes(query))
+                            )
+                          })
+                          .map((container) => {
+                            // state 객체에서 상태 추출
+                            let stateText = 'Unknown'
+                            let stateColor = 'text-slate-400'
+                            
+                            if (container.state && typeof container.state === 'object') {
+                              const state = container.state as any
+                              if (state.running) {
+                                stateText = 'Running'
+                                stateColor = 'text-green-400'
+                              } else if (state.waiting) {
+                                stateText = `Waiting: ${state.waiting.reason || 'Unknown'}`
+                                stateColor = 'text-yellow-400'
+                              } else if (state.terminated) {
+                                stateText = `Terminated: ${state.terminated.reason || 'Unknown'} (exit code: ${state.terminated.exit_code})`
+                                stateColor = 'text-red-400'
+                              }
+                            }
+                            
+                            return (
+                              <div key={container.name} className="p-4 bg-slate-700 rounded-lg">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    {container.ready ? (
+                                      <CheckCircle className="w-5 h-5 text-green-400" />
+                                    ) : (
+                                      <XCircle className="w-5 h-5 text-red-400" />
+                                    )}
+                                    <span className="font-medium text-white">{container.name}</span>
+                                  </div>
+                                  <span className={`text-sm ${stateColor}`}>
+                                    {stateText}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-400 truncate" title={container.image}>
+                                  Image: {container.image}
+                                </p>
+                                {container.restart_count > 0 && (
+                                  <p className="text-sm text-yellow-400 mt-1">
+                                    Restarts: {container.restart_count}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-slate-400">
+                            {containerSearchQuery ? '검색 결과가 없습니다' : '컨테이너가 없습니다'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -749,23 +799,65 @@ export default function ClusterView() {
                       
                       {isContainerDropdownOpen && (
                         <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[300px] overflow-y-auto">
-                          {selectedPod.containers?.map((container) => (
-                            <button
-                              key={container.name}
-                              onClick={() => {
-                                setSelectedContainer(container.name)
-                                setIsContainerDropdownOpen(false)
-                              }}
-                              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
-                            >
-                              {selectedContainer === container.name && (
-                                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                          {/* 컨테이너 드롭다운 검색창 */}
+                          <div className="p-2 border-b border-slate-600 sticky top-0 bg-slate-700">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                              <input
+                                type="text"
+                                placeholder="컨테이너 검색..."
+                                value={containerSearchQuery}
+                                onChange={(e) => setContainerSearchQuery(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full h-8 pl-8 pr-8 bg-slate-600 text-white rounded text-sm border border-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                              />
+                              {containerSearchQuery && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setContainerSearchQuery('')
+                                  }}
+                                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded transition-colors"
+                                >
+                                  <X className="w-3 h-3 text-slate-400" />
+                                </button>
                               )}
-                              <span className={selectedContainer === container.name ? 'font-medium' : ''}>
-                                {container.name}
-                              </span>
-                            </button>
-                          ))}
+                            </div>
+                          </div>
+                          {selectedPod.containers &&
+                          selectedPod.containers.filter((container) => {
+                            if (!containerSearchQuery.trim()) return true
+                            const query = containerSearchQuery.toLowerCase()
+                            return container.name.toLowerCase().includes(query)
+                          }).length > 0 ? (
+                            selectedPod.containers
+                              .filter((container) => {
+                                if (!containerSearchQuery.trim()) return true
+                                const query = containerSearchQuery.toLowerCase()
+                                return container.name.toLowerCase().includes(query)
+                              })
+                              .map((container) => (
+                                <button
+                                  key={container.name}
+                                  onClick={() => {
+                                    setSelectedContainer(container.name)
+                                    setIsContainerDropdownOpen(false)
+                                  }}
+                                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                                >
+                                  {selectedContainer === container.name && (
+                                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                  )}
+                                  <span className={selectedContainer === container.name ? 'font-medium' : ''}>
+                                    {container.name}
+                                  </span>
+                                </button>
+                              ))
+                          ) : (
+                            <div className="p-4 text-center text-sm text-slate-400">
+                              {containerSearchQuery ? '검색 결과가 없습니다' : '컨테이너가 없습니다'}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -10,7 +10,8 @@ import {
   RefreshCw,
   X,
   CheckCircle,
-  XCircle
+  XCircle,
+  Search
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useState } from 'react'
@@ -21,6 +22,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
+  const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
   
   const { data: overview, isLoading } = useQuery({
     queryKey: ['cluster-overview'],
@@ -109,6 +111,7 @@ export default function Dashboard() {
 
   const handleCloseModal = () => {
     setSelectedResourceType(null)
+    setModalSearchQuery('')
   }
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
@@ -145,6 +148,72 @@ export default function Dashboard() {
     if (selectedResourceType === 'nodes') return isLoadingNodes
     return false
   }
+
+  // 검색어로 리소스 필터링
+  const getFilteredResources = () => {
+    if (!modalSearchQuery.trim()) {
+      if (selectedResourceType === 'namespaces') return namespaces || []
+      if (selectedResourceType === 'pods') return allPods || []
+      if (selectedResourceType === 'services') return allServices || []
+      if (selectedResourceType === 'deployments') return allDeployments || []
+      if (selectedResourceType === 'pvcs') return allPVCs || []
+      if (selectedResourceType === 'nodes') return modalNodes || []
+      return []
+    }
+
+    const query = modalSearchQuery.toLowerCase()
+
+    if (selectedResourceType === 'namespaces') {
+      return (namespaces || []).filter(ns => 
+        ns.name.toLowerCase().includes(query)
+      )
+    }
+
+    if (selectedResourceType === 'pods') {
+      return (allPods || []).filter(pod => 
+        pod.name.toLowerCase().includes(query) ||
+        pod.namespace.toLowerCase().includes(query) ||
+        (pod.node_name && pod.node_name.toLowerCase().includes(query))
+      )
+    }
+
+    if (selectedResourceType === 'services') {
+      return (allServices || []).filter(svc => 
+        svc.name.toLowerCase().includes(query) ||
+        svc.namespace.toLowerCase().includes(query) ||
+        (svc.type && svc.type.toLowerCase().includes(query)) ||
+        (svc.cluster_ip && svc.cluster_ip.toLowerCase().includes(query))
+      )
+    }
+
+    if (selectedResourceType === 'deployments') {
+      return (allDeployments || []).filter(deploy => 
+        deploy.name.toLowerCase().includes(query) ||
+        deploy.namespace.toLowerCase().includes(query)
+      )
+    }
+
+    if (selectedResourceType === 'pvcs') {
+      return (allPVCs || []).filter(pvc => 
+        pvc.name.toLowerCase().includes(query) ||
+        pvc.namespace.toLowerCase().includes(query) ||
+        (pvc.storage_class && pvc.storage_class.toLowerCase().includes(query))
+      )
+    }
+
+    if (selectedResourceType === 'nodes') {
+      return (modalNodes || []).filter(node => 
+        node.name.toLowerCase().includes(query) ||
+        (node.version && node.version.toLowerCase().includes(query)) ||
+        (node.internal_ip && node.internal_ip.toLowerCase().includes(query)) ||
+        (node.roles && node.roles.some(role => role.toLowerCase().includes(query)))
+      )
+    }
+
+    return []
+  }
+
+  const filteredResources = getFilteredResources()
 
   if (isLoading) {
     return (
@@ -421,28 +490,49 @@ export default function Dashboard() {
               const selectedStat = getSelectedStat()
               const Icon = selectedStat?.icon || Box
               return (
-                <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {selectedStat && (
-                      <div className={`p-2 rounded-lg ${selectedStat.bgColor || 'bg-slate-700'}`}>
-                        <Icon className={`w-5 h-5 ${selectedStat.color || 'text-white'}`} />
+                <div className="p-6 border-b border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      {selectedStat && (
+                        <div className={`p-2 rounded-lg ${selectedStat.bgColor || 'bg-slate-700'}`}>
+                          <Icon className={`w-5 h-5 ${selectedStat.color || 'text-white'}`} />
+                        </div>
+                      )}
+                      <div>
+                        <h2 className="text-xl font-bold text-white">
+                          {selectedStat?.name || selectedResourceType}
+                        </h2>
+                        <p className="text-sm text-slate-400">
+                          {isLoadingResource() ? '로딩 중...' : `총 ${getResourceCount()}개`}
+                        </p>
                       </div>
-                    )}
-                    <div>
-                      <h2 className="text-xl font-bold text-white">
-                        {selectedStat?.name || selectedResourceType}
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        {isLoadingResource() ? '로딩 중...' : `총 ${getResourceCount()}개`}
-                      </p>
                     </div>
+                    <button
+                      onClick={handleCloseModal}
+                      className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5 text-slate-400" />
+                    </button>
                   </div>
-                  <button
-                    onClick={handleCloseModal}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-slate-400" />
-                  </button>
+                  {/* 검색창 - 헤더 내부 */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="검색..."
+                      value={modalSearchQuery}
+                      onChange={(e) => setModalSearchQuery(e.target.value)}
+                      className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+                    />
+                    {modalSearchQuery && (
+                      <button
+                        onClick={() => setModalSearchQuery('')}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+                      >
+                        <X className="w-4 h-4 text-slate-400" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })()}
@@ -458,8 +548,8 @@ export default function Dashboard() {
                 <>
                   {selectedResourceType === 'namespaces' && (
                     <div className="space-y-2">
-                      {namespaces && namespaces.length > 0 ? (
-                        namespaces.map((ns) => (
+                      {filteredResources.length > 0 ? (
+                        filteredResources.map((ns) => (
                     <div key={ns.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -480,7 +570,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <div className="text-center py-12">
-                          <p className="text-slate-400">네임스페이스가 없습니다</p>
+                          <p className="text-slate-400">
+                            {modalSearchQuery ? '검색 결과가 없습니다' : '네임스페이스가 없습니다'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -488,8 +580,8 @@ export default function Dashboard() {
 
                   {selectedResourceType === 'pods' && (
                     <div className="space-y-2">
-                      {allPods && allPods.length > 0 ? (
-                        allPods.map((pod) => (
+                      {filteredResources.length > 0 ? (
+                        filteredResources.map((pod) => (
                     <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -518,7 +610,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <div className="text-center py-12">
-                          <p className="text-slate-400">Pod가 없습니다</p>
+                          <p className="text-slate-400">
+                            {modalSearchQuery ? '검색 결과가 없습니다' : 'Pod가 없습니다'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -526,8 +620,8 @@ export default function Dashboard() {
 
                   {selectedResourceType === 'services' && (
                     <div className="space-y-2">
-                      {allServices && allServices.length > 0 ? (
-                        allServices.map((svc) => (
+                      {filteredResources.length > 0 ? (
+                        filteredResources.map((svc) => (
                     <div key={`${svc.namespace}-${svc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -542,7 +636,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <div className="text-center py-12">
-                          <p className="text-slate-400">Service가 없습니다</p>
+                          <p className="text-slate-400">
+                            {modalSearchQuery ? '검색 결과가 없습니다' : 'Service가 없습니다'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -550,8 +646,8 @@ export default function Dashboard() {
 
                   {selectedResourceType === 'deployments' && (
                     <div className="space-y-2">
-                      {allDeployments && allDeployments.length > 0 ? (
-                        allDeployments.map((deploy) => (
+                      {filteredResources.length > 0 ? (
+                        filteredResources.map((deploy) => (
                     <div key={`${deploy.namespace}-${deploy.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -570,7 +666,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <div className="text-center py-12">
-                          <p className="text-slate-400">Deployment가 없습니다</p>
+                          <p className="text-slate-400">
+                            {modalSearchQuery ? '검색 결과가 없습니다' : 'Deployment가 없습니다'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -578,8 +676,8 @@ export default function Dashboard() {
 
                   {selectedResourceType === 'pvcs' && (
                     <div className="space-y-2">
-                      {allPVCs && allPVCs.length > 0 ? (
-                        allPVCs.map((pvc) => (
+                      {filteredResources.length > 0 ? (
+                        filteredResources.map((pvc) => (
                     <div key={`${pvc.namespace}-${pvc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -598,7 +696,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <div className="text-center py-12">
-                          <p className="text-slate-400">PVC가 없습니다</p>
+                          <p className="text-slate-400">
+                            {modalSearchQuery ? '검색 결과가 없습니다' : 'PVC가 없습니다'}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -606,8 +706,8 @@ export default function Dashboard() {
 
                   {selectedResourceType === 'nodes' && (
                     <div className="space-y-2">
-                      {modalNodes && modalNodes.length > 0 ? (
-                        modalNodes.map((node) => (
+                      {filteredResources.length > 0 ? (
+                        filteredResources.map((node) => (
                           <div key={node.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
                             <div className="flex items-center justify-between">
                               <div>
@@ -628,7 +728,9 @@ export default function Dashboard() {
                         ))
                       ) : (
                         <div className="text-center py-12">
-                          <p className="text-slate-400">노드가 없습니다</p>
+                          <p className="text-slate-400">
+                            {modalSearchQuery ? '검색 결과가 없습니다' : '노드가 없습니다'}
+                          </p>
                         </div>
                       )}
                     </div>
