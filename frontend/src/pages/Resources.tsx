@@ -153,7 +153,7 @@ export default function Resources() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">External IP</p>
-                  <p className="text-sm font-mono text-white">{svc.external_ip || 'N/A'}</p>
+                  <p className="text-sm font-mono text-white">{svc.external_ip || 'none'}</p>
                 </div>
               </div>
               {svc.ports && svc.ports.length > 0 && (

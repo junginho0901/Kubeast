@@ -521,11 +521,9 @@ export default function ClusterView() {
                       {pod.name}
                     </div>
                     <div className="text-xs text-slate-400 mt-1">{pod.namespace}</div>
-                    {pod.restart_count > 0 && (
-                      <div className="text-xs text-yellow-400 mt-1">
-                        재시작: {pod.restart_count}
-                      </div>
-                    )}
+                    <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
+                      {pod.restart_count > 0 && `재시작: ${pod.restart_count}`}
+                    </div>
                   </button>
                 ))}
               </div>
