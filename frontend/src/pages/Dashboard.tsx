@@ -391,9 +391,20 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-white mb-4">Pod 상태</h2>
             <p className="text-sm text-slate-400 mb-4">클릭하여 해당 상태의 Pod 목록 보기</p>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={podStatusData}>
+              <BarChart 
+                data={podStatusData}
+                onClick={(data) => {
+                  if (data && data.activeLabel) {
+                    handlePodStatusClick(data.activeLabel)
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="name" stroke="#94a3b8" />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#94a3b8"
+                  style={{ cursor: 'pointer' }}
+                />
                 <YAxis stroke="#94a3b8" />
                 <Tooltip 
                   contentStyle={{ 
@@ -401,12 +412,12 @@ export default function Dashboard() {
                     border: '1px solid #334155',
                     borderRadius: '8px'
                   }}
+                  cursor={{ fill: 'rgba(14, 165, 233, 0.1)' }}
                 />
                 <Bar 
                   dataKey="value" 
                   fill="#0ea5e9" 
                   cursor="pointer"
-                  onClick={(data) => handlePodStatusClick(data.name)}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -419,9 +430,20 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-white mb-4">노드 상태</h2>
             <p className="text-sm text-slate-400 mb-4">클릭하여 해당 상태의 노드 목록 보기</p>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={nodeStatusChartData}>
+              <BarChart 
+                data={nodeStatusChartData}
+                onClick={(data) => {
+                  if (data && data.activeLabel) {
+                    handleNodeStatusClick(data.activeLabel)
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="name" stroke="#94a3b8" />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#94a3b8"
+                  style={{ cursor: 'pointer' }}
+                />
                 <YAxis stroke="#94a3b8" />
                 <Tooltip 
                   contentStyle={{ 
@@ -429,13 +451,13 @@ export default function Dashboard() {
                     border: '1px solid #334155',
                     borderRadius: '8px'
                   }}
+                  cursor={{ fill: 'rgba(6, 182, 212, 0.1)' }}
                 />
                 <Bar 
                   dataKey="value" 
                   fill="#06b6d4"
                   fillOpacity={0.8}
                   cursor="pointer"
-                  onClick={(data) => handleNodeStatusClick(data.name)}
                 />
               </BarChart>
             </ResponsiveContainer>
