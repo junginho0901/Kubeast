@@ -17,7 +17,7 @@ from app.models.ai import (
     ErrorPattern,
     SeverityLevel
 )
-from app.services.k8s_service import K8sService
+from app.services.k8s_client import K8sServiceClient
 
 
 class ToolContext:
@@ -35,7 +35,7 @@ class AIService:
         """OpenAI 클라이언트 초기화"""
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = settings.OPENAI_MODEL
-        self.k8s_service = K8sService()
+        self.k8s_service = K8sServiceClient()
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}", flush=True)
     
@@ -379,7 +379,7 @@ Pods: {len(pods)}
 Deployment 상세:
 """
         for deploy in deployments[:5]:  # 처음 5개만
-            context += f"\n- {deploy.name}: {deploy.replicas} replicas, image: {deploy.image}"
+            context += f"\n- {deploy['name']}: {deploy.get('replicas', 0)} replicas, image: {deploy.get('image', 'N/A')}"
         
         prompt = f"""
 다음 Kubernetes 네임스페이스의 리소스 최적화 방안을 제안해주세요:
@@ -449,12 +449,12 @@ Deployment 상세:
         try:
             if request.resource_type.lower() == "pod":
                 pods = await self.k8s_service.get_pods(request.namespace)
-                pod = next((p for p in pods if p.name == request.resource_name), None)
+                pod = next((p for p in pods if p["name"] == request.resource_name), None)
                 if pod:
-                    context += f"Pod Status: {pod.status}\n"
-                    context += f"Phase: {pod.phase}\n"
-                    context += f"Restart Count: {pod.restart_count}\n"
-                    context += f"Node: {pod.node_name}\n"
+                    context += f"Pod Status: {pod.get('status', 'N/A')}\n"
+                    context += f"Phase: {pod.get('phase', 'N/A')}\n"
+                    context += f"Restart Count: {pod.get('restart_count', 0)}\n"
+                    context += f"Node: {pod.get('node_name', 'N/A')}\n"
                 
                 if request.include_logs:
                     logs = await self.k8s_service.get_pod_logs(
@@ -465,10 +465,7 @@ Deployment 상세:
                     context += f"\nRecent Logs:\n{logs}\n"
             
             if request.include_events:
-                events = await self.k8s_service.get_events(
-                    request.namespace,
-                    request.resource_name
-                )
+                events = await self.k8s_service.get_events(request.namespace)
                 if events:
                     context += "\nRecent Events:\n"
                     for event in events[:5]:
@@ -886,37 +883,23 @@ Deployment 상세:
             
             if function_name == "get_namespaces":
                 namespaces = await self.k8s_service.get_namespaces()
-                result = json.dumps([{"name": ns.name, "status": ns.status} for ns in namespaces], ensure_ascii=False)
+                result = json.dumps(namespaces, ensure_ascii=False)
                 print(f"[DEBUG] get_namespaces result: {result[:200]}")
                 return result
             
             elif function_name == "get_pods":
                 pods = await self.k8s_service.get_pods(function_args["namespace"])
-                result = json.dumps([{
-                    "name": pod.name,
-                    "status": pod.status,
-                    "phase": pod.phase,
-                    "restart_count": pod.restart_count
-                } for pod in pods], ensure_ascii=False)
+                result = json.dumps(pods, ensure_ascii=False)
                 print(f"[DEBUG] get_pods result: {result[:200]}")
                 return result
             
             elif function_name == "get_deployments":
                 deployments = await self.k8s_service.get_deployments(function_args["namespace"])
-                return json.dumps([{
-                    "name": deploy.name,
-                    "replicas": deploy.replicas,
-                    "ready_replicas": deploy.ready_replicas,
-                    "status": deploy.status
-                } for deploy in deployments], ensure_ascii=False)
+                return json.dumps(deployments, ensure_ascii=False)
             
             elif function_name == "get_services":
                 services = await self.k8s_service.get_services(function_args["namespace"])
-                return json.dumps([{
-                    "name": svc.name,
-                    "type": svc.type,
-                    "cluster_ip": svc.cluster_ip
-                } for svc in services], ensure_ascii=False)
+                return json.dumps(services, ensure_ascii=False)
             
             elif function_name == "get_pod_logs":
                 logs = await self.k8s_service.get_pod_logs(
@@ -928,14 +911,7 @@ Deployment 상세:
             
             elif function_name == "get_cluster_overview":
                 overview = await self.k8s_service.get_cluster_overview()
-                return json.dumps({
-                    "total_namespaces": overview.total_namespaces,
-                    "total_pods": overview.total_pods,
-                    "total_services": overview.total_services,
-                    "total_deployments": overview.total_deployments,
-                    "pod_status": overview.pod_status,
-                    "node_count": overview.node_count
-                }, ensure_ascii=False)
+                return json.dumps(overview, ensure_ascii=False)
             
             elif function_name == "describe_pod":
                 result = await self.k8s_service.describe_pod(
@@ -960,12 +936,7 @@ Deployment 상세:
             
             elif function_name == "get_events":
                 events = await self.k8s_service.get_events(function_args["namespace"])
-                return json.dumps([{
-                    "type": event["type"],
-                    "reason": event["reason"],
-                    "message": event["message"],
-                    "count": event["count"]
-                } for event in events], ensure_ascii=False)
+                return json.dumps(events, ensure_ascii=False)
             
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()
@@ -978,20 +949,11 @@ Deployment 상세:
             elif function_name == "get_pvcs":
                 namespace = function_args.get("namespace")
                 pvcs = await self.k8s_service.get_pvcs(namespace) if namespace else await self.k8s_service.get_pvcs()
-                return json.dumps([{
-                    "name": pvc.name,
-                    "namespace": pvc.namespace,
-                    "status": pvc.status,
-                    "capacity": pvc.capacity
-                } for pvc in pvcs], ensure_ascii=False)
+                return json.dumps(pvcs, ensure_ascii=False)
             
             elif function_name == "get_pvs":
                 pvs = await self.k8s_service.get_pvs()
-                return json.dumps([{
-                    "name": pv.name,
-                    "capacity": pv.capacity,
-                    "status": pv.status
-                } for pv in pvs], ensure_ascii=False)
+                return json.dumps(pvs, ensure_ascii=False)
             
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})
@@ -1072,15 +1034,24 @@ Deployment 상세:
                 
                 # GPT 호출 (Function Calling)
                 print(f"[AI Service] Session Chat API 호출 (Iteration {iteration}) - 요청 모델: {self.model}", flush=True)
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    temperature=0.7,
-                    max_tokens=1000  # 토큰 제한
-                )
-                print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
+                print(f"[DEBUG] Messages count: {len(messages)}, Tools count: {len(tools)}", flush=True)
+                
+                try:
+                    response = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice="auto",
+                        temperature=0.7,
+                        max_tokens=1000,  # 토큰 제한
+                        timeout=30.0  # 30초 타임아웃
+                    )
+                    print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
+                except Exception as api_error:
+                    print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
+                    yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
                 
                 response_message = response.choices[0].message
                 
@@ -1185,8 +1156,6 @@ Deployment 상세:
                     
                     # Results 섹션 - 실제 tool 실행 결과
                     result_preview = tc.get('result', 'No result')
-                    if len(result_preview) > 500:
-                        result_preview = result_preview[:500] + "...\n\n(결과가 길어서 일부만 표시됩니다)"
                     
                     results_section = f"""<details>
 <summary><strong>📊 Results</strong></summary>
@@ -1736,42 +1705,23 @@ Remember: You're not just answering questions - you're **solving production prob
             # 함수 실행
             if function_name == "get_cluster_overview":
                 overview = await self.k8s_service.get_cluster_overview()
-                result = json.dumps({
-                    "total_namespaces": overview.total_namespaces,
-                    "total_pods": overview.total_pods,
-                    "total_services": overview.total_services,
-                    "total_deployments": overview.total_deployments,
-                    "pod_status": overview.pod_status,
-                    "node_count": overview.node_count
-                }, ensure_ascii=False)
+                result = json.dumps(overview, ensure_ascii=False)
             
             elif function_name == "get_namespaces":
                 namespaces = await self.k8s_service.get_namespaces()
-                result = json.dumps([{"name": ns.name, "status": ns.status} for ns in namespaces], ensure_ascii=False)
-                tool_context.state["last_namespaces"] = [ns.name for ns in namespaces]
+                result = json.dumps(namespaces, ensure_ascii=False)
+                tool_context.state["last_namespaces"] = [ns["name"] for ns in namespaces]
             
             elif function_name == "get_all_pods":
                 pods = await self.k8s_service.get_all_pods()
-                result = json.dumps([{
-                    "name": pod.name,
-                    "namespace": pod.namespace,
-                    "status": pod.status,
-                    "phase": pod.phase,
-                    "restart_count": pod.restart_count,
-                    "ready": pod.ready
-                } for pod in pods], ensure_ascii=False)
+                result = json.dumps(pods, ensure_ascii=False)
                 tool_context.state["last_all_pods_count"] = len(pods)
             
             elif function_name == "get_pods":
                 pods = await self.k8s_service.get_pods(function_args["namespace"])
-                result = json.dumps([{
-                    "name": pod.name,
-                    "status": pod.status,
-                    "phase": pod.phase,
-                    "restart_count": pod.restart_count
-                } for pod in pods], ensure_ascii=False)
+                result = json.dumps(pods, ensure_ascii=False)
                 tool_context.state["last_namespace"] = function_args["namespace"]
-                tool_context.state["last_pods"] = [{"name": pod.name, "status": pod.status} for pod in pods]
+                tool_context.state["last_pods"] = [{"name": pod["name"], "status": pod["status"]} for pod in pods]
             
             elif function_name == "describe_pod":
                 result_data = await self.k8s_service.describe_pod(
@@ -1792,12 +1742,7 @@ Remember: You're not just answering questions - you're **solving production prob
             
             elif function_name == "get_deployments":
                 deployments = await self.k8s_service.get_deployments(function_args["namespace"])
-                result = json.dumps([{
-                    "name": deploy.name,
-                    "replicas": deploy.replicas,
-                    "ready_replicas": deploy.ready_replicas,
-                    "status": deploy.status
-                } for deploy in deployments], ensure_ascii=False)
+                result = json.dumps(deployments, ensure_ascii=False)
             
             elif function_name == "describe_deployment":
                 result_data = await self.k8s_service.describe_deployment(
@@ -1808,11 +1753,7 @@ Remember: You're not just answering questions - you're **solving production prob
             
             elif function_name == "get_services":
                 services = await self.k8s_service.get_services(function_args["namespace"])
-                result = json.dumps([{
-                    "name": svc.name,
-                    "type": svc.type,
-                    "cluster_ip": svc.cluster_ip
-                } for svc in services], ensure_ascii=False)
+                result = json.dumps(services, ensure_ascii=False)
             
             elif function_name == "describe_service":
                 result_data = await self.k8s_service.describe_service(
@@ -1841,20 +1782,11 @@ Remember: You're not just answering questions - you're **solving production prob
             elif function_name == "get_pvcs":
                 namespace = function_args.get("namespace")
                 pvcs = await self.k8s_service.get_pvcs(namespace) if namespace else await self.k8s_service.get_pvcs()
-                result = json.dumps([{
-                    "name": pvc.name,
-                    "namespace": pvc.namespace,
-                    "status": pvc.status,
-                    "capacity": pvc.capacity
-                } for pvc in pvcs], ensure_ascii=False)
+                result = json.dumps(pvcs, ensure_ascii=False)
             
             elif function_name == "get_pvs":
                 pvs = await self.k8s_service.get_pvs()
-                result = json.dumps([{
-                    "name": pv.name,
-                    "capacity": pv.capacity,
-                    "status": pv.status
-                } for pv in pvs], ensure_ascii=False)
+                result = json.dumps(pvs, ensure_ascii=False)
             
             elif function_name == "get_pod_metrics":
                 namespace = function_args.get("namespace")

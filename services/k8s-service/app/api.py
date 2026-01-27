@@ -648,3 +648,21 @@ async def websocket_pod_logs(
             await websocket.close()
         except:
             pass
+
+
+@router.get("/metrics/pods")
+async def get_pod_metrics(namespace: Optional[str] = Query(None, description="특정 네임스페이스 필터")):
+    """Pod 리소스 사용량 조회 (kubectl top pods)"""
+    try:
+        return await k8s_service.get_pod_metrics(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/metrics/nodes")
+async def get_node_metrics():
+    """Node 리소스 사용량 조회 (kubectl top nodes)"""
+    try:
+        return await k8s_service.get_node_metrics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
