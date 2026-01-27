@@ -1,0 +1,59 @@
+"""
+AI Service - OpenAI 통합 및 AI 기능 전담
+Port: 8001
+"""
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from app.api import router
+from app.config import settings
+import uvicorn
+
+app = FastAPI(
+    title="AI Service",
+    version="1.0.0",
+    description="OpenAI 통합 및 AI 분석 서비스"
+)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# API 라우터 등록
+app.include_router(router, prefix="/api/v1/ai")
+
+
+@app.get("/")
+async def root():
+    """헬스 체크"""
+    return {
+        "service": "ai-service",
+        "version": "1.0.0",
+        "status": "healthy"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """상세 헬스 체크"""
+    openai_status = "configured" if settings.OPENAI_API_KEY else "not_configured"
+    
+    return {
+        "status": "healthy",
+        "openai": openai_status,
+        "model": settings.OPENAI_MODEL
+    }
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=settings.DEBUG
+    )
