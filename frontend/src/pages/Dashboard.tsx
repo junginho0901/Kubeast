@@ -23,6 +23,8 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
   const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
+  const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
+  const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   
   const { data: overview, isLoading, refetch: refetchOverview } = useQuery({
     queryKey: ['cluster-overview'],
@@ -42,7 +44,7 @@ export default function Dashboard() {
   const { data: allPods, isLoading: isLoadingPods } = useQuery({
     queryKey: ['all-pods'],
     queryFn: api.getAllPods,
-    enabled: selectedResourceType === 'pods',
+    enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
   })
 
   // 전체 Services 목록 (모든 네임스페이스)
@@ -117,7 +119,19 @@ export default function Dashboard() {
 
   const handleCloseModal = () => {
     setSelectedResourceType(null)
+    setSelectedPodStatus(null)
+    setSelectedNodeStatus(null)
     setModalSearchQuery('')
+  }
+
+  const handlePodStatusClick = (status: string) => {
+    setSelectedPodStatus(status)
+    setSelectedResourceType('pods')
+  }
+
+  const handleNodeStatusClick = (status: string) => {
+    setSelectedNodeStatus(status)
+    setSelectedResourceType('nodes')
   }
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
@@ -157,26 +171,39 @@ export default function Dashboard() {
 
   // 검색어로 리소스 필터링
   const getFilteredResources = () => {
-    if (!modalSearchQuery.trim()) {
-      if (selectedResourceType === 'namespaces') return namespaces || []
-      if (selectedResourceType === 'pods') return allPods || []
-      if (selectedResourceType === 'services') return allServices || []
-      if (selectedResourceType === 'deployments') return allDeployments || []
-      if (selectedResourceType === 'pvcs') return allPVCs || []
-      if (selectedResourceType === 'nodes') return modalNodes || []
-      return []
+    let resources: any[] = []
+    
+    // 리소스 타입별 기본 데이터
+    if (selectedResourceType === 'namespaces') resources = namespaces || []
+    else if (selectedResourceType === 'pods') resources = allPods || []
+    else if (selectedResourceType === 'services') resources = allServices || []
+    else if (selectedResourceType === 'deployments') resources = allDeployments || []
+    else if (selectedResourceType === 'pvcs') resources = allPVCs || []
+    else if (selectedResourceType === 'nodes') resources = modalNodes || []
+    
+    // Pod 상태 필터링
+    if (selectedPodStatus && selectedResourceType === 'pods') {
+      resources = resources.filter((pod: any) => pod.phase === selectedPodStatus)
     }
+    
+    // Node 상태 필터링
+    if (selectedNodeStatus && selectedResourceType === 'nodes') {
+      resources = resources.filter((node: any) => node.status === selectedNodeStatus)
+    }
+    
+    // 검색어 필터링
+    if (!modalSearchQuery.trim()) return resources
 
     const query = modalSearchQuery.toLowerCase()
 
     if (selectedResourceType === 'namespaces') {
-      return (namespaces || []).filter(ns => 
+      return resources.filter((ns: any) => 
         ns.name.toLowerCase().includes(query)
       )
     }
 
     if (selectedResourceType === 'pods') {
-      return (allPods || []).filter(pod => 
+      return resources.filter((pod: any) => 
         pod.name.toLowerCase().includes(query) ||
         pod.namespace.toLowerCase().includes(query) ||
         (pod.node_name && pod.node_name.toLowerCase().includes(query))
@@ -362,6 +389,7 @@ export default function Dashboard() {
         {podStatusData.length > 0 && (
           <div className="card">
             <h2 className="text-xl font-bold text-white mb-4">Pod 상태</h2>
+            <p className="text-sm text-slate-400 mb-4">클릭하여 해당 상태의 Pod 목록 보기</p>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={podStatusData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -374,7 +402,12 @@ export default function Dashboard() {
                     borderRadius: '8px'
                   }}
                 />
-                <Bar dataKey="value" fill="#0ea5e9" />
+                <Bar 
+                  dataKey="value" 
+                  fill="#0ea5e9" 
+                  cursor="pointer"
+                  onClick={(data) => handlePodStatusClick(data.name)}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -384,6 +417,7 @@ export default function Dashboard() {
         {nodeStatusChartData.length > 0 && (
           <div className="card">
             <h2 className="text-xl font-bold text-white mb-4">노드 상태</h2>
+            <p className="text-sm text-slate-400 mb-4">클릭하여 해당 상태의 노드 목록 보기</p>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={nodeStatusChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -400,6 +434,8 @@ export default function Dashboard() {
                   dataKey="value" 
                   fill="#06b6d4"
                   fillOpacity={0.8}
+                  cursor="pointer"
+                  onClick={(data) => handleNodeStatusClick(data.name)}
                 />
               </BarChart>
             </ResponsiveContainer>
