@@ -26,7 +26,7 @@ export default function Dashboard() {
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   
-  const { data: overview, isLoading, refetch: refetchOverview } = useQuery({
+  const { data: overview, isLoading } = useQuery({
     queryKey: ['cluster-overview'],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
@@ -36,7 +36,7 @@ export default function Dashboard() {
   // 네임스페이스 목록
   const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: api.getNamespaces,
+    queryFn: () => api.getNamespaces(),
     enabled: selectedResourceType === 'namespaces',
   })
 
@@ -50,16 +50,16 @@ export default function Dashboard() {
   // 전체 Services 목록 (모든 네임스페이스)
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
-    queryFn: api.getNamespaces,
+    queryFn: () => api.getNamespaces(),
     enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments',
   })
 
   const { data: allServices, isLoading: isLoadingServices } = useQuery({
     queryKey: ['all-services'],
     queryFn: async () => {
-      if (!allNamespaces) return []
+      if (!allNamespaces || !Array.isArray(allNamespaces)) return []
       const services = await Promise.all(
-        allNamespaces.map(ns => api.getServices(ns.name))
+        allNamespaces.map((ns: any) => api.getServices(ns.name))
       )
       return services.flat()
     },
@@ -70,9 +70,9 @@ export default function Dashboard() {
   const { data: allDeployments, isLoading: isLoadingDeployments } = useQuery({
     queryKey: ['all-deployments'],
     queryFn: async () => {
-      if (!allNamespaces) return []
+      if (!allNamespaces || !Array.isArray(allNamespaces)) return []
       const deployments = await Promise.all(
-        allNamespaces.map(ns => api.getDeployments(ns.name))
+        allNamespaces.map((ns: any) => api.getDeployments(ns.name))
       )
       return deployments.flat()
     },
@@ -149,12 +149,12 @@ export default function Dashboard() {
 
   // 리소스 개수 가져오기
   const getResourceCount = () => {
-    if (selectedResourceType === 'namespaces') return namespaces?.length || 0
-    if (selectedResourceType === 'pods') return allPods?.length || 0
-    if (selectedResourceType === 'services') return allServices?.length || 0
-    if (selectedResourceType === 'deployments') return allDeployments?.length || 0
-    if (selectedResourceType === 'pvcs') return allPVCs?.length || 0
-    if (selectedResourceType === 'nodes') return modalNodes?.length || 0
+    if (selectedResourceType === 'namespaces') return Array.isArray(namespaces) ? namespaces.length : 0
+    if (selectedResourceType === 'pods') return Array.isArray(allPods) ? allPods.length : 0
+    if (selectedResourceType === 'services') return Array.isArray(allServices) ? allServices.length : 0
+    if (selectedResourceType === 'deployments') return Array.isArray(allDeployments) ? allDeployments.length : 0
+    if (selectedResourceType === 'pvcs') return Array.isArray(allPVCs) ? allPVCs.length : 0
+    if (selectedResourceType === 'nodes') return Array.isArray(modalNodes) ? modalNodes.length : 0
     return 0
   }
 
@@ -174,7 +174,7 @@ export default function Dashboard() {
     let resources: any[] = []
     
     // 리소스 타입별 기본 데이터
-    if (selectedResourceType === 'namespaces') resources = namespaces || []
+    if (selectedResourceType === 'namespaces') resources = Array.isArray(namespaces) ? namespaces : []
     else if (selectedResourceType === 'pods') resources = allPods || []
     else if (selectedResourceType === 'services') resources = allServices || []
     else if (selectedResourceType === 'deployments') resources = allDeployments || []
@@ -211,7 +211,7 @@ export default function Dashboard() {
     }
 
     if (selectedResourceType === 'services') {
-      return (allServices || []).filter(svc => 
+      return (Array.isArray(allServices) ? allServices : []).filter((svc: any) => 
         svc.name.toLowerCase().includes(query) ||
         svc.namespace.toLowerCase().includes(query) ||
         (svc.type && svc.type.toLowerCase().includes(query)) ||
@@ -220,7 +220,7 @@ export default function Dashboard() {
     }
 
     if (selectedResourceType === 'deployments') {
-      return (allDeployments || []).filter(deploy => 
+      return (Array.isArray(allDeployments) ? allDeployments : []).filter((deploy: any) => 
         deploy.name.toLowerCase().includes(query) ||
         deploy.namespace.toLowerCase().includes(query)
       )

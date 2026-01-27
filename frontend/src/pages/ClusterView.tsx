@@ -41,7 +41,7 @@ export default function ClusterView() {
   const [showManifest, setShowManifest] = useState(false)
   const [showDescribe, setShowDescribe] = useState(false)
   const [logs, setLogs] = useState<string>('')
-  const [isStreamingLogs, setIsStreamingLogs] = useState(false)
+  const [, setIsStreamingLogs] = useState(false)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [isContainerDropdownOpen, setIsContainerDropdownOpen] = useState(false)
   const [isTailLinesDropdownOpen, setIsTailLinesDropdownOpen] = useState(false)
