@@ -1003,6 +1003,53 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to describe node: {e}")
     
+    async def get_component_statuses(self) -> List[Dict]:
+        """컴포넌트 상태 조회 (kubectl get componentstatuses)"""
+        try:
+            # ComponentStatus API는 deprecated되었지만 여전히 일부 클러스터에서 사용 가능
+            # v1 API를 통해 접근 시도
+            try:
+                # CoreV1Api를 사용하여 component status 조회
+                component_statuses = self.v1.list_component_status()
+                
+                result = []
+                for component in component_statuses.items:
+                    status = "Healthy"
+                    message = "ok"
+                    error = None
+                    
+                    # Conditions 확인
+                    if component.conditions:
+                        for condition in component.conditions:
+                            if condition.type == "Healthy":
+                                if condition.status == "True":
+                                    status = "Healthy"
+                                    message = condition.message or "ok"
+                                else:
+                                    status = "Unhealthy"
+                                    message = condition.message or "error"
+                                    error = condition.error or None
+                    
+                    result.append({
+                        "name": component.metadata.name,
+                        "status": status,
+                        "message": message,
+                        "error": error
+                    })
+                
+                return result
+            except Exception as e:
+                # ComponentStatus API가 비활성화된 경우
+                print(f"ComponentStatus API not available: {e}")
+                return [{
+                    "name": "component-status",
+                    "status": "Unavailable",
+                    "message": "ComponentStatus API is deprecated or not enabled",
+                    "error": str(e)
+                }]
+        except ApiException as e:
+            raise Exception(f"Failed to get component statuses: {e}")
+    
     async def get_pod_metrics(self, namespace: Optional[str] = None) -> List[Dict]:
         """Pod 리소스 사용량 조회 (kubectl top pods)"""
         try:

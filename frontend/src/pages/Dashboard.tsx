@@ -11,7 +11,8 @@ import {
   X,
   CheckCircle,
   XCircle,
-  Search
+  Search,
+  Info
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useState } from 'react'
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
+  const [selectedNode, setSelectedNode] = useState<any | null>(null)
   
   const { data: overview, isLoading } = useQuery({
     queryKey: ['cluster-overview'],
@@ -100,6 +102,20 @@ export default function Dashboard() {
     queryFn: api.getNodes,
     enabled: selectedResourceType === 'nodes',
   })
+
+  // 선택된 노드의 상세 정보
+  const { data: nodeDetail, isLoading: isLoadingNodeDetail } = useQuery({
+    queryKey: ['node-detail', selectedNode?.name],
+    queryFn: () => api.describeNode(selectedNode.name),
+    enabled: !!selectedNode,
+  })
+
+  // 컴포넌트 상태
+  const { data: componentStatuses, isLoading: isLoadingComponents } = useQuery({
+    queryKey: ['component-statuses'],
+    queryFn: api.getComponentStatuses,
+    enabled: !!selectedNode,
+  })
   
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -122,6 +138,14 @@ export default function Dashboard() {
     setSelectedPodStatus(null)
     setSelectedNodeStatus(null)
     setModalSearchQuery('')
+  }
+
+  const handleNodeClick = (node: any) => {
+    setSelectedNode(node)
+  }
+
+  const handleCloseNodeDetail = () => {
+    setSelectedNode(null)
   }
 
   const handlePodStatusClick = (status: string) => {
@@ -471,7 +495,11 @@ export default function Dashboard() {
           <h2 className="text-xl font-bold text-white mb-4">노드 목록</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
             {nodes.map((node) => (
-              <div key={node.name} className="p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+              <button
+                key={node.name}
+                onClick={() => handleNodeClick(node)}
+                className="p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors text-left cursor-pointer"
+              >
                 <div className="flex items-start gap-2 mb-2">
                   {node.status === 'Ready' ? (
                     <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
@@ -483,6 +511,7 @@ export default function Dashboard() {
                       {node.name}
                     </p>
                   </div>
+                  <Info className="w-4 h-4 text-slate-400 flex-shrink-0" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-slate-400">
@@ -506,7 +535,7 @@ export default function Dashboard() {
                     {node.status}
                   </span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -801,6 +830,234 @@ export default function Dashboard() {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 노드 상세 모달 */}
+      {selectedNode && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg max-w-6xl w-full h-[85vh] overflow-hidden flex flex-col">
+            {/* 모달 헤더 */}
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-cyan-500/10">
+                    <Server className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{selectedNode.name}</h2>
+                    <p className="text-sm text-slate-400">노드 상세 정보</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseNodeDetail}
+                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 내용 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {isLoadingNodeDetail || isLoadingComponents ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
+                  <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
+                  <p className="text-slate-400">데이터를 불러오는 중...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* 컴포넌트 상태 */}
+                  {componentStatuses && componentStatuses.length > 0 && (
+                    <div className="card">
+                      <h3 className="text-lg font-bold text-white mb-4">Component Status</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-700">
+                              <th className="text-left py-2 px-3 text-slate-400 font-medium">NAME</th>
+                              <th className="text-left py-2 px-3 text-slate-400 font-medium">STATUS</th>
+                              <th className="text-left py-2 px-3 text-slate-400 font-medium">MESSAGE</th>
+                              <th className="text-left py-2 px-3 text-slate-400 font-medium">ERROR</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {componentStatuses.map((comp: any) => (
+                              <tr key={comp.name} className="border-b border-slate-700/50">
+                                <td className="py-3 px-3 text-white font-mono text-sm">{comp.name}</td>
+                                <td className="py-3 px-3">
+                                  <span className={`badge ${
+                                    comp.status === 'Healthy' ? 'badge-success' : 
+                                    comp.status === 'Unavailable' ? 'badge-warning' : 'badge-error'
+                                  }`}>
+                                    {comp.status}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-slate-300 text-sm">{comp.message || '-'}</td>
+                                <td className="py-3 px-3 text-slate-300 text-sm">{comp.error || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Node Describe 정보 */}
+                  {nodeDetail && (
+                    <>
+                      {/* 기본 정보 */}
+                      <div className="card">
+                        <h3 className="text-lg font-bold text-white mb-4">기본 정보</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-slate-400 mb-1">이름</p>
+                            <p className="text-white font-mono">{nodeDetail.name}</p>
+                          </div>
+                          {nodeDetail.system_info && (
+                            <>
+                              <div>
+                                <p className="text-sm text-slate-400 mb-1">OS Image</p>
+                                <p className="text-white">{nodeDetail.system_info.os_image}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-400 mb-1">Kernel Version</p>
+                                <p className="text-white font-mono">{nodeDetail.system_info.kernel_version}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-400 mb-1">Container Runtime</p>
+                                <p className="text-white font-mono">{nodeDetail.system_info.container_runtime}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-400 mb-1">Kubelet Version</p>
+                                <p className="text-white font-mono">{nodeDetail.system_info.kubelet_version}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-400 mb-1">Kube-Proxy Version</p>
+                                <p className="text-white font-mono">{nodeDetail.system_info.kube_proxy_version}</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 주소 */}
+                      {nodeDetail.addresses && nodeDetail.addresses.length > 0 && (
+                        <div className="card">
+                          <h3 className="text-lg font-bold text-white mb-4">Addresses</h3>
+                          <div className="space-y-2">
+                            {nodeDetail.addresses.map((addr: any, idx: number) => (
+                              <div key={idx} className="flex items-center gap-3 p-2 bg-slate-700 rounded">
+                                <span className="text-slate-400 text-sm font-medium w-32">{addr.type}</span>
+                                <span className="text-white font-mono">{addr.address}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 용량 및 할당 가능 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {nodeDetail.capacity && Object.keys(nodeDetail.capacity).length > 0 && (
+                          <div className="card">
+                            <h3 className="text-lg font-bold text-white mb-4">Capacity</h3>
+                            <div className="space-y-2">
+                              {Object.entries(nodeDetail.capacity).map(([key, value]) => (
+                                <div key={key} className="flex items-center justify-between p-2 bg-slate-700 rounded">
+                                  <span className="text-slate-400 text-sm">{key}</span>
+                                  <span className="text-white font-mono text-sm">{value as string}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {nodeDetail.allocatable && Object.keys(nodeDetail.allocatable).length > 0 && (
+                          <div className="card">
+                            <h3 className="text-lg font-bold text-white mb-4">Allocatable</h3>
+                            <div className="space-y-2">
+                              {Object.entries(nodeDetail.allocatable).map(([key, value]) => (
+                                <div key={key} className="flex items-center justify-between p-2 bg-slate-700 rounded">
+                                  <span className="text-slate-400 text-sm">{key}</span>
+                                  <span className="text-white font-mono text-sm">{value as string}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Conditions */}
+                      {nodeDetail.conditions && nodeDetail.conditions.length > 0 && (
+                        <div className="card">
+                          <h3 className="text-lg font-bold text-white mb-4">Conditions</h3>
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="border-b border-slate-700">
+                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">Type</th>
+                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">Status</th>
+                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">Reason</th>
+                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">Message</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {nodeDetail.conditions.map((condition: any, idx: number) => (
+                                  <tr key={idx} className="border-b border-slate-700/50">
+                                    <td className="py-3 px-3 text-white font-medium">{condition.type}</td>
+                                    <td className="py-3 px-3">
+                                      <span className={`badge ${
+                                        condition.status === 'True' ? 'badge-success' : 
+                                        condition.status === 'False' ? 'badge-error' : 'badge-warning'
+                                      }`}>
+                                        {condition.status}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-slate-300 text-sm">{condition.reason || '-'}</td>
+                                    <td className="py-3 px-3 text-slate-300 text-sm">{condition.message || '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Labels */}
+                      {nodeDetail.labels && Object.keys(nodeDetail.labels).length > 0 && (
+                        <div className="card">
+                          <h3 className="text-lg font-bold text-white mb-4">Labels</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                            {Object.entries(nodeDetail.labels).map(([key, value]) => (
+                              <div key={key} className="p-2 bg-slate-700 rounded text-xs">
+                                <span className="text-slate-400">{key}:</span>{' '}
+                                <span className="text-white font-mono">{value as string}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Annotations */}
+                      {nodeDetail.annotations && Object.keys(nodeDetail.annotations).length > 0 && (
+                        <div className="card">
+                          <h3 className="text-lg font-bold text-white mb-4">Annotations</h3>
+                          <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
+                            {Object.entries(nodeDetail.annotations).map(([key, value]) => (
+                              <div key={key} className="p-2 bg-slate-700 rounded text-xs">
+                                <span className="text-slate-400 break-all">{key}:</span>{' '}
+                                <span className="text-white font-mono break-all">{value as string}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </div>

@@ -266,6 +266,16 @@ export const api = {
     return data
   },
 
+  describeNode: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/nodes/${name}/describe`)
+    return data
+  },
+
+  getComponentStatuses: async (): Promise<any[]> => {
+    const { data } = await client.get('/cluster/componentstatuses')
+    return data
+  },
+
   // Health check
   getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
     // /health는 /api/v1가 아닌 루트에 있음
