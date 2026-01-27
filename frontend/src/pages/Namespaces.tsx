@@ -14,8 +14,8 @@ export default function Namespaces() {
   
   const { data: namespaces, isLoading } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: api.getNamespaces,
-    staleTime: 30000, // 30초 동안 캐시 유지
+    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
+    staleTime: 30000,
   })
   
   // 검색어로 네임스페이스 필터링
@@ -29,7 +29,13 @@ export default function Namespaces() {
   
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await queryClient.invalidateQueries({ queryKey: ['namespaces'] })
+    // 새로고침은 항상 강제 갱신
+    try {
+      await api.getNamespaces(true)
+      await queryClient.invalidateQueries({ queryKey: ['namespaces'] })
+    } catch (error) {
+      console.error('새로고침 실패:', error)
+    }
     setTimeout(() => setIsRefreshing(false), 500)
   }
 

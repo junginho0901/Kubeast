@@ -15,29 +15,41 @@ export default function Resources() {
   const { namespace } = useParams<{ namespace: string }>()
   const [activeTab, setActiveTab] = useState<ResourceType>('deployments')
 
-  const { data: services } = useQuery({
+  const { data: services, refetch: refetchServices } = useQuery({
     queryKey: ['services', namespace],
     queryFn: () => api.getServices(namespace!),
     enabled: !!namespace && activeTab === 'services',
   })
 
-  const { data: deployments } = useQuery({
+  const { data: deployments, refetch: refetchDeployments } = useQuery({
     queryKey: ['deployments', namespace],
     queryFn: () => api.getDeployments(namespace!),
     enabled: !!namespace && activeTab === 'deployments',
   })
 
-  const { data: pods } = useQuery({
+  const { data: pods, refetch: refetchPods } = useQuery({
     queryKey: ['pods', namespace],
-    queryFn: () => api.getPods(namespace!),
+    queryFn: () => api.getPods(namespace!, undefined, false), // 자동 갱신은 캐시 사용
     enabled: !!namespace && activeTab === 'pods',
   })
 
-  const { data: pvcs } = useQuery({
+  const { data: pvcs, refetch: refetchPVCs } = useQuery({
     queryKey: ['pvcs', namespace],
     queryFn: () => api.getPVCs(namespace),
     enabled: activeTab === 'pvcs',
   })
+  
+  const handleRefresh = async () => {
+    // 새로고침은 항상 강제 갱신
+    if (activeTab === 'services') await refetchServices()
+    else if (activeTab === 'deployments') await refetchDeployments()
+    else if (activeTab === 'pods') {
+      // Pods는 강제 갱신
+      await api.getPods(namespace!, undefined, true)
+      await refetchPods()
+    }
+    else if (activeTab === 'pvcs') await refetchPVCs()
+  }
 
   const tabs = [
     { id: 'deployments' as ResourceType, name: 'Deployments', icon: Server },
@@ -71,7 +83,11 @@ export default function Resources() {
             네임스페이스의 모든 리소스를 확인하고 관리하세요
           </p>
         </div>
-        <button className="btn btn-primary flex items-center gap-2">
+        <button 
+          onClick={handleRefresh}
+          title="새로고침 (강제 갱신)"
+          className="btn btn-primary flex items-center gap-2"
+        >
           <RefreshCw className="w-4 h-4" />
           새로고침
         </button>

@@ -24,11 +24,11 @@ export default function Dashboard() {
   const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
   const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
   
-  const { data: overview, isLoading } = useQuery({
+  const { data: overview, isLoading, refetch: refetchOverview } = useQuery({
     queryKey: ['cluster-overview'],
-    queryFn: api.getClusterOverview,
-    staleTime: 30000, // 30초 동안 캐시 유지
-    refetchInterval: 60000, // 60초마다 갱신
+    queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
+    staleTime: 30000,
+    refetchInterval: 60000,
   })
 
   // 네임스페이스 목록
@@ -99,14 +99,14 @@ export default function Dashboard() {
     enabled: selectedResourceType === 'nodes',
   })
   
-  const handleRefresh = async (forceRefresh = false) => {
+  const handleRefresh = async () => {
     setIsRefreshing(true)
-    if (forceRefresh) {
-      console.log('🔄 강제 갱신 (캐시 무시)')
-      // React Query 캐시 강제 무효화
-      await queryClient.resetQueries({ queryKey: ['cluster-overview'] })
-    } else {
+    // 새로고침은 항상 강제 갱신 (force_refresh=true)
+    try {
+      await api.getClusterOverview(true)
       await queryClient.invalidateQueries({ queryKey: ['cluster-overview'] })
+    } catch (error) {
+      console.error('새로고침 실패:', error)
     }
     setTimeout(() => setIsRefreshing(false), 500)
   }
@@ -313,9 +313,9 @@ export default function Dashboard() {
           )}
         </div>
         <button
-          onClick={(e) => handleRefresh(e.shiftKey)}
+          onClick={handleRefresh}
           disabled={isRefreshing}
-          title="새로고침 (Shift+클릭: 캐시 무시)"
+          title="새로고침 (강제 갱신)"
           className="btn btn-secondary flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />

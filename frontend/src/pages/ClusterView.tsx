@@ -55,23 +55,23 @@ export default function ClusterView() {
   const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
 
   // 네임스페이스 목록
-  const { data: namespaces } = useQuery({
+  const { data: namespaces, refetch: refetchNamespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: api.getNamespaces,
+    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
   })
 
   // 전체 Pod 조회
-  const { data: allPods, isLoading, refetch } = useQuery({
+  const { data: allPods, isLoading, refetch: refetchPods } = useQuery({
     queryKey: ['all-pods', selectedNamespace],
     queryFn: async () => {
+      const forceRefresh = true // Pod 조회는 항상 강제 갱신
       if (selectedNamespace === 'all') {
-        // 모든 네임스페이스의 Pod 조회
         const pods = await Promise.all(
-          (namespaces || []).map(ns => api.getPods(ns.name))
+          (namespaces || []).map(ns => api.getPods(ns.name, undefined, forceRefresh))
         )
         return pods.flat()
       } else {
-        return await api.getPods(selectedNamespace)
+        return await api.getPods(selectedNamespace, undefined, forceRefresh)
       }
     },
     enabled: !!namespaces,
@@ -460,17 +460,12 @@ export default function ClusterView() {
             )}
           </div>
           <button
-            onClick={(e) => {
-              // Shift + 클릭하면 강제 갱신 (캐시 무시)
-              if (e.shiftKey) {
-                console.log('🔄 강제 갱신 (캐시 무시)')
-                // force_refresh를 지원하도록 나중에 구현
-                refetch()
-              } else {
-                refetch()
-              }
+            onClick={async () => {
+              // 새로고침은 항상 강제 갱신
+              await refetchNamespaces()
+              await refetchPods()
             }}
-            title="새로고침 (Shift+클릭: 캐시 무시)"
+            title="새로고침 (강제 갱신)"
             className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" />
