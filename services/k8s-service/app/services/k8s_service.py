@@ -290,7 +290,7 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get all pods: {e}")
     
-    async def get_pods(self, namespace: str, label_selector: Optional[str] = None) -> List[PodInfo]:
+    async def get_pods(self, namespace: str, label_selector: Optional[str] = None, force_refresh: bool = False) -> List[PodInfo]:
         """파드 목록"""
         try:
             pods = self.v1.list_namespaced_pod(namespace, label_selector=label_selector)
