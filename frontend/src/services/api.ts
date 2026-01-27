@@ -145,13 +145,17 @@ export interface SessionDetail {
 // API Functions
 export const api = {
   // Cluster
-  getClusterOverview: async (): Promise<ClusterOverview> => {
-    const { data } = await client.get('/cluster/overview')
+  getClusterOverview: async (forceRefresh = false): Promise<ClusterOverview> => {
+    const { data } = await client.get('/cluster/overview', {
+      params: { force_refresh: forceRefresh }
+    })
     return data
   },
 
-  getNamespaces: async (): Promise<NamespaceInfo[]> => {
-    const { data } = await client.get('/cluster/namespaces')
+  getNamespaces: async (forceRefresh = false): Promise<NamespaceInfo[]> => {
+    const { data } = await client.get('/cluster/namespaces', {
+      params: { force_refresh: forceRefresh }
+    })
     return data
   },
 
@@ -165,9 +169,9 @@ export const api = {
     return data
   },
 
-  getPods: async (namespace: string, labelSelector?: string): Promise<PodInfo[]> => {
-    const { data } = await client.get(`/cluster/namespaces/${namespace}/pods`, {
-      params: { label_selector: labelSelector },
+  getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
+    const { data} = await client.get(`/cluster/namespaces/${namespace}/pods`, {
+      params: { label_selector: labelSelector, force_refresh: forceRefresh },
     })
     return data
   },

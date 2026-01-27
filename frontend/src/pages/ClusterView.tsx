@@ -460,7 +460,17 @@ export default function ClusterView() {
             )}
           </div>
           <button
-            onClick={() => refetch()}
+            onClick={(e) => {
+              // Shift + 클릭하면 강제 갱신 (캐시 무시)
+              if (e.shiftKey) {
+                console.log('🔄 강제 갱신 (캐시 무시)')
+                // force_refresh를 지원하도록 나중에 구현
+                refetch()
+              } else {
+                refetch()
+              }
+            }}
+            title="새로고침 (Shift+클릭: 캐시 무시)"
             className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" />

@@ -99,9 +99,15 @@ export default function Dashboard() {
     enabled: selectedResourceType === 'nodes',
   })
   
-  const handleRefresh = async () => {
+  const handleRefresh = async (forceRefresh = false) => {
     setIsRefreshing(true)
-    await queryClient.invalidateQueries({ queryKey: ['cluster-overview'] })
+    if (forceRefresh) {
+      console.log('🔄 강제 갱신 (캐시 무시)')
+      // React Query 캐시 강제 무효화
+      await queryClient.resetQueries({ queryKey: ['cluster-overview'] })
+    } else {
+      await queryClient.invalidateQueries({ queryKey: ['cluster-overview'] })
+    }
     setTimeout(() => setIsRefreshing(false), 500)
   }
 
@@ -307,8 +313,9 @@ export default function Dashboard() {
           )}
         </div>
         <button
-          onClick={handleRefresh}
+          onClick={(e) => handleRefresh(e.shiftKey)}
           disabled={isRefreshing}
+          title="새로고침 (Shift+클릭: 캐시 무시)"
           className="btn btn-secondary flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
