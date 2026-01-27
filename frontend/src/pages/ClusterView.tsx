@@ -48,6 +48,7 @@ export default function ClusterView() {
   const [containerSearchQuery, setContainerSearchQuery] = useState<string>('')
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
@@ -461,14 +462,19 @@ export default function ClusterView() {
           </div>
           <button
             onClick={async () => {
-              // 새로고침은 항상 강제 갱신
-              await refetchNamespaces()
-              await refetchPods()
+              setIsRefreshing(true)
+              try {
+                await refetchNamespaces()
+                await refetchPods()
+              } finally {
+                setTimeout(() => setIsRefreshing(false), 500)
+              }
             }}
+            disabled={isRefreshing}
             title="새로고침 (강제 갱신)"
-            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2"
+            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             새로고침
           </button>
         </div>
