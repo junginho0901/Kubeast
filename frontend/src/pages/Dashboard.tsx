@@ -38,21 +38,21 @@ export default function Dashboard() {
   // 네임스페이스 목록
   const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(),
+    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'namespaces',
   })
 
   // 전체 Pod 목록
   const { data: allPods, isLoading: isLoadingPods } = useQuery({
     queryKey: ['all-pods'],
-    queryFn: api.getAllPods,
+    queryFn: () => api.getAllPods(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
   })
 
   // 전체 Services 목록 (모든 네임스페이스)
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
-    queryFn: () => api.getNamespaces(),
+    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments',
   })
 
@@ -91,7 +91,7 @@ export default function Dashboard() {
   // 노드 목록 (차트 표시용 - 항상 가져오기)
   const { data: nodes } = useQuery({
     queryKey: ['nodes'],
-    queryFn: api.getNodes,
+    queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
     refetchInterval: 60000,
   })
@@ -107,7 +107,7 @@ export default function Dashboard() {
   // 노드 목록 (모달용)
   const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['modal-nodes'],
-    queryFn: api.getNodes,
+    queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'nodes',
   })
 
@@ -129,27 +129,27 @@ export default function Dashboard() {
     setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신 (force_refresh=true)
     try {
-      // API를 직접 호출하고 캐시에 수동으로 업데이트
-      const [overviewData, namespacesData, nodesData] = await Promise.all([
+      // 메인 데이터를 직접 호출하고 캐시에 수동으로 업데이트
+      const [overviewData, namespacesData, nodesData, allPodsData] = await Promise.all([
         api.getClusterOverview(true),
         api.getNamespaces(true),
         api.getNodes(true),
+        api.getAllPods(true),
       ])
       
-      // 캐시에 수동으로 데이터 설정
+      // 캐시에 수동으로 데이터 설정 (React Query 캐시를 직접 업데이트)
       queryClient.setQueryData(['cluster-overview'], overviewData)
       queryClient.setQueryData(['namespaces'], namespacesData)
       queryClient.setQueryData(['all-namespaces'], namespacesData)
       queryClient.setQueryData(['nodes'], nodesData)
       queryClient.setQueryData(['modal-nodes'], nodesData)
+      queryClient.setQueryData(['all-pods'], allPodsData)
       
-      // 나머지는 invalidate해서 다시 fetch하도록
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['all-pods'] }),
-        queryClient.invalidateQueries({ queryKey: ['all-services'] }),
-        queryClient.invalidateQueries({ queryKey: ['all-deployments'] }),
-        queryClient.invalidateQueries({ queryKey: ['all-pvcs'] }),
-      ])
+      // Services, Deployments, PVCs는 모달이 열려있을 때만 필요하므로 invalidate
+      // (enabled 조건에 의해 모달이 닫혀있으면 자동으로 fetch하지 않음)
+      queryClient.invalidateQueries({ queryKey: ['all-services'] })
+      queryClient.invalidateQueries({ queryKey: ['all-deployments'] })
+      queryClient.invalidateQueries({ queryKey: ['all-pvcs'] })
     } catch (error) {
       console.error('새로고침 실패:', error)
     }
