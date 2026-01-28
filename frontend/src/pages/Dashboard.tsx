@@ -146,7 +146,7 @@ export default function Dashboard() {
         pods: allPodsData?.length
       })
       
-      // 캐시에 수동으로 데이터 설정 (React Query 캐시를 직접 업데이트)
+      // 캐시에 수동으로 데이터 설정하고 강제 리렌더링 트리거
       queryClient.setQueryData(['cluster-overview'], overviewData)
       queryClient.setQueryData(['namespaces'], namespacesData)
       queryClient.setQueryData(['all-namespaces'], namespacesData)
@@ -154,10 +154,17 @@ export default function Dashboard() {
       queryClient.setQueryData(['modal-nodes'], nodesData)
       queryClient.setQueryData(['all-pods'], allPodsData)
       
+      // 강제로 쿼리를 stale로 만들고 리페치를 트리거 (화면 업데이트 보장)
+      queryClient.invalidateQueries({ queryKey: ['cluster-overview'], refetchType: 'none' })
+      queryClient.invalidateQueries({ queryKey: ['namespaces'], refetchType: 'none' })
+      queryClient.invalidateQueries({ queryKey: ['all-namespaces'], refetchType: 'none' })
+      queryClient.invalidateQueries({ queryKey: ['nodes'], refetchType: 'none' })
+      queryClient.invalidateQueries({ queryKey: ['modal-nodes'], refetchType: 'none' })
+      queryClient.invalidateQueries({ queryKey: ['all-pods'], refetchType: 'none' })
+      
       console.log('💾 React Query 캐시 업데이트 완료')
       
       // Services, Deployments, PVCs는 모달이 열려있을 때만 필요하므로 invalidate
-      // (enabled 조건에 의해 모달이 닫혀있으면 자동으로 fetch하지 않음)
       queryClient.invalidateQueries({ queryKey: ['all-services'] })
       queryClient.invalidateQueries({ queryKey: ['all-deployments'] })
       queryClient.invalidateQueries({ queryKey: ['all-pvcs'] })
