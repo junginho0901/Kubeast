@@ -71,8 +71,12 @@ class K8sService:
         try:
             cache_key = "k8s:cluster_overview"
             
-            # force_refresh가 아니면 캐시 확인
-            if not force_refresh:
+            # force_refresh이면 캐시 삭제
+            if force_refresh:
+                redis_cache.delete(cache_key)
+                print(f"🗑️  Cache DELETED: {cache_key}")
+            else:
+                # 캐시 확인
                 cached = redis_cache.get(cache_key)
                 if cached:
                     print(f"✅ Cache HIT: {cache_key}")
@@ -119,10 +123,14 @@ class K8sService:
     async def get_namespaces(self, force_refresh: bool = False) -> List[NamespaceInfo]:
         """네임스페이스 목록 (캐시 + 병렬 처리)"""
         try:
-            # 캐시 확인
             cache_key = "k8s:namespaces"
             
-            if not force_refresh:
+            # force_refresh이면 캐시 삭제
+            if force_refresh:
+                redis_cache.delete(cache_key)
+                print(f"🗑️  Cache DELETED: {cache_key}")
+            else:
+                # 캐시 확인
                 cached = redis_cache.get(cache_key)
                 if cached:
                     print(f"✅ Cache HIT: {cache_key}")
