@@ -96,6 +96,14 @@ export default function Dashboard() {
     refetchInterval: 60000,
   })
 
+  // 노드 리소스 사용량 (5초마다 갱신)
+  const { data: nodeMetrics } = useQuery({
+    queryKey: ['node-metrics'],
+    queryFn: api.getNodeMetrics,
+    staleTime: 5000,
+    refetchInterval: 5000,
+  })
+
   // 노드 목록 (모달용)
   const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['modal-nodes'],
@@ -488,6 +496,82 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* 노드 리소스 사용량 */}
+      {nodeMetrics && nodeMetrics.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">노드 리소스 사용량</h2>
+            <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
+          </div>
+          <div className="space-y-6">
+            {nodeMetrics.map((node) => {
+              const cpuPercent = parseFloat(node.cpu_percent)
+              const memoryPercent = parseFloat(node.memory_percent)
+              
+              return (
+                <div key={node.name} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium text-white">{node.name}</h3>
+                    <div className="flex items-center gap-4 text-sm text-slate-400">
+                      <span>CPU: {node.cpu}</span>
+                      <span>Memory: {node.memory}</span>
+                    </div>
+                  </div>
+                  
+                  {/* CPU 사용량 막대 */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">CPU</span>
+                      <span className={`font-medium ${
+                        cpuPercent >= 80 ? 'text-red-400' : 
+                        cpuPercent >= 60 ? 'text-yellow-400' : 
+                        'text-green-400'
+                      }`}>
+                        {node.cpu_percent}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          cpuPercent >= 80 ? 'bg-red-500' : 
+                          cpuPercent >= 60 ? 'bg-yellow-500' : 
+                          'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(cpuPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Memory 사용량 막대 */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Memory</span>
+                      <span className={`font-medium ${
+                        memoryPercent >= 80 ? 'text-red-400' : 
+                        memoryPercent >= 60 ? 'text-yellow-400' : 
+                        'text-blue-400'
+                      }`}>
+                        {node.memory_percent}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          memoryPercent >= 80 ? 'bg-red-500' : 
+                          memoryPercent >= 60 ? 'bg-yellow-500' : 
+                          'bg-blue-500'
+                        }`}
+                        style={{ width: `${Math.min(memoryPercent, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 노드 상세 정보 - 별도 카드 */}
       {nodes && nodes.length > 0 && (

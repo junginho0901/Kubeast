@@ -276,6 +276,11 @@ export const api = {
     return data
   },
 
+  getNodeMetrics: async (): Promise<any[]> => {
+    const { data } = await client.get('/cluster/metrics/nodes')
+    return data
+  },
+
   // Health check
   getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
     // /health는 /api/v1가 아닌 루트에 있음

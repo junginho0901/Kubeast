@@ -440,6 +440,15 @@ async def get_component_statuses():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/metrics/nodes")
+async def get_node_metrics():
+    """Node 리소스 사용량 조회 (kubectl top nodes)"""
+    try:
+        return await k8s_service.get_node_metrics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/pods/all")
 async def get_all_pods():
     """전체 네임스페이스의 Pod 목록 조회"""
