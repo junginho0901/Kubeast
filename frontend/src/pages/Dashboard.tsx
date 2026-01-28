@@ -141,26 +141,28 @@ export default function Dashboard() {
       
       console.log('✅ API 응답 받음:', {
         overview: overviewData,
+        overviewPods: overviewData?.total_pods,
         namespaces: namespacesData?.length,
         nodes: nodesData?.length,
         pods: allPodsData?.length
       })
+      console.log('📊 현재 화면에 표시중인 overview:', overview)
       
-      // 캐시에 수동으로 데이터 설정하고 강제 리렌더링 트리거
+      // 캐시를 완전히 제거하고 새 데이터로 설정 (강제 리렌더링)
+      queryClient.removeQueries({ queryKey: ['cluster-overview'] })
+      queryClient.removeQueries({ queryKey: ['namespaces'] })
+      queryClient.removeQueries({ queryKey: ['all-namespaces'] })
+      queryClient.removeQueries({ queryKey: ['nodes'] })
+      queryClient.removeQueries({ queryKey: ['modal-nodes'] })
+      queryClient.removeQueries({ queryKey: ['all-pods'] })
+      
+      // 새 데이터로 캐시 설정
       queryClient.setQueryData(['cluster-overview'], overviewData)
       queryClient.setQueryData(['namespaces'], namespacesData)
       queryClient.setQueryData(['all-namespaces'], namespacesData)
       queryClient.setQueryData(['nodes'], nodesData)
       queryClient.setQueryData(['modal-nodes'], nodesData)
       queryClient.setQueryData(['all-pods'], allPodsData)
-      
-      // 강제로 쿼리를 stale로 만들고 리페치를 트리거 (화면 업데이트 보장)
-      queryClient.invalidateQueries({ queryKey: ['cluster-overview'], refetchType: 'none' })
-      queryClient.invalidateQueries({ queryKey: ['namespaces'], refetchType: 'none' })
-      queryClient.invalidateQueries({ queryKey: ['all-namespaces'], refetchType: 'none' })
-      queryClient.invalidateQueries({ queryKey: ['nodes'], refetchType: 'none' })
-      queryClient.invalidateQueries({ queryKey: ['modal-nodes'], refetchType: 'none' })
-      queryClient.invalidateQueries({ queryKey: ['all-pods'], refetchType: 'none' })
       
       console.log('💾 React Query 캐시 업데이트 완료')
       
