@@ -126,16 +126,25 @@ export default function Dashboard() {
   })
   
   const handleRefresh = async () => {
+    console.log('🔄 새로고침 시작...')
     setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신 (force_refresh=true)
     try {
       // 메인 데이터를 직접 호출하고 캐시에 수동으로 업데이트
+      console.log('📡 API 호출 중 (force_refresh=true)...')
       const [overviewData, namespacesData, nodesData, allPodsData] = await Promise.all([
         api.getClusterOverview(true),
         api.getNamespaces(true),
         api.getNodes(true),
         api.getAllPods(true),
       ])
+      
+      console.log('✅ API 응답 받음:', {
+        overview: overviewData,
+        namespaces: namespacesData?.length,
+        nodes: nodesData?.length,
+        pods: allPodsData?.length
+      })
       
       // 캐시에 수동으로 데이터 설정 (React Query 캐시를 직접 업데이트)
       queryClient.setQueryData(['cluster-overview'], overviewData)
@@ -145,13 +154,15 @@ export default function Dashboard() {
       queryClient.setQueryData(['modal-nodes'], nodesData)
       queryClient.setQueryData(['all-pods'], allPodsData)
       
+      console.log('💾 React Query 캐시 업데이트 완료')
+      
       // Services, Deployments, PVCs는 모달이 열려있을 때만 필요하므로 invalidate
       // (enabled 조건에 의해 모달이 닫혀있으면 자동으로 fetch하지 않음)
       queryClient.invalidateQueries({ queryKey: ['all-services'] })
       queryClient.invalidateQueries({ queryKey: ['all-deployments'] })
       queryClient.invalidateQueries({ queryKey: ['all-pvcs'] })
     } catch (error) {
-      console.error('새로고침 실패:', error)
+      console.error('❌ 새로고침 실패:', error)
     }
     setTimeout(() => setIsRefreshing(false), 500)
   }
