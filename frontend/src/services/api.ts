@@ -191,9 +191,9 @@ export const api = {
     return data.logs
   },
 
-  getPVCs: async (namespace?: string): Promise<PVCInfo[]> => {
+  getPVCs: async (namespace?: string, forceRefresh: boolean = false): Promise<PVCInfo[]> => {
     const { data } = await client.get('/cluster/pvcs', {
-      params: { namespace },
+      params: { namespace, force_refresh: forceRefresh },
     })
     return data
   },
@@ -251,13 +251,17 @@ export const api = {
   },
 
   // Cluster View
-  getAllPods: async (): Promise<PodInfo[]> => {
-    const { data } = await client.get('/cluster/pods/all')
+  getAllPods: async (forceRefresh: boolean = false): Promise<PodInfo[]> => {
+    const { data } = await client.get('/cluster/pods/all', {
+      params: { force_refresh: forceRefresh },
+    })
     return data
   },
 
-  getNodes: async (): Promise<any[]> => {
-    const { data} = await client.get('/cluster/nodes')
+  getNodes: async (forceRefresh: boolean = false): Promise<any[]> => {
+    const { data} = await client.get('/cluster/nodes', {
+      params: { force_refresh: forceRefresh },
+    })
     return data
   },
 

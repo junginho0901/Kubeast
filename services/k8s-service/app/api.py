@@ -180,10 +180,13 @@ async def get_pod_logs(
 
 
 @router.get("/pvcs", response_model=List[PVCInfo])
-async def get_pvcs(namespace: Optional[str] = Query(None, description="네임스페이스 필터")):
+async def get_pvcs(
+    namespace: Optional[str] = Query(None, description="네임스페이스 필터"),
+    force_refresh: bool = Query(False)
+):
     """PVC 목록 조회"""
     try:
-        return await k8s_service.get_pvcs(namespace)
+        return await k8s_service.get_pvcs(namespace, force_refresh)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -412,20 +415,20 @@ async def get_pv_yaml(name: str):
 
 # 클러스터 뷰용 API
 @router.get("/nodes")
-async def get_nodes():
+async def get_nodes(force_refresh: bool = Query(False)):
     """노드 목록 조회"""
     try:
-        nodes = await k8s_service.get_node_list()
+        nodes = await k8s_service.get_node_list(force_refresh)
         return nodes
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/pods/all")
-async def get_all_pods():
+async def get_all_pods(force_refresh: bool = Query(False)):
     """전체 네임스페이스의 Pod 목록 조회"""
     try:
-        pods = await k8s_service.get_all_pods()
+        pods = await k8s_service.get_all_pods(force_refresh)
         return pods
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

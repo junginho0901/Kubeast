@@ -255,7 +255,7 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get deployments: {e}")
     
-    async def get_all_pods(self) -> List[PodInfo]:
+    async def get_all_pods(self, force_refresh: bool = False) -> List[PodInfo]:
         """모든 네임스페이스의 파드 목록 조회"""
         try:
             pods = self.v1.list_pod_for_all_namespaces()
@@ -358,7 +358,7 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get pod logs: {e}")
     
-    async def get_pvcs(self, namespace: Optional[str] = None) -> List[PVCInfo]:
+    async def get_pvcs(self, namespace: Optional[str] = None, force_refresh: bool = False) -> List[PVCInfo]:
         """PVC 목록"""
         try:
             if namespace:
@@ -905,7 +905,7 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to describe service: {e}")
     
-    async def get_node_list(self) -> List[Dict]:
+    async def get_node_list(self, force_refresh: bool = False) -> List[Dict]:
         """노드 목록 조회"""
         try:
             nodes = self.v1.list_node()

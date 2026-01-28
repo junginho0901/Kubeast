@@ -129,8 +129,22 @@ export default function Dashboard() {
     setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신 (force_refresh=true)
     try {
-      await api.getClusterOverview(true)
-      await queryClient.invalidateQueries({ queryKey: ['cluster-overview'] })
+      // 모든 데이터를 강제로 새로 가져오기
+      await Promise.all([
+        api.getClusterOverview(true).then(() => queryClient.invalidateQueries({ queryKey: ['cluster-overview'] })),
+        api.getNamespaces(true).then(() => queryClient.invalidateQueries({ queryKey: ['namespaces'] })),
+        api.getNamespaces(true).then(() => queryClient.invalidateQueries({ queryKey: ['all-namespaces'] })),
+        api.getNodes(true).then(() => queryClient.invalidateQueries({ queryKey: ['nodes'] })),
+        api.getNodes(true).then(() => queryClient.invalidateQueries({ queryKey: ['modal-nodes'] })),
+      ])
+      
+      // Pod, Service, Deployment, PVC는 네임스페이스별로 조회하므로 invalidate만
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['all-pods'] }),
+        queryClient.invalidateQueries({ queryKey: ['all-services'] }),
+        queryClient.invalidateQueries({ queryKey: ['all-deployments'] }),
+        queryClient.invalidateQueries({ queryKey: ['all-pvcs'] }),
+      ])
     } catch (error) {
       console.error('새로고침 실패:', error)
     }
