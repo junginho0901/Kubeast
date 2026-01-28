@@ -15,7 +15,7 @@ import {
   Info
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
 
@@ -165,6 +165,27 @@ export default function Dashboard() {
     setSelectedNodeStatus(status)
     setSelectedResourceType('nodes')
   }
+
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedResourceType) {
+          setSelectedResourceType(null)
+          setSelectedPodStatus(null)
+          setSelectedNodeStatus(null)
+          setModalSearchQuery('')
+        }
+        if (selectedNode) {
+          setSelectedNode(null)
+        }
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [selectedResourceType, selectedNode])
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
   const getSelectedStat = () => {
@@ -661,8 +682,14 @@ export default function Dashboard() {
 
       {/* 리소스 상세 모달 */}
       {selectedResourceType && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseModal}
+        >
+          <div 
+            className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 모달 헤더 */}
             {(() => {
               const selectedStat = getSelectedStat()
@@ -922,8 +949,14 @@ export default function Dashboard() {
 
       {/* 노드 상세 모달 */}
       {selectedNode && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg max-w-6xl w-full h-[85vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseNodeDetail}
+        >
+          <div 
+            className="bg-slate-800 rounded-lg max-w-6xl w-full h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 모달 헤더 */}
             <div className="p-6 border-b border-slate-700">
               <div className="flex items-center justify-between">

@@ -116,6 +116,19 @@ export default function AIChat() {
     }
   }, [contextMenu])
 
+  // ESC 키로 컨텍스트 메뉴 닫기
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && contextMenu) {
+        setContextMenu(null)
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [contextMenu])
+
   const handleStop = async () => {
     console.log('[DEBUG] Stop button clicked')
     if (abortControllerRef.current) {

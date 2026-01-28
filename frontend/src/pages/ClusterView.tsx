@@ -56,6 +56,19 @@ export default function ClusterView() {
   const containerDropdownRef = useRef<HTMLDivElement>(null)
   const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
 
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedPod) {
+        setSelectedPod(null)
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [selectedPod])
+
   // 네임스페이스 목록
   const { data: namespaces, refetch: refetchNamespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -572,8 +585,14 @@ export default function ClusterView() {
 
       {/* Pod 상세 정보 모달 */}
       {selectedPod && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedPod(null)}
+        >
+          <div 
+            className="bg-slate-800 rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 모달 헤더 */}
             <div className="p-6 border-b border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
