@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { 
   Server, 
@@ -34,6 +34,7 @@ interface PodDetail {
 }
 
 export default function ClusterView() {
+  const queryClient = useQueryClient()
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [selectedContainer, setSelectedContainer] = useState<string>('')
@@ -494,8 +495,22 @@ export default function ClusterView() {
             onClick={async () => {
               setIsRefreshing(true)
               try {
-                await refetchNamespaces()
-                await refetchPods()
+                // force_refresh=true로 API 직접 호출
+                const [namespacesData, allPodsData] = await Promise.all([
+                  api.getNamespaces(true),
+                  selectedNamespace === 'all'
+                    ? Promise.all((namespaces || []).map(ns => api.getPods(ns.name, undefined, true))).then(pods => pods.flat())
+                    : api.getPods(selectedNamespace, undefined, true)
+                ])
+                
+                // 캐시 제거 후 새 데이터로 업데이트
+                queryClient.removeQueries({ queryKey: ['namespaces'] })
+                queryClient.removeQueries({ queryKey: ['all-pods', selectedNamespace] })
+                
+                queryClient.setQueryData(['namespaces'], namespacesData)
+                queryClient.setQueryData(['all-pods', selectedNamespace], allPodsData)
+              } catch (error) {
+                console.error('새로고침 실패:', error)
               } finally {
                 setTimeout(() => setIsRefreshing(false), 500)
               }

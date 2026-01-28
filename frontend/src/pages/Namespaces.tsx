@@ -31,8 +31,11 @@ export default function Namespaces() {
     setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신
     try {
-      await api.getNamespaces(true)
-      await queryClient.invalidateQueries({ queryKey: ['namespaces'] })
+      const namespacesData = await api.getNamespaces(true)
+      
+      // 캐시 제거 후 새 데이터로 업데이트
+      queryClient.removeQueries({ queryKey: ['namespaces'] })
+      queryClient.setQueryData(['namespaces'], namespacesData)
     } catch (error) {
       console.error('새로고침 실패:', error)
     }

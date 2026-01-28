@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { 
   Server, 
@@ -12,8 +12,10 @@ import {
 type ResourceType = 'services' | 'deployments' | 'pods' | 'pvcs'
 
 export default function Resources() {
+  const queryClient = useQueryClient()
   const { namespace } = useParams<{ namespace: string }>()
   const [activeTab, setActiveTab] = useState<ResourceType>('deployments')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: services, refetch: refetchServices } = useQuery({
     queryKey: ['services', namespace],
@@ -40,15 +42,31 @@ export default function Resources() {
   })
   
   const handleRefresh = async () => {
+    setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신
-    if (activeTab === 'services') await refetchServices()
-    else if (activeTab === 'deployments') await refetchDeployments()
-    else if (activeTab === 'pods') {
-      // Pods는 강제 갱신
-      await api.getPods(namespace!, undefined, true)
-      await refetchPods()
+    try {
+      let data: any
+      if (activeTab === 'services') {
+        data = await api.getServices(namespace!, true)
+        queryClient.removeQueries({ queryKey: ['services', namespace] })
+        queryClient.setQueryData(['services', namespace], data)
+      } else if (activeTab === 'deployments') {
+        data = await api.getDeployments(namespace!, true)
+        queryClient.removeQueries({ queryKey: ['deployments', namespace] })
+        queryClient.setQueryData(['deployments', namespace], data)
+      } else if (activeTab === 'pods') {
+        data = await api.getPods(namespace!, undefined, true)
+        queryClient.removeQueries({ queryKey: ['pods', namespace] })
+        queryClient.setQueryData(['pods', namespace], data)
+      } else if (activeTab === 'pvcs') {
+        data = await api.getPVCs(namespace, true)
+        queryClient.removeQueries({ queryKey: ['pvcs', namespace] })
+        queryClient.setQueryData(['pvcs', namespace], data)
+      }
+    } catch (error) {
+      console.error('새로고침 실패:', error)
     }
-    else if (activeTab === 'pvcs') await refetchPVCs()
+    setTimeout(() => setIsRefreshing(false), 500)
   }
 
   const tabs = [
@@ -85,10 +103,11 @@ export default function Resources() {
         </div>
         <button 
           onClick={handleRefresh}
+          disabled={isRefreshing}
           title="새로고침 (강제 갱신)"
-          className="btn btn-primary flex items-center gap-2"
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           새로고침
         </button>
       </div>
