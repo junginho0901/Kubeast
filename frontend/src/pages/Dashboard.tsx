@@ -584,7 +584,7 @@ export default function Dashboard() {
       </div>
 
       {/* 노드 리소스 사용량 */}
-      {nodeMetrics && nodeMetrics.length > 0 && (
+      {nodeMetrics && Array.isArray(nodeMetrics) && nodeMetrics.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white">노드 리소스 사용량</h2>
@@ -660,7 +660,7 @@ export default function Dashboard() {
       )}
 
       {/* 노드 상세 정보 - 별도 카드 */}
-      {nodes && nodes.length > 0 && (
+      {nodes && Array.isArray(nodes) && nodes.length > 0 && (
         <div className="card">
           <h2 className="text-xl font-bold text-white mb-4">노드 목록</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
