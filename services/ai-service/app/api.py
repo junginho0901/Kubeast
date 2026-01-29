@@ -113,3 +113,15 @@ async def suggest_optimization(namespace: str):
         return {"suggestions": suggestions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/config")
+async def get_config():
+    """AI 서비스 설정 정보 조회"""
+    from app.config import settings
+    
+    return {
+        "model": settings.OPENAI_MODEL,
+        "app_name": settings.APP_NAME,
+        "version": settings.APP_VERSION
+    }

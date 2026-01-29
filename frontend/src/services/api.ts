@@ -304,4 +304,10 @@ export const api = {
     })
     return data
   },
+
+  // AI Config
+  getAIConfig: async (): Promise<{ model: string; app_name: string; version: string }> => {
+    const { data } = await client.get('/ai/config')
+    return data
+  },
 }

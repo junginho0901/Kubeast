@@ -41,6 +41,13 @@ export default function AIChat() {
     enabled: !!selectedSessionId && !isStreaming,
   })
 
+  // AI 설정 정보 조회 (모델명)
+  const { data: aiConfig } = useQuery({
+    queryKey: ['ai-config'],
+    queryFn: api.getAIConfig,
+    staleTime: Infinity, // 설정은 변경되지 않으므로 캐시 무한정 유지
+  })
+
   // 세션 생성
   const createSessionMutation = useMutation({
     mutationFn: () => api.createSession('New Chat'),
@@ -709,10 +716,17 @@ Executing...
       <div className="flex-1 flex flex-col">
         <div className="px-6 border-b border-slate-700 bg-slate-800 h-[100px] flex items-center">
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-white flex items-center gap-3">
-              <Sparkles className="w-6 h-6 text-yellow-400" />
-              AI 어시스턴트
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-white flex items-center gap-3">
+                <Sparkles className="w-6 h-6 text-yellow-400" />
+                AI 어시스턴트
+              </h1>
+              {aiConfig && (
+                <span className="px-2.5 py-1 text-xs font-medium bg-primary-500/20 text-primary-400 rounded-full border border-primary-500/30">
+                  {aiConfig.model}
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-sm text-slate-400">
               자연어로 클러스터를 질의하고 문제를 해결하세요
             </p>
