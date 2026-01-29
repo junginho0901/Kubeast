@@ -45,7 +45,7 @@ export default function Topology() {
   const [selectedResource, setSelectedResource] = useState<string | null>(null)
 
   // 리소스 목록 조회
-  const { data: resources, isLoading: resourcesLoading } = useQuery({
+  const { data: resources, isLoading: resourcesLoading, refetch: refetchResources } = useQuery({
     queryKey: ['resources', selectedType, namespace],
     queryFn: async () => {
       if (!namespace) return []
