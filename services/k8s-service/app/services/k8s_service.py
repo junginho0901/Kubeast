@@ -1145,3 +1145,12 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get node metrics: {e}")
+
+    async def get_component_statuses(self) -> List[Dict]:
+        """컴포넌트 상태 조회"""
+        try:
+            # Kubernetes 1.19+ 에서는 componentstatuses API가 deprecated 되었습니다
+            # 대신 빈 배열을 반환합니다
+            return []
+        except Exception as e:
+            raise Exception(f"Failed to get component statuses: {str(e)}")
