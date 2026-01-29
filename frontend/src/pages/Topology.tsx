@@ -61,7 +61,7 @@ export default function Topology() {
   })
 
   // YAML 조회
-  const { data: yaml, isLoading: yamlLoading } = useQuery({
+  const { data: yaml, isLoading: yamlLoading, error: yamlError, refetch: refetchYaml } = useQuery({
     queryKey: ['yaml', selectedType, namespace, selectedResource],
     queryFn: async () => {
       if (!namespace || !selectedResource) return null
@@ -71,12 +71,19 @@ export default function Topology() {
       const response = await fetch(
         `http://localhost:8000/api/v1/cluster/namespaces/${namespace}/${category.endpoint}/${selectedResource}/yaml`
       )
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || `Failed to fetch YAML: ${response.status}`)
+      }
+      
       const data = await response.json()
       return data.yaml
     },
     enabled: !!namespace && !!selectedResource,
     staleTime: 0, // 데이터를 항상 stale로 간주
     cacheTime: 0, // 캐시 비활성화 (항상 새로 가져오기)
+    retry: false, // 에러 시 재시도하지 않음
   })
 
   if (!namespace) {
@@ -160,11 +167,45 @@ export default function Topology() {
 
         {/* YAML 내용 */}
         <div className="card lg:col-span-2">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            {selectedResource ? `${selectedResource} YAML` : 'YAML 내용'}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">
+              {selectedResource ? `${selectedResource} YAML` : 'YAML 내용'}
+            </h2>
+            {selectedResource && (
+              <button
+                onClick={() => {
+                  refetchYaml()
+                  refetchResources()
+                }}
+                className="btn btn-secondary text-sm"
+                title="목록 및 YAML 새로고침"
+              >
+                새로고침
+              </button>
+            )}
+          </div>
           {yamlLoading ? (
             <div className="text-slate-400">YAML 로딩 중...</div>
+          ) : yamlError ? (
+            <div className="text-center py-12">
+              <div className="text-red-400 mb-4">
+                ❌ YAML을 가져올 수 없습니다
+              </div>
+              <p className="text-slate-400 text-sm mb-4">
+                {(yamlError as Error).message.includes('not found') 
+                  ? '리소스가 삭제되었거나 존재하지 않습니다.'
+                  : (yamlError as Error).message}
+              </p>
+              <button
+                onClick={() => {
+                  refetchResources()
+                  setSelectedResource(null)
+                }}
+                className="btn btn-primary"
+              >
+                목록 새로고침
+              </button>
+            </div>
           ) : yaml ? (
             <div className="bg-slate-900 rounded-lg overflow-auto max-h-[600px]">
               <SyntaxHighlighter 
