@@ -20,7 +20,7 @@ export default function Namespaces() {
   
   // 검색어로 네임스페이스 필터링
   const filteredNamespaces = useMemo(() => {
-    if (!namespaces) return []
+    if (!namespaces || !Array.isArray(namespaces)) return []
     if (!searchQuery.trim()) return namespaces
     return namespaces.filter(ns => 
       ns.name.toLowerCase().includes(searchQuery.toLowerCase())

@@ -471,7 +471,7 @@ export default function ClusterView() {
                     전체 네임스페이스
                   </span>
                 </button>
-                {namespaces?.map((ns) => (
+                {Array.isArray(namespaces) && namespaces.map((ns) => (
                   <button
                     key={ns.name}
                     onClick={() => {

@@ -136,7 +136,7 @@ export default function Resources() {
       {/* Deployments */}
       {activeTab === 'deployments' && (
         <div className="space-y-4">
-          {deployments?.map((deploy) => (
+          {Array.isArray(deployments) && deployments.map((deploy) => (
             <div key={deploy.name} className="card">
               <div className="flex items-start justify-between">
                 <div>
@@ -173,7 +173,7 @@ export default function Resources() {
       {/* Services */}
       {activeTab === 'services' && (
         <div className="space-y-4">
-          {services?.map((svc) => (
+          {Array.isArray(services) && services.map((svc) => (
             <div key={svc.name} className="card">
               <div className="flex items-start justify-between">
                 <div>
@@ -211,7 +211,7 @@ export default function Resources() {
       {/* Pods */}
       {activeTab === 'pods' && (
         <div className="space-y-4">
-          {pods?.map((pod) => (
+          {Array.isArray(pods) && pods.map((pod) => (
             <div key={pod.name} className="card">
               <div className="flex items-start justify-between">
                 <div>
@@ -251,7 +251,7 @@ export default function Resources() {
       {/* PVCs */}
       {activeTab === 'pvcs' && (
         <div className="space-y-4">
-          {pvcs?.map((pvc) => (
+          {Array.isArray(pvcs) && pvcs.map((pvc) => (
             <div key={`${pvc.namespace}-${pvc.name}`} className="card">
               <div className="flex items-start justify-between">
                 <div>

@@ -570,7 +570,7 @@ Executing...
         <div className="flex-1 overflow-y-auto p-2">
           {sessionsLoading ? (
             <div className="text-slate-400 text-sm text-center py-4">로딩 중...</div>
-          ) : sessions && sessions.length > 0 ? (
+          ) : sessions && Array.isArray(sessions) && sessions.length > 0 ? (
             <div className="space-y-1">
               {sessions.map((session) => (
                 <div
