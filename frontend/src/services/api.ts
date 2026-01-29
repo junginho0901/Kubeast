@@ -289,6 +289,13 @@ export const api = {
     return data
   },
 
+  getPodMetrics: async (namespace?: string): Promise<any[]> => {
+    const { data } = await client.get('/cluster/metrics/pods', {
+      params: { namespace },
+    })
+    return data
+  },
+
   // Health check
   getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
     // /health는 /api/v1가 아닌 루트에 있음

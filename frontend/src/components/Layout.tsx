@@ -14,6 +14,7 @@ import { api } from '@/services/api'
 const navigation = [
   { name: '대시보드', href: '/', icon: LayoutDashboard },
   { name: '네임스페이스', href: '/namespaces', icon: Boxes },
+  { name: '모니터링', href: '/monitoring', icon: Activity },
   { name: '클러스터 뷰', href: '/cluster-view', icon: Layers },
   { name: 'AI 챗', href: '/ai-chat', icon: MessageSquare },
 ]

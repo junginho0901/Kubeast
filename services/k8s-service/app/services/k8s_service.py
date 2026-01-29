@@ -266,6 +266,7 @@ class K8sService:
     async def get_all_pods(self, force_refresh: bool = False) -> List[PodInfo]:
         """모든 네임스페이스의 파드 목록 조회"""
         try:
+            print(f"[DEBUG] get_all_pods called with force_refresh={force_refresh}")
             pods = self.v1.list_pod_for_all_namespaces()
             result = []
             
@@ -273,19 +274,48 @@ class K8sService:
                 containers = []
                 restart_count = 0
                 
+                # 컨테이너 스펙에서 limits/requests 추출
+                container_specs = {}
+                if pod.spec.containers:
+                    for spec in pod.spec.containers:
+                        limits = None
+                        requests = None
+                        if spec.resources:
+                            if spec.resources.limits:
+                                # Quantity 객체를 문자열로 변환
+                                limits = {k: str(v) for k, v in spec.resources.limits.items()}
+                                print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Limits: {limits}")
+                            if spec.resources.requests:
+                                requests = {k: str(v) for k, v in spec.resources.requests.items()}
+                                print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Requests: {requests}")
+                        container_specs[spec.name] = {
+                            "limits": limits,
+                            "requests": requests
+                        }
+                
                 if pod.status.container_statuses:
                     for container in pod.status.container_statuses:
-                        containers.append({
+                        container_info = {
                             "name": container.name,
                             "image": container.image,
                             "ready": container.ready,
-                            "restart_count": container.restart_count
-                        })
+                            "restart_count": container.restart_count,
+                            "limits": None,
+                            "requests": None
+                        }
+                        # limits/requests 추가
+                        if container.name in container_specs:
+                            container_info["limits"] = container_specs[container.name].get("limits")
+                            container_info["requests"] = container_specs[container.name].get("requests")
+                        containers.append(container_info)
                         restart_count += container.restart_count
                 
                 # Ready 상태
                 ready_containers = sum(1 for c in containers if c["ready"])
                 ready = f"{ready_containers}/{len(containers)}"
+                
+                if "kagent-controller" in pod.metadata.name:
+                    print(f"[DEBUG GET_ALL_PODS] Final containers for {pod.metadata.name}: {containers}")
                 
                 result.append(PodInfo(
                     name=pod.metadata.name,
@@ -301,6 +331,7 @@ class K8sService:
                     ready=ready
                 ))
             
+            print(f"[DEBUG GET_ALL_PODS] Returning {len(result)} pods")
             return result
         except ApiException as e:
             raise Exception(f"Failed to get all pods: {e}")
@@ -315,14 +346,40 @@ class K8sService:
                 containers = []
                 restart_count = 0
                 
+                # 컨테이너 스펙에서 limits/requests 추출
+                container_specs = {}
+                if pod.spec.containers:
+                    for spec in pod.spec.containers:
+                        limits = None
+                        requests = None
+                        if spec.resources:
+                            if spec.resources.limits:
+                                # Quantity 객체를 문자열로 변환
+                                limits = {k: str(v) for k, v in spec.resources.limits.items()}
+                                print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Limits: {limits}")
+                            if spec.resources.requests:
+                                requests = {k: str(v) for k, v in spec.resources.requests.items()}
+                                print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Requests: {requests}")
+                        container_specs[spec.name] = {
+                            "limits": limits,
+                            "requests": requests
+                        }
+                
                 if pod.status.container_statuses:
                     for container in pod.status.container_statuses:
-                        containers.append({
+                        container_info = {
                             "name": container.name,
                             "image": container.image,
                             "ready": container.ready,
-                            "restart_count": container.restart_count
-                        })
+                            "restart_count": container.restart_count,
+                            "limits": None,
+                            "requests": None
+                        }
+                        # limits/requests 추가
+                        if container.name in container_specs:
+                            container_info["limits"] = container_specs[container.name].get("limits")
+                            container_info["requests"] = container_specs[container.name].get("requests")
+                        containers.append(container_info)
                         restart_count += container.restart_count
                 
                 # Ready 상태
@@ -1014,6 +1071,7 @@ class K8sService:
             
             if namespace:
                 # 특정 네임스페이스의 Pod 메트릭
+                print(f"[DEBUG] Fetching pod metrics for namespace: {namespace}")
                 metrics = custom_api.list_namespaced_custom_object(
                     group="metrics.k8s.io",
                     version="v1beta1",
@@ -1022,6 +1080,7 @@ class K8sService:
                 )
             else:
                 # 전체 네임스페이스의 Pod 메트릭
+                print(f"[DEBUG] Fetching pod metrics for all namespaces")
                 metrics = custom_api.list_cluster_custom_object(
                     group="metrics.k8s.io",
                     version="v1beta1",
@@ -1067,9 +1126,17 @@ class K8sService:
                     "memory": f"{int(total_memory)}Mi"
                 })
             
+            print(f"[DEBUG] Pod metrics result count: {len(result)}")
             return result
         except ApiException as e:
-            raise Exception(f"Failed to get pod metrics: {e}")
+            print(f"[ERROR] Failed to get pod metrics: {e.status} - {e.reason}")
+            print(f"[ERROR] Response body: {e.body}")
+            raise Exception(f"Failed to get pod metrics: {e.status} - {e.reason}")
+        except Exception as e:
+            print(f"[ERROR] Unexpected error in get_pod_metrics: {type(e).__name__} - {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise Exception(f"Failed to get pod metrics: {str(e)}")
     
     async def get_node_metrics(self) -> List[Dict]:
         """Node 리소스 사용량 조회 (kubectl top nodes)"""
