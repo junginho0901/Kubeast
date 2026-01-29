@@ -291,13 +291,13 @@ export default function Dashboard() {
   const getFilteredResources = () => {
     let resources: any[] = []
     
-    // 리소스 타입별 기본 데이터
+    // 리소스 타입별 기본 데이터 - 항상 배열 보장
     if (selectedResourceType === 'namespaces') resources = Array.isArray(namespaces) ? namespaces : []
-    else if (selectedResourceType === 'pods') resources = allPods || []
-    else if (selectedResourceType === 'services') resources = allServices || []
-    else if (selectedResourceType === 'deployments') resources = allDeployments || []
-    else if (selectedResourceType === 'pvcs') resources = allPVCs || []
-    else if (selectedResourceType === 'nodes') resources = modalNodes || []
+    else if (selectedResourceType === 'pods') resources = Array.isArray(allPods) ? allPods : []
+    else if (selectedResourceType === 'services') resources = Array.isArray(allServices) ? allServices : []
+    else if (selectedResourceType === 'deployments') resources = Array.isArray(allDeployments) ? allDeployments : []
+    else if (selectedResourceType === 'pvcs') resources = Array.isArray(allPVCs) ? allPVCs : []
+    else if (selectedResourceType === 'nodes') resources = Array.isArray(modalNodes) ? modalNodes : []
     
     // Pod 상태 필터링
     if (selectedPodStatus && selectedResourceType === 'pods') {
@@ -329,7 +329,7 @@ export default function Dashboard() {
     }
 
     if (selectedResourceType === 'services') {
-      return (Array.isArray(allServices) ? allServices : []).filter((svc: any) => 
+      return resources.filter((svc: any) => 
         svc.name.toLowerCase().includes(query) ||
         svc.namespace.toLowerCase().includes(query) ||
         (svc.type && svc.type.toLowerCase().includes(query)) ||
@@ -338,14 +338,14 @@ export default function Dashboard() {
     }
 
     if (selectedResourceType === 'deployments') {
-      return (Array.isArray(allDeployments) ? allDeployments : []).filter((deploy: any) => 
+      return resources.filter((deploy: any) => 
         deploy.name.toLowerCase().includes(query) ||
         deploy.namespace.toLowerCase().includes(query)
       )
     }
 
     if (selectedResourceType === 'pvcs') {
-      return (allPVCs || []).filter(pvc => 
+      return resources.filter(pvc => 
         pvc.name.toLowerCase().includes(query) ||
         pvc.namespace.toLowerCase().includes(query) ||
         (pvc.storage_class && pvc.storage_class.toLowerCase().includes(query))
@@ -353,7 +353,7 @@ export default function Dashboard() {
     }
 
     if (selectedResourceType === 'nodes') {
-      return (modalNodes || []).filter(node => 
+      return resources.filter(node => 
         node.name.toLowerCase().includes(query) ||
         (node.version && node.version.toLowerCase().includes(query)) ||
         (node.internal_ip && node.internal_ip.toLowerCase().includes(query)) ||
