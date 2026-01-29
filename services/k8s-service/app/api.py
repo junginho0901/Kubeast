@@ -669,3 +669,73 @@ async def get_node_metrics():
         return await k8s_service.get_node_metrics()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/nodes/{name}/describe")
+async def describe_node(name: str):
+    """노드 상세 정보 조회"""
+    try:
+        node_detail = await k8s_service.describe_node(name)
+        return node_detail
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/componentstatuses")
+async def get_component_statuses():
+    """컴포넌트 상태 조회"""
+    try:
+        statuses = await k8s_service.get_component_statuses()
+        return statuses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Topology endpoints
+@router.get("/topology/namespace/{namespace}")
+async def get_namespace_topology(namespace: str):
+    """
+    네임스페이스 전체 리소스 관계도
+    - Service → Deployment → Pod
+    - PVC → PV
+    - ConfigMap, Secret 연결
+    """
+    try:
+        from app.services.topology_service import TopologyService
+        topology_service = TopologyService()
+        return await topology_service.get_namespace_topology(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/topology/service/{namespace}/{service_name}")
+async def get_service_topology(namespace: str, service_name: str):
+    """특정 서비스의 리소스 관계도"""
+    try:
+        from app.services.topology_service import TopologyService
+        topology_service = TopologyService()
+        return await topology_service.get_service_topology(namespace, service_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/topology/deployment/{namespace}/{deployment_name}")
+async def get_deployment_topology(namespace: str, deployment_name: str):
+    """특정 디플로이먼트의 리소스 관계도"""
+    try:
+        from app.services.topology_service import TopologyService
+        topology_service = TopologyService()
+        return await topology_service.get_deployment_topology(namespace, deployment_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/topology/storage")
+async def get_storage_topology():
+    """스토리지 리소스 관계도 (PV, PVC)"""
+    try:
+        from app.services.topology_service import TopologyService
+        topology_service = TopologyService()
+        return await topology_service.get_storage_topology()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

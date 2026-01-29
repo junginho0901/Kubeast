@@ -16,19 +16,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://backend:8000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://backend:8000',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://backend:8000',
-        ws: true,
-      },
-    },
+    // MSA 구조: API Gateway(nginx)가 모든 요청을 라우팅하므로 프록시 불필요
+    // Gateway가 frontend:5173으로 프록시하고, API 요청은 해당 서비스로 라우팅
   },
 })
