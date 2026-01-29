@@ -75,6 +75,8 @@ export default function Topology() {
       return data.yaml
     },
     enabled: !!namespace && !!selectedResource,
+    staleTime: 0, // 데이터를 항상 stale로 간주
+    cacheTime: 0, // 캐시 비활성화 (항상 새로 가져오기)
   })
 
   if (!namespace) {
