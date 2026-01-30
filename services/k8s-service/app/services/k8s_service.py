@@ -20,6 +20,10 @@ from app.cluster import (
 )
 
 
+METRICS_REQUEST_TIMEOUT = 6  # seconds for metrics.k8s.io calls
+METRICS_MAX_RETRIES = 2      # max retries for metrics fetch
+
+
 class K8sService:
     """Kubernetes 클러스터 서비스"""
     
@@ -1105,8 +1109,8 @@ class K8sService:
     async def get_pod_metrics(self, namespace: Optional[str] = None) -> List[Dict]:
         """Pod 리소스 사용량 조회 (kubectl top pods)"""
         import time
-        
-        max_retries = 3
+
+        max_retries = METRICS_MAX_RETRIES
         retry_delay = 0.5  # 0.5초
         
         for attempt in range(1, max_retries + 1):
@@ -1121,7 +1125,7 @@ class K8sService:
                         version="v1beta1",
                         namespace=namespace,
                         plural="pods",
-                        _request_timeout=5  # 5초 타임아웃
+                        _request_timeout=METRICS_REQUEST_TIMEOUT  # 메트릭 서버 응답 지연 대응
                     )
                 else:
                     # 전체 네임스페이스의 Pod 메트릭
@@ -1130,7 +1134,7 @@ class K8sService:
                         group="metrics.k8s.io",
                         version="v1beta1",
                         plural="pods",
-                        _request_timeout=5  # 5초 타임아웃
+                        _request_timeout=METRICS_REQUEST_TIMEOUT  # 메트릭 서버 응답 지연 대응
                     )
                 
                 result = []
@@ -1139,6 +1143,8 @@ class K8sService:
                     pod_namespace = item["metadata"]["namespace"]
                     
                     # 컨테이너별 리소스 사용량 파싱
+                    total_cpu = 0
+                    total_memory = 0
                     for container in item.get("containers", []):
                         usage = container.get("usage", {})
                         total_cpu += self._parse_cpu_usage(usage.get("cpu", "0"))
@@ -1192,12 +1198,13 @@ class K8sService:
         """Node 리소스 사용량 조회 (kubectl top nodes)"""
         try:
             custom_api = client.CustomObjectsApi()
-            
+
             # Node 메트릭 조회
             metrics = custom_api.list_cluster_custom_object(
                 group="metrics.k8s.io",
                 version="v1beta1",
-                plural="nodes"
+                plural="nodes",
+                _request_timeout=METRICS_REQUEST_TIMEOUT  # 메트릭 서버 응답 지연 대응
             )
             
             # Node 정보 조회 (용량 확인용)

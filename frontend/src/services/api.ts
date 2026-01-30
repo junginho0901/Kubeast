@@ -5,6 +5,7 @@ const client = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10초 타임아웃 (백엔드 재시도 시간 고려)
 })
 
 // Types
@@ -100,6 +101,24 @@ export interface TopologyGraph {
     label?: string
   }>
   metadata: Record<string, any>
+}
+
+export interface TopResources {
+  top_pods: Array<{
+    namespace: string
+    name: string
+    cpu: string
+    memory: string
+  }>
+  top_nodes: Array<{
+    name: string
+    cpu: string
+    cpu_percent: string
+    memory: string
+    memory_percent: string
+  }>
+  pod_error?: boolean
+  node_error?: boolean
 }
 
 export interface LogAnalysisResponse {
@@ -285,32 +304,22 @@ export const api = {
   },
 
   getNodeMetrics: async (): Promise<any[]> => {
-    const { data } = await client.get('/cluster/metrics/nodes')
+    const { data } = await client.get('/cluster/metrics/nodes', {
+      // 메트릭 수집은 최대 수 초 이상 걸릴 수 있으므로 일반 API보다 여유 있게 설정
+      timeout: 20000,
+    })
     return data
   },
 
   getPodMetrics: async (namespace?: string): Promise<any[]> => {
     const { data } = await client.get('/cluster/metrics/pods', {
       params: { namespace },
+      timeout: 20000,
     })
     return data
   },
 
-  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3): Promise<{
-    top_pods: Array<{
-      namespace: string
-      name: string
-      cpu: string
-      memory: string
-    }>
-    top_nodes: Array<{
-      name: string
-      cpu: string
-      cpu_percent: string
-      memory: string
-      memory_percent: string
-    }>
-  }> => {
+  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3): Promise<TopResources> => {
     const { data } = await client.get('/cluster/metrics/top-resources', {
       params: { pod_limit: podLimit, node_limit: nodeLimit },
     })

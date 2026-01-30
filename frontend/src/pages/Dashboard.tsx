@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/services/api'
+import { api, TopResources } from '@/services/api'
 import {
   Server,
   Box,
@@ -100,15 +100,41 @@ export default function Dashboard() {
   const {
     data: topResources,
     isLoading: isLoadingTopResources,
-    isFetching: isFetchingTopResources,
     isError: isTopResourcesError
-  } = useQuery({
+  } = useQuery<TopResources>({
     queryKey: ['top-resources'],
-    queryFn: () => api.getTopResources(5, 3), // 파드 5개, 노드 3개
+    queryFn: async () => {
+      const result = await api.getTopResources(5, 3)
+      // 백엔드에서 빈 배열을 반환한 경우(일시적 실패) 이전 데이터 유지를 위해
+      // 유효한 데이터가 있는지 확인
+      const hasValidData = (result.top_pods && result.top_pods.length > 0) ||
+                          (result.top_nodes && result.top_nodes.length > 0)
+      
+      if (!hasValidData) {
+        // 빈 데이터면 에러를 throw하여 React Query가 이전 데이터를 유지하도록
+        // placeholderData가 이전 데이터를 반환하도록 함
+        throw new Error('No valid metrics data available')
+      }
+      
+      return result
+    },
     staleTime: 5000, // 5초간 fresh 상태 유지
     refetchInterval: 5000, // 5초마다 백그라운드 갱신
-    placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
-    retry: 3, // 실패 시 3번까지 재시도 (더 끈기있게)
+    placeholderData: (previousData) => {
+      // 이전 데이터가 있고 유효한 경우에만 유지
+      // 에러 발생 시에도 이전 데이터를 유지하여 깜빡임 방지
+      if (previousData && (
+        (previousData.top_pods && previousData.top_pods.length > 0) ||
+        (previousData.top_nodes && previousData.top_nodes.length > 0)
+      )) {
+        return previousData
+      }
+      return undefined
+    },
+    retry: 1, // 실패 시 1번만 재시도
+    retryDelay: 1000, // 1초 대기 후 재시도
+    // 에러 발생 시에도 이전 데이터를 유지
+    gcTime: 60000, // 캐시 유지 시간 (기본값보다 길게)
   })
 
   // 노드 목록 (모달용)
@@ -598,7 +624,26 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-white">리소스 사용 Top 5 파드</h2>
             <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
           </div>
-          {(topResources?.top_pods && topResources.top_pods.length > 0) ? (
+          {isLoadingTopResources && !topResources ? (
+            // 초기 로딩: 스켈레톤 표시
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="p-4 bg-slate-700 rounded-lg animate-pulse">
+                  <div className="h-4 bg-slate-600 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-slate-600 rounded w-1/2"></div>
+                </div>
+              ))}
+            </div>
+          ) : isTopResourcesError && !topResources?.top_pods ? (
+            // 에러 상태: 이전 데이터가 없을 때만 에러 표시
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+                <p className="text-slate-400">데이터를 가져오는데 실패했습니다</p>
+              </div>
+            </div>
+          ) : topResources?.top_pods && topResources.top_pods.length > 0 ? (
+            // 데이터가 있을 때: 데이터 표시 (백그라운드 갱신 중에도 이전 데이터 유지)
             <div className="space-y-3">
               {topResources.top_pods.map((pod, index) => (
                 <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
@@ -626,25 +671,19 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          ) : (isLoadingTopResources || isFetchingTopResources) ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="p-4 bg-slate-700 rounded-lg animate-pulse">
-                  <div className="h-4 bg-slate-600 rounded w-3/4 mb-2"></div>
-                  <div className="h-3 bg-slate-600 rounded w-1/2"></div>
-                </div>
-              ))}
+          ) : topResources?.pod_error ? (
+            // 메트릭 수집 실패 (노드 메트릭은 있을 수 있음)
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <AlertCircle className="w-8 h-8 text-yellow-400" />
+                <p className="text-slate-400">Pod 메트릭을 가져오는 데 실패했습니다</p>
+                <p className="text-xs text-slate-500">metrics-server 상태를 확인해주세요</p>
+              </div>
             </div>
           ) : (
+            // 데이터가 없을 때
             <div className="text-center py-12">
-              {isTopResourcesError ? (
-                <div className="flex flex-col items-center gap-2">
-                  <AlertCircle className="w-8 h-8 text-red-400" />
-                  <p className="text-slate-400">데이터를 가져오는데 실패했습니다</p>
-                </div>
-              ) : (
-                <p className="text-slate-400">리소스 사용 데이터가 없습니다</p>
-              )}
+              <p className="text-slate-400">리소스 사용 데이터가 없습니다</p>
             </div>
           )}
         </div>
@@ -655,7 +694,27 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-white">리소스 사용 Top 3 노드</h2>
             <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
           </div>
-          {(topResources?.top_nodes && topResources.top_nodes.length > 0) ? (
+          {isLoadingTopResources && !topResources ? (
+            // 초기 로딩: 스켈레톤 표시
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-3 animate-pulse">
+                  <div className="h-4 bg-slate-600 rounded w-2/3"></div>
+                  <div className="h-2 bg-slate-600 rounded"></div>
+                  <div className="h-2 bg-slate-600 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : isTopResourcesError && !topResources?.top_nodes ? (
+            // 에러 상태: 이전 데이터가 없을 때만 에러 표시
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+                <p className="text-slate-400">데이터를 가져오는데 실패했습니다</p>
+              </div>
+            </div>
+          ) : topResources?.top_nodes && topResources.top_nodes.length > 0 ? (
+            // 데이터가 있을 때: 데이터 표시 (백그라운드 갱신 중에도 이전 데이터 유지)
             <div className="space-y-4">
               {topResources.top_nodes.map((node, index) => {
                 const cpuPercent = parseFloat(node.cpu_percent)
@@ -723,26 +782,19 @@ export default function Dashboard() {
                 )
               })}
             </div>
-          ) : (isLoadingTopResources || isFetchingTopResources) ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="space-y-3 animate-pulse">
-                  <div className="h-4 bg-slate-600 rounded w-2/3"></div>
-                  <div className="h-2 bg-slate-600 rounded"></div>
-                  <div className="h-2 bg-slate-600 rounded"></div>
-                </div>
-              ))}
+          ) : topResources?.node_error ? (
+            // 메트릭 수집 실패 (파드 메트릭은 있을 수 있음)
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <AlertCircle className="w-8 h-8 text-yellow-400" />
+                <p className="text-slate-400">노드 메트릭을 가져오는 데 실패했습니다</p>
+                <p className="text-xs text-slate-500">metrics-server 상태를 확인해주세요</p>
+              </div>
             </div>
           ) : (
+            // 데이터가 없을 때
             <div className="text-center py-12">
-              {isTopResourcesError ? (
-                <div className="flex flex-col items-center gap-2">
-                  <AlertCircle className="w-8 h-8 text-red-400" />
-                  <p className="text-slate-400">데이터를 가져오는데 실패했습니다</p>
-                </div>
-              ) : (
-                <p className="text-slate-400">리소스 사용 데이터가 없습니다</p>
-              )}
+              <p className="text-slate-400">리소스 사용 데이터가 없습니다</p>
             </div>
           )}
         </div>

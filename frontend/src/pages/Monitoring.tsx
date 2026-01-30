@@ -21,6 +21,9 @@ export default function Monitoring() {
     queryFn: api.getNodeMetrics,
     staleTime: 5000,
     refetchInterval: 5000,
+    retry: 2, // 2번 재시도
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프
+    placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
   })
 
   // 네임스페이스 목록
@@ -37,8 +40,9 @@ export default function Monitoring() {
     staleTime: 5000,
     refetchInterval: 5000,
     enabled: !!selectedNamespace, // 네임스페이스가 선택되었을 때만 활성화
-    retry: 3, // 3번 재시도
-    retryDelay: 1000, // 1초 대기 후 재시도
+    retry: 2, // 2번 재시도 (너무 많은 재시도는 오히려 지연 증가)
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프 (최대 5초)
+    placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
   })
 
   // Pod 상세 정보 (Limit/Request 포함) - 네임스페이스 선택 시에만 활성화

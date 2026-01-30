@@ -678,17 +678,44 @@ async def get_top_resources(
 ):
     """리소스 사용량 Top N 파드/노드 조회"""
     try:
+        pod_metrics_error = False
+        node_metrics_error = False
+
         # 파드 메트릭 가져오기
-        pod_metrics = await k8s_service.get_pod_metrics()
-        if not pod_metrics:
-             print(f"[WARN] API layer: No pod metrics retrieved. Raising exception to prevent clearing frontend data.")
-             raise Exception("Pod metrics not available")
+        pod_metrics = None
+        try:
+            pod_metrics = await k8s_service.get_pod_metrics()
+            if not pod_metrics:
+                print(f"[WARN] API layer: No pod metrics retrieved.")
+                pod_metrics = None
+                pod_metrics_error = True
+        except Exception as e:
+            print(f"[WARN] API layer: Failed to get pod metrics: {str(e)}.")
+            pod_metrics = None
+            pod_metrics_error = True
         
         # 노드 메트릭 가져오기
-        node_metrics = await k8s_service.get_node_metrics()
-        if not node_metrics:
-             print(f"[WARN] API layer: No node metrics retrieved. Raising exception.")
-             raise Exception("Node metrics not available")
+        node_metrics = None
+        try:
+            node_metrics = await k8s_service.get_node_metrics()
+            if not node_metrics:
+                print(f"[WARN] API layer: No node metrics retrieved.")
+                node_metrics = None
+                node_metrics_error = True
+        except Exception as e:
+            print(f"[WARN] API layer: Failed to get node metrics: {str(e)}.")
+            node_metrics = None
+            node_metrics_error = True
+        
+        # 둘 다 실패한 경우에만 에러 반환
+        if pod_metrics is None and node_metrics is None:
+            raise Exception("Both pod and node metrics are unavailable")
+        
+        # 실패한 부분은 빈 배열로 처리 (프론트엔드에서 이전 데이터 유지하도록)
+        if pod_metrics is None:
+            pod_metrics = []
+        if node_metrics is None:
+            node_metrics = []
         
         # 파드 CPU 기준 정렬 (내림차순)
         def parse_cpu(cpu_str: str) -> float:
@@ -739,10 +766,12 @@ async def get_top_resources(
         # _score 필드 제거
         for node in top_nodes:
             node.pop('_score', None)
-        
+
         return {
             "top_pods": top_pods,
-            "top_nodes": top_nodes
+            "top_nodes": top_nodes,
+            "pod_error": pod_metrics_error,
+            "node_error": node_metrics_error
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

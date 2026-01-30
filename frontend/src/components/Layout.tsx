@@ -1,11 +1,9 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { 
-  LayoutDashboard, 
-  Boxes, 
-  Network, 
-  MessageSquare, 
-  FileText,
+import {
+  LayoutDashboard,
+  Boxes,
+  MessageSquare,
   Activity,
   Layers
 } from 'lucide-react'
