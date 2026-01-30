@@ -7,13 +7,17 @@ import {
   Activity,
   HardDrive,
   Cpu,
-  Clock
+  Clock,
+  ChevronDown,
+  CheckCircle
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export default function Monitoring() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
+  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
   // 노드 리소스 사용량 (5초마다 자동 갱신)
   const { data: nodeMetrics, isLoading: isLoadingNodes } = useQuery({
@@ -60,6 +64,23 @@ export default function Monitoring() {
       setLastUpdate(new Date())
     }
   }, [nodeMetrics, podMetrics])
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
+        setIsNamespaceDropdownOpen(false)
+      }
+    }
+
+    if (isNamespaceDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isNamespaceDropdownOpen])
 
   // Pod 메트릭 통계
   const podStats = podMetrics ? {
@@ -214,7 +235,7 @@ export default function Monitoring() {
       </div>
 
       {/* Pod 리소스 사용량 */}
-      <div className="card">
+      <div className="card overflow-visible">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-green-500/10">
@@ -228,23 +249,79 @@ export default function Monitoring() {
         </div>
 
         {/* 네임스페이스 선택 */}
-        <div className="mb-6">
+        <div className="mb-6 overflow-visible">
           <label className="block text-sm font-medium text-slate-400 mb-2">
             네임스페이스 선택
           </label>
-          <select
-            value={selectedNamespace}
-            onChange={(e) => setSelectedNamespace(e.target.value)}
-            className="w-full md:w-64 px-4 py-2 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500"
-          >
-            <option value="">네임스페이스를 선택하세요</option>
-            <option value="all">전체 네임스페이스</option>
-            {namespaces && namespaces.map((ns) => (
-              <option key={ns.name} value={ns.name}>
-                {ns.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative w-full md:w-64" ref={namespaceDropdownRef}>
+            <button
+              onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
+              className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+            >
+              <span className="text-sm font-medium">
+                {selectedNamespace === '' 
+                  ? '네임스페이스를 선택하세요' 
+                  : selectedNamespace === 'all' 
+                    ? '전체 네임스페이스' 
+                    : selectedNamespace}
+              </span>
+              <ChevronDown 
+                className={`w-4 h-4 text-slate-400 transition-transform ${
+                  isNamespaceDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+            
+            {isNamespaceDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[200px] overflow-y-auto">
+                <button
+                  onClick={() => {
+                    setSelectedNamespace('')
+                    setIsNamespaceDropdownOpen(false)
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
+                >
+                  {selectedNamespace === '' && (
+                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  )}
+                  <span className={selectedNamespace === '' ? 'font-medium' : ''}>
+                    네임스페이스를 선택하세요
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedNamespace('all')
+                    setIsNamespaceDropdownOpen(false)
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2"
+                >
+                  {selectedNamespace === 'all' && (
+                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  )}
+                  <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
+                    전체 네임스페이스
+                  </span>
+                </button>
+                {Array.isArray(namespaces) && namespaces.map((ns) => (
+                  <button
+                    key={ns.name}
+                    onClick={() => {
+                      setSelectedNamespace(ns.name)
+                      setIsNamespaceDropdownOpen(false)
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
+                  >
+                    {selectedNamespace === ns.name && (
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    )}
+                    <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>
+                      {ns.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 네임스페이스 미선택 시 안내 메시지 */}
