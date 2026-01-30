@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+// @ts-nocheck
+import React, { useEffect, useRef } from 'react'
 
 declare global {
   interface Window {
