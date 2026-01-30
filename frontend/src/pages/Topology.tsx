@@ -106,7 +106,7 @@ export default function Topology() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 h-full">
       <div>
         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
           <FileCode className="w-8 h-8" />
@@ -117,11 +117,11 @@ export default function Topology() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-220px)]">
         {/* 리소스 타입 선택 */}
-        <div className="card">
+        <div className="card h-full flex flex-col overflow-hidden">
           <h2 className="text-lg font-semibold text-white mb-4">리소스 타입</h2>
-          <div className="space-y-2">
+          <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
             {resourceCategories.map((category) => (
               <button
                 key={category.type}
@@ -143,14 +143,16 @@ export default function Topology() {
         </div>
 
         {/* 리소스 목록 */}
-        <div className="card">
+        <div className="card h-full flex flex-col overflow-hidden">
           <h2 className="text-lg font-semibold text-white mb-4">
             {resourceCategories.find(c => c.type === selectedType)?.label}
           </h2>
           {resourcesLoading ? (
-            <div className="text-slate-400">로딩 중...</div>
+            <div className="flex-1 min-h-0 flex items-center justify-center text-slate-400">
+              로딩 중...
+            </div>
           ) : (
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
               {resources && resources.length > 0 ? (
                 resources.map((resource: any) => (
                   <button
@@ -176,7 +178,7 @@ export default function Topology() {
         </div>
 
         {/* YAML 내용 */}
-        <div className="card lg:col-span-2">
+        <div className="card lg:col-span-2 h-full flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white">
               {selectedResource ? `${selectedResource} YAML` : 'YAML 내용'}
@@ -193,48 +195,53 @@ export default function Topology() {
               </button>
             )}
           </div>
-          {yamlLoading ? (
-            <div className="text-slate-400">YAML 로딩 중...</div>
-          ) : yamlError ? (
-            <div className="text-center py-12">
-              <div className="text-red-400 mb-4">
-                ❌ YAML을 가져올 수 없습니다
+          <div className="flex-1 min-h-0">
+            {yamlLoading ? (
+              <div className="flex items-center justify-center h-full text-slate-400">
+                YAML 로딩 중...
               </div>
-              <p className="text-slate-400 text-sm mb-4">
-                {(yamlError as Error).message.includes('not found') 
-                  ? '리소스가 삭제되었거나 존재하지 않습니다.'
-                  : (yamlError as Error).message}
-              </p>
-              <button
-                onClick={() => {
-                  refetchResources()
-                  setSelectedResource(null)
-                }}
-                className="btn btn-primary"
-              >
-                목록 새로고침
-              </button>
-            </div>
-          ) : yaml ? (
-            <div className="bg-slate-900 rounded-lg overflow-auto max-h-[600px]">
-              <SyntaxHighlighter 
-                language="yaml" 
-                style={dracula} 
-                customStyle={{ 
-                  padding: '1rem',
-                  margin: 0,
-                  fontSize: '0.875rem'
-                }}
-              >
-                {String(yaml)}
-              </SyntaxHighlighter>
-            </div>
-          ) : (
-            <div className="text-slate-400 text-center py-12">
-              <FileCode className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>리소스를 선택하면 YAML 정의를 볼 수 있습니다</p>
-            </div>
-          )}
+            ) : yamlError ? (
+              <div className="flex flex-col items-center justify-center h-full text-center py-6">
+                <div className="text-red-400 mb-4">
+                  ❌ YAML을 가져올 수 없습니다
+                </div>
+                <p className="text-slate-400 text-sm mb-4">
+                  {(yamlError as Error).message.includes('not found') 
+                    ? '리소스가 삭제되었거나 존재하지 않습니다.'
+                    : (yamlError as Error).message}
+                </p>
+                <button
+                  onClick={() => {
+                    refetchResources()
+                    setSelectedResource(null)
+                  }}
+                  className="btn btn-primary"
+                >
+                  목록 새로고침
+                </button>
+              </div>
+            ) : yaml ? (
+              <div className="bg-slate-900 rounded-lg overflow-auto h-full">
+                <SyntaxHighlighter 
+                  language="yaml" 
+                  style={dracula} 
+                  customStyle={{ 
+                    padding: '1rem',
+                    margin: 0,
+                    fontSize: '0.875rem',
+                    height: '100%',
+                  }}
+                >
+                  {String(yaml)}
+                </SyntaxHighlighter>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 text-center">
+                <FileCode className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>리소스를 선택하면 YAML 정의를 볼 수 있습니다</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
