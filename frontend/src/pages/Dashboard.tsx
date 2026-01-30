@@ -96,12 +96,14 @@ export default function Dashboard() {
     refetchInterval: 60000,
   })
 
-  // 노드 리소스 사용량 (5초마다 갱신)
-  const { data: nodeMetrics } = useQuery({
-    queryKey: ['node-metrics'],
-    queryFn: api.getNodeMetrics,
-    staleTime: 5000,
-    refetchInterval: 5000,
+  // Top 리소스 사용 파드/노드 (5초마다 갱신)
+  const { data: topResources, isLoading: isLoadingTopResources } = useQuery({
+    queryKey: ['top-resources'],
+    queryFn: () => api.getTopResources(5, 3), // 파드 5개, 노드 3개
+    staleTime: 10000, // 10초간 fresh 상태 유지
+    refetchInterval: 5000, // 5초마다 백그라운드 갱신
+    placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
+    retry: 1, // 실패 시 1번만 재시도
   })
 
   // 노드 목록 (모달용)
@@ -583,81 +585,153 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* 노드 리소스 사용량 */}
-      {nodeMetrics && Array.isArray(nodeMetrics) && nodeMetrics.length > 0 && (
+      {/* Top 리소스 사용 파드/노드 */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Top 파드 */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">노드 리소스 사용량</h2>
+            <h2 className="text-xl font-bold text-white">리소스 사용 Top 5 파드</h2>
             <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
           </div>
-          <div className="space-y-6">
-            {nodeMetrics.map((node) => {
-              const cpuPercent = parseFloat(node.cpu_percent)
-              const memoryPercent = parseFloat(node.memory_percent)
-              
-              return (
-                <div key={node.name} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-white">{node.name}</h3>
-                    <div className="flex items-center gap-4 text-sm text-slate-400">
-                      <span>CPU: {node.cpu}</span>
-                      <span>Memory: {node.memory}</span>
+          {isLoadingTopResources && !topResources ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="p-4 bg-slate-700 rounded-lg animate-pulse">
+                  <div className="h-4 bg-slate-600 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-slate-600 rounded w-1/2"></div>
+                </div>
+              ))}
+            </div>
+          ) : topResources?.top_pods && topResources.top_pods.length > 0 ? (
+            <div className="space-y-3">
+              {topResources.top_pods.map((pod, index) => (
+                <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-500/20">
+                      <span className="text-primary-400 font-bold text-sm">#{index + 1}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white truncate" title={pod.name}>
+                        {pod.name}
+                      </h3>
+                      <p className="text-sm text-slate-400">{pod.namespace}</p>
                     </div>
                   </div>
-                  
-                  {/* CPU 사용량 막대 */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">CPU</span>
-                      <span className={`font-medium ${
-                        cpuPercent >= 80 ? 'text-red-400' : 
-                        cpuPercent >= 60 ? 'text-yellow-400' : 
-                        'text-green-400'
-                      }`}>
-                        {node.cpu_percent}
-                      </span>
+                  <div className="flex items-center justify-end gap-6 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">CPU:</span>
+                      <span className="text-green-400 font-mono font-medium">{pod.cpu}</span>
                     </div>
-                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full transition-all duration-300 ${
-                          cpuPercent >= 80 ? 'bg-red-500' : 
-                          cpuPercent >= 60 ? 'bg-yellow-500' : 
-                          'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min(cpuPercent, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Memory 사용량 막대 */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Memory</span>
-                      <span className={`font-medium ${
-                        memoryPercent >= 80 ? 'text-red-400' : 
-                        memoryPercent >= 60 ? 'text-yellow-400' : 
-                        'text-blue-400'
-                      }`}>
-                        {node.memory_percent}
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full transition-all duration-300 ${
-                          memoryPercent >= 80 ? 'bg-red-500' : 
-                          memoryPercent >= 60 ? 'bg-yellow-500' : 
-                          'bg-blue-500'
-                        }`}
-                        style={{ width: `${Math.min(memoryPercent, 100)}%` }}
-                      />
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">Memory:</span>
+                      <span className="text-blue-400 font-mono font-medium">{pod.memory}</span>
                     </div>
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-slate-400">리소스 사용 데이터가 없습니다</p>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Top 노드 */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">리소스 사용 Top 3 노드</h2>
+            <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
+          </div>
+          {isLoadingTopResources && !topResources ? (
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-3 animate-pulse">
+                  <div className="h-4 bg-slate-600 rounded w-2/3"></div>
+                  <div className="h-2 bg-slate-600 rounded"></div>
+                  <div className="h-2 bg-slate-600 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : topResources?.top_nodes && topResources.top_nodes.length > 0 ? (
+            <div className="space-y-4">
+              {topResources.top_nodes.map((node, index) => {
+                const cpuPercent = parseFloat(node.cpu_percent)
+                const memoryPercent = parseFloat(node.memory_percent)
+                
+                return (
+                  <div key={node.name} className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20">
+                        <span className="text-cyan-400 font-bold text-sm">#{index + 1}</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-white">{node.name}</h3>
+                        <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
+                          <span>CPU: {node.cpu}</span>
+                          <span>Memory: {node.memory}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* CPU 사용량 막대 */}
+                    <div className="space-y-1 pl-11">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">CPU</span>
+                        <span className={`font-medium ${
+                          cpuPercent >= 80 ? 'text-red-400' : 
+                          cpuPercent >= 60 ? 'text-yellow-400' : 
+                          'text-green-400'
+                        }`}>
+                          {node.cpu_percent}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-300 ${
+                            cpuPercent >= 80 ? 'bg-red-500' : 
+                            cpuPercent >= 60 ? 'bg-yellow-500' : 
+                            'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(cpuPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Memory 사용량 막대 */}
+                    <div className="space-y-1 pl-11">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Memory</span>
+                        <span className={`font-medium ${
+                          memoryPercent >= 80 ? 'text-red-400' : 
+                          memoryPercent >= 60 ? 'text-yellow-400' : 
+                          'text-blue-400'
+                        }`}>
+                          {node.memory_percent}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-300 ${
+                            memoryPercent >= 80 ? 'bg-red-500' : 
+                            memoryPercent >= 60 ? 'bg-yellow-500' : 
+                            'bg-blue-500'
+                          }`}
+                          style={{ width: `${Math.min(memoryPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-slate-400">리소스 사용 데이터가 없습니다</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* 노드 상세 정보 - 별도 카드 */}
       {nodes && Array.isArray(nodes) && nodes.length > 0 && (

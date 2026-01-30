@@ -296,6 +296,27 @@ export const api = {
     return data
   },
 
+  getTopResources: async (podLimit: number = 5, nodeLimit: number = 3): Promise<{
+    top_pods: Array<{
+      namespace: string
+      name: string
+      cpu: string
+      memory: string
+    }>
+    top_nodes: Array<{
+      name: string
+      cpu: string
+      cpu_percent: string
+      memory: string
+      memory_percent: string
+    }>
+  }> => {
+    const { data } = await client.get('/cluster/metrics/top-resources', {
+      params: { pod_limit: podLimit, node_limit: nodeLimit },
+    })
+    return data
+  },
+
   // Health check
   getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
     // /health는 /api/v1가 아닌 루트에 있음

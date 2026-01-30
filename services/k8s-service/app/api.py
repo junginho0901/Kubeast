@@ -671,6 +671,77 @@ async def get_node_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/metrics/top-resources")
+async def get_top_resources(
+    pod_limit: int = Query(5, description="상위 N개 파드"),
+    node_limit: int = Query(3, description="상위 N개 노드")
+):
+    """리소스 사용량 Top N 파드/노드 조회"""
+    try:
+        # 파드 메트릭 가져오기
+        pod_metrics = await k8s_service.get_pod_metrics()
+        
+        # 노드 메트릭 가져오기
+        node_metrics = await k8s_service.get_node_metrics()
+        
+        # 파드 CPU 기준 정렬 (내림차순)
+        def parse_cpu(cpu_str: str) -> float:
+            """CPU 문자열을 숫자로 변환 (millicores)"""
+            if cpu_str.endswith('m'):
+                return float(cpu_str[:-1])
+            elif cpu_str.endswith('n'):
+                return float(cpu_str[:-1]) / 1_000_000
+            else:
+                return float(cpu_str) * 1000
+        
+        def parse_memory(mem_str: str) -> float:
+            """Memory 문자열을 숫자로 변환 (Mi)"""
+            if mem_str.endswith('Mi'):
+                return float(mem_str[:-2])
+            elif mem_str.endswith('Gi'):
+                return float(mem_str[:-2]) * 1024
+            elif mem_str.endswith('Ki'):
+                return float(mem_str[:-2]) / 1024
+            else:
+                return float(mem_str) / (1024 * 1024)
+        
+        # 파드를 CPU+Memory 합계로 정렬 (가중치: CPU 70%, Memory 30%)
+        for pod in pod_metrics:
+            cpu_val = parse_cpu(pod.get('cpu', '0m'))
+            mem_val = parse_memory(pod.get('memory', '0Mi'))
+            # 정규화된 점수 (CPU는 1000m = 1 core 기준, Memory는 1000Mi = 1Gi 기준)
+            pod['_score'] = (cpu_val / 1000 * 0.7) + (mem_val / 1000 * 0.3)
+        
+        top_pods = sorted(pod_metrics, key=lambda x: x.get('_score', 0), reverse=True)[:pod_limit]
+        
+        # _score 필드 제거
+        for pod in top_pods:
+            pod.pop('_score', None)
+        
+        # 노드를 CPU 사용률로 정렬
+        def parse_percent(percent_str: str) -> float:
+            """백분율 문자열을 숫자로 변환"""
+            return float(percent_str.rstrip('%'))
+        
+        for node in node_metrics:
+            cpu_percent = parse_percent(node.get('cpu_percent', '0%'))
+            mem_percent = parse_percent(node.get('memory_percent', '0%'))
+            node['_score'] = (cpu_percent * 0.7) + (mem_percent * 0.3)
+        
+        top_nodes = sorted(node_metrics, key=lambda x: x.get('_score', 0), reverse=True)[:node_limit]
+        
+        # _score 필드 제거
+        for node in top_nodes:
+            node.pop('_score', None)
+        
+        return {
+            "top_pods": top_pods,
+            "top_nodes": top_nodes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/nodes/{name}/describe")
 async def describe_node(name: str):
     """노드 상세 정보 조회"""
