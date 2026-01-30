@@ -1306,37 +1306,6 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* 용량 및 할당 가능 */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {nodeDetail.capacity && Object.keys(nodeDetail.capacity).length > 0 && (
-                          <div className="card">
-                            <h3 className="text-lg font-bold text-white mb-4">Capacity</h3>
-                            <div className="space-y-2">
-                              {Object.entries(nodeDetail.capacity).map(([key, value]) => (
-                                <div key={key} className="flex items-center justify-between p-2 bg-slate-700 rounded">
-                                  <span className="text-slate-400 text-sm">{key}</span>
-                                  <span className="text-white font-mono text-sm">{value as string}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {nodeDetail.allocatable && Object.keys(nodeDetail.allocatable).length > 0 && (
-                          <div className="card">
-                            <h3 className="text-lg font-bold text-white mb-4">Allocatable</h3>
-                            <div className="space-y-2">
-                              {Object.entries(nodeDetail.allocatable).map(([key, value]) => (
-                                <div key={key} className="flex items-center justify-between p-2 bg-slate-700 rounded">
-                                  <span className="text-slate-400 text-sm">{key}</span>
-                                  <span className="text-white font-mono text-sm">{value as string}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
                       {/* Conditions */}
                       {nodeDetail.conditions && nodeDetail.conditions.length > 0 && (
                         <div className="card">
