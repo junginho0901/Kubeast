@@ -1148,7 +1148,7 @@ class K8sService:
                 print(f"[ERROR] Failed to get pod metrics (attempt {attempt}/{max_retries}): {e.status} - {e.reason}")
                 if attempt < max_retries:
                     print(f"[INFO] Retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
+                    await asyncio.sleep(retry_delay)
                     retry_delay *= 2  # 지수 백오프
                 else:
                     print(f"[ERROR] All retries exhausted. Response body: {e.body}")
@@ -1159,7 +1159,7 @@ class K8sService:
                 print(f"[ERROR] Unexpected error in get_pod_metrics (attempt {attempt}/{max_retries}): {type(e).__name__} - {str(e)}")
                 if attempt < max_retries:
                     print(f"[INFO] Retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
+                    await asyncio.sleep(retry_delay)
                     retry_delay *= 2
                 else:
                     import traceback

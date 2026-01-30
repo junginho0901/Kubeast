@@ -680,9 +680,15 @@ async def get_top_resources(
     try:
         # 파드 메트릭 가져오기
         pod_metrics = await k8s_service.get_pod_metrics()
+        if not pod_metrics:
+             print(f"[WARN] API layer: No pod metrics retrieved. Raising exception to prevent clearing frontend data.")
+             raise Exception("Pod metrics not available")
         
         # 노드 메트릭 가져오기
         node_metrics = await k8s_service.get_node_metrics()
+        if not node_metrics:
+             print(f"[WARN] API layer: No node metrics retrieved. Raising exception.")
+             raise Exception("Node metrics not available")
         
         # 파드 CPU 기준 정렬 (내림차순)
         def parse_cpu(cpu_str: str) -> float:
