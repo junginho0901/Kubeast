@@ -607,9 +607,25 @@ Executing...
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      const sessionPart = selectedSessionId || 'session'
-      const messagePart = message.id != null ? `-${message.id}` : ''
-      a.download = `tool-results-${sessionPart}${messagePart}.json`
+      // 파일 이름: 호출된 tool 이름들 + 타임스탬프
+      const toolNames = (message.toolCalls || [])
+        .map((tc: any) => tc?.function)
+        .filter((name: any) => typeof name === 'string' && name.length > 0)
+      const uniqueToolNames = Array.from(new Set(toolNames))
+      const toolPart =
+        uniqueToolNames.length > 0
+          ? uniqueToolNames.join('+').slice(0, 40)
+          : 'tool'
+
+      const now = new Date()
+      const pad = (n: number) => n.toString().padStart(2, '0')
+      const timestamp = `${now.getFullYear()}${pad(
+        now.getMonth() + 1
+      )}${pad(now.getDate())}-${pad(now.getHours())}${pad(
+        now.getMinutes()
+      )}${pad(now.getSeconds())}`
+
+      a.download = `${toolPart}_${timestamp}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
