@@ -409,6 +409,11 @@ export default function Dashboard() {
     )
   }
 
+  // Pod/Node 상태는 Kubernetes 스펙상 가능한 값이 제한적이므로
+  // 차트에서 항상 전체 상태를 보여주기 위해 고정 목록 사용
+  const POD_PHASES = ['Pending', 'Running', 'Succeeded', 'Failed', 'Unknown']
+  const NODE_STATUSES = ['Ready', 'NotReady']
+
   const stats = [
     {
       name: '네임스페이스',
@@ -455,10 +460,10 @@ export default function Dashboard() {
   ]
 
   // Pod 상태 차트 데이터
-  const podStatusData = overview?.pod_status
-    ? Object.entries(overview.pod_status).map(([name, value]) => ({
-      name,
-      value,
+  const podStatusData = overview
+    ? POD_PHASES.map((phase) => ({
+      name: phase,
+      value: overview?.pod_status?.[phase] ?? 0,
     }))
     : []
 
@@ -468,13 +473,15 @@ export default function Dashboard() {
       const status = node.status || 'Unknown'
       acc[status] = (acc[status] || 0) + 1
       return acc
-    }, {})
+    }, {} as Record<string, number>)
     : {}
 
-  const nodeStatusChartData = Object.entries(nodeStatusData).map(([name, value]) => ({
-    name,
-    value,
-  }))
+  const nodeStatusChartData = nodes && Array.isArray(nodes)
+    ? NODE_STATUSES.map((status) => ({
+      name: status,
+      value: nodeStatusData[status] ?? 0,
+    }))
+    : []
 
   return (
     <div className="space-y-8">
