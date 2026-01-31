@@ -62,6 +62,15 @@ async def get_namespaces(force_refresh: bool = Query(False, description="캐시 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/namespaces/{namespace}/describe")
+async def describe_namespace(namespace: str):
+    """네임스페이스 상세 정보 조회 (kubectl describe namespace 유사)"""
+    try:
+        return await k8s_service.describe_namespace(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/namespaces/{namespace}/services", response_model=List[ServiceInfo])
 async def get_services(namespace: str):
     """특정 네임스페이스의 서비스 목록"""

@@ -29,6 +29,22 @@ export interface NamespaceInfo {
   resource_count: Record<string, number>
 }
 
+export interface NamespaceDescribe {
+  name: string
+  status?: string
+  created_at?: string
+  labels: Record<string, string>
+  annotations: Record<string, string>
+  events: Array<{
+    type?: string
+    reason?: string
+    message?: string
+    count?: number
+    first_timestamp?: string
+    last_timestamp?: string
+  }>
+}
+
 export interface ServiceInfo {
   name: string
   namespace: string
@@ -175,6 +191,11 @@ export const api = {
     const { data } = await client.get('/cluster/namespaces', {
       params: { force_refresh: forceRefresh }
     })
+    return data
+  },
+
+  describeNamespace: async (namespace: string): Promise<NamespaceDescribe> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/describe`)
     return data
   },
 

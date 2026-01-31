@@ -195,6 +195,59 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get namespaces: {e}")
+
+    async def describe_namespace(self, name: str) -> Dict:
+        """네임스페이스 상세 정보 조회 (kubectl describe namespace와 유사)"""
+        try:
+            ns = self.v1.read_namespace(name)
+
+            # 이벤트 조회 (Namespace 관련)
+            events = self.v1.list_namespaced_event(
+                namespace=name,
+                field_selector=f"involvedObject.name={name},involvedObject.kind=Namespace"
+            )
+
+            # 생성 시각 포맷
+            created_at = None
+            if hasattr(ns.metadata, "creation_timestamp") and ns.metadata.creation_timestamp:
+                try:
+                    if hasattr(ns.metadata.creation_timestamp, "isoformat"):
+                        created_at = ns.metadata.creation_timestamp.isoformat()
+                    else:
+                        created_at = str(ns.metadata.creation_timestamp)
+                except Exception as e:
+                    print(f"[WARN] Failed to format namespace.creation_timestamp: {e}")
+                    created_at = str(ns.metadata.creation_timestamp)
+
+            describe_info: Dict[str, Any] = {
+                "name": ns.metadata.name,
+                "status": getattr(ns.status, "phase", None) if getattr(ns, "status", None) else None,
+                "created_at": created_at,
+                "labels": ns.metadata.labels or {},
+                "annotations": ns.metadata.annotations or {},
+                "events": [],
+            }
+
+            if events and events.items:
+                for event in events.items:
+                    describe_info["events"].append(
+                        {
+                            "type": event.type,
+                            "reason": event.reason,
+                            "message": event.message,
+                            "count": event.count,
+                            "first_timestamp": str(event.first_timestamp)
+                            if getattr(event, "first_timestamp", None)
+                            else None,
+                            "last_timestamp": str(event.last_timestamp)
+                            if getattr(event, "last_timestamp", None)
+                            else None,
+                        }
+                    )
+
+            return describe_info
+        except ApiException as e:
+            raise Exception(f"Failed to describe namespace: {e}")
     
     async def get_services(self, namespace: str) -> List[ServiceInfo]:
         """서비스 목록"""

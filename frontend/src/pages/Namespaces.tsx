@@ -1,21 +1,33 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
-import { Box, ArrowRight, Network, RefreshCw, Search } from 'lucide-react'
+import { Box, ArrowRight, Network, RefreshCw, Search, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useState, useMemo } from 'react'
+import { ModalOverlay } from '@/components/ModalOverlay'
 
 export default function Namespaces() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedNamespaceForDescribe, setSelectedNamespaceForDescribe] = useState<string | null>(null)
   
   const { data: namespaces, isLoading } = useQuery({
     queryKey: ['namespaces'],
     queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
+  })
+
+  const {
+    data: namespaceDescribe,
+    isLoading: isLoadingNamespaceDescribe,
+    error: namespaceDescribeError,
+  } = useQuery({
+    queryKey: ['namespace-describe', selectedNamespaceForDescribe],
+    queryFn: () => api.describeNamespace(selectedNamespaceForDescribe!),
+    enabled: !!selectedNamespaceForDescribe,
   })
   
   // 검색어로 네임스페이스 필터링
@@ -131,7 +143,11 @@ export default function Namespaces() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {filteredNamespaces.length > 0 ? (
           filteredNamespaces.map((ns) => (
-          <div key={ns.name} className="card hover:border-primary-500 transition-colors cursor-pointer">
+          <div
+            key={ns.name}
+            className="card hover:border-primary-500 transition-colors cursor-pointer"
+            onClick={() => setSelectedNamespaceForDescribe(ns.name)}
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-primary-500/10 rounded-lg">
@@ -183,14 +199,20 @@ export default function Namespaces() {
 
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => navigate(`/resources/${ns.name}`)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate(`/resources/${ns.name}`)
+                }}
                 className="btn btn-primary flex-1 flex items-center justify-center gap-2"
               >
                 리소스 보기
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={() => navigate(`/topology/${ns.name}`)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate(`/topology/${ns.name}`)
+                }}
                 className="btn btn-secondary flex items-center justify-center gap-2"
               >
                 <Network className="w-4 h-4" />
@@ -207,6 +229,91 @@ export default function Namespaces() {
           </div>
         )}
       </div>
+
+      {selectedNamespaceForDescribe && (
+        <ModalOverlay onClose={() => setSelectedNamespaceForDescribe(null)}>
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-xl max-w-3xl w-full max-h-[80vh] overflow-hidden shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  네임스페이스 상세: {selectedNamespaceForDescribe}
+                </h2>
+                <p className="text-xs text-slate-400">
+                  kubectl describe namespace {selectedNamespaceForDescribe} 에 해당하는 정보
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedNamespaceForDescribe(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 max-h-[60vh] overflow-y-auto text-sm space-y-4">
+              {isLoadingNamespaceDescribe ? (
+                <p className="text-slate-400">네임스페이스 정보를 불러오는 중...</p>
+              ) : namespaceDescribeError ? (
+                <p className="text-red-400">네임스페이스 상세 정보를 가져오는데 실패했습니다.</p>
+              ) : namespaceDescribe ? (
+                <>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">기본 정보</p>
+                    <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
+{`이름: ${namespaceDescribe.name}
+상태: ${namespaceDescribe.status || 'N/A'}
+생성 시각: ${namespaceDescribe.created_at || 'N/A'}`}
+                    </pre>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">Labels</p>
+                      <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
+                        {namespaceDescribe.labels &&
+                        Object.keys(namespaceDescribe.labels).length > 0
+                          ? Object.entries(namespaceDescribe.labels)
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join('\n')
+                          : '(없음)'}
+                      </pre>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">Annotations</p>
+                      <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
+                        {namespaceDescribe.annotations &&
+                        Object.keys(namespaceDescribe.annotations).length > 0
+                          ? Object.entries(namespaceDescribe.annotations)
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join('\n')
+                          : '(없음)'}
+                      </pre>
+                    </div>
+                  </div>
+                  {namespaceDescribe.events && namespaceDescribe.events.length > 0 && (
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">최근 이벤트</p>
+                      <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
+                        {namespaceDescribe.events
+                          .map(
+                            (e) =>
+                              `[${e.type || ''}] ${e.reason || ''}: ${
+                                e.message || ''
+                              } (count=${e.count ?? 1})`
+                          )
+                          .join('\n')}
+                      </pre>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-slate-400">네임스페이스 정보를 찾을 수 없습니다.</p>
+              )}
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
     </div>
   )
 }
