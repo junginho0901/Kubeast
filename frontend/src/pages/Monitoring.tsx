@@ -18,7 +18,7 @@ export default function Monitoring() {
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
-  // 노드 리소스 사용량 (5초마다 자동 갱신)
+  // Node 리소스 사용량 (5초마다 자동 갱신)
   const { data: nodeMetrics, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['node-metrics'],
     queryFn: api.getNodeMetrics,
@@ -113,12 +113,12 @@ export default function Monitoring() {
         <div>
           <h1 className="text-3xl font-bold text-white">리소스 모니터링</h1>
           <p className="mt-2 text-slate-400">
-            노드 및 Pod의 실시간 리소스 사용량을 모니터링하세요
+            Node 및 Pod의 실시간 리소스 사용량을 모니터링하세요
           </p>
         </div>
       </div>
 
-      {/* 노드 리소스 사용량 */}
+      {/* Node 리소스 사용량 */}
       <div className="card">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -148,7 +148,7 @@ export default function Monitoring() {
             </p>
             {nodeMetrics && (
               <p className="text-xs text-slate-400">
-                총 {nodeMetrics.length}개 노드
+                총 {nodeMetrics.length}개 Node
               </p>
             )}
           </div>
@@ -243,7 +243,7 @@ export default function Monitoring() {
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-slate-400">노드 메트릭을 사용할 수 없습니다</p>
+            <p className="text-slate-400">Node 메트릭을 사용할 수 없습니다</p>
             <p className="text-sm text-slate-500 mt-2">
               metrics-server가 설치되어 있는지 확인하세요
             </p>

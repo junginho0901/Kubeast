@@ -624,12 +624,12 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Top 리소스 사용 파드/노드 */}
+      {/* Top 리소스 사용 Pod/Node */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Top 파드 */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">리소스 사용 Top 5 파드</h2>
+            <h2 className="text-xl font-bold text-white">리소스 사용 Top 5 Pod</h2>
             <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
           </div>
           {isLoadingTopResources && !topResources ? (
@@ -689,7 +689,7 @@ export default function Dashboard() {
               ))}
             </div>
           ) : topResources?.pod_error ? (
-            // 메트릭 수집 실패 (노드 메트릭은 있을 수 있음)
+            // 메트릭 수집 실패 (Node 메트릭은 있을 수 있음)
             <div className="text-center py-12">
               <div className="flex flex-col items-center gap-2">
                 <AlertCircle className="w-8 h-8 text-yellow-400" />
@@ -705,10 +705,10 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Top 노드 */}
+        {/* Top Node */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">리소스 사용 Top 3 노드</h2>
+            <h2 className="text-xl font-bold text-white">리소스 사용 Top 3 Node</h2>
             <p className="text-xs text-slate-400">5초마다 자동 갱신</p>
           </div>
           {isLoadingTopResources && !topResources ? (
@@ -826,7 +826,7 @@ export default function Dashboard() {
             <div className="text-center py-12">
               <div className="flex flex-col items-center gap-2">
                 <AlertCircle className="w-8 h-8 text-yellow-400" />
-                <p className="text-slate-400">노드 메트릭을 가져오는 데 실패했습니다</p>
+                <p className="text-slate-400">Node 메트릭을 가져오는 데 실패했습니다</p>
                 <p className="text-xs text-slate-500">metrics-server 상태를 확인해주세요</p>
               </div>
             </div>
@@ -839,10 +839,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 노드 상세 정보 - 별도 카드 */}
+      {/* Node 상세 정보 - 별도 카드 */}
       {nodes && Array.isArray(nodes) && nodes.length > 0 && (
         <div className="card">
-          <h2 className="text-xl font-bold text-white mb-4">노드 목록</h2>
+          <h2 className="text-xl font-bold text-white mb-4">Node 목록</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
             {nodes.map((node) => (
               <button
@@ -1170,7 +1170,7 @@ export default function Dashboard() {
                       ) : (
                         <div className="text-center py-12">
                           <p className="text-slate-400">
-                            {modalSearchQuery ? '검색 결과가 없습니다' : '노드가 없습니다'}
+                            {modalSearchQuery ? '검색 결과가 없습니다' : 'Node가 없습니다'}
                           </p>
                         </div>
                       )}
@@ -1183,7 +1183,7 @@ export default function Dashboard() {
         </ModalOverlay>
       )}
 
-      {/* 노드 상세 모달 */}
+      {/* Node 상세 모달 */}
       {selectedNode && (
         <ModalOverlay onClose={handleCloseNodeDetail}>
           <div
@@ -1199,7 +1199,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-white">{selectedNode.name}</h2>
-                    <p className="text-sm text-slate-400">노드 상세 정보</p>
+                    <p className="text-sm text-slate-400">Node 상세 정보</p>
                   </div>
                 </div>
                 <button
