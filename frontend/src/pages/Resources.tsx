@@ -240,7 +240,7 @@ export default function Resources() {
                 <div className="mt-4">
                   <p className="text-xs text-slate-400 mb-2">Ports</p>
                   <div className="flex flex-wrap gap-2">
-                    {svc.ports.map((port, idx) => (
+                    {svc.ports.map((port: any, idx: number) => (
                       <span key={idx} className="badge badge-info">
                         {port.port}:{port.target_port}/{port.protocol}
                       </span>

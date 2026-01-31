@@ -1141,6 +1141,8 @@ class K8sService:
                 for item in metrics.get("items", []):
                     pod_name = item["metadata"]["name"]
                     pod_namespace = item["metadata"]["namespace"]
+                    timestamp = item.get("timestamp")
+                    window = item.get("window")
                     
                     # 컨테이너별 리소스 사용량 파싱
                     total_cpu = 0
@@ -1154,7 +1156,10 @@ class K8sService:
                         "namespace": pod_namespace,
                         "name": pod_name,
                         "cpu": f"{int(total_cpu)}m",
-                        "memory": f"{int(total_memory)}Mi"
+                        "memory": f"{int(total_memory)}Mi",
+                        # 메트릭 수집 시각/윈도우 (metrics.k8s.io 기준)
+                        "timestamp": timestamp,
+                        "window": window,
                     })
                 
                 print(f"[DEBUG] Pod metrics result count: {len(result)}")
@@ -1220,6 +1225,8 @@ class K8sService:
             for item in metrics.get("items", []):
                 node_name = item["metadata"]["name"]
                 usage = item.get("usage", {})
+                timestamp = item.get("timestamp")
+                window = item.get("window")
                 
                 # 리소스 사용량 파싱
                 cpu_value = self._parse_cpu_usage(usage.get("cpu", "0"))
@@ -1244,7 +1251,10 @@ class K8sService:
                     "cpu": f"{int(cpu_value)}m",
                     "cpu_percent": f"{int(cpu_percent)}%",
                     "memory": f"{int(memory_value)}Mi",
-                    "memory_percent": f"{int(memory_percent)}%"
+                    "memory_percent": f"{int(memory_percent)}%",
+                    # 메트릭 수집 시각/윈도우 (metrics.k8s.io 기준)
+                    "timestamp": timestamp,
+                    "window": window,
                 })
             
             return result

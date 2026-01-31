@@ -103,6 +103,25 @@ export default function Monitoring() {
     }, 0)
   } : null
 
+  // 메트릭 수집 시각 (metrics-server 기준)
+  const getLatestMetricTimestamp = (items: any[] | undefined | null): Date | null => {
+    if (!items || !Array.isArray(items) || items.length === 0) return null
+    let latest: Date | null = null
+    for (const item of items) {
+      const ts = item?.timestamp as string | undefined
+      if (!ts) continue
+      const d = new Date(ts)
+      if (isNaN(d.getTime())) continue
+      if (!latest || d > latest) {
+        latest = d
+      }
+    }
+    return latest
+  }
+
+  const latestNodeMetricTime = getLatestMetricTimestamp(nodeMetrics)
+  const latestPodMetricTime = getLatestMetricTimestamp(podMetrics)
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -130,12 +149,18 @@ export default function Monitoring() {
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <Clock className="w-4 h-4" />
               <span>
-                마지막 업데이트:{' '}
+                마지막 업데이트 (화면 기준):{' '}
                 {lastNodeUpdate ? lastNodeUpdate.toLocaleTimeString() : '대기 중'}
               </span>
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
               <span className="text-green-400">5초마다 자동 갱신</span>
             </div>
+            {latestNodeMetricTime && (
+              <p className="text-xs text-slate-400">
+                메트릭 기준 수집 시각:{' '}
+                {latestNodeMetricTime.toLocaleTimeString()}
+              </p>
+            )}
             <p className="text-xs text-slate-500">
               * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
             </p>
@@ -261,12 +286,18 @@ export default function Monitoring() {
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <Clock className="w-4 h-4" />
                 <span>
-                  마지막 업데이트:{' '}
+                  마지막 업데이트 (화면 기준):{' '}
                   {lastPodUpdate ? lastPodUpdate.toLocaleTimeString() : '대기 중'}
                 </span>
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
                 <span className="text-green-400">5초마다 자동 갱신</span>
               </div>
+              {latestPodMetricTime && (
+                <p className="text-xs text-slate-400">
+                  메트릭 기준 수집 시각:{' '}
+                  {latestPodMetricTime.toLocaleTimeString()}
+                </p>
+              )}
               <p className="text-xs text-slate-500">
                 * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
               </p>
