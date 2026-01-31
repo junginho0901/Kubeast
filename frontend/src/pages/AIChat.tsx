@@ -338,10 +338,14 @@ Executing...
                   const beforeFunction = functionCallsContent.substring(0, lastFunctionIndex)
                   const afterFunction = functionCallsContent.substring(lastFunctionIndex)
                   
+                  const codeBlock = data.is_json
+                    ? `\`\`\`json\n${data.result}\n\`\`\``
+                    : `\`\`\`\n${data.result}\n\`\`\``
+                  
                   // "Executing..."을 실제 결과로 교체
                   const updatedAfterFunction = afterFunction.replace(
                     'Executing...',
-                    `\`\`\`\n${data.result}\n\`\`\``
+                    codeBlock
                   )
                   
                   functionCallsContent = beforeFunction + updatedAfterFunction

@@ -963,6 +963,35 @@ Deployment 상세:
             print(f"[DEBUG] {error_msg}")
             return json.dumps({"error": error_msg}, ensure_ascii=False)
     
+    def _format_tool_result(self, function_response) -> (str, bool):
+        """Tool 실행 결과를 사용자 친화적으로 포맷 (JSON은 pretty-print)
+
+        Returns:
+            (formatted_text, is_json)
+        """
+        try:
+            # dict/list 는 그대로 pretty-print
+            if isinstance(function_response, (dict, list)):
+                return json.dumps(function_response, ensure_ascii=False, indent=2), True
+            
+            # 문자열인 경우 JSON 여부를 감지해서 포맷
+            if isinstance(function_response, str):
+                stripped = function_response.strip()
+                if stripped.startswith("{") or stripped.startswith("["):
+                    try:
+                        parsed = json.loads(stripped)
+                        return json.dumps(parsed, ensure_ascii=False, indent=2), True
+                    except json.JSONDecodeError:
+                        # JSON 이 아니면 원본 그대로 사용
+                        return function_response, False
+                return function_response, False
+            
+            # 그 외 타입은 문자열로 변환
+            return str(function_response), False
+        except Exception as e:
+            print(f"[DEBUG] Failed to format tool result: {e}")
+            return str(function_response), False
+    
     def _extract_suggestions(self, message: str) -> List[str]:
         """메시지에서 제안 추출"""
         suggestions = []
@@ -1078,17 +1107,31 @@ Deployment 상세:
                         
                         print(f"[DEBUG] Function response length: {len(str(function_response))}")
                         
-                        # 결과 미리보기 (너무 길면 잘라서 전송)
-                        result_preview = str(function_response)[:1000]  # 프론트엔드로는 1000자만
+                        # 결과를 사용자 친화적으로 포맷 (JSON이면 pretty-print)
+                        formatted_result, is_json = self._format_tool_result(function_response)
+                        
+                        # 결과 미리보기 (너무 길면 잘라서 전송하되, 표시를 남김)
+                        max_preview_len = 4000
+                        if len(formatted_result) > max_preview_len:
+                            result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..."
+                        else:
+                            result_preview = formatted_result
                         
                         # Function 결과를 프론트엔드로 전송 (스트리밍) - 실행 후
-                        yield f"data: {json.dumps({'function_result': function_name, 'result': result_preview}, ensure_ascii=False)}\n\n"
+                        yield f"data: {json.dumps({'function_result': function_name, 'result': result_preview, 'is_json': is_json}, ensure_ascii=False)}\n\n"
                         
                         # Tool call 정보 + 실행 결과 저장
+                        max_store_len = 4000
+                        stored_result = (
+                            formatted_result[:max_store_len] + "\n... (truncated) ..."
+                            if len(formatted_result) > max_store_len
+                            else formatted_result
+                        )
                         tool_calls_log.append({
                             'function': function_name, 
                             'args': function_args,
-                            'result': str(function_response)[:2000]  # 결과는 처음 2000자만 저장
+                            'result': stored_result,
+                            'is_json': is_json
                         })
                         
                         messages.append({
@@ -1156,11 +1199,13 @@ Deployment 상세:
                     
                     # Results 섹션 - 실제 tool 실행 결과
                     result_preview = tc.get('result', 'No result')
+                    is_json = tc.get('is_json', False)
+                    code_fence = "```json" if is_json else "```"
                     
                     results_section = f"""<details>
 <summary><strong>📊 Results</strong></summary>
 
-```
+{code_fence}
 {result_preview}
 ```
 
