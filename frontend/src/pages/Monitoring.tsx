@@ -15,7 +15,8 @@ import { useState, useEffect, useRef } from 'react'
 
 export default function Monitoring() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const [lastNodeUpdate, setLastNodeUpdate] = useState<Date | null>(null)
+  const [lastPodUpdate, setLastPodUpdate] = useState<Date | null>(null)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -58,12 +59,19 @@ export default function Monitoring() {
     enabled: !!selectedNamespace, // 네임스페이스가 선택되었을 때만 활성화
   })
 
-  // 마지막 업데이트 시간 갱신
+  // 마지막 업데이트 시간 갱신 - 노드
   useEffect(() => {
-    if (nodeMetrics || podMetrics) {
-      setLastUpdate(new Date())
+    if (nodeMetrics) {
+      setLastNodeUpdate(new Date())
     }
-  }, [nodeMetrics, podMetrics])
+  }, [nodeMetrics])
+
+  // 마지막 업데이트 시간 갱신 - Pod
+  useEffect(() => {
+    if (podMetrics) {
+      setLastPodUpdate(new Date())
+    }
+  }, [podMetrics])
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -105,36 +113,38 @@ export default function Monitoring() {
             노드 및 Pod의 실시간 리소스 사용량을 모니터링하세요
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <Clock className="w-4 h-4" />
-            <span>마지막 업데이트: {lastUpdate.toLocaleTimeString()}</span>
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
-            <span className="text-green-400">5초마다 자동 갱신</span>
-          </div>
-          <p className="text-xs text-slate-500">
-            * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
-          </p>
-        </div>
       </div>
 
       {/* 노드 리소스 사용량 */}
       <div className="card">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-cyan-500/10">
               <Server className="w-6 h-6 text-cyan-400" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">노드 리소스 사용량</h2>
-              <p className="text-sm text-slate-400">5초마다 자동 갱신</p>
             </div>
           </div>
-          {nodeMetrics && (
-            <div className="text-sm text-slate-400">
-              총 {nodeMetrics.length}개 노드
+          <div className="flex flex-col items-end gap-1 text-right">
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Clock className="w-4 h-4" />
+              <span>
+                마지막 업데이트:{' '}
+                {lastNodeUpdate ? lastNodeUpdate.toLocaleTimeString() : '대기 중'}
+              </span>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
+              <span className="text-green-400">5초마다 자동 갱신</span>
             </div>
-          )}
+            <p className="text-xs text-slate-500">
+              * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
+            </p>
+            {nodeMetrics && (
+              <p className="text-xs text-slate-400">
+                총 {nodeMetrics.length}개 노드
+              </p>
+            )}
+          </div>
         </div>
 
         {isLoadingNodes ? (
@@ -236,7 +246,7 @@ export default function Monitoring() {
 
       {/* Pod 리소스 사용량 */}
       <div className="card overflow-visible">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-green-500/10">
               <Box className="w-6 h-6 text-green-400" />
@@ -246,6 +256,22 @@ export default function Monitoring() {
               <p className="text-sm text-slate-400">네임스페이스별 필터링 지원</p>
             </div>
           </div>
+          {selectedNamespace && (
+            <div className="flex flex-col items-end gap-1 text-right">
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Clock className="w-4 h-4" />
+                <span>
+                  마지막 업데이트:{' '}
+                  {lastPodUpdate ? lastPodUpdate.toLocaleTimeString() : '대기 중'}
+                </span>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
+                <span className="text-green-400">5초마다 자동 갱신</span>
+              </div>
+              <p className="text-xs text-slate-500">
+                * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 네임스페이스 선택 */}
