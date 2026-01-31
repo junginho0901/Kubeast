@@ -602,7 +602,10 @@ export default function ClusterView() {
       {/* Pod 상세 정보 모달 */}
       {selectedPod && (
         <ModalOverlay onClose={() => setSelectedPod(null)}>
-          <div className="bg-slate-800 rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col">
+          <div
+            className="bg-slate-800 rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 모달 헤더 */}
             <div className="p-6 border-b border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">

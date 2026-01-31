@@ -920,7 +920,10 @@ export default function Dashboard() {
       {/* 리소스 상세 모달 */}
       {selectedResourceType && (
         <ModalOverlay onClose={handleCloseModal}>
-          <div className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col">
+          <div
+            className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 모달 헤더 */}
             {(() => {
               const selectedStat = getSelectedStat()
@@ -1176,7 +1179,10 @@ export default function Dashboard() {
       {/* 노드 상세 모달 */}
       {selectedNode && (
         <ModalOverlay onClose={handleCloseNodeDetail}>
-          <div className="bg-slate-800 rounded-lg max-w-6xl w-full h-[85vh] overflow-hidden flex flex-col">
+          <div
+            className="bg-slate-800 rounded-lg max-w-6xl w-full h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* 모달 헤더 */}
             <div className="p-6 border-b border-slate-700">
               <div className="flex items-center justify-between">
