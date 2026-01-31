@@ -8,9 +8,12 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 
 interface Message {
+  id?: number
   role: 'user' | 'assistant'
   content: string
   isTemporary?: boolean  // 스트리밍 중 임시 메시지 표시
+  // Tool 호출 결과 (DB의 tool_calls 컬럼 그대로)
+  toolCalls?: any[] 
 }
 
 export default function AIChat() {
@@ -87,8 +90,10 @@ export default function AIChat() {
       console.log('[DEBUG] Current messages count:', messages.length)
       
       const dbMessages = sessionDetail.messages.map((msg) => ({
+        id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
+        toolCalls: msg.tool_calls || undefined,
       }))
       
       // 임시 메시지가 있으면 제거하고 DB 데이터로 교체
@@ -521,7 +526,38 @@ Executing...
     'okestro-cmp 네임스페이스의 Service 목록을 조회해줘',
   ]
 
-  const MAX_DISPLAY_CHARS = 4000
+  const handleDownloadJson = (message: Message) => {
+    if (!message.toolCalls || message.toolCalls.length === 0) {
+      console.warn('[DEBUG] No toolCalls available for download')
+      return
+    }
+
+    try {
+      const payload = message.toolCalls.map((tc: any, index: number) => ({
+        index,
+        function: tc.function,
+        args: tc.args,
+        is_json: tc.is_json,
+        result: tc.result,
+      }))
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const sessionPart = selectedSessionId || 'session'
+      const messagePart = message.id != null ? `-${message.id}` : ''
+      a.download = `tool-results-${sessionPart}${messagePart}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('[ERROR] Failed to download JSON:', err)
+    }
+  }
 
   return (
     <div className="flex h-screen">
@@ -769,7 +805,7 @@ Executing...
           <div className="flex-1 overflow-y-auto">
             {messages.map((message, idx) => (
               <div
-                key={idx}
+                key={message.id ?? idx}
                 className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
               >
                 <div
@@ -803,13 +839,6 @@ Executing...
                       const hasMarkdownHeading = message.content.includes('##')
                       const koreanTextLength = (message.content.match(/[가-힣]/g) || []).length
                       const hasActualResponse = hasMarkdownHeading || koreanTextLength > 20
-
-                      const shouldTruncate =
-                        hasToolCalls && message.content.length > MAX_DISPLAY_CHARS && !message.isTemporary
-
-                      const displayContent = shouldTruncate
-                        ? message.content.slice(0, MAX_DISPLAY_CHARS)
-                        : message.content
                       
                       console.log('[DEBUG LOADING]', {
                         hasToolCalls,
@@ -822,8 +851,26 @@ Executing...
                       
                       return (
                         <>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                            {displayContent}
+                          {message.toolCalls && message.toolCalls.length > 0 && (
+                            <div className="flex justify-end mb-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleDownloadJson(message)
+                                }}
+                                className="px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
+                              >
+                                JSON 다운로드
+                              </button>
+                            </div>
+                          )}
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeRaw]}
+                          >
+                            {message.content}
                           </ReactMarkdown>
                           {hasToolCalls && !hasActualResponse && message.isTemporary && (
                             <div className="flex gap-2 items-center py-3 mt-4">

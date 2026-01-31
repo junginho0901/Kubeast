@@ -1118,19 +1118,14 @@ Deployment 상세:
                             result_preview = formatted_result
                         
                         # Function 결과를 프론트엔드로 전송 (스트리밍) - 실행 후
+                        # 👉 프론트에는 미리보기만 전달 (약 4000자)
                         yield f"data: {json.dumps({'function_result': function_name, 'result': result_preview, 'is_json': is_json}, ensure_ascii=False)}\n\n"
                         
-                        # Tool call 정보 + 실행 결과 저장
-                        max_store_len = 4000
-                        stored_result = (
-                            formatted_result[:max_store_len] + "\n... (truncated) ..."
-                            if len(formatted_result) > max_store_len
-                            else formatted_result
-                        )
+                        # Tool call 정보 + 실행 결과 전체 저장 (DB에는 전체 결과 보관)
                         tool_calls_log.append({
                             'function': function_name, 
                             'args': function_args,
-                            'result': stored_result,
+                            'result': formatted_result,
                             'is_json': is_json
                         })
                         
@@ -1226,8 +1221,8 @@ Deployment 상세:
             print(f"[DEBUG] Full message length: {len(full_message)}")
             print(f"[DEBUG] Full message preview: {full_message[:200]}...")
             
-            # Assistant 메시지 저장 (tool call 정보 포함)
-            await db.add_message(session_id, "assistant", full_message)
+            # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
+            await db.add_message(session_id, "assistant", full_message, tool_calls=tool_calls_log or None)
             print(f"[DEBUG] Message saved to DB")
             
             # Tool Context를 DB에 저장
