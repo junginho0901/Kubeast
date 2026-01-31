@@ -17,6 +17,7 @@ export default function Monitoring() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
+  const [activeTab, setActiveTab] = useState<'nodes' | 'pods'>('nodes')
 
   // Node 리소스 사용량 (5초마다 자동 갱신)
   const { data: nodeMetrics, isLoading: isLoadingNodes } = useQuery({
@@ -27,6 +28,7 @@ export default function Monitoring() {
     retry: 2, // 2번 재시도
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
+    enabled: activeTab === 'nodes',
   })
 
   // 네임스페이스 목록
@@ -42,7 +44,7 @@ export default function Monitoring() {
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace),
     staleTime: 5000,
     refetchInterval: 5000,
-    enabled: !!selectedNamespace, // 네임스페이스가 선택되었을 때만 활성화
+    enabled: activeTab === 'pods' && !!selectedNamespace, // Pod 탭 + 네임스페이스 선택 시에만 활성화
     retry: 2, // 2번 재시도 (너무 많은 재시도는 오히려 지연 증가)
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프 (최대 5초)
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
@@ -54,7 +56,7 @@ export default function Monitoring() {
     queryFn: () => api.getAllPods(false),
     staleTime: 10000,
     refetchInterval: 10000,
-    enabled: !!selectedNamespace, // 네임스페이스가 선택되었을 때만 활성화
+    enabled: activeTab === 'pods' && !!selectedNamespace, // Pod 탭 + 네임스페이스 선택 시에만 활성화
   })
 
   // 외부 클릭 시 드롭다운 닫기
@@ -116,9 +118,36 @@ export default function Monitoring() {
             Node 및 Pod의 실시간 리소스 사용량을 모니터링하세요
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('nodes')}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                activeTab === 'nodes'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              Node 리소스
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pods')}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                activeTab === 'pods'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              Pod 리소스
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Node 리소스 사용량 */}
+      {activeTab === 'nodes' && (
       <div className="card">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -250,8 +279,10 @@ export default function Monitoring() {
           </div>
         )}
       </div>
+      )}
 
       {/* Pod 리소스 사용량 */}
+      {activeTab === 'pods' && (
       <div className="card overflow-visible">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -566,6 +597,7 @@ export default function Monitoring() {
           </div>
         ) : null}
       </div>
+      )}
     </div>
   )
 }
