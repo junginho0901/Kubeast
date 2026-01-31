@@ -15,8 +15,6 @@ import { useState, useEffect, useRef } from 'react'
 
 export default function Monitoring() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
-  const [lastNodeUpdate, setLastNodeUpdate] = useState<Date | null>(null)
-  const [lastPodUpdate, setLastPodUpdate] = useState<Date | null>(null)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -58,20 +56,6 @@ export default function Monitoring() {
     refetchInterval: 10000,
     enabled: !!selectedNamespace, // 네임스페이스가 선택되었을 때만 활성화
   })
-
-  // 마지막 업데이트 시간 갱신 - 노드
-  useEffect(() => {
-    if (nodeMetrics) {
-      setLastNodeUpdate(new Date())
-    }
-  }, [nodeMetrics])
-
-  // 마지막 업데이트 시간 갱신 - Pod
-  useEffect(() => {
-    if (podMetrics) {
-      setLastPodUpdate(new Date())
-    }
-  }, [podMetrics])
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -147,18 +131,16 @@ export default function Monitoring() {
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
             <div className="flex items-center gap-2 text-sm text-slate-400">
-              <Clock className="w-4 h-4" />
-              <span>
-                마지막 업데이트 (화면 기준):{' '}
-                {lastNodeUpdate ? lastNodeUpdate.toLocaleTimeString() : '대기 중'}
-              </span>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-green-400">5초마다 자동 갱신</span>
             </div>
             {latestNodeMetricTime && (
-              <p className="text-xs text-slate-400">
-                메트릭 기준 수집 시각:{' '}
-                {latestNodeMetricTime.toLocaleTimeString()}
+              <p className="text-xs text-slate-400 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span>
+                  메트릭 기준 수집 시각:{' '}
+                  {latestNodeMetricTime.toLocaleTimeString()}
+                </span>
               </p>
             )}
             <p className="text-xs text-slate-500">
@@ -284,18 +266,16 @@ export default function Monitoring() {
           {selectedNamespace && (
             <div className="flex flex-col items-end gap-1 text-right">
               <div className="flex items-center gap-2 text-sm text-slate-400">
-                <Clock className="w-4 h-4" />
-                <span>
-                  마지막 업데이트 (화면 기준):{' '}
-                  {lastPodUpdate ? lastPodUpdate.toLocaleTimeString() : '대기 중'}
-                </span>
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-2"></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-green-400">5초마다 자동 갱신</span>
               </div>
               {latestPodMetricTime && (
-                <p className="text-xs text-slate-400">
-                  메트릭 기준 수집 시각:{' '}
-                  {latestPodMetricTime.toLocaleTimeString()}
+                <p className="text-xs text-slate-400 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  <span>
+                    메트릭 기준 수집 시각:{' '}
+                    {latestPodMetricTime.toLocaleTimeString()}
+                  </span>
                 </p>
               )}
               <p className="text-xs text-slate-500">
