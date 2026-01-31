@@ -906,7 +906,6 @@ Executing...
                 >
                   {(() => {
                     const hasContent = message.content && message.content.length > 0
-                    console.log(`[DEBUG] Message ${idx}: role=${message.role}, hasContent=${hasContent}, content="${message.content}"`)
                     
                     if (hasContent) {
                       // Tool call이 있고 실제 답변이 없으면 로딩 점 추가
@@ -915,15 +914,6 @@ Executing...
                       const hasMarkdownHeading = message.content.includes('##')
                       const koreanTextLength = (message.content.match(/[가-힣]/g) || []).length
                       const hasActualResponse = hasMarkdownHeading || koreanTextLength > 20
-                      
-                      console.log('[DEBUG LOADING]', {
-                        hasToolCalls,
-                        hasActualResponse,
-                        isTemporary: message.isTemporary,
-                        hasMarkdownHeading,
-                        koreanTextLength,
-                        shouldShowLoading: hasToolCalls && !hasActualResponse && message.isTemporary
-                      })
                       
                       return (
                         <>
@@ -964,7 +954,6 @@ Executing...
                         </>
                       )
                     } else if (message.role === 'assistant') {
-                      console.log('[DEBUG] Showing loading dots for empty assistant message')
                       return (
                         <div className="flex gap-2 items-center py-1">
                           <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
