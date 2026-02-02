@@ -576,37 +576,89 @@ Executing...
     'okestro-cmp 네임스페이스의 Service 목록을 조회해줘',
   ]
 
-  const handleDownloadJson = (message: Message) => {
+  const handleDownloadJson = async (message: Message) => {
     if (!message.toolCalls || message.toolCalls.length === 0) {
       console.warn('[DEBUG] No toolCalls available for download')
       return
     }
 
     try {
-      // toolCalls 중 JSON 결과만 추려서 result만 추출
-      const jsonResults = message.toolCalls
-        .filter((tc: any) => tc && tc.is_json && typeof tc.result === 'string')
-        .map((tc: any) => {
-          try {
-            return JSON.parse(tc.result)
-          } catch {
-            return tc.result
-          }
-        })
+      const toolCalls = message.toolCalls as any[]
 
-      let payload: any
-      if (jsonResults.length === 1) {
-        // 단일 JSON 결과인 경우 그 JSON만 그대로 저장
-        payload = jsonResults[0]
-      } else if (jsonResults.length > 1) {
-        // 여러 개면 배열로 묶어서 저장
-        payload = jsonResults
+      // 1) JSON 결과(is_json === true)가 하나뿐인 경우:
+      //    -> 기본적으로 그 tool의 result 문자열만 그대로 파일로 저장
+      //    -> 단, result 안에 '... (truncated) ...' 가 포함되어 있으면
+      //       가능한 경우 직접 API를 다시 호출해서 전체 JSON을 가져온다
+      const jsonToolCalls = toolCalls.filter(
+        (tc) => tc && tc.is_json && typeof tc.result === 'string',
+      )
+
+      let blobContent: string
+
+      if (jsonToolCalls.length === 1) {
+        const tc = jsonToolCalls[0]
+        const raw = String(tc.result)
+
+        const isTruncated = raw.includes('... (truncated) ...')
+        const fnName = tc.function as string | undefined
+        const args = (tc.args || {}) as any
+
+        // get_pods 처럼 다시 조회가 가능한 툴이고, 결과가 잘린 경우에는
+        // 직접 클러스터 API를 호출해서 전체 데이터를 가져와 JSON으로 저장
+        if (isTruncated && fnName) {
+          try {
+            if (fnName === 'get_pods' && typeof args.namespace === 'string') {
+              const pods = await api.getPods(args.namespace)
+              blobContent = JSON.stringify(pods, null, 2)
+            } else if (fnName === 'get_node_list') {
+              const nodes = await api.getNodes()
+              blobContent = JSON.stringify(nodes, null, 2)
+            } else if (fnName === 'get_cluster_overview') {
+              const overview = await api.getClusterOverview()
+              blobContent = JSON.stringify(overview, null, 2)
+            } else if (fnName === 'get_deployments' && typeof args.namespace === 'string') {
+              const deployments = await api.getDeployments(args.namespace)
+              blobContent = JSON.stringify(deployments, null, 2)
+            } else if (fnName === 'get_services' && typeof args.namespace === 'string') {
+              const services = await api.getServices(args.namespace)
+              blobContent = JSON.stringify(services, null, 2)
+            } else {
+              // 지원하지 않는 툴이거나 args 부족하면 원본 문자열 그대로 사용
+              blobContent = raw
+            }
+          } catch (e) {
+            console.error('[ERROR] Failed to refetch full JSON for download:', e)
+            blobContent = raw
+          }
+        } else {
+          // 잘리지 않았거나, 재조회 대상이 아니면 원본 result 그대로 사용
+          blobContent = raw
+        }
+      } else if (jsonToolCalls.length > 1) {
+        // 2) JSON 결과가 여러 개면:
+        //    가능한 것은 실제 JSON으로 파싱해서 배열로 저장,
+        //    파싱 실패하면 해당 항목은 문자열 그대로 배열에 포함
+        const items: any[] = []
+        for (const tc of jsonToolCalls) {
+          const raw = String(tc.result)
+          const trimmed = raw.trim()
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+              items.push(JSON.parse(trimmed))
+            } catch {
+              items.push(raw)
+            }
+          } else {
+            items.push(raw)
+          }
+        }
+        blobContent = JSON.stringify(items, null, 2)
       } else {
-        // JSON으로 표시되지 않는 경우에는 원본 toolCalls를 fallback으로 저장
-        payload = message.toolCalls
+        // 3) is_json 표시가 없는 경우(로그 등)에는 기존처럼 전체 toolCalls 구조를 JSON으로 저장
+        blobContent = JSON.stringify(toolCalls, null, 2)
       }
 
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      const blob = new Blob([blobContent], {
         type: 'application/json;charset=utf-8',
       })
       const url = URL.createObjectURL(blob)
