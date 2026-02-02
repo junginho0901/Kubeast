@@ -1444,9 +1444,10 @@ Deployment 상세:
                             # Content 스트리밍
                             if hasattr(choice, 'delta') and choice.delta.content:
                                 content = choice.delta.content
-                                accumulated_content += content
-                                assistant_content += content
-                                yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                                if content:  # 빈 content는 전송하지 않음
+                                    accumulated_content += content
+                                    assistant_content += content
+                                    yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
                             
                             # Tool calls 수집 (여러 청크에 걸쳐 올 수 있음)
                             if hasattr(choice, 'delta') and choice.delta.tool_calls:
