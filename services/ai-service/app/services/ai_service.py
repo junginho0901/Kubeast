@@ -86,7 +86,31 @@ JSON 형식으로 응답해주세요:
             )
             print(f"[AI Service] Analyze Logs API 응답 - 실제 사용 모델: {response.model}", flush=True)
             
+            # OpenAI 응답 전체 로그 출력
             import json
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "created": response.created,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "total_tokens": response.usage.total_tokens if response.usage else None
+                } if response.usage else None
+            }
+            print(f"[OPENAI RESPONSE][analyze_logs] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+            
             result = json.loads(response.choices[0].message.content)
             
             return LogAnalysisResponse(
@@ -156,7 +180,31 @@ JSON 형식으로 응답해주세요:
             )
             print(f"[AI Service] Troubleshoot API 응답 - 실제 사용 모델: {response.model}", flush=True)
             
+            # OpenAI 응답 전체 로그 출력
             import json
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "created": response.created,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "total_tokens": response.usage.total_tokens if response.usage else None
+                } if response.usage else None
+            }
+            print(f"[OPENAI RESPONSE][troubleshoot] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+            
             result = json.loads(response.choices[0].message.content)
             
             return TroubleshootResponse(
@@ -289,6 +337,31 @@ JSON 형식으로 응답해주세요:
             )
             print(f"[AI Service] Chat API 응답 - 실제 사용 모델: {response.model}", flush=True)
             
+            # OpenAI 응답 전체 로그 출력
+            import json
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "created": response.created,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "total_tokens": response.usage.total_tokens if response.usage else None
+                } if response.usage else None
+            }
+            print(f"[OPENAI RESPONSE][chat first] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+            
             response_message = response.choices[0].message
             tool_calls = response_message.tool_calls
             
@@ -318,6 +391,31 @@ JSON 형식으로 응답해주세요:
                     temperature=0.7
                 )
                 print(f"[AI Service] Chat API 두 번째 응답 - 실제 사용 모델: {second_response.model}", flush=True)
+                
+                # OpenAI 응답 전체 로그 출력
+                import json
+                response_dict = {
+                    "id": second_response.id,
+                    "model": second_response.model,
+                    "created": second_response.created,
+                    "choices": [
+                        {
+                            "index": choice.index,
+                            "message": {
+                                "role": choice.message.role,
+                                "content": choice.message.content,
+                                "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                            },
+                            "finish_reason": choice.finish_reason
+                        } for choice in second_response.choices
+                    ],
+                    "usage": {
+                        "prompt_tokens": second_response.usage.prompt_tokens if second_response.usage else None,
+                        "completion_tokens": second_response.usage.completion_tokens if second_response.usage else None,
+                        "total_tokens": second_response.usage.total_tokens if second_response.usage else None
+                    } if second_response.usage else None
+                }
+                print(f"[OPENAI RESPONSE][chat second] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
                 
                 message = second_response.choices[0].message.content
             else:
@@ -359,6 +457,31 @@ JSON 형식으로 응답해주세요:
                 ],
                 temperature=0.5
             )
+            
+            # OpenAI 응답 전체 로그 출력
+            import json
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "created": response.created,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "total_tokens": response.usage.total_tokens if response.usage else None
+                } if response.usage else None
+            }
+            print(f"[OPENAI RESPONSE][explain_resource] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
             
             return response.choices[0].message.content
         except Exception as e:
@@ -405,6 +528,31 @@ Deployment 상세:
                 ],
                 temperature=0.5
             )
+            
+            # OpenAI 응답 전체 로그 출력
+            import json
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "created": response.created,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "total_tokens": response.usage.total_tokens if response.usage else None
+                } if response.usage else None
+            }
+            print(f"[OPENAI RESPONSE][suggest_optimization] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
             
             content = response.choices[0].message.content
             # 제안을 리스트로 파싱
@@ -806,6 +954,31 @@ Deployment 상세:
                 temperature=0.7
             )
 
+            # OpenAI 응답 전체 로그 출력
+            import json
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "created": response.created,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                    "total_tokens": response.usage.total_tokens if response.usage else None
+                } if response.usage else None
+            }
+            print(f"[OPENAI RESPONSE][chat_stream first] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+
             # 토큰 사용량 로그 (첫 번째 호출)
             usage = getattr(response, "usage", None)
             if usage is not None:
@@ -857,10 +1030,37 @@ Deployment 상세:
                 
                 print(f"[DEBUG] Second GPT call started, streaming...")
                 
+                # 스트리밍 청크 전체 수집 및 로그
+                full_stream_content = ""
+                stream_chunks = []
                 async for chunk in stream:
+                    chunk_dict = {
+                        "id": chunk.id if hasattr(chunk, 'id') else None,
+                        "model": chunk.model if hasattr(chunk, 'model') else None,
+                        "created": chunk.created if hasattr(chunk, 'created') else None,
+                        "choices": [
+                            {
+                                "index": choice.index if hasattr(choice, 'index') else None,
+                                "delta": {
+                                    "role": choice.delta.role if hasattr(choice.delta, 'role') else None,
+                                    "content": choice.delta.content if hasattr(choice.delta, 'content') else None,
+                                    "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.delta.tool_calls or [])]
+                                } if hasattr(choice, 'delta') else None,
+                                "finish_reason": choice.finish_reason if hasattr(choice, 'finish_reason') else None
+                            } for choice in chunk.choices
+                        ]
+                    }
+                    stream_chunks.append(chunk_dict)
+                    
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
+                        full_stream_content += content
                         yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                
+                # 스트리밍 완료 후 전체 로그 출력
+                print(f"[OPENAI RESPONSE][chat_stream second - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(full_stream_content)}", flush=True)
+                print(f"[OPENAI RESPONSE][chat_stream second - full_content] {json.dumps({'content': full_stream_content}, ensure_ascii=False)}", flush=True)
+                print(f"[OPENAI RESPONSE][chat_stream second - chunks] {json.dumps(stream_chunks, ensure_ascii=False, indent=2)}", flush=True)
                 
                 print(f"[DEBUG] Streaming completed")
             else:
@@ -873,10 +1073,37 @@ Deployment 상세:
                     stream=True,
                 )
                 
+                # 스트리밍 청크 전체 수집 및 로그
+                full_stream_content = ""
+                stream_chunks = []
                 async for chunk in stream:
+                    chunk_dict = {
+                        "id": chunk.id if hasattr(chunk, 'id') else None,
+                        "model": chunk.model if hasattr(chunk, 'model') else None,
+                        "created": chunk.created if hasattr(chunk, 'created') else None,
+                        "choices": [
+                            {
+                                "index": choice.index if hasattr(choice, 'index') else None,
+                                "delta": {
+                                    "role": choice.delta.role if hasattr(choice.delta, 'role') else None,
+                                    "content": choice.delta.content if hasattr(choice.delta, 'content') else None,
+                                    "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.delta.tool_calls or [])]
+                                } if hasattr(choice, 'delta') else None,
+                                "finish_reason": choice.finish_reason if hasattr(choice, 'finish_reason') else None
+                            } for choice in chunk.choices
+                        ]
+                    }
+                    stream_chunks.append(chunk_dict)
+                    
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
+                        full_stream_content += content
                         yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+                
+                # 스트리밍 완료 후 전체 로그 출력
+                print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(full_stream_content)}", flush=True)
+                print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - full_content] {json.dumps({'content': full_stream_content}, ensure_ascii=False)}", flush=True)
+                print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - chunks] {json.dumps(stream_chunks, ensure_ascii=False, indent=2)}", flush=True)
             
             yield "data: [DONE]\n\n"
         
@@ -1172,6 +1399,31 @@ Deployment 상세:
                     )
                     print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
 
+                    # OpenAI 응답 전체 로그 출력
+                    import json
+                    response_dict = {
+                        "id": response.id,
+                        "model": response.model,
+                        "created": response.created,
+                        "choices": [
+                            {
+                                "index": choice.index,
+                                "message": {
+                                    "role": choice.message.role,
+                                    "content": choice.message.content,
+                                    "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
+                                },
+                                "finish_reason": choice.finish_reason
+                            } for choice in response.choices
+                        ],
+                        "usage": {
+                            "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
+                            "completion_tokens": response.usage.completion_tokens if response.usage else None,
+                            "total_tokens": response.usage.total_tokens if response.usage else None
+                        } if response.usage else None
+                    }
+                    print(f"[OPENAI RESPONSE][session_chat_stream iteration {iteration}] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+
                     # 토큰 사용량 로그 (Function Calling 단계)
                     usage = getattr(response, "usage", None)
                     if usage is not None:
@@ -1260,13 +1512,37 @@ Deployment 상세:
                     
                     print(f"[DEBUG] Streaming final response...")
 
+                    # 스트리밍 청크 전체 수집 및 로그
+                    stream_chunks = []
                     async for chunk in stream:
+                        chunk_dict = {
+                            "id": chunk.id if hasattr(chunk, 'id') else None,
+                            "model": chunk.model if hasattr(chunk, 'model') else None,
+                            "created": chunk.created if hasattr(chunk, 'created') else None,
+                            "choices": [
+                                {
+                                    "index": choice.index if hasattr(choice, 'index') else None,
+                                    "delta": {
+                                        "role": choice.delta.role if hasattr(choice.delta, 'role') else None,
+                                        "content": choice.delta.content if hasattr(choice.delta, 'content') else None,
+                                        "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.delta.tool_calls or [])]
+                                    } if hasattr(choice, 'delta') else None,
+                                    "finish_reason": choice.finish_reason if hasattr(choice, 'finish_reason') else None
+                                } for choice in chunk.choices
+                            ]
+                        }
+                        stream_chunks.append(chunk_dict)
+                        
                         if chunk.choices[0].delta.content:
                             content = chunk.choices[0].delta.content
                             assistant_content += content
                             yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
                     
+                    # 스트리밍 완료 후 전체 로그 출력
                     print(f"[DEBUG] Streaming completed, content length: {len(assistant_content)}")
+                    print(f"[OPENAI RESPONSE][session_chat_stream final - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(assistant_content)}", flush=True)
+                    print(f"[OPENAI RESPONSE][session_chat_stream final - full_content] {json.dumps({'content': assistant_content}, ensure_ascii=False)}", flush=True)
+                    print(f"[OPENAI RESPONSE][session_chat_stream final - chunks] {json.dumps(stream_chunks, ensure_ascii=False, indent=2)}", flush=True)
                     
                     # 최종 응답 완료, 루프 종료
                     break
