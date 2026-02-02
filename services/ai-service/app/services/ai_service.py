@@ -1394,8 +1394,8 @@ Deployment 상세:
                         tools=tools,
                         tool_choice="auto",
                         temperature=0.7,
-                        max_tokens=1000,  # 토큰 제한
-                        timeout=30.0  # 30초 타임아웃
+                        max_tokens=1600,  # 답변이 길어질 수 있어 여유를 둠
+                        timeout=60.0  # tool 결과가 큰 경우를 고려해 타임아웃 상향
                     )
                     print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
 
@@ -1497,53 +1497,83 @@ Deployment 상세:
                 
                 # Tool call이 없으면 최종 텍스트 응답 (스트리밍)
                 else:
-                    print(f"[DEBUG] No tool calls, generating final response (streaming)")
-                    
-                    # 항상 스트리밍 모드로 최종 응답 생성
-                    messages.append(response_message)
-                    print(f"[AI Service] Session Chat 스트리밍 API 호출 - 요청 모델: {self.model}", flush=True)
+                    print("[DEBUG] No tool calls. Streaming final answer directly from OpenAI.")
+
+                    # 1) 최초 응답을 스트리밍으로 전송
                     stream = await self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,
                         temperature=0.7,
-                        max_tokens=800,  # 토큰 제한 (간결한 답변)
+                        max_tokens=1200,
                         stream=True,
                     )
-                    
-                    print(f"[DEBUG] Streaming final response...")
 
-                    # 스트리밍 청크 전체 수집 및 로그
-                    stream_chunks = []
+                    last_finish_reason = None
                     async for chunk in stream:
-                        chunk_dict = {
-                            "id": chunk.id if hasattr(chunk, 'id') else None,
-                            "model": chunk.model if hasattr(chunk, 'model') else None,
-                            "created": chunk.created if hasattr(chunk, 'created') else None,
-                            "choices": [
+                        if chunk.choices and getattr(chunk.choices[0], "delta", None):
+                            delta = chunk.choices[0].delta
+                            if delta.content:
+                                assistant_content += delta.content
+                                yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+                        if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
+                            last_finish_reason = chunk.choices[0].finish_reason
+
+                    # 모델 컨텍스트에 누적된 전체 답변을 넣어 둠
+                    if assistant_content:
+                        messages.append({"role": "assistant", "content": assistant_content})
+
+                    print(
+                        f"[DEBUG] Primary streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}"
+                    )
+
+                    # 2) 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
+                    if last_finish_reason == "length":
+                        max_continuations = 3
+                        for continuation_index in range(1, max_continuations + 1):
+                            print(
+                                f"[DEBUG] Continuation {continuation_index}/{max_continuations} (length truncated)"
+                            )
+                            messages.append(
                                 {
-                                    "index": choice.index if hasattr(choice, 'index') else None,
-                                    "delta": {
-                                        "role": choice.delta.role if hasattr(choice.delta, 'role') else None,
-                                        "content": choice.delta.content if hasattr(choice.delta, 'content') else None,
-                                        "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.delta.tool_calls or [])]
-                                    } if hasattr(choice, 'delta') else None,
-                                    "finish_reason": choice.finish_reason if hasattr(choice, 'finish_reason') else None
-                                } for choice in chunk.choices
-                            ]
-                        }
-                        stream_chunks.append(chunk_dict)
-                        
-                        if chunk.choices[0].delta.content:
-                            content = chunk.choices[0].delta.content
-                            assistant_content += content
-                            yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
-                    
-                    # 스트리밍 완료 후 전체 로그 출력
-                    print(f"[DEBUG] Streaming completed, content length: {len(assistant_content)}")
-                    print(f"[OPENAI RESPONSE][session_chat_stream final - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(assistant_content)}", flush=True)
-                    print(f"[OPENAI RESPONSE][session_chat_stream final - full_content] {json.dumps({'content': assistant_content}, ensure_ascii=False)}", flush=True)
-                    print(f"[OPENAI RESPONSE][session_chat_stream final - chunks] {json.dumps(stream_chunks, ensure_ascii=False, indent=2)}", flush=True)
-                    
+                                    "role": "user",
+                                    "content": (
+                                        "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
+                                        "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
+                                        "이미 출력한 내용은 반복하지 마세요."
+                                    ),
+                                }
+                            )
+
+                            cont_stream = await self.client.chat.completions.create(
+                                model=self.model,
+                                messages=messages,
+                                temperature=0.7,
+                                max_tokens=1200,
+                                stream=True,
+                            )
+
+                            continuation_text = ""
+                            cont_finish_reason = None
+                            async for chunk in cont_stream:
+                                if chunk.choices and getattr(chunk.choices[0], "delta", None):
+                                    delta = chunk.choices[0].delta
+                                    if delta.content:
+                                        continuation_text += delta.content
+                                        assistant_content += delta.content
+                                        yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+                                if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
+                                    cont_finish_reason = chunk.choices[0].finish_reason
+
+                            if continuation_text:
+                                messages.append({"role": "assistant", "content": continuation_text})
+
+                            print(
+                                f"[DEBUG] Continuation done. finish_reason={cont_finish_reason}, len={len(continuation_text)}"
+                            )
+
+                            if cont_finish_reason != "length":
+                                break
+
                     # 최종 응답 완료, 루프 종료
                     break
             
