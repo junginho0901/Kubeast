@@ -1535,7 +1535,22 @@ Deployment 상세:
                 # Function calling이 있으면 실행
                 if response_message.tool_calls:
                     print(f"[DEBUG] Tool calls detected: {len(response_message.tool_calls)}")
-                    messages.append(response_message)
+                    # 메시지를 dict 형식으로 변환하여 추가
+                    message_dict = {
+                        "role": response_message.role,
+                        "content": response_message.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": tc.type,
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                            } for tc in response_message.tool_calls
+                        ]
+                    }
+                    messages.append(message_dict)
                     
                     for tool_call in response_message.tool_calls:
                         function_name = tool_call.function.name
