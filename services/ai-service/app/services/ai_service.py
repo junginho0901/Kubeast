@@ -1499,6 +1499,16 @@ Deployment 상세:
                 else:
                     print(f"[DEBUG] No tool calls, generating final response (streaming)")
                     
+                    # response_message에 이미 내용이 있는 경우 먼저 전송 (finish_reason이 "length"인 경우 등)
+                    if response_message.content:
+                        print(f"[DEBUG] Response message already has content (length: {len(response_message.content)}), sending it first", flush=True)
+                        assistant_content += response_message.content
+                        # 내용을 청크 단위로 나눠서 전송 (스트리밍처럼 보이게)
+                        chunk_size = 50  # 한 번에 전송할 문자 수
+                        for i in range(0, len(response_message.content), chunk_size):
+                            chunk = response_message.content[i:i+chunk_size]
+                            yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+                    
                     # 항상 스트리밍 모드로 최종 응답 생성
                     messages.append(response_message)
                     print(f"[AI Service] Session Chat 스트리밍 API 호출 - 요청 모델: {self.model}", flush=True)
