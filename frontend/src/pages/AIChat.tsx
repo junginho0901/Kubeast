@@ -293,11 +293,10 @@ export default function AIChat() {
           if (!line) continue
 
           if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6).trim()
-            if (!dataStr || dataStr === '[DONE]') break
+            const dataStr = line.slice(6)
+            if (dataStr === '[DONE]') break
 
             try {
-              if (!dataStr) continue  // 빈 문자열 건너뛰기
               const data = JSON.parse(dataStr)
 
               if (data.content) {
@@ -455,8 +454,7 @@ Executing...
                 console.error('Error:', data.error)
               }
             } catch (e) {
-              // JSON 파싱 실패 로그 출력 (디버깅용)
-              console.warn('[WARN] Failed to parse JSON:', dataStr, e)
+              // JSON 파싱 실패 무시
             }
           }
         }
