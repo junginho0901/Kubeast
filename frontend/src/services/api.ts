@@ -265,7 +265,12 @@ export const api = {
   },
 
   // Sessions
-  getSessions: async (params?: { limit?: number; offset?: number }): Promise<Session[]> => {
+  getSessions: async (params?: {
+    limit?: number
+    offset?: number
+    before_updated_at?: string
+    before_id?: string
+  }): Promise<Session[]> => {
     const { data } = await client.get('/sessions', { params })
     return data
   },

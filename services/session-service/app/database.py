@@ -125,11 +125,14 @@ class DatabaseService:
         user_id: str = "default",
         limit: int = 50,
         offset: int = 0,
+        before_updated_at: Optional[datetime] = None,
+        before_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """세션 목록 + 메시지 개수 조회 (N+1 방지)"""
         async with self.async_session() as db:
-            from sqlalchemy import select
-            result = await db.execute(
+            from sqlalchemy import select, and_, or_
+
+            stmt = (
                 select(
                     Session,
                     func.count(Message.id).label("message_count"),
@@ -139,8 +142,25 @@ class DatabaseService:
                 .group_by(Session.id)
                 .order_by(Session.updated_at.desc(), Session.id.desc())
                 .limit(limit)
-                .offset(offset)
             )
+
+            # 커서 기반 페이지네이션: (updated_at, id) 가 (cursor_updated_at, cursor_id) 보다 "작은" 것만
+            # (정렬이 desc이므로 "작다" = 더 과거)
+            if before_updated_at is not None:
+                if before_id:
+                    stmt = stmt.where(
+                        or_(
+                            Session.updated_at < before_updated_at,
+                            and_(Session.updated_at == before_updated_at, Session.id < before_id),
+                        )
+                    )
+                else:
+                    stmt = stmt.where(Session.updated_at < before_updated_at)
+            else:
+                # 기존 offset 기반도 유지 (호환)
+                stmt = stmt.offset(offset)
+
+            result = await db.execute(stmt)
 
             rows = result.all()
             return [

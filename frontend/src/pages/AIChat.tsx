@@ -39,6 +39,11 @@ interface Message {
   streamingPhase?: 'waiting' | 'tools' | 'answer'
 }
 
+type SessionsPageParam = {
+  before_updated_at?: string
+  before_id?: string
+}
+
 export default function AIChat() {
   const queryClient = useQueryClient()
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
@@ -75,13 +80,14 @@ export default function AIChat() {
     hasNextPage: sessionsHasNextPage,
   } = useInfiniteQuery({
     queryKey: ['sessions'],
-    queryFn: ({ pageParam }) =>
-      api.getSessions({ limit: SESSIONS_PAGE_SIZE, offset: Number(pageParam || 0) }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => {
+    queryFn: ({ pageParam }) => api.getSessions({ limit: SESSIONS_PAGE_SIZE, ...(pageParam || {}) }),
+    initialPageParam: {} as SessionsPageParam,
+    getNextPageParam: (lastPage) => {
       if (!Array.isArray(lastPage)) return undefined
       if (lastPage.length < SESSIONS_PAGE_SIZE) return undefined
-      return allPages.length * SESSIONS_PAGE_SIZE
+      const last = lastPage[lastPage.length - 1]
+      if (!last) return undefined
+      return { before_updated_at: last.updated_at, before_id: last.id } as SessionsPageParam
     },
   })
 
@@ -107,9 +113,20 @@ export default function AIChat() {
     for (let i = 0; i < sessions.length; i += SESSIONS_PAGE_SIZE) {
       pages.push(sessions.slice(i, i + SESSIONS_PAGE_SIZE))
     }
+
+    const pageParams: Array<SessionsPageParam | undefined> = []
+    let cursor: SessionsPageParam | undefined = {} as SessionsPageParam
+    for (const page of pages) {
+      pageParams.push(cursor)
+      if (page.length > 0) {
+        const last = page[page.length - 1]
+        cursor = last ? { before_updated_at: last.updated_at, before_id: last.id } : cursor
+      }
+    }
+
     return {
       pages: pages.length > 0 ? pages : [[]],
-      pageParams: pages.map((_, index) => index * SESSIONS_PAGE_SIZE),
+      pageParams,
     }
   }
 

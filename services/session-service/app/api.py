@@ -42,11 +42,18 @@ class SaveMessagesRequest(BaseModel):
 async def list_sessions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    before_updated_at: Optional[datetime] = Query(None),
+    before_id: Optional[str] = Query(None),
 ):
     """세션 목록 조회"""
     try:
         db = await get_db_service()
-        rows = await db.list_sessions_with_message_counts(limit=limit, offset=offset)
+        rows = await db.list_sessions_with_message_counts(
+            limit=limit,
+            offset=offset,
+            before_updated_at=before_updated_at,
+            before_id=before_id,
+        )
         
         result = [
             SessionResponse(
