@@ -1074,7 +1074,7 @@ export default function AIChat() {
                         ? '더 불러오는 중...'
                         : sessionsHasNextPage
                           ? '더 불러오기'
-                          : '끝'}
+                          : '마지막 히스토리입니다.'}
                     </div>,
                   )
                   continue
