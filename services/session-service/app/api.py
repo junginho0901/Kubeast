@@ -48,13 +48,13 @@ async def list_sessions():
         # 각 세션의 메시지 개수 조회
         result = []
         for session in sessions:
-            messages = await db.get_messages(session.id)
+            message_count = await db.get_message_count(session.id)
             result.append(SessionResponse(
                 id=session.id,
                 title=session.title,
                 created_at=session.created_at,
                 updated_at=session.updated_at,
-                message_count=len(messages)
+                message_count=message_count
             ))
         
         return result
@@ -129,14 +129,14 @@ async def update_session(session_id: str, request: UpdateSessionRequest):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        messages = await db.get_messages(session_id)
+        message_count = await db.get_message_count(session_id)
         
         return SessionResponse(
             id=session.id,
             title=session.title,
             created_at=session.created_at,
             updated_at=session.updated_at,
-            message_count=len(messages)
+            message_count=message_count
         )
     except HTTPException:
         raise

@@ -3,6 +3,7 @@ Database models and session management
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from sqlalchemy import func
 from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
@@ -177,10 +178,22 @@ class DatabaseService:
             result = await db.execute(
                 select(Message)
                 .where(Message.session_id == session_id)
-                .order_by(Message.created_at.asc())
+                # 최신 메시지부터 limit 만큼 가져온 뒤(내림차순), 이후 로직에서 자연스럽게 읽히도록 다시 오름차순으로 반환한다.
+                .order_by(Message.created_at.desc(), Message.id.desc())
                 .limit(limit)
             )
-            return list(result.scalars().all())
+            messages = list(result.scalars().all())
+            messages.reverse()
+            return messages
+
+    async def get_message_count(self, session_id: str) -> int:
+        """세션의 전체 메시지 개수 조회"""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(
+                select(func.count(Message.id)).where(Message.session_id == session_id)
+            )
+            return int(result.scalar_one())
     
     async def get_context(self, session_id: str) -> Optional[SessionContext]:
         """세션 컨텍스트 조회"""
