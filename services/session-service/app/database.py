@@ -107,17 +107,49 @@ class DatabaseService:
             )
             return result.scalar_one_or_none()
     
-    async def list_sessions(self, user_id: str = "default", limit: int = 50) -> List[Session]:
-        """세션 목록 조회"""
+    async def list_sessions(self, user_id: str = "default", limit: int = 50, offset: int = 0) -> List[Session]:
+        """세션 목록 조회 (최근 업데이트 순)"""
         async with self.async_session() as db:
             from sqlalchemy import select
             result = await db.execute(
                 select(Session)
                 .where(Session.user_id == user_id)
-                .order_by(Session.updated_at.desc())
+                .order_by(Session.updated_at.desc(), Session.id.desc())
                 .limit(limit)
+                .offset(offset)
             )
             return list(result.scalars().all())
+
+    async def list_sessions_with_message_counts(
+        self,
+        user_id: str = "default",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """세션 목록 + 메시지 개수 조회 (N+1 방지)"""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(
+                select(
+                    Session,
+                    func.count(Message.id).label("message_count"),
+                )
+                .outerjoin(Message, Message.session_id == Session.id)
+                .where(Session.user_id == user_id)
+                .group_by(Session.id)
+                .order_by(Session.updated_at.desc(), Session.id.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+
+            rows = result.all()
+            return [
+                {
+                    "session": session,
+                    "message_count": int(message_count or 0),
+                }
+                for session, message_count in rows
+            ]
     
     async def update_session_title(self, session_id: str, title: str):
         """세션 제목 업데이트"""

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import { api, Session } from '@/services/api'
 import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
 import ParticleWaveLoader from '@/components/ParticleWaveLoader'
@@ -10,6 +11,7 @@ import rehypeRaw from 'rehype-raw'
 
 const TOOL_RESULT_DISPLAY_MAX_CHARS = 2000
 const TRUNCATED_MARKER = '... (truncated) ...'
+const SESSIONS_PAGE_SIZE = 50
 
 function truncateToolResultsInContent(content: string, maxChars = TOOL_RESULT_DISPLAY_MAX_CHARS) {
   if (!content) return content
@@ -56,21 +58,61 @@ export default function AIChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const streamStateRef = useRef<ChatStreamState>(streamState)
   const messagesRef = useRef<Message[]>([])
+  const sessionsScrollRef = useRef<HTMLDivElement>(null)
 
   const isStreaming = streamState.isStreaming
   const isTempSessionId = (id: string | null) => typeof id === 'string' && id.startsWith('temp:')
 
   // 세션 목록 조회
-  const { data: sessions, isLoading: sessionsLoading } = useQuery({
+  const {
+    data: sessionsInfinite,
+    isLoading: sessionsLoading,
+    isFetchingNextPage: sessionsFetchingNextPage,
+    fetchNextPage: fetchNextSessionsPage,
+    hasNextPage: sessionsHasNextPage,
+  } = useInfiniteQuery({
     queryKey: ['sessions'],
-    queryFn: api.getSessions,
+    queryFn: ({ pageParam }) =>
+      api.getSessions({ limit: SESSIONS_PAGE_SIZE, offset: Number(pageParam || 0) }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!Array.isArray(lastPage)) return undefined
+      if (lastPage.length < SESSIONS_PAGE_SIZE) return undefined
+      return allPages.length * SESSIONS_PAGE_SIZE
+    },
   })
+
+  const getFlattenedSessions = (data?: InfiniteData<Session[]>) => {
+    const pages = data?.pages
+    if (!pages || !Array.isArray(pages)) return []
+    return pages.flat().filter(Boolean)
+  }
+
+  const buildSessionsInfiniteData = (sessions: Session[]): InfiniteData<Session[]> => {
+    const pages: Session[][] = []
+    for (let i = 0; i < sessions.length; i += SESSIONS_PAGE_SIZE) {
+      pages.push(sessions.slice(i, i + SESSIONS_PAGE_SIZE))
+    }
+    return {
+      pages: pages.length > 0 ? pages : [[]],
+      pageParams: pages.map((_, index) => index * SESSIONS_PAGE_SIZE),
+    }
+  }
+
+  const upsertSessionAtFront = (session: Session, optimisticId?: string | null) => {
+    queryClient.setQueryData<InfiniteData<Session[]>>(['sessions'], (old) => {
+      const existing = getFlattenedSessions(old)
+      const withoutDuplicates = existing.filter((s) => s.id !== session.id && (!optimisticId || s.id !== optimisticId))
+      return buildSessionsInfiniteData([session, ...withoutDuplicates])
+    })
+  }
+
   const sessionsList = useMemo(() => {
-    const base = Array.isArray(sessions) ? sessions : []
+    const base = getFlattenedSessions(sessionsInfinite)
     const pinned = Object.values(pinnedSessions)
     const pinnedIds = new Set(pinned.map((s) => s.id))
     return [...pinned, ...base.filter((s) => !pinnedIds.has(s.id))]
-  }, [pinnedSessions, sessions])
+  }, [pinnedSessions, sessionsInfinite])
 
   // 세션 상세 조회 (스트리밍 중이 아닐 때만)
   const { data: sessionDetail } = useQuery({
@@ -90,7 +132,7 @@ export default function AIChat() {
   const createSessionMutation = useMutation({
     mutationFn: ({ title }: { title: string; optimisticId: string }) => api.createSession(title || 'New Chat'),
     onMutate: async ({ title, optimisticId }: { title: string; optimisticId: string }) => {
-      const previousSessions = queryClient.getQueryData<Session[]>(['sessions'])
+      const previousSessions = queryClient.getQueryData<InfiniteData<Session[]>>(['sessions'])
       const nowIso = new Date().toISOString()
 
       const optimisticSession: Session = {
@@ -101,10 +143,7 @@ export default function AIChat() {
         message_count: 0,
       }
 
-      queryClient.setQueryData<Session[]>(['sessions'], (old) => {
-        const list = Array.isArray(old) ? old : []
-        return [optimisticSession, ...list.filter((s) => s.id !== optimisticId)]
-      })
+      upsertSessionAtFront(optimisticSession)
 
       // 즉시 UI에 반영 후, 백그라운드에서 기존 세션 fetch를 취소
       void queryClient.cancelQueries({ queryKey: ['sessions'] })
@@ -122,12 +161,7 @@ export default function AIChat() {
         })
       }
 
-      queryClient.setQueryData<Session[]>(['sessions'], (old) => {
-        const list = Array.isArray(old) ? old : []
-        const replaced = list.map((s) => (ctx?.optimisticId && s.id === ctx.optimisticId ? newSession : s))
-        const hasNew = replaced.some((s) => s.id === newSession.id)
-        return hasNew ? replaced : [newSession, ...replaced]
-      })
+      upsertSessionAtFront(newSession, ctx?.optimisticId)
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.previousSessions) {
@@ -437,10 +471,7 @@ export default function AIChat() {
         message_count: 0,
       }
       setPinnedSessions((prev) => ({ ...prev, [optimisticId]: optimisticSession }))
-      queryClient.setQueryData<Session[]>(['sessions'], (old) => {
-        const list = Array.isArray(old) ? old : []
-        return [optimisticSession, ...list.filter((s) => s.id !== optimisticId)]
-      })
+      upsertSessionAtFront(optimisticSession)
     }
     if (existingRealSessionId) {
       setViewSessionId(existingRealSessionId)
@@ -517,6 +548,20 @@ export default function AIChat() {
     setPendingFinalSyncSessionId(null)
     setPinnedSessions({})
     setMessages([])
+  }
+
+  const maybeFetchMoreSessions = (container: HTMLDivElement) => {
+    if (!sessionsHasNextPage) return
+    if (sessionsFetchingNextPage) return
+    const thresholdPx = 120
+    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
+    if (remaining <= thresholdPx) {
+      void fetchNextSessionsPage()
+    }
+  }
+
+  const handleSessionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    maybeFetchMoreSessions(e.currentTarget)
   }
 
   const handleSelectSession = (sessionId: string) => {
@@ -892,7 +937,7 @@ export default function AIChat() {
           </button>
           
           {/* 다중 선택 모드 토글 */}
-          {sessions && sessions.length > 0 && (
+          {sessionsList.length > 0 && (
             <button
               onClick={handleToggleMultiSelect}
               className={`w-full btn flex items-center justify-center gap-2 text-sm ${
@@ -939,7 +984,7 @@ export default function AIChat() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-2" ref={sessionsScrollRef} onScroll={handleSessionsScroll}>
           {sessionsLoading && sessionsList.length === 0 ? (
             <div className="text-slate-400 text-sm text-center py-4">로딩 중...</div>
           ) : sessionsList.length > 0 ? (
@@ -1019,6 +1064,9 @@ export default function AIChat() {
                   )}
                 </div>
               ))}
+              {sessionsFetchingNextPage && (
+                <div className="text-slate-400 text-xs text-center py-2">더 불러오는 중...</div>
+              )}
             </div>
           ) : (
             <div className="text-slate-400 text-sm text-center py-4">대화 내역이 없습니다</div>

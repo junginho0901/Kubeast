@@ -265,8 +265,8 @@ export const api = {
   },
 
   // Sessions
-  getSessions: async (): Promise<Session[]> => {
-    const { data } = await client.get('/sessions')
+  getSessions: async (params?: { limit?: number; offset?: number }): Promise<Session[]> => {
+    const { data } = await client.get('/sessions', { params })
     return data
   },
 

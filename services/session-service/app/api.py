@@ -1,7 +1,7 @@
 """
 Session management endpoints
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -39,23 +39,25 @@ class SaveMessagesRequest(BaseModel):
 
 
 @router.get("/sessions")
-async def list_sessions():
+async def list_sessions(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
     """세션 목록 조회"""
     try:
         db = await get_db_service()
-        sessions = await db.list_sessions()
+        rows = await db.list_sessions_with_message_counts(limit=limit, offset=offset)
         
-        # 각 세션의 메시지 개수 조회
-        result = []
-        for session in sessions:
-            message_count = await db.get_message_count(session.id)
-            result.append(SessionResponse(
-                id=session.id,
-                title=session.title,
-                created_at=session.created_at,
-                updated_at=session.updated_at,
-                message_count=message_count
-            ))
+        result = [
+            SessionResponse(
+                id=row["session"].id,
+                title=row["session"].title,
+                created_at=row["session"].created_at,
+                updated_at=row["session"].updated_at,
+                message_count=row["message_count"],
+            )
+            for row in rows
+        ]
         
         return result
     except Exception as e:
