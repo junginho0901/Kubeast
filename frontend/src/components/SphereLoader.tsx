@@ -125,10 +125,6 @@ export default function SphereLoader() {
       scene.add(points)
       pointsRef.current = points
 
-      // FPS 계산
-      let frameCount = 0
-      let lastFpsUpdate = Date.now()
-
       // 애니메이션
       const startTime = Date.now()
 
@@ -170,13 +166,6 @@ export default function SphereLoader() {
         // 렌더링
         renderer.render(scene, camera)
 
-        // FPS 계산 (표시하지 않지만 내부적으로 유지)
-        frameCount++
-        const now = Date.now()
-        if (now - lastFpsUpdate >= 1000) {
-          frameCount = 0
-          lastFpsUpdate = now
-        }
       }
 
       animate()

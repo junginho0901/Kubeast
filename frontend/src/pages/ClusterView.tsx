@@ -197,7 +197,7 @@ export default function ClusterView() {
     if (showLogs && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
     }
-  }, [logs])
+  }, [logs, showLogs])
 
   // 네임스페이스 드롭다운 외부 클릭 감지
   useEffect(() => {

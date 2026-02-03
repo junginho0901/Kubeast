@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, Session } from '@/services/api'
+import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
 import ParticleWaveLoader from '@/components/ParticleWaveLoader'
 import { Send, Bot, User, Sparkles, Plus, MessageSquare, Trash2, Edit2, Check, X, StopCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -41,17 +42,19 @@ export default function AIChat() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamState, setStreamState] = useState<ChatStreamState>(() => chatStreamManager.getState())
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
-  const [hasStoppedMessage, setHasStoppedMessage] = useState(false)  // 중단된 메시지 플래그
+  const [stoppedSessionId, setStoppedSessionId] = useState<string | null>(null)  // 중단된 세션 ID
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)  // 다중 선택 모드
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set())  // 선택된 세션들
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)  // 우클릭 컨텍스트 메뉴
   const [lastLoadedSessionId, setLastLoadedSessionId] = useState<string | null>(null)
+  const [forceDbSyncSessionId, setForceDbSyncSessionId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const streamToolCallsRef = useRef<any[]>([])  // 현재 스트리밍 중인 tool 호출 정보
+  const streamStateRef = useRef<ChatStreamState>(streamState)
+
+  const isStreaming = streamState.isStreaming
 
   // 세션 목록 조회
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
@@ -63,7 +66,7 @@ export default function AIChat() {
   const { data: sessionDetail } = useQuery({
     queryKey: ['session', selectedSessionId],
     queryFn: () => api.getSession(selectedSessionId!),
-    enabled: !!selectedSessionId && !isStreaming,
+    enabled: !!selectedSessionId,
   })
 
   // AI 설정 정보 조회 (모델명)
@@ -110,9 +113,8 @@ export default function AIChat() {
   // - 새 세션으로 전환될 때는 DB 내용을 그대로 사용
   // - 동일 세션에서 스트리밍이 끝난 후에는, 이미 화면에 있는 답변을 덮어쓰지 않도록 함
   useEffect(() => {
-    if (sessionDetail && !isStreaming && !hasStoppedMessage) {
+    if (sessionDetail && stoppedSessionId !== sessionDetail.id) {
       console.log('[DEBUG] Loading messages from DB:', sessionDetail.messages.length, 'messages')
-      console.log('[DEBUG] Current messages count:', messages.length)
       
       const dbMessages = sessionDetail.messages.map((msg) => ({
         id: msg.id,
@@ -120,6 +122,14 @@ export default function AIChat() {
         content: msg.content,
         toolCalls: msg.tool_calls || undefined,
       }))
+
+      // 스트리밍이 끝나고(완료) DB에 저장된 최종 메시지/툴 결과로 강제 동기화
+      if (forceDbSyncSessionId && sessionDetail.id === forceDbSyncSessionId) {
+        setMessages(dbMessages)
+        setLastLoadedSessionId(sessionDetail.id)
+        setForceDbSyncSessionId(null)
+        return
+      }
 
       // 1) 세션이 바뀐 경우: DB 데이터로 완전히 교체
       if (sessionDetail.id !== lastLoadedSessionId) {
@@ -142,7 +152,93 @@ export default function AIChat() {
         return prev
       })
     }
-  }, [sessionDetail, isStreaming, hasStoppedMessage, lastLoadedSessionId])
+  }, [forceDbSyncSessionId, sessionDetail, stoppedSessionId, lastLoadedSessionId])
+
+  // 스트리밍 상태는 라우트 이동(언마운트) 이후에도 유지될 수 있으므로,
+  // 전역 스트림 매니저에서 상태를 구독한다.
+  useEffect(() => {
+    const unsubscribe = chatStreamManager.subscribe((s) => {
+      streamStateRef.current = s
+      setStreamState(s)
+    })
+    return unsubscribe
+  }, [])
+
+  // 현재 선택된 세션이 스트리밍 중인 세션이라면, 스트리밍 내용을 UI에 반영
+  useEffect(() => {
+    if (streamState.status !== 'streaming') return
+    if (!streamState.sessionId) return
+    if (selectedSessionId !== streamState.sessionId) return
+
+    const combinedContent = streamState.functionCallsContent + streamState.assistantContent
+
+    setMessages((prev) => {
+      const tempAssistantIndex = prev.findIndex((msg) => msg.role === 'assistant' && msg.isTemporary)
+
+      if (tempAssistantIndex !== -1) {
+        const updated = [...prev]
+        updated[tempAssistantIndex] = {
+          ...updated[tempAssistantIndex],
+          content: combinedContent,
+          toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
+          streamingPhase: streamState.streamingPhase ?? updated[tempAssistantIndex].streamingPhase,
+        }
+        return updated
+      }
+
+      // DB에는 아직 assistant 메시지가 없을 수 있으므로, 임시 assistant 메시지를 추가한다.
+      const nextMessages = [...prev]
+      if (!nextMessages.some((m) => m.role === 'user') && streamState.userMessage) {
+        nextMessages.push({
+          role: 'user',
+          content: streamState.userMessage,
+          isTemporary: true,
+        })
+      }
+      nextMessages.push({
+        role: 'assistant',
+        content: combinedContent,
+        isTemporary: true,
+        toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
+        streamingPhase: streamState.streamingPhase ?? 'waiting',
+      })
+      return nextMessages
+    })
+  }, [selectedSessionId, streamState])
+
+  // 스트리밍 종료 시(완료/오류/중단) 세션 목록/상세를 갱신하고 임시 플래그를 정리
+  const prevStreamStatusRef = useRef(streamState.status)
+  useEffect(() => {
+    const prev = prevStreamStatusRef.current
+    const next = streamState.status
+    prevStreamStatusRef.current = next
+
+    if (prev !== 'streaming' || next === 'streaming') return
+
+    queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    if (streamState.sessionId) {
+      queryClient.refetchQueries({ queryKey: ['session', streamState.sessionId] })
+    }
+
+    if (next === 'completed' && streamState.sessionId) {
+      setForceDbSyncSessionId(streamState.sessionId)
+    }
+
+    // 현재 화면에 보이는 임시 메시지는 일단 영구 표시로 전환
+    setMessages((prevMessages) =>
+      prevMessages.map((m) => ({
+        ...m,
+        isTemporary: false,
+      }))
+    )
+
+    if (next === 'error' && streamState.error && streamState.sessionId && selectedSessionId === streamState.sessionId) {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { role: 'assistant', content: `죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: ${streamState.error}` },
+      ])
+    }
+  }, [queryClient, selectedSessionId, streamState.error, streamState.sessionId, streamState.status])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -177,61 +273,47 @@ export default function AIChat() {
   }, [contextMenu])
 
   const handleStop = async () => {
-    console.log('[DEBUG] Stop button clicked')
-    // 중단된 메시지가 있으므로, 일단 DB에서 세션 메시지를 다시 덮어쓰지 않도록 플래그 설정
-    setHasStoppedMessage(true)
+    const snapshot = chatStreamManager.getState()
+    if (!snapshot.sessionId || !snapshot.isStreaming) return
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-    }
-    setIsStreaming(false)
-    
-    // 현재 메시지 상태에서 assistant 메시지 찾기
-    const assistantMsg = messages.find(msg => msg.isTemporary && msg.role === 'assistant')
-    
-    if (selectedSessionId && assistantMsg && assistantMsg.content) {
+    console.log('[DEBUG] Stop button clicked. sessionId=', snapshot.sessionId)
+
+    // 중단된 세션은 현재 UI 상태를 유지하기 위해 DB 동기화를 잠시 막는다.
+    setStoppedSessionId(snapshot.sessionId)
+
+    await chatStreamManager.stop()
+
+    const assistantContent = snapshot.functionCallsContent + snapshot.assistantContent
+    if (assistantContent) {
       try {
-        // DB에 중단된 assistant 메시지만 저장 (user 메시지는 이미 백엔드에서 저장됨)
+        // DB에 중단된 assistant 메시지만 저장 (user 메시지는 백엔드에서 이미 저장)
         console.log('[DEBUG] Saving stopped assistant message to DB')
-        const response = await fetch(`/api/v1/sessions/${selectedSessionId}/messages`, {
+        const response = await fetch(`/api/v1/sessions/${snapshot.sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
-              { 
-                role: 'assistant', 
-                content: assistantMsg.content,
-                tool_calls: streamToolCallsRef.current.length > 0 ? streamToolCallsRef.current : undefined,
-              }
-            ]
-          })
+              {
+                role: 'assistant',
+                content: assistantContent,
+                tool_calls: snapshot.toolCalls && snapshot.toolCalls.length > 0 ? snapshot.toolCalls : undefined,
+              },
+            ],
+          }),
         })
-        
+
         if (response.ok) {
           console.log('[DEBUG] Messages saved successfully')
-          // DB에 저장했으므로 다시 불러오기
-          await queryClient.refetchQueries({ queryKey: ['session', selectedSessionId] })
+          await queryClient.refetchQueries({ queryKey: ['session', snapshot.sessionId] })
           await queryClient.invalidateQueries({ queryKey: ['sessions'] })
-          // 이 시점 이후에는 hasStoppedMessage는 다음 사용자 액션(새 질문/세션 전환)까지 유지
-          // -> UI에서는 현재까지 생성된 답변을 그대로 보여주고,
-          //    이후 세션 전환 또는 새 질문 시에만 DB 데이터로 동기화
         }
       } catch (error) {
         console.error('[ERROR] Failed to save stopped messages:', error)
-        // 이미 hasStoppedMessage를 true로 설정했으므로, 저장 실패 시에도
-        // DB에서 덮어쓰지 않고 화면에만 유지
       }
     }
-    
-    // 임시 플래그 제거하여 메시지를 화면에 유지
-    setMessages((prev) => {
-      console.log('[DEBUG] Keeping messages on stop:', prev.length)
-      return prev.map((msg) => ({
-        ...msg,
-        isTemporary: false,
-      }))
-    })
+
+    // 임시 플래그 제거하여 현재 화면에 유지
+    setMessages((prev) => prev.map((msg) => ({ ...msg, isTemporary: false })))
   }
 
   const handleSend = async (messageToSend?: string) => {
@@ -240,8 +322,8 @@ export default function AIChat() {
 
     const userMessage = message
 
-    // 중단된 메시지 플래그 리셋
-    setHasStoppedMessage(false)
+    // 중단 플래그 리셋
+    setStoppedSessionId(null)
 
     // 세션이 없으면 생성
     let sessionId = selectedSessionId
@@ -266,260 +348,22 @@ export default function AIChat() {
       { role: 'assistant', content: '', isTemporary: true, streamingPhase: 'waiting' }  // 로딩용 빈 메시지
     ])
     setInput('')
-    setIsStreaming(true)
 
-    // 렌더링 시간 확보 (로딩 표시가 보이도록)
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    // AbortController 생성
-    abortControllerRef.current = new AbortController()
-    // 스트리밍용 tool 호출 정보 초기화
-    streamToolCallsRef.current = []
-
-    try {
-      const response = await fetch(`/api/v1/ai/sessions/${sessionId}/chat?message=${encodeURIComponent(userMessage)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: abortControllerRef.current.signal,
-      })
-
-      if (!response.body) throw new Error('No response body')
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let assistantMessageContent = ''
-      let functionCallsContent = ''  // Tool call 정보를 별도로 저장
-
-      console.log('[DEBUG] Starting streaming')
-
-      // SSE 청크 경계에서 잘리지 않도록 버퍼 사용
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-
-        const lines = buffer.split('\n')
-        // 마지막 라인은 아직 완전하지 않을 수 있으므로 버퍼에 남겨둠
-        buffer = lines.pop() || ''
-
-        for (const rawLine of lines) {
-          const line = rawLine.trim()
-          if (!line) continue
-
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6)
-            if (dataStr === '[DONE]') break
-
-            try {
-              const data = JSON.parse(dataStr)
-
-              if (data.content) {
-                assistantMessageContent += data.content
-                setMessages((prev) => {
-                  console.log('[DEBUG] Updating message. Current messages:', prev.length, 'Temporary messages:', prev.filter(m => m.isTemporary).length)
-                  
-                  // 임시 assistant 메시지 찾기 (마지막이 아닐 수도 있음)
-                  const tempAssistantIndex = prev.findIndex(
-                    (msg) => msg.role === 'assistant' && msg.isTemporary
-                  )
-                  
-                  console.log('[DEBUG] Temp assistant index:', tempAssistantIndex, 'Content length:', assistantMessageContent.length)
-                  
-                  if (tempAssistantIndex !== -1) {
-                    const updated = [...prev]
-                    // Tool call 정보 + 실제 답변 내용을 합침 (로딩 텍스트는 자동으로 사라짐)
-                    updated[tempAssistantIndex] = {
-                      ...updated[tempAssistantIndex],
-                      content: functionCallsContent + assistantMessageContent,
-                      streamingPhase: 'answer',
-                    }
-                    return updated
-                  }
-                  console.warn('[WARN] No temporary assistant message found!')
-                  return prev
-                })
-              } else if (data.function) {
-                // Function call 시작 - KAgent 스타일
-                console.log('Function call:', data.function, data.args)
-                
-                // 스트리밍 중 tool 호출 정보 갱신
-                streamToolCallsRef.current = [
-                  ...streamToolCallsRef.current,
-                  {
-                    function: data.function,
-                    args: data.args || {},
-                    result: '',
-                    is_json: false,
-                  },
-                ]
-                // 현재 임시 assistant 메시지에 toolCalls 반영 (스트리밍 중에도 JSON 버튼 표시)
-                setMessages((prev) => {
-                  const tempAssistantIndex = prev.findIndex(
-                    (msg) => msg.role === 'assistant' && msg.isTemporary
-                  )
-                  if (tempAssistantIndex !== -1) {
-                    const updated = [...prev]
-                    updated[tempAssistantIndex] = {
-                      ...updated[tempAssistantIndex],
-                      toolCalls: [...streamToolCallsRef.current],
-                      streamingPhase: 'tools',
-                    }
-                    return updated
-                  }
-                  return prev
-                })
-                
-                const args_json = JSON.stringify(data.args, null, 2)
-                const args_section = Object.keys(data.args).length > 0 
-                  ? `<details>
-<summary><strong>📋 Arguments</strong></summary>
-
-\`\`\`json
-${args_json}
-\`\`\`
-
-</details>`
-                  : '<p><strong>📋 Arguments:</strong> No arguments</p>'
-                
-                const functionCallText = `<details>
-<summary>🔧 <strong>${data.function}</strong></summary>
-
-${args_section}
-
-<details>
-<summary><strong>📊 Results</strong></summary>
-
-Executing...
-
-</details>
-
-</details>
-
-`
-                
-                functionCallsContent += functionCallText
-                
-                // 임시 assistant 메시지에 function call 정보 즉시 추가
-                setMessages((prev) => {
-                  const tempAssistantIndex = prev.findIndex(
-                    (msg) => msg.role === 'assistant' && msg.isTemporary
-                  )
-                  
-                  if (tempAssistantIndex !== -1) {
-                    const updated = [...prev]
-                    updated[tempAssistantIndex] = {
-                      ...updated[tempAssistantIndex],
-                      content: functionCallsContent + assistantMessageContent,
-                      streamingPhase: 'tools',
-                    }
-                    return updated
-                  }
-                  return prev
-                })
-              } else if (data.function_result) {
-                // Function 실행 결과 - 기존 "Executing..." 을 실제 결과로 교체
-                console.log('Function result:', data.function_result, data.result)
-                
-                // 스트리밍 중 tool 호출 정보에 결과 반영
-                streamToolCallsRef.current = streamToolCallsRef.current.map((tc) =>
-                  tc.function === data.function_result
-                    ? {
-                        ...tc,
-                        result: data.result,
-                        is_json: !!data.is_json,
-                      }
-                    : tc
-                )
-                
-                // 마지막 function call의 "Executing..."을 실제 결과로 교체
-                const lastFunctionIndex = functionCallsContent.lastIndexOf(`<summary>🔧 <strong>${data.function_result}</strong></summary>`)
-                if (lastFunctionIndex !== -1) {
-                  const beforeFunction = functionCallsContent.substring(0, lastFunctionIndex)
-                  const afterFunction = functionCallsContent.substring(lastFunctionIndex)
-                  
-                  const codeBlock = data.is_json
-                    ? `\`\`\`json\n${data.result}\n\`\`\``
-                    : `\`\`\`\n${data.result}\n\`\`\``
-                  
-                  // "Executing..."을 실제 결과로 교체
-                  const updatedAfterFunction = afterFunction.replace(
-                    'Executing...',
-                    codeBlock
-                  )
-                  
-                  functionCallsContent = beforeFunction + updatedAfterFunction
-                  
-                  // 화면 업데이트
-                  setMessages((prev) => {
-                    const tempAssistantIndex = prev.findIndex(
-                      (msg) => msg.role === 'assistant' && msg.isTemporary
-                    )
-                    
-                    if (tempAssistantIndex !== -1) {
-                      const updated = [...prev]
-                      updated[tempAssistantIndex] = {
-                        ...updated[tempAssistantIndex],
-                        content: functionCallsContent + assistantMessageContent,
-                        toolCalls: [...streamToolCallsRef.current],
-                        streamingPhase: 'tools',
-                      }
-                      return updated
-                    }
-                    return prev
-                  })
-                }
-              } else if (data.error) {
-                console.error('Error:', data.error)
-              }
-            } catch (e) {
-              // JSON 파싱 실패 무시
-            }
-          }
-        }
-      }
-
-      // 스트리밍 완료 후 DB에서 최신 메시지 불러오기
-      console.log('[DEBUG] Streaming complete, refetching from DB')
-      abortControllerRef.current = null
-      console.log('[DEBUG] Refetching session data')
-      
-      // DB에서 최신 데이터 불러오기
-      await queryClient.invalidateQueries({ queryKey: ['sessions'] })
-      await queryClient.refetchQueries({ queryKey: ['session', sessionId] })
-      
-      // 스트리밍 종료 (useEffect가 작동하여 DB 데이터로 교체)
-      setIsStreaming(false)
-    } catch (error: any) {
-      // Abort 에러는 무시 (사용자가 의도적으로 중단)
-      if (error.name === 'AbortError') {
-        console.log('[DEBUG] Streaming aborted by user - keeping current messages')
-        // 중단 시: isStreaming은 이미 handleStop에서 false로 설정됨
-        // 임시 플래그만 제거하여 메시지는 화면에 유지 (DB에는 저장 안 함)
-        return
-      }
-      
-      console.error('Streaming error:', error)
-      setIsStreaming(false)  // 에러 시에도 스트리밍 종료
-      abortControllerRef.current = null
-      // 에러 시 임시 메시지 제거
+    // 스트리밍 시작 (라우트 이동 후에도 유지)
+    void chatStreamManager.startSessionChat(sessionId, userMessage).catch((error) => {
+      console.error('[ERROR] Failed to start streaming:', error)
       setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: `죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: ${error}` },
+        { role: 'assistant', content: `죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: ${String(error)}` },
       ])
-    }
+    })
   }
 
   const handleNewChat = () => {
     // 세션을 미리 생성하지 않고, 선택만 해제 (첫 질문 시 자동 생성)
     setSelectedSessionId(null)
-    setHasStoppedMessage(false)
+    setStoppedSessionId(null)
     setMessages([])
   }
 
@@ -536,15 +380,26 @@ Executing...
     } else {
       // 일반 모드에서는 세션 선택 + 중단 플래그 초기화
       setSelectedSessionId(sessionId)
-      setHasStoppedMessage(false)
+      setStoppedSessionId(null)
     }
   }
 
-  const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (confirm('이 대화를 삭제하시겠습니까?')) {
-      deleteSessionMutation.mutate(sessionId)
+    const isStreamingThisSession = isStreaming && streamState.sessionId === sessionId
+
+    const ok = isStreamingThisSession
+      ? confirm('현재 답변 생성 중입니다. 중단하고 이 대화를 삭제하시겠습니까?')
+      : confirm('이 대화를 삭제하시겠습니까?')
+
+    if (!ok) return
+
+    if (isStreamingThisSession) {
+      await chatStreamManager.stop()
     }
+
+    setStoppedSessionId(null)
+    deleteSessionMutation.mutate(sessionId)
   }
 
   const handleToggleMultiSelect = () => {
@@ -554,8 +409,21 @@ Executing...
 
   const handleDeleteSelected = async () => {
     if (selectedSessionIds.size === 0) return
-    
-    if (confirm(`선택한 ${selectedSessionIds.size}개의 대화를 삭제하시겠습니까?`)) {
+
+    const includesStreaming =
+      isStreaming && !!streamState.sessionId && selectedSessionIds.has(streamState.sessionId)
+
+    const ok = includesStreaming
+      ? confirm(
+          `선택한 ${selectedSessionIds.size}개의 대화를 삭제하시겠습니까?\n(현재 답변 생성 중인 대화가 포함되어 있어 중단 후 삭제됩니다.)`,
+        )
+      : confirm(`선택한 ${selectedSessionIds.size}개의 대화를 삭제하시겠습니까?`)
+
+    if (ok) {
+      if (includesStreaming) {
+        await chatStreamManager.stop()
+      }
+
       // 선택된 세션들을 순차적으로 삭제
       for (const sessionId of selectedSessionIds) {
         await deleteSessionMutation.mutateAsync(sessionId)
@@ -568,6 +436,7 @@ Executing...
       // 현재 선택된 세션이 삭제되었으면 초기화
       if (selectedSessionId && selectedSessionIds.has(selectedSessionId)) {
         setSelectedSessionId(null)
+        setStoppedSessionId(null)
         setMessages([])
       }
     }
