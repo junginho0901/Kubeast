@@ -50,11 +50,12 @@ export default function AIChat() {
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set())  // 선택된 세션들
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)  // 우클릭 컨텍스트 메뉴
   const [lastLoadedSessionId, setLastLoadedSessionId] = useState<string | null>(null)
-  const [forceDbSyncSessionId, setForceDbSyncSessionId] = useState<string | null>(null)
+  const [pendingFinalSyncSessionId, setPendingFinalSyncSessionId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const streamStateRef = useRef<ChatStreamState>(streamState)
 
   const isStreaming = streamState.isStreaming
+  const isTempSessionId = (id: string | null) => typeof id === 'string' && id.startsWith('temp:')
 
   // 세션 목록 조회
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
@@ -66,7 +67,7 @@ export default function AIChat() {
   const { data: sessionDetail } = useQuery({
     queryKey: ['session', selectedSessionId],
     queryFn: () => api.getSession(selectedSessionId!),
-    enabled: !!selectedSessionId,
+    enabled: !!selectedSessionId && !isTempSessionId(selectedSessionId),
   })
 
   // AI 설정 정보 조회 (모델명)
@@ -76,14 +77,45 @@ export default function AIChat() {
     staleTime: Infinity, // 설정은 변경되지 않으므로 캐시 무한정 유지
   })
 
-  // 세션 생성
+  // 세션 생성 (첫 질문에서만 필요)
   const createSessionMutation = useMutation({
-    // 첫 질문 내용을 기반으로 초기 제목 설정 (없으면 New Chat)
-    mutationFn: (title?: string) => api.createSession(title || 'New Chat'),
-    onSuccess: (newSession) => {
+    mutationFn: ({ title }: { title: string; optimisticId: string }) => api.createSession(title || 'New Chat'),
+    onMutate: async ({ title, optimisticId }: { title: string; optimisticId: string }) => {
+      await queryClient.cancelQueries({ queryKey: ['sessions'] })
+
+      const previousSessions = queryClient.getQueryData<Session[]>(['sessions'])
+      const nowIso = new Date().toISOString()
+
+      const optimisticSession: Session = {
+        id: optimisticId,
+        title: title || 'New Chat',
+        created_at: nowIso,
+        updated_at: nowIso,
+        message_count: 0,
+      }
+
+      queryClient.setQueryData<Session[]>(['sessions'], (old) => {
+        const list = Array.isArray(old) ? old : []
+        return [optimisticSession, ...list]
+      })
+
+      return { previousSessions, optimisticId }
+    },
+    onSuccess: (newSession, _vars, ctx) => {
+      queryClient.setQueryData<Session[]>(['sessions'], (old) => {
+        const list = Array.isArray(old) ? old : []
+        const replaced = list.map((s) => (ctx?.optimisticId && s.id === ctx.optimisticId ? newSession : s))
+        const hasNew = replaced.some((s) => s.id === newSession.id)
+        return hasNew ? replaced : [newSession, ...replaced]
+      })
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previousSessions) {
+        queryClient.setQueryData(['sessions'], ctx.previousSessions)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
-      setSelectedSessionId(newSession.id)
-      setMessages([])
     },
   })
 
@@ -123,12 +155,21 @@ export default function AIChat() {
         toolCalls: msg.tool_calls || undefined,
       }))
 
-      // 스트리밍이 끝나고(완료) DB에 저장된 최종 메시지/툴 결과로 강제 동기화
-      if (forceDbSyncSessionId && sessionDetail.id === forceDbSyncSessionId) {
-        setMessages(dbMessages)
-        setLastLoadedSessionId(sessionDetail.id)
-        setForceDbSyncSessionId(null)
+      // 현재 세션이 스트리밍 중이라면 DB의 중간 상태(user만 저장 등)로 UI를 덮어쓰지 않는다.
+      const activeStream = streamStateRef.current
+      if (activeStream.status === 'streaming' && activeStream.sessionId === sessionDetail.id) {
         return
+      }
+
+      // 스트리밍 완료 후: DB에 최종 assistant 메시지가 저장되었을 때만 동기화한다.
+      if (pendingFinalSyncSessionId && sessionDetail.id === pendingFinalSyncSessionId) {
+        const last = dbMessages[dbMessages.length - 1]
+        if (last && last.role === 'assistant') {
+          setMessages(dbMessages)
+          setLastLoadedSessionId(sessionDetail.id)
+          setPendingFinalSyncSessionId(null)
+          return
+        }
       }
 
       // 1) 세션이 바뀐 경우: DB 데이터로 완전히 교체
@@ -152,7 +193,7 @@ export default function AIChat() {
         return prev
       })
     }
-  }, [forceDbSyncSessionId, sessionDetail, stoppedSessionId, lastLoadedSessionId])
+  }, [pendingFinalSyncSessionId, sessionDetail, stoppedSessionId, lastLoadedSessionId])
 
   // 스트리밍 상태는 라우트 이동(언마운트) 이후에도 유지될 수 있으므로,
   // 전역 스트림 매니저에서 상태를 구독한다.
@@ -221,7 +262,7 @@ export default function AIChat() {
     }
 
     if (next === 'completed' && streamState.sessionId) {
-      setForceDbSyncSessionId(streamState.sessionId)
+      setPendingFinalSyncSessionId(streamState.sessionId)
     }
 
     // 현재 화면에 보이는 임시 메시지는 일단 영구 표시로 전환
@@ -324,15 +365,17 @@ export default function AIChat() {
 
     // 중단 플래그 리셋
     setStoppedSessionId(null)
+    setPendingFinalSyncSessionId(null)
 
-    // 세션이 없으면 생성
-    let sessionId = selectedSessionId
-    if (!sessionId) {
-      // 첫 질문 내용으로 세션 제목 설정 (최대 50자)
-      const initialTitle =
-        userMessage.length > 50 ? `${userMessage.slice(0, 50)}...` : userMessage
-      const newSession = await createSessionMutation.mutateAsync(initialTitle)
-      sessionId = newSession.id
+    // 세션이 없으면(첫 질문) UI는 즉시 보여주고, 실제 세션 생성/스트리밍은 비동기로 이어서 처리
+    const existingRealSessionId =
+      selectedSessionId && !isTempSessionId(selectedSessionId) ? selectedSessionId : null
+
+    const optimisticId =
+      existingRealSessionId ?? `temp:${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+    if (!existingRealSessionId) {
+      setSelectedSessionId(optimisticId)
     }
 
     const newMessage: Message = {
@@ -349,8 +392,9 @@ export default function AIChat() {
     ])
     setInput('')
 
-    // 스트리밍 시작 (라우트 이동 후에도 유지)
-    void chatStreamManager.startSessionChat(sessionId, userMessage).catch((error) => {
+    const startStream = (sessionIdToUse: string) => {
+      // 스트리밍 시작 (라우트 이동 후에도 유지)
+      void chatStreamManager.startSessionChat(sessionIdToUse, userMessage).catch((error) => {
       console.error('[ERROR] Failed to start streaming:', error)
       setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
       setMessages((prev) => [
@@ -358,12 +402,39 @@ export default function AIChat() {
         { role: 'assistant', content: `죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: ${String(error)}` },
       ])
     })
+    }
+
+    if (existingRealSessionId) {
+      startStream(existingRealSessionId)
+      return
+    }
+
+    try {
+      // 첫 질문 내용으로 세션 제목 설정 (최대 50자)
+      const initialTitle = userMessage.length > 50 ? `${userMessage.slice(0, 50)}...` : userMessage
+      const newSession = await createSessionMutation.mutateAsync({ title: initialTitle, optimisticId })
+
+      // DB 동기화가 중간 상태로 덮어쓰지 않도록 먼저 스트리밍 상태를 올린다.
+      startStream(newSession.id)
+
+      // 사용자가 아직 이 임시 세션을 보고 있다면 실제 세션으로 전환
+      setSelectedSessionId((current) => (current === optimisticId ? newSession.id : current))
+    } catch (error) {
+      console.error('[ERROR] Failed to create session:', error)
+      setSelectedSessionId((current) => (current === optimisticId ? null : current))
+      setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `세션 생성에 실패했습니다: ${String(error)}` },
+      ])
+    }
   }
 
   const handleNewChat = () => {
     // 세션을 미리 생성하지 않고, 선택만 해제 (첫 질문 시 자동 생성)
     setSelectedSessionId(null)
     setStoppedSessionId(null)
+    setPendingFinalSyncSessionId(null)
     setMessages([])
   }
 
@@ -381,6 +452,7 @@ export default function AIChat() {
       // 일반 모드에서는 세션 선택 + 중단 플래그 초기화
       setSelectedSessionId(sessionId)
       setStoppedSessionId(null)
+      setPendingFinalSyncSessionId(null)
     }
   }
 
@@ -399,6 +471,7 @@ export default function AIChat() {
     }
 
     setStoppedSessionId(null)
+    setPendingFinalSyncSessionId(null)
     deleteSessionMutation.mutate(sessionId)
   }
 
@@ -437,6 +510,7 @@ export default function AIChat() {
       if (selectedSessionId && selectedSessionIds.has(selectedSessionId)) {
         setSelectedSessionId(null)
         setStoppedSessionId(null)
+        setPendingFinalSyncSessionId(null)
         setMessages([])
       }
     }
