@@ -40,6 +40,7 @@ interface Message {
 export default function AIChat() {
   const queryClient = useQueryClient()
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [viewSessionId, setViewSessionId] = useState<string | null>(null) // 현재 화면에 표시 중인 메시지의 세션
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [streamState, setStreamState] = useState<ChatStreamState>(() => chatStreamManager.getState())
@@ -81,8 +82,6 @@ export default function AIChat() {
   const createSessionMutation = useMutation({
     mutationFn: ({ title }: { title: string; optimisticId: string }) => api.createSession(title || 'New Chat'),
     onMutate: async ({ title, optimisticId }: { title: string; optimisticId: string }) => {
-      await queryClient.cancelQueries({ queryKey: ['sessions'] })
-
       const previousSessions = queryClient.getQueryData<Session[]>(['sessions'])
       const nowIso = new Date().toISOString()
 
@@ -99,6 +98,9 @@ export default function AIChat() {
         return [optimisticSession, ...list]
       })
 
+      // 즉시 UI에 반영 후, 백그라운드에서 기존 세션 fetch를 취소
+      void queryClient.cancelQueries({ queryKey: ['sessions'] })
+      setViewSessionId(optimisticId)
       return { previousSessions, optimisticId }
     },
     onSuccess: (newSession, _vars, ctx) => {
@@ -155,6 +157,15 @@ export default function AIChat() {
         toolCalls: msg.tool_calls || undefined,
       }))
 
+      // 1) 세션이 바뀐 경우: DB 데이터로 완전히 교체 (스트리밍 중인 세션이라도 화면 세션은 맞춰야 함)
+      if (sessionDetail.id !== lastLoadedSessionId) {
+        console.log('[DEBUG] Session changed, replacing messages from DB')
+        setMessages(dbMessages)
+        setLastLoadedSessionId(sessionDetail.id)
+        setViewSessionId(sessionDetail.id)
+        return
+      }
+
       // 현재 세션이 스트리밍 중이라면 DB의 중간 상태(user만 저장 등)로 UI를 덮어쓰지 않는다.
       const activeStream = streamStateRef.current
       if (activeStream.status === 'streaming' && activeStream.sessionId === sessionDetail.id) {
@@ -168,16 +179,9 @@ export default function AIChat() {
           setMessages(dbMessages)
           setLastLoadedSessionId(sessionDetail.id)
           setPendingFinalSyncSessionId(null)
+          setViewSessionId(sessionDetail.id)
           return
         }
-      }
-
-      // 1) 세션이 바뀐 경우: DB 데이터로 완전히 교체
-      if (sessionDetail.id !== lastLoadedSessionId) {
-        console.log('[DEBUG] Session changed, replacing messages from DB')
-        setMessages(dbMessages)
-        setLastLoadedSessionId(sessionDetail.id)
-        return
       }
 
       // 2) 같은 세션인 경우:
@@ -187,6 +191,7 @@ export default function AIChat() {
         const hasNonTemporary = prev.some(msg => !msg.isTemporary)
         if (!hasNonTemporary) {
           console.log('[DEBUG] No non-temporary messages yet, syncing from DB')
+          setViewSessionId(sessionDetail.id)
           return dbMessages
         }
         console.log('[DEBUG] Keeping existing messages (same session, non-temporary present)')
@@ -210,6 +215,7 @@ export default function AIChat() {
     if (streamState.status !== 'streaming') return
     if (!streamState.sessionId) return
     if (selectedSessionId !== streamState.sessionId) return
+    if (viewSessionId !== selectedSessionId) return
 
     const combinedContent = streamState.functionCallsContent + streamState.assistantContent
 
@@ -245,7 +251,7 @@ export default function AIChat() {
       })
       return nextMessages
     })
-  }, [selectedSessionId, streamState])
+  }, [selectedSessionId, streamState, viewSessionId])
 
   // 스트리밍 종료 시(완료/오류/중단) 세션 목록/상세를 갱신하고 임시 플래그를 정리
   const prevStreamStatusRef = useRef(streamState.status)
@@ -376,6 +382,10 @@ export default function AIChat() {
 
     if (!existingRealSessionId) {
       setSelectedSessionId(optimisticId)
+      setViewSessionId(optimisticId)
+    }
+    if (existingRealSessionId) {
+      setViewSessionId(existingRealSessionId)
     }
 
     const newMessage: Message = {
@@ -419,9 +429,11 @@ export default function AIChat() {
 
       // 사용자가 아직 이 임시 세션을 보고 있다면 실제 세션으로 전환
       setSelectedSessionId((current) => (current === optimisticId ? newSession.id : current))
+      setViewSessionId((current) => (current === optimisticId ? newSession.id : current))
     } catch (error) {
       console.error('[ERROR] Failed to create session:', error)
       setSelectedSessionId((current) => (current === optimisticId ? null : current))
+      setViewSessionId((current) => (current === optimisticId ? null : current))
       setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
       setMessages((prev) => [
         ...prev,
@@ -433,6 +445,7 @@ export default function AIChat() {
   const handleNewChat = () => {
     // 세션을 미리 생성하지 않고, 선택만 해제 (첫 질문 시 자동 생성)
     setSelectedSessionId(null)
+    setViewSessionId(null)
     setStoppedSessionId(null)
     setPendingFinalSyncSessionId(null)
     setMessages([])
@@ -451,8 +464,10 @@ export default function AIChat() {
     } else {
       // 일반 모드에서는 세션 선택 + 중단 플래그 초기화
       setSelectedSessionId(sessionId)
+      setViewSessionId(sessionId)
       setStoppedSessionId(null)
       setPendingFinalSyncSessionId(null)
+      setMessages([])
     }
   }
 
@@ -472,6 +487,11 @@ export default function AIChat() {
 
     setStoppedSessionId(null)
     setPendingFinalSyncSessionId(null)
+    if (selectedSessionId === sessionId) {
+      setSelectedSessionId(null)
+      setViewSessionId(null)
+      setMessages([])
+    }
     deleteSessionMutation.mutate(sessionId)
   }
 
@@ -509,6 +529,7 @@ export default function AIChat() {
       // 현재 선택된 세션이 삭제되었으면 초기화
       if (selectedSessionId && selectedSessionIds.has(selectedSessionId)) {
         setSelectedSessionId(null)
+        setViewSessionId(null)
         setStoppedSessionId(null)
         setPendingFinalSyncSessionId(null)
         setMessages([])
