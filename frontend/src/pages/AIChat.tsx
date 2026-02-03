@@ -59,6 +59,9 @@ export default function AIChat() {
   const streamStateRef = useRef<ChatStreamState>(streamState)
   const messagesRef = useRef<Message[]>([])
   const sessionsScrollRef = useRef<HTMLDivElement>(null)
+  const sessionsScrollRafRef = useRef<number | null>(null)
+  const [sessionsScrollTop, setSessionsScrollTop] = useState(0)
+  const [sessionsViewportHeight, setSessionsViewportHeight] = useState(0)
 
   const isStreaming = streamState.isStreaming
   const isTempSessionId = (id: string | null) => typeof id === 'string' && id.startsWith('temp:')
@@ -85,7 +88,18 @@ export default function AIChat() {
   const getFlattenedSessions = (data?: InfiniteData<Session[]>) => {
     const pages = data?.pages
     if (!pages || !Array.isArray(pages)) return []
-    return pages.flat().filter(Boolean)
+    const seen = new Set<string>()
+    const result: Session[] = []
+    for (const page of pages) {
+      if (!Array.isArray(page)) continue
+      for (const session of page) {
+        if (!session) continue
+        if (seen.has(session.id)) continue
+        seen.add(session.id)
+        result.push(session)
+      }
+    }
+    return result
   }
 
   const buildSessionsInfiniteData = (sessions: Session[]): InfiniteData<Session[]> => {
@@ -113,6 +127,23 @@ export default function AIChat() {
     const pinnedIds = new Set(pinned.map((s) => s.id))
     return [...pinned, ...base.filter((s) => !pinnedIds.has(s.id))]
   }, [pinnedSessions, sessionsInfinite])
+
+  useEffect(() => {
+    const el = sessionsScrollRef.current
+    if (!el) return
+
+    const update = () => {
+      setSessionsViewportHeight(el.clientHeight || 0)
+      setSessionsScrollTop(el.scrollTop || 0)
+    }
+
+    update()
+
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // 세션 상세 조회 (스트리밍 중이 아닐 때만)
   const { data: sessionDetail } = useQuery({
@@ -553,15 +584,25 @@ export default function AIChat() {
   const maybeFetchMoreSessions = (container: HTMLDivElement) => {
     if (!sessionsHasNextPage) return
     if (sessionsFetchingNextPage) return
-    const thresholdPx = 120
     const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
-    if (remaining <= thresholdPx) {
+    // "바닥에 딱 닿았을 때"만 다음 페이지를 로드 (브라우저 반올림 오차 감안)
+    if (remaining <= 1) {
       void fetchNextSessionsPage()
     }
   }
 
   const handleSessionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    maybeFetchMoreSessions(e.currentTarget)
+    const container = e.currentTarget
+
+    if (sessionsScrollRafRef.current != null) {
+      cancelAnimationFrame(sessionsScrollRafRef.current)
+    }
+
+    sessionsScrollRafRef.current = requestAnimationFrame(() => {
+      setSessionsScrollTop(container.scrollTop)
+      maybeFetchMoreSessions(container)
+      sessionsScrollRafRef.current = null
+    })
   }
 
   const handleSelectSession = (sessionId: string) => {
@@ -988,86 +1029,127 @@ export default function AIChat() {
           {sessionsLoading && sessionsList.length === 0 ? (
             <div className="text-slate-400 text-sm text-center py-4">로딩 중...</div>
           ) : sessionsList.length > 0 ? (
-            <div className="space-y-1">
-              {sessionsList.map((session) => (
-                <div
-                  key={session.id}
-                  onClick={() => handleSelectSession(session.id)}
-                  onContextMenu={(e) => {
-                    const sessionData = sessionsList.find(s => s.id === session.id)
-                    if (sessionData) handleContextMenu(sessionData, e)
-                  }}
-                  className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
-                    isMultiSelectMode
-                      ? selectedSessionIds.has(session.id)
-                        ? 'bg-primary-600 text-white'
-                        : 'hover:bg-slate-700/50 text-slate-300'
-                      : selectedSessionId === session.id
-                      ? 'bg-slate-700 text-white'
-                      : 'hover:bg-slate-700/50 text-slate-300'
-                  }`}
-                >
-                  {/* 다중 선택 모드일 때 체크박스 표시 */}
-                  {isMultiSelectMode && (
-                    <div 
-                      className="absolute left-2 top-1/2 -translate-y-1/2"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleSelectSession(session.id)
+            (() => {
+              const rowHeight = 76
+              const totalRows = sessionsList.length + 1 // 마지막 행: 로딩/더보기
+              const overscan = 12
+              const startIndex = Math.max(0, Math.floor(sessionsScrollTop / rowHeight) - overscan)
+              const endIndex = Math.min(
+                totalRows,
+                Math.ceil((sessionsScrollTop + sessionsViewportHeight) / rowHeight) + overscan,
+              )
+
+              const rows = []
+              for (let index = startIndex; index < endIndex; index += 1) {
+                const isLoadMoreRow = index === sessionsList.length
+
+                if (isLoadMoreRow) {
+                  rows.push(
+                    <div
+                      key="__load_more__"
+                      style={{ position: 'absolute', top: index * rowHeight, left: 0, right: 0, height: rowHeight }}
+                      className="flex items-center justify-center text-slate-400 text-xs"
+                      onClick={() => {
+                        if (!sessionsFetchingNextPage && sessionsHasNextPage) void fetchNextSessionsPage()
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedSessionIds.has(session.id)}
-                        onChange={() => {}}
-                        className="w-4 h-4 rounded border-slate-500 cursor-pointer"
-                      />
-                    </div>
-                  )}
-                  
-                  {editingSessionId === session.id ? (
-                    <div className="flex items-center gap-2 -mx-3 -my-3 p-3" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        value={editingTitle}
-                        onChange={(e) => setEditingTitle(e.target.value)}
-                        className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded text-white min-w-0"
-                        autoFocus
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') handleSaveEdit(session.id)
-                          if (e.key === 'Escape') handleCancelEdit()
+                      {sessionsFetchingNextPage
+                        ? '더 불러오는 중...'
+                        : sessionsHasNextPage
+                          ? '더 불러오기'
+                          : '끝'}
+                    </div>,
+                  )
+                  continue
+                }
+
+                const session = sessionsList[index]
+                if (!session) continue
+
+                rows.push(
+                  <div
+                    key={session.id}
+                    style={{ position: 'absolute', top: index * rowHeight, left: 0, right: 0, height: rowHeight }}
+                    onClick={() => handleSelectSession(session.id)}
+                    onContextMenu={(e) => handleContextMenu(session, e)}
+                    className={`group relative rounded-lg cursor-pointer transition-colors overflow-hidden ${
+                      isMultiSelectMode
+                        ? selectedSessionIds.has(session.id)
+                          ? 'bg-primary-600 text-white'
+                          : 'hover:bg-slate-700/50 text-slate-300'
+                        : selectedSessionId === session.id
+                          ? 'bg-slate-700 text-white'
+                          : 'hover:bg-slate-700/50 text-slate-300'
+                    }`}
+                  >
+                    {/* 다중 선택 모드일 때 체크박스 표시 */}
+                    {isMultiSelectMode && (
+                      <div
+                        className="absolute left-2 top-1/2 -translate-y-1/2"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSelectSession(session.id)
                         }}
-                      />
-                      <button
-                        onClick={() => handleSaveEdit(session.id)}
-                        className="flex-shrink-0 p-1 hover:bg-slate-600 rounded"
                       >
-                        <Check className="w-4 h-4 text-green-400" />
-                      </button>
-                      <button 
-                        onClick={handleCancelEdit} 
-                        className="flex-shrink-0 p-1 hover:bg-slate-600 rounded"
+                        <input
+                          type="checkbox"
+                          checked={selectedSessionIds.has(session.id)}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded border-slate-500 cursor-pointer"
+                        />
+                      </div>
+                    )}
+
+                    {editingSessionId === session.id ? (
+                      <div
+                        className="flex items-center gap-2 p-3 h-full"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <X className="w-4 h-4 text-red-400" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className={`flex items-start gap-2 ${isMultiSelectMode ? 'ml-6' : ''}`}>
-                      <MessageSquare className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium break-words">{session.title}</div>
-                        <div className="text-xs text-slate-400 mt-1">
-                          {session.message_count}개 메시지
+                        <input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded text-white min-w-0"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEdit(session.id)
+                            if (e.key === 'Escape') handleCancelEdit()
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSaveEdit(session.id)}
+                          className="flex-shrink-0 p-1 hover:bg-slate-600 rounded"
+                        >
+                          <Check className="w-4 h-4 text-green-400" />
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          className="flex-shrink-0 p-1 hover:bg-slate-600 rounded"
+                        >
+                          <X className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={`flex items-start gap-2 p-3 h-full ${isMultiSelectMode ? 'ml-6' : ''}`}>
+                        <MessageSquare className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate" title={session.title}>
+                            {session.title}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">{session.message_count}개 메시지</div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>,
+                )
+              }
+
+              return (
+                <div style={{ position: 'relative', height: totalRows * rowHeight }}>
+                  {rows}
                 </div>
-              ))}
-              {sessionsFetchingNextPage && (
-                <div className="text-slate-400 text-xs text-center py-2">더 불러오는 중...</div>
-              )}
-            </div>
+              )
+            })()
           ) : (
             <div className="text-slate-400 text-sm text-center py-4">대화 내역이 없습니다</div>
           )}
