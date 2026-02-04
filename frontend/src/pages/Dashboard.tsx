@@ -104,10 +104,18 @@ export default function Dashboard() {
   })
 
   // 스토리지 토폴로지 (선택 탭에서만 로드)
-  const { data: storageTopology, isLoading: isLoadingStorageTopology } = useQuery({
+  const {
+    data: storageTopology,
+    isLoading: isLoadingStorageTopology,
+    isError: isStorageTopologyError,
+    error: storageTopologyError,
+  } = useQuery({
     queryKey: ['storage-topology'],
     queryFn: () => api.getStorageTopology(),
     enabled: isStorageModalOpen && storageActiveTab === 'topology',
+    retry: false,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
   })
 
   // 노드 목록 (차트 표시용 - 항상 가져오기)
@@ -1789,6 +1797,13 @@ export default function Dashboard() {
                     <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
                       <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
                       <p className="text-slate-400">토폴로지 로딩 중...</p>
+                    </div>
+                  ) : isStorageTopologyError ? (
+                    <div className="text-center py-12">
+                      <p className="text-slate-400">토폴로지 조회 실패</p>
+                      <p className="text-xs text-slate-500 mt-2">
+                        {(storageTopologyError as any)?.message || '알 수 없는 오류'}
+                      </p>
                     </div>
                   ) : (
                     <div className="text-center py-12">

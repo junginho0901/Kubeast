@@ -2,7 +2,7 @@
 리소스 토폴로지 서비스
 """
 from typing import List, Dict, Set
-from app.models.topology import (
+from app.topology import (
     TopologyGraph,
     TopologyNode,
     TopologyEdge,
