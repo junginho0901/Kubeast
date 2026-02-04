@@ -100,6 +100,20 @@ export interface PVCInfo {
   created_at: string
 }
 
+export interface PVInfo {
+  name: string
+  status: string
+  capacity: string
+  access_modes: string[]
+  storage_class?: string
+  reclaim_policy: string
+  claim_ref?: {
+    namespace?: string
+    name?: string
+  }
+  created_at: string
+}
+
 export interface TopologyGraph {
   nodes: Array<{
     id: string
@@ -242,9 +256,19 @@ export const api = {
     return data
   },
 
+  getPVs: async (): Promise<PVInfo[]> => {
+    const { data } = await client.get('/cluster/pvs')
+    return data
+  },
+
   // Topology
   getNamespaceTopology: async (namespace: string): Promise<TopologyGraph> => {
     const { data } = await client.get(`/topology/namespace/${namespace}`)
+    return data
+  },
+
+  getStorageTopology: async (): Promise<TopologyGraph> => {
+    const { data } = await client.get('/topology/storage')
     return data
   },
 

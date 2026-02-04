@@ -28,6 +28,10 @@ export default function Dashboard() {
   const [isIssuesModalOpen, setIsIssuesModalOpen] = useState(false)
   const [issuesSearchQuery, setIssuesSearchQuery] = useState<string>('')
   const [includeRestartHistory, setIncludeRestartHistory] = useState(false)
+  const [isStorageModalOpen, setIsStorageModalOpen] = useState(false)
+  const [storageActiveTab, setStorageActiveTab] = useState<'pvcs' | 'pvs' | 'topology'>('pvcs')
+  const [storageSearchQuery, setStorageSearchQuery] = useState<string>('')
+  const [storageNamespaceFilter, setStorageNamespaceFilter] = useState<string>('all')
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
@@ -57,7 +61,7 @@ export default function Dashboard() {
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
     queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
-    enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments' || isIssuesModalOpen,
+    enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments' || isIssuesModalOpen || isStorageModalOpen,
   })
 
   const { data: allServices, isLoading: isLoadingServices } = useQuery({
@@ -82,14 +86,28 @@ export default function Dashboard() {
       )
       return deployments.flat()
     },
-    enabled: (selectedResourceType === 'deployments' || isIssuesModalOpen) && !!allNamespaces,
+    enabled: (selectedResourceType === 'deployments' || isIssuesModalOpen || isStorageModalOpen) && !!allNamespaces,
   })
 
   // 전체 PVC 목록
   const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
     queryKey: ['all-pvcs'],
     queryFn: () => api.getPVCs(),
-    enabled: selectedResourceType === 'pvcs' || isIssuesModalOpen,
+    enabled: selectedResourceType === 'pvcs' || isIssuesModalOpen || isStorageModalOpen,
+  })
+
+  // 전체 PV 목록 (스토리지 분석용)
+  const { data: allPVs, isLoading: isLoadingPVs } = useQuery({
+    queryKey: ['all-pvs'],
+    queryFn: () => api.getPVs(),
+    enabled: isStorageModalOpen,
+  })
+
+  // 스토리지 토폴로지 (선택 탭에서만 로드)
+  const { data: storageTopology, isLoading: isLoadingStorageTopology } = useQuery({
+    queryKey: ['storage-topology'],
+    queryFn: () => api.getStorageTopology(),
+    enabled: isStorageModalOpen && storageActiveTab === 'topology',
   })
 
   // 노드 목록 (차트 표시용 - 항상 가져오기)
@@ -254,7 +272,19 @@ export default function Dashboard() {
     // 다른 모달이 열려있으면 겹치지 않도록 정리
     handleCloseModal()
     setSelectedNode(null)
+    setIsStorageModalOpen(false)
     setIsIssuesModalOpen(true)
+  }
+
+  const handleOpenStorageModal = () => {
+    // 다른 모달이 열려있으면 겹치지 않도록 정리
+    handleCloseModal()
+    setSelectedNode(null)
+    setIsIssuesModalOpen(false)
+    setStorageActiveTab('pvcs')
+    setStorageSearchQuery('')
+    setStorageNamespaceFilter('all')
+    setIsStorageModalOpen(true)
   }
 
   useEffect(() => {
@@ -272,6 +302,19 @@ export default function Dashboard() {
     setIssuesSearchQuery('')
     setIncludeRestartHistory(false)
   }
+
+  const handleCloseStorageModal = () => {
+    setIsStorageModalOpen(false)
+    setStorageSearchQuery('')
+    setStorageNamespaceFilter('all')
+  }
+
+  useEffect(() => {
+    if (!isStorageModalOpen) return
+    void queryClient.invalidateQueries({ queryKey: ['all-pvcs'], refetchType: 'active' })
+    void queryClient.invalidateQueries({ queryKey: ['all-pvs'], refetchType: 'active' })
+    void queryClient.invalidateQueries({ queryKey: ['storage-topology'], refetchType: 'active' })
+  }, [isStorageModalOpen, queryClient])
 
   const handleNodeClick = (node: any) => {
     setSelectedNode(node)
@@ -298,6 +341,9 @@ export default function Dashboard() {
         if (isIssuesModalOpen) {
           handleCloseIssuesModal()
         }
+        if (isStorageModalOpen) {
+          handleCloseStorageModal()
+        }
         if (selectedResourceType) {
           setSelectedResourceType(null)
           setSelectedPodStatus(null)
@@ -313,7 +359,7 @@ export default function Dashboard() {
     return () => {
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [selectedResourceType, selectedNode, isIssuesModalOpen])
+  }, [selectedResourceType, selectedNode, isIssuesModalOpen, isStorageModalOpen])
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
   const getSelectedStat = () => {
@@ -823,6 +869,93 @@ export default function Dashboard() {
     isIssuesModalOpen &&
     (isLoadingPods || isLoadingPVCs || isLoadingAllNamespaces || isLoadingDeployments)
 
+  const allPVsArray = Array.isArray(allPVs) ? allPVs : []
+
+  const normalizedStorageQuery = storageSearchQuery.trim().toLowerCase()
+  const storageNamespaces = (() => {
+    const fromApi = Array.isArray(allNamespaces) ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean) : []
+    const fromPVCs = allPVCsArray.map((pvc: any) => String(pvc?.namespace ?? '')).filter(Boolean)
+    return Array.from(new Set([...fromApi, ...fromPVCs])).sort()
+  })()
+
+  const filteredPVCsForStorage = allPVCsArray
+    .filter((pvc: any) => (storageNamespaceFilter === 'all' ? true : String(pvc?.namespace ?? '') === storageNamespaceFilter))
+    .filter((pvc: any) => {
+      if (!normalizedStorageQuery) return true
+      const haystack = [
+        pvc?.name,
+        pvc?.namespace,
+        pvc?.status,
+        pvc?.storage_class,
+        pvc?.volume_name,
+        pvc?.capacity,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(normalizedStorageQuery)
+    })
+
+  const filteredPVsForStorage = allPVsArray
+    .filter((pv: any) => {
+      if (storageNamespaceFilter === 'all') return true
+      const claimNs = pv?.claim_ref?.namespace
+      return claimNs && String(claimNs) === storageNamespaceFilter
+    })
+    .filter((pv: any) => {
+      if (!normalizedStorageQuery) return true
+      const haystack = [
+        pv?.name,
+        pv?.status,
+        pv?.capacity,
+        pv?.storage_class,
+        pv?.reclaim_policy,
+        pv?.claim_ref?.namespace,
+        pv?.claim_ref?.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(normalizedStorageQuery)
+    })
+
+  const pvcStatusCounts = filteredPVCsForStorage.reduce<Record<string, number>>((acc, pvc: any) => {
+    const status = String(pvc?.status ?? 'Unknown')
+    acc[status] = (acc[status] || 0) + 1
+    return acc
+  }, {})
+
+  const pvStatusCounts = filteredPVsForStorage.reduce<Record<string, number>>((acc, pv: any) => {
+    const status = String(pv?.status ?? 'Unknown')
+    acc[status] = (acc[status] || 0) + 1
+    return acc
+  }, {})
+
+  const pvcStatusRank: Record<string, number> = { Pending: 0, Lost: 1, Bound: 2 }
+  const pvStatusRank: Record<string, number> = { Failed: 0, Released: 1, Available: 2, Bound: 3 }
+
+  const sortedPVCsForStorage = [...filteredPVCsForStorage].sort((a: any, b: any) => {
+    const ar = pvcStatusRank[String(a?.status ?? '')] ?? 99
+    const br = pvcStatusRank[String(b?.status ?? '')] ?? 99
+    if (ar !== br) return ar - br
+    const an = `${a?.namespace ?? ''}/${a?.name ?? ''}`
+    const bn = `${b?.namespace ?? ''}/${b?.name ?? ''}`
+    return an.localeCompare(bn)
+  })
+
+  const sortedPVsForStorage = [...filteredPVsForStorage].sort((a: any, b: any) => {
+    const ar = pvStatusRank[String(a?.status ?? '')] ?? 99
+    const br = pvStatusRank[String(b?.status ?? '')] ?? 99
+    if (ar !== br) return ar - br
+    const an = String(a?.name ?? '')
+    const bn = String(b?.name ?? '')
+    return an.localeCompare(bn)
+  })
+
+  const isStorageLoading =
+    isStorageModalOpen &&
+    (isLoadingPVCs || isLoadingPVs || (storageActiveTab === 'topology' && isLoadingStorageTopology))
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -1279,7 +1412,7 @@ export default function Dashboard() {
               </div>
             </div>
           </button>
-          <button className="btn btn-secondary text-left">
+          <button className="btn btn-secondary text-left" onClick={handleOpenStorageModal}>
             <div className="flex items-center gap-3">
               <Database className="w-5 h-5 text-blue-400" />
               <div>
@@ -1418,6 +1551,250 @@ export default function Dashboard() {
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* 스토리지 분석 모달 */}
+      {isStorageModalOpen && (
+        <ModalOverlay onClose={handleCloseStorageModal}>
+          <div
+            className="bg-slate-800 rounded-lg max-w-5xl w-full h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">스토리지 분석</h2>
+                  <p className="text-sm text-slate-400">PV/PVC 상태 및 바인딩 현황을 확인합니다</p>
+                </div>
+                <button
+                  onClick={handleCloseStorageModal}
+                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="badge badge-info">PVC {sortedPVCsForStorage.length}개</span>
+                <span className="badge badge-info">PV {sortedPVsForStorage.length}개</span>
+                {Object.entries(pvcStatusCounts).slice(0, 4).map(([status, count]) => (
+                  <span
+                    key={`pvc-${status}`}
+                    className={`badge ${status === 'Bound' ? 'badge-success' : status === 'Pending' ? 'badge-warning' : status === 'Lost' ? 'badge-error' : 'badge-info'}`}
+                    title="PVC Status"
+                  >
+                    PVC {status} {count}
+                  </span>
+                ))}
+                {Object.entries(pvStatusCounts).slice(0, 4).map(([status, count]) => (
+                  <span
+                    key={`pv-${status}`}
+                    className={`badge ${status === 'Bound' ? 'badge-success' : status === 'Available' ? 'badge-info' : status === 'Released' ? 'badge-warning' : status === 'Failed' ? 'badge-error' : 'badge-info'}`}
+                    title="PV Status"
+                  >
+                    PV {status} {count}
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setStorageActiveTab('pvcs')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${storageActiveTab === 'pvcs' ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+                  >
+                    PVC
+                  </button>
+                  <button
+                    onClick={() => setStorageActiveTab('pvs')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${storageActiveTab === 'pvs' ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+                  >
+                    PV
+                  </button>
+                  <button
+                    onClick={() => setStorageActiveTab('topology')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${storageActiveTab === 'topology' ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+                  >
+                    Topology
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={storageNamespaceFilter}
+                    onChange={(e) => setStorageNamespaceFilter(e.target.value)}
+                    className="h-10 px-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+                    title="네임스페이스 필터"
+                  >
+                    <option value="all">All namespaces</option>
+                    {storageNamespaces.map((ns) => (
+                      <option key={ns} value={ns}>
+                        {ns}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="relative mt-3">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="검색 (이름/상태/StorageClass/Claim 등)..."
+                  value={storageSearchQuery}
+                  onChange={(e) => setStorageSearchQuery(e.target.value)}
+                  className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+                />
+                {storageSearchQuery && (
+                  <button
+                    onClick={() => setStorageSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+                  >
+                    <X className="w-4 h-4 text-slate-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {isStorageLoading ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
+                  <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
+                  <p className="text-slate-400">스토리지 데이터를 불러오는 중...</p>
+                </div>
+              ) : storageActiveTab === 'pvcs' ? (
+                sortedPVCsForStorage.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400">표시할 PVC가 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
+                    {sortedPVCsForStorage.map((pvc: any) => {
+                      const status = String(pvc?.status ?? 'Unknown')
+                      const badge =
+                        status === 'Bound'
+                          ? 'badge-success'
+                          : status === 'Pending'
+                            ? 'badge-warning'
+                            : status === 'Lost'
+                              ? 'badge-error'
+                              : 'badge-info'
+
+                      return (
+                        <div key={`${pvc.namespace}/${pvc.name}`} className="p-3 bg-slate-900/20">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`badge ${badge}`}>{status}</span>
+                                <p className="text-sm font-medium text-white truncate">{pvc.name}</p>
+                              </div>
+                              <div className="mt-1 space-y-0.5">
+                                <p className="text-xs text-slate-400">
+                                  <span className="font-medium">ns:</span> {pvc.namespace}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  {pvc.capacity || 'N/A'} · {pvc.storage_class || 'N/A'} · PV: {pvc.volume_name || 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              ) : storageActiveTab === 'pvs' ? (
+                sortedPVsForStorage.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400">표시할 PV가 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
+                    {sortedPVsForStorage.map((pv: any) => {
+                      const status = String(pv?.status ?? 'Unknown')
+                      const badge =
+                        status === 'Bound'
+                          ? 'badge-success'
+                          : status === 'Available'
+                            ? 'badge-info'
+                            : status === 'Released'
+                              ? 'badge-warning'
+                              : status === 'Failed'
+                                ? 'badge-error'
+                                : 'badge-info'
+
+                      const claimNs = pv?.claim_ref?.namespace ? String(pv.claim_ref.namespace) : ''
+                      const claimName = pv?.claim_ref?.name ? String(pv.claim_ref.name) : ''
+                      const claim = claimNs && claimName ? `${claimNs}/${claimName}` : '—'
+
+                      return (
+                        <div key={pv.name} className="p-3 bg-slate-900/20">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`badge ${badge}`}>{status}</span>
+                                <p className="text-sm font-medium text-white truncate">{pv.name}</p>
+                              </div>
+                              <div className="mt-1 space-y-0.5">
+                                <p className="text-xs text-slate-400">
+                                  {pv.capacity || 'N/A'} · {pv.storage_class || 'N/A'} · Reclaim: {pv.reclaim_policy || 'N/A'}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  <span className="font-medium">Claim:</span> {claim}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              ) : (
+                <div className="space-y-4">
+                  {storageTopology ? (
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/20">
+                        <p className="text-sm text-slate-200 font-medium">Storage Topology</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Nodes: {storageTopology.nodes?.length ?? 0} · Edges: {storageTopology.edges?.length ?? 0}
+                        </p>
+                      </div>
+                      {Array.isArray(storageTopology.edges) && storageTopology.edges.length > 0 ? (
+                        <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
+                          {storageTopology.edges.slice(0, 50).map((edge: any) => (
+                            <div key={edge.id} className="p-3 bg-slate-900/20">
+                              <p className="text-xs text-slate-300">
+                                {edge.source} → {edge.target}
+                                {edge.label ? ` · ${edge.label}` : ''}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-slate-400">표시할 토폴로지 연결이 없습니다</p>
+                        </div>
+                      )}
+                      {Array.isArray(storageTopology.edges) && storageTopology.edges.length > 50 && (
+                        <p className="text-xs text-slate-500">표시는 최대 50개 edge까지만 합니다</p>
+                      )}
+                    </div>
+                  ) : isLoadingStorageTopology ? (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
+                      <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
+                      <p className="text-slate-400">토폴로지 로딩 중...</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-slate-400">토폴로지 데이터를 가져오지 못했습니다</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
