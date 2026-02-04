@@ -536,11 +536,54 @@ export default function Dashboard() {
     const reasons: string[] = []
     let severity: IssueSeverity | null = null
 
+    const containerReasons: string[] = []
+    let hasCriticalContainerReason = false
+    const containers = Array.isArray(pod?.containers) ? pod.containers : []
+    const criticalWaitingReasons = new Set([
+      'CrashLoopBackOff',
+      'ImagePullBackOff',
+      'ErrImagePull',
+      'CreateContainerConfigError',
+      'CreateContainerError',
+      'RunContainerError',
+    ])
+    const warningWaitingReasons = new Set([
+      'BackOff',
+      'ErrImageNeverPull',
+      'InvalidImageName',
+    ])
+    const criticalTerminatedReasons = new Set(['OOMKilled', 'Error'])
+    for (const container of containers) {
+      const waitingReason = container?.state?.waiting?.reason
+      const terminatedReason = container?.state?.terminated?.reason
+      const lastTerminatedReason = container?.last_state?.terminated?.reason
+
+      if (waitingReason && criticalWaitingReasons.has(String(waitingReason))) {
+        hasCriticalContainerReason = true
+        containerReasons.push(String(waitingReason))
+      } else if (waitingReason && warningWaitingReasons.has(String(waitingReason))) {
+        containerReasons.push(String(waitingReason))
+      }
+
+      if ((terminatedReason && criticalTerminatedReasons.has(String(terminatedReason))) ||
+          (lastTerminatedReason && criticalTerminatedReasons.has(String(lastTerminatedReason)))) {
+        hasCriticalContainerReason = true
+        if (terminatedReason) containerReasons.push(String(terminatedReason))
+        if (lastTerminatedReason) containerReasons.push(String(lastTerminatedReason))
+      }
+    }
+
+    const uniqueContainerReasons = Array.from(new Set(containerReasons))
+    if (uniqueContainerReasons.length > 0) {
+      reasons.push(`Reason: ${uniqueContainerReasons.slice(0, 3).join(', ')}${uniqueContainerReasons.length > 3 ? '…' : ''}`)
+      severity = hasCriticalContainerReason ? 'critical' : 'warning'
+    }
+
     if (['Pending', 'Failed', 'Unknown'].includes(phase)) {
       severity = 'critical'
       reasons.push(`Phase: ${phase}`)
     } else if (isRunningNotReady) {
-      severity = 'warning'
+      if (severity == null) severity = 'warning'
       reasons.push(`Ready: ${pod.ready}`)
     }
 

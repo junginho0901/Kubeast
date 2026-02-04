@@ -3,7 +3,7 @@ Kubernetes 클러스터 서비스
 """
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 import asyncio
@@ -69,6 +69,50 @@ class K8sService:
         except Exception as e:
             print(f"Error creating fresh CoreV1Api: {e}")
             return self.v1  # 실패 시 기존 클라이언트 반환 (Fallback)
+
+    def _to_iso(self, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        try:
+            return value.isoformat()
+        except Exception:
+            return str(value)
+
+    def _serialize_container_state(self, state: Any) -> Optional[Dict[str, Any]]:
+        """
+        ContainerState / ContainerStateTerminated / etc. 를 프론트에서 쓰기 쉬운 dict로 축약한다.
+        (CrashLoopBackOff, ImagePullBackOff 등 Reason 판별 용도)
+        """
+        if state is None:
+            return None
+
+        result: Dict[str, Any] = {}
+
+        waiting = getattr(state, "waiting", None)
+        if waiting is not None:
+            result["waiting"] = {
+                "reason": getattr(waiting, "reason", None),
+                "message": getattr(waiting, "message", None),
+            }
+
+        terminated = getattr(state, "terminated", None)
+        if terminated is not None:
+            result["terminated"] = {
+                "reason": getattr(terminated, "reason", None),
+                "message": getattr(terminated, "message", None),
+                "exit_code": getattr(terminated, "exit_code", None),
+                "signal": getattr(terminated, "signal", None),
+                "started_at": self._to_iso(getattr(terminated, "started_at", None)),
+                "finished_at": self._to_iso(getattr(terminated, "finished_at", None)),
+            }
+
+        running = getattr(state, "running", None)
+        if running is not None:
+            result["running"] = {
+                "started_at": self._to_iso(getattr(running, "started_at", None)),
+            }
+
+        return result or None
     
     async def get_cluster_overview(self, force_refresh: bool = False) -> ClusterOverview:
         """클러스터 전체 개요 (Redis 캐시)"""
@@ -357,6 +401,8 @@ class K8sService:
                             "image": container.image,
                             "ready": container.ready,
                             "restart_count": container.restart_count,
+                            "state": self._serialize_container_state(container.state),
+                            "last_state": self._serialize_container_state(container.last_state),
                             "limits": None,
                             "requests": None
                         }
@@ -429,6 +475,8 @@ class K8sService:
                             "image": container.image,
                             "ready": container.ready,
                             "restart_count": container.restart_count,
+                            "state": self._serialize_container_state(container.state),
+                            "last_state": self._serialize_container_state(container.last_state),
                             "limits": None,
                             "requests": None
                         }
