@@ -164,7 +164,7 @@ class ChatStreamManager {
             if (data.usage) {
               const phase = data.usage_phase ? ` (${String(data.usage_phase)})` : ''
               // console.debug 는 브라우저 설정에 따라 숨겨질 수 있어 info 로 출력
-              console.info('[TOKENS]' + phase, data.usage)
+              console.debug('[TOKENS]' + phase, data.usage)
               continue
             }
 
