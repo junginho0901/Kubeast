@@ -1291,16 +1291,31 @@ Deployment 상세:
             v = max_value
         return v
 
+    def _normalize_for_search(self, text: str) -> str:
+        # Treat non-alphanumerics as separators (e.g., "alarm broker" matches "service-alarm-broker").
+        return re.sub(r"[^a-z0-9]+", " ", str(text).lower()).strip()
+
+    def _query_tokens(self, query: str) -> List[str]:
+        normalized = self._normalize_for_search(query)
+        return [t for t in normalized.split() if t]
+
+    def _all_tokens_in_text(self, query: str, text: str) -> bool:
+        tokens = self._query_tokens(query)
+        if not tokens:
+            return False
+        hay = self._normalize_for_search(text)
+        return all(t in hay for t in tokens)
+
     def _query_in_mapping(self, query: str, mapping: object) -> bool:
         if not isinstance(mapping, dict):
             return False
         for k, v in mapping.items():
-            if query in str(k).lower() or query in str(v).lower():
+            if self._all_tokens_in_text(query, f"{k} {v}"):
                 return True
         return False
 
     async def _find_pods(self, query_raw: str, namespace: Optional[str] = None, limit: int = 20) -> List[Dict]:
-        query = query_raw.strip().lower()
+        query = query_raw.strip()
         if not query:
             return []
 
@@ -1310,8 +1325,8 @@ Deployment 상세:
             pods = await self.k8s_service.get_all_pods()
 
         def _matches(p: Dict) -> bool:
-            name = str(p.get("name", "")).lower()
-            if query in name:
+            name = str(p.get("name", ""))
+            if self._all_tokens_in_text(query, name):
                 return True
             return self._query_in_mapping(query, p.get("labels") or {})
 
@@ -1342,7 +1357,7 @@ Deployment 상세:
         return matches[:limit]
 
     async def _find_services(self, query_raw: str, namespace: Optional[str] = None, limit: int = 20) -> List[Dict]:
-        query = query_raw.strip().lower()
+        query = query_raw.strip()
         if not query:
             return []
 
@@ -1370,7 +1385,7 @@ Deployment 상세:
                     break
 
         def _matches(s: Dict) -> bool:
-            if query in str(s.get("name", "")).lower():
+            if self._all_tokens_in_text(query, str(s.get("name", ""))):
                 return True
             return self._query_in_mapping(query, s.get("selector") or {})
 
@@ -1379,7 +1394,7 @@ Deployment 상세:
         return matches[:limit]
 
     async def _find_deployments(self, query_raw: str, namespace: Optional[str] = None, limit: int = 20) -> List[Dict]:
-        query = query_raw.strip().lower()
+        query = query_raw.strip()
         if not query:
             return []
 
@@ -1406,7 +1421,7 @@ Deployment 상세:
                     break
 
         def _matches(d: Dict) -> bool:
-            if query in str(d.get("name", "")).lower():
+            if self._all_tokens_in_text(query, str(d.get("name", ""))):
                 return True
             if self._query_in_mapping(query, d.get("labels") or {}):
                 return True
