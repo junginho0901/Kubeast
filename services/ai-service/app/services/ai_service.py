@@ -1129,21 +1129,37 @@ Deployment 상세:
                 print(f"[DEBUG] Starting second GPT call for analysis with {len(messages)} messages")
                 
                 # 함수 결과를 바탕으로 스트리밍 응답
-                stream = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=tools,  # tools를 계속 제공
-                    temperature=0.8,
-                    max_tokens=2000,
-                    stream=True,
-                )
+                try:
+                    stream = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        tools=tools,  # tools를 계속 제공
+                        temperature=0.8,
+                        max_tokens=2000,
+                        stream=True,
+                        stream_options={"include_usage": True},
+                    )
+                except TypeError:
+                    # openai 라이브러리 버전에 따라 stream_options 미지원일 수 있음
+                    stream = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        tools=tools,  # tools를 계속 제공
+                        temperature=0.8,
+                        max_tokens=2000,
+                        stream=True,
+                    )
                 
                 print(f"[DEBUG] Second GPT call started, streaming...")
                 
                 # 스트리밍 청크 전체 수집 및 로그
                 full_stream_content = ""
                 stream_chunks = []
+                stream_usage = None
                 async for chunk in stream:
+                    if getattr(chunk, "usage", None) is not None:
+                        # include_usage=true 일 때 보통 마지막 chunk에 usage가 포함됨
+                        stream_usage = chunk.usage
                     chunk_dict = {
                         "id": chunk.id if hasattr(chunk, 'id') else None,
                         "model": chunk.model if hasattr(chunk, 'model') else None,
@@ -1166,6 +1182,28 @@ Deployment 상세:
                         content = chunk.choices[0].delta.content
                         full_stream_content += content
                         yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+
+                if stream_usage is not None:
+                    print(
+                        f"[TOKENS][chat_stream second stream] prompt={stream_usage.prompt_tokens}, "
+                        f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
+                        flush=True,
+                    )
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "usage_phase": "chat_stream_second_stream",
+                                "usage": {
+                                    "prompt_tokens": stream_usage.prompt_tokens,
+                                    "completion_tokens": stream_usage.completion_tokens,
+                                    "total_tokens": stream_usage.total_tokens,
+                                },
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
                 
                 # 스트리밍 완료 후 전체 로그 출력
                 print(f"[OPENAI RESPONSE][chat_stream second - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(full_stream_content)}", flush=True)
@@ -1175,18 +1213,31 @@ Deployment 상세:
                 print(f"[DEBUG] Streaming completed")
             else:
                 # Function calling 없이 바로 스트리밍
-                stream = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=0.8,
-                    max_tokens=2000,
-                    stream=True,
-                )
+                try:
+                    stream = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=0.8,
+                        max_tokens=2000,
+                        stream=True,
+                        stream_options={"include_usage": True},
+                    )
+                except TypeError:
+                    stream = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=0.8,
+                        max_tokens=2000,
+                        stream=True,
+                    )
                 
                 # 스트리밍 청크 전체 수집 및 로그
                 full_stream_content = ""
                 stream_chunks = []
+                stream_usage = None
                 async for chunk in stream:
+                    if getattr(chunk, "usage", None) is not None:
+                        stream_usage = chunk.usage
                     chunk_dict = {
                         "id": chunk.id if hasattr(chunk, 'id') else None,
                         "model": chunk.model if hasattr(chunk, 'model') else None,
@@ -1209,6 +1260,28 @@ Deployment 상세:
                         content = chunk.choices[0].delta.content
                         full_stream_content += content
                         yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
+
+                if stream_usage is not None:
+                    print(
+                        f"[TOKENS][chat_stream stream] prompt={stream_usage.prompt_tokens}, "
+                        f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
+                        flush=True,
+                    )
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "usage_phase": "chat_stream_stream",
+                                "usage": {
+                                    "prompt_tokens": stream_usage.prompt_tokens,
+                                    "completion_tokens": stream_usage.completion_tokens,
+                                    "total_tokens": stream_usage.total_tokens,
+                                },
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
+                    )
                 
                 # 스트리밍 완료 후 전체 로그 출력
                 print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(full_stream_content)}", flush=True)
@@ -1784,6 +1857,21 @@ Deployment 상세:
                             f"completion={usage.completion_tokens}, total={usage.total_tokens}",
                             flush=True,
                         )
+                        yield (
+                            "data: "
+                            + json.dumps(
+                                {
+                                    "usage_phase": f"session_chat_iteration_{iteration}_fc",
+                                    "usage": {
+                                        "prompt_tokens": usage.prompt_tokens,
+                                        "completion_tokens": usage.completion_tokens,
+                                        "total_tokens": usage.total_tokens,
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n\n"
+                        )
                 except Exception as api_error:
                     print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
                     yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
@@ -1852,16 +1940,29 @@ Deployment 상세:
                     print("[DEBUG] No tool calls. Streaming final answer directly from OpenAI.")
 
                     # 1) 최초 응답을 스트리밍으로 전송
-                    stream = await self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=0.7,
-                        max_tokens=1200,
-                        stream=True,
-                    )
+                    try:
+                        stream = await self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            temperature=0.7,
+                            max_tokens=1200,
+                            stream=True,
+                            stream_options={"include_usage": True},
+                        )
+                    except TypeError:
+                        stream = await self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            temperature=0.7,
+                            max_tokens=1200,
+                            stream=True,
+                        )
 
                     last_finish_reason = None
+                    stream_usage = None
                     async for chunk in stream:
+                        if getattr(chunk, "usage", None) is not None:
+                            stream_usage = chunk.usage
                         if chunk.choices and getattr(chunk.choices[0], "delta", None):
                             delta = chunk.choices[0].delta
                             if delta.content:
@@ -1869,6 +1970,28 @@ Deployment 상세:
                                 yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
                         if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
                             last_finish_reason = chunk.choices[0].finish_reason
+
+                    if stream_usage is not None:
+                        print(
+                            f"[TOKENS][session_chat final stream] prompt={stream_usage.prompt_tokens}, "
+                            f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
+                            flush=True,
+                        )
+                        yield (
+                            "data: "
+                            + json.dumps(
+                                {
+                                    "usage_phase": "session_chat_final_stream",
+                                    "usage": {
+                                        "prompt_tokens": stream_usage.prompt_tokens,
+                                        "completion_tokens": stream_usage.completion_tokens,
+                                        "total_tokens": stream_usage.total_tokens,
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n\n"
+                        )
 
                     # 모델 컨텍스트에 누적된 전체 답변을 넣어 둠
                     if assistant_content:
@@ -1896,17 +2019,30 @@ Deployment 상세:
                                 }
                             )
 
-                            cont_stream = await self.client.chat.completions.create(
-                                model=self.model,
-                                messages=messages,
-                                temperature=0.7,
-                                max_tokens=1200,
-                                stream=True,
-                            )
+                            try:
+                                cont_stream = await self.client.chat.completions.create(
+                                    model=self.model,
+                                    messages=messages,
+                                    temperature=0.7,
+                                    max_tokens=1200,
+                                    stream=True,
+                                    stream_options={"include_usage": True},
+                                )
+                            except TypeError:
+                                cont_stream = await self.client.chat.completions.create(
+                                    model=self.model,
+                                    messages=messages,
+                                    temperature=0.7,
+                                    max_tokens=1200,
+                                    stream=True,
+                                )
+                            cont_usage = None
 
                             continuation_text = ""
                             cont_finish_reason = None
                             async for chunk in cont_stream:
+                                if getattr(chunk, "usage", None) is not None:
+                                    cont_usage = chunk.usage
                                 if chunk.choices and getattr(chunk.choices[0], "delta", None):
                                     delta = chunk.choices[0].delta
                                     if delta.content:
@@ -1915,6 +2051,28 @@ Deployment 상세:
                                         yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
                                 if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
                                     cont_finish_reason = chunk.choices[0].finish_reason
+
+                            if cont_usage is not None:
+                                print(
+                                    f"[TOKENS][session_chat continuation {continuation_index}] prompt={cont_usage.prompt_tokens}, "
+                                    f"completion={cont_usage.completion_tokens}, total={cont_usage.total_tokens}",
+                                    flush=True,
+                                )
+                                yield (
+                                    "data: "
+                                    + json.dumps(
+                                        {
+                                            "usage_phase": f"session_chat_continuation_{continuation_index}",
+                                            "usage": {
+                                                "prompt_tokens": cont_usage.prompt_tokens,
+                                                "completion_tokens": cont_usage.completion_tokens,
+                                                "total_tokens": cont_usage.total_tokens,
+                                            },
+                                        },
+                                        ensure_ascii=False,
+                                    )
+                                    + "\n\n"
+                                )
 
                             if continuation_text:
                                 messages.append({"role": "assistant", "content": continuation_text})
