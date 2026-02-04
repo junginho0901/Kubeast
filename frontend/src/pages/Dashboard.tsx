@@ -25,6 +25,8 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
   const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
+  const [isIssuesModalOpen, setIsIssuesModalOpen] = useState(false)
+  const [issuesSearchQuery, setIssuesSearchQuery] = useState<string>('')
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
@@ -47,14 +49,14 @@ export default function Dashboard() {
   const { data: allPods, isLoading: isLoadingPods } = useQuery({
     queryKey: ['all-pods'],
     queryFn: () => api.getAllPods(false), // 자동 갱신은 캐시 사용
-    enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
+    enabled: selectedResourceType === 'pods' || selectedPodStatus !== null || isIssuesModalOpen,
   })
 
   // 전체 Services 목록 (모든 네임스페이스)
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
     queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
-    enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments',
+    enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments' || isIssuesModalOpen,
   })
 
   const { data: allServices, isLoading: isLoadingServices } = useQuery({
@@ -79,14 +81,14 @@ export default function Dashboard() {
       )
       return deployments.flat()
     },
-    enabled: selectedResourceType === 'deployments' && !!allNamespaces,
+    enabled: (selectedResourceType === 'deployments' || isIssuesModalOpen) && !!allNamespaces,
   })
 
   // 전체 PVC 목록
   const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
     queryKey: ['all-pvcs'],
     queryFn: () => api.getPVCs(),
-    enabled: selectedResourceType === 'pvcs',
+    enabled: selectedResourceType === 'pvcs' || isIssuesModalOpen,
   })
 
   // 노드 목록 (차트 표시용 - 항상 가져오기)
@@ -247,6 +249,18 @@ export default function Dashboard() {
     setModalSearchQuery('')
   }
 
+  const handleOpenIssuesModal = () => {
+    // 다른 모달이 열려있으면 겹치지 않도록 정리
+    handleCloseModal()
+    setSelectedNode(null)
+    setIsIssuesModalOpen(true)
+  }
+
+  const handleCloseIssuesModal = () => {
+    setIsIssuesModalOpen(false)
+    setIssuesSearchQuery('')
+  }
+
   const handleNodeClick = (node: any) => {
     setSelectedNode(node)
   }
@@ -269,6 +283,9 @@ export default function Dashboard() {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (isIssuesModalOpen) {
+          handleCloseIssuesModal()
+        }
         if (selectedResourceType) {
           setSelectedResourceType(null)
           setSelectedPodStatus(null)
@@ -284,7 +301,7 @@ export default function Dashboard() {
     return () => {
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [selectedResourceType, selectedNode])
+  }, [selectedResourceType, selectedNode, isIssuesModalOpen])
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
   const getSelectedStat = () => {
@@ -482,6 +499,216 @@ export default function Dashboard() {
       value: nodeStatusData[status] ?? 0,
     }))
     : []
+
+  type IssueSeverity = 'critical' | 'warning' | 'info'
+  type IssueKind = 'Pod' | 'Node' | 'Deployment' | 'PVC' | 'Metrics'
+  type IssueItem = {
+    id: string
+    kind: IssueKind
+    severity: IssueSeverity
+    title: string
+    subtitle?: string
+    namespace?: string
+    name?: string
+  }
+
+  const parseReady = (ready: unknown): { ready: number; total: number } | null => {
+    if (typeof ready !== 'string') return null
+    const match = ready.match(/^(\d+)\/(\d+)$/)
+    if (!match) return null
+    const readyCount = Number(match[1])
+    const totalCount = Number(match[2])
+    if (!Number.isFinite(readyCount) || !Number.isFinite(totalCount)) return null
+    return { ready: readyCount, total: totalCount }
+  }
+
+  const allPodsArray = Array.isArray(allPods) ? allPods : []
+  const allNodesArray = Array.isArray(nodes) ? nodes : []
+  const allPVCsArray = Array.isArray(allPVCs) ? allPVCs : []
+  const allDeploymentsArray = Array.isArray(allDeployments) ? allDeployments : []
+
+  const issuesFromPods: IssueItem[] = allPodsArray.flatMap((pod: any) => {
+    const phase = String(pod?.phase ?? pod?.status ?? '')
+    const ready = parseReady(pod?.ready)
+    const isRunningNotReady = phase === 'Running' && ready != null && ready.ready < ready.total
+    const restartCount = Number(pod?.restart_count ?? 0)
+
+    const reasons: string[] = []
+    let severity: IssueSeverity | null = null
+
+    if (['Pending', 'Failed', 'Unknown'].includes(phase)) {
+      severity = 'critical'
+      reasons.push(`Phase: ${phase}`)
+    } else if (isRunningNotReady) {
+      severity = 'warning'
+      reasons.push(`Ready: ${pod.ready}`)
+    }
+
+    if (Number.isFinite(restartCount) && restartCount > 0) {
+      if (severity == null) severity = restartCount >= 5 ? 'warning' : 'info'
+      reasons.push(`Restarts: ${restartCount}`)
+    }
+
+    if (reasons.length === 0 || severity == null) return []
+
+    const namespace = String(pod?.namespace ?? '')
+    const name = String(pod?.name ?? '')
+    return [
+      {
+        id: `pod:${namespace}:${name}`,
+        kind: 'Pod',
+        severity,
+        title: name,
+        subtitle: reasons.join(' · '),
+        namespace,
+        name,
+      },
+    ]
+  })
+
+  const issuesFromNodes: IssueItem[] = allNodesArray.flatMap((node: any) => {
+    const status = String(node?.status ?? '')
+    if (!status || status === 'Ready') return []
+
+    const name = String(node?.name ?? '')
+    return [
+      {
+        id: `node:${name}`,
+        kind: 'Node',
+        severity: 'critical',
+        title: name,
+        subtitle: `Status: ${status}`,
+        name,
+      },
+    ]
+  })
+
+  const issuesFromPVCs: IssueItem[] = allPVCsArray.flatMap((pvc: any) => {
+    const status = String(pvc?.status ?? '')
+    if (!status || status === 'Bound') return []
+
+    const namespace = String(pvc?.namespace ?? '')
+    const name = String(pvc?.name ?? '')
+    const severity: IssueSeverity = ['Lost', 'Pending'].includes(status) ? 'critical' : 'warning'
+
+    return [
+      {
+        id: `pvc:${namespace}:${name}`,
+        kind: 'PVC',
+        severity,
+        title: name,
+        subtitle: `Status: ${status}`,
+        namespace,
+        name,
+      },
+    ]
+  })
+
+  const issuesFromDeployments: IssueItem[] = allDeploymentsArray.flatMap((deploy: any) => {
+    const replicas = Number(deploy?.replicas ?? 0)
+    const readyReplicas = Number(deploy?.ready_replicas ?? 0)
+    const availableReplicas = Number(deploy?.available_replicas ?? 0)
+
+    if (!Number.isFinite(replicas) || replicas <= 0) return []
+    if (readyReplicas >= replicas && availableReplicas >= replicas) return []
+
+    const namespace = String(deploy?.namespace ?? '')
+    const name = String(deploy?.name ?? '')
+
+    const severity: IssueSeverity = readyReplicas === 0 ? 'critical' : 'warning'
+    const subtitle = `Ready: ${readyReplicas}/${replicas} · Available: ${availableReplicas}/${replicas}`
+
+    return [
+      {
+        id: `deploy:${namespace}:${name}`,
+        kind: 'Deployment',
+        severity,
+        title: name,
+        subtitle,
+        namespace,
+        name,
+      },
+    ]
+  })
+
+  const issuesFromMetrics: IssueItem[] = (() => {
+    const items: IssueItem[] = []
+    if (topResources?.pod_error) {
+      items.push({
+        id: 'metrics:pod_error',
+        kind: 'Metrics',
+        severity: 'info',
+        title: 'Pod 메트릭 수집 실패',
+        subtitle: 'metrics-server 상태를 확인해주세요',
+      })
+    }
+    if (topResources?.node_error) {
+      items.push({
+        id: 'metrics:node_error',
+        kind: 'Metrics',
+        severity: 'info',
+        title: 'Node 메트릭 수집 실패',
+        subtitle: 'metrics-server 상태를 확인해주세요',
+      })
+    }
+    return items
+  })()
+
+  const allIssues: IssueItem[] = [
+    ...issuesFromNodes,
+    ...issuesFromDeployments,
+    ...issuesFromPVCs,
+    ...issuesFromPods,
+    ...issuesFromMetrics,
+  ]
+
+  const severityRank: Record<IssueSeverity, number> = { critical: 0, warning: 1, info: 2 }
+  const kindRank: Record<IssueKind, number> = { Node: 0, Deployment: 1, PVC: 2, Pod: 3, Metrics: 4 }
+
+  const normalizedIssuesQuery = issuesSearchQuery.trim().toLowerCase()
+  const filteredIssues = normalizedIssuesQuery
+    ? allIssues.filter((issue) => {
+      const haystack = [
+        issue.kind,
+        issue.severity,
+        issue.namespace,
+        issue.name,
+        issue.title,
+        issue.subtitle,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(normalizedIssuesQuery)
+    })
+    : allIssues
+
+  const sortedIssues = [...filteredIssues].sort((a, b) => {
+    const bySeverity = severityRank[a.severity] - severityRank[b.severity]
+    if (bySeverity !== 0) return bySeverity
+    const byKind = kindRank[a.kind] - kindRank[b.kind]
+    if (byKind !== 0) return byKind
+    return a.id.localeCompare(b.id)
+  })
+
+  const issuesByKind = sortedIssues.reduce<Record<IssueKind, IssueItem[]>>((acc, issue) => {
+    acc[issue.kind] = acc[issue.kind] ?? []
+    acc[issue.kind].push(issue)
+    return acc
+  }, {} as Record<IssueKind, IssueItem[]>)
+
+  const issuesSummary = sortedIssues.reduce(
+    (acc, issue) => {
+      acc.total += 1
+      acc[issue.severity] += 1
+      return acc
+    },
+    { total: 0, critical: 0, warning: 0, info: 0 } as { total: number; critical: number; warning: number; info: number }
+  )
+
+  const isIssuesLoading =
+    isIssuesModalOpen &&
+    (isLoadingPods || isLoadingPVCs || isLoadingAllNamespaces || isLoadingDeployments)
 
   return (
     <div className="space-y-8">
@@ -921,7 +1148,7 @@ export default function Dashboard() {
       <div className="card">
         <h2 className="text-xl font-bold text-white mb-4">빠른 작업</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <button className="btn btn-secondary text-left">
+          <button className="btn btn-secondary text-left" onClick={handleOpenIssuesModal}>
             <div className="flex items-center gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-400" />
               <div>
@@ -950,6 +1177,125 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* 이슈 확인 모달 */}
+      {isIssuesModalOpen && (
+        <ModalOverlay onClose={handleCloseIssuesModal}>
+          <div
+            className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">이슈 확인</h2>
+                  <p className="text-sm text-slate-400">
+                    Pod/Node/Deployment/PVC 상태를 기반으로 문제 리소스를 모아 보여줍니다
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseIssuesModal}
+                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="text-xs text-slate-400">총</span>
+                <span className="badge badge-info">{issuesSummary.total}개</span>
+                <span className="badge badge-error">Critical {issuesSummary.critical}</span>
+                <span className="badge badge-warning">Warning {issuesSummary.warning}</span>
+                <span className="badge badge-info">Info {issuesSummary.info}</span>
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="이슈 검색 (이름/네임스페이스/메시지)..."
+                  value={issuesSearchQuery}
+                  onChange={(e) => setIssuesSearchQuery(e.target.value)}
+                  className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+                />
+                {issuesSearchQuery && (
+                  <button
+                    onClick={() => setIssuesSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+                  >
+                    <X className="w-4 h-4 text-slate-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {isIssuesLoading ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
+                  <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
+                  <p className="text-slate-400">이슈를 수집하는 중...</p>
+                </div>
+              ) : sortedIssues.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
+                  <CheckCircle className="w-9 h-9 text-green-400 mb-3" />
+                  <p className="text-slate-300 font-medium">문제가 감지되지 않았습니다</p>
+                  <p className="text-sm text-slate-400 mt-1">필터 조건(검색)을 확인해보세요</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(['Node', 'Deployment', 'PVC', 'Pod', 'Metrics'] as IssueKind[]).map((kind) => {
+                    const items = issuesByKind[kind] ?? []
+                    if (items.length === 0) return null
+                    return (
+                      <div key={kind} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-slate-200">{kind}</h3>
+                          <span className="text-xs text-slate-400">{items.length}개</span>
+                        </div>
+                        <div className="divide-y divide-slate-700 rounded-lg border border-slate-700 overflow-hidden">
+                          {items.map((issue) => (
+                            <div key={issue.id} className="p-3 bg-slate-900/20">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`badge ${issue.severity === 'critical'
+                                          ? 'badge-error'
+                                          : issue.severity === 'warning'
+                                            ? 'badge-warning'
+                                            : 'badge-info'
+                                        }`}
+                                    >
+                                      {issue.severity.toUpperCase()}
+                                    </span>
+                                    <p className="text-sm font-medium text-white truncate">
+                                      {issue.title}
+                                    </p>
+                                  </div>
+                                  <div className="mt-1 space-y-0.5">
+                                    {issue.namespace && (
+                                      <p className="text-xs text-slate-400">
+                                        <span className="font-medium">ns:</span> {issue.namespace}
+                                      </p>
+                                    )}
+                                    {issue.subtitle && (
+                                      <p className="text-xs text-slate-400">{issue.subtitle}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
 
       {/* 리소스 상세 모달 */}
       {selectedResourceType && (
