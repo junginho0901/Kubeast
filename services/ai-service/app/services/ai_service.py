@@ -614,82 +614,14 @@ JSON 형식으로 응답해주세요:
 
         try:
             observations = await self._build_optimization_observations(namespace)
-
-            # 먼저 관측 데이터 요약을 화면에 바로 보여줌(사용자가 "근거"를 확인 가능)
-            preface = observations["observations_md"] + "\n\n---\n\n## 최적화 제안\n"
-            yield "data: " + json.dumps({"content": preface}, ensure_ascii=False) + "\n\n"
-
-            prompt = f"""
-아래는 Kubernetes 네임스페이스의 **관측 데이터(스펙/상태/메트릭/이벤트)** 요약입니다.
-이 데이터에 근거해서 최적화 제안을 작성하세요.
-
-필수 조건:
-- 각 항목마다 반드시 "근거(관측)"를 포함하세요(리소스명/수치/이벤트 등).
-- 관측 데이터에 없는 내용은 추측하지 말고 "추가 확인 필요"라고 쓰세요.
-- "일반적인 베스트프랙티스"만 나열하지 마세요. 이 네임스페이스에 맞춘 내용이어야 합니다.
-
-관측 요약:
-{observations['observations_text']}
-
-출력 형식(마크다운):
-- 섹션별(H2/H3)로 묶기
-- 각 제안 항목은 아래 템플릿을 따르기
-  - **[Priority] 제목 (효과: 비용/성능/안정성)**  
-    - 근거: ...  
-    - 권장: ...  
-    - 적용 예시: ```yaml 또는 kubectl``` (짧게)
-"""
-
-            try:
-                stream = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.5,
-                    max_tokens=1200,
-                    stream=True,
-                    stream_options={"include_usage": True},
-                )
-            except TypeError:
-                stream = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "당신은 Kubernetes 리소스 최적화 전문가입니다."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.5,
-                    max_tokens=1200,
-                    stream=True,
-                )
-
-            stream_usage = None
-            async for chunk in stream:
-                if getattr(chunk, "usage", None) is not None:
-                    stream_usage = chunk.usage
-
-                delta = chunk.choices[0].delta
-                if delta and getattr(delta, "content", None):
-                    yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
-
-            if stream_usage is not None:
-                yield (
-                    "data: "
-                    + json.dumps(
-                        {
-                            "usage_phase": "suggest_optimization_stream",
-                            "usage": {
-                                "prompt_tokens": stream_usage.prompt_tokens,
-                                "completion_tokens": stream_usage.completion_tokens,
-                                "total_tokens": stream_usage.total_tokens,
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n\n"
-                )
-
+            # Observed data + derived action plan을 한 흐름으로 출력 (표/제안 분리감 해소)
+            content = (
+                observations["observations_md"]
+                + "\n\n---\n\n## 최적화 제안 (데이터 기반)\n\n"
+                + observations.get("action_plan_md", "")
+                + "\n"
+            )
+            yield "data: " + json.dumps({"content": content}, ensure_ascii=False) + "\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
@@ -737,6 +669,11 @@ JSON 형식으로 응답해주세요:
             return None
         values_sorted = sorted(values)
         return values_sorted[len(values_sorted) // 2]
+
+    def _round_up_int(self, value: int, step: int) -> int:
+        if step <= 0:
+            return value
+        return int(((value + step - 1) // step) * step)
 
     def _labels_match_selector(self, labels: Dict, selector: Dict) -> bool:
         if not selector:
@@ -1159,6 +1096,230 @@ JSON 형식으로 응답해주세요:
         if findings:
             md += "\n\n### Auto findings (based on observed data)\n" + "\n".join(findings[:30])
 
+        # Build deterministic action plan (so "표"와 "제안"이 연결되게)
+        def is_probably_control_plane(name: str) -> bool:
+            lowered = name.lower()
+            keywords = ("operator", "controller", "admission", "webhook", "converter", "crd")
+            return any(k in lowered for k in keywords)
+
+        def is_probably_user_facing(name: str) -> bool:
+            lowered = name.lower()
+            keywords = ("gateway", "ingress", "web", "api", "console", "dashboard")
+            return any(k in lowered for k in keywords)
+
+        def fmt_m(value: Optional[int]) -> str:
+            return f"{value}m" if isinstance(value, int) else "N/A"
+
+        def fmt_mi(value: Optional[int]) -> str:
+            return f"{value}Mi" if isinstance(value, int) else "N/A"
+
+        def rec_cpu_request_m(row: Dict) -> Optional[int]:
+            usage = row.get("cpu_usage_m_avg")
+            if not isinstance(usage, int) or usage <= 0:
+                return None
+            # p95가 없으니 보수적으로 avg*2를 권장(최소 50m)
+            return self._round_up_int(max(int(usage * 2), 50), 10)
+
+        def rec_mem_request_mi(row: Dict) -> Optional[int]:
+            usage = row.get("mem_usage_mi_avg")
+            if not isinstance(usage, int) or usage <= 0:
+                return None
+            # avg 기반으로 1.5x(최소 128Mi)
+            return self._round_up_int(max(int(usage * 1.5), 128), 64)
+
+        def rec_limit_from_request(request: Optional[int], factor: float, step: int) -> Optional[int]:
+            if not isinstance(request, int) or request <= 0:
+                return None
+            return self._round_up_int(max(int(request * factor), request), step)
+
+        # Hot/overprovision lists
+        hot_mem = sorted(
+            [r for r in deployment_rows if isinstance(r.get("mem_util_pct"), (int, float)) and float(r["mem_util_pct"]) >= 90],
+            key=lambda r: float(r.get("mem_util_pct") or 0),
+            reverse=True,
+        )
+        hot_cpu = sorted(
+            [r for r in deployment_rows if isinstance(r.get("cpu_util_pct"), (int, float)) and float(r["cpu_util_pct"]) >= 90],
+            key=lambda r: float(r.get("cpu_util_pct") or 0),
+            reverse=True,
+        )
+        over_cpu = sorted(
+            [r for r in deployment_rows if isinstance(r.get("cpu_util_pct"), (int, float)) and float(r["cpu_util_pct"]) < 20 and (r.get("cpu_req_m") or 0) >= 200],
+            key=lambda r: float(r.get("cpu_util_pct") or 0),
+        )
+
+        missing_resources_rows = [
+            r
+            for r in deployment_rows
+            if (r.get("missing_req_containers", 0) > 0 or r.get("missing_lim_containers", 0) > 0 or r.get("cpu_req_m") is None or r.get("mem_req_mi") is None)
+        ]
+
+        latest_images_rows = [r for r in deployment_rows if r.get("image_flag") in ("latest", "untagged")]
+
+        oom_rows = [r for r in deployment_rows if isinstance(r.get("reason_counts"), dict) and (r["reason_counts"].get("OOMKilled") or 0) > 0]
+
+        failed_scheduling = any("FailedScheduling" in line for line in event_lines)
+        readiness_failed = any("Readiness probe failed" in line or "ReadinessProbe" in line for line in event_lines)
+
+        action_lines: List[str] = []
+        action_lines.append("### High")
+
+        # HA recommendation (nuanced)
+        if node_count and node_count >= 2:
+            user_facing_single = [r["name"] for r in deployment_rows if r.get("replicas") == 1 and is_probably_user_facing(r.get("name", ""))]
+            controllers_single = [r["name"] for r in deployment_rows if r.get("replicas") == 1 and is_probably_control_plane(r.get("name", ""))]
+            if user_facing_single:
+                sample_names = ", ".join(f"`{n}`" for n in user_facing_single[:6]) + ("…" if len(user_facing_single) > 6 else "")
+                action_lines.append(
+                    f"- **[High] 사용자 트래픽/게이트웨이 계열 HA 보강 (효과: 안정성)**  \n"
+                    f"  - 근거: node_count={node_count}인데 replicas=1. 사용자 facing으로 보이는 deployment {len(user_facing_single)}개 예: {sample_names}  \n"
+                    f"  - 권장: 우선 사용자 요청 경로(gateway/web/api/dashboard)부터 replicas=2+로 올리고, readiness/liveness를 확인  \n"
+                    f"  - 적용 예시: `spec.replicas: 2`"
+                )
+            if controllers_single:
+                action_lines.append(
+                    f"- **[High] operator/controller는 replicas=1 유지 여부 검토 (효과: 안정성)**  \n"
+                    f"  - 근거: operator/controller로 보이는 deployment도 replicas=1 다수(예: `{controllers_single[0]}` 등)  \n"
+                    f"  - 권장: leader election 지원 여부 확인 후 2로 확장(지원 시) 또는 1 유지(의도된 싱글톤인 경우)"
+                )
+
+        # Missing resources
+        if missing_resources_rows:
+            examples = ", ".join(f"`{r['name']}`" for r in missing_resources_rows[:6]) + ("…" if len(missing_resources_rows) > 6 else "")
+            action_lines.append(
+                f"- **[High] requests/limits 누락 정리 (효과: 안정성/비용)**  \n"
+                f"  - 근거: requests/limits 누락 의심 deployment {len(missing_resources_rows)}개 예: {examples}  \n"
+                f"  - 권장: 최소한 `cpu/memory requests`를 먼저 채우고, 안정화 후 `limits` 적용"
+            )
+
+        # Hot memory targets with numbers + recommended values
+        if hot_mem:
+            action_lines.append("- **[High] Memory request 상향(스케줄링/eviction 리스크 감소) (효과: 안정성)**")
+            for r in hot_mem[:6]:
+                name = r["name"]
+                req = r.get("mem_req_mi")
+                lim = r.get("mem_lim_mi")
+                usage = r.get("mem_usage_mi_avg")
+                util = r.get("mem_util_pct")
+                action_lines.append(
+                    f"  - 근거: `{name}` mem usage avg={fmt_mi(usage)} vs request={fmt_mi(req)} (util≈{util}%), limit={fmt_mi(lim)}"
+                )
+                suspicious = (
+                    isinstance(lim, int)
+                    and isinstance(usage, int)
+                    and lim > 0
+                    and usage > int(lim * 1.1)
+                )
+                if suspicious:
+                    action_lines.append(
+                        "  - 주의: **표상 usage avg가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                    )
+                    continue
+
+                rec_req = rec_mem_request_mi(r)
+                rec_lim = rec_limit_from_request(rec_req, 2.0, 128)
+                if rec_req and rec_lim:
+                    action_lines.append(
+                        f"  - 권장(초안): requests.memory≈`{fmt_mi(rec_req)}` (avg*1.5, round) / limits.memory≈`{fmt_mi(rec_lim)}` (request*2)  \n"
+                        f"    - 적용 예시:\n"
+                        f"      ```yaml\n"
+                        f"      resources:\n"
+                        f"        requests:\n"
+                        f"          memory: \"{rec_req}Mi\"\n"
+                        f"        limits:\n"
+                        f"          memory: \"{rec_lim}Mi\"\n"
+                        f"      ```"
+                    )
+
+        # Hot CPU targets
+        if hot_cpu:
+            action_lines.append("- **[High] CPU request 상향 또는 HPA 검토 (효과: 안정성/성능)**")
+            for r in hot_cpu[:4]:
+                name = r["name"]
+                req = r.get("cpu_req_m")
+                lim = r.get("cpu_lim_m")
+                usage = r.get("cpu_usage_m_avg")
+                util = r.get("cpu_util_pct")
+                action_lines.append(
+                    f"  - 근거: `{name}` cpu usage avg={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%), limit={fmt_m(lim)}"
+                )
+                suspicious = (
+                    isinstance(lim, int)
+                    and isinstance(usage, int)
+                    and lim > 0
+                    and usage > int(lim * 1.1)
+                )
+                if suspicious:
+                    action_lines.append(
+                        "  - 주의: **표상 usage avg가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                    )
+                    continue
+
+                rec_req = rec_cpu_request_m(r)
+                rec_lim = rec_limit_from_request(rec_req, 2.0, 100)
+                if rec_req and rec_lim:
+                    action_lines.append(
+                        f"  - 권장(초안): requests.cpu≈`{fmt_m(rec_req)}` (avg*2, round) / limits.cpu≈`{fmt_m(rec_lim)}`  \n"
+                        f"    - 적용 예시:\n"
+                        f"      ```yaml\n"
+                        f"      resources:\n"
+                        f"        requests:\n"
+                        f"          cpu: \"{rec_req}m\"\n"
+                        f"        limits:\n"
+                        f"          cpu: \"{rec_lim}m\"\n"
+                        f"      ```"
+                    )
+
+        # Scheduling / readiness event hints
+        if failed_scheduling:
+            action_lines.append(
+                "- **[High] FailedScheduling(affinity/nodeSelector) 원인 확인 (효과: 안정성)**  \n"
+                "  - 근거: Warning events에 `FailedScheduling` 존재 (node affinity/selector 불일치)  \n"
+                "  - 권장: 해당 Pod의 `nodeSelector/affinity/tolerations`와 노드 label/taint를 비교해서 스케줄 가능하도록 조정"
+            )
+        if readiness_failed:
+            action_lines.append(
+                "- **[High] Readiness probe 실패 원인 점검 (효과: 안정성/가용성)**  \n"
+                "  - 근거: Warning events에 `Readiness probe failed` 존재  \n"
+                "  - 권장: probe endpoint/timeout/initialDelaySeconds 확인 + 앱 로그/헬스체크 응답 시간 측정"
+            )
+
+        action_lines.append("")
+        action_lines.append("### Medium")
+
+        if latest_images_rows:
+            examples = ", ".join(f"`{r['name']}`" for r in latest_images_rows[:6]) + ("…" if len(latest_images_rows) > 6 else "")
+            action_lines.append(
+                f"- **[Medium] 이미지 태그 pinning (효과: 안정성/재현성)**  \n"
+                f"  - 근거: latest/미태깅 이미지 가능성 {len(latest_images_rows)}개 예: {examples}  \n"
+                f"  - 권장: `:latest` 대신 버전 태그 또는 digest 사용"
+            )
+
+        if oom_rows:
+            examples = ", ".join(f"`{r['name']}`" for r in oom_rows[:6]) + ("…" if len(oom_rows) > 6 else "")
+            action_lines.append(
+                f"- **[Medium] OOMKilled 원인 분석 및 memory limit/request 재조정 (효과: 안정성)**  \n"
+                f"  - 근거: OOMKilled 감지 deployment {len(oom_rows)}개 예: {examples}  \n"
+                f"  - 권장: (1) OOMKilled 시점 로그/메트릭 확인 (2) memory limit이 실제 피크를 수용하는지 확인 (3) 누수/캐시 설정 점검"
+            )
+
+        if over_cpu:
+            action_lines.append("- **[Medium] CPU request 과대(낭비) 의심 - 하향 검토 (효과: 비용)**")
+            for r in over_cpu[:4]:
+                name = r["name"]
+                req = r.get("cpu_req_m")
+                usage = r.get("cpu_usage_m_avg")
+                util = r.get("cpu_util_pct")
+                if not isinstance(req, int):
+                    continue
+                suggested = self._round_up_int(max(int((usage or 0) * 2), 50), 10) if isinstance(usage, int) else max(int(req * 0.5), 50)
+                action_lines.append(
+                    f"  - 근거: `{name}` cpu usage avg={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%)  \n"
+                    f"  - 권장(초안): requests.cpu≈`{fmt_m(suggested)}`로 낮추고 모니터링(p95 기반으로 재조정)"
+                )
+
+        action_plan_md = "\n".join(action_lines).strip()
+
         # Text-only version (for LLM; keep same content but without heavy markdown table constraints)
         text = {
             "namespace": namespace,
@@ -1169,11 +1330,13 @@ JSON 형식으로 응답해주세요:
             "warning_events_sample": event_lines,
             "auto_findings": findings[:40],
             "pod_metrics_available": pod_metrics is not None,
+            "action_plan_md": action_plan_md,
         }
 
         return {
             "observations_md": md,
             "observations_text": json.dumps(text, ensure_ascii=False),
+            "action_plan_md": action_plan_md,
         }
     
     def _extract_error_patterns(self, logs: str) -> List[ErrorPattern]:
