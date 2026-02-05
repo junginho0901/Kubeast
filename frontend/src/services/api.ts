@@ -169,6 +169,10 @@ export interface ChatResponse {
   actions: Array<any>
 }
 
+export interface OptimizationSuggestionsResponse {
+  suggestions: string[]
+}
+
 export interface Session {
   id: string
   title: string
@@ -285,6 +289,18 @@ export const api = {
 
   chat: async (messages: Array<{ role: string; content: string }>): Promise<ChatResponse> => {
     const { data } = await client.post('/ai/chat', { messages })
+    return data
+  },
+
+  suggestOptimization: async (namespace: string): Promise<OptimizationSuggestionsResponse> => {
+    const { data } = await client.post(
+      '/ai/suggest-optimization',
+      null,
+      {
+        params: { namespace },
+        timeout: 60000,
+      }
+    )
     return data
   },
 
