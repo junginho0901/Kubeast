@@ -114,6 +114,25 @@ async def suggest_optimization(namespace: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/suggest-optimization/stream")
+async def suggest_optimization_stream(namespace: str):
+    """리소스 최적화 제안 (SSE 스트리밍)"""
+    from app.services.ai_service import AIService
+
+    ai_service = AIService()
+
+    try:
+        return StreamingResponse(
+            ai_service.suggest_optimization_stream(namespace),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/config")
 async def get_config():

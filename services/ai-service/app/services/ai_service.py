@@ -615,6 +615,97 @@ Deployment 상세:
             return suggestions if suggestions else [content]
         except Exception as e:
             raise Exception(f"Optimization suggestion failed: {e}")
+
+    async def suggest_optimization_stream(self, namespace: str):
+        """리소스 최적화 제안 (SSE 스트리밍)"""
+        import json
+
+        try:
+            deployments = await self.k8s_service.get_deployments(namespace)
+            pods = await self.k8s_service.get_pods(namespace)
+
+            context = f"""
+Namespace: {namespace}
+Deployments: {len(deployments)}
+Pods: {len(pods)}
+
+Deployment 상세:
+"""
+            for deploy in deployments[:10]:
+                context += f"\n- {deploy['name']}: {deploy.get('replicas', 0)} replicas, image: {deploy.get('image', 'N/A')}"
+
+            prompt = f"""
+다음 Kubernetes 네임스페이스의 리소스 최적화 방안을 **마크다운**으로 제안해주세요.
+
+{context}
+
+요구사항:
+- 섹션(헤더) + 체크리스트/번호 리스트 형태로, 실행 가능한 액션 위주로 작성
+- 가능하면 각 제안마다 짧게 '왜(근거)'와 '어떻게(실행 예시)'를 포함
+- 과도한 추측은 피하고, 관측된 정보(Deployment/Pod 요약)에 기반해서 작성
+
+다음 관점에서 분석해주세요:
+1. 리소스 요청/제한 설정
+2. 레플리카 수 적정성 및 HPA
+3. 이미지 최적화 및 보안 스캔
+4. 비용 절감 방안
+5. 성능/안정성 개선 방안
+"""
+
+            try:
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "당신은 Kubernetes 리소스 최적화 전문가입니다."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.5,
+                    max_tokens=1200,
+                    stream=True,
+                    stream_options={"include_usage": True},
+                )
+            except TypeError:
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "당신은 Kubernetes 리소스 최적화 전문가입니다."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.5,
+                    max_tokens=1200,
+                    stream=True,
+                )
+
+            stream_usage = None
+            async for chunk in stream:
+                if getattr(chunk, "usage", None) is not None:
+                    stream_usage = chunk.usage
+
+                delta = chunk.choices[0].delta
+                if delta and getattr(delta, "content", None):
+                    yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+
+            if stream_usage is not None:
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "usage_phase": "suggest_optimization_stream",
+                            "usage": {
+                                "prompt_tokens": stream_usage.prompt_tokens,
+                                "completion_tokens": stream_usage.completion_tokens,
+                                "total_tokens": stream_usage.total_tokens,
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
     
     def _extract_error_patterns(self, logs: str) -> List[ErrorPattern]:
         """로그에서 에러 패턴 추출"""
