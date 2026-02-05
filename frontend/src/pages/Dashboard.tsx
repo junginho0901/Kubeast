@@ -13,11 +13,15 @@ import {
   XCircle,
   Search,
   Info,
-  ChevronDown
+  ChevronDown,
+  Copy,
+  StopCircle
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
 
@@ -35,6 +39,15 @@ export default function Dashboard() {
   const [storageNamespaceFilter, setStorageNamespaceFilter] = useState<string>('all')
   const [isStorageNamespaceDropdownOpen, setIsStorageNamespaceDropdownOpen] = useState(false)
   const storageNamespaceDropdownRef = useRef<HTMLDivElement>(null)
+  const [isOptimizationModalOpen, setIsOptimizationModalOpen] = useState(false)
+  const [optimizationNamespace, setOptimizationNamespace] = useState<string>('default')
+  const [isOptimizationNamespaceDropdownOpen, setIsOptimizationNamespaceDropdownOpen] = useState(false)
+  const optimizationNamespaceDropdownRef = useRef<HTMLDivElement>(null)
+  const [optimizationCopied, setOptimizationCopied] = useState(false)
+  const optimizationAbortRef = useRef<AbortController | null>(null)
+  const [isOptimizationStreaming, setIsOptimizationStreaming] = useState(false)
+  const [optimizationStreamContent, setOptimizationStreamContent] = useState('')
+  const [optimizationStreamError, setOptimizationStreamError] = useState('')
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
@@ -64,7 +77,12 @@ export default function Dashboard() {
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
     queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
-    enabled: selectedResourceType === 'services' || selectedResourceType === 'deployments' || isIssuesModalOpen || isStorageModalOpen,
+    enabled:
+      selectedResourceType === 'services' ||
+      selectedResourceType === 'deployments' ||
+      isIssuesModalOpen ||
+      isStorageModalOpen ||
+      isOptimizationModalOpen,
   })
 
   const { data: allServices, isLoading: isLoadingServices } = useQuery({
@@ -284,6 +302,7 @@ export default function Dashboard() {
     handleCloseModal()
     setSelectedNode(null)
     setIsStorageModalOpen(false)
+    setIsOptimizationModalOpen(false)
     setIsIssuesModalOpen(true)
   }
 
@@ -292,11 +311,36 @@ export default function Dashboard() {
     handleCloseModal()
     setSelectedNode(null)
     setIsIssuesModalOpen(false)
+    setIsOptimizationModalOpen(false)
     setStorageActiveTab('pvcs')
     setStorageSearchQuery('')
     setStorageNamespaceFilter('all')
     setIsStorageNamespaceDropdownOpen(false)
     setIsStorageModalOpen(true)
+  }
+
+  const handleOpenOptimizationModal = () => {
+    // 다른 모달이 열려있으면 겹치지 않도록 정리
+    handleCloseModal()
+    setSelectedNode(null)
+    setIsIssuesModalOpen(false)
+    setIsStorageModalOpen(false)
+    setIsStorageNamespaceDropdownOpen(false)
+    setIsOptimizationNamespaceDropdownOpen(false)
+    setOptimizationCopied(false)
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    setIsOptimizationStreaming(false)
+    setOptimizationStreamContent('')
+    setOptimizationStreamError('')
+
+    const namespaceNames = Array.isArray(allNamespaces)
+      ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean)
+      : []
+    const preferred = namespaceNames.includes('default') ? 'default' : (namespaceNames[0] ?? 'default')
+    setOptimizationNamespace(preferred)
+
+    setIsOptimizationModalOpen(true)
   }
 
   useEffect(() => {
@@ -322,6 +366,71 @@ export default function Dashboard() {
     setIsStorageNamespaceDropdownOpen(false)
   }
 
+  const handleCloseOptimizationModal = () => {
+    setIsOptimizationModalOpen(false)
+    setIsOptimizationNamespaceDropdownOpen(false)
+    setOptimizationCopied(false)
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    setIsOptimizationStreaming(false)
+    setOptimizationStreamContent('')
+    setOptimizationStreamError('')
+  }
+
+  const handleRunOptimizationSuggestions = () => {
+    if (!optimizationNamespace) return
+    setOptimizationCopied(false)
+    setIsOptimizationNamespaceDropdownOpen(false)
+    optimizationAbortRef.current?.abort()
+    const controller = new AbortController()
+    optimizationAbortRef.current = controller
+
+    setIsOptimizationStreaming(true)
+    setOptimizationStreamContent('')
+    setOptimizationStreamError('')
+
+    void api
+      .suggestOptimizationStream(optimizationNamespace, {
+        signal: controller.signal,
+        onContent: (chunk) => {
+          setOptimizationStreamContent((prev) => prev + chunk)
+        },
+        onError: (message) => {
+          setOptimizationStreamError(message)
+        },
+        onDone: () => {
+          setIsOptimizationStreaming(false)
+          optimizationAbortRef.current = null
+        },
+      })
+      .catch((error) => {
+        if ((error as any)?.name === 'AbortError') return
+        setOptimizationStreamError(error instanceof Error ? error.message : String(error))
+        setIsOptimizationStreaming(false)
+        optimizationAbortRef.current = null
+      })
+  }
+
+  const handleCopyOptimizationSuggestions = async () => {
+    const text = optimizationStreamContent.trim()
+    if (!text) return
+
+    try {
+      await navigator.clipboard.writeText(text)
+      setOptimizationCopied(true)
+      setTimeout(() => setOptimizationCopied(false), 1500)
+    } catch (error) {
+      console.error('❌ 클립보드 복사 실패:', error)
+      setOptimizationCopied(false)
+    }
+  }
+
+  const handleStopOptimizationSuggestions = () => {
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    setIsOptimizationStreaming(false)
+  }
+
   // 스토리지 네임스페이스 드롭다운 외부 클릭 감지
   useEffect(() => {
     if (!isStorageNamespaceDropdownOpen) return
@@ -339,12 +448,43 @@ export default function Dashboard() {
     }
   }, [isStorageNamespaceDropdownOpen])
 
+  // 최적화 제안 네임스페이스 드롭다운 외부 클릭 감지
+  useEffect(() => {
+    if (!isOptimizationNamespaceDropdownOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        optimizationNamespaceDropdownRef.current &&
+        !optimizationNamespaceDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOptimizationNamespaceDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOptimizationNamespaceDropdownOpen])
+
   useEffect(() => {
     if (!isStorageModalOpen) return
     void queryClient.invalidateQueries({ queryKey: ['all-pvcs'], refetchType: 'active' })
     void queryClient.invalidateQueries({ queryKey: ['all-pvs'], refetchType: 'active' })
     void queryClient.invalidateQueries({ queryKey: ['storage-topology'], refetchType: 'active' })
   }, [isStorageModalOpen, queryClient])
+
+  useEffect(() => {
+    if (!isOptimizationModalOpen) return
+    void queryClient.invalidateQueries({ queryKey: ['all-namespaces'], refetchType: 'active' })
+  }, [isOptimizationModalOpen, queryClient])
+
+  useEffect(() => {
+    if (!isOptimizationModalOpen) return
+    if (!Array.isArray(allNamespaces) || allNamespaces.length === 0) return
+    const namespaceNames = allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean)
+    if (!namespaceNames.includes(optimizationNamespace)) {
+      setOptimizationNamespace(namespaceNames.includes('default') ? 'default' : namespaceNames[0])
+    }
+  }, [isOptimizationModalOpen, allNamespaces, optimizationNamespace])
 
   const handleNodeClick = (node: any) => {
     setSelectedNode(node)
@@ -986,6 +1126,15 @@ export default function Dashboard() {
     isStorageModalOpen &&
     (isLoadingPVCs || isLoadingPVs || (storageActiveTab === 'topology' && isLoadingStorageTopology))
 
+  const optimizationNamespaces = Array.isArray(allNamespaces)
+    ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean).sort()
+    : []
+
+  const optimizationMarkdown = optimizationStreamContent.trim()
+  const optimizationLineCount = optimizationMarkdown
+    ? optimizationMarkdown.split('\n').filter((line) => line.trim().length > 0).length
+    : 0
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -1433,7 +1582,7 @@ export default function Dashboard() {
               </div>
             </div>
           </button>
-          <button className="btn btn-secondary text-left">
+          <button className="btn btn-secondary text-left" onClick={handleOpenOptimizationModal}>
             <div className="flex items-center gap-3">
               <TrendingUp className="w-5 h-5 text-green-400" />
               <div>
@@ -1453,6 +1602,157 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* 최적화 제안 모달 */}
+      {isOptimizationModalOpen && (
+        <ModalOverlay onClose={handleCloseOptimizationModal}>
+          <div
+            className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">최적화 제안</h2>
+                  <p className="text-sm text-slate-400">
+                    선택한 네임스페이스의 Deployment/Pod 정보를 바탕으로 AI가 최적화 방안을 제안합니다
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseOptimizationModal}
+                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative" ref={optimizationNamespaceDropdownRef}>
+                  <button
+                    onClick={() => setIsOptimizationNamespaceDropdownOpen(!isOptimizationNamespaceDropdownOpen)}
+                    className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                    title="네임스페이스 선택"
+                    disabled={isLoadingAllNamespaces}
+                  >
+                    <span className="text-sm font-medium truncate">
+                      {optimizationNamespace || (isLoadingAllNamespaces ? 'Loading...' : 'Select namespace')}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 transition-transform ${isOptimizationNamespaceDropdownOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+
+                  {isOptimizationNamespaceDropdownOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[340px] overflow-y-auto">
+                      {optimizationNamespaces.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-slate-200">표시할 네임스페이스가 없습니다</div>
+                      ) : (
+                        optimizationNamespaces.map((ns) => (
+                          <button
+                            key={ns}
+                            onClick={() => {
+                              setOptimizationNamespace(ns)
+                              setIsOptimizationNamespaceDropdownOpen(false)
+                            }}
+                            className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                          >
+                            {optimizationNamespace === ns && (
+                              <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                            )}
+                            <span className={optimizationNamespace === ns ? 'font-medium' : ''}>{ns}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRunOptimizationSuggestions}
+                    disabled={!optimizationNamespace || isOptimizationStreaming}
+                    className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="AI 제안 생성"
+                  >
+                    {isOptimizationStreaming && (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    )}
+                    {isOptimizationStreaming ? '생성 중...' : '제안 생성'}
+                  </button>
+
+                  {isOptimizationStreaming && (
+                    <button
+                      onClick={handleStopOptimizationSuggestions}
+                      className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center gap-2"
+                      title="중단"
+                    >
+                      <StopCircle className="w-4 h-4" />
+                      중단
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleCopyOptimizationSuggestions}
+                    disabled={!optimizationMarkdown}
+                    className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="결과 복사"
+                  >
+                    <Copy className="w-4 h-4" />
+                    {optimizationCopied ? '복사됨' : '복사'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
+                <span className="badge badge-info">Lines {optimizationLineCount}</span>
+                <span className="text-xs text-slate-500">모델 호출에 최대 1분 정도 걸릴 수 있어요</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {isOptimizationStreaming && !optimizationMarkdown ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
+                  <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
+                  <p className="text-slate-400">최적화 제안을 생성하는 중...</p>
+                  <p className="text-xs text-slate-500 mt-1">OpenAI 응답을 기다리고 있습니다</p>
+                </div>
+              ) : optimizationStreamError && !optimizationMarkdown ? (
+                <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-100">제안 생성에 실패했습니다</p>
+                      <p className="text-xs text-slate-400 mt-1 break-words">{optimizationStreamError}</p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          onClick={handleRunOptimizationSuggestions}
+                          className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200"
+                        >
+                          다시 시도
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : !optimizationMarkdown ? (
+                <div className="text-center py-12">
+                  <p className="text-slate-400">네임스페이스를 선택한 뒤 “제안 생성”을 눌러주세요</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    (현재 API는 Deployment/Pod 목록을 요약해 AI에게 최적화 아이디어를 요청합니다)
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4 overflow-x-auto">
+                  <div className="prose prose-invert max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdown}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
 
       {/* 이슈 확인 모달 */}
       {isIssuesModalOpen && (

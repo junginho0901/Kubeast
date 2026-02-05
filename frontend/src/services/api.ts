@@ -169,6 +169,17 @@ export interface ChatResponse {
   actions: Array<any>
 }
 
+export interface OptimizationSuggestionsResponse {
+  suggestions: string[]
+}
+
+type OptimizationStreamHandlers = {
+  onContent?: (chunk: string) => void
+  onError?: (message: string) => void
+  onDone?: () => void
+  signal?: AbortSignal
+}
+
 export interface Session {
   id: string
   title: string
@@ -286,6 +297,102 @@ export const api = {
   chat: async (messages: Array<{ role: string; content: string }>): Promise<ChatResponse> => {
     const { data } = await client.post('/ai/chat', { messages })
     return data
+  },
+
+  suggestOptimization: async (namespace: string): Promise<OptimizationSuggestionsResponse> => {
+    const { data } = await client.post(
+      '/ai/suggest-optimization',
+      null,
+      {
+        params: { namespace },
+        timeout: 60000,
+      }
+    )
+    return data
+  },
+
+  suggestOptimizationStream: async (namespace: string, handlers: OptimizationStreamHandlers = {}): Promise<void> => {
+    const { onContent, onError, onDone, signal } = handlers
+
+    const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}`, {
+      method: 'GET',
+      headers: { Accept: 'text/event-stream' },
+      signal,
+    })
+
+    if (!response.ok) {
+      const message = `HTTP ${response.status}`
+      onError?.(message)
+      throw new Error(message)
+    }
+
+    if (!response.body) {
+      const message = 'No response body'
+      onError?.(message)
+      throw new Error(message)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let aborted = false
+
+    const processEventBlock = (block: string) => {
+      const lines = block.split('\n')
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd()
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice('data:'.length).trim()
+        if (!payload) continue
+        if (payload === '[DONE]') {
+          onDone?.()
+          return 'done' as const
+        }
+        try {
+          const parsed = JSON.parse(payload) as any
+          if (parsed?.error) {
+            onError?.(String(parsed.error))
+          }
+          if (typeof parsed?.content === 'string') {
+            onContent?.(parsed.content)
+          }
+        } catch {
+          // ignore non-json payload
+        }
+      }
+      return 'continue' as const
+    }
+
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        for (;;) {
+          const sepIndex = buffer.indexOf('\n\n')
+          if (sepIndex === -1) break
+          const eventBlock = buffer.slice(0, sepIndex)
+          buffer = buffer.slice(sepIndex + 2)
+          const status = processEventBlock(eventBlock)
+          if (status === 'done') return
+        }
+      }
+    } catch (error) {
+      if ((error as any)?.name !== 'AbortError') {
+        onError?.(error instanceof Error ? error.message : String(error))
+        throw error
+      }
+      aborted = true
+    } finally {
+      try {
+        reader.releaseLock()
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!aborted) onDone?.()
   },
 
   // Sessions
