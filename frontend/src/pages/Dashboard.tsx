@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, TopResources } from '@/services/api'
 import {
   Server,
@@ -14,14 +14,14 @@ import {
   Search,
   Info,
   ChevronDown,
-  Copy
+  Copy,
+  StopCircle
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import rehypeRaw from 'rehype-raw'
 
 type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
 
@@ -44,6 +44,10 @@ export default function Dashboard() {
   const [isOptimizationNamespaceDropdownOpen, setIsOptimizationNamespaceDropdownOpen] = useState(false)
   const optimizationNamespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [optimizationCopied, setOptimizationCopied] = useState(false)
+  const optimizationAbortRef = useRef<AbortController | null>(null)
+  const [isOptimizationStreaming, setIsOptimizationStreaming] = useState(false)
+  const [optimizationStreamContent, setOptimizationStreamContent] = useState('')
+  const [optimizationStreamError, setOptimizationStreamError] = useState('')
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
@@ -182,10 +186,6 @@ export default function Dashboard() {
     retryDelay: 1000, // 1초 대기 후 재시도
     // 에러 발생 시에도 이전 데이터를 유지
     gcTime: 60000, // 캐시 유지 시간 (기본값보다 길게)
-  })
-
-  const suggestOptimizationMutation = useMutation({
-    mutationFn: (namespace: string) => api.suggestOptimization(namespace),
   })
 
   // 노드 목록 (모달용)
@@ -328,7 +328,11 @@ export default function Dashboard() {
     setIsStorageNamespaceDropdownOpen(false)
     setIsOptimizationNamespaceDropdownOpen(false)
     setOptimizationCopied(false)
-    suggestOptimizationMutation.reset()
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    setIsOptimizationStreaming(false)
+    setOptimizationStreamContent('')
+    setOptimizationStreamError('')
 
     const namespaceNames = Array.isArray(allNamespaces)
       ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean)
@@ -366,19 +370,50 @@ export default function Dashboard() {
     setIsOptimizationModalOpen(false)
     setIsOptimizationNamespaceDropdownOpen(false)
     setOptimizationCopied(false)
-    suggestOptimizationMutation.reset()
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    setIsOptimizationStreaming(false)
+    setOptimizationStreamContent('')
+    setOptimizationStreamError('')
   }
 
   const handleRunOptimizationSuggestions = () => {
     if (!optimizationNamespace) return
     setOptimizationCopied(false)
     setIsOptimizationNamespaceDropdownOpen(false)
-    suggestOptimizationMutation.mutate(optimizationNamespace)
+    optimizationAbortRef.current?.abort()
+    const controller = new AbortController()
+    optimizationAbortRef.current = controller
+
+    setIsOptimizationStreaming(true)
+    setOptimizationStreamContent('')
+    setOptimizationStreamError('')
+
+    void api
+      .suggestOptimizationStream(optimizationNamespace, {
+        signal: controller.signal,
+        onContent: (chunk) => {
+          setOptimizationStreamContent((prev) => prev + chunk)
+        },
+        onError: (message) => {
+          setOptimizationStreamError(message)
+        },
+        onDone: () => {
+          setIsOptimizationStreaming(false)
+          optimizationAbortRef.current = null
+        },
+      })
+      .catch((error) => {
+        if ((error as any)?.name === 'AbortError') return
+        setOptimizationStreamError(error instanceof Error ? error.message : String(error))
+        setIsOptimizationStreaming(false)
+        optimizationAbortRef.current = null
+      })
   }
 
   const handleCopyOptimizationSuggestions = async () => {
-    if (!optimizationSuggestions || optimizationSuggestions.length === 0) return
-    const text = optimizationSuggestions.map((line: string) => String(line ?? '')).join('\n').trim()
+    const text = optimizationStreamContent.trim()
+    if (!text) return
 
     try {
       await navigator.clipboard.writeText(text)
@@ -388,6 +423,12 @@ export default function Dashboard() {
       console.error('❌ 클립보드 복사 실패:', error)
       setOptimizationCopied(false)
     }
+  }
+
+  const handleStopOptimizationSuggestions = () => {
+    optimizationAbortRef.current?.abort()
+    optimizationAbortRef.current = null
+    setIsOptimizationStreaming(false)
   }
 
   // 스토리지 네임스페이스 드롭다운 외부 클릭 감지
@@ -1089,13 +1130,10 @@ export default function Dashboard() {
     ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean).sort()
     : []
 
-  const optimizationSuggestions = suggestOptimizationMutation.data?.suggestions ?? []
-  const optimizationErrorMessage =
-    suggestOptimizationMutation.error instanceof Error
-      ? suggestOptimizationMutation.error.message
-      : suggestOptimizationMutation.error
-        ? String(suggestOptimizationMutation.error)
-        : ''
+  const optimizationMarkdown = optimizationStreamContent.trim()
+  const optimizationLineCount = optimizationMarkdown
+    ? optimizationMarkdown.split('\n').filter((line) => line.trim().length > 0).length
+    : 0
 
   return (
     <div className="space-y-8">
@@ -1632,19 +1670,30 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleRunOptimizationSuggestions}
-                    disabled={!optimizationNamespace || suggestOptimizationMutation.isPending}
+                    disabled={!optimizationNamespace || isOptimizationStreaming}
                     className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
                     title="AI 제안 생성"
                   >
-                    {suggestOptimizationMutation.isPending && (
+                    {isOptimizationStreaming && (
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     )}
-                    {suggestOptimizationMutation.isPending ? '생성 중...' : '제안 생성'}
+                    {isOptimizationStreaming ? '생성 중...' : '제안 생성'}
                   </button>
+
+                  {isOptimizationStreaming && (
+                    <button
+                      onClick={handleStopOptimizationSuggestions}
+                      className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center gap-2"
+                      title="중단"
+                    >
+                      <StopCircle className="w-4 h-4" />
+                      중단
+                    </button>
+                  )}
 
                   <button
                     onClick={handleCopyOptimizationSuggestions}
-                    disabled={optimizationSuggestions.length === 0}
+                    disabled={!optimizationMarkdown}
                     className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
                     title="결과 복사"
                   >
@@ -1656,27 +1705,25 @@ export default function Dashboard() {
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
-                <span className="badge badge-info">Suggestions {optimizationSuggestions.length}</span>
+                <span className="badge badge-info">Lines {optimizationLineCount}</span>
                 <span className="text-xs text-slate-500">모델 호출에 최대 1분 정도 걸릴 수 있어요</span>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              {suggestOptimizationMutation.isPending ? (
+              {isOptimizationStreaming && !optimizationMarkdown ? (
                 <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
                   <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
                   <p className="text-slate-400">최적화 제안을 생성하는 중...</p>
                   <p className="text-xs text-slate-500 mt-1">OpenAI 응답을 기다리고 있습니다</p>
                 </div>
-              ) : suggestOptimizationMutation.isError ? (
+              ) : optimizationStreamError && !optimizationMarkdown ? (
                 <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-100">제안 생성에 실패했습니다</p>
-                      {optimizationErrorMessage && (
-                        <p className="text-xs text-slate-400 mt-1 break-words">{optimizationErrorMessage}</p>
-                      )}
+                      <p className="text-xs text-slate-400 mt-1 break-words">{optimizationStreamError}</p>
                       <div className="mt-3 flex items-center gap-2">
                         <button
                           onClick={handleRunOptimizationSuggestions}
@@ -1688,7 +1735,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-              ) : optimizationSuggestions.length === 0 ? (
+              ) : !optimizationMarkdown ? (
                 <div className="text-center py-12">
                   <p className="text-slate-400">네임스페이스를 선택한 뒤 “제안 생성”을 눌러주세요</p>
                   <p className="text-xs text-slate-500 mt-1">
@@ -1698,9 +1745,7 @@ export default function Dashboard() {
               ) : (
                 <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4 overflow-x-auto">
                   <div className="prose prose-invert max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                      {optimizationSuggestions.map((line: string) => String(line ?? '')).join('\n')}
-                    </ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdown}</ReactMarkdown>
                   </div>
                 </div>
               )}
