@@ -1263,8 +1263,12 @@ export default function Dashboard() {
     ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean).sort()
     : []
 
+  const optimizationObservedMarkdown = optimizationObservedContent
+    .replace(/\n\n---\n\n## 최적화 제안 \(AI\)\n\n\s*$/m, '')
+    .trim()
+  const optimizationAnswerMarkdown = unwrapOuterMarkdownFence(optimizationAnswerContent).trim()
+  const optimizationAnswerMarkdownForStreaming = makeStreamingMarkdownRenderFriendly(optimizationAnswerMarkdown)
   const optimizationMarkdown = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
-  const optimizationMarkdownForStreaming = makeStreamingMarkdownRenderFriendly(optimizationMarkdown)
   const optimizationLineCount = optimizationMarkdown
     ? optimizationMarkdown.split('\n').filter((line) => line.trim().length > 0).length
     : 0
@@ -1899,18 +1903,31 @@ export default function Dashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4 overflow-x-auto">
+                <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
                   {isOptimizationStreaming ? (
                     <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdownForStreaming}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdownForStreaming}</ReactMarkdown>
                       {!optimizationAnswerContent && (
                         <p className="text-xs text-slate-500">AI가 제안을 작성 중입니다…</p>
                       )}
                     </div>
                   ) : (
                     <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdown}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdown}</ReactMarkdown>
                     </div>
+                  )}
+
+                  {!!optimizationObservedMarkdown && (
+                    <details className="mt-4 rounded-lg border border-slate-700 bg-slate-900/30">
+                      <summary className="cursor-pointer select-none px-3 py-2 text-sm text-slate-200">
+                        관측 데이터(표) 보기
+                      </summary>
+                      <div className="px-3 pb-3">
+                        <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationObservedMarkdown}</ReactMarkdown>
+                        </div>
+                      </div>
+                    </details>
                   )}
                 </div>
               )}
