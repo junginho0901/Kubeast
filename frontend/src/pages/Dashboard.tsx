@@ -18,20 +18,12 @@ import {
   StopCircle
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
-
-const MarkdownBlock = memo(function MarkdownBlock({ markdown }: { markdown: string }) {
-  return (
-    <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
-    </div>
-  )
-})
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
@@ -420,73 +412,58 @@ export default function Dashboard() {
     return match ? match[1] : text
   }
 
-  const splitStableMarkdownForStreaming = (text: string) => {
-    if (!text) return { stable: '', tail: '' }
+  const makeStreamingMarkdownRenderFriendly = (markdown: string) => {
+    if (!markdown) return markdown
 
-    const lines = text.split('\n')
+    const lines = markdown.split('\n')
     let inFence = false
-    let fenceStartIndex: number | null = null
-    let offset = 0
-    let lastSafeIndex = 0
+    let doubleAsteriskCount = 0
+    let backtickCount = 0
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      const lineStart = offset
+    for (const line of lines) {
       const trimmedStart = line.trimStart()
-
       if (trimmedStart.startsWith('```')) {
-        if (!inFence) {
-          inFence = true
-          fenceStartIndex = lineStart
-        } else {
-          inFence = false
-          fenceStartIndex = null
-        }
+        inFence = !inFence
+        continue
       }
 
-      const hasNewline = i < lines.length - 1
-      offset += line.length + (hasNewline ? 1 : 0)
+      if (inFence) continue
 
-      if (!inFence && hasNewline) {
-        // 줄 단위로만 커밋해서 "깨진" 마크다운(미완성 줄/블록)을 최소화
-        lastSafeIndex = offset
+      let idx = 0
+      for (;;) {
+        const next = line.indexOf('**', idx)
+        if (next === -1) break
+        doubleAsteriskCount += 1
+        idx = next + 2
+      }
+
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '`') backtickCount += 1
       }
     }
 
-    if (inFence && fenceStartIndex != null) {
-      // code fence가 닫히기 전까지는 fence 자체를 마크다운 렌더에 포함하지 않는다
-      lastSafeIndex = Math.min(lastSafeIndex, fenceStartIndex)
-    }
-
-    return {
-      stable: text.slice(0, lastSafeIndex),
-      tail: text.slice(lastSafeIndex),
-    }
+    let out = markdown
+    if (inFence) out += '\n```'
+    if (doubleAsteriskCount % 2 === 1) out += '**'
+    if (backtickCount % 2 === 1) out += '`'
+    if (out.endsWith('*') && !out.endsWith('**')) out += '*'
+    return out
   }
 
   const flushOptimizationStreamPending = () => {
     const pending = optimizationStreamPendingRef.current
-    if (!pending) {
-      optimizationStreamRafRef.current = null
-      if (optimizationStreamDoneRef.current) {
-        setOptimizationAnswerContent((prev) => unwrapOuterMarkdownFence(prev))
-        setIsOptimizationStreaming(false)
-        optimizationStreamDoneRef.current = false
-      }
-      return
+    optimizationStreamRafRef.current = null
+
+    if (pending) {
+      optimizationStreamPendingRef.current = ''
+      setOptimizationAnswerContent((prev) => prev + pending)
     }
 
-    // 한 글자(유니코드 codepoint)씩 타이핑처럼 보여주기
-    const firstCodePoint = pending.codePointAt(0)
-    if (firstCodePoint === undefined) {
-      optimizationStreamPendingRef.current = ''
-      optimizationStreamRafRef.current = null
-      return
+    if (!optimizationStreamPendingRef.current && optimizationStreamDoneRef.current) {
+      setOptimizationAnswerContent((prev) => unwrapOuterMarkdownFence(prev))
+      setIsOptimizationStreaming(false)
+      optimizationStreamDoneRef.current = false
     }
-    const char = String.fromCodePoint(firstCodePoint)
-    optimizationStreamPendingRef.current = pending.slice(char.length)
-    setOptimizationAnswerContent((prev) => prev + char)
-    optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
   }
 
   const handleRunOptimizationSuggestions = () => {
@@ -1286,12 +1263,12 @@ export default function Dashboard() {
     ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean).sort()
     : []
 
+  const optimizationObservedMarkdown = optimizationObservedContent
+    .replace(/\n\n---\n\n## 최적화 제안 \(AI\)\n\n\s*$/m, '')
+    .trim()
+  const optimizationAnswerMarkdown = unwrapOuterMarkdownFence(optimizationAnswerContent).trim()
+  const optimizationAnswerMarkdownForStreaming = makeStreamingMarkdownRenderFriendly(optimizationAnswerMarkdown)
   const optimizationMarkdown = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
-  const optimizationAnswerSplit = splitStableMarkdownForStreaming(optimizationAnswerContent)
-  const optimizationLineCount = optimizationMarkdown
-    ? optimizationMarkdown.split('\n').filter((line) => line.trim().length > 0).length
-    : 0
-
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -1783,59 +1760,59 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="relative" ref={optimizationNamespaceDropdownRef}>
-                  <button
-                    onClick={() => setIsOptimizationNamespaceDropdownOpen(!isOptimizationNamespaceDropdownOpen)}
-                    className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
-                    title="네임스페이스 선택"
-                    disabled={isLoadingAllNamespaces}
-                  >
-                    <span className="text-sm font-medium truncate">
-                      {optimizationNamespace || (isLoadingAllNamespaces ? 'Loading...' : 'Select namespace')}
-                    </span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-slate-400 transition-transform ${isOptimizationNamespaceDropdownOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative" ref={optimizationNamespaceDropdownRef}>
+                    <button
+                      onClick={() => setIsOptimizationNamespaceDropdownOpen(!isOptimizationNamespaceDropdownOpen)}
+                      className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                      title="네임스페이스 선택"
+                      disabled={isLoadingAllNamespaces}
+                    >
+                      <span className="text-sm font-medium truncate">
+                        {optimizationNamespace || (isLoadingAllNamespaces ? 'Loading...' : 'Select namespace')}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-400 transition-transform ${isOptimizationNamespaceDropdownOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
 
-                  {isOptimizationNamespaceDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[340px] overflow-y-auto">
-                      {optimizationNamespaces.length === 0 ? (
-                        <div className="px-4 py-3 text-sm text-slate-200">표시할 네임스페이스가 없습니다</div>
-                      ) : (
-                        optimizationNamespaces.map((ns) => (
-                          <button
-                            key={ns}
-                            onClick={() => {
-                              setOptimizationNamespace(ns)
-                              setIsOptimizationNamespaceDropdownOpen(false)
-                            }}
-                            className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
-                          >
-                            {optimizationNamespace === ns && (
-                              <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-                            )}
-                            <span className={optimizationNamespace === ns ? 'font-medium' : ''}>{ns}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleRunOptimizationSuggestions}
-                    disabled={!optimizationNamespace || isOptimizationStreaming}
-                    className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
-                    title="AI 제안 생성"
-                  >
-                    {isOptimizationStreaming && (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    {isOptimizationNamespaceDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[340px] overflow-y-auto">
+                        {optimizationNamespaces.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-slate-200">표시할 네임스페이스가 없습니다</div>
+                        ) : (
+                          optimizationNamespaces.map((ns) => (
+                            <button
+                              key={ns}
+                              onClick={() => {
+                                setOptimizationNamespace(ns)
+                                setIsOptimizationNamespaceDropdownOpen(false)
+                              }}
+                              className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
+                            >
+                              {optimizationNamespace === ns && (
+                                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                              )}
+                              <span className={optimizationNamespace === ns ? 'font-medium' : ''}>{ns}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
                     )}
-                    {isOptimizationStreaming ? '생성 중...' : '제안 생성'}
-                  </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleRunOptimizationSuggestions}
+                      disabled={!optimizationNamespace || isOptimizationStreaming}
+                      className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+                      title="AI 제안 생성"
+                    >
+                      {isOptimizationStreaming && (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      )}
+                      {isOptimizationStreaming ? '생성 중...' : '제안 생성'}
+                    </button>
 
                   {isOptimizationStreaming && (
                     <button
@@ -1862,13 +1839,6 @@ export default function Dashboard() {
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
-                <span className="badge badge-info">Lines {optimizationLineCount}</span>
-                {!!optimizationMeta && (
-                  <span className="badge badge-info">
-                    Finish {optimizationMeta.finish_reason ?? 'unknown'}
-                    {optimizationMeta.max_tokens ? ` (max ${optimizationMeta.max_tokens})` : ''}
-                  </span>
-                )}
                 {!!optimizationUsage && (
                   <span className="badge badge-info">
                     Tokens {optimizationUsage.completion_tokens}
@@ -1922,26 +1892,31 @@ export default function Dashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4 overflow-x-auto">
+                <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
                   {isOptimizationStreaming ? (
-                    <div className="space-y-4">
-                      {!!optimizationObservedContent && (
-                        <MarkdownBlock markdown={optimizationObservedContent} />
-                      )}
-                      {!!optimizationAnswerSplit.stable && <MarkdownBlock markdown={optimizationAnswerSplit.stable} />}
-                      {!!optimizationAnswerSplit.tail && (
-                        <pre className="text-sm text-slate-100 whitespace-pre-wrap font-mono leading-relaxed">
-                          {optimizationAnswerSplit.tail}
-                        </pre>
-                      )}
+                    <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdownForStreaming}</ReactMarkdown>
                       {!optimizationAnswerContent && (
                         <p className="text-xs text-slate-500">AI가 제안을 작성 중입니다…</p>
                       )}
                     </div>
                   ) : (
                     <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdown}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdown}</ReactMarkdown>
                     </div>
+                  )}
+
+                  {!!optimizationObservedMarkdown && (
+                    <details className="mt-4 rounded-lg border border-slate-700 bg-slate-900/30">
+                      <summary className="cursor-pointer select-none px-3 py-2 text-sm text-slate-200">
+                        관측 데이터(표) 보기
+                      </summary>
+                      <div className="px-3 pb-3">
+                        <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationObservedMarkdown}</ReactMarkdown>
+                        </div>
+                      </div>
+                    </details>
                   )}
                 </div>
               )}
