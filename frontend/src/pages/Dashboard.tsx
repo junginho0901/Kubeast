@@ -60,6 +60,8 @@ export default function Dashboard() {
   const optimizationStreamPendingRef = useRef('')
   const optimizationStreamRafRef = useRef<number | null>(null)
   const optimizationStreamDoneRef = useRef(false)
+  const optimizationMetaReceivedRef = useRef(false)
+  const optimizationUsageReceivedRef = useRef(false)
   const [optimizationUsage, setOptimizationUsage] = useState<{
     prompt_tokens: number
     completion_tokens: number
@@ -501,6 +503,8 @@ export default function Dashboard() {
     setOptimizationStreamError('')
     setOptimizationUsage(null)
     setOptimizationMeta(null)
+    optimizationMetaReceivedRef.current = false
+    optimizationUsageReceivedRef.current = false
     optimizationStreamPendingRef.current = ''
     optimizationStreamDoneRef.current = false
     if (optimizationStreamRafRef.current) {
@@ -522,15 +526,20 @@ export default function Dashboard() {
           }
         },
         onUsage: (usage) => {
+          optimizationUsageReceivedRef.current = true
           setOptimizationUsage(usage)
         },
         onMeta: (meta) => {
+          optimizationMetaReceivedRef.current = true
           setOptimizationMeta(meta)
         },
         onError: (message) => {
           setOptimizationStreamError(message)
         },
         onDone: () => {
+          if (!optimizationMetaReceivedRef.current) {
+            setOptimizationStreamError((prev) => prev || '서버가 meta(종료 사유)를 보내지 않았습니다. ai-service가 재빌드/재시작되지 않았을 수 있어요.')
+          }
           optimizationStreamDoneRef.current = true
           if (!optimizationStreamRafRef.current) {
             optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
