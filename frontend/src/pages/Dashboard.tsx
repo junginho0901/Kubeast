@@ -18,12 +18,20 @@ import {
   StopCircle
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
+
+const MarkdownBlock = memo(function MarkdownBlock({ markdown }: { markdown: string }) {
+  return (
+    <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+    </div>
+  )
+})
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
@@ -46,8 +54,23 @@ export default function Dashboard() {
   const [optimizationCopied, setOptimizationCopied] = useState(false)
   const optimizationAbortRef = useRef<AbortController | null>(null)
   const [isOptimizationStreaming, setIsOptimizationStreaming] = useState(false)
-  const [optimizationStreamContent, setOptimizationStreamContent] = useState('')
+  const [optimizationObservedContent, setOptimizationObservedContent] = useState('')
+  const [optimizationAnswerContent, setOptimizationAnswerContent] = useState('')
   const [optimizationStreamError, setOptimizationStreamError] = useState('')
+  const optimizationStreamPendingRef = useRef('')
+  const optimizationStreamRafRef = useRef<number | null>(null)
+  const optimizationStreamDoneRef = useRef(false)
+  const optimizationMetaReceivedRef = useRef(false)
+  const optimizationUsageReceivedRef = useRef(false)
+  const [optimizationUsage, setOptimizationUsage] = useState<{
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  } | null>(null)
+  const [optimizationMeta, setOptimizationMeta] = useState<{
+    finish_reason?: string | null
+    max_tokens?: number | null
+  } | null>(null)
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
@@ -330,8 +353,15 @@ export default function Dashboard() {
     setOptimizationCopied(false)
     optimizationAbortRef.current?.abort()
     optimizationAbortRef.current = null
+    if (optimizationStreamRafRef.current) {
+      window.cancelAnimationFrame(optimizationStreamRafRef.current)
+      optimizationStreamRafRef.current = null
+    }
+    optimizationStreamPendingRef.current = ''
+    optimizationStreamDoneRef.current = false
     setIsOptimizationStreaming(false)
-    setOptimizationStreamContent('')
+    setOptimizationObservedContent('')
+    setOptimizationAnswerContent('')
     setOptimizationStreamError('')
 
     const namespaceNames = Array.isArray(allNamespaces)
@@ -372,9 +402,91 @@ export default function Dashboard() {
     setOptimizationCopied(false)
     optimizationAbortRef.current?.abort()
     optimizationAbortRef.current = null
+    if (optimizationStreamRafRef.current) {
+      window.cancelAnimationFrame(optimizationStreamRafRef.current)
+      optimizationStreamRafRef.current = null
+    }
+    optimizationStreamPendingRef.current = ''
+    optimizationStreamDoneRef.current = false
     setIsOptimizationStreaming(false)
-    setOptimizationStreamContent('')
+    setOptimizationObservedContent('')
+    setOptimizationAnswerContent('')
     setOptimizationStreamError('')
+  }
+
+  const unwrapOuterMarkdownFence = (text: string) => {
+    const trimmed = text.trim()
+    const match = trimmed.match(/^```(?:markdown|md)?\n([\s\S]*)\n```$/i)
+    return match ? match[1] : text
+  }
+
+  const splitStableMarkdownForStreaming = (text: string) => {
+    if (!text) return { stable: '', tail: '' }
+
+    const lines = text.split('\n')
+    let inFence = false
+    let fenceStartIndex: number | null = null
+    let offset = 0
+    let lastSafeIndex = 0
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const lineStart = offset
+      const trimmedStart = line.trimStart()
+
+      if (trimmedStart.startsWith('```')) {
+        if (!inFence) {
+          inFence = true
+          fenceStartIndex = lineStart
+        } else {
+          inFence = false
+          fenceStartIndex = null
+        }
+      }
+
+      const hasNewline = i < lines.length - 1
+      offset += line.length + (hasNewline ? 1 : 0)
+
+      if (!inFence && hasNewline) {
+        // 줄 단위로만 커밋해서 "깨진" 마크다운(미완성 줄/블록)을 최소화
+        lastSafeIndex = offset
+      }
+    }
+
+    if (inFence && fenceStartIndex != null) {
+      // code fence가 닫히기 전까지는 fence 자체를 마크다운 렌더에 포함하지 않는다
+      lastSafeIndex = Math.min(lastSafeIndex, fenceStartIndex)
+    }
+
+    return {
+      stable: text.slice(0, lastSafeIndex),
+      tail: text.slice(lastSafeIndex),
+    }
+  }
+
+  const flushOptimizationStreamPending = () => {
+    const pending = optimizationStreamPendingRef.current
+    if (!pending) {
+      optimizationStreamRafRef.current = null
+      if (optimizationStreamDoneRef.current) {
+        setOptimizationAnswerContent((prev) => unwrapOuterMarkdownFence(prev))
+        setIsOptimizationStreaming(false)
+        optimizationStreamDoneRef.current = false
+      }
+      return
+    }
+
+    // 한 글자(유니코드 codepoint)씩 타이핑처럼 보여주기
+    const firstCodePoint = pending.codePointAt(0)
+    if (firstCodePoint === undefined) {
+      optimizationStreamPendingRef.current = ''
+      optimizationStreamRafRef.current = null
+      return
+    }
+    const char = String.fromCodePoint(firstCodePoint)
+    optimizationStreamPendingRef.current = pending.slice(char.length)
+    setOptimizationAnswerContent((prev) => prev + char)
+    optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
   }
 
   const handleRunOptimizationSuggestions = () => {
@@ -386,33 +498,71 @@ export default function Dashboard() {
     optimizationAbortRef.current = controller
 
     setIsOptimizationStreaming(true)
-    setOptimizationStreamContent('')
+    setOptimizationObservedContent('')
+    setOptimizationAnswerContent('')
     setOptimizationStreamError('')
+    setOptimizationUsage(null)
+    setOptimizationMeta(null)
+    optimizationMetaReceivedRef.current = false
+    optimizationUsageReceivedRef.current = false
+    optimizationStreamPendingRef.current = ''
+    optimizationStreamDoneRef.current = false
+    if (optimizationStreamRafRef.current) {
+      window.cancelAnimationFrame(optimizationStreamRafRef.current)
+      optimizationStreamRafRef.current = null
+    }
 
     void api
       .suggestOptimizationStream(optimizationNamespace, {
         signal: controller.signal,
+        onObserved: (content) => {
+          // Observed data 표는 한 번에 표시 (타자 효과 적용 X)
+          setOptimizationObservedContent((prev) => prev + content)
+        },
         onContent: (chunk) => {
-          setOptimizationStreamContent((prev) => prev + chunk)
+          optimizationStreamPendingRef.current += chunk
+          if (!optimizationStreamRafRef.current) {
+            optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
+          }
+        },
+        onUsage: (usage) => {
+          optimizationUsageReceivedRef.current = true
+          setOptimizationUsage(usage)
+        },
+        onMeta: (meta) => {
+          optimizationMetaReceivedRef.current = true
+          setOptimizationMeta(meta)
         },
         onError: (message) => {
           setOptimizationStreamError(message)
         },
         onDone: () => {
-          setIsOptimizationStreaming(false)
+          if (!optimizationMetaReceivedRef.current) {
+            setOptimizationStreamError((prev) => prev || '서버가 meta(종료 사유)를 보내지 않았습니다. ai-service가 재빌드/재시작되지 않았을 수 있어요.')
+          }
+          optimizationStreamDoneRef.current = true
+          if (!optimizationStreamRafRef.current) {
+            optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
+          }
           optimizationAbortRef.current = null
         },
       })
       .catch((error) => {
         if ((error as any)?.name === 'AbortError') return
         setOptimizationStreamError(error instanceof Error ? error.message : String(error))
+        if (optimizationStreamRafRef.current) {
+          window.cancelAnimationFrame(optimizationStreamRafRef.current)
+          optimizationStreamRafRef.current = null
+        }
+        optimizationStreamPendingRef.current = ''
+        optimizationStreamDoneRef.current = false
         setIsOptimizationStreaming(false)
         optimizationAbortRef.current = null
       })
   }
 
   const handleCopyOptimizationSuggestions = async () => {
-    const text = optimizationStreamContent.trim()
+    const text = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
     if (!text) return
 
     try {
@@ -428,6 +578,12 @@ export default function Dashboard() {
   const handleStopOptimizationSuggestions = () => {
     optimizationAbortRef.current?.abort()
     optimizationAbortRef.current = null
+    if (optimizationStreamRafRef.current) {
+      window.cancelAnimationFrame(optimizationStreamRafRef.current)
+      optimizationStreamRafRef.current = null
+    }
+    optimizationStreamPendingRef.current = ''
+    optimizationStreamDoneRef.current = false
     setIsOptimizationStreaming(false)
   }
 
@@ -1130,7 +1286,8 @@ export default function Dashboard() {
     ? allNamespaces.map((ns: any) => String(ns?.name ?? '')).filter(Boolean).sort()
     : []
 
-  const optimizationMarkdown = optimizationStreamContent.trim()
+  const optimizationMarkdown = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
+  const optimizationAnswerSplit = splitStableMarkdownForStreaming(optimizationAnswerContent)
   const optimizationLineCount = optimizationMarkdown
     ? optimizationMarkdown.split('\n').filter((line) => line.trim().length > 0).length
     : 0
@@ -1607,7 +1764,7 @@ export default function Dashboard() {
       {isOptimizationModalOpen && (
         <ModalOverlay onClose={handleCloseOptimizationModal}>
           <div
-            className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+            className="bg-slate-800 rounded-lg max-w-[95vw] w-full h-[80vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-slate-700">
@@ -1706,6 +1863,28 @@ export default function Dashboard() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
                 <span className="badge badge-info">Lines {optimizationLineCount}</span>
+                {!!optimizationMeta && (
+                  <span className="badge badge-info">
+                    Finish {optimizationMeta.finish_reason ?? 'unknown'}
+                    {optimizationMeta.max_tokens ? ` (max ${optimizationMeta.max_tokens})` : ''}
+                  </span>
+                )}
+                {!!optimizationUsage && (
+                  <span className="badge badge-info">
+                    Tokens {optimizationUsage.completion_tokens}
+                    {optimizationMeta?.max_tokens ? `/${optimizationMeta.max_tokens}` : ''}
+                  </span>
+                )}
+                {!!optimizationMeta?.finish_reason && optimizationMeta.finish_reason !== 'stop' && (
+                  <span className={`text-xs ${optimizationMeta.finish_reason === 'length' ? 'text-yellow-300' : 'text-yellow-200'}`}>
+                    응답이 정상 종료(stop)가 아니어서 일부가 잘렸을 수 있어요 ({optimizationMeta.finish_reason})
+                  </span>
+                )}
+                {!!optimizationStreamError && (
+                  <span className="text-xs text-red-300 break-words">
+                    스트림 오류: {optimizationStreamError}
+                  </span>
+                )}
                 <span className="text-xs text-slate-500">모델 호출에 최대 1분 정도 걸릴 수 있어요</span>
               </div>
             </div>
@@ -1744,9 +1923,26 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4 overflow-x-auto">
-                  <div className="prose prose-invert max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdown}</ReactMarkdown>
-                  </div>
+                  {isOptimizationStreaming ? (
+                    <div className="space-y-4">
+                      {!!optimizationObservedContent && (
+                        <MarkdownBlock markdown={optimizationObservedContent} />
+                      )}
+                      {!!optimizationAnswerSplit.stable && <MarkdownBlock markdown={optimizationAnswerSplit.stable} />}
+                      {!!optimizationAnswerSplit.tail && (
+                        <pre className="text-sm text-slate-100 whitespace-pre-wrap font-mono leading-relaxed">
+                          {optimizationAnswerSplit.tail}
+                        </pre>
+                      )}
+                      {!optimizationAnswerContent && (
+                        <p className="text-xs text-slate-500">AI가 제안을 작성 중입니다…</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationMarkdown}</ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

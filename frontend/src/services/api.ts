@@ -174,7 +174,10 @@ export interface OptimizationSuggestionsResponse {
 }
 
 type OptimizationStreamHandlers = {
+  onObserved?: (content: string) => void
   onContent?: (chunk: string) => void
+  onUsage?: (usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => void
+  onMeta?: (meta: { finish_reason?: string | null; max_tokens?: number | null }) => void
   onError?: (message: string) => void
   onDone?: () => void
   signal?: AbortSignal
@@ -312,7 +315,7 @@ export const api = {
   },
 
   suggestOptimizationStream: async (namespace: string, handlers: OptimizationStreamHandlers = {}): Promise<void> => {
-    const { onContent, onError, onDone, signal } = handlers
+    const { onObserved, onContent, onUsage, onMeta, onError, onDone, signal } = handlers
 
     const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}`, {
       method: 'GET',
@@ -336,31 +339,51 @@ export const api = {
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     let aborted = false
+    let sawDone = false
 
     const processEventBlock = (block: string) => {
       const lines = block.split('\n')
+      let didEmit = false
       for (const rawLine of lines) {
         const line = rawLine.trimEnd()
         if (!line.startsWith('data:')) continue
         const payload = line.slice('data:'.length).trim()
         if (!payload) continue
         if (payload === '[DONE]') {
+          sawDone = true
           onDone?.()
-          return 'done' as const
+          return { status: 'done' as const, didEmit }
         }
         try {
           const parsed = JSON.parse(payload) as any
-          if (parsed?.error) {
+          const kind = typeof parsed?.kind === 'string' ? parsed.kind : undefined
+          if (kind === 'usage' && parsed?.usage) {
+            onUsage?.(parsed.usage)
+            didEmit = true
+            continue
+          }
+          if (kind === 'meta') {
+            onMeta?.({ finish_reason: parsed?.finish_reason, max_tokens: parsed?.max_tokens })
+            didEmit = true
+            continue
+          }
+          if (parsed?.error != null) {
             onError?.(String(parsed.error))
           }
           if (typeof parsed?.content === 'string') {
-            onContent?.(parsed.content)
+            const contentKind = kind ?? 'answer'
+            if (contentKind === 'observed') {
+              onObserved?.(parsed.content)
+            } else {
+              onContent?.(parsed.content)
+            }
+            didEmit = true
           }
         } catch {
           // ignore non-json payload
         }
       }
-      return 'continue' as const
+      return { status: 'continue' as const, didEmit }
     }
 
     try {
@@ -374,8 +397,9 @@ export const api = {
           if (sepIndex === -1) break
           const eventBlock = buffer.slice(0, sepIndex)
           buffer = buffer.slice(sepIndex + 2)
-          const status = processEventBlock(eventBlock)
-          if (status === 'done') return
+          const result = processEventBlock(eventBlock)
+          if (result.status === 'done') return
+          if (result.didEmit) await new Promise((resolve) => setTimeout(resolve, 0))
         }
       }
     } catch (error) {
@@ -392,7 +416,12 @@ export const api = {
       }
     }
 
-    if (!aborted) onDone?.()
+    if (aborted) return
+    if (!sawDone) {
+      const message = 'Stream ended unexpectedly (missing [DONE])'
+      onError?.(message)
+      throw new Error(message)
+    }
   },
 
   // Sessions

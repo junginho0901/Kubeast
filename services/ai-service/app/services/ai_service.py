@@ -610,21 +610,123 @@ JSON 형식으로 응답해주세요:
 
     async def suggest_optimization_stream(self, namespace: str):
         """리소스 최적화 제안 (SSE 스트리밍)"""
+        import asyncio
         import json
 
         try:
             observations = await self._build_optimization_observations(namespace)
-            # Observed data + derived action plan을 한 흐름으로 출력 (표/제안 분리감 해소)
-            content = (
-                observations["observations_md"]
-                + "\n\n---\n\n## 최적화 제안 (데이터 기반)\n\n"
-                + observations.get("action_plan_md", "")
-                + "\n"
+            observed_md = observations["observations_md"].rstrip() + "\n\n---\n\n## 최적화 제안 (AI)\n\n"
+
+            # 1) 표(관측 데이터) 먼저 출력
+            yield "data: " + json.dumps({"kind": "observed", "content": observed_md}, ensure_ascii=False) + "\n\n"
+            await asyncio.sleep(0)
+
+            # 2) 표/관측값 기반 draft(룰 기반)도 모델 입력에 포함해 일관성 강화 (UI에는 직접 출력 X)
+            draft_plan = observations.get("action_plan_md", "").strip()
+
+            prompt = f"""
+아래는 Kubernetes 네임스페이스의 관측 데이터(표)입니다. 이 표를 근거로 최적화 제안을 작성하세요.
+
+필수:
+- 제안에 반드시 표의 리소스명/수치(util, request/limit, avg usage 등)를 인용해서 근거를 달아주세요.
+- 표에 없는 내용은 "추가 확인 필요"로 처리하고 추측하지 마세요.
+- 아래 'Draft (rules-based)'에 있는 수치/추천값이 있다면 **수치를 변경하지 말고** 문장/구조만 다듬어 주세요.
+
+Observed data (markdown):
+{observations["observations_md"]}
+
+Draft (rules-based, keep numbers unchanged):
+{draft_plan if draft_plan else "(none)"}
+
+출력:
+- 마크다운
+- High/Medium/Low 우선순위
+- 각 항목에 (효과: 비용/성능/안정성) + 근거 + 적용 예시(yaml 또는 kubectl 짧게)
+
+금지:
+- 응답 전체를 ```markdown ... ``` 같은 코드 펜스로 감싸지 마세요. (그렇게 하면 UI에서 마크다운 렌더가 코드블록으로 깨집니다)
+- 최상단을 ```로 시작하지 마세요.
+"""
+
+            max_tokens = int(getattr(settings, "OPENAI_OPTIMIZATION_MAX_TOKENS", 900) or 900)
+
+            try:
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=max_tokens,
+                    stream=True,
+                    stream_options={"include_usage": True},
+                )
+            except TypeError:
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+
+            stream_usage = None
+            finish_reason = None
+            async for chunk in stream:
+                if getattr(chunk, "usage", None) is not None:
+                    stream_usage = chunk.usage
+                if chunk.choices and getattr(chunk.choices[0], "finish_reason", None) is not None:
+                    finish_reason = chunk.choices[0].finish_reason
+
+                delta = chunk.choices[0].delta
+                if delta and getattr(delta, "content", None):
+                    yield "data: " + json.dumps({"kind": "answer", "content": delta.content}, ensure_ascii=False) + "\n\n"
+
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "kind": "meta",
+                        "usage_phase": "suggest_optimization_stream",
+                        "finish_reason": finish_reason,
+                        "max_tokens": max_tokens,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n\n"
             )
-            yield "data: " + json.dumps({"content": content}, ensure_ascii=False) + "\n\n"
+
+            if stream_usage is not None:
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "kind": "usage",
+                            "usage_phase": "suggest_optimization_stream",
+                            "usage": {
+                                "prompt_tokens": stream_usage.prompt_tokens,
+                                "completion_tokens": stream_usage.completion_tokens,
+                                "total_tokens": stream_usage.total_tokens,
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+            yield "data: " + json.dumps({"kind": "error", "error": str(e)}, ensure_ascii=False) + "\n\n"
             yield "data: [DONE]\n\n"
 
     def _parse_cpu_quantity_to_m(self, value: Optional[str]) -> Optional[int]:
