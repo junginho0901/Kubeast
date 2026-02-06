@@ -60,6 +60,15 @@ export default function Dashboard() {
   const optimizationStreamPendingRef = useRef('')
   const optimizationStreamRafRef = useRef<number | null>(null)
   const optimizationStreamDoneRef = useRef(false)
+  const [optimizationUsage, setOptimizationUsage] = useState<{
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  } | null>(null)
+  const [optimizationMeta, setOptimizationMeta] = useState<{
+    finish_reason?: string | null
+    max_tokens?: number | null
+  } | null>(null)
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
@@ -490,6 +499,8 @@ export default function Dashboard() {
     setOptimizationObservedContent('')
     setOptimizationAnswerContent('')
     setOptimizationStreamError('')
+    setOptimizationUsage(null)
+    setOptimizationMeta(null)
     optimizationStreamPendingRef.current = ''
     optimizationStreamDoneRef.current = false
     if (optimizationStreamRafRef.current) {
@@ -509,6 +520,12 @@ export default function Dashboard() {
           if (!optimizationStreamRafRef.current) {
             optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
           }
+        },
+        onUsage: (usage) => {
+          setOptimizationUsage(usage)
+        },
+        onMeta: (meta) => {
+          setOptimizationMeta(meta)
         },
         onError: (message) => {
           setOptimizationStreamError(message)
@@ -1837,6 +1854,17 @@ export default function Dashboard() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
                 <span className="badge badge-info">Lines {optimizationLineCount}</span>
+                {!!optimizationUsage && (
+                  <span className="badge badge-info">
+                    Tokens {optimizationUsage.completion_tokens}
+                    {optimizationMeta?.max_tokens ? `/${optimizationMeta.max_tokens}` : ''}
+                  </span>
+                )}
+                {optimizationMeta?.finish_reason === 'length' && (
+                  <span className="text-xs text-yellow-300">
+                    출력 토큰 제한에 도달해 답변이 일부 잘렸을 수 있어요
+                  </span>
+                )}
                 <span className="text-xs text-slate-500">모델 호출에 최대 1분 정도 걸릴 수 있어요</span>
               </div>
             </div>

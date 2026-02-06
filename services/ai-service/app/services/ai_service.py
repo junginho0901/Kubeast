@@ -610,8 +610,8 @@ JSON 형식으로 응답해주세요:
 
     async def suggest_optimization_stream(self, namespace: str):
         """리소스 최적화 제안 (SSE 스트리밍)"""
-        import json
         import asyncio
+        import json
 
         try:
             observations = await self._build_optimization_observations(namespace)
@@ -648,15 +648,20 @@ Draft (rules-based, keep numbers unchanged):
 - 최상단을 ```로 시작하지 마세요.
 """
 
+            max_tokens = int(getattr(settings, "OPENAI_OPTIMIZATION_MAX_TOKENS", 900) or 900)
+
             try:
                 stream = await self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요."},
+                        {
+                            "role": "system",
+                            "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요.",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.2,
-                    max_tokens=900,
+                    max_tokens=max_tokens,
                     stream=True,
                     stream_options={"include_usage": True},
                 )
@@ -664,22 +669,42 @@ Draft (rules-based, keep numbers unchanged):
                 stream = await self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요."},
+                        {
+                            "role": "system",
+                            "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요.",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.2,
-                    max_tokens=900,
+                    max_tokens=max_tokens,
                     stream=True,
                 )
 
             stream_usage = None
+            finish_reason = None
             async for chunk in stream:
                 if getattr(chunk, "usage", None) is not None:
                     stream_usage = chunk.usage
+                if chunk.choices and getattr(chunk.choices[0], "finish_reason", None) is not None:
+                    finish_reason = chunk.choices[0].finish_reason
 
                 delta = chunk.choices[0].delta
                 if delta and getattr(delta, "content", None):
                     yield "data: " + json.dumps({"kind": "answer", "content": delta.content}, ensure_ascii=False) + "\n\n"
+
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "kind": "meta",
+                        "usage_phase": "suggest_optimization_stream",
+                        "finish_reason": finish_reason,
+                        "max_tokens": max_tokens,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
 
             if stream_usage is not None:
                 yield (

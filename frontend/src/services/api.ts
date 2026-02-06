@@ -176,6 +176,8 @@ export interface OptimizationSuggestionsResponse {
 type OptimizationStreamHandlers = {
   onObserved?: (content: string) => void
   onContent?: (chunk: string) => void
+  onUsage?: (usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => void
+  onMeta?: (meta: { finish_reason?: string | null; max_tokens?: number | null }) => void
   onError?: (message: string) => void
   onDone?: () => void
   signal?: AbortSignal
@@ -313,7 +315,7 @@ export const api = {
   },
 
   suggestOptimizationStream: async (namespace: string, handlers: OptimizationStreamHandlers = {}): Promise<void> => {
-    const { onObserved, onContent, onError, onDone, signal } = handlers
+    const { onObserved, onContent, onUsage, onMeta, onError, onDone, signal } = handlers
 
     const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}`, {
       method: 'GET',
@@ -352,12 +354,23 @@ export const api = {
         }
         try {
           const parsed = JSON.parse(payload) as any
+          const kind = typeof parsed?.kind === 'string' ? parsed.kind : undefined
+          if (kind === 'usage' && parsed?.usage) {
+            onUsage?.(parsed.usage)
+            didEmit = true
+            continue
+          }
+          if (kind === 'meta') {
+            onMeta?.({ finish_reason: parsed?.finish_reason, max_tokens: parsed?.max_tokens })
+            didEmit = true
+            continue
+          }
           if (parsed?.error != null) {
             onError?.(String(parsed.error))
           }
           if (typeof parsed?.content === 'string') {
-            const kind = typeof parsed?.kind === 'string' ? parsed.kind : 'answer'
-            if (kind === 'observed') {
+            const contentKind = kind ?? 'answer'
+            if (contentKind === 'observed') {
               onObserved?.(parsed.content)
             } else {
               onContent?.(parsed.content)
