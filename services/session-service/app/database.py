@@ -13,6 +13,17 @@ import json
 Base = declarative_base()
 
 
+class Member(Base):
+    """멤버 (추후 권한/RBAC의 주체)"""
+    __tablename__ = "members"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="user")  # admin | user
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Session(Base):
     """대화 세션"""
     __tablename__ = "sessions"
@@ -77,6 +88,83 @@ class DatabaseService:
         """데이터베이스 초기화"""
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+    async def ensure_default_member(self) -> Member:
+        """기본 멤버(default) 보장 (기존 single-user 호환)"""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(Member).where(Member.id == "default"))
+            existing = result.scalar_one_or_none()
+            if existing:
+                return existing
+
+            member = Member(id="default", name="default", role="admin")
+            db.add(member)
+            await db.commit()
+            await db.refresh(member)
+            return member
+
+    async def create_member(self, member_id: str, name: str, role: str = "user") -> Member:
+        """멤버 생성"""
+        async with self.async_session() as db:
+            member = Member(id=member_id, name=name, role=role)
+            db.add(member)
+            await db.commit()
+            await db.refresh(member)
+            return member
+
+    async def get_member(self, member_id: str) -> Optional[Member]:
+        """멤버 조회"""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(Member).where(Member.id == member_id))
+            return result.scalar_one_or_none()
+
+    async def list_members(self, limit: int = 100, offset: int = 0) -> List[Member]:
+        """멤버 목록 조회"""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(
+                select(Member)
+                .order_by(Member.created_at.asc(), Member.id.asc())
+                .limit(limit)
+                .offset(offset)
+            )
+            return list(result.scalars().all())
+
+    async def update_member(self, member_id: str, name: Optional[str] = None, role: Optional[str] = None) -> Optional[Member]:
+        """멤버 업데이트"""
+        async with self.async_session() as db:
+            from sqlalchemy import select, update
+
+            updates = {"updated_at": datetime.utcnow()}
+            if name is not None:
+                updates["name"] = name
+            if role is not None:
+                updates["role"] = role
+
+            await db.execute(update(Member).where(Member.id == member_id).values(**updates))
+            await db.commit()
+
+            result = await db.execute(select(Member).where(Member.id == member_id))
+            return result.scalar_one_or_none()
+
+    async def delete_member(self, member_id: str) -> bool:
+        """멤버 삭제"""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(Member).where(Member.id == member_id))
+            member = result.scalar_one_or_none()
+            if not member:
+                return False
+
+            await db.delete(member)
+            await db.commit()
+            return True
     
     async def create_session(self, session_id: str, user_id: str = "default", title: str = "New Chat") -> Session:
         """새 세션 생성"""
@@ -285,4 +373,5 @@ async def get_db_service() -> DatabaseService:
     if db_service is None:
         db_service = DatabaseService()
         await db_service.init_db()
+        await db_service.ensure_default_member()
     return db_service

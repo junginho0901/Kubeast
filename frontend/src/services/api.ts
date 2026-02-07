@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getStoredMemberId } from './member'
 
 const client = axios.create({
   baseURL: '/api/v1',
@@ -6,6 +7,13 @@ const client = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 10000, // 10초 타임아웃 (백엔드 재시도 시간 고려)
+})
+
+client.interceptors.request.use((config) => {
+  const memberId = getStoredMemberId()
+  config.headers = config.headers ?? {}
+  ;(config.headers as any)['X-User-ID'] = memberId
+  return config
 })
 
 // Types
@@ -169,6 +177,14 @@ export interface ChatResponse {
   actions: Array<any>
 }
 
+export interface Member {
+  id: string
+  name: string
+  role: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -193,6 +209,26 @@ export interface SessionDetail {
 
 // API Functions
 export const api = {
+  // Members
+  getMembers: async (params?: { limit?: number; offset?: number }): Promise<Member[]> => {
+    const { data } = await client.get('/members', { params })
+    return data
+  },
+
+  createMember: async (name: string, role: 'admin' | 'user' = 'user'): Promise<Member> => {
+    const { data } = await client.post('/members', { name, role })
+    return data
+  },
+
+  updateMember: async (memberId: string, patch: { name?: string; role?: 'admin' | 'user' }): Promise<Member> => {
+    const { data } = await client.patch(`/members/${memberId}`, patch)
+    return data
+  },
+
+  deleteMember: async (memberId: string): Promise<void> => {
+    await client.delete(`/members/${memberId}`)
+  },
+
   // Cluster
   getClusterOverview: async (forceRefresh = false): Promise<ClusterOverview> => {
     const { data } = await client.get('/cluster/overview', {
