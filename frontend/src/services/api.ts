@@ -253,6 +253,17 @@ export const api = {
     return data
   },
 
+  adminListUsers: async (params?: { limit?: number; offset?: number }): Promise<Member[]> => {
+    const { data } = await client.get('/auth/admin/users', { params })
+    if (!Array.isArray(data)) throw new Error('Invalid users response')
+    return data as Member[]
+  },
+
+  adminUpdateUserRole: async (userId: string, role: 'admin' | 'user'): Promise<Member> => {
+    const { data } = await client.patch(`/auth/admin/users/${userId}`, { role })
+    return data
+  },
+
   // Members
   getMembers: async (params?: { limit?: number; offset?: number }): Promise<Member[]> => {
     const { data } = await client.get('/members', { params })

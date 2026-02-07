@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, Boxes, MessageSquare, Activity, Layers, LogOut } from 'lucide-react'
+import { LayoutDashboard, Boxes, MessageSquare, Activity, Layers, LogOut, Shield } from 'lucide-react'
 import { api } from '@/services/api'
 import { clearAccessToken } from '@/services/auth'
 
@@ -57,6 +57,10 @@ export default function Layout() {
     navigate('/login')
   }
 
+  const navItems = me?.role === 'admin'
+    ? [...navigation, { name: '유저 관리', href: '/admin/users', icon: Shield }]
+    : navigation
+
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
@@ -70,7 +74,7 @@ export default function Layout() {
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-2">
-            {navigation.map((item) => {
+            {navItems.map((item) => {
               const isActive = location.pathname === item.href
               return (
                 <Link
@@ -134,4 +138,3 @@ export default function Layout() {
     </div>
   )
 }
-
