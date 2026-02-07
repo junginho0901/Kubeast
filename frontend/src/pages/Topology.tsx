@@ -4,6 +4,7 @@ import { FileCode, Package, Network as NetworkIcon, Database, Key, Box, Clock, G
 import { useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { getAuthHeaders } from '@/services/auth'
 
 type ResourceType = 
   | 'deployment' 
@@ -53,7 +54,8 @@ export default function Topology() {
       if (!category) return []
       
       const response = await fetch(
-        `http://localhost:8000/api/v1/cluster/namespaces/${namespace}/${category.endpoint}`
+        `/api/v1/cluster/namespaces/${namespace}/${category.endpoint}`,
+        { headers: { ...getAuthHeaders() } }
       )
       return response.json()
     },
@@ -70,7 +72,8 @@ export default function Topology() {
       
       try {
         const response = await fetch(
-          `http://localhost:8000/api/v1/cluster/namespaces/${namespace}/${category.endpoint}/${selectedResource}/yaml`
+          `/api/v1/cluster/namespaces/${namespace}/${category.endpoint}/${selectedResource}/yaml`,
+          { headers: { ...getAuthHeaders() } }
         )
         
         if (!response.ok) {

@@ -1,4 +1,4 @@
-import { getMemberHeaders } from '@/services/member'
+import { getAuthHeaders } from '@/services/auth'
 
 export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
@@ -128,7 +128,7 @@ class ChatStreamManager {
         `/api/v1/ai/sessions/${sessionId}/chat?message=${encodeURIComponent(userMessage)}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getMemberHeaders() },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           signal: this.abortController.signal,
         }
       )

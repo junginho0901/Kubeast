@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getStoredMemberId } from './member'
+import { getAccessToken } from './auth'
 
 const client = axios.create({
   baseURL: '/api/v1',
@@ -10,9 +10,11 @@ const client = axios.create({
 })
 
 client.interceptors.request.use((config) => {
-  const memberId = getStoredMemberId()
   config.headers = config.headers ?? {}
-  ;(config.headers as any)['X-User-ID'] = memberId
+  const token = getAccessToken()
+  if (token) {
+    ;(config.headers as any).Authorization = `Bearer ${token}`
+  }
   return config
 })
 
@@ -180,9 +182,16 @@ export interface ChatResponse {
 export interface Member {
   id: string
   name: string
+  email?: string
   role: string
   created_at: string
   updated_at: string
+}
+
+export interface AuthResponse {
+  access_token: string
+  token_type: string
+  member: Member
 }
 
 export interface Session {
@@ -209,18 +218,37 @@ export interface SessionDetail {
 
 // API Functions
 export const api = {
+  // Auth
+  register: async (request: { name: string; email: string; password: string }): Promise<Member> => {
+    const { data } = await client.post('/auth/register', request)
+    return data
+  },
+
+  login: async (request: { email: string; password: string }): Promise<AuthResponse> => {
+    const { data } = await client.post('/auth/login', request)
+    return data
+  },
+
+  me: async (): Promise<Member> => {
+    const { data } = await client.get('/auth/me')
+    return data
+  },
+
   // Members
   getMembers: async (params?: { limit?: number; offset?: number }): Promise<Member[]> => {
     const { data } = await client.get('/members', { params })
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid members response')
+    }
+    return data as Member[]
+  },
+
+  createMember: async (request: { name: string; email: string; password: string; role?: 'admin' | 'user' }): Promise<Member> => {
+    const { data } = await client.post('/members', request)
     return data
   },
 
-  createMember: async (name: string, role: 'admin' | 'user' = 'user'): Promise<Member> => {
-    const { data } = await client.post('/members', { name, role })
-    return data
-  },
-
-  updateMember: async (memberId: string, patch: { name?: string; role?: 'admin' | 'user' }): Promise<Member> => {
+  updateMember: async (memberId: string, patch: { name?: string; email?: string; password?: string; role?: 'admin' | 'user' }): Promise<Member> => {
     const { data } = await client.patch(`/members/${memberId}`, patch)
     return data
   },

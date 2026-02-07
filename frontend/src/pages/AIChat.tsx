@@ -8,7 +8,7 @@ import { Send, Bot, User, Sparkles, Plus, MessageSquare, Trash2, Edit2, Check, X
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
-import { getMemberHeaders } from '@/services/member'
+import { getAuthHeaders } from '@/services/auth'
 
 const TOOL_RESULT_DISPLAY_MAX_CHARS = 2000
 const TRUNCATED_MARKER = '... (truncated) ...'
@@ -513,7 +513,7 @@ export default function AIChat() {
         console.log('[DEBUG] Saving stopped assistant message to DB')
         const response = await fetch(`/api/v1/sessions/${snapshot.sessionId}/messages`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getMemberHeaders() },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({
             messages: [
               {

@@ -9,3 +9,4 @@ asyncpg==0.29.0
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.25
 redis==5.0.1
+PyJWT==2.8.0
