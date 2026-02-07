@@ -11,6 +11,12 @@ from app.security import create_access_token, hash_password, jwks, require_auth,
 
 router = APIRouter()
 audit_logger = logging.getLogger("auth.audit")
+if not audit_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    audit_logger.addHandler(handler)
+audit_logger.setLevel(logging.INFO)
+audit_logger.propagate = False
 
 ALLOWED_ROLES = {"admin", "user"}
 
