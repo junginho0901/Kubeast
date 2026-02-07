@@ -1740,18 +1740,18 @@ export default function Dashboard() {
       {/* 최적화 제안 모달 */}
       {isOptimizationModalOpen && (
         <ModalOverlay onClose={handleCloseOptimizationModal}>
-          <div
-            className="bg-slate-800 rounded-lg max-w-[95vw] w-full h-[80vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6 border-b border-slate-700">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-white">최적화 제안</h2>
-                  <p className="text-sm text-slate-400">
-                    선택한 네임스페이스의 Deployment/Pod 정보를 바탕으로 AI가 최적화 방안을 제안합니다
-                  </p>
-                </div>
+            <div
+              className="bg-slate-800 rounded-lg max-w-[98vw] w-full h-[85vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-slate-700">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">최적화 제안</h2>
+                    <p className="text-xs text-slate-400">
+                      선택한 네임스페이스의 Deployment/Pod 정보를 바탕으로 AI가 최적화 방안을 제안합니다
+                    </p>
+                  </div>
                 <button
                   onClick={handleCloseOptimizationModal}
                   className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
@@ -1768,7 +1768,7 @@ export default function Dashboard() {
                       title="네임스페이스 선택"
                       disabled={isLoadingAllNamespaces}
                     >
-                      <span className="text-sm font-medium truncate">
+                      <span className="text-xs font-medium truncate">
                         {optimizationNamespace || (isLoadingAllNamespaces ? 'Loading...' : 'Select namespace')}
                       </span>
                       <ChevronDown
@@ -1801,13 +1801,13 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleRunOptimizationSuggestions}
-                      disabled={!optimizationNamespace || isOptimizationStreaming}
-                      className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
-                      title="AI 제안 생성"
-                    >
+                    <div className="flex items-center gap-2 text-xs">
+                      <button
+                        onClick={handleRunOptimizationSuggestions}
+                        disabled={!optimizationNamespace || isOptimizationStreaming}
+                        className="h-9 px-3 rounded-lg text-xs font-medium transition-colors bg-primary-600 hover:bg-primary-500 text-white disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+                        title="AI 제안 생성"
+                      >
                       {isOptimizationStreaming && (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       )}
@@ -1825,20 +1825,20 @@ export default function Dashboard() {
                     </button>
                   )}
 
-                  <button
-                    onClick={handleCopyOptimizationSuggestions}
-                    disabled={!optimizationMarkdown}
-                    className="h-10 px-4 rounded-lg text-sm font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-                    title="결과 복사"
-                  >
+                    <button
+                      onClick={handleCopyOptimizationSuggestions}
+                      disabled={!optimizationMarkdown}
+                      className="h-9 px-3 rounded-lg text-xs font-medium transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                      title="결과 복사"
+                    >
                     <Copy className="w-4 h-4" />
                     {optimizationCopied ? '복사됨' : '복사'}
                   </button>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="badge badge-info">Namespace {optimizationNamespace || 'N/A'}</span>
                 {!!optimizationUsage && (
                   <span className="badge badge-info">
                     Tokens {optimizationUsage.completion_tokens}
@@ -1855,11 +1855,11 @@ export default function Dashboard() {
                     스트림 오류: {optimizationStreamError}
                   </span>
                 )}
-                <span className="text-xs text-slate-500">모델 호출에 최대 1분 정도 걸릴 수 있어요</span>
+                  <span className="text-[11px] text-slate-500">모델 호출에 최대 1분 정도 걸릴 수 있어요</span>
+                </div>
               </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
+  
+              <div className="flex-1 overflow-y-auto p-4">
               {isOptimizationStreaming && !optimizationMarkdown ? (
                 <div className="flex flex-col items-center justify-center h-full min-h-[240px]">
                   <RefreshCw className="w-7 h-7 text-primary-400 animate-spin mb-3" />
@@ -1892,34 +1892,34 @@ export default function Dashboard() {
                   </p>
                 </div>
                 ) : (
-                  <div className="space-y-4">
-                    {!!optimizationObservedMarkdown && (
-                      <details className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
-                        <summary className="cursor-pointer select-none text-sm text-slate-200">
-                          관측 데이터(표)
-                        </summary>
-                        <div className="mt-3 prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationObservedMarkdown}</ReactMarkdown>
-                        </div>
-                      </details>
-                    )}
-
-                    <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
-                      {isOptimizationStreaming ? (
-                        <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdownForStreaming}</ReactMarkdown>
-                          {!optimizationAnswerContent && (
-                            <p className="text-xs text-slate-500">AI가 제안을 작성 중입니다…</p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="prose prose-invert max-w-none overflow-x-auto [&_table]:min-w-full [&_table]:w-max">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdown}</ReactMarkdown>
-                        </div>
+                    <div className="space-y-3 text-xs">
+                      {!!optimizationObservedMarkdown && (
+                        <details className="rounded-lg border border-slate-700 bg-slate-900/20 p-3">
+                          <summary className="cursor-pointer select-none text-xs font-medium text-slate-200">
+                            관측 데이터(표)
+                          </summary>
+                          <div className="mt-2 prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationObservedMarkdown}</ReactMarkdown>
+                          </div>
+                        </details>
                       )}
+  
+                      <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-3">
+                        {isOptimizationStreaming ? (
+                          <div className="prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdownForStreaming}</ReactMarkdown>
+                            {!optimizationAnswerContent && (
+                              <p className="text-[11px] text-slate-500">AI가 제안을 작성 중입니다…</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{optimizationAnswerMarkdown}</ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
             </div>
           </div>
         </ModalOverlay>
