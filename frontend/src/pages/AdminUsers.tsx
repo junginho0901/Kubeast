@@ -55,7 +55,6 @@ export default function AdminUsers() {
               <th className="px-4 py-3">이름</th>
               <th className="px-4 py-3">이메일</th>
               <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Change</th>
             </tr>
           </thead>
           <tbody>
@@ -66,11 +65,6 @@ export default function AdminUsers() {
                 <tr key={u.id} className="border-t border-slate-700 text-slate-200">
                   <td className="px-4 py-3">{u.name}</td>
                   <td className="px-4 py-3">{u.email ?? '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-md border border-slate-600 bg-slate-900/40 px-2 py-1 text-xs">
-                      {String(u.role).toUpperCase()}
-                    </span>
-                  </td>
                   <td className="px-4 py-3">
                     <select
                       value={currentRole}
@@ -91,7 +85,7 @@ export default function AdminUsers() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-slate-300" colSpan={4}>
+                <td className="px-4 py-4 text-slate-300" colSpan={3}>
                   유저가 없습니다.
                 </td>
               </tr>
