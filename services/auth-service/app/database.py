@@ -2,7 +2,7 @@
 Database models and user management
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import Column, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
@@ -59,6 +59,32 @@ class DatabaseService:
             await db.commit()
             await db.refresh(user)
             return user
+
+    async def list_users(self, limit: int = 100, offset: int = 0) -> List[User]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(
+                select(User)
+                .order_by(User.created_at.desc(), User.id.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            return list(result.scalars().all())
+
+    async def update_user_role(self, user_id: str, role: str) -> Optional[User]:
+        async with self.async_session() as db:
+            from sqlalchemy import select, update
+
+            await db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(role=role, updated_at=datetime.utcnow())
+            )
+            await db.commit()
+
+            result = await db.execute(select(User).where(User.id == user_id))
+            return result.scalar_one_or_none()
 
     async def ensure_bootstrap_admin(self):
         from app.config import settings
