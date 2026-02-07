@@ -629,7 +629,7 @@ JSON 형식으로 응답해주세요:
 
     필수:
     - 제안에 반드시 표의 리소스명/수치(util, request/limit, avg usage 등)를 인용해서 근거를 달아주세요.
-    - 표의 `usage`는 metrics-server 스냅샷(현재값) 기반이며, `req/lim`은 컨테이너별 합(누락 시 과소추정)일 수 있습니다. 누락/불일치가 보이면 숫자 추천을 단정하지 말고 "먼저 YAML 확인/누락 보완"을 제안하세요.
+    - 표의 `usage`는 metrics-server 스냅샷(현재값)이며, 표의 `usage` 값은 파드별 스냅샷을 deployment 단위로 평균 낸 값입니다. `req/lim`은 컨테이너별 합(누락 시 과소추정)일 수 있습니다. 누락/불일치가 보이면 숫자 추천을 단정하지 말고 "먼저 YAML 확인/누락 보완"을 제안하세요.
     - 표에 없는 내용은 "추가 확인 필요"로 처리하고 추측하지 마세요.
     - 아래 'Draft (rules-based)'에 있는 수치/추천값이 있다면 **수치를 변경하지 말고** 문장/구조만 다듬어 주세요.
 
@@ -857,6 +857,30 @@ Draft (rules-based, keep numbers unchanged):
             for item in pod_metrics:
                 key = f"{item.get('namespace')}/{item.get('name')}"
                 metrics_by_pod[key] = item
+
+        metrics_window_sample: Optional[str] = None
+        metrics_timestamp_max: Optional[str] = None
+        if pod_metrics:
+            windows = [str(m.get("window")) for m in pod_metrics if m.get("window")]
+            if windows:
+                # "30s" 같은 값이 대부분이므로 샘플 1개만 표기(가장 흔한 값 우선)
+                counts: Dict[str, int] = {}
+                for w in windows:
+                    counts[w] = counts.get(w, 0) + 1
+                metrics_window_sample = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[0][0]
+
+            timestamps = [str(m.get("timestamp")) for m in pod_metrics if m.get("timestamp")]
+            if timestamps:
+                # ISO8601이면 max timestamp를 표기(파싱 실패 시 문자열 max로 fallback)
+                try:
+                    from datetime import datetime
+
+                    parsed = []
+                    for ts in timestamps:
+                        parsed.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
+                    metrics_timestamp_max = max(parsed).isoformat()
+                except Exception:
+                    metrics_timestamp_max = max(timestamps)
 
         def pod_resource_totals(pod: Dict):
             cpu_req_m_vals: List[int] = []
@@ -1198,8 +1222,12 @@ Draft (rules-based, keep numbers unchanged):
         else:
             header_lines.append(f"- Pod metrics: {'available' if pod_metrics is not None else 'unavailable'}")
         header_lines.append(
-            "- Note: `usage`는 metrics-server 스냅샷(현재값) 기반이며, `req/lim`은 컨테이너별 합(누락 컨테이너가 있으면 과소추정)입니다."
+            "- Note: `usage`는 metrics-server **스냅샷(현재값)** 이며, 표의 `usage` 값은 **파드별 스냅샷을 deployment 단위로 평균** 낸 값입니다. `req/lim`은 컨테이너별 합(누락 컨테이너가 있으면 과소추정)입니다."
         )
+        if metrics_window_sample or metrics_timestamp_max:
+            header_lines.append(
+                f"- Pod metrics snapshot info: window={metrics_window_sample or 'N/A'}, timestamp(max)={metrics_timestamp_max or 'N/A'}"
+            )
         if events_error:
             header_lines.append(f"- Events: error={events_error}")
         elif event_lines:
@@ -1208,7 +1236,7 @@ Draft (rules-based, keep numbers unchanged):
         table_lines = [
             "",
             "### Deployments summary",
-            "| deployment | replicas(ready) | pods(notReady) | restarts(total/max) | cpu req/lim (m) | cpu usage (m, snapshot) | mem req/lim (Mi) | mem usage (Mi, snapshot) | util cpu/mem (vs req) | image |",
+            "| deployment | replicas(ready) | pods(notReady) | restarts(total/max) | cpu req/lim (m, per-pod) | cpu usage (m, pods avg snapshot) | mem req/lim (Mi, per-pod) | mem usage (Mi, pods avg snapshot) | util cpu/mem (vs req) | image |",
             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
         ]
         for row in deployment_rows:
@@ -1355,7 +1383,7 @@ Draft (rules-based, keep numbers unchanged):
                 missing_req = int(r.get("missing_mem_req_containers") or 0)
                 missing_lim = int(r.get("missing_mem_lim_containers") or 0)
                 action_lines.append(
-                    f"  - 근거: `{name}` mem usage avg={fmt_mi(usage)} vs request={fmt_mi(req)} (util≈{util}%), limit={fmt_mi(lim)}"
+                    f"  - 근거: `{name}` mem usage(pods avg snapshot)={fmt_mi(usage)} vs request={fmt_mi(req)} (util≈{util}%), limit={fmt_mi(lim)}"
                 )
                 if missing_req > 0:
                     action_lines.append(
@@ -1375,7 +1403,7 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 if suspicious:
                     action_lines.append(
-                        "  - 주의: **표상 usage avg가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
                     )
                     continue
 
@@ -1383,7 +1411,7 @@ Draft (rules-based, keep numbers unchanged):
                 rec_lim = rec_limit_from_request(rec_req, 2.0, 128)
                 if rec_req and rec_lim:
                     action_lines.append(
-                        f"  - 권장(초안): requests.memory≈`{fmt_mi(rec_req)}` (avg*1.5, round) / limits.memory≈`{fmt_mi(rec_lim)}` (request*2)  \n"
+                        f"  - 권장(초안): requests.memory≈`{fmt_mi(rec_req)}` (pods avg snapshot*1.5, round) / limits.memory≈`{fmt_mi(rec_lim)}` (request*2)  \n"
                         f"    - 적용 예시:\n"
                         f"      ```yaml\n"
                         f"      resources:\n"
@@ -1406,7 +1434,7 @@ Draft (rules-based, keep numbers unchanged):
                 missing_req = int(r.get("missing_cpu_req_containers") or 0)
                 missing_lim = int(r.get("missing_cpu_lim_containers") or 0)
                 action_lines.append(
-                    f"  - 근거: `{name}` cpu usage avg={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%), limit={fmt_m(lim)}"
+                    f"  - 근거: `{name}` cpu usage(pods avg snapshot)={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%), limit={fmt_m(lim)}"
                 )
                 if missing_req > 0:
                     action_lines.append(
@@ -1426,7 +1454,7 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 if suspicious:
                     action_lines.append(
-                        "  - 주의: **표상 usage avg가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
                     )
                     continue
 
@@ -1434,7 +1462,7 @@ Draft (rules-based, keep numbers unchanged):
                 rec_lim = rec_limit_from_request(rec_req, 2.0, 100)
                 if rec_req and rec_lim:
                     action_lines.append(
-                        f"  - 권장(초안): requests.cpu≈`{fmt_m(rec_req)}` (avg*2, round) / limits.cpu≈`{fmt_m(rec_lim)}`  \n"
+                        f"  - 권장(초안): requests.cpu≈`{fmt_m(rec_req)}` (pods avg snapshot*2, round) / limits.cpu≈`{fmt_m(rec_lim)}`  \n"
                         f"    - 적용 예시:\n"
                         f"      ```yaml\n"
                         f"      resources:\n"
@@ -1489,7 +1517,7 @@ Draft (rules-based, keep numbers unchanged):
                     continue
                 suggested = self._round_up_int(max(int((usage or 0) * 2), 50), 10) if isinstance(usage, int) else max(int(req * 0.5), 50)
                 action_lines.append(
-                    f"  - 근거: `{name}` cpu usage avg={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%)  \n"
+                    f"  - 근거: `{name}` cpu usage(pods avg snapshot)={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%)  \n"
                     f"  - 권장(초안): requests.cpu≈`{fmt_m(suggested)}`로 낮추고 모니터링(p95 기반으로 재조정)"
                 )
 
