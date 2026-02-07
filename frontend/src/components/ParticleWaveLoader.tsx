@@ -1,23 +1,32 @@
 import { useEffect, useRef } from 'react'
 
+type ParticleWaveLoaderProps = {
+  className?: string
+}
+
 declare global {
   interface Window {
     THREE: any
   }
 }
 
-export default function ParticleWaveLoader() {
+export default function ParticleWaveLoader({ className }: ParticleWaveLoaderProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const sceneRef = useRef<any>(null)
   const pointsRef = useRef<any>(null)
   const geometryRef = useRef<any>(null)
+  const rendererRef = useRef<any>(null)
+  const cameraRef = useRef<any>(null)
 
   useEffect(() => {
     let mounted = true
+    let resizeObserver: ResizeObserver | null = null
+    let onWindowResize: (() => void) | null = null
 
     function initParticleWave() {
-      if (!mounted || !canvasRef.current) return
+      if (!mounted || !canvasRef.current || !containerRef.current) return
       
       const THREE = window.THREE
       if (!THREE) {
@@ -26,8 +35,8 @@ export default function ParticleWaveLoader() {
       }
 
       const canvas = canvasRef.current
-      const width = 220
-      const height = 220
+      const width = Math.max(1, Math.floor(containerRef.current.clientWidth))
+      const height = Math.max(1, Math.floor(containerRef.current.clientHeight))
 
       // Config
       const CONFIG = {
@@ -49,6 +58,7 @@ export default function ParticleWaveLoader() {
       // Camera
       const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000)
       camera.position.z = 7
+      cameraRef.current = camera
 
       // Renderer
       const renderer = new THREE.WebGLRenderer({
@@ -56,8 +66,9 @@ export default function ParticleWaveLoader() {
         antialias: true,
         alpha: true,
       })
-      renderer.setSize(width, height)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setSize(width, height, false)
+      rendererRef.current = renderer
 
       // 파티클 생성
       const positions: number[] = []
@@ -128,6 +139,26 @@ export default function ParticleWaveLoader() {
       // 애니메이션
       const startTime = Date.now()
 
+      function resize() {
+        if (!mounted || !containerRef.current || !rendererRef.current || !cameraRef.current) return
+        const nextWidth = Math.max(1, Math.floor(containerRef.current.clientWidth))
+        const nextHeight = Math.max(1, Math.floor(containerRef.current.clientHeight))
+        rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+        rendererRef.current.setSize(nextWidth, nextHeight, false)
+        cameraRef.current.aspect = nextWidth / nextHeight
+        cameraRef.current.updateProjectionMatrix()
+      }
+
+      resize()
+
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => resize())
+        resizeObserver.observe(containerRef.current)
+      } else {
+        onWindowResize = () => resize()
+        window.addEventListener('resize', onWindowResize)
+      }
+
       function animate() {
         if (!mounted) return
         animationFrameRef.current = requestAnimationFrame(animate)
@@ -195,6 +226,14 @@ export default function ParticleWaveLoader() {
 
     return () => {
       mounted = false
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+        resizeObserver = null
+      }
+      if (onWindowResize) {
+        window.removeEventListener('resize', onWindowResize)
+        onWindowResize = null
+      }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
@@ -205,17 +244,18 @@ export default function ParticleWaveLoader() {
       if (pointsRef.current?.material) {
         pointsRef.current.material.dispose()
       }
+      if (rendererRef.current) {
+        rendererRef.current.dispose?.()
+      }
     }
   }, [])
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <div className="w-[220px] h-[220px] relative">
+      <div ref={containerRef} className={`${className ?? 'w-[220px] h-[220px]'} relative`}>
         <canvas
           ref={canvasRef}
-          width={220}
-          height={220}
-          className="rounded-full"
+          className="w-full h-full rounded-full"
         />
       </div>
     </div>

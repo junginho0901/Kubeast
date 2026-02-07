@@ -223,15 +223,15 @@ JSON 형식으로 응답해주세요:
         
         # 시스템 메시지
         system_message = """
-	당신은 Kubernetes 클러스터를 관리하는 AI Agent입니다.
-	사용자의 질문에 답하기 위해 필요한 경우 Kubernetes API를 직접 호출할 수 있습니다.
-	실시간 클러스터 정보를 조회하여 정확한 답변을 제공하세요.
+    당신은 Kubernetes 클러스터를 관리하는 AI Agent입니다.
+    사용자의 질문에 답하기 위해 필요한 경우 Kubernetes API를 직접 호출할 수 있습니다.
+    실시간 클러스터 정보를 조회하여 정확한 답변을 제공하세요.
 
-	중요: 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
-	사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-	먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 모든 네임스페이스에서 후보를 찾고
-	그 결과의 `namespace`/`name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
-	"""
+    중요: 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
+    사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
+    먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 모든 네임스페이스에서 후보를 찾고
+    그 결과의 `namespace`/`name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
+    """
         
         # 메시지 변환
         messages = [{"role": "system", "content": system_message}]
@@ -625,12 +625,13 @@ JSON 형식으로 응답해주세요:
             draft_plan = observations.get("action_plan_md", "").strip()
 
             prompt = f"""
-아래는 Kubernetes 네임스페이스의 관측 데이터(표)입니다. 이 표를 근거로 최적화 제안을 작성하세요.
+    아래는 Kubernetes 네임스페이스의 관측 데이터(표)입니다. 이 표를 근거로 최적화 제안을 작성하세요.
 
-필수:
-- 제안에 반드시 표의 리소스명/수치(util, request/limit, avg usage 등)를 인용해서 근거를 달아주세요.
-- 표에 없는 내용은 "추가 확인 필요"로 처리하고 추측하지 마세요.
-- 아래 'Draft (rules-based)'에 있는 수치/추천값이 있다면 **수치를 변경하지 말고** 문장/구조만 다듬어 주세요.
+    필수:
+    - 제안에 반드시 표의 리소스명/수치(util, request/limit, avg usage 등)를 인용해서 근거를 달아주세요.
+    - 표의 `usage`는 metrics-server 스냅샷(현재값)이며, 표의 `usage` 값은 파드별 스냅샷을 deployment 단위로 평균 낸 값입니다. `req/lim`은 컨테이너별 합(누락 시 과소추정)일 수 있습니다. 누락/불일치가 보이면 숫자 추천을 단정하지 말고 "먼저 YAML 확인/누락 보완"을 제안하세요.
+    - 표에 없는 내용은 "추가 확인 필요"로 처리하고 추측하지 마세요.
+    - 아래 'Draft (rules-based)'에 있는 수치/추천값이 있다면 **수치를 변경하지 말고** 문장/구조만 다듬어 주세요.
 
 Observed data (markdown):
 {observations["observations_md"]}
@@ -857,13 +858,41 @@ Draft (rules-based, keep numbers unchanged):
                 key = f"{item.get('namespace')}/{item.get('name')}"
                 metrics_by_pod[key] = item
 
+        metrics_window_sample: Optional[str] = None
+        metrics_timestamp_max: Optional[str] = None
+        if pod_metrics:
+            windows = [str(m.get("window")) for m in pod_metrics if m.get("window")]
+            if windows:
+                # "30s" 같은 값이 대부분이므로 샘플 1개만 표기(가장 흔한 값 우선)
+                counts: Dict[str, int] = {}
+                for w in windows:
+                    counts[w] = counts.get(w, 0) + 1
+                metrics_window_sample = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[0][0]
+
+            timestamps = [str(m.get("timestamp")) for m in pod_metrics if m.get("timestamp")]
+            if timestamps:
+                # ISO8601이면 max timestamp를 표기(파싱 실패 시 문자열 max로 fallback)
+                try:
+                    from datetime import datetime
+
+                    parsed = []
+                    for ts in timestamps:
+                        parsed.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
+                    metrics_timestamp_max = max(parsed).isoformat()
+                except Exception:
+                    metrics_timestamp_max = max(timestamps)
+
         def pod_resource_totals(pod: Dict):
             cpu_req_m_vals: List[int] = []
             cpu_lim_m_vals: List[int] = []
             mem_req_mi_vals: List[int] = []
             mem_lim_mi_vals: List[int] = []
-            missing_req = 0
-            missing_lim = 0
+            missing_req_any = 0
+            missing_lim_any = 0
+            missing_cpu_req = 0
+            missing_mem_req = 0
+            missing_cpu_lim = 0
+            missing_mem_lim = 0
 
             for c in (pod.get("containers") or []):
                 req = c.get("requests") or {}
@@ -873,10 +902,19 @@ Draft (rules-based, keep numbers unchanged):
                 cpu_lim_m = self._parse_cpu_quantity_to_m(lim.get("cpu"))
                 mem_lim_mi = self._parse_memory_quantity_to_mi(lim.get("memory"))
 
-                if cpu_req_m is None and mem_req_mi is None:
-                    missing_req += 1
-                if cpu_lim_m is None and mem_lim_mi is None:
-                    missing_lim += 1
+                if cpu_req_m is None:
+                    missing_cpu_req += 1
+                if mem_req_mi is None:
+                    missing_mem_req += 1
+                if cpu_lim_m is None:
+                    missing_cpu_lim += 1
+                if mem_lim_mi is None:
+                    missing_mem_lim += 1
+
+                if cpu_req_m is None or mem_req_mi is None:
+                    missing_req_any += 1
+                if cpu_lim_m is None or mem_lim_mi is None:
+                    missing_lim_any += 1
 
                 if cpu_req_m is not None:
                     cpu_req_m_vals.append(cpu_req_m)
@@ -893,8 +931,12 @@ Draft (rules-based, keep numbers unchanged):
                 "mem_request_mi": sum(mem_req_mi_vals) if mem_req_mi_vals else None,
                 "mem_limit_mi": sum(mem_lim_mi_vals) if mem_lim_mi_vals else None,
                 "containers_total": len(pod.get("containers") or []),
-                "containers_missing_requests": missing_req,
-                "containers_missing_limits": missing_lim,
+                "containers_missing_requests": missing_req_any,
+                "containers_missing_limits": missing_lim_any,
+                "containers_missing_cpu_requests": missing_cpu_req,
+                "containers_missing_mem_requests": missing_mem_req,
+                "containers_missing_cpu_limits": missing_cpu_lim,
+                "containers_missing_mem_limits": missing_mem_lim,
             }
 
         def pod_usage(pod: Dict):
@@ -942,6 +984,10 @@ Draft (rules-based, keep numbers unchanged):
             per_pod_mem_lim = []
             missing_req_containers = 0
             missing_lim_containers = 0
+            missing_cpu_req_containers = 0
+            missing_mem_req_containers = 0
+            missing_cpu_lim_containers = 0
+            missing_mem_lim_containers = 0
             containers_total = 0
 
             cpu_usage_vals = []
@@ -954,6 +1000,10 @@ Draft (rules-based, keep numbers unchanged):
                 containers_total += totals["containers_total"]
                 missing_req_containers += totals["containers_missing_requests"]
                 missing_lim_containers += totals["containers_missing_limits"]
+                missing_cpu_req_containers += totals.get("containers_missing_cpu_requests", 0) or 0
+                missing_mem_req_containers += totals.get("containers_missing_mem_requests", 0) or 0
+                missing_cpu_lim_containers += totals.get("containers_missing_cpu_limits", 0) or 0
+                missing_mem_lim_containers += totals.get("containers_missing_mem_limits", 0) or 0
                 if totals["cpu_request_m"] is not None:
                     per_pod_cpu_req.append(totals["cpu_request_m"])
                 if totals["cpu_limit_m"] is not None:
@@ -997,10 +1047,10 @@ Draft (rules-based, keep numbers unchanged):
             mem_usage_avg = int(sum(mem_usage_vals) / len(mem_usage_vals)) if mem_usage_vals else None
 
             cpu_util = None
-            if cpu_req_med and cpu_usage_avg is not None and cpu_req_med > 0:
+            if missing_cpu_req_containers == 0 and cpu_req_med and cpu_usage_avg is not None and cpu_req_med > 0:
                 cpu_util = round(cpu_usage_avg / cpu_req_med * 100, 1)
             mem_util = None
-            if mem_req_med and mem_usage_avg is not None and mem_req_med > 0:
+            if missing_mem_req_containers == 0 and mem_req_med and mem_usage_avg is not None and mem_req_med > 0:
                 mem_util = round(mem_usage_avg / mem_req_med * 100, 1)
 
             image_flag = "unknown"
@@ -1033,6 +1083,10 @@ Draft (rules-based, keep numbers unchanged):
                     "containers_total": containers_total,
                     "missing_req_containers": missing_req_containers,
                     "missing_lim_containers": missing_lim_containers,
+                    "missing_cpu_req_containers": missing_cpu_req_containers,
+                    "missing_mem_req_containers": missing_mem_req_containers,
+                    "missing_cpu_lim_containers": missing_cpu_lim_containers,
+                    "missing_mem_lim_containers": missing_mem_lim_containers,
                     "image_flag": image_flag,
                     "selector": dep.get("selector") or {},
                     "reason_counts": reason_counts,
@@ -1061,6 +1115,22 @@ Draft (rules-based, keep numbers unchanged):
         ]
         if missing_resources:
             findings.append(f"- requests/limits 누락 컨테이너가 있는 deployment: {len(missing_resources)} 예: {sample(missing_resources)}")
+
+        missing_cpu_req = [r["name"] for r in deployment_rows if (r.get("missing_cpu_req_containers") or 0) > 0]
+        if missing_cpu_req:
+            findings.append(f"- cpu requests 누락 컨테이너(부분 누락 포함): {len(missing_cpu_req)} 예: {sample(missing_cpu_req)}")
+
+        missing_mem_req = [r["name"] for r in deployment_rows if (r.get("missing_mem_req_containers") or 0) > 0]
+        if missing_mem_req:
+            findings.append(f"- memory requests 누락 컨테이너(부분 누락 포함): {len(missing_mem_req)} 예: {sample(missing_mem_req)}")
+
+        missing_cpu_lim = [r["name"] for r in deployment_rows if (r.get("missing_cpu_lim_containers") or 0) > 0]
+        if missing_cpu_lim:
+            findings.append(f"- cpu limits 누락 컨테이너(부분 누락 포함): {len(missing_cpu_lim)} 예: {sample(missing_cpu_lim)}")
+
+        missing_mem_lim = [r["name"] for r in deployment_rows if (r.get("missing_mem_lim_containers") or 0) > 0]
+        if missing_mem_lim:
+            findings.append(f"- memory limits 누락 컨테이너(부분 누락 포함): {len(missing_mem_lim)} 예: {sample(missing_mem_lim)}")
 
         image_issues = [r["name"] for r in deployment_rows if r.get("image_flag") in ("latest", "untagged")]
         if image_issues:
@@ -1151,6 +1221,13 @@ Draft (rules-based, keep numbers unchanged):
             header_lines.append(f"- Pod metrics: error={pod_metrics_error}")
         else:
             header_lines.append(f"- Pod metrics: {'available' if pod_metrics is not None else 'unavailable'}")
+        header_lines.append(
+            "- Note: `usage`는 metrics-server **스냅샷(현재값)** 이며, 표의 `usage` 값은 **파드별 스냅샷을 deployment 단위로 평균** 낸 값입니다. `req/lim`은 컨테이너별 합(누락 컨테이너가 있으면 과소추정)입니다."
+        )
+        if metrics_window_sample or metrics_timestamp_max:
+            header_lines.append(
+                f"- Pod metrics snapshot info: window={metrics_window_sample or 'N/A'}, timestamp(max)={metrics_timestamp_max or 'N/A'}"
+            )
         if events_error:
             header_lines.append(f"- Events: error={events_error}")
         elif event_lines:
@@ -1159,7 +1236,7 @@ Draft (rules-based, keep numbers unchanged):
         table_lines = [
             "",
             "### Deployments summary",
-            "| deployment | replicas(ready) | pods(notReady) | restarts(total/max) | cpu req/lim (m) | cpu usage avg (m) | mem req/lim (Mi) | mem usage avg (Mi) | util cpu/mem | image |",
+            "| deployment | replicas(ready) | pods(notReady) | restarts(total/max) | cpu req/lim (m, per-pod) | cpu usage (m, pods avg snapshot) | mem req/lim (Mi, per-pod) | mem usage (Mi, pods avg snapshot) | util cpu/mem (vs req) | image |",
             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
         ]
         for row in deployment_rows:
@@ -1303,9 +1380,21 @@ Draft (rules-based, keep numbers unchanged):
                 lim = r.get("mem_lim_mi")
                 usage = r.get("mem_usage_mi_avg")
                 util = r.get("mem_util_pct")
+                missing_req = int(r.get("missing_mem_req_containers") or 0)
+                missing_lim = int(r.get("missing_mem_lim_containers") or 0)
                 action_lines.append(
-                    f"  - 근거: `{name}` mem usage avg={fmt_mi(usage)} vs request={fmt_mi(req)} (util≈{util}%), limit={fmt_mi(lim)}"
+                    f"  - 근거: `{name}` mem usage(pods avg snapshot)={fmt_mi(usage)} vs request={fmt_mi(req)} (util≈{util}%), limit={fmt_mi(lim)}"
                 )
+                if missing_req > 0:
+                    action_lines.append(
+                        f"  - 주의: memory requests 누락 컨테이너가 있어(util 계산이 부정확할 수 있음) 먼저 컨테이너별 requests를 채운 뒤 재평가하세요. (missing={missing_req})"
+                    )
+                    continue
+                if missing_lim > 0:
+                    action_lines.append(
+                        f"  - 주의: memory limits 누락 컨테이너가 있어(limit 합계가 과소추정일 수 있음) 먼저 컨테이너별 limits를 확인/정리하세요. (missing={missing_lim})"
+                    )
+                    continue
                 suspicious = (
                     isinstance(lim, int)
                     and isinstance(usage, int)
@@ -1314,7 +1403,7 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 if suspicious:
                     action_lines.append(
-                        "  - 주의: **표상 usage avg가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
                     )
                     continue
 
@@ -1322,7 +1411,7 @@ Draft (rules-based, keep numbers unchanged):
                 rec_lim = rec_limit_from_request(rec_req, 2.0, 128)
                 if rec_req and rec_lim:
                     action_lines.append(
-                        f"  - 권장(초안): requests.memory≈`{fmt_mi(rec_req)}` (avg*1.5, round) / limits.memory≈`{fmt_mi(rec_lim)}` (request*2)  \n"
+                        f"  - 권장(초안): requests.memory≈`{fmt_mi(rec_req)}` (pods avg snapshot*1.5, round) / limits.memory≈`{fmt_mi(rec_lim)}` (request*2)  \n"
                         f"    - 적용 예시:\n"
                         f"      ```yaml\n"
                         f"      resources:\n"
@@ -1342,9 +1431,21 @@ Draft (rules-based, keep numbers unchanged):
                 lim = r.get("cpu_lim_m")
                 usage = r.get("cpu_usage_m_avg")
                 util = r.get("cpu_util_pct")
+                missing_req = int(r.get("missing_cpu_req_containers") or 0)
+                missing_lim = int(r.get("missing_cpu_lim_containers") or 0)
                 action_lines.append(
-                    f"  - 근거: `{name}` cpu usage avg={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%), limit={fmt_m(lim)}"
+                    f"  - 근거: `{name}` cpu usage(pods avg snapshot)={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%), limit={fmt_m(lim)}"
                 )
+                if missing_req > 0:
+                    action_lines.append(
+                        f"  - 주의: cpu requests 누락 컨테이너가 있어(util 계산이 부정확할 수 있음) 먼저 컨테이너별 requests를 채운 뒤 재평가하세요. (missing={missing_req})"
+                    )
+                    continue
+                if missing_lim > 0:
+                    action_lines.append(
+                        f"  - 주의: cpu limits 누락 컨테이너가 있어(limit 합계가 과소추정일 수 있음) 먼저 컨테이너별 limits를 확인/정리하세요. (missing={missing_lim})"
+                    )
+                    continue
                 suspicious = (
                     isinstance(lim, int)
                     and isinstance(usage, int)
@@ -1353,7 +1454,7 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 if suspicious:
                     action_lines.append(
-                        "  - 주의: **표상 usage avg가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
                     )
                     continue
 
@@ -1361,7 +1462,7 @@ Draft (rules-based, keep numbers unchanged):
                 rec_lim = rec_limit_from_request(rec_req, 2.0, 100)
                 if rec_req and rec_lim:
                     action_lines.append(
-                        f"  - 권장(초안): requests.cpu≈`{fmt_m(rec_req)}` (avg*2, round) / limits.cpu≈`{fmt_m(rec_lim)}`  \n"
+                        f"  - 권장(초안): requests.cpu≈`{fmt_m(rec_req)}` (pods avg snapshot*2, round) / limits.cpu≈`{fmt_m(rec_lim)}`  \n"
                         f"    - 적용 예시:\n"
                         f"      ```yaml\n"
                         f"      resources:\n"
@@ -1416,7 +1517,7 @@ Draft (rules-based, keep numbers unchanged):
                     continue
                 suggested = self._round_up_int(max(int((usage or 0) * 2), 50), 10) if isinstance(usage, int) else max(int(req * 0.5), 50)
                 action_lines.append(
-                    f"  - 근거: `{name}` cpu usage avg={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%)  \n"
+                    f"  - 근거: `{name}` cpu usage(pods avg snapshot)={fmt_m(usage)} vs request={fmt_m(req)} (util≈{util}%)  \n"
                     f"  - 권장(초안): requests.cpu≈`{fmt_m(suggested)}`로 낮추고 모니터링(p95 기반으로 재조정)"
                 )
 

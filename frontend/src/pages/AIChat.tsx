@@ -1315,22 +1315,29 @@ export default function AIChat() {
         </div>
 
         {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <div className="mb-4">
-              <ParticleWaveLoader />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">새 대화를 시작하세요</h2>
-            <p className="text-slate-400 mb-6">아래 질문을 클릭하거나 직접 입력하세요</p>
-            <div className="grid grid-cols-2 gap-3 w-full px-8">
-              {quickQuestions.map((question, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSend(question)}
-                  className="p-4 text-left bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
-                >
-                  {question}
-                </button>
-              ))}
+          <div className="flex-1 flex flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
+            <div className="w-full max-w-4xl flex flex-col items-center">
+              <div className="mb-6">
+                <ParticleWaveLoader className="w-[clamp(220px,24vh,360px)] h-[clamp(220px,24vh,360px)]" />
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">
+                새 대화를 시작하세요
+              </h2>
+              <p className="text-slate-400 mb-8 text-center text-sm sm:text-base">
+                아래 질문을 클릭하거나 직접 입력하세요
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 w-full px-8">
+                {quickQuestions.map((question, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(question)}
+                    className="p-4 text-left bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
