@@ -3,10 +3,12 @@ AI Service - OpenAI 통합 및 AI 기능 전담
 Port: 8001
 """
 from fastapi import FastAPI, HTTPException
+from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from app.api import router
 from app.config import settings
+from app.security import require_auth
 import uvicorn
 
 app = FastAPI(
@@ -25,7 +27,7 @@ app.add_middleware(
 )
 
 # API 라우터 등록
-app.include_router(router, prefix="/api/v1/ai")
+app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_auth)])
 
 
 @app.get("/")

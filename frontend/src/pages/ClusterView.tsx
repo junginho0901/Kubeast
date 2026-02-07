@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { getAuthHeaders } from '@/services/auth'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { 
   Server, 
@@ -265,7 +266,8 @@ export default function ClusterView() {
     queryFn: async () => {
       if (!selectedPod) return ''
       const response = await fetch(
-        `/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/yaml`
+        `/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/yaml`,
+        { headers: { ...getAuthHeaders() } }
       )
       const data = await response.json()
       return data.yaml
@@ -334,7 +336,8 @@ export default function ClusterView() {
   const handlePodClick = async (pod: any) => {
     // Pod 상세 정보 조회
     const response = await fetch(
-      `/api/v1/cluster/namespaces/${pod.namespace}/pods/${pod.name}/describe`
+      `/api/v1/cluster/namespaces/${pod.namespace}/pods/${pod.name}/describe`,
+      { headers: { ...getAuthHeaders() } }
     )
     const detail = await response.json()
     console.log('Pod detail response:', detail) // 디버깅용

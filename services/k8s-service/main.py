@@ -27,6 +27,47 @@ app.add_middleware(
 app.include_router(router, prefix="/api/v1")
 
 
+@app.middleware("http")
+async def auth_middleware(request, call_next):
+    # 헬스체크/프론트 리소스는 제외
+    path = request.url.path
+    if path in ["/", "/health"] or not path.startswith("/api/"):
+        return await call_next(request)
+
+    # CORS preflight 허용
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    # WebSocket 경로는 ASGI websocket 타입으로 들어오므로 여기서 처리하지 않음
+    auth = request.headers.get("Authorization", "")
+    if not auth:
+        from starlette.responses import JSONResponse
+
+        return JSONResponse({"detail": "Missing Authorization header"}, status_code=401)
+
+    parts = auth.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
+        from starlette.responses import JSONResponse
+
+        return JSONResponse({"detail": "Invalid Authorization header"}, status_code=401)
+
+    token = parts[1].strip()
+    try:
+        from app.security import decode_access_token
+
+        payload = decode_access_token(token)
+        request.state.member_id = payload.member_id
+        request.state.role = payload.role
+    except Exception as e:
+        from starlette.responses import JSONResponse
+
+        detail = getattr(e, "detail", "Invalid token")
+        status = getattr(e, "status_code", 401)
+        return JSONResponse({"detail": detail}, status_code=status)
+
+    return await call_next(request)
+
+
 @app.get("/")
 async def root():
     """헬스 체크"""
