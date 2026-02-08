@@ -92,7 +92,7 @@ export default function Layout() {
             })}
           </nav>
 
-          <div className="px-6 py-4 border-t border-slate-700">
+          <div className="px-6 py-4">
             <Link
               to="/account"
               className="block rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 hover:bg-slate-700/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600"
@@ -113,7 +113,8 @@ export default function Layout() {
               로그아웃
             </button>
 
-            <div className="mt-4 pt-3 border-t border-slate-700 flex items-center gap-2 text-sm text-slate-400">
+            <div className="-mx-6 mt-4 border-t border-slate-700" />
+            <div className="mt-3 flex items-center gap-2 text-sm text-slate-400">
               {clusterStatus === 'checking' ? (
                 <>
                   <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
