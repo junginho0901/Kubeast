@@ -75,10 +75,6 @@ export default function Login() {
             : '새 계정을 만들고 바로 로그인합니다.'}
         </p>
 
-        <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
-          기본 관리자: <span className="text-white">admin@local</span> / <span className="text-white">admin</span>
-        </div>
-
         <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
           {mode === 'register' && (
             <div>
