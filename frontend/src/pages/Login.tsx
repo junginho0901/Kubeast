@@ -66,9 +66,6 @@ export default function Login() {
               <h1 className="text-4xl font-bold tracking-tight text-white">
                 K8s DevOps Assistant
               </h1>
-              <p className="text-slate-300 leading-relaxed">
-                클러스터 상태 확인, 리소스 모니터링, 로그/트러블슈팅을 한 곳에서 처리하는 운영 도구입니다.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -102,9 +99,6 @@ export default function Login() {
               </div>
             </div>
 
-            <p className="text-xs text-slate-500">
-              계정은 인증 서비스에서 관리되며, 로그인 후 <span className="text-slate-300">계정</span>에서 비밀번호를 변경할 수 있습니다.
-            </p>
           </div>
 
           <div className="w-full">
@@ -188,9 +182,6 @@ export default function Login() {
               </form>
             </div>
 
-            <p className="mt-4 text-center text-xs text-slate-500">
-              로그인 후 <span className="text-slate-300">계정</span>에서 내 정보 확인 및 비밀번호 변경이 가능합니다.
-            </p>
           </div>
         </div>
       </div>
