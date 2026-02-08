@@ -184,6 +184,47 @@ class DatabaseService:
             await db.refresh(audit)
             return target, audit
 
+    async def reset_user_password_with_audit(
+        self,
+        *,
+        actor_user_id: str,
+        target_user_id: str,
+        password_hash: str,
+        request_ip: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        request_id: Optional[str] = None,
+        path: Optional[str] = None,
+    ) -> Tuple[Optional[User], Optional[AuditLog]]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            actor = (await db.execute(select(User).where(User.id == actor_user_id))).scalar_one_or_none()
+            target = (await db.execute(select(User).where(User.id == target_user_id))).scalar_one_or_none()
+            if not target:
+                return None, None
+
+            target.password_hash = password_hash
+            target.updated_at = datetime.utcnow()
+
+            audit = AuditLog(
+                action="user.password.reset",
+                actor_user_id=actor_user_id,
+                actor_email=getattr(actor, "email", None),
+                target_user_id=target_user_id,
+                target_email=getattr(target, "email", None),
+                before={},
+                after={"password_reset": True},
+                request_ip=request_ip,
+                user_agent=user_agent,
+                request_id=request_id,
+                path=path,
+            )
+            db.add(audit)
+            await db.commit()
+            await db.refresh(target)
+            await db.refresh(audit)
+            return target, audit
+
     async def ensure_bootstrap_admin(self):
         from app.config import settings
         from app.security import hash_password

@@ -229,3 +229,62 @@ async def admin_update_user_role(
         created_at=updated.created_at,
         updated_at=updated.updated_at,
     )
+
+
+@router.post("/admin/users/{user_id}/reset-password", response_model=UserResponse)
+async def admin_reset_user_password(
+    user_id: str,
+    http_request: Request,
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
+    payload: TokenPayload = Depends(require_auth),
+):
+    _require_admin(payload)
+    db = await get_db_service()
+
+    forwarded_for = http_request.headers.get("X-Forwarded-For")
+    request_ip = (forwarded_for.split(",")[0].strip() if forwarded_for else None) or (
+        http_request.client.host if http_request.client else None
+    )
+    user_agent = http_request.headers.get("User-Agent")
+    path = str(http_request.url.path)
+
+    updated, audit_row = await db.reset_user_password_with_audit(
+        actor_user_id=payload.user_id,
+        target_user_id=user_id,
+        password_hash=hash_password("1111"),
+        request_ip=request_ip,
+        user_agent=user_agent,
+        request_id=x_request_id,
+        path=path,
+    )
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        audit_logger.info(
+            json.dumps(
+                {
+                    "action": "user.password.reset",
+                    "actor_user_id": payload.user_id,
+                    "target_user_id": user_id,
+                    "request_ip": request_ip,
+                    "user_agent": user_agent,
+                    "request_id": x_request_id,
+                    "path": path,
+                    "audit_id": getattr(audit_row, "id", None),
+                },
+                ensure_ascii=False,
+            )
+        )
+    except Exception:
+        pass
+
+    return UserResponse(
+        id=updated.id,
+        name=updated.name,
+        email=updated.email,
+        role=updated.role,
+        created_at=updated.created_at,
+        updated_at=updated.updated_at,
+    )

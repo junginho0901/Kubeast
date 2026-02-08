@@ -264,6 +264,11 @@ export const api = {
     return data
   },
 
+  adminResetUserPassword: async (userId: string): Promise<Member> => {
+    const { data } = await client.post(`/auth/admin/users/${userId}/reset-password`)
+    return data
+  },
+
   // Members
   getMembers: async (params?: { limit?: number; offset?: number }): Promise<Member[]> => {
     const { data } = await client.get('/members', { params })
