@@ -84,6 +84,7 @@ export default function AdminUsers() {
               <th className="px-4 py-3">이름</th>
               <th className="px-4 py-3">이메일</th>
               <th className="px-4 py-3">Role</th>
+              <th className="px-4 py-3">비밀번호</th>
             </tr>
           </thead>
           <tbody>
@@ -97,78 +98,77 @@ export default function AdminUsers() {
                   <td className="px-4 py-3">{u.name}</td>
                   <td className="px-4 py-3">{u.email ?? '-'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="relative inline-block"
-                        ref={(el) => {
-                          if (isOpen) roleDropdownRef.current = el
-                        }}
-                      >
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={() => setOpenRoleDropdownUserId((prev) => (prev === u.id ? null : u.id))}
-                          className="w-32 inline-flex items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
-                          aria-haspopup="menu"
-                          aria-expanded={isOpen}
-                        >
-                          <span className="truncate">{currentRole === 'admin' ? 'ADMIN' : 'USER'}</span>
-                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {isOpen && (
-                          <div
-                            role="menu"
-                            className="absolute right-0 mt-2 w-32 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-50 overflow-hidden"
-                          >
-                            {(['user', 'admin'] as const).map((role) => {
-                              const isSelected = currentRole === role
-                              return (
-                                <button
-                                  key={role}
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setOpenRoleDropdownUserId(null)
-                                    if (role === currentRole) return
-                                    setRoleDrafts((prev) => ({ ...prev, [u.id]: role }))
-                                    updateRoleMutation.mutate({ userId: u.id, role })
-                                  }}
-                                  className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-800 transition-colors ${
-                                    isSelected ? 'bg-slate-800 text-white' : 'text-slate-200'
-                                  }`}
-                                >
-                                  <span className="flex-1 text-left">{role === 'admin' ? 'ADMIN' : 'USER'}</span>
-                                  {isSelected && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
+                    <div
+                      className="relative inline-block"
+                      ref={(el) => {
+                        if (isOpen) roleDropdownRef.current = el
+                      }}
+                    >
                       <button
                         type="button"
-                        disabled={isResetting}
-                        onClick={() => {
-                          const ok = window.confirm(`비밀번호를 1111로 초기화할까요?\n\n대상: ${u.email ?? u.name}`)
-                          if (!ok) return
-                          resetPasswordMutation.mutate({ userId: u.id })
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/40 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
-                        title="비밀번호를 1111로 초기화"
+                        disabled={isUpdating}
+                        onClick={() => setOpenRoleDropdownUserId((prev) => (prev === u.id ? null : u.id))}
+                        className="w-32 inline-flex items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                        aria-haspopup="menu"
+                        aria-expanded={isOpen}
                       >
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{isResetting ? '초기화중' : 'PW 초기화'}</span>
+                        <span className="truncate">{currentRole === 'admin' ? 'ADMIN' : 'USER'}</span>
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                       </button>
+
+                      {isOpen && (
+                        <div
+                          role="menu"
+                          className="absolute right-0 mt-2 w-32 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-50 overflow-hidden"
+                        >
+                          {(['user', 'admin'] as const).map((role) => {
+                            const isSelected = currentRole === role
+                            return (
+                              <button
+                                key={role}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenRoleDropdownUserId(null)
+                                  if (role === currentRole) return
+                                  setRoleDrafts((prev) => ({ ...prev, [u.id]: role }))
+                                  updateRoleMutation.mutate({ userId: u.id, role })
+                                }}
+                                className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-800 transition-colors ${
+                                  isSelected ? 'bg-slate-800 text-white' : 'text-slate-200'
+                                }`}
+                              >
+                                <span className="flex-1 text-left">{role === 'admin' ? 'ADMIN' : 'USER'}</span>
+                                {isSelected && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      disabled={isResetting}
+                      onClick={() => {
+                        const ok = window.confirm(`비밀번호를 1111로 초기화할까요?\n\n대상: ${u.email ?? u.name}`)
+                        if (!ok) return
+                        resetPasswordMutation.mutate({ userId: u.id })
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/40 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                      title="비밀번호를 1111로 초기화"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{isResetting ? '초기화중' : 'PW 초기화'}</span>
+                    </button>
                   </td>
                 </tr>
               )
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-slate-300" colSpan={3}>
+                <td className="px-4 py-4 text-slate-300" colSpan={4}>
                   유저가 없습니다.
                 </td>
               </tr>
