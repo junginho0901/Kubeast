@@ -112,18 +112,16 @@ export default function Layout() {
               )}
             </div>
 
-            <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2">
-              <Link
-                to="/account"
-                className="block rounded-md focus:outline-none focus:ring-2 focus:ring-primary-600"
-                title="내 정보 / 비밀번호 변경"
-              >
-                <div className="text-[11px] text-slate-400">계정</div>
-                <div className="mt-0.5 truncate text-sm text-white">{me?.name ?? '...'}</div>
-                <div className="truncate text-xs text-slate-400">{me?.email ?? ''}</div>
-                <div className="mt-1 text-[11px] text-slate-500">내 정보 · 비밀번호 변경</div>
-              </Link>
-            </div>
+            <Link
+              to="/account"
+              className="mt-3 block rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 hover:bg-slate-700/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600"
+              title="내 정보 / 비밀번호 변경"
+            >
+              <div className="text-[11px] text-slate-400">계정</div>
+              <div className="mt-0.5 truncate text-sm text-white">{me?.name ?? '...'}</div>
+              <div className="truncate text-xs text-slate-400">{me?.email ?? ''}</div>
+              <div className="mt-1 text-[11px] text-slate-500">내 정보 · 비밀번호 변경</div>
+            </Link>
 
             <button
               type="button"
