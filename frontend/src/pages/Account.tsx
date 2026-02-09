@@ -78,7 +78,7 @@ export default function Account() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card h-full flex flex-col">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-cyan-500/10">
               <KeyRound className="w-6 h-6 text-cyan-400" />
@@ -101,50 +101,54 @@ export default function Account() {
             </div>
           )}
 
-          <form onSubmit={onSubmit} className="space-y-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">현재 비밀번호</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </div>
+          <form onSubmit={onSubmit} className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col justify-between gap-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">현재 비밀번호</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">새 비밀번호</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
-                placeholder="최소 4자"
-                autoComplete="new-password"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">새 비밀번호</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                    placeholder="최소 4자"
+                    autoComplete="new-password"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">새 비밀번호 확인</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
-                placeholder="다시 입력"
-                autoComplete="new-password"
-              />
-            </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">새 비밀번호 확인</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                    placeholder="다시 입력"
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
 
-            <button
-              type="submit"
-              disabled={isBusy}
-              className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isBusy ? '변경 중...' : '비밀번호 변경'}
-            </button>
+              <button
+                type="submit"
+                disabled={isBusy}
+                className="w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBusy ? '변경 중...' : '비밀번호 변경'}
+              </button>
+            </div>
           </form>
         </div>
       </div>
