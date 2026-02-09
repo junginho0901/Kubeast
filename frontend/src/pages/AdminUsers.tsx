@@ -4,6 +4,7 @@ import { CheckCircle, ChevronDown, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearAccessToken } from '@/services/auth'
+import { ModalOverlay } from '@/components/ModalOverlay'
 
 export default function AdminUsers() {
   const navigate = useNavigate()
@@ -13,12 +14,14 @@ export default function AdminUsers() {
   const [roleDrafts, setRoleDrafts] = useState<Record<string, 'admin' | 'user'>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
+  const [reauthModalOpen, setReauthModalOpen] = useState(false)
 
   const { data: me } = useQuery({
     queryKey: ['me'],
     queryFn: api.me,
     staleTime: 30000,
     retry: false,
+    enabled: !reauthModalOpen,
   })
 
   const { data: users, isLoading, isError } = useQuery({
@@ -26,20 +29,20 @@ export default function AdminUsers() {
     queryFn: () => api.adminListUsers({ limit, offset }),
     staleTime: 5000,
     retry: false,
+    enabled: !reauthModalOpen,
   })
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: 'admin' | 'user' }) => api.adminUpdateUserRole(userId, role),
     onSuccess: (_data, vars) => {
+      // 본인 권한을 admin -> user 로 내린 경우: 안내 모달을 띄우고, 확인 시 로그아웃 + 재로그인 유도
+      if (me?.id && vars.userId === me.id && vars.role !== 'admin') {
+        setReauthModalOpen(true)
+        return
+      }
+
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['me'] })
-
-      // 본인 권한을 admin -> user 로 내린 경우: 즉시 로그아웃시키고 재로그인 유도
-      if (me?.id && vars.userId === me.id && vars.role !== 'admin') {
-        clearAccessToken()
-        queryClient.clear()
-        navigate('/login', { replace: true })
-      }
     },
     onError: (_err, vars) => {
       // 실패 시 서버 값으로 되돌리기(다음 refetch에 맞춤)
@@ -93,6 +96,7 @@ export default function AdminUsers() {
   }
 
   const rows: Member[] = Array.isArray(users) ? users : []
+  const isBlocked = reauthModalOpen
 
   return (
     <div className="space-y-6">
@@ -133,7 +137,7 @@ export default function AdminUsers() {
                     >
                       <button
                         type="button"
-                        disabled={isUpdating}
+                        disabled={isUpdating || isBlocked}
                         onClick={() => setOpenRoleDropdownUserId((prev) => (prev === u.id ? null : u.id))}
                         className="w-32 inline-flex items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                         aria-haspopup="menu"
@@ -177,7 +181,7 @@ export default function AdminUsers() {
                   <td className="px-4 py-3">
                     <button
                       type="button"
-                      disabled={isResetting}
+                      disabled={isResetting || isBlocked}
                       onClick={() => {
                         const ok = window.confirm(`비밀번호를 1111로 초기화할까요?\n\n대상: ${u.email ?? u.name}`)
                         if (!ok) return
@@ -193,7 +197,7 @@ export default function AdminUsers() {
                   <td className="px-4 py-3">
                     <button
                       type="button"
-                      disabled={isDeleting || isSelf}
+                      disabled={isDeleting || isSelf || isBlocked}
                       onClick={() => {
                         const ok = window.confirm(`유저를 삭제할까요?\n\n대상: ${u.email ?? u.name}\n\n* 삭제하면 복구가 어렵습니다.`)
                         if (!ok) return
@@ -219,6 +223,38 @@ export default function AdminUsers() {
           </tbody>
         </table>
       </div>
+
+      {reauthModalOpen && (
+        <ModalOverlay>
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="재로그인 필요"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-white">권한이 변경되었습니다</h2>
+            <p className="mt-2 text-sm text-slate-300">
+              보안을 위해 다시 로그인해야 합니다. 확인을 누르면 로그인 화면으로 이동합니다.
+            </p>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  clearAccessToken()
+                  queryClient.clear()
+                  navigate('/login', { replace: true })
+                }}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
     </div>
   )
 }
