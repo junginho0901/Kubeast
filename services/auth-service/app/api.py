@@ -37,6 +37,8 @@ class UserResponse(BaseModel):
     id: str
     name: str
     email: str
+    hq: Optional[str] = None
+    team: Optional[str] = None
     role: str
     created_at: datetime
     updated_at: datetime
@@ -46,6 +48,8 @@ class RegisterRequest(BaseModel):
     name: str
     email: str
     password: str
+    hq: Optional[str] = None
+    team: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -91,6 +95,9 @@ async def register(request: RegisterRequest):
     if existing:
         raise HTTPException(status_code=409, detail="Email already exists")
 
+    hq = (request.hq or "").strip() or None
+    team = (request.team or "").strip() or None
+
     user_id = str(uuid.uuid4())
     user = await db.create_user(
         user_id=user_id,
@@ -98,12 +105,16 @@ async def register(request: RegisterRequest):
         email=email,
         password_hash=hash_password(request.password),
         role="user",
+        hq=hq,
+        team=team,
     )
 
     return UserResponse(
         id=user.id,
         name=user.name,
         email=user.email,
+        hq=getattr(user, "hq", None),
+        team=getattr(user, "team", None),
         role=user.role,
         created_at=user.created_at,
         updated_at=user.updated_at,
@@ -128,6 +139,8 @@ async def login(request: LoginRequest):
             id=user.id,
             name=user.name,
             email=user.email,
+            hq=getattr(user, "hq", None),
+            team=getattr(user, "team", None),
             role=user.role,
             created_at=user.created_at,
             updated_at=user.updated_at,
@@ -145,6 +158,8 @@ async def me(payload: TokenPayload = Depends(require_auth)):
         id=user.id,
         name=user.name,
         email=user.email,
+        hq=getattr(user, "hq", None),
+        team=getattr(user, "team", None),
         role=user.role,
         created_at=user.created_at,
         updated_at=user.updated_at,
@@ -236,6 +251,8 @@ async def admin_list_users(
             id=u.id,
             name=u.name,
             email=u.email,
+            hq=getattr(u, "hq", None),
+            team=getattr(u, "team", None),
             role=u.role,
             created_at=u.created_at,
             updated_at=u.updated_at,
@@ -302,6 +319,8 @@ async def admin_update_user_role(
         id=updated.id,
         name=updated.name,
         email=updated.email,
+        hq=getattr(updated, "hq", None),
+        team=getattr(updated, "team", None),
         role=updated.role,
         created_at=updated.created_at,
         updated_at=updated.updated_at,
@@ -361,6 +380,8 @@ async def admin_reset_user_password(
         id=updated.id,
         name=updated.name,
         email=updated.email,
+        hq=getattr(updated, "hq", None),
+        team=getattr(updated, "team", None),
         role=updated.role,
         created_at=updated.created_at,
         updated_at=updated.updated_at,

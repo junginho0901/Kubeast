@@ -4,7 +4,7 @@ Database models and user management
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 
-from sqlalchemy import Column, String, DateTime, Integer, JSON
+from sqlalchemy import Column, String, DateTime, Integer, JSON, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
@@ -17,6 +17,8 @@ class User(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
+    hq = Column(String, nullable=True)  # 본부
+    team = Column(String, nullable=True)  # 팀
     role = Column(String, nullable=False, default="user")  # admin | user
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -59,6 +61,28 @@ class DatabaseService:
     async def init_db(self):
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await self._migrate_user_org_fields(conn)
+
+    async def _migrate_user_org_fields(self, conn):
+        """
+        Dev-friendly migration for adding new nullable columns.
+        (Avoids a full Alembic setup for now.)
+        """
+        # Prefer Postgres syntax when possible.
+        try:
+            await conn.execute(text("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS hq VARCHAR"))
+            await conn.execute(text("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS team VARCHAR"))
+            return
+        except Exception:
+            pass
+
+        # Fallback for SQLite (no IF NOT EXISTS on older versions)
+        for col in ("hq", "team"):
+            try:
+                await conn.execute(text(f"ALTER TABLE auth_users ADD COLUMN {col} VARCHAR"))
+            except Exception:
+                # Ignore if column already exists
+                pass
 
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
         async with self.async_session() as db:
@@ -74,9 +98,18 @@ class DatabaseService:
             result = await db.execute(select(User).where(User.email == email))
             return result.scalar_one_or_none()
 
-    async def create_user(self, user_id: str, name: str, email: str, password_hash: str, role: str = "user") -> User:
+    async def create_user(
+        self,
+        user_id: str,
+        name: str,
+        email: str,
+        password_hash: str,
+        role: str = "user",
+        hq: Optional[str] = None,
+        team: Optional[str] = None,
+    ) -> User:
         async with self.async_session() as db:
-            user = User(id=user_id, name=name, email=email, password_hash=password_hash, role=role)
+            user = User(id=user_id, name=name, email=email, password_hash=password_hash, role=role, hq=hq, team=team)
             db.add(user)
             await db.commit()
             await db.refresh(user)

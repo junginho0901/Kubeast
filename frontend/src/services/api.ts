@@ -183,6 +183,8 @@ export interface Member {
   id: string
   name: string
   email?: string
+  hq?: string
+  team?: string
   role: string
   created_at: string
   updated_at: string
@@ -234,7 +236,7 @@ export interface SessionDetail {
 // API Functions
 export const api = {
   // Auth
-  register: async (request: { name: string; email: string; password: string }): Promise<Member> => {
+  register: async (request: { name: string; email: string; password: string; hq?: string; team?: string }): Promise<Member> => {
     const { data } = await client.post('/auth/register', request)
     return data
   },

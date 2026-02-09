@@ -14,6 +14,8 @@ export default function Login() {
 
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
+  const [hq, setHq] = useState('')
+  const [team, setTeam] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -34,7 +36,7 @@ export default function Login() {
   })
 
   const registerMutation = useMutation({
-    mutationFn: () => api.register({ name, email, password }),
+    mutationFn: () => api.register({ name, email, password, hq, team }),
     onSuccess: async () => {
       await loginMutation.mutateAsync()
     },
@@ -151,6 +153,31 @@ export default function Login() {
                       placeholder="홍길동"
                       autoComplete="name"
                     />
+                  </div>
+                )}
+
+                {mode === 'register' && (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">본부</label>
+                      <input
+                        value={hq}
+                        onChange={(e) => setHq(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                        placeholder="예: 플랫폼"
+                        autoComplete="organization"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">팀</label>
+                      <input
+                        value={team}
+                        onChange={(e) => setTeam(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                        placeholder="예: DevOps"
+                        autoComplete="organization"
+                      />
+                    </div>
                   </div>
                 )}
 

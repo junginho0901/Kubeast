@@ -69,6 +69,10 @@ export default function Account() {
             <div className="mt-1 text-sm text-white">{me?.name ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">이메일</div>
             <div className="mt-1 text-sm text-white">{me?.email ?? '-'}</div>
+            <div className="mt-3 text-xs text-slate-400">본부</div>
+            <div className="mt-1 text-sm text-white">{me?.hq ?? '-'}</div>
+            <div className="mt-3 text-xs text-slate-400">팀</div>
+            <div className="mt-1 text-sm text-white">{me?.team ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">Role</div>
             <div className="mt-1 text-sm text-white">{me?.role ?? '-'}</div>
           </div>
@@ -147,4 +151,3 @@ export default function Account() {
     </div>
   )
 }
-
