@@ -2,8 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member } from '@/services/api'
 import { CheckCircle, ChevronDown, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { clearAccessToken } from '@/services/auth'
 
 export default function AdminUsers() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [limit] = useState(100)
   const [offset] = useState(0)
@@ -27,9 +30,16 @@ export default function AdminUsers() {
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: 'admin' | 'user' }) => api.adminUpdateUserRole(userId, role),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['me'] })
+
+      // 본인 권한을 admin -> user 로 내린 경우: 즉시 로그아웃시키고 재로그인 유도
+      if (me?.id && vars.userId === me.id && vars.role !== 'admin') {
+        clearAccessToken()
+        queryClient.clear()
+        navigate('/login', { replace: true })
+      }
     },
     onError: (_err, vars) => {
       // 실패 시 서버 값으로 되돌리기(다음 refetch에 맞춤)
