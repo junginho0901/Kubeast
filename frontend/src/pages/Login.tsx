@@ -16,6 +16,8 @@ export default function Login() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
 
   const redirectTo = useMemo(() => {
     const state = location.state as any
@@ -43,8 +45,18 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (isBusy) return
-    if (mode === 'login') loginMutation.mutate()
-    else registerMutation.mutate()
+    setFormError(null)
+
+    if (mode === 'register') {
+      if (password !== confirmPassword) {
+        setFormError('비밀번호가 일치하지 않습니다.')
+        return
+      }
+      registerMutation.mutate()
+      return
+    }
+
+    loginMutation.mutate()
   }
 
   return (
@@ -159,28 +171,53 @@ export default function Login() {
                   <input
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      setFormError(null)
+                    }}
                     className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
                     placeholder="••••••••"
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   />
                 </div>
 
-                {(loginMutation.isError || registerMutation.isError) && (
-                  <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" aria-live="polite">
-                    {mode === 'login' ? '로그인에 실패했습니다.' : '회원가입에 실패했습니다.'}
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">비밀번호 확인</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value)
+                        setFormError(null)
+                      }}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                    />
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={isBusy || !email.trim() || !password}
-                  className="w-full rounded-lg bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isBusy ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입'}
-                </button>
-              </form>
-            </div>
+                {(formError || loginMutation.isError || registerMutation.isError) && (
+                  <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" aria-live="polite">
+                    {formError ?? (mode === 'login' ? '로그인에 실패했습니다.' : '회원가입에 실패했습니다.')}
+                  </div>
+                )}
+
+              <button
+                type="submit"
+                disabled={
+                  isBusy ||
+                  !email.trim() ||
+                  !password ||
+                  (mode === 'register' && (!confirmPassword || password !== confirmPassword))
+                }
+                className="w-full rounded-lg bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBusy ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입'}
+              </button>
+            </form>
+          </div>
 
           </div>
         </div>
