@@ -146,9 +146,12 @@ export default function AIChat() {
 
   const sessionsList = useMemo(() => {
     const base = getFlattenedSessions(sessionsInfinite)
-    const pinned = Object.values(pinnedSessions)
-    const pinnedIds = new Set(pinned.map((s) => s.id))
-    return [...pinned, ...base.filter((s) => !pinnedIds.has(s.id))]
+    const baseById = new Map(base.map((s) => [s.id, s] as const))
+    // pinnedSessions는 "temp:" 세션 등 서버 목록에 아직 없는 항목을 잠깐 노출하기 위한 용도.
+    // 서버에서 동일 ID가 내려오면(=실제 세션이 존재) 서버 데이터를 우선한다.
+    const pinnedVisible = Object.values(pinnedSessions).filter((s) => isTempSessionId(s.id) || !baseById.has(s.id))
+    const pinnedIds = new Set(pinnedVisible.map((s) => s.id))
+    return [...pinnedVisible, ...base.filter((s) => !pinnedIds.has(s.id))]
   }, [pinnedSessions, sessionsInfinite])
 
   useEffect(() => {
@@ -210,7 +213,6 @@ export default function AIChat() {
         setPinnedSessions((prev) => {
           const next = { ...prev }
           delete next[ctx.optimisticId]
-          next[newSession.id] = newSession
           return next
         })
       }

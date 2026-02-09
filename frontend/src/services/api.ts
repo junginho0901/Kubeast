@@ -13,7 +13,7 @@ client.interceptors.request.use((config) => {
   config.headers = config.headers ?? {}
   const token = getAccessToken()
   if (token) {
-    ;(config.headers as any).Authorization = `Bearer ${token}`
+    (config.headers as any).Authorization = `Bearer ${token}`
   }
   return config
 })
