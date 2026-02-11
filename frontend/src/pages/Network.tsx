@@ -53,11 +53,41 @@ function podMatchesNetworkPolicy(pod: PodInfo, policy: NetworkPolicyInfo): boole
   return true
 }
 
-function selectorToInline(matchLabels: Record<string, string> | undefined | null): string {
-  const labels = matchLabels || {}
-  const entries = Object.entries(labels)
-  if (entries.length === 0) return '(all pods)'
-  return entries.map(([k, v]) => `${k}=${v}`).join(', ')
+function selectorToInline(
+  selector:
+    | {
+        match_labels: Record<string, string>
+        match_expressions?: Array<{
+          key?: string | null
+          operator?: string | null
+          values?: string[] | null
+        }>
+      }
+    | undefined
+    | null,
+  emptyMeaning: string
+): string {
+  const labels = selector?.match_labels || {}
+  const expressions = selector?.match_expressions || []
+
+  const labelEntries = Object.entries(labels)
+  const expressionEntries = expressions
+    .map((e) => {
+      const key = e.key ?? ''
+      const op = e.operator ?? ''
+      const values = Array.isArray(e.values) ? e.values.join(',') : ''
+      if (!key && !op) return null
+      if (values) return `${key} ${op} (${values})`
+      return `${key} ${op}`.trim()
+    })
+    .filter(Boolean) as string[]
+
+  if (labelEntries.length === 0 && expressionEntries.length === 0) return emptyMeaning
+
+  const parts: string[] = []
+  if (labelEntries.length > 0) parts.push(labelEntries.map(([k, v]) => `${k}=${v}`).join(', '))
+  if (expressionEntries.length > 0) parts.push(expressionEntries.join(', '))
+  return parts.join(' · ')
 }
 
 function formatPeer(peer: any): string {
@@ -66,8 +96,8 @@ function formatPeer(peer: any): string {
     const except = Array.isArray(peer.ip_block.except) && peer.ip_block.except.length > 0 ? ` except=${peer.ip_block.except.join(',')}` : ''
     return `ipBlock ${peer.ip_block.cidr}${except}`
   }
-  const ns = peer.namespace_selector?.match_labels ? selectorToInline(peer.namespace_selector.match_labels) : null
-  const pod = peer.pod_selector?.match_labels ? selectorToInline(peer.pod_selector.match_labels) : null
+  const ns = peer.namespace_selector ? selectorToInline(peer.namespace_selector, 'all namespaces') : null
+  const pod = peer.pod_selector ? selectorToInline(peer.pod_selector, 'all pods') : null
   if (ns && pod) return `nsSel(${ns}) podSel(${pod})`
   if (ns) return `nsSel(${ns})`
   if (pod) return `podSel(${pod})`
@@ -671,11 +701,7 @@ export default function NetworkPage() {
                           </div>
                           <div className="mt-2 text-[11px] text-slate-400">
                             selector:{' '}
-                            {Object.keys(p.pod_selector?.match_labels || {}).length > 0
-                              ? Object.entries(p.pod_selector.match_labels)
-                                  .map(([k, v]) => `${k}=${v}`)
-                                  .join(', ')
-                              : '(all pods)'}
+                            {selectorToInline(p.pod_selector as any, 'all pods')}
                           </div>
 
                           {(p.ingress && p.ingress.length > 0) || p.default_deny_ingress ? (
