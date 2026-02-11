@@ -2,13 +2,17 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type EndpointInfo, type IngressDetail, type NetworkPolicyInfo, type PodInfo, type ServiceInfo } from '@/services/api'
-import { Network, RefreshCw, Search, Server, Shield, Waypoints } from 'lucide-react'
+import { AlertTriangle, Network, RefreshCw, Search, Server, Shield, Waypoints } from 'lucide-react'
 
 function buildLabelSelector(selector: Record<string, string> | undefined | null): string | undefined {
   if (!selector) return undefined
   const entries = Object.entries(selector).filter(([k, v]) => k && v)
   if (entries.length === 0) return undefined
   return entries.map(([k, v]) => `${k}=${v}`).join(',')
+}
+
+function isNumeric(value: string): boolean {
+  return /^[0-9]+$/.test(value)
 }
 
 function podMatchesNetworkPolicy(pod: PodInfo, policy: NetworkPolicyInfo): boolean {
@@ -325,6 +329,120 @@ export default function NetworkPage() {
     }
   }, [selectedService, endpoints, endpointSlices, ingresses, networkPolicies, podsForService])
 
+  const heuristics = useMemo(() => {
+    if (!selectedService) return []
+
+    const hasSelector = Object.keys(selectedService.selector || {}).length > 0
+    // ExternalName has no endpoints by design
+    if (selectedService.type === 'ExternalName') return []
+
+    const endpoint = related.endpoints
+    const endpointTotal = endpoint ? (endpoint.ready_count || 0) + (endpoint.not_ready_count || 0) : 0
+    const endpointReady = endpoint ? (endpoint.ready_count || 0) : 0
+
+    const slices = related.endpointSlices || []
+    const sliceTotal = slices.reduce((sum, s) => sum + (s.endpoints_total || 0), 0)
+    const sliceReady = slices.reduce((sum, s) => sum + (s.endpoints_ready || 0), 0)
+
+    const warnings: Array<{ level: 'error' | 'warn'; title: string; detail?: string }> = []
+
+    // Selector exists but endpoints empty
+    if (hasSelector && Array.isArray(podsForService) && podsForService.length > 0 && endpointTotal === 0) {
+      warnings.push({
+        level: 'error',
+        title: 'Selector는 매칭되는데 Endpoints가 비어있습니다',
+        detail: 'Pod Ready/ReadinessProbe, Service targetPort, 또는 selector/label 불일치를 확인하세요.',
+      })
+    } else if (hasSelector && endpointTotal === 0 && sliceTotal > 0) {
+      warnings.push({
+        level: 'warn',
+        title: 'Endpoints는 비어있는데 EndpointSlices는 존재합니다',
+        detail: `EndpointSlices total=${sliceTotal}`,
+      })
+    } else if (hasSelector && endpointTotal === 0) {
+      warnings.push({
+        level: 'warn',
+        title: 'Selector는 있는데 Endpoints가 비어있습니다',
+        detail: 'selector가 매칭되는 Pod가 없거나, 아직 Ready가 아닐 수 있습니다.',
+      })
+    }
+
+    // Endpoints vs slices mismatch
+    if (endpointTotal > 0 && sliceTotal > 0 && endpointTotal !== sliceTotal) {
+      warnings.push({
+        level: 'warn',
+        title: 'Endpoints와 EndpointSlices의 개수가 다릅니다',
+        detail: `Endpoints=${endpointTotal}, EndpointSlices total=${sliceTotal}`,
+      })
+    }
+    if (endpointReady !== sliceReady && (endpointReady > 0 || sliceReady > 0)) {
+      warnings.push({
+        level: 'warn',
+        title: 'Ready Endpoints와 Ready EndpointSlices가 다릅니다',
+        detail: `Endpoints ready=${endpointReady}, EndpointSlices ready=${sliceReady}`,
+      })
+    }
+
+    // Service port name vs Endpoints port name mismatch (best-effort)
+    if (endpoint && Array.isArray((endpoint as any).ports) && (endpoint as any).ports.length > 0) {
+      const endpointPorts = (endpoint as any).ports as Array<any>
+      for (const sp of selectedService.ports || []) {
+        const svcPortName = (sp as any).name as string | undefined
+        if (svcPortName) {
+          const ok = endpointPorts.some((ep) => ep?.name === svcPortName)
+          if (!ok) {
+            warnings.push({
+              level: 'warn',
+              title: `Service port name(${svcPortName})가 Endpoints port에 없습니다`,
+              detail: 'port name/targetPort 불일치 가능성이 있습니다.',
+            })
+          }
+        }
+      }
+    }
+
+    // targetPort mismatch vs pod container ports (best-effort)
+    if (hasSelector && Array.isArray(podsForService) && podsForService.length > 0) {
+      const containerPortNumbers = new Set<number>()
+      const containerPortNames = new Set<string>()
+
+      for (const pod of podsForService) {
+        for (const c of pod.containers || []) {
+          const ports = (c as any).ports
+          if (!Array.isArray(ports)) continue
+          for (const p of ports) {
+            if (typeof p?.container_port === 'number') containerPortNumbers.add(p.container_port)
+            if (typeof p?.name === 'string' && p.name) containerPortNames.add(p.name)
+          }
+        }
+      }
+
+      for (const sp of selectedService.ports || []) {
+        const targetPortRaw = (sp as any).target_port as string | undefined
+        if (!targetPortRaw) continue
+
+        if (isNumeric(targetPortRaw)) {
+          const num = Number(targetPortRaw)
+          if (Number.isFinite(num) && !containerPortNumbers.has(num)) {
+            warnings.push({
+              level: 'warn',
+              title: `targetPort(${targetPortRaw})가 Pod containerPort에 없습니다`,
+              detail: 'Service가 실제 컨테이너 포트로 라우팅되지 않을 수 있습니다.',
+            })
+          }
+        } else if (!containerPortNames.has(targetPortRaw)) {
+          warnings.push({
+            level: 'warn',
+            title: `targetPort name(${targetPortRaw})가 Pod port name에 없습니다`,
+            detail: 'Service가 named port로 라우팅되지 않을 수 있습니다.',
+          })
+        }
+      }
+    }
+
+    return warnings
+  }, [podsForService, related.endpoints, related.endpointSlices, selectedService])
+
   const policySummary = useMemo(() => {
     const policies = related.networkPolicies || []
     const ingressIsolationOn = policies.some((p) => (p.policy_types || []).includes('Ingress'))
@@ -482,6 +600,28 @@ export default function NetworkPage() {
                   <div>Pods: {podsForService?.length ?? (labelSelector ? 0 : '-')}</div>
                 </div>
               </div>
+
+              {heuristics.length > 0 ? (
+                <div className="rounded-lg border border-amber-700/60 bg-amber-950/10 p-4">
+                  <div className="flex items-center gap-2 text-amber-200 font-semibold">
+                    <AlertTriangle className="w-4 h-4" />
+                    이상 징후 감지 ({heuristics.length})
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {heuristics.map((w, idx) => (
+                      <div key={idx} className="rounded-md border border-slate-700 bg-slate-900/20 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm text-slate-100">{w.title}</div>
+                          <span className={`badge ${w.level === 'error' ? 'badge-error' : 'badge-warning'}`}>
+                            {w.level === 'error' ? 'error' : 'warn'}
+                          </span>
+                        </div>
+                        {w.detail ? <div className="mt-1 text-xs text-slate-400">{w.detail}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="space-y-4">
                 <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">

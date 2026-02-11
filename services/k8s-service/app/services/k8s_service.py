@@ -382,6 +382,14 @@ class K8sService:
                     for spec in pod.spec.containers:
                         limits = None
                         requests = None
+                        ports = []
+                        if getattr(spec, "ports", None):
+                            for p in (spec.ports or []):
+                                ports.append({
+                                    "name": getattr(p, "name", None),
+                                    "container_port": getattr(p, "container_port", None),
+                                    "protocol": getattr(p, "protocol", None),
+                                })
                         if spec.resources:
                             if spec.resources.limits:
                                 # Quantity 객체를 문자열로 변환
@@ -392,7 +400,8 @@ class K8sService:
                                 print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Requests: {requests}")
                         container_specs[spec.name] = {
                             "limits": limits,
-                            "requests": requests
+                            "requests": requests,
+                            "ports": ports,
                         }
                 
                 if pod.status.container_statuses:
@@ -405,12 +414,14 @@ class K8sService:
                             "state": self._serialize_container_state(container.state),
                             "last_state": self._serialize_container_state(container.last_state),
                             "limits": None,
-                            "requests": None
+                            "requests": None,
+                            "ports": [],
                         }
                         # limits/requests 추가
                         if container.name in container_specs:
                             container_info["limits"] = container_specs[container.name].get("limits")
                             container_info["requests"] = container_specs[container.name].get("requests")
+                            container_info["ports"] = container_specs[container.name].get("ports") or []
                         containers.append(container_info)
                         restart_count += container.restart_count
                 
