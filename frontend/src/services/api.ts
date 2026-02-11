@@ -65,6 +65,7 @@ export interface ServiceInfo {
     name?: string
     port: number
     target_port: string
+    node_port?: number | null
     protocol: string
   }>
   selector: Record<string, string>

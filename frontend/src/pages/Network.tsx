@@ -321,6 +321,10 @@ export default function NetworkPage() {
                           <div className="truncate">
                             <span className="text-slate-300">{p.protocol}</span> {p.port} →{' '}
                             <span className="text-slate-300">{p.target_port}</span>
+                            {(selectedService.type === 'NodePort' || selectedService.type === 'LoadBalancer') &&
+                            typeof p.node_port === 'number' ? (
+                              <span className="text-slate-300">{` · nodePort ${p.node_port}`}</span>
+                            ) : null}
                           </div>
                           <div className="text-xs text-slate-400">{p.name || ''}</div>
                         </div>

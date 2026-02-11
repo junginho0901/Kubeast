@@ -307,7 +307,8 @@ class K8sService:
                             "name": port.name,
                             "port": port.port,
                             "target_port": str(port.target_port),
-                            "protocol": port.protocol
+                            "protocol": port.protocol,
+                            "node_port": getattr(port, "node_port", None),
                         })
                 
                 external_ip = None
