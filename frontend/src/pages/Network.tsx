@@ -417,25 +417,45 @@ export default function NetworkPage() {
         }
       }
 
+      const slicePortNumbers = new Set<number>()
+      const slicePortNames = new Set<string>()
+      for (const s of slices) {
+        const ports = (s as any).ports
+        if (!Array.isArray(ports)) continue
+        for (const p of ports) {
+          const port = p?.port
+          const name = p?.name
+          if (typeof port === 'number') slicePortNumbers.add(port)
+          if (typeof name === 'string' && name) slicePortNames.add(name)
+        }
+      }
+
+      const canValidateAgainstContainerPorts = containerPortNumbers.size > 0 || containerPortNames.size > 0
+
       for (const sp of selectedService.ports || []) {
         const targetPortRaw = (sp as any).target_port as string | undefined
         if (!targetPortRaw) continue
 
         if (isNumeric(targetPortRaw)) {
           const num = Number(targetPortRaw)
-          if (Number.isFinite(num) && !containerPortNumbers.has(num)) {
+          // If EndpointSlice already reports this port, avoid noisy warnings even if containerPort isn't declared.
+          if (Number.isFinite(num) && slicePortNumbers.has(num)) continue
+          if (Number.isFinite(num) && canValidateAgainstContainerPorts && !containerPortNumbers.has(num)) {
             warnings.push({
               level: 'warn',
               title: `targetPort(${targetPortRaw})가 Pod containerPort에 없습니다`,
               detail: 'Service가 실제 컨테이너 포트로 라우팅되지 않을 수 있습니다.',
             })
           }
-        } else if (!containerPortNames.has(targetPortRaw)) {
+        } else {
+          if (slicePortNames.has(targetPortRaw)) continue
+          if (canValidateAgainstContainerPorts && !containerPortNames.has(targetPortRaw)) {
           warnings.push({
             level: 'warn',
             title: `targetPort name(${targetPortRaw})가 Pod port name에 없습니다`,
             detail: 'Service가 named port로 라우팅되지 않을 수 있습니다.',
           })
+          }
         }
       }
     }
