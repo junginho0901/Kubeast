@@ -916,37 +916,46 @@ class K8sService:
     async def get_endpointslices(self, namespace: str) -> List[Dict]:
         """EndpointSlice 목록 조회 (discovery.k8s.io/v1)"""
         try:
-            discovery_v1 = client.DiscoveryV1Api()
-            slices = discovery_v1.list_namespaced_endpoint_slice(namespace)
+            # NOTE: Some clusters may return EndpointSlice objects with `endpoints: null`,
+            # which can break the typed DiscoveryV1Api deserialization (ValueError).
+            # Use CustomObjectsApi (unstructured) to be resilient.
+            custom_api = client.CustomObjectsApi()
+            slices = custom_api.list_namespaced_custom_object(
+                group="discovery.k8s.io",
+                version="v1",
+                namespace=namespace,
+                plural="endpointslices",
+            )
             result: List[Dict] = []
-            for es in slices.items:
-                labels = es.metadata.labels or {}
+            for es in (slices.get("items", []) or []):
+                metadata = es.get("metadata", {}) or {}
+                labels = metadata.get("labels", {}) or {}
                 service_name = labels.get("kubernetes.io/service-name")
                 total = 0
                 ready = 0
-                for e in (es.endpoints or []):
+                for e in (es.get("endpoints", []) or []):
                     total += 1
-                    cond = getattr(e, "conditions", None)
-                    is_ready = getattr(cond, "ready", None) if cond else None
+                    cond = e.get("conditions", {}) or {}
+                    is_ready = cond.get("ready", None)
                     if is_ready is True or is_ready is None:
                         # ready==None can appear; treat as ready-ish for high-level summary
                         ready += 1
                 ports: List[Dict] = []
-                for p in (es.ports or []):
+                for p in (es.get("ports", []) or []):
                     ports.append({
-                        "name": getattr(p, "name", None),
-                        "port": getattr(p, "port", None),
-                        "protocol": getattr(p, "protocol", None),
+                        "name": p.get("name"),
+                        "port": p.get("port"),
+                        "protocol": p.get("protocol"),
                     })
                 result.append({
-                    "name": es.metadata.name,
-                    "namespace": es.metadata.namespace,
+                    "name": metadata.get("name"),
+                    "namespace": metadata.get("namespace"),
                     "service_name": service_name,
-                    "address_type": getattr(es, "address_type", None),
+                    "address_type": es.get("addressType"),
                     "endpoints_total": total,
                     "endpoints_ready": ready,
                     "ports": ports,
-                    "created_at": str(es.metadata.creation_timestamp) if es.metadata.creation_timestamp else None,
+                    "created_at": metadata.get("creationTimestamp"),
                 })
             return result
         except ApiException as e:
