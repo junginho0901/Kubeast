@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
-import { Box, ArrowRight, Network, RefreshCw, Search, X } from 'lucide-react'
+import { Box, ArrowRight, Network, RefreshCw, Search, Waypoints, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useState, useMemo } from 'react'
@@ -197,16 +197,26 @@ export default function Namespaces() {
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   navigate(`/resources/${ns.name}`)
                 }}
-                className="btn btn-primary flex-1 flex items-center justify-center gap-2"
+                className="btn btn-primary flex items-center justify-center gap-2"
               >
                 리소스 보기
                 <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate(`/network/${ns.name}`)
+                }}
+                className="btn btn-secondary flex items-center justify-center gap-2"
+              >
+                <Waypoints className="w-4 h-4" />
+                Network 보기
               </button>
               <button
                 onClick={(e) => {

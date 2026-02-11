@@ -71,6 +71,74 @@ export interface ServiceInfo {
   created_at: string
 }
 
+export interface IngressInfo {
+  name: string
+  hosts: string[]
+  class?: string | null
+  backends: string[]
+}
+
+export interface IngressClassInfo {
+  name: string
+  controller?: string | null
+  is_default: boolean
+  parameters?: {
+    api_group?: string | null
+    kind?: string | null
+    name?: string | null
+    scope?: string | null
+    namespace?: string | null
+  } | null
+  created_at?: string | null
+}
+
+export interface EndpointInfo {
+  name: string
+  namespace: string
+  ready_count: number
+  not_ready_count: number
+  ready_addresses: string[]
+  not_ready_addresses: string[]
+  ports: Array<{
+    name?: string | null
+    port?: number | null
+    protocol?: string | null
+  }>
+  created_at?: string | null
+}
+
+export interface EndpointSliceInfo {
+  name: string
+  namespace: string
+  service_name?: string | null
+  address_type?: string | null
+  endpoints_total: number
+  endpoints_ready: number
+  ports: Array<{
+    name?: string | null
+    port?: number | null
+    protocol?: string | null
+  }>
+  created_at?: string | null
+}
+
+export interface NetworkPolicyInfo {
+  name: string
+  namespace: string
+  pod_selector: {
+    match_labels: Record<string, string>
+    match_expressions: Array<{
+      key?: string | null
+      operator?: string | null
+      values?: string[] | null
+    }>
+  }
+  policy_types: string[]
+  ingress_rules: number
+  egress_rules: number
+  created_at?: string | null
+}
+
 export interface DeploymentInfo {
   name: string
   namespace: string
@@ -327,6 +395,31 @@ export const api = {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/services`, {
       params: { force_refresh: forceRefresh },
     })
+    return data
+  },
+
+  getIngresses: async (namespace: string): Promise<IngressInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/ingresses`)
+    return data
+  },
+
+  getIngressClasses: async (): Promise<IngressClassInfo[]> => {
+    const { data } = await client.get('/cluster/ingressclasses')
+    return data
+  },
+
+  getEndpoints: async (namespace: string): Promise<EndpointInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/endpoints`)
+    return data
+  },
+
+  getEndpointSlices: async (namespace: string): Promise<EndpointSliceInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/endpointslices`)
+    return data
+  },
+
+  getNetworkPolicies: async (namespace: string): Promise<NetworkPolicyInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/networkpolicies`)
     return data
   },
 

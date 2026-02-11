@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Namespaces from './pages/Namespaces'
 import Resources from './pages/Resources'
 import Topology from './pages/Topology'
+import NetworkPage from './pages/Network'
 import AIChat from './pages/AIChat'
 import ClusterView from './pages/ClusterView'
 import Monitoring from './pages/Monitoring'
@@ -26,6 +27,7 @@ function App() {
           <Route path="account" element={<Account />} />
           <Route path="resources/:namespace" element={<Resources />} />
           <Route path="topology/:namespace" element={<Topology />} />
+          <Route path="network/:namespace" element={<NetworkPage />} />
           <Route path="ai-chat" element={<AIChat />} />
           <Route path="admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
         </Route>
