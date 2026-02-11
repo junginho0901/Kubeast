@@ -438,24 +438,30 @@ export default function NetworkPage() {
 
         if (isNumeric(targetPortRaw)) {
           const num = Number(targetPortRaw)
-          // If EndpointSlice already reports this port, avoid noisy warnings even if containerPort isn't declared.
-          if (Number.isFinite(num) && slicePortNumbers.has(num)) continue
+          // If containerPort is declared, validate against it (strong signal).
+          // EndpointSlice ports can mirror Service spec, so they don't guarantee the container listens.
           if (Number.isFinite(num) && canValidateAgainstContainerPorts && !containerPortNumbers.has(num)) {
+            const declared = containerPortNumbers.size > 0 ? `declared containerPorts: ${Array.from(containerPortNumbers).sort((a, b) => a - b).join(', ')}` : ''
             warnings.push({
               level: 'warn',
               title: `targetPort(${targetPortRaw})가 Pod containerPort에 없습니다`,
-              detail: 'Service가 실제 컨테이너 포트로 라우팅되지 않을 수 있습니다.',
+              detail: `Service가 실제 컨테이너 포트로 라우팅되지 않을 수 있습니다.${declared ? ` (${declared})` : ''}`,
             })
+            continue
           }
+          // If we can't validate via containerPort declarations, avoid noisy warnings when EndpointSlice already exists for that port.
+          if (Number.isFinite(num) && !canValidateAgainstContainerPorts && slicePortNumbers.has(num)) continue
         } else {
-          if (slicePortNames.has(targetPortRaw)) continue
           if (canValidateAgainstContainerPorts && !containerPortNames.has(targetPortRaw)) {
-          warnings.push({
-            level: 'warn',
-            title: `targetPort name(${targetPortRaw})가 Pod port name에 없습니다`,
-            detail: 'Service가 named port로 라우팅되지 않을 수 있습니다.',
-          })
+            const declared = containerPortNames.size > 0 ? `declared port names: ${Array.from(containerPortNames).sort().join(', ')}` : ''
+            warnings.push({
+              level: 'warn',
+              title: `targetPort name(${targetPortRaw})가 Pod port name에 없습니다`,
+              detail: `Service가 named port로 라우팅되지 않을 수 있습니다.${declared ? ` (${declared})` : ''}`,
+            })
+            continue
           }
+          if (!canValidateAgainstContainerPorts && slicePortNames.has(targetPortRaw)) continue
         }
       }
     }
