@@ -668,10 +668,20 @@ export const api = {
     return data
   },
 
+  getPV: async (name: string): Promise<PVInfo> => {
+    const { data } = await client.get(`/cluster/pvs/${name}`)
+    return data
+  },
+
   getStorageClasses: async (forceRefresh = false): Promise<StorageClassInfo[]> => {
     const { data } = await client.get('/cluster/storageclasses', {
       params: { force_refresh: forceRefresh },
     })
+    return data
+  },
+
+  getStorageClass: async (name: string): Promise<StorageClassInfo> => {
+    const { data } = await client.get(`/cluster/storageclasses/${name}`)
     return data
   },
 

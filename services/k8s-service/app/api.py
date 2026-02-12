@@ -220,11 +220,29 @@ async def get_pvs():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/pvs/{name}", response_model=PVInfo)
+async def get_pv(name: str):
+    """PV 단건 조회"""
+    try:
+        return await k8s_service.get_pv(name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/storageclasses")
 async def get_storageclasses(force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
     """StorageClass 목록 조회"""
     try:
         return await k8s_service.get_storageclasses(force_refresh=force_refresh)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/storageclasses/{name}")
+async def get_storageclass(name: str):
+    """StorageClass 단건 조회"""
+    try:
+        return await k8s_service.get_storageclass(name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

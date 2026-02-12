@@ -640,6 +640,31 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get PVs: {e}")
 
+    async def get_pv(self, name: str) -> PVInfo:
+        """PV 단건"""
+        try:
+            pv = self.v1.read_persistent_volume(name)
+
+            claim_ref = None
+            if pv.spec.claim_ref:
+                claim_ref = {
+                    "namespace": pv.spec.claim_ref.namespace,
+                    "name": pv.spec.claim_ref.name,
+                }
+
+            return PVInfo(
+                name=pv.metadata.name,
+                status=pv.status.phase,
+                capacity=pv.spec.capacity.get("storage"),
+                access_modes=pv.spec.access_modes or [],
+                storage_class=pv.spec.storage_class_name,
+                reclaim_policy=pv.spec.persistent_volume_reclaim_policy,
+                claim_ref=claim_ref,
+                created_at=pv.metadata.creation_timestamp,
+            )
+        except ApiException as e:
+            raise Exception(f"Failed to get PV: {e}")
+
     async def get_storageclasses(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """StorageClass 목록"""
         try:
@@ -667,6 +692,30 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get StorageClasses: {e}")
+
+    async def get_storageclass(self, name: str) -> Dict[str, Any]:
+        """StorageClass 단건"""
+        try:
+            storage_v1 = client.StorageV1Api()
+            sc = storage_v1.read_storage_class(name)
+
+            annotations = sc.metadata.annotations or {}
+            is_default = annotations.get("storageclass.kubernetes.io/is-default-class") == "true" or annotations.get(
+                "storageclass.beta.kubernetes.io/is-default-class"
+            ) == "true"
+
+            return {
+                "name": sc.metadata.name,
+                "provisioner": sc.provisioner,
+                "reclaim_policy": getattr(sc, "reclaim_policy", None),
+                "volume_binding_mode": getattr(sc, "volume_binding_mode", None),
+                "allow_volume_expansion": getattr(sc, "allow_volume_expansion", None),
+                "is_default": is_default,
+                "parameters": getattr(sc, "parameters", None) or {},
+                "created_at": self._to_iso(getattr(sc.metadata, "creation_timestamp", None)),
+            }
+        except ApiException as e:
+            raise Exception(f"Failed to get StorageClass: {e}")
 
     async def get_volumeattachments(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """VolumeAttachment 목록"""
