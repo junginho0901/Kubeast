@@ -1484,17 +1484,22 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to describe pod: {e}")
 
-    async def get_pod_rbac(self, namespace: str, name: str) -> Dict[str, Any]:
+    async def get_pod_rbac(self, namespace: str, name: str, include_authenticated: bool = False) -> Dict[str, Any]:
         """
         Pod → ServiceAccount → (RoleBinding/ClusterRoleBinding) → (Role/ClusterRole rules) 체인을 조회한다.
 
-        주의: 1차 구현은 '직접 매칭(ServiceAccount subject / system:serviceaccount User)'만 대상으로 한다.
+        주의: system:authenticated 는 모든 ServiceAccount(및 사용자)가 포함될 수 있는 광범위 그룹이므로,
+        include_authenticated=True 일 때만 포함한다.
         """
         rbac_v1 = client.RbacAuthorizationV1Api()
 
         pod = self.v1.read_namespaced_pod(name, namespace)
         service_account_name = getattr(pod.spec, "service_account_name", None) or "default"
         service_account_user = f"system:serviceaccount:{namespace}:{service_account_name}"
+        service_account_groups = {
+            "system:serviceaccounts",
+            f"system:serviceaccounts:{namespace}",
+        }
 
         result: Dict[str, Any] = {
             "pod": {"name": name, "namespace": namespace},
@@ -1504,18 +1509,44 @@ class K8sService:
             "errors": [],
         }
 
-        def subject_matches(subject: Any) -> bool:
+        def subject_match_info(subject: Any) -> Optional[Dict[str, Any]]:
             if subject is None:
-                return False
+                return None
             kind = getattr(subject, "kind", None)
             subj_name = getattr(subject, "name", None)
             subj_ns = getattr(subject, "namespace", None)
 
             if kind == "ServiceAccount":
-                return subj_name == service_account_name and (subj_ns == namespace or subj_ns is None)
+                if subj_name == service_account_name and (subj_ns == namespace or subj_ns is None):
+                    return {
+                        "reason": "serviceaccount",
+                        "broad": False,
+                        "subject": self._serialize_rbac_subject(subject),
+                    }
+                return None
             if kind == "User":
-                return subj_name == service_account_user
-            return False
+                if subj_name == service_account_user:
+                    return {
+                        "reason": "user:system:serviceaccount",
+                        "broad": False,
+                        "subject": self._serialize_rbac_subject(subject),
+                    }
+                return None
+            if kind == "Group":
+                if subj_name in service_account_groups:
+                    return {
+                        "reason": "group:serviceaccounts",
+                        "broad": False,
+                        "subject": self._serialize_rbac_subject(subject),
+                    }
+                if subj_name == "system:authenticated":
+                    return {
+                        "reason": "group:system:authenticated",
+                        "broad": True,
+                        "subject": self._serialize_rbac_subject(subject),
+                    }
+                return None
+            return None
 
         def resolve_role_ref(role_ref: Any, binding_namespace: Optional[str]) -> Dict[str, Any]:
             info: Dict[str, Any] = {
@@ -1551,8 +1582,14 @@ class K8sService:
             role_bindings = rbac_v1.list_namespaced_role_binding(namespace)
             for rb in role_bindings.items:
                 subjects = list(getattr(rb, "subjects", None) or [])
-                if not any(subject_matches(s) for s in subjects):
+                matched_by = [m for m in (subject_match_info(s) for s in subjects) if m]
+                if not matched_by:
                     continue
+                is_broad = any(m.get("broad") for m in matched_by)
+                if is_broad and not include_authenticated:
+                    # system:authenticated 만으로 매칭되는 케이스는 너무 광범위하므로 기본적으로 숨긴다.
+                    if all(m.get("reason") == "group:system:authenticated" for m in matched_by):
+                        continue
 
                 role_ref = getattr(rb, "role_ref", None)
                 role_ref_info = resolve_role_ref(role_ref, namespace) if role_ref is not None else {
@@ -1567,6 +1604,8 @@ class K8sService:
                     "name": rb.metadata.name,
                     "namespace": namespace,
                     "subjects": [self._serialize_rbac_subject(s) for s in subjects],
+                    "matched_by": matched_by,
+                    "is_broad": is_broad,
                     "role_ref": {
                         "api_group": getattr(role_ref, "api_group", None) if role_ref else None,
                         "kind": getattr(role_ref, "kind", None) if role_ref else None,
@@ -1583,8 +1622,13 @@ class K8sService:
             cluster_role_bindings = rbac_v1.list_cluster_role_binding()
             for crb in cluster_role_bindings.items:
                 subjects = list(getattr(crb, "subjects", None) or [])
-                if not any(subject_matches(s) for s in subjects):
+                matched_by = [m for m in (subject_match_info(s) for s in subjects) if m]
+                if not matched_by:
                     continue
+                is_broad = any(m.get("broad") for m in matched_by)
+                if is_broad and not include_authenticated:
+                    if all(m.get("reason") == "group:system:authenticated" for m in matched_by):
+                        continue
 
                 role_ref = getattr(crb, "role_ref", None)
                 role_ref_info = resolve_role_ref(role_ref, None) if role_ref is not None else {
@@ -1598,6 +1642,8 @@ class K8sService:
                 result["cluster_role_bindings"].append({
                     "name": crb.metadata.name,
                     "subjects": [self._serialize_rbac_subject(s) for s in subjects],
+                    "matched_by": matched_by,
+                    "is_broad": is_broad,
                     "role_ref": {
                         "api_group": getattr(role_ref, "api_group", None) if role_ref else None,
                         "kind": getattr(role_ref, "kind", None) if role_ref else None,

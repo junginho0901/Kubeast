@@ -305,6 +305,12 @@ export interface PodRbacBinding {
   name: string
   namespace?: string | null
   subjects: PodRbacSubject[]
+  matched_by?: Array<{
+    reason?: string | null
+    broad?: boolean | null
+    subject?: PodRbacSubject | null
+  }>
+  is_broad?: boolean | null
   role_ref: PodRbacRoleRef
   resolved_role: PodRbacResolvedRole
   created_at?: string | null
@@ -618,8 +624,12 @@ export const api = {
     return data.logs
   },
 
-  getPodRbac: async (namespace: string, podName: string): Promise<PodRbacResponse> => {
-    const { data } = await client.get(`/cluster/namespaces/${namespace}/pods/${podName}/rbac`)
+  getPodRbac: async (
+    namespace: string,
+    podName: string,
+    params?: { include_authenticated?: boolean }
+  ): Promise<PodRbacResponse> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pods/${podName}/rbac`, { params })
     return data
   },
 

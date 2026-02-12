@@ -510,10 +510,17 @@ async def describe_pod(namespace: str, name: str):
 
 
 @router.get("/namespaces/{namespace}/pods/{name}/rbac")
-async def get_pod_rbac(namespace: str, name: str):
+async def get_pod_rbac(
+    namespace: str,
+    name: str,
+    include_authenticated: bool = Query(
+        False,
+        description="subjects에 system:authenticated(Group)가 포함된 바인딩까지 포함 (너무 광범위할 수 있음)",
+    ),
+):
     """Pod가 사용하는 ServiceAccount 기반 RBAC(RoleBinding/ClusterRoleBinding) 체인 조회"""
     try:
-        return await k8s_service.get_pod_rbac(namespace, name)
+        return await k8s_service.get_pod_rbac(namespace, name, include_authenticated=include_authenticated)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

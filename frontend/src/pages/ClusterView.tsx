@@ -45,6 +45,7 @@ export default function ClusterView() {
   const [showManifest, setShowManifest] = useState(false)
   const [showDescribe, setShowDescribe] = useState(false)
   const [showRbac, setShowRbac] = useState(false)
+  const [includeAuthenticatedGroup, setIncludeAuthenticatedGroup] = useState(false)
   const [logs, setLogs] = useState<string>('')
   const [, setIsStreamingLogs] = useState(false)
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
@@ -289,10 +290,12 @@ export default function ClusterView() {
 
   // Pod RBAC 조회
   const { data: rbacData, isLoading: isRbacLoading, error: rbacError } = useQuery({
-    queryKey: ['pod-rbac', selectedPod?.namespace, selectedPod?.name],
+    queryKey: ['pod-rbac', selectedPod?.namespace, selectedPod?.name, includeAuthenticatedGroup],
     queryFn: async () => {
       if (!selectedPod) return null
-      return await api.getPodRbac(selectedPod.namespace, selectedPod.name)
+      return await api.getPodRbac(selectedPod.namespace, selectedPod.name, {
+        include_authenticated: includeAuthenticatedGroup,
+      })
     },
     enabled: showRbac && !!selectedPod,
   })
@@ -362,6 +365,7 @@ export default function ClusterView() {
     setShowManifest(false)
     setShowDescribe(false)
     setShowRbac(false)
+    setIncludeAuthenticatedGroup(false)
     
     setSelectedPod(detail)
     setContainerSearchQuery('') // 모달 열 때 검색어 초기화
@@ -1202,6 +1206,25 @@ export default function ClusterView() {
                 <div className="space-y-6">
                   <h3 className="text-lg font-semibold text-white">RBAC</h3>
 
+                  <div className="bg-slate-800 rounded-lg p-4">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={includeAuthenticatedGroup}
+                        onChange={(e) => setIncludeAuthenticatedGroup(e.target.checked)}
+                      />
+                      <div>
+                        <p className="text-white text-sm font-medium">
+                          광범위 그룹 <span className="font-mono">system:authenticated</span> 포함
+                        </p>
+                        <p className="text-slate-400 text-xs mt-1">
+                          일부 클러스터 권한은 이 그룹으로 부여됩니다. 다만 거의 모든 인증된 주체가 포함될 수 있어 결과가 과대해질 수 있습니다.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
                   {isRbacLoading && (
                     <div className="text-slate-400">RBAC 정보를 불러오는 중...</div>
                   )}
@@ -1268,6 +1291,9 @@ export default function ClusterView() {
                                       <p className="text-sm text-slate-300">
                                         rules: {b.resolved_role?.rules?.length ?? 0}
                                       </p>
+                                      {b.is_broad && (
+                                        <p className="text-xs text-yellow-300">광범위</p>
+                                      )}
                                       {b.resolved_role?.error && (
                                         <p className="text-xs text-yellow-300">resolve 실패</p>
                                       )}
@@ -1357,6 +1383,9 @@ export default function ClusterView() {
                                       <p className="text-sm text-slate-300">
                                         rules: {b.resolved_role?.rules?.length ?? 0}
                                       </p>
+                                      {b.is_broad && (
+                                        <p className="text-xs text-yellow-300">광범위</p>
+                                      )}
                                       {b.resolved_role?.error && (
                                         <p className="text-xs text-yellow-300">resolve 실패</p>
                                       )}
