@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { Database, HardDrive, RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp } from 'lucide-react'
@@ -14,6 +14,19 @@ type PvcSortKey =
   | 'requested'
   | 'capacity'
   | 'access_modes'
+type PvSortKey =
+  | 'name'
+  | 'status'
+  | 'age'
+  | 'capacity'
+  | 'storage_class'
+  | 'source_driver'
+  | 'volume_handle'
+  | 'volume_mode'
+  | 'node_affinity'
+  | 'reclaim_policy'
+  | 'access_modes'
+  | 'claim'
 
 export default function Storage() {
   const queryClient = useQueryClient()
@@ -24,6 +37,10 @@ export default function Storage() {
   const [selectedPvc, setSelectedPvc] = useState<any | null>(null)
   const [pvcSort, setPvcSort] = useState<{ key: PvcSortKey; dir: 'asc' | 'desc' }>({
     key: 'namespace',
+    dir: 'asc',
+  })
+  const [pvSort, setPvSort] = useState<{ key: PvSortKey; dir: 'asc' | 'desc' }>({
+    key: 'name',
     dir: 'asc',
   })
 
@@ -42,6 +59,41 @@ export default function Storage() {
     if (hours > 0) return `${hours}h ${minutes}m`
     return `${minutes}m`
   }
+
+  const parseQuantityToBytes = useCallback((value?: string | null): number | null => {
+    if (!value) return null
+    const s = value.toString().trim()
+    if (!s) return null
+
+    const m = s.match(/^([0-9]+(?:\\.[0-9]+)?)([a-zA-Z]+)?$/)
+    if (!m) return null
+
+    const num = Number(m[1])
+    if (Number.isNaN(num)) return null
+    const unit = (m[2] || '').trim()
+
+    const bin: Record<string, number> = {
+      Ki: 1024 ** 1,
+      Mi: 1024 ** 2,
+      Gi: 1024 ** 3,
+      Ti: 1024 ** 4,
+      Pi: 1024 ** 5,
+      Ei: 1024 ** 6,
+    }
+    const dec: Record<string, number> = {
+      K: 1000 ** 1,
+      M: 1000 ** 2,
+      G: 1000 ** 3,
+      T: 1000 ** 4,
+      P: 1000 ** 5,
+      E: 1000 ** 6,
+    }
+
+    if (!unit) return num
+    if (bin[unit] !== undefined) return num * bin[unit]
+    if (dec[unit] !== undefined) return num * dec[unit]
+    return null
+  }, [])
 
   useEffect(() => {
     if (activeTab !== 'pvcs') setSelectedPvc(null)
@@ -158,41 +210,6 @@ export default function Storage() {
     const items = (filteredItems || []) as any[]
     const dirMul = pvcSort.dir === 'asc' ? 1 : -1
 
-    const parseQuantityToBytes = (value?: string | null): number | null => {
-      if (!value) return null
-      const s = value.toString().trim()
-      if (!s) return null
-
-      const m = s.match(/^([0-9]+(?:\\.[0-9]+)?)([a-zA-Z]+)?$/)
-      if (!m) return null
-
-      const num = Number(m[1])
-      if (Number.isNaN(num)) return null
-      const unit = (m[2] || '').trim()
-
-      const bin: Record<string, number> = {
-        Ki: 1024 ** 1,
-        Mi: 1024 ** 2,
-        Gi: 1024 ** 3,
-        Ti: 1024 ** 4,
-        Pi: 1024 ** 5,
-        Ei: 1024 ** 6,
-      }
-      const dec: Record<string, number> = {
-        K: 1000 ** 1,
-        M: 1000 ** 2,
-        G: 1000 ** 3,
-        T: 1000 ** 4,
-        P: 1000 ** 5,
-        E: 1000 ** 6,
-      }
-
-      if (!unit) return num
-      if (bin[unit] !== undefined) return num * bin[unit]
-      if (dec[unit] !== undefined) return num * dec[unit]
-      return null
-    }
-
     const strCmp = (a: any, b: any) => a.toString().localeCompare(b.toString())
     const safeStr = (v: any) => (v ?? '').toString()
 
@@ -245,7 +262,81 @@ export default function Storage() {
     }
 
     return items.slice().sort((a, b) => compare(a, b) * dirMul)
-  }, [activeTab, filteredItems, pvcSort])
+  }, [activeTab, filteredItems, pvcSort, parseQuantityToBytes])
+
+  const sortedPvItems = useMemo(() => {
+    if (activeTab !== 'pvs') return filteredItems
+    const items = (filteredItems || []) as any[]
+    const dirMul = pvSort.dir === 'asc' ? 1 : -1
+
+    const safeStr = (v: any) => (v ?? '').toString()
+    const strCmp = (a: any, b: any) => a.toString().localeCompare(b.toString())
+
+    const getAgeMs = (pv: any) => {
+      const t = pv?.created_at ? new Date(pv.created_at).getTime() : NaN
+      return Number.isNaN(t) ? null : t
+    }
+
+    const getSize = (pv: any) => parseQuantityToBytes(pv?.capacity)
+
+    const claimStr = (pv: any) =>
+      pv?.claim_ref?.namespace && pv?.claim_ref?.name ? `${pv.claim_ref.namespace}/${pv.claim_ref.name}` : ''
+
+    const sourceDriverStr = (pv: any) => {
+      if (!pv?.source) return ''
+      if (!pv?.driver) return pv.source
+      return `${pv.source} · ${pv.driver}`
+    }
+
+    const cmpNullableNumber = (a: number | null, b: number | null) => {
+      if (a === null && b === null) return 0
+      if (a === null) return 1
+      if (b === null) return -1
+      return a - b
+    }
+
+    const cmpNullableString = (a: string, b: string) => {
+      const aa = safeStr(a).trim()
+      const bb = safeStr(b).trim()
+      if (!aa && !bb) return 0
+      if (!aa) return 1
+      if (!bb) return -1
+      return strCmp(aa, bb)
+    }
+
+    const compare = (a: any, b: any) => {
+      switch (pvSort.key) {
+        case 'name':
+          return cmpNullableString(a?.name, b?.name)
+        case 'status':
+          return cmpNullableString(a?.status, b?.status)
+        case 'age':
+          return cmpNullableNumber(getAgeMs(a), getAgeMs(b))
+        case 'capacity':
+          return cmpNullableNumber(getSize(a), getSize(b))
+        case 'storage_class':
+          return cmpNullableString(a?.storage_class, b?.storage_class)
+        case 'source_driver':
+          return cmpNullableString(sourceDriverStr(a), sourceDriverStr(b))
+        case 'volume_handle':
+          return cmpNullableString(a?.volume_handle, b?.volume_handle)
+        case 'volume_mode':
+          return cmpNullableString(a?.volume_mode, b?.volume_mode)
+        case 'node_affinity':
+          return cmpNullableString(a?.node_affinity, b?.node_affinity)
+        case 'reclaim_policy':
+          return cmpNullableString(a?.reclaim_policy, b?.reclaim_policy)
+        case 'access_modes':
+          return cmpNullableString((a?.access_modes || []).join(','), (b?.access_modes || []).join(','))
+        case 'claim':
+          return cmpNullableString(claimStr(a), claimStr(b))
+        default:
+          return 0
+      }
+    }
+
+    return items.slice().sort((a, b) => compare(a, b) * dirMul)
+  }, [activeTab, filteredItems, pvSort, parseQuantityToBytes])
 
   const selectedPv = useMemo(() => {
     if (!selectedPvc?.volume_name) return null
@@ -266,9 +357,27 @@ export default function Storage() {
     })
   }
 
+  const togglePvSort = (key: PvSortKey) => {
+    setPvSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, dir: 'asc' }
+    })
+  }
+
   const SortIcon = ({ colKey }: { colKey: PvcSortKey }) => {
     if (pvcSort.key !== colKey) return null
     return pvcSort.dir === 'asc' ? (
+      <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+    )
+  }
+
+  const PvSortIcon = ({ colKey }: { colKey: PvSortKey }) => {
+    if (pvSort.key !== colKey) return null
+    return pvSort.dir === 'asc' ? (
       <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
     ) : (
       <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
@@ -659,22 +768,70 @@ export default function Storage() {
           <table className="w-full text-sm">
             <thead className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4">Name</th>
-                <th className="text-left py-3 px-4">Status</th>
-                <th className="text-left py-3 px-4">Age</th>
-                <th className="text-left py-3 px-4">Capacity</th>
-                <th className="text-left py-3 px-4">StorageClass</th>
-                <th className="text-left py-3 px-4">Source/Driver</th>
-                <th className="text-left py-3 px-4">VolumeHandle</th>
-                <th className="text-left py-3 px-4">VolumeMode</th>
-                <th className="text-left py-3 px-4">NodeAffinity</th>
-                <th className="text-left py-3 px-4">Reclaim</th>
-                <th className="text-left py-3 px-4">AccessModes</th>
-                <th className="text-left py-3 px-4">Claim</th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('name')}>
+                  <div className="flex items-center gap-2">
+                    Name <PvSortIcon colKey="name" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('status')}>
+                  <div className="flex items-center gap-2">
+                    Status <PvSortIcon colKey="status" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('age')}>
+                  <div className="flex items-center gap-2">
+                    Age <PvSortIcon colKey="age" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('capacity')}>
+                  <div className="flex items-center gap-2">
+                    Capacity <PvSortIcon colKey="capacity" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('storage_class')}>
+                  <div className="flex items-center gap-2">
+                    StorageClass <PvSortIcon colKey="storage_class" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('source_driver')}>
+                  <div className="flex items-center gap-2">
+                    Source/Driver <PvSortIcon colKey="source_driver" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('volume_handle')}>
+                  <div className="flex items-center gap-2">
+                    VolumeHandle <PvSortIcon colKey="volume_handle" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('volume_mode')}>
+                  <div className="flex items-center gap-2">
+                    VolumeMode <PvSortIcon colKey="volume_mode" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('node_affinity')}>
+                  <div className="flex items-center gap-2">
+                    NodeAffinity <PvSortIcon colKey="node_affinity" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('reclaim_policy')}>
+                  <div className="flex items-center gap-2">
+                    Reclaim <PvSortIcon colKey="reclaim_policy" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('access_modes')}>
+                  <div className="flex items-center gap-2">
+                    AccessModes <PvSortIcon colKey="access_modes" />
+                  </div>
+                </th>
+                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('claim')}>
+                  <div className="flex items-center gap-2">
+                    Claim <PvSortIcon colKey="claim" />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {filteredItems.map((pv: any) => (
+              {sortedPvItems.map((pv: any) => (
                 <tr key={pv.name}>
                   <td className="py-3 px-4 text-white font-mono">{pv.name}</td>
                   <td className="py-3 px-4 text-slate-200">{pv.status}</td>
@@ -701,7 +858,7 @@ export default function Storage() {
                   </td>
                 </tr>
               ))}
-              {filteredItems.length === 0 && (
+              {sortedPvItems.length === 0 && (
                 <tr>
                   <td className="py-6 px-4 text-slate-400" colSpan={12}>
                     (없음)
