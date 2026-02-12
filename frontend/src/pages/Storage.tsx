@@ -43,6 +43,7 @@ export default function Storage() {
     key: 'name',
     dir: 'asc',
   })
+  const [pvColumnMode, setPvColumnMode] = useState<'compact' | 'full'>('compact')
 
   const formatAge = (iso?: string | null) => {
     if (!iso) return '-'
@@ -98,6 +99,13 @@ export default function Storage() {
   useEffect(() => {
     if (activeTab !== 'pvcs') setSelectedPvc(null)
   }, [activeTab])
+
+  useEffect(() => {
+    if (pvColumnMode !== 'compact') return
+    const hiddenInCompact: PvSortKey[] = ['source_driver', 'volume_handle', 'volume_mode', 'node_affinity']
+    if (!hiddenInCompact.includes(pvSort.key)) return
+    setPvSort((prev) => ({ ...prev, key: 'name' }))
+  }, [pvColumnMode, pvSort.key])
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -436,6 +444,9 @@ export default function Storage() {
     volumeattachments: 'VolumeAttachment 이름 검색...',
   }
 
+  const isPvCompact = activeTab === 'pvs' && pvColumnMode === 'compact'
+  const pvColSpan = isPvCompact ? 8 : 12
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -502,6 +513,31 @@ export default function Storage() {
                 </option>
               ))}
             </select>
+          </div>
+        ) : activeTab === 'pvs' ? (
+          <div className="flex items-center justify-end">
+            <div className="inline-flex rounded-lg border border-slate-600 bg-slate-700 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPvColumnMode('compact')}
+                className={`px-3 py-3 text-sm font-medium transition-colors ${
+                  pvColumnMode === 'compact' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
+                }`}
+                title="핵심 컬럼만 표시"
+              >
+                기본
+              </button>
+              <button
+                type="button"
+                onClick={() => setPvColumnMode('full')}
+                className={`px-3 py-3 text-sm font-medium transition-colors ${
+                  pvColumnMode === 'full' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
+                }`}
+                title="상세 컬럼까지 표시"
+              >
+                상세
+              </button>
+            </div>
           </div>
         ) : (
           <div />
@@ -771,65 +807,97 @@ export default function Storage() {
 
       {activeTab === 'pvs' && (
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={`w-full text-sm ${isPvCompact ? 'table-fixed' : ''}`}>
             <thead className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('name')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[320px]' : ''}`}
+                  onClick={() => togglePvSort('name')}
+                >
                   <div className="flex items-center gap-2">
                     Name <PvSortIcon colKey="name" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('status')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[120px]' : ''}`}
+                  onClick={() => togglePvSort('status')}
+                >
                   <div className="flex items-center gap-2">
                     Status <PvSortIcon colKey="status" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('age')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[120px]' : ''}`}
+                  onClick={() => togglePvSort('age')}
+                >
                   <div className="flex items-center gap-2">
                     Age <PvSortIcon colKey="age" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('capacity')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[120px]' : ''}`}
+                  onClick={() => togglePvSort('capacity')}
+                >
                   <div className="flex items-center gap-2">
                     Capacity <PvSortIcon colKey="capacity" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('storage_class')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[160px]' : ''}`}
+                  onClick={() => togglePvSort('storage_class')}
+                >
                   <div className="flex items-center gap-2">
                     StorageClass <PvSortIcon colKey="storage_class" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('source_driver')}>
-                  <div className="flex items-center gap-2">
-                    Source/Driver <PvSortIcon colKey="source_driver" />
-                  </div>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('volume_handle')}>
-                  <div className="flex items-center gap-2">
-                    VolumeHandle <PvSortIcon colKey="volume_handle" />
-                  </div>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('volume_mode')}>
-                  <div className="flex items-center gap-2">
-                    VolumeMode <PvSortIcon colKey="volume_mode" />
-                  </div>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('node_affinity')}>
-                  <div className="flex items-center gap-2">
-                    NodeAffinity <PvSortIcon colKey="node_affinity" />
-                  </div>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('reclaim_policy')}>
+                {!isPvCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('source_driver')}>
+                    <div className="flex items-center gap-2">
+                      Source/Driver <PvSortIcon colKey="source_driver" />
+                    </div>
+                  </th>
+                )}
+                {!isPvCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('volume_handle')}>
+                    <div className="flex items-center gap-2">
+                      VolumeHandle <PvSortIcon colKey="volume_handle" />
+                    </div>
+                  </th>
+                )}
+                {!isPvCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('volume_mode')}>
+                    <div className="flex items-center gap-2">
+                      VolumeMode <PvSortIcon colKey="volume_mode" />
+                    </div>
+                  </th>
+                )}
+                {!isPvCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('node_affinity')}>
+                    <div className="flex items-center gap-2">
+                      NodeAffinity <PvSortIcon colKey="node_affinity" />
+                    </div>
+                  </th>
+                )}
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[120px]' : ''}`}
+                  onClick={() => togglePvSort('reclaim_policy')}
+                >
                   <div className="flex items-center gap-2">
                     Reclaim <PvSortIcon colKey="reclaim_policy" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('access_modes')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[180px]' : ''}`}
+                  onClick={() => togglePvSort('access_modes')}
+                >
                   <div className="flex items-center gap-2">
                     AccessModes <PvSortIcon colKey="access_modes" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvSort('claim')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isPvCompact ? 'w-[240px]' : ''}`}
+                  onClick={() => togglePvSort('claim')}
+                >
                   <div className="flex items-center gap-2">
                     Claim <PvSortIcon colKey="claim" />
                   </div>
@@ -839,7 +907,9 @@ export default function Storage() {
             <tbody className="divide-y divide-slate-700">
               {sortedPvItems.map((pv: any) => (
                 <tr key={pv.name}>
-                  <td className="py-3 px-4 text-white font-mono">{pv.name}</td>
+                  <td className={`py-3 px-4 text-white font-mono ${isPvCompact ? 'truncate' : ''}`} title={pv.name}>
+                    {pv.name}
+                  </td>
                   <td className="py-3 px-4 text-slate-200">{pv.status}</td>
                   <td
                     className="py-3 px-4 text-slate-200 font-mono whitespace-nowrap"
@@ -848,25 +918,36 @@ export default function Storage() {
                     {formatAge(pv.created_at)}
                   </td>
                   <td className="py-3 px-4 text-slate-200 font-mono">{pv.capacity || '-'}</td>
-                  <td className="py-3 px-4 text-slate-200 font-mono">{pv.storage_class || '-'}</td>
-                  <td className="py-3 px-4 text-slate-200 font-mono break-words">
-                    {pv.source ? (pv.driver ? `${pv.source} · ${pv.driver}` : pv.source) : '-'}
+                  <td className={`py-3 px-4 text-slate-200 font-mono ${isPvCompact ? 'truncate' : ''}`} title={pv.storage_class || ''}>
+                    {pv.storage_class || '-'}
                   </td>
-                  <td className="py-3 px-4 text-slate-200 font-mono break-words">{pv.volume_handle || '-'}</td>
-                  <td className="py-3 px-4 text-slate-200">{pv.volume_mode || '-'}</td>
-                  <td className="py-3 px-4 text-slate-200 font-mono break-words" title={pv.node_affinity || ''}>
-                    {pv.node_affinity || '-'}
-                  </td>
+                  {!isPvCompact && (
+                    <td className="py-3 px-4 text-slate-200 font-mono break-words">
+                      {pv.source ? (pv.driver ? `${pv.source} · ${pv.driver}` : pv.source) : '-'}
+                    </td>
+                  )}
+                  {!isPvCompact && (
+                    <td className="py-3 px-4 text-slate-200 font-mono break-words">{pv.volume_handle || '-'}</td>
+                  )}
+                  {!isPvCompact && <td className="py-3 px-4 text-slate-200">{pv.volume_mode || '-'}</td>}
+                  {!isPvCompact && (
+                    <td className="py-3 px-4 text-slate-200 font-mono break-words" title={pv.node_affinity || ''}>
+                      {pv.node_affinity || '-'}
+                    </td>
+                  )}
                   <td className="py-3 px-4 text-slate-200">{pv.reclaim_policy}</td>
                   <td className="py-3 px-4 text-slate-200">{(pv.access_modes || []).join(', ') || '-'}</td>
-                  <td className="py-3 px-4 text-slate-200 font-mono">
+                  <td
+                    className={`py-3 px-4 text-slate-200 font-mono ${isPvCompact ? 'truncate' : ''}`}
+                    title={pv.claim_ref?.namespace && pv.claim_ref?.name ? `${pv.claim_ref.namespace}/${pv.claim_ref.name}` : ''}
+                  >
                     {pv.claim_ref?.namespace && pv.claim_ref?.name ? `${pv.claim_ref.namespace}/${pv.claim_ref.name}` : '-'}
                   </td>
                 </tr>
               ))}
               {sortedPvItems.length === 0 && (
                 <tr>
-                  <td className="py-6 px-4 text-slate-400" colSpan={12}>
+                  <td className="py-6 px-4 text-slate-400" colSpan={pvColSpan}>
                     (없음)
                   </td>
                 </tr>
