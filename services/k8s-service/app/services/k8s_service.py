@@ -584,12 +584,14 @@ class K8sService:
             for pvc in pvcs.items:
                 capacity = None
                 if pvc.status.capacity:
-                    capacity = pvc.status.capacity.get("storage")
+                    cap_val = pvc.status.capacity.get("storage")
+                    capacity = str(cap_val) if cap_val is not None else None
 
                 requested = None
                 try:
                     if pvc.spec.resources and pvc.spec.resources.requests:
-                        requested = pvc.spec.resources.requests.get("storage")
+                        req_val = pvc.spec.resources.requests.get("storage")
+                        requested = str(req_val) if req_val is not None else None
                 except Exception:
                     requested = None
                 
