@@ -1,9 +1,19 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { Database, HardDrive, RefreshCw, Search, X, ExternalLink } from 'lucide-react'
+import { Database, HardDrive, RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp } from 'lucide-react'
 
 type StorageTab = 'pvcs' | 'pvs' | 'storageclasses' | 'volumeattachments'
+type PvcSortKey =
+  | 'namespace'
+  | 'name'
+  | 'status'
+  | 'age'
+  | 'storage_class'
+  | 'volume_name'
+  | 'requested'
+  | 'capacity'
+  | 'access_modes'
 
 export default function Storage() {
   const queryClient = useQueryClient()
@@ -12,6 +22,10 @@ export default function Storage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
   const [selectedPvc, setSelectedPvc] = useState<any | null>(null)
+  const [pvcSort, setPvcSort] = useState<{ key: PvcSortKey; dir: 'asc' | 'desc' }>({
+    key: 'namespace',
+    dir: 'asc',
+  })
 
   const formatAge = (iso?: string | null) => {
     if (!iso) return '-'
@@ -147,6 +161,118 @@ export default function Storage() {
     return []
   }, [activeTab, pvcs, pvs, storageClasses, volumeAttachments, searchQuery])
 
+  const sortedPvcItems = useMemo(() => {
+    if (activeTab !== 'pvcs') return filteredItems
+    const items = (filteredItems || []) as any[]
+    const dirMul = pvcSort.dir === 'asc' ? 1 : -1
+
+    const parseQuantityToBytes = (value?: string | null): number | null => {
+      if (!value) return null
+      const s = value.toString().trim()
+      if (!s) return null
+
+      const m = s.match(/^([0-9]+(?:\\.[0-9]+)?)([a-zA-Z]+)?$/)
+      if (!m) return null
+
+      const num = Number(m[1])
+      if (Number.isNaN(num)) return null
+      const unit = (m[2] || '').trim()
+
+      const bin: Record<string, number> = {
+        Ki: 1024 ** 1,
+        Mi: 1024 ** 2,
+        Gi: 1024 ** 3,
+        Ti: 1024 ** 4,
+        Pi: 1024 ** 5,
+        Ei: 1024 ** 6,
+      }
+      const dec: Record<string, number> = {
+        K: 1000 ** 1,
+        M: 1000 ** 2,
+        G: 1000 ** 3,
+        T: 1000 ** 4,
+        P: 1000 ** 5,
+        E: 1000 ** 6,
+      }
+
+      if (!unit) return num
+      if (bin[unit] !== undefined) return num * bin[unit]
+      if (dec[unit] !== undefined) return num * dec[unit]
+      return null
+    }
+
+    const strCmp = (a: any, b: any) => a.toString().localeCompare(b.toString())
+    const safeStr = (v: any) => (v ?? '').toString()
+
+    const getAgeMs = (pvc: any) => {
+      const t = pvc?.created_at ? new Date(pvc.created_at).getTime() : NaN
+      return Number.isNaN(t) ? null : t
+    }
+
+    const getSize = (pvc: any, field: 'requested' | 'capacity') => parseQuantityToBytes(pvc?.[field])
+
+    const cmpNullableNumber = (a: number | null, b: number | null) => {
+      if (a === null && b === null) return 0
+      if (a === null) return 1
+      if (b === null) return -1
+      return a - b
+    }
+
+    const cmpNullableString = (a: string, b: string) => {
+      const aa = safeStr(a).trim()
+      const bb = safeStr(b).trim()
+      if (!aa && !bb) return 0
+      if (!aa) return 1
+      if (!bb) return -1
+      return strCmp(aa, bb)
+    }
+
+    const compare = (a: any, b: any) => {
+      switch (pvcSort.key) {
+        case 'namespace':
+          return cmpNullableString(a?.namespace, b?.namespace)
+        case 'name':
+          return cmpNullableString(a?.name, b?.name)
+        case 'status':
+          return cmpNullableString(a?.status, b?.status)
+        case 'storage_class':
+          return cmpNullableString(a?.storage_class, b?.storage_class)
+        case 'volume_name':
+          return cmpNullableString(a?.volume_name, b?.volume_name)
+        case 'access_modes':
+          return cmpNullableString((a?.access_modes || []).join(','), (b?.access_modes || []).join(','))
+        case 'age':
+          return cmpNullableNumber(getAgeMs(a), getAgeMs(b))
+        case 'requested':
+          return cmpNullableNumber(getSize(a, 'requested'), getSize(b, 'requested'))
+        case 'capacity':
+          return cmpNullableNumber(getSize(a, 'capacity'), getSize(b, 'capacity'))
+        default:
+          return 0
+      }
+    }
+
+    return items.slice().sort((a, b) => compare(a, b) * dirMul)
+  }, [activeTab, filteredItems, pvcSort])
+
+  const togglePvcSort = (key: PvcSortKey) => {
+    setPvcSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, dir: 'asc' }
+    })
+  }
+
+  const SortIcon = ({ colKey }: { colKey: PvcSortKey }) => {
+    if (pvcSort.key !== colKey) return null
+    return pvcSort.dir === 'asc' ? (
+      <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+    )
+  }
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
@@ -278,19 +404,55 @@ export default function Storage() {
             <table className="w-full text-sm">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-3 px-4">Namespace</th>
-                  <th className="text-left py-3 px-4">Name</th>
-                  <th className="text-left py-3 px-4">Status</th>
-                  <th className="text-left py-3 px-4">Age</th>
-                  <th className="text-left py-3 px-4">StorageClass</th>
-                  <th className="text-left py-3 px-4">Volume</th>
-                  <th className="text-left py-3 px-4">Requested</th>
-                  <th className="text-left py-3 px-4">Capacity</th>
-                  <th className="text-left py-3 px-4">AccessModes</th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('namespace')}>
+                    <div className="flex items-center gap-2">
+                      Namespace <SortIcon colKey="namespace" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('name')}>
+                    <div className="flex items-center gap-2">
+                      Name <SortIcon colKey="name" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('status')}>
+                    <div className="flex items-center gap-2">
+                      Status <SortIcon colKey="status" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('age')}>
+                    <div className="flex items-center gap-2">
+                      Age <SortIcon colKey="age" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('storage_class')}>
+                    <div className="flex items-center gap-2">
+                      StorageClass <SortIcon colKey="storage_class" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('volume_name')}>
+                    <div className="flex items-center gap-2">
+                      Volume <SortIcon colKey="volume_name" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('requested')}>
+                    <div className="flex items-center gap-2">
+                      Requested <SortIcon colKey="requested" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('capacity')}>
+                    <div className="flex items-center gap-2">
+                      Capacity <SortIcon colKey="capacity" />
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => togglePvcSort('access_modes')}>
+                    <div className="flex items-center gap-2">
+                      AccessModes <SortIcon colKey="access_modes" />
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {filteredItems.map((pvc: any) => {
+                {sortedPvcItems.map((pvc: any) => {
                   const isSelected = selectedPvc?.namespace === pvc.namespace && selectedPvc?.name === pvc.name
                   return (
                     <tr
