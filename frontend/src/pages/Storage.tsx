@@ -61,15 +61,68 @@ export default function Storage() {
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    const filterByName = (items: any[] | undefined | null) => {
+    const filterByPredicate = (items: any[] | undefined | null, predicate: (it: any) => boolean) => {
       if (!Array.isArray(items)) return []
       if (!q) return items
-      return items.filter((it) => (it?.name || '').toString().toLowerCase().includes(q))
+      return items.filter(predicate)
     }
-    if (activeTab === 'pvcs') return filterByName(pvcs)
-    if (activeTab === 'pvs') return filterByName(pvs)
-    if (activeTab === 'storageclasses') return filterByName(storageClasses)
-    if (activeTab === 'volumeattachments') return filterByName(volumeAttachments as any)
+
+    const includes = (value: any) => (value ?? '').toString().toLowerCase().includes(q)
+    const includesAny = (values: any[] | undefined | null) => (values || []).some((v) => includes(v))
+
+    if (activeTab === 'pvcs') {
+      return filterByPredicate(pvcs, (pvc: any) => {
+        return (
+          includes(pvc?.name) ||
+          includes(pvc?.namespace) ||
+          includes(pvc?.status) ||
+          includes(pvc?.storage_class) ||
+          includes(pvc?.volume_name) ||
+          includes(pvc?.requested) ||
+          includes(pvc?.capacity) ||
+          includesAny(pvc?.access_modes)
+        )
+      })
+    }
+    if (activeTab === 'pvs') {
+      return filterByPredicate(pvs, (pv: any) => {
+        const claim = pv?.claim_ref?.namespace && pv?.claim_ref?.name ? `${pv.claim_ref.namespace}/${pv.claim_ref.name}` : ''
+        return (
+          includes(pv?.name) ||
+          includes(pv?.status) ||
+          includes(pv?.storage_class) ||
+          includes(pv?.capacity) ||
+          includes(pv?.reclaim_policy) ||
+          includesAny(pv?.access_modes) ||
+          includes(claim)
+        )
+      })
+    }
+    if (activeTab === 'storageclasses') {
+      return filterByPredicate(storageClasses, (sc: any) => {
+        return (
+          includes(sc?.name) ||
+          includes(sc?.provisioner) ||
+          includes(sc?.reclaim_policy) ||
+          includes(sc?.volume_binding_mode) ||
+          includes(sc?.allow_volume_expansion) ||
+          includes(sc?.is_default)
+        )
+      })
+    }
+    if (activeTab === 'volumeattachments') {
+      return filterByPredicate(volumeAttachments as any, (va: any) => {
+        return (
+          includes(va?.name) ||
+          includes(va?.node_name) ||
+          includes(va?.persistent_volume_name) ||
+          includes(va?.attacher) ||
+          includes(va?.attached) ||
+          includes(va?.attach_error?.message) ||
+          includes(va?.detach_error?.message)
+        )
+      })
+    }
     return []
   }, [activeTab, pvcs, pvs, storageClasses, volumeAttachments, searchQuery])
 
