@@ -272,6 +272,58 @@ export interface PodInfo {
   ready: string
 }
 
+export interface PodRbacRule {
+  verbs: string[]
+  api_groups: string[]
+  resources: string[]
+  resource_names: string[]
+  non_resource_urls: string[]
+}
+
+export interface PodRbacSubject {
+  kind?: string | null
+  api_group?: string | null
+  name?: string | null
+  namespace?: string | null
+}
+
+export interface PodRbacRoleRef {
+  api_group?: string | null
+  kind?: string | null
+  name?: string | null
+}
+
+export interface PodRbacResolvedRole {
+  api_group?: string | null
+  kind?: string | null
+  name?: string | null
+  rules: PodRbacRule[]
+  error?: string | null
+}
+
+export interface PodRbacBinding {
+  name: string
+  namespace?: string | null
+  subjects: PodRbacSubject[]
+  matched_by?: Array<{
+    reason?: string | null
+    broad?: boolean | null
+    subject?: PodRbacSubject | null
+  }>
+  is_broad?: boolean | null
+  role_ref: PodRbacRoleRef
+  resolved_role: PodRbacResolvedRole
+  created_at?: string | null
+}
+
+export interface PodRbacResponse {
+  pod: { name: string; namespace: string }
+  service_account: { name: string; namespace: string }
+  role_bindings: PodRbacBinding[]
+  cluster_role_bindings: PodRbacBinding[]
+  errors: string[]
+}
+
 export interface PVCInfo {
   name: string
   namespace: string
@@ -570,6 +622,15 @@ export const api = {
       }
     )
     return data.logs
+  },
+
+  getPodRbac: async (
+    namespace: string,
+    podName: string,
+    params?: { include_authenticated?: boolean }
+  ): Promise<PodRbacResponse> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pods/${podName}/rbac`, { params })
+    return data
   },
 
   getPVCs: async (namespace?: string, forceRefresh: boolean = false): Promise<PVCInfo[]> => {
