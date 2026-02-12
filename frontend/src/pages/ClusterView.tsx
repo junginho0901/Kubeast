@@ -1470,7 +1470,12 @@ export default function ClusterView() {
                                   <div>
                                     <p className="text-slate-300 text-sm font-medium mb-2">Resources</p>
                                     <div className="overflow-x-auto">
-                                      <table className="w-full text-sm">
+                                      <table className="w-full text-sm table-fixed">
+                                        <colgroup>
+                                          <col className="w-56" />
+                                          <col />
+                                          <col className="w-80" />
+                                        </colgroup>
                                         <thead className="text-slate-400">
                                           <tr>
                                             <th className="text-left py-2 pr-4">apiGroup</th>
@@ -1481,7 +1486,7 @@ export default function ClusterView() {
                                         <tbody className="divide-y divide-slate-700">
                                           {resourceItems.map((it: any, idx: number) => (
                                             <tr key={idx}>
-                                              <td className="py-2 pr-4 text-slate-300 font-mono whitespace-nowrap">{it.apiGroup}</td>
+                                              <td className="py-2 pr-4 text-slate-300 font-mono break-words">{it.apiGroup}</td>
                                               <td className="py-2 pr-4 text-white font-mono break-words">
                                                 {it.resource}
                                                 {it.resourceNames?.length ? (
@@ -1505,7 +1510,11 @@ export default function ClusterView() {
                                   <div>
                                     <p className="text-slate-300 text-sm font-medium mb-2">Non-resource URLs</p>
                                     <div className="overflow-x-auto">
-                                      <table className="w-full text-sm">
+                                      <table className="w-full text-sm table-fixed">
+                                        <colgroup>
+                                          <col />
+                                          <col className="w-80" />
+                                        </colgroup>
                                         <thead className="text-slate-400">
                                           <tr>
                                             <th className="text-left py-2 pr-4">url</th>
