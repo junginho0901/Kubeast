@@ -1281,25 +1281,23 @@ export default function ClusterView() {
                               {scoped.length ? (
                                 <div className="space-y-2">
                                   {scoped.map((b: any) => (
-                                    <details key={`rb-${b.name}`} className="bg-slate-800 rounded-lg p-4">
-                                      <summary className="cursor-pointer select-none">
-                                        <div className="flex items-start justify-between gap-4">
-                                          <div className="min-w-0">
-                                            <p className="text-white font-medium break-words">{b.name}</p>
-                                            <p className="text-sm text-slate-400 break-words">
-                                              {b.role_ref?.kind}:{b.role_ref?.name}
-                                            </p>
-                                          </div>
-                                          <div className="text-right flex-shrink-0">
-                                            <p className="text-sm text-slate-300">
-                                              rules: {b.resolved_role?.rules?.length ?? 0}
-                                            </p>
-                                            {b.resolved_role?.error && (
-                                              <p className="text-xs text-yellow-300">resolve 실패</p>
-                                            )}
-                                          </div>
+                                    <div key={`rb-${b.name}`} className="bg-slate-800 rounded-lg p-4">
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0">
+                                          <p className="text-white font-medium break-words">{b.name}</p>
+                                          <p className="text-sm text-slate-400 break-words">
+                                            {b.role_ref?.kind}:{b.role_ref?.name}
+                                          </p>
                                         </div>
-                                      </summary>
+                                        <div className="text-right flex-shrink-0">
+                                          <p className="text-sm text-slate-300">
+                                            rules: {b.resolved_role?.rules?.length ?? 0}
+                                          </p>
+                                          {b.resolved_role?.error && (
+                                            <p className="text-xs text-yellow-300">resolve 실패</p>
+                                          )}
+                                        </div>
+                                      </div>
 
                                       <div className="mt-4 space-y-3">
                                         <div>
@@ -1324,7 +1322,7 @@ export default function ClusterView() {
                                         ) : (
                                           <div>
                                             <p className="text-sm text-slate-400 mb-2">Rules</p>
-                                            <div className="space-y-2">
+                                            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                                               {(b.resolved_role?.rules || []).map((r: any, idx: number) => (
                                                 <div key={idx} className="bg-slate-900 rounded-lg p-3 text-sm">
                                                   <div className="flex flex-col gap-1">
@@ -1357,7 +1355,7 @@ export default function ClusterView() {
                                           </div>
                                         )}
                                       </div>
-                                    </details>
+                                    </div>
                                   ))}
                                 </div>
                               ) : (
@@ -1380,26 +1378,24 @@ export default function ClusterView() {
 
                                   <div className="mt-3 space-y-2">
                                     {broad.map((b: any) => (
-                                      <details key={`rb-broad-${b.name}`} className="bg-slate-900 rounded-lg p-4">
-                                        <summary className="cursor-pointer select-none">
-                                          <div className="flex items-start justify-between gap-4">
-                                            <div className="min-w-0">
-                                              <p className="text-white font-medium break-words">{b.name}</p>
-                                              <p className="text-sm text-slate-400 break-words">
-                                                {b.role_ref?.kind}:{b.role_ref?.name}
-                                              </p>
-                                            </div>
-                                            <div className="text-right flex-shrink-0">
-                                              <p className="text-sm text-slate-300">
-                                                rules: {b.resolved_role?.rules?.length ?? 0}
-                                              </p>
-                                              <p className="text-xs text-yellow-300">광범위</p>
-                                              {b.resolved_role?.error && (
-                                                <p className="text-xs text-yellow-300">resolve 실패</p>
-                                              )}
-                                            </div>
+                                      <div key={`rb-broad-${b.name}`} className="bg-slate-900 rounded-lg p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                          <div className="min-w-0">
+                                            <p className="text-white font-medium break-words">{b.name}</p>
+                                            <p className="text-sm text-slate-400 break-words">
+                                              {b.role_ref?.kind}:{b.role_ref?.name}
+                                            </p>
                                           </div>
-                                        </summary>
+                                          <div className="text-right flex-shrink-0">
+                                            <p className="text-sm text-slate-300">
+                                              rules: {b.resolved_role?.rules?.length ?? 0}
+                                            </p>
+                                            <p className="text-xs text-yellow-300">광범위</p>
+                                            {b.resolved_role?.error && (
+                                              <p className="text-xs text-yellow-300">resolve 실패</p>
+                                            )}
+                                          </div>
+                                        </div>
 
                                         <div className="mt-4 space-y-3">
                                           <div>
@@ -1424,7 +1420,7 @@ export default function ClusterView() {
                                           ) : (
                                             <div>
                                               <p className="text-sm text-slate-400 mb-2">Rules</p>
-                                              <div className="space-y-2">
+                                              <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                                                 {(b.resolved_role?.rules || []).map((r: any, idx: number) => (
                                                   <div key={idx} className="bg-slate-800 rounded-lg p-3 text-sm">
                                                     <div className="flex flex-col gap-1">
@@ -1445,7 +1441,7 @@ export default function ClusterView() {
                                             </div>
                                           )}
                                         </div>
-                                      </details>
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
@@ -1467,25 +1463,23 @@ export default function ClusterView() {
                               {scoped.length ? (
                                 <div className="space-y-2">
                                   {scoped.map((b: any) => (
-                                    <details key={`crb-${b.name}`} className="bg-slate-800 rounded-lg p-4">
-                                      <summary className="cursor-pointer select-none">
-                                        <div className="flex items-start justify-between gap-4">
-                                          <div className="min-w-0">
-                                            <p className="text-white font-medium break-words">{b.name}</p>
-                                            <p className="text-sm text-slate-400 break-words">
-                                              {b.role_ref?.kind}:{b.role_ref?.name}
-                                            </p>
-                                          </div>
-                                          <div className="text-right flex-shrink-0">
-                                            <p className="text-sm text-slate-300">
-                                              rules: {b.resolved_role?.rules?.length ?? 0}
-                                            </p>
-                                            {b.resolved_role?.error && (
-                                              <p className="text-xs text-yellow-300">resolve 실패</p>
-                                            )}
-                                          </div>
+                                    <div key={`crb-${b.name}`} className="bg-slate-800 rounded-lg p-4">
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0">
+                                          <p className="text-white font-medium break-words">{b.name}</p>
+                                          <p className="text-sm text-slate-400 break-words">
+                                            {b.role_ref?.kind}:{b.role_ref?.name}
+                                          </p>
                                         </div>
-                                      </summary>
+                                        <div className="text-right flex-shrink-0">
+                                          <p className="text-sm text-slate-300">
+                                            rules: {b.resolved_role?.rules?.length ?? 0}
+                                          </p>
+                                          {b.resolved_role?.error && (
+                                            <p className="text-xs text-yellow-300">resolve 실패</p>
+                                          )}
+                                        </div>
+                                      </div>
 
                                       <div className="mt-4 space-y-3">
                                         <div>
@@ -1510,7 +1504,7 @@ export default function ClusterView() {
                                         ) : (
                                           <div>
                                             <p className="text-sm text-slate-400 mb-2">Rules</p>
-                                            <div className="space-y-2">
+                                            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                                               {(b.resolved_role?.rules || []).map((r: any, idx: number) => (
                                                 <div key={idx} className="bg-slate-900 rounded-lg p-3 text-sm">
                                                   <div className="flex flex-col gap-1">
@@ -1543,7 +1537,7 @@ export default function ClusterView() {
                                           </div>
                                         )}
                                       </div>
-                                    </details>
+                                    </div>
                                   ))}
                                 </div>
                               ) : (
@@ -1566,26 +1560,24 @@ export default function ClusterView() {
 
                                   <div className="mt-3 space-y-2">
                                     {broad.map((b: any) => (
-                                      <details key={`crb-broad-${b.name}`} className="bg-slate-900 rounded-lg p-4">
-                                        <summary className="cursor-pointer select-none">
-                                          <div className="flex items-start justify-between gap-4">
-                                            <div className="min-w-0">
-                                              <p className="text-white font-medium break-words">{b.name}</p>
-                                              <p className="text-sm text-slate-400 break-words">
-                                                {b.role_ref?.kind}:{b.role_ref?.name}
-                                              </p>
-                                            </div>
-                                            <div className="text-right flex-shrink-0">
-                                              <p className="text-sm text-slate-300">
-                                                rules: {b.resolved_role?.rules?.length ?? 0}
-                                              </p>
-                                              <p className="text-xs text-yellow-300">광범위</p>
-                                              {b.resolved_role?.error && (
-                                                <p className="text-xs text-yellow-300">resolve 실패</p>
-                                              )}
-                                            </div>
+                                      <div key={`crb-broad-${b.name}`} className="bg-slate-900 rounded-lg p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                          <div className="min-w-0">
+                                            <p className="text-white font-medium break-words">{b.name}</p>
+                                            <p className="text-sm text-slate-400 break-words">
+                                              {b.role_ref?.kind}:{b.role_ref?.name}
+                                            </p>
                                           </div>
-                                        </summary>
+                                          <div className="text-right flex-shrink-0">
+                                            <p className="text-sm text-slate-300">
+                                              rules: {b.resolved_role?.rules?.length ?? 0}
+                                            </p>
+                                            <p className="text-xs text-yellow-300">광범위</p>
+                                            {b.resolved_role?.error && (
+                                              <p className="text-xs text-yellow-300">resolve 실패</p>
+                                            )}
+                                          </div>
+                                        </div>
 
                                         <div className="mt-4 space-y-3">
                                           <div>
@@ -1610,7 +1602,7 @@ export default function ClusterView() {
                                           ) : (
                                             <div>
                                               <p className="text-sm text-slate-400 mb-2">Rules</p>
-                                              <div className="space-y-2">
+                                              <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                                                 {(b.resolved_role?.rules || []).map((r: any, idx: number) => (
                                                   <div key={idx} className="bg-slate-800 rounded-lg p-3 text-sm">
                                                     <div className="flex flex-col gap-1">
@@ -1631,7 +1623,7 @@ export default function ClusterView() {
                                             </div>
                                           )}
                                         </div>
-                                      </details>
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
