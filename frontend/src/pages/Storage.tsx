@@ -507,39 +507,59 @@ export default function Storage() {
   }
 
   const SortIcon = ({ colKey }: { colKey: PvcSortKey }) => {
-    if (pvcSort.key !== colKey) return null
-    return pvcSort.dir === 'asc' ? (
-      <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+    const isActive = pvcSort.key === colKey
+    const icon = isActive ? (
+      pvcSort.dir === 'asc' ? (
+        <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+      ) : (
+        <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      )
     ) : (
-      <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      <ArrowUp className="w-3.5 h-3.5 text-slate-400 opacity-0" />
     )
+    return <span className="inline-flex w-3.5 h-3.5 items-center justify-center pointer-events-none">{icon}</span>
   }
 
   const PvSortIcon = ({ colKey }: { colKey: PvSortKey }) => {
-    if (pvSort.key !== colKey) return null
-    return pvSort.dir === 'asc' ? (
-      <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+    const isActive = pvSort.key === colKey
+    const icon = isActive ? (
+      pvSort.dir === 'asc' ? (
+        <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+      ) : (
+        <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      )
     ) : (
-      <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      <ArrowUp className="w-3.5 h-3.5 text-slate-400 opacity-0" />
     )
+    return <span className="inline-flex w-3.5 h-3.5 items-center justify-center pointer-events-none">{icon}</span>
   }
 
   const StorageClassSortIcon = ({ colKey }: { colKey: StorageClassSortKey }) => {
-    if (storageClassSort.key !== colKey) return null
-    return storageClassSort.dir === 'asc' ? (
-      <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+    const isActive = storageClassSort.key === colKey
+    const icon = isActive ? (
+      storageClassSort.dir === 'asc' ? (
+        <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+      ) : (
+        <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      )
     ) : (
-      <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      <ArrowUp className="w-3.5 h-3.5 text-slate-400 opacity-0" />
     )
+    return <span className="inline-flex w-3.5 h-3.5 items-center justify-center pointer-events-none">{icon}</span>
   }
 
   const VolumeAttachmentSortIcon = ({ colKey }: { colKey: VolumeAttachmentSortKey }) => {
-    if (volumeAttachmentSort.key !== colKey) return null
-    return volumeAttachmentSort.dir === 'asc' ? (
-      <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+    const isActive = volumeAttachmentSort.key === colKey
+    const icon = isActive ? (
+      volumeAttachmentSort.dir === 'asc' ? (
+        <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+      ) : (
+        <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      )
     ) : (
-      <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+      <ArrowUp className="w-3.5 h-3.5 text-slate-400 opacity-0" />
     )
+    return <span className="inline-flex w-3.5 h-3.5 items-center justify-center pointer-events-none">{icon}</span>
   }
 
   const handleRefresh = async () => {
