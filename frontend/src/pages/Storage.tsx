@@ -115,6 +115,11 @@ export default function Storage() {
           includes(pv?.storage_class) ||
           includes(pv?.capacity) ||
           includes(pv?.reclaim_policy) ||
+          includes(pv?.source) ||
+          includes(pv?.driver) ||
+          includes(pv?.volume_handle) ||
+          includes(pv?.volume_mode) ||
+          includes(pv?.node_affinity) ||
           includesAny(pv?.access_modes) ||
           includes(claim)
         )
@@ -656,8 +661,13 @@ export default function Storage() {
               <tr>
                 <th className="text-left py-3 px-4">Name</th>
                 <th className="text-left py-3 px-4">Status</th>
+                <th className="text-left py-3 px-4">Age</th>
                 <th className="text-left py-3 px-4">Capacity</th>
                 <th className="text-left py-3 px-4">StorageClass</th>
+                <th className="text-left py-3 px-4">Source/Driver</th>
+                <th className="text-left py-3 px-4">VolumeHandle</th>
+                <th className="text-left py-3 px-4">VolumeMode</th>
+                <th className="text-left py-3 px-4">NodeAffinity</th>
                 <th className="text-left py-3 px-4">Reclaim</th>
                 <th className="text-left py-3 px-4">AccessModes</th>
                 <th className="text-left py-3 px-4">Claim</th>
@@ -668,8 +678,22 @@ export default function Storage() {
                 <tr key={pv.name}>
                   <td className="py-3 px-4 text-white font-mono">{pv.name}</td>
                   <td className="py-3 px-4 text-slate-200">{pv.status}</td>
-                  <td className="py-3 px-4 text-slate-200 font-mono">{pv.capacity}</td>
+                  <td
+                    className="py-3 px-4 text-slate-200 font-mono whitespace-nowrap"
+                    title={pv.created_at ? new Date(pv.created_at).toLocaleString('ko-KR') : ''}
+                  >
+                    {formatAge(pv.created_at)}
+                  </td>
+                  <td className="py-3 px-4 text-slate-200 font-mono">{pv.capacity || '-'}</td>
                   <td className="py-3 px-4 text-slate-200 font-mono">{pv.storage_class || '-'}</td>
+                  <td className="py-3 px-4 text-slate-200 font-mono break-words">
+                    {pv.source ? (pv.driver ? `${pv.source} · ${pv.driver}` : pv.source) : '-'}
+                  </td>
+                  <td className="py-3 px-4 text-slate-200 font-mono break-words">{pv.volume_handle || '-'}</td>
+                  <td className="py-3 px-4 text-slate-200">{pv.volume_mode || '-'}</td>
+                  <td className="py-3 px-4 text-slate-200 font-mono break-words" title={pv.node_affinity || ''}>
+                    {pv.node_affinity || '-'}
+                  </td>
                   <td className="py-3 px-4 text-slate-200">{pv.reclaim_policy}</td>
                   <td className="py-3 px-4 text-slate-200">{(pv.access_modes || []).join(', ') || '-'}</td>
                   <td className="py-3 px-4 text-slate-200 font-mono">
@@ -679,7 +703,7 @@ export default function Storage() {
               ))}
               {filteredItems.length === 0 && (
                 <tr>
-                  <td className="py-6 px-4 text-slate-400" colSpan={7}>
+                  <td className="py-6 px-4 text-slate-400" colSpan={12}>
                     (없음)
                   </td>
                 </tr>

@@ -134,6 +134,122 @@ class K8sService:
             "resource_names": list(getattr(rule, "resource_names", None) or []),
             "non_resource_urls": list(getattr(rule, "non_resource_urls", None) or []),
         }
+
+    def _summarize_pv_source(self, pv: Any) -> Dict[str, Optional[str]]:
+        """
+        PV spec의 volume source를 간단히 요약한다.
+        - source: CSI/NFS/Local/HostPath/...
+        - driver: CSI driver (해당 시)
+        - volume_handle: CSI volumeHandle (해당 시)
+        """
+        spec = getattr(pv, "spec", None)
+        if spec is None:
+            return {"source": None, "driver": None, "volume_handle": None}
+
+        csi = getattr(spec, "csi", None)
+        if csi is not None:
+            return {
+                "source": "CSI",
+                "driver": getattr(csi, "driver", None),
+                "volume_handle": getattr(csi, "volume_handle", None),
+            }
+
+        nfs = getattr(spec, "nfs", None)
+        if nfs is not None:
+            server = getattr(nfs, "server", None)
+            path = getattr(nfs, "path", None)
+            detail = None
+            if server or path:
+                detail = f"{server or ''}:{path or ''}".strip(":")
+            return {"source": "NFS", "driver": detail, "volume_handle": None}
+
+        local = getattr(spec, "local", None)
+        if local is not None:
+            path = getattr(local, "path", None)
+            return {"source": "Local", "driver": path, "volume_handle": None}
+
+        host_path = getattr(spec, "host_path", None)
+        if host_path is not None:
+            path = getattr(host_path, "path", None)
+            return {"source": "HostPath", "driver": path, "volume_handle": None}
+
+        aws_ebs = getattr(spec, "aws_elastic_block_store", None)
+        if aws_ebs is not None:
+            volume_id = getattr(aws_ebs, "volume_id", None)
+            return {"source": "AWS EBS", "driver": volume_id, "volume_handle": None}
+
+        gce_pd = getattr(spec, "gce_persistent_disk", None)
+        if gce_pd is not None:
+            pd_name = getattr(gce_pd, "pd_name", None)
+            return {"source": "GCE PD", "driver": pd_name, "volume_handle": None}
+
+        azure_disk = getattr(spec, "azure_disk", None)
+        if azure_disk is not None:
+            disk_name = getattr(azure_disk, "disk_name", None)
+            return {"source": "AzureDisk", "driver": disk_name, "volume_handle": None}
+
+        azure_file = getattr(spec, "azure_file", None)
+        if azure_file is not None:
+            share_name = getattr(azure_file, "share_name", None)
+            return {"source": "AzureFile", "driver": share_name, "volume_handle": None}
+
+        # 기타 source는 너무 많아서 이름만 표시한다.
+        for attr, label in [
+            ("cephfs", "CephFS"),
+            ("rbd", "RBD"),
+            ("iscsi", "iSCSI"),
+            ("cinder", "Cinder"),
+            ("glusterfs", "GlusterFS"),
+            ("vsphere_volume", "vSphere"),
+            ("portworx_volume", "Portworx"),
+            ("quobyte", "Quobyte"),
+            ("scale_io", "ScaleIO"),
+            ("storageos", "StorageOS"),
+        ]:
+            if getattr(spec, attr, None) is not None:
+                return {"source": label, "driver": None, "volume_handle": None}
+
+        return {"source": "Unknown", "driver": None, "volume_handle": None}
+
+    def _summarize_pv_node_affinity(self, pv: Any) -> Optional[str]:
+        """
+        PV spec.nodeAffinity.required 를 1줄로 요약한다.
+        예: kubernetes.io/hostname In [node-a,node-b]
+        """
+        spec = getattr(pv, "spec", None)
+        if spec is None:
+            return None
+
+        node_affinity = getattr(spec, "node_affinity", None)
+        required = getattr(node_affinity, "required", None)
+        terms = list(getattr(required, "node_selector_terms", None) or [])
+        if not terms:
+            return None
+
+        parts: List[str] = []
+        for term in terms:
+            exprs = list(getattr(term, "match_expressions", None) or [])
+            for expr in exprs:
+                key = getattr(expr, "key", None)
+                op = getattr(expr, "operator", None)
+                values = list(getattr(expr, "values", None) or [])
+                if not key or not op:
+                    continue
+                if values:
+                    preview = ", ".join(values[:3])
+                    if len(values) > 3:
+                        preview = f"{preview}, …(+{len(values) - 3})"
+                    parts.append(f"{key} {op} [{preview}]")
+                else:
+                    parts.append(f"{key} {op}")
+
+        if not parts:
+            return None
+
+        # 너무 길어지는 경우 앞부분만 노출
+        if len(parts) == 1:
+            return parts[0]
+        return f"{parts[0]} (+{len(parts) - 1} more)"
     
     async def get_cluster_overview(self, force_refresh: bool = False) -> ClusterOverview:
         """클러스터 전체 개요 (Redis 캐시)"""
@@ -618,21 +734,35 @@ class K8sService:
             result = []
             
             for pv in pvs.items:
+                source_info = self._summarize_pv_source(pv)
+                node_affinity = self._summarize_pv_node_affinity(pv)
+
                 claim_ref = None
                 if pv.spec.claim_ref:
                     claim_ref = {
                         "namespace": pv.spec.claim_ref.namespace,
                         "name": pv.spec.claim_ref.name
                     }
+
+                cap_val = None
+                try:
+                    cap_val = pv.spec.capacity.get("storage") if pv.spec.capacity else None
+                except Exception:
+                    cap_val = None
                 
                 result.append(PVInfo(
                     name=pv.metadata.name,
                     status=pv.status.phase,
-                    capacity=pv.spec.capacity.get("storage"),
+                    capacity=str(cap_val) if cap_val is not None else "",
                     access_modes=pv.spec.access_modes or [],
                     storage_class=pv.spec.storage_class_name,
                     reclaim_policy=pv.spec.persistent_volume_reclaim_policy,
                     claim_ref=claim_ref,
+                    volume_mode=getattr(pv.spec, "volume_mode", None),
+                    source=source_info.get("source"),
+                    driver=source_info.get("driver"),
+                    volume_handle=source_info.get("volume_handle"),
+                    node_affinity=node_affinity,
                     created_at=pv.metadata.creation_timestamp
                 ))
             
@@ -645,6 +775,9 @@ class K8sService:
         try:
             pv = self.v1.read_persistent_volume(name)
 
+            source_info = self._summarize_pv_source(pv)
+            node_affinity = self._summarize_pv_node_affinity(pv)
+
             claim_ref = None
             if pv.spec.claim_ref:
                 claim_ref = {
@@ -652,14 +785,25 @@ class K8sService:
                     "name": pv.spec.claim_ref.name,
                 }
 
+            cap_val = None
+            try:
+                cap_val = pv.spec.capacity.get("storage") if pv.spec.capacity else None
+            except Exception:
+                cap_val = None
+
             return PVInfo(
                 name=pv.metadata.name,
                 status=pv.status.phase,
-                capacity=pv.spec.capacity.get("storage"),
+                capacity=str(cap_val) if cap_val is not None else "",
                 access_modes=pv.spec.access_modes or [],
                 storage_class=pv.spec.storage_class_name,
                 reclaim_policy=pv.spec.persistent_volume_reclaim_policy,
                 claim_ref=claim_ref,
+                volume_mode=getattr(pv.spec, "volume_mode", None),
+                source=source_info.get("source"),
+                driver=source_info.get("driver"),
+                volume_handle=source_info.get("volume_handle"),
+                node_affinity=node_affinity,
                 created_at=pv.metadata.creation_timestamp,
             )
         except ApiException as e:

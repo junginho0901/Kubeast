@@ -347,6 +347,11 @@ export interface PVInfo {
     namespace?: string
     name?: string
   }
+  volume_mode?: string | null
+  source?: string | null
+  driver?: string | null
+  volume_handle?: string | null
+  node_affinity?: string | null
   created_at: string
 }
 
