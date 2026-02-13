@@ -56,6 +56,12 @@ export default function Resources() {
     retry: 0,
   })
 
+  const { data: podsForPdbs } = useQuery({
+    queryKey: ['pods', namespace, '__for_pdbs__'],
+    queryFn: () => api.getPods(namespace!, undefined, false),
+    enabled: !!namespace && activeTab === 'pdbs',
+  })
+
   const { data: pods } = useQuery({
     queryKey: ['pods', namespace, podLabelSelector || ''],
     queryFn: () => api.getPods(namespace!, podLabelSelector || undefined, false), // 자동 갱신은 캐시 사용
@@ -84,6 +90,32 @@ export default function Resources() {
   const filteredPDBs = filterBySearch(pdbs)
   const filteredPods = filterBySearch(pods)
   const filteredPVCs = filterBySearch(pvcs)
+
+  const selectorToString = (selectorObj: Record<string, string> | undefined | null) => {
+    const obj = selectorObj || {}
+    return Object.entries(obj)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(',')
+  }
+
+  const podMatchesSelector = (pod: any, selectorObj: Record<string, string> | undefined | null) => {
+    const sel = selectorObj || {}
+    const entries = Object.entries(sel)
+    if (entries.length === 0) return false
+    const labels = pod?.labels || {}
+    return entries.every(([k, v]) => labels?.[k] === v)
+  }
+
+  const isPodReady = (pod: any) => {
+    const ready = (pod?.ready || '').toString()
+    const m = ready.match(/^(\d+)\/(\d+)$/)
+    if (m) {
+      const a = Number(m[1])
+      const b = Number(m[2])
+      if (!Number.isNaN(a) && !Number.isNaN(b) && b > 0) return a === b
+    }
+    return pod?.phase === 'Running'
+  }
   
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -110,6 +142,9 @@ export default function Resources() {
         data = await api.getPDBs(namespace!, true)
         queryClient.removeQueries({ queryKey: ['pdbs', namespace] })
         queryClient.setQueryData(['pdbs', namespace], data)
+        const podData = await api.getPods(namespace!, undefined, true)
+        queryClient.removeQueries({ queryKey: ['pods', namespace, '__for_pdbs__'] })
+        queryClient.setQueryData(['pods', namespace, '__for_pdbs__'], podData)
       } else if (activeTab === 'pods') {
         data = await api.getPods(namespace!, podLabelSelector || undefined, true)
         queryClient.removeQueries({ queryKey: ['pods', namespace, podLabelSelector || ''] })
@@ -524,6 +559,44 @@ export default function Resources() {
                   <p className="text-sm text-slate-400 mt-1">
                     {pdb.min_available ? `minAvailable=${pdb.min_available}` : pdb.max_unavailable ? `maxUnavailable=${pdb.max_unavailable}` : 'min/max: -'}
                   </p>
+                  {(() => {
+                    const selectorObj = pdb.selector || {}
+                    const matched = (podsForPdbs || []).filter((pod: any) => podMatchesSelector(pod, selectorObj))
+                    const matchedCount = matched.length
+                    const readyCount = matched.filter(isPodReady).length
+
+                    if (Object.keys(selectorObj).length === 0) {
+                      return <p className="text-xs text-slate-500 mt-1">selector가 없어 매칭 Pod를 계산할 수 없습니다.</p>
+                    }
+
+                    return (
+                      <p className="text-xs text-slate-500 mt-1 font-mono">
+                        matchedPods: {matchedCount} · ready: {readyCount}
+                      </p>
+                    )
+                  })()}
+
+                  {(() => {
+                    const expected = Number(pdb.expected_pods || 0)
+                    const currentHealthy = Number(pdb.current_healthy || 0)
+                    const desiredHealthy = Number(pdb.desired_healthy || 0)
+                    const allowed = Number(pdb.disruptions_allowed || 0)
+
+                    if (expected === 0) {
+                      return <p className="text-xs text-slate-400 mt-2">매칭 Pod가 없어 PDB가 적용되지 않습니다.</p>
+                    }
+                    if (allowed > 0) {
+                      return <p className="text-xs text-slate-400 mt-2">현재 {allowed}개까지 disruption(퇴거)이 허용됩니다.</p>
+                    }
+                    if (currentHealthy < desiredHealthy) {
+                      return (
+                        <p className="text-xs text-yellow-200 mt-2">
+                          현재는 보호 불가: healthy({currentHealthy})가 desiredHealthy({desiredHealthy}) 미만이라 disruptionsAllowed=0 입니다.
+                        </p>
+                      )
+                    }
+                    return <p className="text-xs text-yellow-200 mt-2">현재는 보호 불가: disruptionsAllowed=0 입니다.</p>
+                  })()}
                 </div>
                 <span className={`badge ${pdb.disruptions_allowed > 0 ? 'badge-success' : 'badge-warning'}`}>
                   disruptionsAllowed: {pdb.disruptions_allowed}
@@ -548,6 +621,23 @@ export default function Resources() {
                     {Object.entries(pdb.selector || {}).map(([k, v]: any) => `${k}=${v}`).join(', ') || '-'}
                   </p>
                 </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selector = selectorToString(pdb.selector || {})
+                    setPodLabelSelector(selector)
+                    setSearchQuery('')
+                    setActiveTab('pods')
+                  }}
+                  disabled={!pdb.selector || Object.keys(pdb.selector).length === 0}
+                  className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="PDB selector로 Pod 목록을 필터링합니다"
+                >
+                  Pods로 이동
+                </button>
               </div>
             </div>
           ))}
