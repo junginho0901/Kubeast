@@ -363,6 +363,8 @@ export interface StorageClassInfo {
   allow_volume_expansion?: boolean | null
   is_default: boolean
   parameters: Record<string, any>
+  mount_options?: string[] | null
+  allowed_topologies?: string[] | null
   created_at?: string | null
 }
 

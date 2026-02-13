@@ -29,11 +29,15 @@ type PvSortKey =
   | 'claim'
 type StorageClassSortKey =
   | 'name'
+  | 'age'
   | 'is_default'
   | 'provisioner'
   | 'volume_binding_mode'
   | 'allow_volume_expansion'
   | 'reclaim_policy'
+  | 'parameters'
+  | 'mount_options'
+  | 'allowed_topologies'
 type VolumeAttachmentSortKey = 'name' | 'attached' | 'persistent_volume_name' | 'node_name' | 'attacher' | 'error'
 
 export default function Storage() {
@@ -52,6 +56,7 @@ export default function Storage() {
     dir: 'asc',
   })
   const [pvColumnMode, setPvColumnMode] = useState<'compact' | 'full'>('compact')
+  const [storageClassColumnMode, setStorageClassColumnMode] = useState<'compact' | 'full'>('compact')
   const [storageClassSort, setStorageClassSort] = useState<{ key: StorageClassSortKey; dir: 'asc' | 'desc' }>({
     key: 'name',
     dir: 'asc',
@@ -129,6 +134,13 @@ export default function Storage() {
     if (!hiddenInCompact.includes(pvSort.key)) return
     setPvSort((prev) => ({ ...prev, key: 'name' }))
   }, [pvColumnMode, pvSort.key])
+
+  useEffect(() => {
+    if (storageClassColumnMode !== 'compact') return
+    const hiddenInCompact: StorageClassSortKey[] = ['parameters', 'mount_options', 'allowed_topologies']
+    if (!hiddenInCompact.includes(storageClassSort.key)) return
+    setStorageClassSort((prev) => ({ ...prev, key: 'name' }))
+  }, [storageClassColumnMode, storageClassSort.key])
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -210,13 +222,22 @@ export default function Storage() {
     }
     if (activeTab === 'storageclasses') {
       return filterByPredicate(storageClasses, (sc: any) => {
+        const paramsStr = Object.entries(sc?.parameters || {})
+          .map(([k, v]) => `${k}=${String(v)}`)
+          .join(', ')
+        const mountStr = (sc?.mount_options || []).join(', ')
+        const topoStr = (sc?.allowed_topologies || []).join('; ')
         return (
           includes(sc?.name) ||
           includes(sc?.provisioner) ||
           includes(sc?.reclaim_policy) ||
           includes(sc?.volume_binding_mode) ||
           includes(sc?.allow_volume_expansion) ||
-          includes(sc?.is_default)
+          includes(sc?.is_default) ||
+          includes(sc?.created_at) ||
+          includes(paramsStr) ||
+          includes(mountStr) ||
+          includes(topoStr)
         )
       })
     }
@@ -391,11 +412,24 @@ export default function Storage() {
       return a - b
     }
     const boolToNum = (v: any): number | null => (v === true ? 1 : v === false ? 0 : null)
+    const getAgeMs = (sc: any) => {
+      const t = sc?.created_at ? new Date(sc.created_at).getTime() : NaN
+      return Number.isNaN(t) ? null : t
+    }
+
+    const paramsStr = (sc: any) =>
+      Object.entries(sc?.parameters || {})
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join(', ')
+    const mountStr = (sc: any) => (sc?.mount_options || []).join(', ')
+    const topoStr = (sc: any) => (sc?.allowed_topologies || []).join('; ')
 
     const compare = (a: any, b: any) => {
       switch (storageClassSort.key) {
         case 'name':
           return cmpNullableString(a?.name, b?.name)
+        case 'age':
+          return cmpNullableNumber(getAgeMs(a), getAgeMs(b))
         case 'is_default':
           return cmpNullableNumber(boolToNum(a?.is_default), boolToNum(b?.is_default))
         case 'provisioner':
@@ -406,6 +440,12 @@ export default function Storage() {
           return cmpNullableNumber(boolToNum(a?.allow_volume_expansion), boolToNum(b?.allow_volume_expansion))
         case 'reclaim_policy':
           return cmpNullableString(a?.reclaim_policy, b?.reclaim_policy)
+        case 'parameters':
+          return cmpNullableString(paramsStr(a), paramsStr(b))
+        case 'mount_options':
+          return cmpNullableString(mountStr(a), mountStr(b))
+        case 'allowed_topologies':
+          return cmpNullableString(topoStr(a), topoStr(b))
         default:
           return 0
       }
@@ -617,6 +657,8 @@ export default function Storage() {
   const isPvCompact = activeTab === 'pvs' && pvColumnMode === 'compact'
   const pvColSpan = isPvCompact ? 8 : 12
   const pvPx = isPvCompact ? 'px-3' : 'px-4'
+  const isScCompact = activeTab === 'storageclasses' && storageClassColumnMode === 'compact'
+  const scColSpan = isScCompact ? 7 : 10
 
   return (
     <div className="space-y-6">
@@ -710,6 +752,31 @@ export default function Storage() {
               </button>
             </div>
           </div>
+        ) : activeTab === 'storageclasses' ? (
+          <div className="flex items-center justify-end">
+            <div className="inline-flex rounded-lg border border-slate-600 bg-slate-700 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setStorageClassColumnMode('compact')}
+                className={`px-3 py-3 text-sm font-medium transition-colors ${
+                  storageClassColumnMode === 'compact' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
+                }`}
+                title="핵심 컬럼만 표시"
+              >
+                기본
+              </button>
+              <button
+                type="button"
+                onClick={() => setStorageClassColumnMode('full')}
+                className={`px-3 py-3 text-sm font-medium transition-colors ${
+                  storageClassColumnMode === 'full' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
+                }`}
+                title="상세 컬럼까지 표시"
+              >
+                상세
+              </button>
+            </div>
+          </div>
         ) : (
           <div />
         )}
@@ -718,6 +785,12 @@ export default function Storage() {
       {activeTab === 'volumeattachments' && volumeAttachmentError && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
           VolumeAttachment 조회에 실패했습니다. (클러스터 권한/환경에 따라 불가할 수 있습니다)
+        </div>
+      )}
+
+      {activeTab === 'volumeattachments' && !volumeAttachmentError && (
+        <div className="text-xs text-slate-400">
+          VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다. (예: NFS 계열은 생성되지 않을 수 있음)
         </div>
       )}
 
@@ -1130,57 +1203,148 @@ export default function Storage() {
 
       {activeTab === 'storageclasses' && (
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={`w-full text-sm ${isScCompact ? 'table-fixed' : ''}`}>
             <thead className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('name')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[220px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('name')}
+                >
                   <div className="flex items-center gap-2">
                     Name <StorageClassSortIcon colKey="name" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('is_default')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[120px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('age')}
+                >
+                  <div className="flex items-center gap-2">
+                    Age <StorageClassSortIcon colKey="age" />
+                  </div>
+                </th>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[110px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('is_default')}
+                >
                   <div className="flex items-center gap-2">
                     Default <StorageClassSortIcon colKey="is_default" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('provisioner')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[220px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('provisioner')}
+                >
                   <div className="flex items-center gap-2">
                     Provisioner <StorageClassSortIcon colKey="provisioner" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('volume_binding_mode')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[140px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('volume_binding_mode')}
+                >
                   <div className="flex items-center gap-2">
                     BindingMode <StorageClassSortIcon colKey="volume_binding_mode" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('allow_volume_expansion')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[160px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('allow_volume_expansion')}
+                >
                   <div className="flex items-center gap-2">
                     AllowExpansion <StorageClassSortIcon colKey="allow_volume_expansion" />
                   </div>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('reclaim_policy')}>
+                <th
+                  className={`text-left py-3 px-4 cursor-pointer select-none ${isScCompact ? 'w-[120px]' : ''}`}
+                  onClick={() => toggleStorageClassSort('reclaim_policy')}
+                >
                   <div className="flex items-center gap-2">
                     Reclaim <StorageClassSortIcon colKey="reclaim_policy" />
                   </div>
                 </th>
+                {!isScCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('parameters')}>
+                    <div className="flex items-center gap-2">
+                      Parameters <StorageClassSortIcon colKey="parameters" />
+                    </div>
+                  </th>
+                )}
+                {!isScCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('mount_options')}>
+                    <div className="flex items-center gap-2">
+                      MountOptions <StorageClassSortIcon colKey="mount_options" />
+                    </div>
+                  </th>
+                )}
+                {!isScCompact && (
+                  <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => toggleStorageClassSort('allowed_topologies')}>
+                    <div className="flex items-center gap-2">
+                      AllowedTopologies <StorageClassSortIcon colKey="allowed_topologies" />
+                    </div>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
               {sortedStorageClassItems.map((sc: any) => (
                 <tr key={sc.name}>
-                  <td className="py-3 px-4 text-white font-mono">{sc.name}</td>
+                  <td className={`py-3 px-4 text-white font-mono ${isScCompact ? 'truncate' : ''}`} title={sc.name}>
+                    {sc.name}
+                  </td>
+                  <td
+                    className="py-3 px-4 text-slate-200 font-mono whitespace-nowrap"
+                    title={sc.created_at ? new Date(sc.created_at).toLocaleString('ko-KR') : ''}
+                  >
+                    {formatAge(sc.created_at)}
+                  </td>
                   <td className="py-3 px-4">
                     {sc.is_default ? <span className="badge badge-success">default</span> : <span className="text-slate-500">-</span>}
                   </td>
-                  <td className="py-3 px-4 text-slate-200 font-mono break-words">{sc.provisioner}</td>
+                  <td
+                    className={`py-3 px-4 text-slate-200 font-mono ${isScCompact ? 'truncate' : 'break-words'}`}
+                    title={sc.provisioner || ''}
+                  >
+                    {sc.provisioner}
+                  </td>
                   <td className="py-3 px-4 text-slate-200">{sc.volume_binding_mode || '-'}</td>
                   <td className="py-3 px-4 text-slate-200">{sc.allow_volume_expansion === true ? 'true' : sc.allow_volume_expansion === false ? 'false' : '-'}</td>
                   <td className="py-3 px-4 text-slate-200">{sc.reclaim_policy || '-'}</td>
+                  {!isScCompact &&
+                    (() => {
+                      const paramsPairs = Object.entries(sc?.parameters || {}).map(([k, v]) => `${k}=${String(v)}`)
+                      const paramsPreview = paramsPairs.slice(0, 3).join(', ')
+                      const paramsText = paramsPairs.length > 3 ? `${paramsPreview}, …(+${paramsPairs.length - 3})` : (paramsPreview || '-')
+                      const paramsFull = paramsPairs.join(', ')
+
+                      const mountOptionsPairs = (sc?.mount_options || []) as string[]
+                      const mountPreview = mountOptionsPairs.slice(0, 3).join(', ')
+                      const mountText =
+                        mountOptionsPairs.length > 3 ? `${mountPreview}, …(+${mountOptionsPairs.length - 3})` : (mountPreview || '-')
+
+                      const topoPairs = (sc?.allowed_topologies || []) as string[]
+                      const topoPreview = topoPairs.slice(0, 2).join(' ; ')
+                      const topoText = topoPairs.length > 2 ? `${topoPreview} ; …(+${topoPairs.length - 2})` : (topoPreview || '-')
+                      const topoFull = topoPairs.join(' ; ')
+
+                      return (
+                        <>
+                          <td className="py-3 px-4 text-slate-200 font-mono truncate max-w-[360px]" title={paramsFull}>
+                            {paramsText}
+                          </td>
+                          <td className="py-3 px-4 text-slate-200 font-mono truncate max-w-[260px]" title={(mountOptionsPairs || []).join(', ')}>
+                            {mountText}
+                          </td>
+                          <td className="py-3 px-4 text-slate-200 font-mono truncate max-w-[420px]" title={topoFull}>
+                            {topoText}
+                          </td>
+                        </>
+                      )
+                    })()}
                 </tr>
               ))}
               {sortedStorageClassItems.length === 0 && (
                 <tr>
-                  <td className="py-6 px-4 text-slate-400" colSpan={6}>
+                  <td className="py-6 px-4 text-slate-400" colSpan={scColSpan}>
                     (없음)
                   </td>
                 </tr>
