@@ -135,6 +135,36 @@ class K8sService:
             "non_resource_urls": list(getattr(rule, "non_resource_urls", None) or []),
         }
 
+    def _summarize_allowed_topologies(self, allowed_topologies: Any) -> List[str]:
+        """
+        StorageClass.allowedTopologies 를 1줄 요약 리스트로 만든다.
+        예: kubernetes.io/hostname In [node-a,node-b]
+        """
+        terms = list(allowed_topologies or [])
+        if not terms:
+            return []
+
+        results: List[str] = []
+        for term in terms:
+            exprs = list(getattr(term, "match_label_expressions", None) or [])
+            parts: List[str] = []
+            for expr in exprs:
+                key = getattr(expr, "key", None)
+                values = list(getattr(expr, "values", None) or [])
+                if not key:
+                    continue
+                if values:
+                    preview = ", ".join(values[:3])
+                    if len(values) > 3:
+                        preview = f"{preview}, …(+{len(values) - 3})"
+                    parts.append(f"{key} In [{preview}]")
+                else:
+                    parts.append(f"{key}")
+            if parts:
+                results.append(" AND ".join(parts))
+
+        return results
+
     def _summarize_pv_source(self, pv: Any) -> Dict[str, Optional[str]]:
         """
         PV spec의 volume source를 간단히 요약한다.
@@ -822,6 +852,9 @@ class K8sService:
                     "storageclass.beta.kubernetes.io/is-default-class"
                 ) == "true"
 
+                mount_options = list(getattr(sc, "mount_options", None) or [])
+                allowed_topologies = self._summarize_allowed_topologies(getattr(sc, "allowed_topologies", None))
+
                 result.append({
                     "name": sc.metadata.name,
                     "provisioner": sc.provisioner,
@@ -830,6 +863,8 @@ class K8sService:
                     "allow_volume_expansion": getattr(sc, "allow_volume_expansion", None),
                     "is_default": is_default,
                     "parameters": getattr(sc, "parameters", None) or {},
+                    "mount_options": mount_options,
+                    "allowed_topologies": allowed_topologies,
                     "created_at": self._to_iso(getattr(sc.metadata, "creation_timestamp", None)),
                 })
 
@@ -848,6 +883,9 @@ class K8sService:
                 "storageclass.beta.kubernetes.io/is-default-class"
             ) == "true"
 
+            mount_options = list(getattr(sc, "mount_options", None) or [])
+            allowed_topologies = self._summarize_allowed_topologies(getattr(sc, "allowed_topologies", None))
+
             return {
                 "name": sc.metadata.name,
                 "provisioner": sc.provisioner,
@@ -856,6 +894,8 @@ class K8sService:
                 "allow_volume_expansion": getattr(sc, "allow_volume_expansion", None),
                 "is_default": is_default,
                 "parameters": getattr(sc, "parameters", None) or {},
+                "mount_options": mount_options,
+                "allowed_topologies": allowed_topologies,
                 "created_at": self._to_iso(getattr(sc.metadata, "creation_timestamp", None)),
             }
         except ApiException as e:
