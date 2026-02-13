@@ -21,6 +21,7 @@ export default function Resources() {
   const [activeTab, setActiveTab] = useState<ResourceType>('deployments')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [podLabelSelector, setPodLabelSelector] = useState<string>('')
 
   const { data: services } = useQuery({
     queryKey: ['services', namespace],
@@ -56,8 +57,8 @@ export default function Resources() {
   })
 
   const { data: pods } = useQuery({
-    queryKey: ['pods', namespace],
-    queryFn: () => api.getPods(namespace!, undefined, false), // 자동 갱신은 캐시 사용
+    queryKey: ['pods', namespace, podLabelSelector || ''],
+    queryFn: () => api.getPods(namespace!, podLabelSelector || undefined, false), // 자동 갱신은 캐시 사용
     enabled: !!namespace && activeTab === 'pods',
   })
 
@@ -110,9 +111,9 @@ export default function Resources() {
         queryClient.removeQueries({ queryKey: ['pdbs', namespace] })
         queryClient.setQueryData(['pdbs', namespace], data)
       } else if (activeTab === 'pods') {
-        data = await api.getPods(namespace!, undefined, true)
-        queryClient.removeQueries({ queryKey: ['pods', namespace] })
-        queryClient.setQueryData(['pods', namespace], data)
+        data = await api.getPods(namespace!, podLabelSelector || undefined, true)
+        queryClient.removeQueries({ queryKey: ['pods', namespace, podLabelSelector || ''] })
+        queryClient.setQueryData(['pods', namespace, podLabelSelector || ''], data)
       } else if (activeTab === 'pvcs') {
         data = await api.getPVCs(namespace, true)
         queryClient.removeQueries({ queryKey: ['pvcs', namespace] })
@@ -213,6 +214,22 @@ export default function Resources() {
             className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
+        {activeTab === 'pods' && podLabelSelector && (
+          <div className="flex items-center justify-between gap-3 text-sm text-slate-300">
+            <div className="min-w-0">
+              <span className="text-slate-400">Label selector:</span>{' '}
+              <span className="font-mono break-words">{podLabelSelector}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPodLabelSelector('')}
+              className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1"
+              title="라벨 셀렉터 제거"
+            >
+              초기화
+            </button>
+          </div>
+        )}
         {searchQuery && (
           <p className="text-sm text-slate-400">
             {activeTab === 'deployments' && `${filteredDeployments.length}개의 Deployment가 검색되었습니다`}
@@ -278,6 +295,14 @@ export default function Resources() {
                   <h3 className="text-lg font-bold text-white">{rs.name}</h3>
                   <p className="text-sm text-slate-400 mt-1">{rs.image || '-'}</p>
                   {rs.owner && <p className="text-xs text-slate-500 mt-1">Owner: {rs.owner}</p>}
+                  {rs.selector && Object.keys(rs.selector).length > 0 && (
+                    <p
+                      className="text-xs text-slate-500 mt-1 font-mono break-words"
+                      title={Object.entries(rs.selector).map(([k, v]: any) => `${k}=${v}`).join(', ')}
+                    >
+                      selector: {Object.entries(rs.selector).map(([k, v]: any) => `${k}=${v}`).join(', ')}
+                    </p>
+                  )}
                 </div>
                 <span className={`badge ${getStatusColor(rs.status)}`}>
                   {rs.status}
@@ -296,6 +321,26 @@ export default function Resources() {
                   <p className="text-xs text-slate-400">Available</p>
                   <p className="text-lg font-bold text-white">{rs.available_replicas}</p>
                 </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selectorObj = rs.selector || {}
+                    const selector = Object.entries(selectorObj)
+                      .map(([k, v]: any) => `${k}=${v}`)
+                      .join(',')
+                    setPodLabelSelector(selector)
+                    setSearchQuery('')
+                    setActiveTab('pods')
+                  }}
+                  disabled={!rs.selector || Object.keys(rs.selector).length === 0}
+                  className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="ReplicaSet selector로 Pod 목록을 필터링합니다"
+                >
+                  Pods로 이동
+                </button>
               </div>
             </div>
           ))}
