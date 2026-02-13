@@ -9,6 +9,9 @@ from app.cluster import (
     NamespaceInfo,
     ServiceInfo,
     DeploymentInfo,
+    ReplicaSetInfo,
+    HPAInfo,
+    PDBInfo,
     PodInfo,
     PVCInfo,
     PVInfo,
@@ -85,6 +88,41 @@ async def get_deployments(namespace: str):
     """특정 네임스페이스의 디플로이먼트 목록"""
     try:
         return await k8s_service.get_deployments(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/namespaces/{namespace}/replicasets", response_model=List[ReplicaSetInfo])
+async def get_replicasets(
+    namespace: str,
+    force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")
+):
+    """특정 네임스페이스의 ReplicaSet 목록"""
+    try:
+        return await k8s_service.get_replicasets(namespace, force_refresh=force_refresh)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/hpas", response_model=List[HPAInfo])
+async def get_hpas(
+    namespace: str,
+    force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")
+):
+    """특정 네임스페이스의 HPA 목록"""
+    try:
+        return await k8s_service.get_hpas(namespace, force_refresh=force_refresh)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/pdbs", response_model=List[PDBInfo])
+async def get_pdbs(
+    namespace: str,
+    force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")
+):
+    """특정 네임스페이스의 PDB 목록"""
+    try:
+        return await k8s_service.get_pdbs(namespace, force_refresh=force_refresh)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

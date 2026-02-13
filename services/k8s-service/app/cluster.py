@@ -42,6 +42,50 @@ class DeploymentInfo(BaseModel):
     status: str
 
 
+class ReplicaSetInfo(BaseModel):
+    """레플리카셋 정보"""
+    name: str
+    namespace: str
+    replicas: int
+    ready_replicas: int
+    available_replicas: int
+    image: str
+    owner: Optional[str] = None
+    labels: Dict[str, str] = {}
+    selector: Dict[str, str] = {}
+    created_at: datetime
+    status: str
+
+
+class HPAInfo(BaseModel):
+    """HorizontalPodAutoscaler 정보"""
+    name: str
+    namespace: str
+    target_ref: str
+    min_replicas: Optional[int]
+    max_replicas: int
+    current_replicas: Optional[int]
+    desired_replicas: Optional[int]
+    metrics: List[Dict[str, Any]] = []
+    conditions: List[Dict[str, Any]] = []
+    last_scale_time: Optional[str] = None
+    created_at: datetime
+
+
+class PDBInfo(BaseModel):
+    """PodDisruptionBudget 정보"""
+    name: str
+    namespace: str
+    min_available: Optional[str] = None
+    max_unavailable: Optional[str] = None
+    current_healthy: int
+    desired_healthy: int
+    disruptions_allowed: int
+    expected_pods: int
+    selector: Dict[str, str] = {}
+    created_at: datetime
+
+
 class PodInfo(BaseModel):
     """파드 정보"""
     name: str

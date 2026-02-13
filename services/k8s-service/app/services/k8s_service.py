@@ -13,6 +13,9 @@ from app.cluster import (
     NamespaceInfo,
     ServiceInfo,
     DeploymentInfo,
+    ReplicaSetInfo,
+    HPAInfo,
+    PDBInfo,
     PodInfo,
     PVCInfo,
     PVInfo,
@@ -46,15 +49,29 @@ class K8sService:
             api_client = client.ApiClient(configuration=c)
             if hasattr(api_client, 'rest_client') and hasattr(api_client.rest_client, 'pool_manager'):
                  api_client.rest_client.pool_manager.connection_pool_kw['maxsize'] = 200
+
+            self.api_client = api_client
             
             self.v1 = client.CoreV1Api(api_client=api_client)
             self.apps_v1 = client.AppsV1Api(api_client=api_client)
             self.version_api = client.VersionApi(api_client=api_client)
+            # optional APIs
+            try:
+                self.autoscaling_v2 = client.AutoscalingV2Api(api_client=api_client)
+            except Exception:
+                self.autoscaling_v2 = None
+            try:
+                self.policy_v1 = client.PolicyV1Api(api_client=api_client)
+            except Exception:
+                self.policy_v1 = None
             
         except Exception as e:
             print(f"Warning: Kubernetes client initialization failed: {e}")
             self.v1 = None
             self.apps_v1 = None
+            self.api_client = None
+            self.autoscaling_v2 = None
+            self.policy_v1 = None
             
     def get_fresh_core_v1_api(self):
         """로그 스트리밍용 독립 CoreV1Api 클라이언트 생성 (연결 풀 고갈 방지)"""
@@ -501,6 +518,167 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get deployments: {e}")
+
+    async def get_replicasets(self, namespace: str, force_refresh: bool = False) -> List[ReplicaSetInfo]:
+        """ReplicaSet 목록"""
+        try:
+            replicasets = self.apps_v1.list_namespaced_replica_set(namespace)
+            result: List[ReplicaSetInfo] = []
+
+            for rs in replicasets.items:
+                image = rs.spec.template.spec.containers[0].image if rs.spec.template.spec.containers else ""
+
+                owner = None
+                owners = list(getattr(rs.metadata, "owner_references", None) or [])
+                if owners:
+                    o = owners[0]
+                    kind = getattr(o, "kind", None)
+                    name = getattr(o, "name", None)
+                    if kind and name:
+                        owner = f"{kind}/{name}"
+
+                desired = rs.spec.replicas or 0
+                ready = rs.status.ready_replicas or 0
+                available = rs.status.available_replicas or 0
+
+                status = "Healthy"
+                if desired == 0 and ready == 0:
+                    status = "Idle"
+                elif ready != desired:
+                    status = "Degraded"
+                if desired > 0 and ready == 0:
+                    status = "Unavailable"
+
+                result.append(ReplicaSetInfo(
+                    name=rs.metadata.name,
+                    namespace=rs.metadata.namespace,
+                    replicas=desired,
+                    ready_replicas=ready,
+                    available_replicas=available,
+                    image=image,
+                    owner=owner,
+                    labels=rs.metadata.labels or {},
+                    selector=getattr(rs.spec.selector, "match_labels", None) or {},
+                    created_at=rs.metadata.creation_timestamp,
+                    status=status,
+                ))
+
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get replicasets: {e}")
+
+    def _serialize_hpa_metrics(self, metrics: Any) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        for m in (metrics or []):
+            try:
+                result.append({
+                    "type": getattr(m, "type", None),
+                    "resource": getattr(getattr(m, "resource", None), "name", None),
+                    "target": getattr(getattr(getattr(m, "resource", None), "target", None), "average_utilization", None)
+                    or getattr(getattr(getattr(m, "resource", None), "target", None), "average_value", None)
+                    or getattr(getattr(getattr(m, "resource", None), "target", None), "value", None),
+                })
+            except Exception:
+                result.append({"type": getattr(m, "type", None)})
+        return result
+
+    def _serialize_hpa_conditions(self, conditions: Any) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        for c in (conditions or []):
+            result.append({
+                "type": getattr(c, "type", None),
+                "status": getattr(c, "status", None),
+                "reason": getattr(c, "reason", None),
+                "message": getattr(c, "message", None),
+                "last_transition_time": self._to_iso(getattr(c, "last_transition_time", None)),
+            })
+        return result
+
+    async def get_hpas(self, namespace: str, force_refresh: bool = False) -> List[HPAInfo]:
+        """HPA 목록"""
+        try:
+            api = self.autoscaling_v2
+            if api is None:
+                # fallback
+                api = client.AutoscalingV1Api(api_client=self.api_client) if self.api_client else client.AutoscalingV1Api()
+
+            hpas = api.list_namespaced_horizontal_pod_autoscaler(namespace)
+            result: List[HPAInfo] = []
+
+            for hpa in hpas.items:
+                target = "-"
+                try:
+                    ref = getattr(hpa.spec, "scale_target_ref", None)
+                    kind = getattr(ref, "kind", None)
+                    name = getattr(ref, "name", None)
+                    if kind and name:
+                        target = f"{kind}/{name}"
+                except Exception:
+                    target = "-"
+
+                metrics = self._serialize_hpa_metrics(getattr(hpa.spec, "metrics", None))
+                conditions = self._serialize_hpa_conditions(getattr(hpa.status, "conditions", None))
+
+                result.append(HPAInfo(
+                    name=hpa.metadata.name,
+                    namespace=hpa.metadata.namespace,
+                    target_ref=target,
+                    min_replicas=getattr(hpa.spec, "min_replicas", None),
+                    max_replicas=getattr(hpa.spec, "max_replicas", 0) or 0,
+                    current_replicas=getattr(hpa.status, "current_replicas", None),
+                    desired_replicas=getattr(hpa.status, "desired_replicas", None),
+                    metrics=metrics,
+                    conditions=conditions,
+                    last_scale_time=self._to_iso(getattr(hpa.status, "last_scale_time", None)),
+                    created_at=hpa.metadata.creation_timestamp,
+                ))
+
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get hpas: {e}")
+
+    async def get_pdbs(self, namespace: str, force_refresh: bool = False) -> List[PDBInfo]:
+        """PDB 목록"""
+        try:
+            api = self.policy_v1
+            if api is None:
+                # fallback: older clusters may have policy/v1beta1
+                try:
+                    api = client.PolicyV1beta1Api(api_client=self.api_client) if self.api_client else client.PolicyV1beta1Api()
+                except Exception:
+                    api = None
+            if api is None:
+                raise Exception("Policy API not available in this environment")
+
+            pdbs = api.list_namespaced_pod_disruption_budget(namespace)
+            result: List[PDBInfo] = []
+
+            for pdb in pdbs.items:
+                selector = {}
+                try:
+                    selector = getattr(getattr(pdb.spec, "selector", None), "match_labels", None) or {}
+                except Exception:
+                    selector = {}
+
+                min_avail = getattr(pdb.spec, "min_available", None)
+                max_unavail = getattr(pdb.spec, "max_unavailable", None)
+
+                result.append(PDBInfo(
+                    name=pdb.metadata.name,
+                    namespace=pdb.metadata.namespace,
+                    min_available=str(min_avail) if min_avail is not None else None,
+                    max_unavailable=str(max_unavail) if max_unavail is not None else None,
+                    current_healthy=getattr(pdb.status, "current_healthy", 0) or 0,
+                    desired_healthy=getattr(pdb.status, "desired_healthy", 0) or 0,
+                    disruptions_allowed=getattr(pdb.status, "disruptions_allowed", 0) or 0,
+                    expected_pods=getattr(pdb.status, "expected_pods", 0) or 0,
+                    selector=selector,
+                    created_at=pdb.metadata.creation_timestamp,
+                ))
+
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get pdbs: {e}")
     
     async def get_all_pods(self, force_refresh: bool = False) -> List[PodInfo]:
         """모든 네임스페이스의 파드 목록 조회"""
