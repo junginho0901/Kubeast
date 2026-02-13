@@ -8,9 +8,12 @@ import {
   Database, 
   RefreshCw,
   Search,
+  Layers,
+  TrendingUp,
+  Shield,
 } from 'lucide-react'
 
-type ResourceType = 'services' | 'deployments' | 'pods' | 'pvcs'
+type ResourceType = 'services' | 'deployments' | 'replicasets' | 'hpas' | 'pdbs' | 'pods' | 'pvcs'
 
 export default function Resources() {
   const queryClient = useQueryClient()
@@ -29,6 +32,27 @@ export default function Resources() {
     queryKey: ['deployments', namespace],
     queryFn: () => api.getDeployments(namespace!),
     enabled: !!namespace && activeTab === 'deployments',
+  })
+
+  const { data: replicasets, error: replicasetsError } = useQuery({
+    queryKey: ['replicasets', namespace],
+    queryFn: () => api.getReplicaSets(namespace!, false),
+    enabled: !!namespace && activeTab === 'replicasets',
+    retry: 0,
+  })
+
+  const { data: hpas, error: hpasError } = useQuery({
+    queryKey: ['hpas', namespace],
+    queryFn: () => api.getHPAs(namespace!, false),
+    enabled: !!namespace && activeTab === 'hpas',
+    retry: 0,
+  })
+
+  const { data: pdbs, error: pdbsError } = useQuery({
+    queryKey: ['pdbs', namespace],
+    queryFn: () => api.getPDBs(namespace!, false),
+    enabled: !!namespace && activeTab === 'pdbs',
+    retry: 0,
   })
 
   const { data: pods } = useQuery({
@@ -54,6 +78,9 @@ export default function Resources() {
   
   const filteredDeployments = filterBySearch(deployments)
   const filteredServices = filterBySearch(services)
+  const filteredReplicaSets = filterBySearch(replicasets)
+  const filteredHPAs = filterBySearch(hpas)
+  const filteredPDBs = filterBySearch(pdbs)
   const filteredPods = filterBySearch(pods)
   const filteredPVCs = filterBySearch(pvcs)
   
@@ -70,6 +97,18 @@ export default function Resources() {
         data = await api.getDeployments(namespace!, true)
         queryClient.removeQueries({ queryKey: ['deployments', namespace] })
         queryClient.setQueryData(['deployments', namespace], data)
+      } else if (activeTab === 'replicasets') {
+        data = await api.getReplicaSets(namespace!, true)
+        queryClient.removeQueries({ queryKey: ['replicasets', namespace] })
+        queryClient.setQueryData(['replicasets', namespace], data)
+      } else if (activeTab === 'hpas') {
+        data = await api.getHPAs(namespace!, true)
+        queryClient.removeQueries({ queryKey: ['hpas', namespace] })
+        queryClient.setQueryData(['hpas', namespace], data)
+      } else if (activeTab === 'pdbs') {
+        data = await api.getPDBs(namespace!, true)
+        queryClient.removeQueries({ queryKey: ['pdbs', namespace] })
+        queryClient.setQueryData(['pdbs', namespace], data)
       } else if (activeTab === 'pods') {
         data = await api.getPods(namespace!, undefined, true)
         queryClient.removeQueries({ queryKey: ['pods', namespace] })
@@ -87,6 +126,9 @@ export default function Resources() {
 
   const tabs = [
     { id: 'deployments' as ResourceType, name: 'Deployments', icon: Server },
+    { id: 'replicasets' as ResourceType, name: 'ReplicaSets', icon: Layers },
+    { id: 'hpas' as ResourceType, name: 'HPA', icon: TrendingUp },
+    { id: 'pdbs' as ResourceType, name: 'PDB', icon: Shield },
     { id: 'services' as ResourceType, name: 'Services', icon: Database },
     { id: 'pods' as ResourceType, name: 'Pods', icon: Box },
     { id: 'pvcs' as ResourceType, name: 'PVCs', icon: Database },
@@ -108,6 +150,9 @@ export default function Resources() {
 
   const searchPlaceholder: Record<ResourceType, string> = {
     deployments: 'Deployment 이름 검색...',
+    replicasets: 'ReplicaSet 이름 검색...',
+    hpas: 'HPA 이름 검색...',
+    pdbs: 'PDB 이름 검색...',
     services: 'Service 이름 검색...',
     pods: 'Pod 이름 검색...',
     pvcs: 'PVC 이름 검색...',
@@ -171,6 +216,9 @@ export default function Resources() {
         {searchQuery && (
           <p className="text-sm text-slate-400">
             {activeTab === 'deployments' && `${filteredDeployments.length}개의 Deployment가 검색되었습니다`}
+            {activeTab === 'replicasets' && `${filteredReplicaSets.length}개의 ReplicaSet이 검색되었습니다`}
+            {activeTab === 'hpas' && `${filteredHPAs.length}개의 HPA가 검색되었습니다`}
+            {activeTab === 'pdbs' && `${filteredPDBs.length}개의 PDB가 검색되었습니다`}
             {activeTab === 'services' && `${filteredServices.length}개의 Service가 검색되었습니다`}
             {activeTab === 'pods' && `${filteredPods.length}개의 Pod가 검색되었습니다`}
             {activeTab === 'pvcs' && `${filteredPVCs.length}개의 PVC가 검색되었습니다`}
@@ -212,6 +260,156 @@ export default function Resources() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ReplicaSets */}
+      {activeTab === 'replicasets' && (
+        <div className="space-y-4">
+          {replicasetsError && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
+              ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
+            </div>
+          )}
+          {filteredReplicaSets.map((rs: any) => (
+            <div key={rs.name} className="card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">{rs.name}</h3>
+                  <p className="text-sm text-slate-400 mt-1">{rs.image || '-'}</p>
+                  {rs.owner && <p className="text-xs text-slate-500 mt-1">Owner: {rs.owner}</p>}
+                </div>
+                <span className={`badge ${getStatusColor(rs.status)}`}>
+                  {rs.status}
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400">Replicas</p>
+                  <p className="text-lg font-bold text-white">{rs.replicas}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Ready</p>
+                  <p className="text-lg font-bold text-white">{rs.ready_replicas}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Available</p>
+                  <p className="text-lg font-bold text-white">{rs.available_replicas}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+          {filteredReplicaSets.length === 0 && (
+            <div className="card">
+              <div className="text-slate-400">(없음)</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HPA */}
+      {activeTab === 'hpas' && (
+        <div className="space-y-4">
+          {hpasError && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
+              HPA 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
+            </div>
+          )}
+          {filteredHPAs.map((hpa: any) => {
+            const conditions: any[] = Array.isArray(hpa.conditions) ? hpa.conditions : []
+            const scalingActive = conditions.find((c) => c?.type === 'ScalingActive')
+            const ableToScale = conditions.find((c) => c?.type === 'AbleToScale')
+            const isHealthy = (scalingActive?.status ?? 'True') === 'True' && (ableToScale?.status ?? 'True') === 'True'
+            const badge = isHealthy ? 'badge-success' : 'badge-warning'
+            return (
+              <div key={hpa.name} className="card">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{hpa.name}</h3>
+                    <p className="text-sm text-slate-400 mt-1">Target: {hpa.target_ref}</p>
+                  </div>
+                  <span className={`badge ${badge}`}>{isHealthy ? 'Healthy' : 'Check'}</span>
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-xs text-slate-400">Min</p>
+                    <p className="text-lg font-bold text-white">{hpa.min_replicas ?? '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Max</p>
+                    <p className="text-lg font-bold text-white">{hpa.max_replicas}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Current</p>
+                    <p className="text-lg font-bold text-white">{hpa.current_replicas ?? '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Desired</p>
+                    <p className="text-lg font-bold text-white">{hpa.desired_replicas ?? '-'}</p>
+                  </div>
+                </div>
+                {hpa.last_scale_time && (
+                  <p className="mt-3 text-xs text-slate-500">LastScale: {new Date(hpa.last_scale_time).toLocaleString('ko-KR')}</p>
+                )}
+              </div>
+            )
+          })}
+          {filteredHPAs.length === 0 && (
+            <div className="card">
+              <div className="text-slate-400">(없음)</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PDB */}
+      {activeTab === 'pdbs' && (
+        <div className="space-y-4">
+          {pdbsError && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
+              PDB 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
+            </div>
+          )}
+          {filteredPDBs.map((pdb: any) => (
+            <div key={pdb.name} className="card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">{pdb.name}</h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {pdb.min_available ? `minAvailable=${pdb.min_available}` : pdb.max_unavailable ? `maxUnavailable=${pdb.max_unavailable}` : 'min/max: -'}
+                  </p>
+                </div>
+                <span className={`badge ${pdb.disruptions_allowed > 0 ? 'badge-success' : 'badge-warning'}`}>
+                  disruptionsAllowed: {pdb.disruptions_allowed}
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400">CurrentHealthy</p>
+                  <p className="text-lg font-bold text-white">{pdb.current_healthy}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">DesiredHealthy</p>
+                  <p className="text-lg font-bold text-white">{pdb.desired_healthy}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">ExpectedPods</p>
+                  <p className="text-lg font-bold text-white">{pdb.expected_pods}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Selector</p>
+                  <p className="text-sm font-mono text-white truncate" title={Object.entries(pdb.selector || {}).map(([k, v]: any) => `${k}=${v}`).join(', ')}>
+                    {Object.entries(pdb.selector || {}).map(([k, v]: any) => `${k}=${v}`).join(', ') || '-'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+          {filteredPDBs.length === 0 && (
+            <div className="card">
+              <div className="text-slate-400">(없음)</div>
+            </div>
+          )}
         </div>
       )}
 
