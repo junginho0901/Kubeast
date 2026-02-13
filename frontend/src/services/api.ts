@@ -258,6 +258,47 @@ export interface DeploymentInfo {
   status: string
 }
 
+export interface ReplicaSetInfo {
+  name: string
+  namespace: string
+  replicas: number
+  ready_replicas: number
+  available_replicas: number
+  image: string
+  owner?: string | null
+  labels: Record<string, string>
+  selector: Record<string, string>
+  created_at: string
+  status: string
+}
+
+export interface HPAInfo {
+  name: string
+  namespace: string
+  target_ref: string
+  min_replicas?: number | null
+  max_replicas: number
+  current_replicas?: number | null
+  desired_replicas?: number | null
+  metrics: Array<Record<string, any>>
+  conditions: Array<Record<string, any>>
+  last_scale_time?: string | null
+  created_at: string
+}
+
+export interface PDBInfo {
+  name: string
+  namespace: string
+  min_available?: string | null
+  max_unavailable?: string | null
+  current_healthy: number
+  desired_healthy: number
+  disruptions_allowed: number
+  expected_pods: number
+  selector: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
@@ -625,6 +666,27 @@ export const api = {
 
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/deployments`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getReplicaSets: async (namespace: string, forceRefresh = false): Promise<ReplicaSetInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/replicasets`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getHPAs: async (namespace: string, forceRefresh = false): Promise<HPAInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/hpas`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getPDBs: async (namespace: string, forceRefresh = false): Promise<PDBInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pdbs`, {
       params: { force_refresh: forceRefresh },
     })
     return data
