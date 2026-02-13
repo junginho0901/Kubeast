@@ -127,7 +127,7 @@ export default function Resources() {
 
   const podTopSummary = useMemo(() => {
     if (activeTab !== 'pods') return null
-    const list = Array.isArray(pods) ? pods : []
+    const list = Array.isArray(filteredPods) ? filteredPods : []
     if (list.length === 0) return { total: 0, topReasons: [] as Array<[string, number]>, phaseSummary: '' }
 
     const reasonCounts = new Map<string, number>()
@@ -152,7 +152,7 @@ export default function Resources() {
       .join(' · ')
 
     return { total: list.length, topReasons, phaseSummary }
-  }, [activeTab, pods])
+  }, [activeTab, filteredPods])
 
   const compactSelector = (selectorObj: Record<string, string> | undefined | null) => {
     const obj = selectorObj || {}
@@ -805,7 +805,7 @@ export default function Resources() {
       {/* Pods */}
       {activeTab === 'pods' && (
         <div className="space-y-4">
-          {podLabelSelector && podTopSummary && podTopSummary.total > 0 && (
+          {podTopSummary && podTopSummary.total > 0 && (
             <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm text-white font-semibold">Top reason 요약</div>
