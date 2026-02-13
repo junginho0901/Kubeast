@@ -429,6 +429,21 @@ export default function Resources() {
             const min = typeof hpa.min_replicas === 'number' ? hpa.min_replicas : 0
             const desiredBelowMin = desired !== null && min > 0 && desired < min
 
+            const metricsMissing = conditions.some((c) => {
+              const reason = String(c?.reason || '')
+              const msg = String(c?.message || '').toLowerCase()
+              if (reason.includes('FailedGetResourceMetric')) return true
+              if (reason.includes('FailedGetMetrics')) return true
+              if (msg.includes('no metrics returned')) return true
+              if (msg.includes('unable to get metrics')) return true
+              if (msg.includes('metrics api')) return true
+              return false
+            })
+
+            const desiredDisplay = metricsMissing
+              ? 'unavailable (metrics missing)'
+              : (hpa.desired_replicas ?? '-')
+
             const hasBadCond = conditions.some((c) => c?.status && c.status !== 'True')
             const isLimited = (scalingLimited?.status ?? 'False') === 'True'
 
@@ -486,11 +501,17 @@ export default function Resources() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Desired</p>
-                    <p className="text-lg font-bold text-white">{hpa.desired_replicas ?? '-'}</p>
+                    <p className="text-lg font-bold text-white font-mono break-words">{desiredDisplay}</p>
                   </div>
                 </div>
 
-                {!isHealthy && desiredBelowMin && (
+                {!isHealthy && metricsMissing && (
+                  <div className="mt-3 text-xs text-yellow-200 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                    Desired 계산 불가: metrics-server/metrics API에서 메트릭을 받지 못했습니다.
+                  </div>
+                )}
+
+                {!isHealthy && !metricsMissing && desiredBelowMin && (
                   <div className="mt-3 text-xs text-yellow-200 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
                     Desired({desired})가 minReplicas({min})보다 작습니다. 조건/메트릭을 확인하세요.
                   </div>
