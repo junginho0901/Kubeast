@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
@@ -97,6 +97,62 @@ export default function Resources() {
       .map(([k, v]) => `${k}=${v}`)
       .join(',')
   }
+
+  const getPodReason = (pod: any) => {
+    const status = (pod?.status || '').toString()
+    if (status && status !== 'Running') return status
+
+    const containers = Array.isArray(pod?.containers) ? pod.containers : []
+    for (const c of containers) {
+      const waitingReason = c?.state?.waiting?.reason
+      if (waitingReason) return waitingReason
+    }
+    for (const c of containers) {
+      const terminatedReason = c?.state?.terminated?.reason || c?.last_state?.terminated?.reason
+      if (terminatedReason) return terminatedReason
+    }
+
+    const phase = (pod?.phase || '').toString()
+    if (phase && phase !== 'Running') return phase
+
+    const ready = (pod?.ready || '').toString()
+    const m = ready.match(/^(\d+)\/(\d+)$/)
+    if (m) {
+      const a = Number(m[1])
+      const b = Number(m[2])
+      if (!Number.isNaN(a) && !Number.isNaN(b) && b > 0 && a !== b) return 'NotReady'
+    }
+    return 'Running'
+  }
+
+  const podTopSummary = useMemo(() => {
+    if (activeTab !== 'pods') return null
+    const list = Array.isArray(pods) ? pods : []
+    if (list.length === 0) return { total: 0, topReasons: [] as Array<[string, number]>, phaseSummary: '' }
+
+    const reasonCounts = new Map<string, number>()
+    const phaseCounts = new Map<string, number>()
+
+    for (const pod of list) {
+      const reason = getPodReason(pod)
+      reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1)
+
+      const phase = (pod?.phase || pod?.status || 'Unknown').toString()
+      phaseCounts.set(phase, (phaseCounts.get(phase) || 0) + 1)
+    }
+
+    const topReasons = Array.from(reasonCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+
+    const phaseSummary = Array.from(phaseCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(' · ')
+
+    return { total: list.length, topReasons, phaseSummary }
+  }, [activeTab, pods])
 
   const compactSelector = (selectorObj: Record<string, string> | undefined | null) => {
     const obj = selectorObj || {}
@@ -740,6 +796,30 @@ export default function Resources() {
       {/* Pods */}
       {activeTab === 'pods' && (
         <div className="space-y-4">
+          {podLabelSelector && podTopSummary && podTopSummary.total > 0 && (
+            <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-white font-semibold">Top reason 요약</div>
+                <div className="text-xs text-slate-400">pods: {podTopSummary.total}</div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {podTopSummary.topReasons.map(([reason, count]) => (
+                  <span
+                    key={reason}
+                    className={`badge font-mono ${
+                      reason === 'Running' ? 'badge-success' : reason === 'NotReady' ? 'badge-warning' : 'badge-warning'
+                    }`}
+                    title={reason}
+                  >
+                    {reason}:{count}
+                  </span>
+                ))}
+              </div>
+              {podTopSummary.phaseSummary && (
+                <div className="mt-2 text-xs text-slate-500 font-mono">phase: {podTopSummary.phaseSummary}</div>
+              )}
+            </div>
+          )}
           {filteredPods.map((pod) => (
             <div key={pod.name} className="card">
               <div className="flex items-start justify-between">
