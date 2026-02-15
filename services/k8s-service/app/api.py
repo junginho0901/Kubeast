@@ -608,6 +608,31 @@ async def websocket_pod_logs(
     tail_lines: int = Query(100)
 ):
     """WebSocket을 통한 실시간 로그 스트리밍 (자동 이전 연결 종료)"""
+    # Authenticate via HttpOnly cookie (Argo CD style).
+    # Note: browser WebSocket API cannot reliably set Authorization headers.
+    try:
+        from http.cookies import SimpleCookie
+        from app.config import settings
+        from app.security import decode_access_token
+
+        token = None
+        cookie_header = websocket.headers.get("cookie")
+        if cookie_header:
+            cookie = SimpleCookie()
+            cookie.load(cookie_header)
+            morsel = cookie.get(settings.AUTH_COOKIE_NAME)
+            if morsel and morsel.value:
+                token = morsel.value
+
+        if not token:
+            await websocket.close(code=1008, reason="Missing auth token")
+            return
+
+        _payload = decode_access_token(token)
+    except Exception:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
     # Pod + Container 조합으로 키 생성 (같은 파드의 다른 컨테이너는 별도 추적)
     pod_key = f"{namespace}/{pod_name}/{container or 'default'}"
     
