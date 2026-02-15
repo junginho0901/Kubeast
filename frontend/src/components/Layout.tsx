@@ -53,8 +53,6 @@ export default function Layout() {
   }, [])
 
   const handleLogout = () => {
-    // Best-effort: clear HttpOnly auth cookie (for WS/SSE auth) as well.
-    void api.logout().catch(() => {})
     clearAccessToken()
     queryClient.clear()
     navigate('/login')

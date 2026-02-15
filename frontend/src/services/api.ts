@@ -544,10 +544,6 @@ export const api = {
     return data
   },
 
-  logout: async (): Promise<void> => {
-    await client.post('/auth/logout')
-  },
-
   me: async (): Promise<Member> => {
     const { data } = await client.get('/auth/me')
     return data
