@@ -15,7 +15,7 @@ services:
       # Optional (recommended): set to enforce auth. If set, ai-service must use the same key as OPENAI_API_KEY.
       # LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       LITELLM_LOG: INFO
-    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    command: ["litellm", "--file", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
     volumes:
       - ./services/litellm/config.yaml:/app/config.yaml:ro
     networks:
@@ -26,4 +26,3 @@ services:
   ai-service:
     environment:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://litellm:4000/v1}
-
