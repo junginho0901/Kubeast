@@ -33,7 +33,8 @@ class AIService:
     
     def __init__(self, authorization: Optional[str] = None):
         """OpenAI 클라이언트 초기화"""
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        base_url = (settings.OPENAI_BASE_URL or "").strip() or None
+        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
         self.model = settings.OPENAI_MODEL
         self.k8s_service = K8sServiceClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
