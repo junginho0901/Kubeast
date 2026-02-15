@@ -1,0 +1,29 @@
+services:
+  # Optional: OpenAI-compatible LLM gateway (LiteLLM)
+  # Usage:
+  #   docker compose -f docker-compose.msa.yml -f docker-compose.llm-gateway.yml up -d
+  #
+  # Then point ai-service to the gateway:
+  #   OPENAI_BASE_URL=http://litellm:4000/v1
+  litellm:
+    image: ghcr.io/berriai/litellm:latest
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      # Optional (recommended): set to enforce auth. If set, ai-service must use the same key as OPENAI_API_KEY.
+      # LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      LITELLM_LOG: INFO
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+    volumes:
+      - ./services/litellm/config.yaml:/app/config.yaml:ro
+    networks:
+      - msa-network
+    restart: unless-stopped
+
+  # Override ai-service to use the gateway by default when this compose file is included.
+  ai-service:
+    environment:
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://litellm:4000/v1}
+
