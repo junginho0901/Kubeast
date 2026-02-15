@@ -26,11 +26,14 @@ kind load docker-image kube-assistant/frontend:local --name kube-assistant
 kubectl apply -k k8s
 ```
 
-## 5) 접속
+## 5) 접속 (NodePort)
 ```bash
-kubectl -n kube-assistant port-forward svc/gateway 8000:8000
+kubectl -n kube-assistant get svc gateway
 ```
-브라우저에서 `http://localhost:8000` 접속.
+기본 NodePort는 `30080`이므로 `http://localhost:30080`로 접근합니다.
+
+> kind에서 NodePort가 로컬에 안 뜨면, 포트포워딩으로 임시 접근하거나
+> cluster 재생성 시 `extraPortMappings`를 설정해야 합니다.
 
 ## 6) LiteLLM 사용 (선택)
 `k8s/configmap.yaml`의 `OPENAI_BASE_URL`을 `http://litellm:4000/v1`로 설정 후 재적용.
