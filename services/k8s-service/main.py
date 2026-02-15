@@ -39,19 +39,32 @@ async def auth_middleware(request, call_next):
         return await call_next(request)
 
     # WebSocket 경로는 ASGI websocket 타입으로 들어오므로 여기서 처리하지 않음
-    auth = request.headers.get("Authorization", "")
-    if not auth:
+    token = None
+
+    # 1) Standard Authorization: Bearer <jwt>
+    auth = request.headers.get("Authorization") or ""
+    if auth:
+        parts = auth.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1].strip():
+            token = parts[1].strip()
+
+    # 2) HttpOnly cookie (Argo CD style)
+    if not token:
+        from http.cookies import SimpleCookie
+
+        cookie_header = request.headers.get("Cookie") or ""
+        if cookie_header:
+            cookie = SimpleCookie()
+            cookie.load(cookie_header)
+            morsel = cookie.get(settings.AUTH_COOKIE_NAME)
+            if morsel and morsel.value:
+                token = morsel.value
+
+    if not token:
         from starlette.responses import JSONResponse
 
-        return JSONResponse({"detail": "Missing Authorization header"}, status_code=401)
+        return JSONResponse({"detail": "Missing auth token"}, status_code=401)
 
-    parts = auth.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
-        from starlette.responses import JSONResponse
-
-        return JSONResponse({"detail": "Invalid Authorization header"}, status_code=401)
-
-    token = parts[1].strip()
     try:
         from app.security import decode_access_token
 

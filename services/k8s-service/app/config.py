@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     
     # WebSocket
     WS_HEARTBEAT_INTERVAL: int = 30
+
+    # Auth cookie (HttpOnly cookie for browser WS/SSE streaming)
+    AUTH_COOKIE_NAME: str = "kube-assistant.token"
     
     class Config:
         # 프로젝트 루트의 .env 파일 사용
