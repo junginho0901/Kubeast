@@ -122,7 +122,7 @@ async def register(request: RegisterRequest):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(request: LoginRequest, http_request: Request, response: Response):
+async def login(request: LoginRequest):
     email = (request.email or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Email required")
@@ -133,22 +133,6 @@ async def login(request: LoginRequest, http_request: Request, response: Response
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(user_id=user.id, role=user.role)
-
-    # Also issue JWT via HttpOnly cookie for browser WS/SSE streaming (Argo CD style).
-    from app.config import settings
-
-    forwarded_proto = (http_request.headers.get("X-Forwarded-Proto") or "").strip().lower()
-    is_secure = forwarded_proto == "https"
-    response.set_cookie(
-        key=settings.AUTH_COOKIE_NAME,
-        value=token,
-        httponly=True,
-        secure=is_secure,
-        samesite="lax",
-        max_age=int(settings.JWT_EXPIRES_MINUTES) * 60,
-        path="/",
-    )
-
     return AuthResponse(
         access_token=token,
         user=UserResponse(
@@ -162,14 +146,6 @@ async def login(request: LoginRequest, http_request: Request, response: Response
             updated_at=user.updated_at,
         ),
     )
-
-@router.post("/logout")
-async def logout(response: Response):
-    """Clear auth cookie (best-effort)."""
-    from app.config import settings
-
-    response.delete_cookie(key=settings.AUTH_COOKIE_NAME, path="/")
-    return {"success": True}
 
 
 @router.get("/me", response_model=UserResponse)

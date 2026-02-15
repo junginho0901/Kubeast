@@ -39,9 +39,6 @@ class Settings(BaseSettings):
     # Key storage (dev)
     KEY_DIR: str = "/app/.keys"
 
-    # Auth cookie (Argo CD style: HttpOnly cookie for browser streaming/WS)
-    AUTH_COOKIE_NAME: str = "kube-assistant.token"
-
     class Config:
         env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = True
