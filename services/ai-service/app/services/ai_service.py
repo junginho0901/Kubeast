@@ -3,6 +3,7 @@ AI 트러블슈팅 서비스
 """
 from openai import AsyncOpenAI
 from typing import List, Dict, Optional
+import httpx
 import re
 import json
 import sys
@@ -31,11 +32,30 @@ class ToolContext:
 class AIService:
     """AI 트러블슈팅 서비스"""
     
-    def __init__(self, authorization: Optional[str] = None):
+    def __init__(
+        self,
+        authorization: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        tls_verify: Optional[bool] = True,
+    ):
         """OpenAI 클라이언트 초기화"""
-        base_url = (settings.OPENAI_BASE_URL or "").strip() or None
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base_url)
-        self.model = settings.OPENAI_MODEL
+        resolved_base_url = (base_url if base_url is not None else settings.OPENAI_BASE_URL)
+        resolved_base_url = (resolved_base_url or "").strip() or None
+        resolved_api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
+        resolved_model = model or settings.OPENAI_MODEL
+        headers = extra_headers or {}
+
+        http_client = httpx.AsyncClient(verify=tls_verify if tls_verify is not None else True)
+        self.client = AsyncOpenAI(
+            api_key=resolved_api_key,
+            base_url=resolved_base_url,
+            default_headers=headers if headers else None,
+            http_client=http_client,
+        )
+        self.model = resolved_model
         self.k8s_service = K8sServiceClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}", flush=True)

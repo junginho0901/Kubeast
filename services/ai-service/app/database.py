@@ -4,7 +4,7 @@ Database models and session management
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func
-from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, create_engine
+from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -55,6 +55,30 @@ class SessionContext(Base):
     
     # Relationships
     session = relationship("Session", back_populates="context")
+
+
+class ModelConfig(Base):
+    """모델 설정 (DB 기반)"""
+    __tablename__ = "model_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)
+    provider = Column(String, nullable=False, default="openai")
+    model = Column(String, nullable=False)
+    base_url = Column(String, nullable=True)
+
+    # K8s Secret 참조 (secret name/key) 또는 env var 키
+    api_key_secret_name = Column(String, nullable=True)
+    api_key_secret_key = Column(String, nullable=True)
+    api_key_env = Column(String, nullable=True)
+
+    extra_headers = Column(JSON, nullable=False, default=dict)
+    tls_verify = Column(Boolean, nullable=False, default=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class DatabaseService:
@@ -222,6 +246,122 @@ class DatabaseService:
             )
             await db.commit()
 
+    # ===== Model Configs =====
+    async def list_model_configs(self, enabled_only: bool = False) -> List[ModelConfig]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            query = select(ModelConfig)
+            if enabled_only:
+                query = query.where(ModelConfig.enabled.is_(True))
+            query = query.order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc())
+            result = await db.execute(query)
+            return list(result.scalars().all())
+
+    async def get_model_config(self, config_id: int) -> Optional[ModelConfig]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(
+                select(ModelConfig).where(ModelConfig.id == config_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def get_active_model_config(self) -> Optional[ModelConfig]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(
+                select(ModelConfig)
+                .where(ModelConfig.enabled.is_(True))
+                .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc())
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
+
+    async def create_model_config(self, data: Dict[str, Any]) -> ModelConfig:
+        async with self.async_session() as db:
+            from sqlalchemy import select, update
+            # 중복 이름 방지
+            exists = await db.execute(
+                select(ModelConfig).where(ModelConfig.name == data.get("name"))
+            )
+            if exists.scalar_one_or_none():
+                raise ValueError("Model config name already exists")
+
+            config = ModelConfig(**data)
+            db.add(config)
+
+            if config.is_default:
+                await db.execute(
+                    update(ModelConfig)
+                    .where(ModelConfig.id != config.id)
+                    .values(is_default=False)
+                )
+
+            await db.commit()
+            await db.refresh(config)
+            return config
+
+    async def update_model_config(self, config_id: int, data: Dict[str, Any]) -> Optional[ModelConfig]:
+        async with self.async_session() as db:
+            from sqlalchemy import select, update
+            result = await db.execute(
+                select(ModelConfig).where(ModelConfig.id == config_id)
+            )
+            config = result.scalar_one_or_none()
+            if not config:
+                return None
+
+            for key, value in data.items():
+                setattr(config, key, value)
+
+            if data.get("is_default") is True:
+                await db.execute(
+                    update(ModelConfig)
+                    .where(ModelConfig.id != config.id)
+                    .values(is_default=False)
+                )
+
+            await db.commit()
+            await db.refresh(config)
+            return config
+
+    async def delete_model_config(self, config_id: int) -> bool:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(
+                select(ModelConfig).where(ModelConfig.id == config_id)
+            )
+            config = result.scalar_one_or_none()
+            if not config:
+                return False
+            await db.delete(config)
+            await db.commit()
+            return True
+
+    async def ensure_default_model_config(self):
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(select(func.count(ModelConfig.id)))
+            count = int(result.scalar_one() or 0)
+            if count > 0:
+                return
+
+            from app.config import settings
+            config = ModelConfig(
+                name="default-openai",
+                provider="openai",
+                model=settings.OPENAI_MODEL,
+                base_url=(settings.OPENAI_BASE_URL or "").strip() or None,
+                api_key_secret_name="kube-assistant-secrets",
+                api_key_secret_key="OPENAI_API_KEY",
+                api_key_env=None,
+                extra_headers={},
+                tls_verify=True,
+                enabled=True,
+                is_default=True,
+            )
+            db.add(config)
+            await db.commit()
+
 
 # 전역 데이터베이스 서비스 인스턴스
 db_service: Optional[DatabaseService] = None
@@ -233,4 +373,5 @@ async def get_db_service() -> DatabaseService:
     if db_service is None:
         db_service = DatabaseService()
         await db_service.init_db()
+        await db_service.ensure_default_model_config()
     return db_service

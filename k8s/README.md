@@ -55,3 +55,28 @@ kubectl -n kube-assistant get svc gateway
 
 ## 참고
 - kind 기본 설치에는 metrics-server가 없어서 일부 메트릭 API가 실패할 수 있습니다.
+
+## ModelConfig (DB 기반) 사용
+AI 모델 설정을 DB에서 관리합니다. API 키는 **K8s Secret의 키 이름**을 참조합니다.
+
+예시 (admin 계정으로 토큰 발급 후 호출):
+```bash
+# 로그인 → 토큰
+curl -s -X POST http://localhost:30080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@local","password":"admin"}'
+
+# 모델 설정 생성
+curl -s -X POST http://localhost:30080/api/v1/ai/model-configs \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":"openai-default",
+    "provider":"openai",
+    "model":"gpt-4o-mini",
+    "base_url":"https://api.openai.com/v1",
+    "api_key_secret_name":"kube-assistant-secrets",
+    "api_key_secret_key":"OPENAI_API_KEY",
+    "is_default":true
+  }'
+```
