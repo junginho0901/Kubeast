@@ -87,7 +87,7 @@ CRD와 컨트롤러로 ModelConfig를 관리합니다. 컨트롤러가 CRD를 DB
 ### 적용
 ```bash
 kubectl apply -f k8s/model-config-crd.yaml
-kubectl apply -f k8s/model-config-controller.yaml
+kubectl -n kube-assistant apply -f k8s/model-config-controller.yaml
 ```
 
 ### 컨트롤러 이미지 (kind)
@@ -99,5 +99,5 @@ kubectl -n kube-assistant rollout restart deploy/model-config-controller
 
 ### 예시 CR
 ```bash
-kubectl apply -f k8s/model-config-sample.yaml
+kubectl -n kube-assistant apply -f k8s/model-config-sample.yaml
 ```
