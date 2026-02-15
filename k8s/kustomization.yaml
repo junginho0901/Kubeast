@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kube-assistant
+
+resources:
+  - namespace.yaml
+  - model-config-crd.yaml
+  - configmap.yaml
+  - secret.yaml
+  - rbac.yaml
+  - postgres.yaml
+  - redis.yaml
+  - model-config-controller.yaml
+  - auth-service.yaml
+  - ai-service.yaml
+  - k8s-service.yaml
+  - session-service.yaml
+  - frontend.yaml
+  - gateway.yaml
+  - litellm.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: gateway-nginx
+    files:
+      - nginx.conf=nginx.conf
+  - name: litellm-config
+    files:
+      - config.yaml=litellm-config.yaml

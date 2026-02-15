@@ -1,0 +1,14 @@
+apiVersion: ai.kube-assistant.io/v1alpha1
+kind: ModelConfig
+metadata:
+  name: openai-default
+  namespace: kube-assistant
+spec:
+  provider: openai
+  model: gpt-4o-mini
+  baseURL: https://api.openai.com/v1
+  apiKeySecretRef:
+    name: kube-assistant-secrets
+    key: OPENAI_API_KEY
+  enabled: true
+  isDefault: true

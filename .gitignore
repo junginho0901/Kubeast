@@ -66,6 +66,7 @@ dist/
 # Kubernetes
 kubeconfig.yaml
 kubeconfig*.yaml
+k8s/secret.local.yaml
 
 # Docker
 .dockerignore
