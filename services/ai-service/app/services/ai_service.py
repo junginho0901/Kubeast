@@ -2752,7 +2752,6 @@ Draft (rules-based, keep numbers unchanged):
                     print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
 
                     # OpenAI 응답 전체 로그 출력
-                    import json
                     response_dict = {
                         "id": response.id,
                         "model": response.model,

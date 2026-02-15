@@ -24,7 +24,7 @@ data:
   REDIS_DB: "0"
 
   OPENAI_MODEL: "gpt-4-turbo-preview"
-  OPENAI_BASE_URL: ""
+  OPENAI_BASE_URL: "https://api.openai.com/v1"
   OPENAI_OPTIMIZATION_MAX_TOKENS: "1800"
 
   IN_CLUSTER: "true"
