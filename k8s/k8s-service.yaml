@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-service
+  template:
+    metadata:
+      labels:
+        app: k8s-service
+    spec:
+      serviceAccountName: k8s-service
+      containers:
+        - name: k8s-service
+          image: kube-assistant/k8s-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - configMapRef:
+                name: kube-assistant-config
+            - secretRef:
+                name: kube-assistant-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-service
+spec:
+  ports:
+    - port: 8002
+      targetPort: 8002
+  selector:
+    app: k8s-service
