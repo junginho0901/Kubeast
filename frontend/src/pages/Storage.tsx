@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { Database, HardDrive, RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp } from 'lucide-react'
+import { Database, HardDrive, RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp, Info } from 'lucide-react'
 
 type StorageTab = 'pvcs' | 'pvs' | 'storageclasses' | 'volumeattachments'
 type PvcSortKey =
@@ -707,8 +707,18 @@ export default function Storage() {
               placeholder={searchPlaceholder[activeTab]}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className={`w-full pl-10 ${activeTab === 'volumeattachments' ? 'pr-10' : 'pr-4'} py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
             />
+            {activeTab === 'volumeattachments' && (
+              <button
+                type="button"
+                title="VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다. (예: NFS 계열은 생성되지 않을 수 있음)"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200"
+              >
+                <Info className="w-5 h-5" />
+                <span className="sr-only">VolumeAttachment 도움말</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -777,6 +787,12 @@ export default function Storage() {
               </button>
             </div>
           </div>
+        ) : activeTab === 'volumeattachments' ? (
+          <div className="hidden md:flex items-center justify-end text-xs text-slate-400 leading-snug text-right">
+            VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다.
+            <br />
+            (예: NFS 계열은 생성되지 않을 수 있음)
+          </div>
         ) : (
           <div />
         )}
@@ -785,12 +801,6 @@ export default function Storage() {
       {activeTab === 'volumeattachments' && volumeAttachmentError && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
           VolumeAttachment 조회에 실패했습니다. (클러스터 권한/환경에 따라 불가할 수 있습니다)
-        </div>
-      )}
-
-      {activeTab === 'volumeattachments' && !volumeAttachmentError && (
-        <div className="text-xs text-slate-400">
-          VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다. (예: NFS 계열은 생성되지 않을 수 있음)
         </div>
       )}
 
