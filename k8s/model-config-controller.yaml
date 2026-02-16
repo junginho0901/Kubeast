@@ -13,6 +13,9 @@ rules:
   - apiGroups: ["ai.kube-assistant.io"]
     resources: ["modelconfigs", "modelconfigs/status"]
     verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
