@@ -370,11 +370,15 @@ def _reconcile_modelconfig(
 def handle_modelconfig_event(api: client.CustomObjectsApi, core_api: client.CoreV1Api, event_type: str, obj: Dict[str, Any]):
     if event_type in ("ADDED", "MODIFIED"):
         meta = obj.get("metadata") or {}
-        status = obj.get("status") or {}
         generation = meta.get("generation")
-        observed = status.get("observedGeneration")
-        if event_type == "MODIFIED" and observed is not None and generation == observed:
-            return
+        if event_type == "MODIFIED":
+            name = meta.get("name")
+            namespace = meta.get("namespace") or NAMESPACE
+            if name:
+                status = _load_existing_status(api, name, namespace)
+                observed = status.get("observedGeneration")
+                if observed is not None and generation == observed:
+                    return
         _reconcile_modelconfig(api, core_api, obj, update_db=True)
     elif event_type == "DELETED":
         meta = obj.get("metadata") or {}
