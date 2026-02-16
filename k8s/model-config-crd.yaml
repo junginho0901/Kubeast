@@ -194,6 +194,21 @@ spec:
                       type: object
                       additionalProperties:
                         type: string
+              x-kubernetes-validations:
+                - message: spec.openAI must be nil if provider is not openai
+                  rule: '!(has(self.openAI) && self.provider != ''openai'')'
+                - message: spec.anthropic must be nil if provider is not anthropic
+                  rule: '!(has(self.anthropic) && self.provider != ''anthropic'')'
+                - message: spec.azureOpenAI must be nil if provider is not azureopenai
+                  rule: '!(has(self.azureOpenAI) && self.provider != ''azureopenai'')'
+                - message: spec.gemini must be nil if provider is not gemini
+                  rule: '!(has(self.gemini) && self.provider != ''gemini'')'
+                - message: spec.geminiVertexAI must be nil if provider is not geminivertexai
+                  rule: '!(has(self.geminiVertexAI) && self.provider != ''geminivertexai'')'
+                - message: spec.anthropicVertexAI must be nil if provider is not anthropicvertexai
+                  rule: '!(has(self.anthropicVertexAI) && self.provider != ''anthropicvertexai'')'
+                - message: spec.ollama must be nil if provider is not ollama
+                  rule: '!(has(self.ollama) && self.provider != ''ollama'')'
             status:
               type: object
               properties:
