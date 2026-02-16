@@ -215,6 +215,13 @@ def _build_conditions(
     return conditions
 
 
+def _find_condition(conditions: Optional[list], cond_type: str) -> Optional[Dict[str, Any]]:
+    for cond in conditions or []:
+        if cond.get("type") == cond_type:
+            return cond
+    return None
+
+
 def upsert_config(data: Dict[str, Any]) -> int:
     sql = """
     INSERT INTO model_configs (
@@ -327,6 +334,23 @@ def _reconcile_modelconfig(
         secret_message = "Secret not required" if not secret_required else (secret_error or "Secret resolved")
 
         message = sync_message if secret_state == "True" else f"{sync_message}; {secret_message}"
+        if not update_db and fetched_status:
+            prev_secret_hash = fetched_status.get("secretHash")
+            prev_synced = fetched_status.get("synced")
+            prev_db_id = fetched_status.get("dbId")
+            prev_message = fetched_status.get("message")
+            prev_secret_cond = _find_condition(fetched_status.get("conditions"), "SecretReady") or {}
+            prev_secret_state = prev_secret_cond.get("status")
+
+            if (
+                prev_secret_hash == secret_hash
+                and prev_secret_state == secret_state
+                and prev_synced == synced_ok
+                and prev_db_id == db_id
+                and prev_message == message
+            ):
+                return
+
         status_payload = {
             "synced": synced_ok,
             "dbId": db_id,
