@@ -32,8 +32,14 @@ model_list:
       model: gemini/gemini-2.0-flash
       api_key: os.environ/GEMINI_API_KEY
 
+  # Bedrock (placeholder)
+  # Replace <MODEL_ID> with a Bedrock model ID (e.g., anthropic.claude-3-5-sonnet-20241022-v2)
+  # AWS credentials/region are picked up from standard AWS env vars (or IRSA in K8s).
+  - model_name: bedrock-placeholder
+    litellm_params:
+      model: bedrock/<MODEL_ID>
+
 general_settings:
   # Keep the OpenAI-compatible endpoints enabled.
   # (default is true; explicit here for clarity)
   openai_compatible_endpoints: true
-

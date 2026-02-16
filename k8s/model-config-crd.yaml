@@ -45,6 +45,7 @@ spec:
                     - geminivertexai
                     - anthropicvertexai
                     - ollama
+                    - bedrock
                 model:
                   type: string
                 baseURL:
@@ -136,6 +137,11 @@ spec:
                       type: string
                     topP:
                       type: string
+                bedrock:
+                  type: object
+                  properties:
+                    region:
+                      type: string
                 gemini:
                   type: object
                   properties:
@@ -219,6 +225,8 @@ spec:
                   rule: '!(has(self.anthropicVertexAI) && self.provider != ''anthropicvertexai'')'
                 - message: spec.ollama must be nil if provider is not ollama
                   rule: '!(has(self.ollama) && self.provider != ''ollama'')'
+                - message: spec.bedrock must be nil if provider is not bedrock
+                  rule: '!(has(self.bedrock) && self.provider != ''bedrock'')'
                 - message: apiKeySecretRef.name requires apiKeySecretRef.key
                   rule: '!(has(self.apiKeySecretRef) && has(self.apiKeySecretRef.name) && size(self.apiKeySecretRef.name) > 0 && (!has(self.apiKeySecretRef.key) || size(self.apiKeySecretRef.key) == 0))'
                 - message: apiKeySecretRef.key requires apiKeySecretRef.name
