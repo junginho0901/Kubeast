@@ -32,8 +32,54 @@ model_list:
       model: gemini/gemini-2.0-flash
       api_key: os.environ/GEMINI_API_KEY
 
+  # OpenAI (placeholder)
+  # - model_name: openai-placeholder
+  #   litellm_params:
+  #     model: openai/<MODEL_ID>
+  #     api_key: os.environ/OPENAI_API_KEY
+
+  # Anthropic (placeholder)
+  # - model_name: claude-placeholder
+  #   litellm_params:
+  #     model: anthropic/<MODEL_ID>
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Azure OpenAI (placeholder)
+  # - model_name: azure-openai-placeholder
+  #   litellm_params:
+  #     model: azure/<DEPLOYMENT_NAME>
+  #     api_key: os.environ/AZURE_OPENAI_API_KEY
+  #     api_base: os.environ/AZURE_OPENAI_ENDPOINT
+  #     api_version: os.environ/AZURE_OPENAI_API_VERSION
+
+  # Ollama (placeholder)
+  # - model_name: ollama-placeholder
+  #   litellm_params:
+  #     model: ollama/<MODEL_ID>
+  #     api_base: http://ollama:11434
+
+  # Gemini Vertex AI (placeholder)
+  # - model_name: gemini-vertex-placeholder
+  #   litellm_params:
+  #     model: vertex_ai/<MODEL_ID>
+  #     project: os.environ/GCP_PROJECT_ID
+  #     location: os.environ/GCP_LOCATION
+
+  # Anthropic Vertex AI (placeholder)
+  # - model_name: anthropic-vertex-placeholder
+  #   litellm_params:
+  #     model: vertex_ai/<MODEL_ID>
+  #     project: os.environ/GCP_PROJECT_ID
+  #     location: os.environ/GCP_LOCATION
+
+  # Bedrock (placeholder)
+  # Replace <MODEL_ID> with a Bedrock model ID (e.g., anthropic.claude-3-5-sonnet-20241022-v2)
+  # AWS credentials/region are picked up from standard AWS env vars (or IRSA in K8s).
+  - model_name: bedrock-placeholder
+    litellm_params:
+      model: bedrock/<MODEL_ID>
+
 general_settings:
   # Keep the OpenAI-compatible endpoints enabled.
   # (default is true; explicit here for clarity)
   openai_compatible_endpoints: true
-

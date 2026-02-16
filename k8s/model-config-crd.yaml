@@ -15,6 +15,13 @@ spec:
     - name: v1alpha1
       served: true
       storage: true
+      additionalPrinterColumns:
+        - jsonPath: .spec.provider
+          name: Provider
+          type: string
+        - jsonPath: .spec.model
+          name: Model
+          type: string
       subresources:
         status: {}
       schema:
@@ -25,9 +32,20 @@ spec:
               type: object
               required:
                 - model
+                - provider
               properties:
                 provider:
                   type: string
+                  default: openai
+                  enum:
+                    - openai
+                    - anthropic
+                    - azureopenai
+                    - gemini
+                    - geminivertexai
+                    - anthropicvertexai
+                    - ollama
+                    - bedrock
                 model:
                   type: string
                 baseURL:
@@ -51,6 +69,168 @@ spec:
                   type: boolean
                 isDefault:
                   type: boolean
+                modelInfo:
+                  type: object
+                  properties:
+                    family:
+                      type: string
+                    functionCalling:
+                      type: boolean
+                    jsonOutput:
+                      type: boolean
+                    multipleSystemMessages:
+                      type: boolean
+                    structuredOutput:
+                      type: boolean
+                    vision:
+                      type: boolean
+                openAI:
+                  type: object
+                  properties:
+                    baseUrl:
+                      type: string
+                    organization:
+                      type: string
+                    maxTokens:
+                      type: integer
+                    temperature:
+                      type: string
+                    topP:
+                      type: string
+                    presencePenalty:
+                      type: string
+                    frequencyPenalty:
+                      type: string
+                    "n":
+                      type: integer
+                    seed:
+                      type: integer
+                    timeout:
+                      type: integer
+                anthropic:
+                  type: object
+                  properties:
+                    baseUrl:
+                      type: string
+                    maxTokens:
+                      type: integer
+                    temperature:
+                      type: string
+                    topP:
+                      type: string
+                    topK:
+                      type: integer
+                azureOpenAI:
+                  type: object
+                  properties:
+                    apiVersion:
+                      type: string
+                    azureEndpoint:
+                      type: string
+                    azureDeployment:
+                      type: string
+                    azureAdToken:
+                      type: string
+                    maxTokens:
+                      type: integer
+                    temperature:
+                      type: string
+                    topP:
+                      type: string
+                bedrock:
+                  type: object
+                  properties:
+                    region:
+                      type: string
+                gemini:
+                  type: object
+                  properties:
+                    maxOutputTokens:
+                      type: integer
+                    temperature:
+                      type: string
+                    topP:
+                      type: string
+                    topK:
+                      type: string
+                    stopSequences:
+                      type: array
+                      items:
+                        type: string
+                    responseMimeType:
+                      type: string
+                geminiVertexAI:
+                  type: object
+                  properties:
+                    projectID:
+                      type: string
+                    location:
+                      type: string
+                    maxOutputTokens:
+                      type: integer
+                    temperature:
+                      type: string
+                    topP:
+                      type: string
+                    topK:
+                      type: string
+                    stopSequences:
+                      type: array
+                      items:
+                        type: string
+                    responseMimeType:
+                      type: string
+                    candidateCount:
+                      type: integer
+                anthropicVertexAI:
+                  type: object
+                  properties:
+                    projectID:
+                      type: string
+                    location:
+                      type: string
+                    maxTokens:
+                      type: integer
+                    temperature:
+                      type: string
+                    topP:
+                      type: string
+                    topK:
+                      type: string
+                    stopSequences:
+                      type: array
+                      items:
+                        type: string
+                ollama:
+                  type: object
+                  properties:
+                    host:
+                      type: string
+                    options:
+                      type: object
+                      additionalProperties:
+                        type: string
+              x-kubernetes-validations:
+                - message: spec.openAI must be nil if provider is not openai
+                  rule: '!(has(self.openAI) && self.provider != ''openai'')'
+                - message: spec.anthropic must be nil if provider is not anthropic
+                  rule: '!(has(self.anthropic) && self.provider != ''anthropic'')'
+                - message: spec.azureOpenAI must be nil if provider is not azureopenai
+                  rule: '!(has(self.azureOpenAI) && self.provider != ''azureopenai'')'
+                - message: spec.gemini must be nil if provider is not gemini
+                  rule: '!(has(self.gemini) && self.provider != ''gemini'')'
+                - message: spec.geminiVertexAI must be nil if provider is not geminivertexai
+                  rule: '!(has(self.geminiVertexAI) && self.provider != ''geminivertexai'')'
+                - message: spec.anthropicVertexAI must be nil if provider is not anthropicvertexai
+                  rule: '!(has(self.anthropicVertexAI) && self.provider != ''anthropicvertexai'')'
+                - message: spec.ollama must be nil if provider is not ollama
+                  rule: '!(has(self.ollama) && self.provider != ''ollama'')'
+                - message: spec.bedrock must be nil if provider is not bedrock
+                  rule: '!(has(self.bedrock) && self.provider != ''bedrock'')'
+                - message: apiKeySecretRef.name requires apiKeySecretRef.key
+                  rule: '!(has(self.apiKeySecretRef) && has(self.apiKeySecretRef.name) && size(self.apiKeySecretRef.name) > 0 && (!has(self.apiKeySecretRef.key) || size(self.apiKeySecretRef.key) == 0))'
+                - message: apiKeySecretRef.key requires apiKeySecretRef.name
+                  rule: '!(has(self.apiKeySecretRef) && has(self.apiKeySecretRef.key) && size(self.apiKeySecretRef.key) > 0 && (!has(self.apiKeySecretRef.name) || size(self.apiKeySecretRef.name) == 0))'
             status:
               type: object
               properties:
@@ -62,3 +242,34 @@ spec:
                   type: string
                 message:
                   type: string
+                observedGeneration:
+                  type: integer
+                  format: int64
+                secretHash:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                      - lastTransitionTime
+                      - reason
+                      - message
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      message:
+                        type: string
