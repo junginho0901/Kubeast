@@ -20,17 +20,17 @@ model_list:
       model: openai/gpt-4o-mini
       api_key: os.environ/OPENAI_API_KEY
 
-  # Claude (Anthropic) - disabled by default
-  # - model_name: claude-3-5-sonnet
-  #   litellm_params:
-  #     model: anthropic/claude-3-5-sonnet-20241022
-  #     api_key: os.environ/ANTHROPIC_API_KEY
+  # Claude (Anthropic)
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
 
-  # Gemini - disabled by default
-  # - model_name: gemini-2.0-flash
-  #   litellm_params:
-  #     model: gemini/gemini-2.0-flash
-  #     api_key: os.environ/GEMINI_API_KEY
+  # Gemini
+  - model_name: gemini-2.0-flash
+    litellm_params:
+      model: gemini/gemini-2.0-flash
+      api_key: os.environ/GEMINI_API_KEY
 
   # OpenAI (placeholder)
   # - model_name: openai-placeholder
@@ -72,12 +72,12 @@ model_list:
   #     project: os.environ/GCP_PROJECT_ID
   #     location: os.environ/GCP_LOCATION
 
-  # Bedrock (placeholder) - disabled by default
+  # Bedrock (placeholder)
   # Replace <MODEL_ID> with a Bedrock model ID (e.g., anthropic.claude-3-5-sonnet-20241022-v2)
   # AWS credentials/region are picked up from standard AWS env vars (or IRSA in K8s).
-  # - model_name: bedrock-placeholder
-  #   litellm_params:
-  #     model: bedrock/<MODEL_ID>
+  - model_name: bedrock-placeholder
+    litellm_params:
+      model: bedrock/<MODEL_ID>
 
 general_settings:
   # Keep the OpenAI-compatible endpoints enabled.
