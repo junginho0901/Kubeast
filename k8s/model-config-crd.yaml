@@ -227,6 +227,28 @@ spec:
                   rule: '!(has(self.ollama) && self.provider != ''ollama'')'
                 - message: spec.bedrock must be nil if provider is not bedrock
                   rule: '!(has(self.bedrock) && self.provider != ''bedrock'')'
+                - message: spec.azureOpenAI is required when provider is azureopenai
+                  rule: 'self.provider != ''azureopenai'' || has(self.azureOpenAI)'
+                - message: spec.azureOpenAI.azureEndpoint is required when provider is azureopenai
+                  rule: 'self.provider != ''azureopenai'' || (has(self.azureOpenAI) && has(self.azureOpenAI.azureEndpoint) && size(self.azureOpenAI.azureEndpoint) > 0)'
+                - message: spec.azureOpenAI.azureDeployment is required when provider is azureopenai
+                  rule: 'self.provider != ''azureopenai'' || (has(self.azureOpenAI) && has(self.azureOpenAI.azureDeployment) && size(self.azureOpenAI.azureDeployment) > 0)'
+                - message: spec.geminiVertexAI is required when provider is geminivertexai
+                  rule: 'self.provider != ''geminivertexai'' || has(self.geminiVertexAI)'
+                - message: spec.geminiVertexAI.projectID is required when provider is geminivertexai
+                  rule: 'self.provider != ''geminivertexai'' || (has(self.geminiVertexAI) && has(self.geminiVertexAI.projectID) && size(self.geminiVertexAI.projectID) > 0)'
+                - message: spec.geminiVertexAI.location is required when provider is geminivertexai
+                  rule: 'self.provider != ''geminivertexai'' || (has(self.geminiVertexAI) && has(self.geminiVertexAI.location) && size(self.geminiVertexAI.location) > 0)'
+                - message: spec.anthropicVertexAI is required when provider is anthropicvertexai
+                  rule: 'self.provider != ''anthropicvertexai'' || has(self.anthropicVertexAI)'
+                - message: spec.anthropicVertexAI.projectID is required when provider is anthropicvertexai
+                  rule: 'self.provider != ''anthropicvertexai'' || (has(self.anthropicVertexAI) && has(self.anthropicVertexAI.projectID) && size(self.anthropicVertexAI.projectID) > 0)'
+                - message: spec.anthropicVertexAI.location is required when provider is anthropicvertexai
+                  rule: 'self.provider != ''anthropicvertexai'' || (has(self.anthropicVertexAI) && has(self.anthropicVertexAI.location) && size(self.anthropicVertexAI.location) > 0)'
+                - message: spec.ollama.host is required when provider is ollama
+                  rule: 'self.provider != ''ollama'' || (has(self.ollama) && has(self.ollama.host) && size(self.ollama.host) > 0)'
+                - message: spec.bedrock.region is required when provider is bedrock
+                  rule: 'self.provider != ''bedrock'' || (has(self.bedrock) && has(self.bedrock.region) && size(self.bedrock.region) > 0)'
                 - message: apiKeySecretRef.name requires apiKeySecretRef.key
                   rule: '!(has(self.apiKeySecretRef) && has(self.apiKeySecretRef.name) && size(self.apiKeySecretRef.name) > 0 && (!has(self.apiKeySecretRef.key) || size(self.apiKeySecretRef.key) == 0))'
                 - message: apiKeySecretRef.key requires apiKeySecretRef.name
