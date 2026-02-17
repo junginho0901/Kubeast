@@ -65,6 +65,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: LEADER_ELECTION
               value: "true"
+            - name: METRICS_ADDR
+              value: ":8080"
             - name: MODEL_CONFIG_GROUP
               value: ai.kube-assistant.io
             - name: MODEL_CONFIG_VERSION
