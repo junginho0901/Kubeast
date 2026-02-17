@@ -16,20 +16,8 @@
 3) **컨트롤러**
 - `model-config-controller-go`가 CRD를 DB로 동기화
 
-## 컨트롤러 운영 옵션
-- **Leader Election**: 기본 활성화. `LEADER_ELECTION=false`로 끌 수 있습니다.
-- **Leader Election Namespace**: `LEADER_ELECTION_NAMESPACE` (기본: `WATCH_NAMESPACE`)
-- **Metrics**: `METRICS_ADDR`로 제어 (`:8080` 활성, `0` 비활성)
-
-### 컨트롤러 메트릭 (추가)
-- `kube_assistant_model_config_controller_sync_total{status,provider}`
-- `kube_assistant_model_config_controller_secret_hash_change_total{provider}`
-
-### 컨트롤러 테스트
-```bash
-cd services/model-config-controller-go
-go test ./internal/controller -v
-```
+## 개발자 문서
+- 컨트롤러 운영 옵션/메트릭/테스트는 `docs/DEVELOPERS.md` 참고
 
 ## 로컬(kind) 배포
 ```bash
