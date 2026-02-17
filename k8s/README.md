@@ -57,7 +57,7 @@ kubectl -n kube-assistant get svc gateway
 
 ## 참고
 - kind 기본 설치에는 metrics-server가 없어서 일부 메트릭 API가 실패할 수 있습니다.
-- 컨트롤러 메트릭은 `METRICS_ADDR`로 제어합니다 (`:8080` 기본, 비활성화는 `0`).
+- 컨트롤러 메트릭은 `METRICS_ADDR`로 제어합니다 (`0` 기본 비활성, 활성화는 `:8080`).
 
 ## ModelConfig (DB 기반) 사용
 AI 모델 설정을 DB에서 관리합니다. API 키는 **K8s Secret의 키 이름**을 참조합니다.
