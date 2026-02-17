@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/junginho0901/kube-assistant/model-config-controller-go/api/v1alpha1"
 	"github.com/junginho0901/kube-assistant/model-config-controller-go/internal/controller"
@@ -24,6 +25,11 @@ func main() {
 
 	metricsAddr := envOrDefault("METRICS_ADDR", ":8080")
 	probeAddr := envOrDefault("HEALTH_PROBE_ADDR", ":8081")
+	leaderElectionID := envOrDefault("LEADER_ELECTION_ID", "model-config-controller-go.ai.kube-assistant.io")
+	leaderElectionNamespace := os.Getenv("LEADER_ELECTION_NAMESPACE")
+	if leaderElectionNamespace == "" {
+		leaderElectionNamespace = os.Getenv("WATCH_NAMESPACE")
+	}
 
 	opts := ctrl.Options{
 		Scheme: scheme,
@@ -31,6 +37,11 @@ func main() {
 			BindAddress: metricsAddr,
 		},
 		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         envBool("LEADER_ELECTION", true),
+		LeaderElectionID:       leaderElectionID,
+	}
+	if leaderElectionNamespace != "" {
+		opts.LeaderElectionNamespace = leaderElectionNamespace
 	}
 	if ns := os.Getenv("WATCH_NAMESPACE"); ns != "" {
 		opts.Cache = cache.Options{
@@ -68,4 +79,19 @@ func envOrDefault(key, value string) string {
 		return v
 	}
 	return value
+}
+
+func envBool(key string, def bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if v == "" {
+		return def
+	}
+	switch v {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return def
+	}
 }
