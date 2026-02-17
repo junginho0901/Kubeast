@@ -16,7 +16,7 @@ declare -a SERVICES=(
   "k8s-service services/k8s-service"
   "session-service services/session-service"
   "frontend frontend"
-  "model-config-controller services/model-config-controller"
+  "model-config-controller-go services/model-config-controller-go"
 )
 
 for item in "${SERVICES[@]}"; do
@@ -34,4 +34,4 @@ kubectl -n kube-assistant set image deploy/ai-service ai-service="$REGISTRY/ai-s
 kubectl -n kube-assistant set image deploy/k8s-service k8s-service="$REGISTRY/k8s-service:$TAG"
 kubectl -n kube-assistant set image deploy/session-service session-service="$REGISTRY/session-service:$TAG"
 kubectl -n kube-assistant set image deploy/frontend frontend="$REGISTRY/frontend:$TAG"
-kubectl -n kube-assistant set image deploy/model-config-controller controller="$REGISTRY/model-config-controller:$TAG"
+kubectl -n kube-assistant set image deploy/model-config-controller-go controller="$REGISTRY/model-config-controller-go:$TAG"

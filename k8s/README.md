@@ -7,6 +7,7 @@ docker build -t kube-assistant/ai-service:local services/ai-service
 docker build -t kube-assistant/k8s-service:local services/k8s-service
 docker build -t kube-assistant/session-service:local services/session-service
 docker build -t kube-assistant/frontend:local frontend
+docker build -t kube-assistant/model-config-controller-go:local services/model-config-controller-go
 ```
 
 ## 2) kind 로드
@@ -16,6 +17,7 @@ kind load docker-image kube-assistant/ai-service:local --name kube-assistant
 kind load docker-image kube-assistant/k8s-service:local --name kube-assistant
 kind load docker-image kube-assistant/session-service:local --name kube-assistant
 kind load docker-image kube-assistant/frontend:local --name kube-assistant
+kind load docker-image kube-assistant/model-config-controller-go:local --name kube-assistant
 ```
 
 ## 3) 시크릿 값 수정
@@ -55,6 +57,7 @@ kubectl -n kube-assistant get svc gateway
 
 ## 참고
 - kind 기본 설치에는 metrics-server가 없어서 일부 메트릭 API가 실패할 수 있습니다.
+- 컨트롤러 메트릭은 `METRICS_ADDR`로 제어합니다 (`0` 기본 비활성, 활성화는 `:8080`).
 
 ## ModelConfig (DB 기반) 사용
 AI 모델 설정을 DB에서 관리합니다. API 키는 **K8s Secret의 키 이름**을 참조합니다.
@@ -87,15 +90,16 @@ CRD와 컨트롤러로 ModelConfig를 관리합니다. 컨트롤러가 CRD를 DB
 ### 적용
 ```bash
 kubectl apply -f k8s/model-config-crd.yaml
-kubectl -n kube-assistant apply -f k8s/model-config-controller.yaml
+kubectl -n kube-assistant apply -f k8s/model-config-controller-go.yaml
 ```
 
 ### 컨트롤러 이미지 (kind)
 ```bash
-docker build -t kube-assistant/model-config-controller:local services/model-config-controller
-kind load docker-image kube-assistant/model-config-controller:local --name kube-assistant
-kubectl -n kube-assistant rollout restart deploy/model-config-controller
+docker build -t kube-assistant/model-config-controller-go:local services/model-config-controller-go
+kind load docker-image kube-assistant/model-config-controller-go:local --name kube-assistant
+kubectl -n kube-assistant rollout restart deploy/model-config-controller-go
 ```
+
 
 ### 예시 CR
 ```bash

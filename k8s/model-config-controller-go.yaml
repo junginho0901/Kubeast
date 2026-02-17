@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: model-config-controller
+  name: model-config-controller-go
   namespace: kube-assistant
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: model-config-controller
+  name: model-config-controller-go
   namespace: kube-assistant
 rules:
   - apiGroups: ["ai.kube-assistant.io"]
@@ -16,46 +16,57 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: model-config-controller
+  name: model-config-controller-go
   namespace: kube-assistant
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: model-config-controller
+  name: model-config-controller-go
 subjects:
   - kind: ServiceAccount
-    name: model-config-controller
+    name: model-config-controller-go
     namespace: kube-assistant
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: model-config-controller
+  name: model-config-controller-go
   namespace: kube-assistant
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: model-config-controller
+      app: model-config-controller-go
   template:
     metadata:
       labels:
-        app: model-config-controller
+        app: model-config-controller-go
     spec:
-      serviceAccountName: model-config-controller
+      serviceAccountName: model-config-controller-go
       containers:
         - name: controller
-          image: kube-assistant/model-config-controller:local
+          image: kube-assistant/model-config-controller-go:local
           imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: LEADER_ELECTION_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: LEADER_ELECTION
+              value: "true"
+            - name: METRICS_ADDR
+              value: "0"
             - name: MODEL_CONFIG_GROUP
               value: ai.kube-assistant.io
             - name: MODEL_CONFIG_VERSION

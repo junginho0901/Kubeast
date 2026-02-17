@@ -10,7 +10,7 @@ resources:
   - rbac.yaml
   - postgres.yaml
   - redis.yaml
-  - model-config-controller.yaml
+  - model-config-controller-go.yaml
   - auth-service.yaml
   - ai-service.yaml
   - k8s-service.yaml

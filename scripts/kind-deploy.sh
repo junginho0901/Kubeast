@@ -17,7 +17,7 @@ declare -a IMAGES=(
   "kube-assistant/k8s-service:local services/k8s-service"
   "kube-assistant/session-service:local services/session-service"
   "kube-assistant/frontend:local frontend"
-  "kube-assistant/model-config-controller:local services/model-config-controller"
+  "kube-assistant/model-config-controller-go:local services/model-config-controller-go"
 )
 
 for item in "${IMAGES[@]}"; do
@@ -33,4 +33,4 @@ if [[ -f "$ROOT/k8s/secret.local.yaml" ]]; then
   kubectl -n kube-assistant apply -f "$ROOT/k8s/secret.local.yaml"
 fi
 
-kubectl -n kube-assistant rollout restart deploy/model-config-controller || true
+kubectl -n kube-assistant rollout restart deploy/model-config-controller-go || true
