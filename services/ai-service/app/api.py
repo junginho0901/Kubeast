@@ -3,9 +3,7 @@ AI Service API 라우터
 """
 from fastapi import APIRouter, Header, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
-from typing import List
-import httpx
-from pydantic import BaseModel
+from app.models.ai import ChatRequest
 from app.security import require_auth
 
 router = APIRouter()
@@ -19,10 +17,6 @@ def _require_admin(payload):
 # K8s Service URL
 K8S_SERVICE_URL = "http://k8s-service:8002/api/v1"
 SESSION_SERVICE_URL = "http://session-service:8003/api/v1"
-
-
-class ChatRequest(BaseModel):
-    messages: List[dict]
 
 
 async def _build_ai_service(authorization: str):
