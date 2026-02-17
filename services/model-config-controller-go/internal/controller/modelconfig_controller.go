@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/junginho0901/kube-assistant/model-config-controller-go/api/v1alpha1"
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,8 +22,34 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+var (
+	syncTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "kube_assistant",
+			Subsystem: "model_config_controller",
+			Name:      "sync_total",
+			Help:      "Total number of model config sync attempts",
+		},
+		[]string{"status", "provider"},
+	)
+	secretHashChangeTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "kube_assistant",
+			Subsystem: "model_config_controller",
+			Name:      "secret_hash_change_total",
+			Help:      "Total number of model config secret hash changes",
+		},
+		[]string{"provider"},
+	)
+)
+
+func init() {
+	metrics.Registry.MustRegister(syncTotal, secretHashChangeTotal)
+}
 
 type ModelConfigReconciler struct {
 	client.Client
@@ -42,17 +69,21 @@ func (r *ModelConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	provider := providerLabel(&modelConfig)
 	if err := r.ensureDB(); err != nil {
+		syncTotal.WithLabelValues("error", provider).Inc()
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
 	}
 
 	data, err := r.parseSpec(&modelConfig)
 	if err != nil {
+		syncTotal.WithLabelValues("error", provider).Inc()
 		return r.patchErrorStatus(ctx, &modelConfig, err)
 	}
 
 	dbID, err := r.upsertModelConfig(ctx, data)
 	if err != nil {
+		syncTotal.WithLabelValues("error", provider).Inc()
 		return r.patchErrorStatus(ctx, &modelConfig, err)
 	}
 
@@ -64,8 +95,10 @@ func (r *ModelConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	updated, err := r.updateStatus(ctx, &modelConfig, dbID, secretHash, secretState, secretMsg)
 	if err != nil {
+		syncTotal.WithLabelValues("error", provider).Inc()
 		return ctrl.Result{}, err
 	}
+	syncTotal.WithLabelValues("success", provider).Inc()
 	if updated {
 		return ctrl.Result{RequeueAfter: 0}, nil
 	}
@@ -220,6 +253,7 @@ func (r *ModelConfigReconciler) updateStatus(ctx context.Context, mc *v1alpha1.M
 	status := mc.Status
 	updated := false
 	specChanged := status.ObservedGeneration == nil || *status.ObservedGeneration != mc.Generation
+	secretChanged := status.SecretHash != secretHash
 
 	if specChanged {
 		updated = true
@@ -253,6 +287,10 @@ func (r *ModelConfigReconciler) updateStatus(ctx context.Context, mc *v1alpha1.M
 
 	if !updated {
 		return false, nil
+	}
+
+	if secretChanged {
+		secretHashChangeTotal.WithLabelValues(providerLabel(mc)).Inc()
 	}
 
 	now := metav1.Now()
@@ -469,4 +507,12 @@ func int64Ptr(v int64) *int64 {
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+func providerLabel(mc *v1alpha1.ModelConfig) string {
+	value := strings.TrimSpace(mc.Spec.Provider)
+	if value == "" {
+		return "unknown"
+	}
+	return strings.ToLower(value)
 }
