@@ -385,9 +385,9 @@ class AIService:
                 node_port = p.get("node_port")
                 proto = p.get("protocol") or ""
                 if node_port:
-                    port_texts.append(f\"{port}:{node_port}/{proto}\")
+                    port_texts.append(f"{port}:{node_port}/{proto}")
                 else:
-                    port_texts.append(f\"{port}/{proto}\")
+                    port_texts.append(f"{port}/{proto}")
             rows.append([
                 str(svc.get("name", "")),
                 str(svc.get("type", "")),
