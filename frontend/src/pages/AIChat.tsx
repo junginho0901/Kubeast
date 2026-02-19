@@ -849,7 +849,33 @@ export default function AIChat() {
             const candidates = session.messages.filter(
               (m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
             )
-            if (candidates.length > 0) {
+
+            const currentFns = current
+              .map((tc) => (tc && typeof tc.function === 'string' ? tc.function : ''))
+              .filter((f) => f.length > 0)
+
+            if (currentFns.length > 0) {
+              // Prefer exact ordered match of tool names
+              dbMessage = candidates.find((m) => {
+                const fns = (m.tool_calls || []).map((tc: any) => String(tc?.function || '')).filter((f: string) => f)
+                return fns.length === currentFns.length && fns.every((f: string, i: number) => f === currentFns[i])
+              })
+            }
+
+            if (!dbMessage && currentFns.length > 0) {
+              // Fallback to set match (unordered)
+              const currentSet = new Set(currentFns)
+              dbMessage = candidates.find((m) => {
+                const fns = (m.tool_calls || []).map((tc: any) => String(tc?.function || '')).filter((f: string) => f)
+                if (fns.length !== currentFns.length) return false
+                const set = new Set(fns)
+                if (set.size !== currentSet.size) return false
+                for (const f of set) if (!currentSet.has(f)) return false
+                return true
+              })
+            }
+
+            if (!dbMessage && candidates.length > 0) {
               dbMessage = candidates[candidates.length - 1]
             }
           }
