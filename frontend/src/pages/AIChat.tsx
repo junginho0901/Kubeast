@@ -832,7 +832,44 @@ export default function AIChat() {
     }
 
     try {
-      const toolCalls = message.toolCalls as any[]
+      const resolveToolCallsForDownload = async () => {
+        const current = (message.toolCalls as any[]) || []
+        const needsFull = current.some(
+          (tc) => typeof tc?.result === 'string' && tc.result.includes(TRUNCATED_MARKER),
+        )
+        if (!needsFull) return current
+
+        const sessionId = viewSessionId || selectedSessionId
+        if (!sessionId) return current
+
+        try {
+          const session = await api.getSession(sessionId)
+          let dbMessage: any | undefined
+
+          if (message.id != null) {
+            dbMessage = session.messages.find((m) => m.id === message.id)
+          }
+
+          if (!dbMessage) {
+            const candidates = session.messages.filter(
+              (m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+            )
+            if (candidates.length > 0) {
+              dbMessage = candidates[candidates.length - 1]
+            }
+          }
+
+          if (dbMessage?.tool_calls?.length) {
+            return dbMessage.tool_calls
+          }
+        } catch (e) {
+          console.warn('[WARN] Failed to load full tool results from session:', e)
+        }
+
+        return current
+      }
+
+      const toolCalls = await resolveToolCallsForDownload()
       const now = new Date()
       const pad = (n: number) => n.toString().padStart(2, '0')
       const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
@@ -878,165 +915,6 @@ export default function AIChat() {
           typeof tc.result === 'string'
             ? String(tc.result)
             : JSON.stringify(tc.result ?? null, null, 2)
-
-        const isTruncated = content.includes(TRUNCATED_MARKER)
-
-        if (isLog && isTruncated) {
-          try {
-            let ns = typeof args.namespace === 'string' ? args.namespace : ''
-            const podName =
-              (args.pod_name as string) ||
-              (args.podName as string) ||
-              ''
-            const tailLines =
-              (args.tail_lines as number) ||
-              (args.tailLines as number) ||
-              100
-
-            if (podName) {
-              if (!ns) {
-                try {
-                  const allPods = await api.getAllPods()
-                  const candidates = allPods.filter((p) => p.name === podName)
-                  if (candidates.length >= 1) {
-                    ns = candidates[0].namespace
-                  }
-                } catch (e) {
-                  console.warn('[WARN] Failed to resolve namespace for log refetch:', e)
-                }
-              }
-
-              if (!ns) {
-                throw new Error('namespace not resolved for log refetch')
-              }
-
-              const podsInNs = await api.getPods(ns)
-              const targetPod = podsInNs.find((p) => p.name === podName)
-
-              if (targetPod && Array.isArray(targetPod.containers)) {
-                const containerNames = targetPod.containers
-                  .map((c: any) => c?.name)
-                  .filter((n: any) => typeof n === 'string' && n.length > 0)
-
-                let containerName: string | undefined
-
-                if (containerNames.length === 1) {
-                  containerName = containerNames[0]
-                } else if (containerNames.length > 1) {
-                  const sidecarExact = new Set(['istio-proxy', 'istio-init', 'linkerd-proxy'])
-                  const sidecarPrefixes = ['istio-', 'linkerd-', 'vault-', 'kube-rbac-proxy']
-
-                  const candidates = containerNames.filter(
-                    (n) =>
-                      !sidecarExact.has(n) &&
-                      !sidecarPrefixes.some((prefix) => n.startsWith(prefix)),
-                  )
-
-                  if (candidates.length === 1) {
-                    containerName = candidates[0]
-                  } else {
-                    containerName = containerNames[0]
-                  }
-                }
-
-                content = await api.getPodLogs(ns, podName, containerName, tailLines)
-              } else {
-                content = await api.getPodLogs(ns, podName, undefined, tailLines)
-              }
-            }
-          } catch (e) {
-            console.error(
-              '[ERROR] Failed to refetch full logs for truncated result, keep stored snapshot:',
-              e,
-            )
-          }
-        } else if ((isJson || isYaml) && isTruncated) {
-          try {
-            if (functionName === 'k8s_get_resources') {
-              const resourceType =
-                typeof args.resource_type === 'string'
-                  ? args.resource_type
-                  : typeof args.resourceType === 'string'
-                  ? args.resourceType
-                  : ''
-              const resourceName =
-                typeof args.resource_name === 'string'
-                  ? args.resource_name
-                  : typeof args.resourceName === 'string'
-                  ? args.resourceName
-                  : undefined
-              const namespace =
-                typeof args.namespace === 'string'
-                  ? args.namespace
-                  : undefined
-              const output =
-                typeof args.output === 'string'
-                  ? args.output
-                  : isYaml
-                  ? 'yaml'
-                  : isJson
-                  ? 'json'
-                  : undefined
-
-              if (resourceType) {
-                const payload = await api.getClusterResources({
-                  resource_type: resourceType,
-                  resource_name: resourceName,
-                  namespace,
-                  all_namespaces: !!args.all_namespaces,
-                  output,
-                })
-                if (payload?.format === 'yaml' && typeof payload.data === 'string') {
-                  content = payload.data
-                } else {
-                  content = JSON.stringify(payload?.data ?? payload ?? null, null, 2)
-                }
-              }
-            } else if (functionName === 'k8s_get_resource_yaml') {
-              const resourceType =
-                typeof args.resource_type === 'string'
-                  ? args.resource_type
-                  : typeof args.resourceType === 'string'
-                  ? args.resourceType
-                  : ''
-              const resourceName =
-                typeof args.resource_name === 'string'
-                  ? args.resource_name
-                  : typeof args.resourceName === 'string'
-                  ? args.resourceName
-                  : ''
-              const namespace = typeof args.namespace === 'string' ? args.namespace : undefined
-
-              if (resourceType && resourceName) {
-                const payload = await api.getClusterResourceYaml({
-                  resource_type: resourceType,
-                  resource_name: resourceName,
-                  namespace,
-                })
-                if (payload?.yaml) {
-                  content = payload.yaml
-                }
-              }
-            } else if (functionName === 'get_pods' && typeof args.namespace === 'string') {
-              const pods = await api.getPods(args.namespace)
-              content = JSON.stringify(pods, null, 2)
-            } else if (functionName === 'get_node_list') {
-              const nodes = await api.getNodes()
-              content = JSON.stringify(nodes, null, 2)
-            } else if (functionName === 'get_cluster_overview') {
-              const overview = await api.getClusterOverview()
-              content = JSON.stringify(overview, null, 2)
-            } else if (functionName === 'get_deployments' && typeof args.namespace === 'string') {
-              const deployments = await api.getDeployments(args.namespace)
-              content = JSON.stringify(deployments, null, 2)
-            } else if (functionName === 'get_services' && typeof args.namespace === 'string') {
-              const services = await api.getServices(args.namespace)
-              content = JSON.stringify(services, null, 2)
-            }
-          } catch (e) {
-            console.error('[ERROR] Failed to refetch full JSON for download:', e)
-          }
-        }
 
         const base = sanitizeName(functionName)
         const uniqueBase = getUniqueBase(base)
