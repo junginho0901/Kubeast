@@ -2829,19 +2829,50 @@ Draft (rules-based, keep numbers unchanged):
             return "json"
         return None
 
+    def _mentions_events(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        return "event" in lowered or "이벤트" in lowered
+
+    def _mentions_logs(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        return "log" in lowered or "로그" in lowered
+
+    def _mentions_describe(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        return "describe" in lowered or "상세" in lowered or "디스크라이브" in lowered
+
     def _filter_tools_for_output_preference(self, tools: List[Dict], user_text: Optional[str]) -> List[Dict]:
         pref = self._detect_output_preference(user_text)
         if pref not in {"yaml", "wide"}:
             return tools
 
-        legacy_json_tools = {"get_pods", "get_deployments", "get_services", "get_all_pods"}
+        want_events = self._mentions_events(user_text)
+        want_logs = self._mentions_logs(user_text)
+        want_describe = self._mentions_describe(user_text)
+
+        # Strongly prefer k8s_get_resources when output format is requested.
+        allow = {"k8s_get_resources", "k8s_get_resource_yaml"}
+        if want_events:
+            allow.add("k8s_get_events")
+        if want_logs:
+            allow.add("k8s_get_pod_logs")
+        if want_describe:
+            allow.add("k8s_describe_resource")
+
         filtered = []
         for tool in tools:
             fn = tool.get("function", {}).get("name")
-            if fn in legacy_json_tools:
-                continue
-            filtered.append(tool)
-        return filtered
+            if fn in allow:
+                filtered.append(tool)
+
+        # If for some reason nothing matched, fall back to original tools
+        return filtered or tools
 
     def _render_k8s_resource_payload(self, payload) -> str:
         """k8s_get_resources 결과 포맷을 문자열로 변환"""
