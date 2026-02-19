@@ -10,3 +10,4 @@ aiohttp==3.9.1
 httpx==0.26.0
 redis==5.0.1
 PyJWT[crypto]==2.8.0
+PyYAML==6.0.1
