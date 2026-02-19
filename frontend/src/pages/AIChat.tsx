@@ -950,9 +950,74 @@ export default function AIChat() {
               e,
             )
           }
-        } else if (isJson && isTruncated) {
+        } else if ((isJson || isYaml) && isTruncated) {
           try {
-            if (functionName === 'get_pods' && typeof args.namespace === 'string') {
+            if (functionName === 'k8s_get_resources') {
+              const resourceType =
+                typeof args.resource_type === 'string'
+                  ? args.resource_type
+                  : typeof args.resourceType === 'string'
+                  ? args.resourceType
+                  : ''
+              const resourceName =
+                typeof args.resource_name === 'string'
+                  ? args.resource_name
+                  : typeof args.resourceName === 'string'
+                  ? args.resourceName
+                  : undefined
+              const namespace =
+                typeof args.namespace === 'string'
+                  ? args.namespace
+                  : undefined
+              const output =
+                typeof args.output === 'string'
+                  ? args.output
+                  : isYaml
+                  ? 'yaml'
+                  : isJson
+                  ? 'json'
+                  : undefined
+
+              if (resourceType) {
+                const payload = await api.getClusterResources({
+                  resource_type: resourceType,
+                  resource_name: resourceName,
+                  namespace,
+                  all_namespaces: !!args.all_namespaces,
+                  output,
+                })
+                if (payload?.format === 'yaml' && typeof payload.data === 'string') {
+                  content = payload.data
+                } else {
+                  content = JSON.stringify(payload?.data ?? payload ?? null, null, 2)
+                }
+              }
+            } else if (functionName === 'k8s_get_resource_yaml') {
+              const resourceType =
+                typeof args.resource_type === 'string'
+                  ? args.resource_type
+                  : typeof args.resourceType === 'string'
+                  ? args.resourceType
+                  : ''
+              const resourceName =
+                typeof args.resource_name === 'string'
+                  ? args.resource_name
+                  : typeof args.resourceName === 'string'
+                  ? args.resourceName
+                  : ''
+              const namespace = typeof args.namespace === 'string' ? args.namespace : undefined
+
+              if (resourceType && resourceName) {
+                const payload = await api.getClusterResourceYaml({
+                  resource_type: resourceType,
+                  resource_name: resourceName,
+                  namespace,
+                })
+                if (payload?.yaml) {
+                  content = payload.yaml
+                }
+              }
+            } else if (functionName === 'get_pods' && typeof args.namespace === 'string') {
               const pods = await api.getPods(args.namespace)
               content = JSON.stringify(pods, null, 2)
             } else if (functionName === 'get_node_list') {

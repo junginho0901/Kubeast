@@ -950,6 +950,26 @@ export const api = {
     return data
   },
 
+  getClusterResources: async (params: {
+    resource_type: string
+    resource_name?: string
+    namespace?: string
+    all_namespaces?: boolean
+    output?: string
+  }): Promise<{ format: string; data: any }> => {
+    const { data } = await client.get('/cluster/resources', { params })
+    return data
+  },
+
+  getClusterResourceYaml: async (params: {
+    resource_type: string
+    resource_name: string
+    namespace?: string
+  }): Promise<{ yaml: string }> => {
+    const { data } = await client.get('/cluster/resources/yaml', { params })
+    return data
+  },
+
   // Cluster View
   getAllPods: async (forceRefresh: boolean = false): Promise<PodInfo[]> => {
     const { data } = await client.get('/cluster/pods/all', {
