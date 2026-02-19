@@ -378,6 +378,7 @@ JSON 형식으로 응답해주세요:
                 }
             }
         ]
+        tools.extend(self._get_k8s_readonly_tool_definitions())
         
         try:
             # 첫 번째 GPT 호출 (function calling 포함)
@@ -1979,6 +1980,7 @@ Draft (rules-based, keep numbers unchanged):
                 }
             }
         ]
+        tools.extend(self._get_k8s_readonly_tool_definitions())
         
         try:
             # 첫 번째 호출 (function calling 체크)
@@ -2603,6 +2605,113 @@ Draft (rules-based, keep numbers unchanged):
             elif function_name == "get_events":
                 events = await self.k8s_service.get_events(function_args["namespace"])
                 return json.dumps(events, ensure_ascii=False)
+
+            elif function_name == "k8s_get_resources":
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name")
+                namespace = function_args.get("namespace")
+                all_namespaces_raw = function_args.get("all_namespaces", False)
+                output = function_args.get("output", "wide")
+
+                if isinstance(all_namespaces_raw, str):
+                    all_namespaces = all_namespaces_raw.strip().lower() == "true"
+                else:
+                    all_namespaces = bool(all_namespaces_raw)
+
+                payload = await self.k8s_service.get_resources(
+                    resource_type=resource_type,
+                    resource_name=resource_name,
+                    namespace=namespace if isinstance(namespace, str) else None,
+                    all_namespaces=all_namespaces,
+                    output=output if isinstance(output, str) else "wide",
+                )
+                return self._render_k8s_resource_payload(payload)
+
+            elif function_name == "k8s_get_resource_yaml":
+                namespace = function_args.get("namespace")
+                yaml_content = await self.k8s_service.get_resource_yaml(
+                    resource_type=function_args.get("resource_type", ""),
+                    resource_name=function_args.get("resource_name", ""),
+                    namespace=namespace if isinstance(namespace, str) else None,
+                )
+                return yaml_content
+
+            elif function_name == "k8s_describe_resource":
+                namespace = function_args.get("namespace")
+                result = await self.k8s_service.describe_resource(
+                    resource_type=function_args.get("resource_type", ""),
+                    resource_name=function_args.get("resource_name", ""),
+                    namespace=namespace if isinstance(namespace, str) else None,
+                )
+                return json.dumps(result, ensure_ascii=False)
+
+            elif function_name == "k8s_get_pod_logs":
+                namespace = function_args.get("namespace")
+                pod_name = function_args.get("pod_name", "")
+                tail_lines = function_args.get("tail_lines", 50)
+                requested_container = function_args.get("container")
+
+                if not isinstance(namespace, str) or not namespace.strip():
+                    matches = await self._find_pods(str(pod_name), namespace=None, limit=20)
+                    chosen = await self._resolve_single("pods", str(pod_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    pod_name = str(chosen.get("name", pod_name))
+
+                chosen_container, all_containers = await self._pick_log_container(
+                    namespace,
+                    pod_name,
+                    explicit_container=requested_container,
+                )
+
+                if chosen_container is None and all_containers:
+                    raise Exception(
+                        f"Pod '{pod_name}' in namespace '{namespace}' has multiple containers "
+                        f"({', '.join(all_containers)}). 'container' 인자를 사용해 로그를 볼 컨테이너를 명시해주세요."
+                    )
+
+                logs = await self.k8s_service.get_pod_logs(
+                    namespace,
+                    pod_name,
+                    tail_lines=tail_lines,
+                    container=chosen_container,
+                )
+                return logs
+
+            elif function_name == "k8s_get_events":
+                namespace = function_args.get("namespace") or "default"
+                events = await self.k8s_service.get_events(namespace)
+                return json.dumps(events, ensure_ascii=False)
+
+            elif function_name == "k8s_get_available_api_resources":
+                resources = await self.k8s_service.get_available_api_resources()
+                return json.dumps(resources, ensure_ascii=False)
+
+            elif function_name == "k8s_get_cluster_configuration":
+                cfg = await self.k8s_service.get_cluster_configuration()
+                return json.dumps(cfg, ensure_ascii=False)
+
+            elif function_name == "k8s_generate_resource":
+                resource_type = function_args.get("resource_type", "")
+                description = function_args.get("resource_description", "")
+                if not resource_type or not description:
+                    raise Exception("resource_type and resource_description are required")
+
+                system_prompt = (
+                    "You are a Kubernetes YAML generator. "
+                    "Output only valid YAML without explanation. "
+                    "Use best practices and include required fields."
+                )
+                user_prompt = f"Resource type: {resource_type}\nDescription: {description}"
+                resp = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.2,
+                )
+                content = resp.choices[0].message.content if resp.choices else ""
+                return (content or "").strip()
             
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()
@@ -2657,6 +2766,17 @@ Draft (rules-based, keep numbers unchanged):
         except Exception as e:
             print(f"[DEBUG] Failed to format tool result: {e}")
             return str(function_response), False
+
+    def _render_k8s_resource_payload(self, payload) -> str:
+        """k8s_get_resources 결과 포맷을 문자열로 변환"""
+        try:
+            if isinstance(payload, dict) and "format" in payload:
+                if payload.get("format") == "yaml":
+                    return payload.get("data", "")
+                return json.dumps(payload.get("data"), ensure_ascii=False)
+            return json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            return str(payload)
     
     def _extract_suggestions(self, message: str) -> List[str]:
         """메시지에서 제안 추출"""
@@ -3291,7 +3411,7 @@ Remember: You're not just answering questions - you're **solving production prob
     
     def _get_tools_definition(self) -> List[Dict]:
         """Tools 정의 반환 (상세한 설명 포함)"""
-        return [
+        tools = [
             {
                 "type": "function",
                 "function": {
@@ -3662,6 +3782,141 @@ If namespace is not provided, search across namespaces first.""",
                 }
             }
         ]
+
+        tools.extend(self._get_k8s_readonly_tool_definitions())
+        return tools
+
+    def _get_k8s_readonly_tool_definitions(self) -> List[Dict]:
+        """kagent 스타일의 read-only k8s tool 정의"""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_resources",
+                    "description": "Kubernetes 리소스를 조회합니다 (kubectl get).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {
+                                "type": "string",
+                                "description": "리소스 타입 (pods, deployments, services 등)",
+                            },
+                            "resource_name": {
+                                "type": "string",
+                                "description": "리소스 이름 (선택)",
+                            },
+                            "namespace": {
+                                "type": "string",
+                                "description": "네임스페이스 (선택)",
+                            },
+                            "all_namespaces": {
+                                "type": "string",
+                                "description": "모든 네임스페이스 조회 (true/false)",
+                            },
+                            "output": {
+                                "type": "string",
+                                "description": "출력 포맷 (json, yaml, wide)",
+                                "default": "wide",
+                            },
+                        },
+                        "required": ["resource_type"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_pod_logs",
+                    "description": "Pod 로그를 조회합니다 (kubectl logs).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "pod_name": {"type": "string", "description": "Pod 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                            "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
+                            "tail_lines": {"type": "integer", "description": "마지막 N줄 (기본: 50)"},
+                        },
+                        "required": ["pod_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_events",
+                    "description": "네임스페이스 이벤트 조회 (kubectl get events).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                        },
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_available_api_resources",
+                    "description": "사용 가능한 API 리소스 목록 조회 (kubectl api-resources).",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_cluster_configuration",
+                    "description": "클러스터 구성 정보 조회 (kubectl config view -o json 유사).",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_resource_yaml",
+                    "description": "리소스 YAML 조회 (kubectl get -o yaml).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                        },
+                        "required": ["resource_type", "resource_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_describe_resource",
+                    "description": "리소스 상세 조회 (kubectl describe).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                        },
+                        "required": ["resource_type", "resource_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_generate_resource",
+                    "description": "설명으로부터 Kubernetes YAML을 생성합니다.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_description": {"type": "string", "description": "생성할 리소스 설명"},
+                        },
+                        "required": ["resource_type", "resource_description"],
+                    },
+                },
+            },
+        ]
     
     async def _execute_function_with_context(
         self,
@@ -3836,6 +4091,120 @@ If namespace is not provided, search across namespaces first.""",
                     "message": event["message"],
                     "count": event["count"]
                 } for event in events], ensure_ascii=False)
+
+            elif function_name == "k8s_get_resources":
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name")
+                namespace = function_args.get("namespace")
+                all_namespaces_raw = function_args.get("all_namespaces", False)
+                output = function_args.get("output", "wide")
+
+                if isinstance(all_namespaces_raw, str):
+                    all_namespaces = all_namespaces_raw.strip().lower() == "true"
+                else:
+                    all_namespaces = bool(all_namespaces_raw)
+
+                payload = await self.k8s_service.get_resources(
+                    resource_type=resource_type,
+                    resource_name=resource_name,
+                    namespace=namespace if isinstance(namespace, str) else None,
+                    all_namespaces=all_namespaces,
+                    output=output if isinstance(output, str) else "wide",
+                )
+                result = self._render_k8s_resource_payload(payload)
+
+            elif function_name == "k8s_get_resource_yaml":
+                namespace = function_args.get("namespace")
+                yaml_content = await self.k8s_service.get_resource_yaml(
+                    resource_type=function_args.get("resource_type", ""),
+                    resource_name=function_args.get("resource_name", ""),
+                    namespace=namespace if isinstance(namespace, str) else None,
+                )
+                result = yaml_content
+
+            elif function_name == "k8s_describe_resource":
+                namespace = function_args.get("namespace")
+                result_data = await self.k8s_service.describe_resource(
+                    resource_type=function_args.get("resource_type", ""),
+                    resource_name=function_args.get("resource_name", ""),
+                    namespace=namespace if isinstance(namespace, str) else None,
+                )
+                result = json.dumps(result_data, ensure_ascii=False)
+
+            elif function_name == "k8s_get_pod_logs":
+                namespace = function_args.get("namespace")
+                pod_name = function_args.get("pod_name", "")
+                tail_lines = function_args.get("tail_lines", 50)
+                requested_container = function_args.get("container")
+
+                if not isinstance(namespace, str) or not namespace.strip():
+                    matches = await self._find_pods(str(pod_name), namespace=None, limit=20)
+                    chosen = await self._resolve_single("pods", str(pod_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    pod_name = str(chosen.get("name", pod_name))
+
+                chosen_container, all_containers = await self._pick_log_container(
+                    namespace,
+                    pod_name,
+                    explicit_container=requested_container,
+                )
+
+                if chosen_container is None and all_containers:
+                    result = json.dumps(
+                        {
+                            "error": (
+                                f"Pod '{pod_name}' in namespace '{namespace}' has multiple containers "
+                                f"({', '.join(all_containers)}). "
+                                "로그를 조회할 컨테이너를 'container' 인자로 명시해주세요."
+                            )
+                        },
+                        ensure_ascii=False,
+                    )
+                else:
+                    logs = await self.k8s_service.get_pod_logs(
+                        namespace,
+                        pod_name,
+                        tail_lines=tail_lines,
+                        container=chosen_container,
+                    )
+                    result = logs
+                    tool_context.state["last_log_pod"] = pod_name
+
+            elif function_name == "k8s_get_events":
+                namespace = function_args.get("namespace") or "default"
+                events = await self.k8s_service.get_events(namespace)
+                result = json.dumps(events, ensure_ascii=False)
+
+            elif function_name == "k8s_get_available_api_resources":
+                resources = await self.k8s_service.get_available_api_resources()
+                result = json.dumps(resources, ensure_ascii=False)
+
+            elif function_name == "k8s_get_cluster_configuration":
+                cfg = await self.k8s_service.get_cluster_configuration()
+                result = json.dumps(cfg, ensure_ascii=False)
+
+            elif function_name == "k8s_generate_resource":
+                resource_type = function_args.get("resource_type", "")
+                description = function_args.get("resource_description", "")
+                if not resource_type or not description:
+                    raise Exception("resource_type and resource_description are required")
+
+                system_prompt = (
+                    "You are a Kubernetes YAML generator. "
+                    "Output only valid YAML without explanation. "
+                    "Use best practices and include required fields."
+                )
+                user_prompt = f"Resource type: {resource_type}\nDescription: {description}"
+                resp = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.2,
+                )
+                content = resp.choices[0].message.content if resp.choices else ""
+                result = (content or "").strip()
             
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()

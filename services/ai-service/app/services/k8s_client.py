@@ -124,6 +124,78 @@ class K8sServiceClient:
         response = await self.client.get("/overview")
         response.raise_for_status()
         return response.json()
+
+    async def get_available_api_resources(self) -> List[Dict]:
+        """API 리소스 목록 조회 (kubectl api-resources 유사)"""
+        response = await self.client.get("/api-resources")
+        response.raise_for_status()
+        return response.json()
+
+    async def get_cluster_configuration(self) -> Dict:
+        """클러스터 구성 정보 조회 (kubectl config view 유사, 민감정보 제거)"""
+        response = await self.client.get("/cluster-config")
+        response.raise_for_status()
+        return response.json()
+
+    async def get_resources(
+        self,
+        resource_type: str,
+        resource_name: Optional[str] = None,
+        namespace: Optional[str] = None,
+        all_namespaces: Optional[bool] = None,
+        output: Optional[str] = None,
+    ) -> Dict:
+        """리소스 조회 (kubectl get 유사)"""
+        params: Dict[str, object] = {"resource_type": resource_type}
+        if resource_name:
+            params["resource_name"] = resource_name
+        if namespace:
+            params["namespace"] = namespace
+        if all_namespaces is not None:
+            params["all_namespaces"] = str(all_namespaces).lower()
+        if output:
+            params["output"] = output
+
+        response = await self.client.get("/resources", params=params)
+        response.raise_for_status()
+        return response.json()
+
+    async def get_resource_yaml(
+        self,
+        resource_type: str,
+        resource_name: str,
+        namespace: Optional[str] = None,
+    ) -> str:
+        """리소스 YAML 조회"""
+        params: Dict[str, object] = {
+            "resource_type": resource_type,
+            "resource_name": resource_name,
+        }
+        if namespace:
+            params["namespace"] = namespace
+
+        response = await self.client.get("/resources/yaml", params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("yaml", "")
+
+    async def describe_resource(
+        self,
+        resource_type: str,
+        resource_name: str,
+        namespace: Optional[str] = None,
+    ) -> Dict:
+        """리소스 상세 조회 (kubectl describe 유사)"""
+        params: Dict[str, object] = {
+            "resource_type": resource_type,
+            "resource_name": resource_name,
+        }
+        if namespace:
+            params["namespace"] = namespace
+
+        response = await self.client.get("/resources/describe", params=params)
+        response.raise_for_status()
+        return response.json()
     
     async def get_pod_metrics(self, namespace: Optional[str] = None) -> List[Dict]:
         """Pod 리소스 사용량 조회"""
