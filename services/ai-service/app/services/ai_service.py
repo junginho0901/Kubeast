@@ -305,7 +305,7 @@ JSON 형식으로 응답해주세요:
                 "type": "function",
                 "function": {
                     "name": "get_pods",
-                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다",
+                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(yaml/wide) 요청에는 k8s_get_resources 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -322,7 +322,7 @@ JSON 형식으로 응답해주세요:
                 "type": "function",
                 "function": {
                     "name": "get_deployments",
-                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다",
+                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(yaml/wide) 요청에는 k8s_get_resources 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -339,7 +339,7 @@ JSON 형식으로 응답해주세요:
                 "type": "function",
                 "function": {
                     "name": "get_services",
-                    "description": "특정 네임스페이스의 Service 목록을 조회합니다",
+                    "description": "특정 네임스페이스의 Service 목록을 조회합니다 (legacy JSON-only). 출력 형식(yaml/wide) 요청에는 k8s_get_resources 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -1646,6 +1646,8 @@ Draft (rules-based, keep numbers unchanged):
 - `get_pods`: 특정 네임스페이스의 Pod 목록 조회. Pod 상태, 재시작 횟수, 준비 상태 확인
 - `get_deployments`: Deployment 목록 조회. 배포 상태 및 레플리카 확인
 - `get_services`: Service 목록 조회. 서비스 엔드포인트 및 포트 확인
+- `k8s_get_resources`: kubectl get (json/yaml/wide) 형식 지원. 출력 형식 요청 시 우선 사용
+- `k8s_get_resource_yaml`: 단일 리소스 YAML 조회
 - `get_node_list`: 클러스터의 노드 목록 조회. 노드 상태, 리소스 용량 확인
 - `get_pod_logs`: 특정 Pod의 로그 조회. 에러 메시지 및 스택 트레이스 분석
 - `describe_pod`: Pod의 상세 정보 조회. 이벤트, 조건, 구성 확인
@@ -1666,6 +1668,12 @@ Draft (rules-based, keep numbers unchanged):
   먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 **모든 네임스페이스에서 후보를 찾은 뒤**
   해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
 - 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
+
+## 출력 포맷/툴 선택 규칙 (중요)
+
+- 사용자가 YAML/WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
+- 단일 리소스 YAML 요청은 `k8s_get_resource_yaml`을 사용하세요.
+- `get_pods`, `get_deployments`, `get_services`는 legacy JSON-only이므로 출력 형식 요청 시 사용하지 마세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
@@ -1815,7 +1823,7 @@ Draft (rules-based, keep numbers unchanged):
                 "type": "function",
                 "function": {
                     "name": "get_pods",
-                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다",
+                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(yaml/wide) 요청에는 k8s_get_resources 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -1829,7 +1837,7 @@ Draft (rules-based, keep numbers unchanged):
                 "type": "function",
                 "function": {
                     "name": "get_deployments",
-                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다",
+                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(yaml/wide) 요청에는 k8s_get_resources 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -1912,7 +1920,7 @@ Draft (rules-based, keep numbers unchanged):
                 "type": "function",
                 "function": {
                     "name": "get_services",
-                    "description": "특정 네임스페이스의 Service 목록을 조회합니다",
+                    "description": "특정 네임스페이스의 Service 목록을 조회합니다 (legacy JSON-only). 출력 형식(yaml/wide) 요청에는 k8s_get_resources 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -3270,6 +3278,8 @@ Draft (rules-based, keep numbers unchanged):
 - `get_pods`: 특정 네임스페이스의 Pod 목록 조회. Pod 상태, 재시작 횟수 확인
 - `get_deployments`: Deployment 목록 조회
 - `get_services`: Service 목록 조회
+- `k8s_get_resources`: kubectl get (json/yaml/wide) 형식 지원. 출력 형식 요청 시 우선 사용
+- `k8s_get_resource_yaml`: 단일 리소스 YAML 조회
 - `get_node_list`: 노드 목록 조회
 - `get_pod_logs`: Pod 로그 조회. 에러 메시지 분석
 - `describe_pod`: Pod 상세 정보 조회. 이벤트, 조건 확인
@@ -3290,6 +3300,12 @@ Draft (rules-based, keep numbers unchanged):
   먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 **모든 네임스페이스에서 후보를 찾은 뒤**
   해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
 - 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
+
+### 출력 포맷/툴 선택 규칙 (중요)
+
+- 사용자가 YAML/WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
+- 단일 리소스 YAML 요청은 `k8s_get_resource_yaml`을 사용하세요.
+- `get_pods`, `get_deployments`, `get_services`는 legacy JSON-only이므로 출력 형식 요청 시 사용하지 마세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
@@ -3817,7 +3833,7 @@ If namespace is not provided, search across namespaces first.""",
                 "type": "function",
                 "function": {
                     "name": "k8s_get_resources",
-                    "description": "Kubernetes 리소스를 조회합니다 (kubectl get).",
+                    "description": "Kubernetes 리소스를 조회합니다 (kubectl get). 출력 형식(yaml/wide/json) 요청 시 우선 사용.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -3897,7 +3913,7 @@ If namespace is not provided, search across namespaces first.""",
                 "type": "function",
                 "function": {
                     "name": "k8s_get_resource_yaml",
-                    "description": "리소스 YAML 조회 (kubectl get -o yaml).",
+                    "description": "단일 리소스 YAML 조회 (kubectl get -o yaml).",
                     "parameters": {
                         "type": "object",
                         "properties": {
