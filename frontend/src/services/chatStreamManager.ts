@@ -206,10 +206,17 @@ class ChatStreamManager {
               const isJson = !!data.is_json
               const isYaml = !!data.is_yaml
               const resultText = String(data.result ?? '')
+              const displayText = data.display ? String(data.display) : ''
+              const displayFormat = data.display_format ? String(data.display_format) : ''
 
               const toolCalls = this.state.toolCalls.map((tc) =>
                 tc.function === functionName
                   ? { ...tc, result: resultText, is_json: isJson, is_yaml: isYaml }
+                  : tc
+              )
+              const mergedToolCalls = toolCalls.map((tc) =>
+                tc.function === functionName && displayText
+                  ? { ...tc, display: displayText, display_format: displayFormat }
                   : tc
               )
 
@@ -222,16 +229,19 @@ class ChatStreamManager {
                 const beforeFunction = functionCallsContent.substring(0, lastFunctionIndex)
                 const afterFunction = functionCallsContent.substring(lastFunctionIndex)
 
-                const codeBlock = isYaml
-                  ? `\`\`\`yaml\n${resultText}\n\`\`\``
+                const bodyText = displayText || resultText
+                const codeBlock = displayText
+                  ? `\`\`\`\n${bodyText}\n\`\`\``
+                  : isYaml
+                  ? `\`\`\`yaml\n${bodyText}\n\`\`\``
                   : isJson
-                  ? `\`\`\`json\n${resultText}\n\`\`\``
-                  : `\`\`\`\n${resultText}\n\`\`\``
+                  ? `\`\`\`json\n${bodyText}\n\`\`\``
+                  : `\`\`\`\n${bodyText}\n\`\`\``
                 functionCallsContent = beforeFunction + afterFunction.replace('Executing...', codeBlock)
               }
 
               this.setState({
-                toolCalls,
+                toolCalls: mergedToolCalls,
                 functionCallsContent,
                 streamingPhase: 'tools',
               })

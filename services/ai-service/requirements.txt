@@ -10,3 +10,4 @@ psycopg2-binary==2.9.9
 sqlalchemy==2.0.25
 redis==5.0.1
 PyJWT[crypto]==2.8.0
+PyYAML==6.0.1

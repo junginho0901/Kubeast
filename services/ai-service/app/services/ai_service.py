@@ -7,6 +7,7 @@ import re
 import json
 import sys
 from app.config import settings
+from datetime import datetime
 from app.models.ai import (
     LogAnalysisRequest,
     LogAnalysisResponse,
@@ -68,6 +69,252 @@ class AIService:
         if len(content) > max_chars:
             return content[:max_chars] + "\n... (truncated for LLM) ..."
         return content
+
+    def _format_age(self, timestamp: Optional[str]) -> str:
+        if not timestamp:
+            return "-"
+        try:
+            ts = timestamp.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+        except Exception:
+            return "-"
+        now = datetime.now(dt.tzinfo)
+        delta = now - dt
+        seconds = int(delta.total_seconds())
+        if seconds < 0:
+            seconds = 0
+        days = seconds // 86400
+        if days > 0:
+            return f"{days}d"
+        hours = seconds // 3600
+        if hours > 0:
+            return f"{hours}h"
+        minutes = seconds // 60
+        if minutes > 0:
+            return f"{minutes}m"
+        return f"{seconds}s"
+
+    def _format_table(self, headers: List[str], rows: List[List[str]]) -> str:
+        if not rows:
+            return "No resources found."
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for idx, cell in enumerate(row):
+                widths[idx] = max(widths[idx], len(cell))
+        lines = ["  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))]
+        for row in rows:
+            lines.append("  ".join(row[i].ljust(widths[i]) for i in range(len(headers))))
+        return "\n".join(lines)
+
+    def _format_k8s_get_resources_display(self, resource_type: str, output: str, raw_text: str) -> Optional[str]:
+        try:
+            import yaml
+        except Exception:
+            yaml = None
+
+        data = None
+        if isinstance(output, str) and output.lower() == "yaml" and yaml is not None:
+            try:
+                data = yaml.safe_load(raw_text)
+            except Exception:
+                data = None
+        else:
+            try:
+                data = json.loads(raw_text)
+            except Exception:
+                data = None
+
+        if not data:
+            return None
+
+        items = []
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            items = data.get("items") or []
+        elif isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = [data]
+
+        key = (resource_type or "").strip().lower()
+        if key in {"po", "pod", "pods"}:
+            headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                spec = item.get("spec", {}) if isinstance(item, dict) else {}
+                containers = (status.get("containerStatuses") or [])
+                ready = sum(1 for c in containers if c.get("ready"))
+                total = len(containers) or len(spec.get("containers") or [])
+                ready_text = f"{ready}/{total}" if total else "0/0"
+                restarts = sum(int(c.get("restartCount", 0)) for c in containers)
+
+                phase = status.get("phase", "Unknown")
+                reason = None
+                for c in containers:
+                    state = c.get("state") or {}
+                    if state.get("waiting") and state["waiting"].get("reason"):
+                        reason = state["waiting"]["reason"]
+                        break
+                    if state.get("terminated") and state["terminated"].get("reason"):
+                        reason = state["terminated"]["reason"]
+                        break
+                status_text = reason or phase or "Unknown"
+
+                age = self._format_age(meta.get("creationTimestamp"))
+                row = [
+                    str(meta.get("name", "")),
+                    ready_text,
+                    str(status_text),
+                    str(restarts),
+                    age,
+                ]
+                rows.append(row)
+            return self._format_table(headers, rows)
+
+        if key in {"deploy", "deployment", "deployments"}:
+            headers = ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                spec = item.get("spec", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                desired = int(spec.get("replicas", 0) or 0)
+                ready = int(status.get("readyReplicas", 0) or 0)
+                updated = int(status.get("updatedReplicas", 0) or 0)
+                available = int(status.get("availableReplicas", 0) or 0)
+                age = self._format_age(meta.get("creationTimestamp"))
+                rows.append([
+                    str(meta.get("name", "")),
+                    f"{ready}/{desired}",
+                    str(updated),
+                    str(available),
+                    age,
+                ])
+            return self._format_table(headers, rows)
+
+        if key in {"svc", "service", "services"}:
+            headers = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                spec = item.get("spec", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                svc_type = spec.get("type", "")
+                cluster_ip = spec.get("clusterIP", "")
+                external_ips = spec.get("externalIPs") or []
+                lb_ingress = (status.get("loadBalancer") or {}).get("ingress") or []
+                if lb_ingress:
+                    external_ips = [ing.get("ip") or ing.get("hostname") for ing in lb_ingress if ing]
+                external_ip = ",".join([ip for ip in external_ips if ip]) or "<none>"
+                ports = []
+                for p in spec.get("ports") or []:
+                    port = p.get("port")
+                    node_port = p.get("nodePort")
+                    proto = p.get("protocol") or "TCP"
+                    if node_port:
+                        ports.append(f"{port}:{node_port}/{proto}")
+                    else:
+                        ports.append(f"{port}/{proto}")
+                ports_text = ",".join(ports)
+                age = self._format_age(meta.get("creationTimestamp"))
+                rows.append([
+                    str(meta.get("name", "")),
+                    str(svc_type),
+                    str(cluster_ip),
+                    external_ip,
+                    ports_text,
+                    age,
+                ])
+            return self._format_table(headers, rows)
+
+        if key in {"ns", "namespace", "namespaces"}:
+            headers = ["NAME", "STATUS", "AGE"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                phase = status.get("phase", "")
+                age = self._format_age(meta.get("creationTimestamp"))
+                rows.append([str(meta.get("name", "")), str(phase), age])
+            return self._format_table(headers, rows)
+
+        if key in {"no", "node", "nodes"}:
+            headers = ["NAME", "STATUS", "ROLES", "AGE", "VERSION"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                conditions = status.get("conditions") or []
+                ready = "NotReady"
+                for c in conditions:
+                    if c.get("type") == "Ready":
+                        ready = "Ready" if c.get("status") == "True" else "NotReady"
+                        break
+                labels = meta.get("labels") or {}
+                roles = []
+                for k in labels.keys():
+                    if k.startswith("node-role.kubernetes.io/"):
+                        role = k.split("/", 1)[1]
+                        roles.append(role or "<none>")
+                roles_text = ",".join(roles) if roles else "<none>"
+                age = self._format_age(meta.get("creationTimestamp"))
+                version = (status.get("nodeInfo") or {}).get("kubeletVersion", "")
+                rows.append([str(meta.get("name", "")), ready, roles_text, age, str(version)])
+            return self._format_table(headers, rows)
+
+        # Fallback: name/age
+        headers = ["NAME", "AGE"]
+        rows = []
+        for item in items:
+            meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+            age = self._format_age(meta.get("creationTimestamp"))
+            rows.append([str(meta.get("name", "")), age])
+        return self._format_table(headers, rows)
+
+    def _format_k8s_get_events_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["LAST SEEN", "TYPE", "REASON", "OBJECT", "MESSAGE"]
+        rows = []
+        for ev in data:
+            last_ts = ev.get("last_timestamp") or ev.get("first_timestamp")
+            last_seen = self._format_age(last_ts) if isinstance(last_ts, str) else "-"
+            obj = ev.get("object") or {}
+            obj_name = obj.get("name") or ""
+            obj_kind = obj.get("kind") or ""
+            obj_text = f"{obj_kind}/{obj_name}" if obj_kind or obj_name else ""
+            rows.append([
+                last_seen,
+                str(ev.get("type", "")),
+                str(ev.get("reason", "")),
+                obj_text,
+                str(ev.get("message", "")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _build_tool_display(
+        self,
+        function_name: str,
+        function_args: Dict,
+        formatted_result: str,
+        is_json: bool,
+        is_yaml: bool,
+    ) -> Optional[str]:
+        if function_name == "k8s_get_resources":
+            output = function_args.get("output", "wide")
+            return self._format_k8s_get_resources_display(
+                function_args.get("resource_type", ""),
+                output if isinstance(output, str) else "wide",
+                formatted_result,
+            )
+        if function_name == "k8s_get_events":
+            return self._format_k8s_get_events_display(formatted_result)
+        return None
     
     async def analyze_logs(self, request: LogAnalysisRequest) -> LogAnalysisResponse:
         """로그 분석"""
@@ -3089,6 +3336,14 @@ Draft (rules-based, keep numbers unchanged):
                             function_args,
                             function_response,
                         )
+
+                        display_result = self._build_tool_display(
+                            function_name,
+                            function_args,
+                            formatted_result,
+                            is_json,
+                            is_yaml,
+                        )
                         
                         # 결과 미리보기 (너무 길면 잘라서 전송하되, 표시를 남김)
                         max_preview_len = 2500
@@ -3096,10 +3351,26 @@ Draft (rules-based, keep numbers unchanged):
                             result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..."
                         else:
                             result_preview = formatted_result
+
+                        display_preview = None
+                        if display_result is not None:
+                            if len(display_result) > max_preview_len:
+                                display_preview = display_result[:max_preview_len] + "\n... (truncated) ..."
+                            else:
+                                display_preview = display_result
                         
                         # Function 결과를 프론트엔드로 전송 (스트리밍) - 실행 후
                         # 👉 프론트에는 미리보기만 전달 (약 2500자)
-                        yield f"data: {json.dumps({'function_result': function_name, 'result': result_preview, 'is_json': is_json, 'is_yaml': is_yaml}, ensure_ascii=False)}\n\n"
+                        payload = {
+                            "function_result": function_name,
+                            "result": result_preview,
+                            "is_json": is_json,
+                            "is_yaml": is_yaml,
+                        }
+                        if display_preview is not None:
+                            payload["display"] = display_preview
+                            payload["display_format"] = "kubectl"
+                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                         
                         # Tool call 정보 + 실행 결과 전체 저장 (DB에는 전체 결과 보관)
                         tool_calls_log.append({
@@ -3107,7 +3378,9 @@ Draft (rules-based, keep numbers unchanged):
                             'args': function_args,
                             'result': formatted_result,
                             'is_json': is_json,
-                            'is_yaml': is_yaml
+                            'is_yaml': is_yaml,
+                            'display': display_result,
+                            'display_format': "kubectl" if display_result is not None else None,
                         })
                         
                         tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
@@ -3300,10 +3573,12 @@ Draft (rules-based, keep numbers unchanged):
                         args_section = '<p><strong>📋 Arguments:</strong> No arguments</p>'
                     
                     # Results 섹션 - 실제 tool 실행 결과
-                    result_preview = tc.get('result', 'No result')
+                    result_preview = tc.get('display') or tc.get('result', 'No result')
                     is_json = tc.get('is_json', False)
                     is_yaml = tc.get('is_yaml', False)
-                    if is_yaml:
+                    if tc.get('display'):
+                        code_fence = "```"
+                    elif is_yaml:
                         code_fence = "```yaml"
                     else:
                         code_fence = "```json" if is_json else "```"
