@@ -466,7 +466,7 @@ class AIService:
                 ns = claim.get("namespace")
                 name = claim.get("name")
                 if ns or name:
-                    claim_text = f\"{ns}/{name}\" if ns and name else str(name or "")
+                    claim_text = f"{ns}/{name}" if ns and name else str(name or "")
             rows.append([
                 str(pv.get("name", "")),
                 str(pv.get("capacity", "")),
