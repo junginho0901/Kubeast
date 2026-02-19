@@ -379,6 +379,9 @@ JSON 형식으로 응답해주세요:
             }
         ]
         tools.extend(self._get_k8s_readonly_tool_definitions())
+        # YAML/WIDE 요청 시 legacy JSON-only 도구는 제외
+        latest_user_message = next((m.content for m in reversed(request.messages) if m.role == "user"), None)
+        tools = self._filter_tools_for_output_preference(tools, latest_user_message)
         
         try:
             # 첫 번째 GPT 호출 (function calling 포함)
@@ -2790,6 +2793,32 @@ Draft (rules-based, keep numbers unchanged):
             print(f"[DEBUG] Failed to format tool result: {e}")
             return str(function_response), False, is_yaml
 
+    def _detect_output_preference(self, text: Optional[str]) -> Optional[str]:
+        if not isinstance(text, str):
+            return None
+        lowered = text.lower()
+        if "yaml" in lowered or "yml" in lowered:
+            return "yaml"
+        if "wide" in lowered:
+            return "wide"
+        if "json" in lowered:
+            return "json"
+        return None
+
+    def _filter_tools_for_output_preference(self, tools: List[Dict], user_text: Optional[str]) -> List[Dict]:
+        pref = self._detect_output_preference(user_text)
+        if pref not in {"yaml", "wide"}:
+            return tools
+
+        legacy_json_tools = {"get_pods", "get_deployments", "get_services", "get_all_pods"}
+        filtered = []
+        for tool in tools:
+            fn = tool.get("function", {}).get("name")
+            if fn in legacy_json_tools:
+                continue
+            filtered.append(tool)
+        return filtered
+
     def _render_k8s_resource_payload(self, payload) -> str:
         """k8s_get_resources 결과 포맷을 문자열로 변환"""
         try:
@@ -2866,6 +2895,8 @@ Draft (rules-based, keep numbers unchanged):
             
             # Function definitions
             tools = self._get_tools_definition()
+            # YAML/WIDE 요청 시 legacy JSON-only 도구는 제외
+            tools = self._filter_tools_for_output_preference(tools, message)
             
             # ===== Multi-turn Tool Calling Loop =====
             max_iterations = 5  # 최대 5번까지 tool call 반복 허용
