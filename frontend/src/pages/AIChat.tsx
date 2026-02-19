@@ -834,11 +834,6 @@ export default function AIChat() {
     try {
       const resolveToolCallsForDownload = async () => {
         const current = (message.toolCalls as any[]) || []
-        const needsFull = current.some(
-          (tc) => typeof tc?.result === 'string' && tc.result.includes(TRUNCATED_MARKER),
-        )
-        if (!needsFull) return current
-
         const sessionId = viewSessionId || selectedSessionId
         if (!sessionId) return current
 
@@ -863,7 +858,7 @@ export default function AIChat() {
             return dbMessage.tool_calls
           }
         } catch (e) {
-          console.warn('[WARN] Failed to load full tool results from session:', e)
+          console.warn('[WARN] Failed to load tool results from session:', e)
         }
 
         return current
