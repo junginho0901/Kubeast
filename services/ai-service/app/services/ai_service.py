@@ -286,6 +286,259 @@ class AIService:
             ])
         return self._format_table(headers, rows)
 
+    def _format_age_value(self, value) -> str:
+        if not value:
+            return "-"
+        if isinstance(value, str):
+            # Already formatted duration (e.g., "110 days, 7:31:18")
+            if ("day" in value or "days" in value or "h" in value or "m" in value or "s" in value) and "T" not in value:
+                return value
+            return self._format_age(value)
+        try:
+            return self._format_age(value)
+        except Exception:
+            return "-"
+
+    def _format_namespaces_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "STATUS", "AGE", "PODS", "SERVICES", "DEPLOYMENTS", "PVCS"]
+        rows = []
+        for ns in data:
+            rc = ns.get("resource_count") or {}
+            rows.append([
+                str(ns.get("name", "")),
+                str(ns.get("status", "")),
+                self._format_age_value(ns.get("created_at")),
+                str(rc.get("pods", 0)),
+                str(rc.get("services", 0)),
+                str(rc.get("deployments", 0)),
+                str(rc.get("pvcs", 0)),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_pods_display(self, raw_text: str, include_namespace: bool) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for pod in data:
+            row = [
+                str(pod.get("name", "")),
+                str(pod.get("ready", "")),
+                str(pod.get("status", "")),
+                str(pod.get("restart_count", 0)),
+                self._format_age_value(pod.get("created_at")),
+            ]
+            if include_namespace:
+                row = [str(pod.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_deployments_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]
+        rows = []
+        for dep in data:
+            replicas = int(dep.get("replicas") or 0)
+            ready = int(dep.get("ready_replicas") or 0)
+            updated = int(dep.get("updated_replicas") or 0)
+            available = int(dep.get("available_replicas") or 0)
+            rows.append([
+                str(dep.get("name", "")),
+                f"{ready}/{replicas}",
+                str(updated),
+                str(available),
+                self._format_age_value(dep.get("created_at")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_services_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
+        rows = []
+        for svc in data:
+            ports = svc.get("ports") or []
+            port_texts = []
+            for p in ports:
+                port = p.get("port")
+                node_port = p.get("node_port")
+                proto = p.get("protocol") or ""
+                if node_port:
+                    port_texts.append(f\"{port}:{node_port}/{proto}\")
+                else:
+                    port_texts.append(f\"{port}/{proto}\")
+            rows.append([
+                str(svc.get("name", "")),
+                str(svc.get("type", "")),
+                str(svc.get("cluster_ip") or ""),
+                str(svc.get("external_ip") or "<none>"),
+                ",".join(port_texts) if port_texts else "",
+                self._format_age_value(svc.get("created_at")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_nodes_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP"]
+        rows = []
+        for node in data:
+            roles = node.get("roles") or []
+            roles_text = ",".join(roles) if roles else "<none>"
+            rows.append([
+                str(node.get("name", "")),
+                str(node.get("status", "")),
+                roles_text,
+                self._format_age_value(node.get("age")),
+                str(node.get("version", "")),
+                str(node.get("internal_ip") or ""),
+                str(node.get("external_ip") or "<none>"),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_pvcs_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        include_namespace = len({str(p.get("namespace", "")) for p in data}) > 1
+        headers = ["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for pvc in data:
+            access_modes = pvc.get("access_modes") or []
+            row = [
+                str(pvc.get("name", "")),
+                str(pvc.get("status", "")),
+                str(pvc.get("volume_name") or ""),
+                str(pvc.get("capacity") or ""),
+                ",".join(access_modes) if access_modes else "",
+                str(pvc.get("storage_class") or ""),
+                self._format_age_value(pvc.get("created_at")),
+            ]
+            if include_namespace:
+                row = [str(pvc.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_pvs_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"]
+        rows = []
+        for pv in data:
+            access_modes = pv.get("access_modes") or []
+            claim = pv.get("claim_ref") or {}
+            claim_text = ""
+            if isinstance(claim, dict):
+                ns = claim.get("namespace")
+                name = claim.get("name")
+                if ns or name:
+                    claim_text = f\"{ns}/{name}\" if ns and name else str(name or "")
+            rows.append([
+                str(pv.get("name", "")),
+                str(pv.get("capacity", "")),
+                ",".join(access_modes) if access_modes else "",
+                str(pv.get("reclaim_policy") or ""),
+                str(pv.get("status") or ""),
+                claim_text or "<none>",
+                str(pv.get("storage_class") or ""),
+                self._format_age_value(pv.get("created_at")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_api_resources_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "SHORTNAMES", "APIVERSION", "NAMESPACED", "KIND"]
+        rows = []
+        for r in data:
+            shortnames = r.get("shortNames") or []
+            rows.append([
+                str(r.get("name", "")),
+                ",".join(shortnames) if shortnames else "",
+                str(r.get("apiVersion", "")),
+                "true" if r.get("namespaced") else "false",
+                str(r.get("kind", "")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_pod_metrics_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        include_namespace = len({str(p.get("namespace", "")) for p in data}) > 1
+        headers = ["NAME", "CPU(cores)", "MEMORY(bytes)"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for m in data:
+            row = [
+                str(m.get("name", "")),
+                str(m.get("cpu", "")),
+                str(m.get("memory", "")),
+            ]
+            if include_namespace:
+                row = [str(m.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_node_metrics_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "CPU(cores)", "MEMORY(bytes)"]
+        rows = []
+        for m in data:
+            rows.append([
+                str(m.get("name", "")),
+                str(m.get("cpu", "")),
+                str(m.get("memory", "")),
+            ])
+        return self._format_table(headers, rows)
+
     def _build_tool_display(
         self,
         function_name: str,
@@ -294,6 +547,34 @@ class AIService:
         is_json: bool,
         is_yaml: bool,
     ) -> Optional[str]:
+        if function_name == "get_namespaces":
+            return self._format_namespaces_display(formatted_result)
+        if function_name == "get_pods":
+            return self._format_pods_display(formatted_result, include_namespace=False)
+        if function_name == "get_all_pods":
+            return self._format_pods_display(formatted_result, include_namespace=True)
+        if function_name == "find_pods":
+            return self._format_pods_display(formatted_result, include_namespace=True)
+        if function_name == "get_deployments":
+            return self._format_deployments_display(formatted_result)
+        if function_name == "find_deployments":
+            return self._format_deployments_display(formatted_result)
+        if function_name == "get_services":
+            return self._format_services_display(formatted_result)
+        if function_name == "find_services":
+            return self._format_services_display(formatted_result)
+        if function_name == "get_node_list":
+            return self._format_nodes_display(formatted_result)
+        if function_name == "get_pvcs":
+            return self._format_pvcs_display(formatted_result)
+        if function_name == "get_pvs":
+            return self._format_pvs_display(formatted_result)
+        if function_name == "get_pod_metrics":
+            return self._format_pod_metrics_display(formatted_result)
+        if function_name == "get_node_metrics":
+            return self._format_node_metrics_display(formatted_result)
+        if function_name == "k8s_get_available_api_resources":
+            return self._format_api_resources_display(formatted_result)
         if function_name == "k8s_get_resources":
             output = function_args.get("output", "wide")
             return self._format_k8s_get_resources_display(
