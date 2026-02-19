@@ -38,6 +38,27 @@ class AIService:
         self.k8s_service = K8sServiceClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}", flush=True)
+
+    def _sanitize_history_content(self, role: str, content: Optional[str]) -> str:
+        """LLM 히스토리에 넣기 전에 tool 결과 블록을 제거/축약"""
+        if not isinstance(content, str):
+            return ""
+        if role != "assistant":
+            return content
+
+        # Remove tool result blocks (KAgent-style <details> with 🔧 summary)
+        sanitized = re.sub(
+            r"<details>\s*<summary>🔧.*?</details>\s*",
+            "",
+            content,
+            flags=re.DOTALL,
+        ).strip()
+
+        # Hard cap to avoid context blow-up even after stripping
+        max_chars = 8000
+        if len(sanitized) > max_chars:
+            sanitized = sanitized[:max_chars] + "\n... (truncated) ..."
+        return sanitized
     
     async def analyze_logs(self, request: LogAnalysisRequest) -> LogAnalysisResponse:
         """로그 분석"""
@@ -236,7 +257,10 @@ JSON 형식으로 응답해주세요:
         # 메시지 변환
         messages = [{"role": "system", "content": system_message}]
         for msg in request.messages:
-            messages.append({"role": msg.role, "content": msg.content})
+            messages.append({
+                "role": msg.role,
+                "content": self._sanitize_history_content(msg.role, msg.content),
+            })
         
         # 컨텍스트 추가
         if request.context:
@@ -2878,7 +2902,10 @@ Draft (rules-based, keep numbers unchanged):
 
             messages = [{"role": "system", "content": self._get_system_message()}]
             for msg in recent_history:
-                messages.append({"role": msg.role, "content": msg.content})
+                messages.append({
+                    "role": msg.role,
+                    "content": self._sanitize_history_content(msg.role, msg.content),
+                })
             
             # Tool Context 가져오기 또는 생성
             if session_id not in self.tool_contexts:
