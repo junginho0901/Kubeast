@@ -542,6 +542,23 @@ async def get_endpointslices(namespace: str, force_refresh: bool = Query(False, 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/namespaces/{namespace}/services/{service_name}/connectivity")
+async def check_service_connectivity(
+    namespace: str,
+    service_name: str,
+    port: Optional[str] = Query(None, description="서비스 포트 (이름 또는 번호)"),
+):
+    """Service/Endpoint 연결성 확인"""
+    try:
+        return await k8s_service.check_service_connectivity(
+            namespace=namespace,
+            service_name=service_name,
+            port=port,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/namespaces/{namespace}/networkpolicies")
 async def get_networkpolicies(namespace: str, force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
     """NetworkPolicy 목록 조회"""
