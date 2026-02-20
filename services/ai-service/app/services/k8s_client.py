@@ -104,9 +104,12 @@ class K8sServiceClient:
         response.raise_for_status()
         return response.json()
     
-    async def get_events(self, namespace: str) -> List[Dict]:
+    async def get_events(self, namespace: Optional[str]) -> List[Dict]:
         """이벤트 조회"""
-        response = await self.client.get(f"/namespaces/{namespace}/events")
+        if namespace:
+            response = await self.client.get(f"/namespaces/{namespace}/events")
+        else:
+            response = await self.client.get("/events")
         response.raise_for_status()
         data = response.json()
         return data.get("events", [])

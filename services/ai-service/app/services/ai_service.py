@@ -268,7 +268,10 @@ class AIService:
             return None
         if not isinstance(data, list):
             return None
+        include_namespace = any(isinstance(ev, dict) and ev.get("namespace") for ev in data)
         headers = ["LAST SEEN", "TYPE", "REASON", "OBJECT", "MESSAGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
         rows = []
         for ev in data:
             last_ts = ev.get("last_timestamp") or ev.get("first_timestamp")
@@ -277,13 +280,16 @@ class AIService:
             obj_name = obj.get("name") or ""
             obj_kind = obj.get("kind") or ""
             obj_text = f"{obj_kind}/{obj_name}" if obj_kind or obj_name else ""
-            rows.append([
+            row = [
                 last_seen,
                 str(ev.get("type", "")),
                 str(ev.get("reason", "")),
                 obj_text,
                 str(ev.get("message", "")),
-            ])
+            ]
+            if include_namespace:
+                row = [str(ev.get("namespace", ""))] + row
+            rows.append(row)
         return self._format_table(headers, rows)
 
     def _format_age_value(self, value) -> str:
@@ -3300,8 +3306,9 @@ Draft (rules-based, keep numbers unchanged):
                 return logs
 
             elif function_name == "k8s_get_events":
-                namespace = function_args.get("namespace") or "default"
-                events = await self.k8s_service.get_events(namespace)
+                namespace = function_args.get("namespace")
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+                events = await self.k8s_service.get_events(ns)
                 return json.dumps(events, ensure_ascii=False)
 
             elif function_name == "k8s_get_available_api_resources":
@@ -4871,8 +4878,9 @@ If namespace is not provided, search across namespaces first.""",
                     tool_context.state["last_log_pod"] = pod_name
 
             elif function_name == "k8s_get_events":
-                namespace = function_args.get("namespace") or "default"
-                events = await self.k8s_service.get_events(namespace)
+                namespace = function_args.get("namespace")
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+                events = await self.k8s_service.get_events(ns)
                 result = json.dumps(events, ensure_ascii=False)
 
             elif function_name == "k8s_get_available_api_resources":
