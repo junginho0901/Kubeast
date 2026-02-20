@@ -116,14 +116,43 @@ class K8sService:
 
     def _get_default_namespace(self) -> str:
         sa_ns_path = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-        try:
-            if os.path.exists(sa_ns_path):
-                with open(sa_ns_path, "r", encoding="utf-8") as f:
-                    ns = f.read().strip()
-                    if ns:
-                        return ns
-        except Exception:
-            pass
+
+        # 1) In-cluster: service account namespace
+        if getattr(settings, "IN_CLUSTER", False):
+            try:
+                if os.path.exists(sa_ns_path):
+                    with open(sa_ns_path, "r", encoding="utf-8") as f:
+                        ns = f.read().strip()
+                        if ns:
+                            return ns
+            except Exception:
+                pass
+
+        # 2) Out-of-cluster: kubeconfig current-context namespace
+        kubeconfig_path = ""
+        if settings.KUBECONFIG_PATH and os.path.exists(settings.KUBECONFIG_PATH):
+            kubeconfig_path = settings.KUBECONFIG_PATH
+        else:
+            default_path = os.path.expanduser("~/.kube/config")
+            if os.path.exists(default_path):
+                kubeconfig_path = default_path
+
+        if kubeconfig_path:
+            try:
+                import yaml
+
+                with open(kubeconfig_path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                current = data.get("current-context")
+                if current:
+                    for ctx in data.get("contexts", []) or []:
+                        if ctx.get("name") == current:
+                            ns = (ctx.get("context") or {}).get("namespace")
+                            if ns:
+                                return ns
+            except Exception:
+                pass
+
         return "default"
 
     async def get_available_api_resources(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
