@@ -281,7 +281,16 @@ export default function ClusterView() {
         
         // WebSocket 연결
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${window.location.hostname}:8000/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/logs/ws?container=${selectedContainer}&tail_lines=100`
+        const rawWsBase = (import.meta.env.VITE_WS_URL || '').trim()
+        let wsBase = rawWsBase
+        if (wsBase && wsBase.startsWith('http')) {
+          wsBase = wsBase.replace(/^http/, 'ws')
+        }
+        if (!wsBase) {
+          wsBase = `${protocol}//${window.location.host}`
+        }
+        wsBase = wsBase.replace(/\/$/, '')
+        const wsUrl = `${wsBase}/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/logs/ws?container=${selectedContainer}&tail_lines=100`
         
         const ws = new WebSocket(wsUrl)
         abortControllerRef.current = ws as any
