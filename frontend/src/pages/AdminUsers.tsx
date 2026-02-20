@@ -105,7 +105,7 @@ export default function AdminUsers() {
         <p className="mt-2 text-slate-400">유저 권한(user/admin)을 변경합니다.</p>
       </div>
 
-      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-visible">
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr className="text-left text-slate-300">
