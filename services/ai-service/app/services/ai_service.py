@@ -398,6 +398,52 @@ class AIService:
             ])
         return self._format_table(headers, rows)
 
+    def _format_service_connectivity_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+
+        ports = data.get("ports") or []
+
+        def _fmt_port(p: Dict[str, object]) -> str:
+            name = p.get("name")
+            port = p.get("port")
+            proto = p.get("protocol") or ""
+            if name:
+                return f"{name}:{port}/{proto}"
+            return f"{port}/{proto}"
+
+        port_text = ""
+        port_check = data.get("port_check") or {}
+        matched = port_check.get("matched")
+        requested = port_check.get("requested")
+        if matched:
+            port_text = _fmt_port(matched)
+        elif requested:
+            port_text = str(requested)
+        else:
+            port_text = ",".join(_fmt_port(p) for p in ports) if ports else ""
+
+        endpoints = data.get("endpoints") or {}
+        ready = int(endpoints.get("ready") or 0)
+        total = endpoints.get("total")
+        if total is None:
+            total = ready + int(endpoints.get("not_ready") or 0)
+
+        headers = ["NAMESPACE", "SERVICE", "TYPE", "PORT(S)", "ENDPOINTS", "STATUS"]
+        rows = [[
+            str(data.get("namespace", "")),
+            str(data.get("service", "")),
+            str(data.get("type", "")),
+            port_text,
+            f"{ready}/{total}",
+            str(data.get("status", "")),
+        ]]
+        return self._format_table(headers, rows)
+
     def _format_nodes_display(self, raw_text: str) -> Optional[str]:
         try:
             data = json.loads(raw_text)
@@ -563,6 +609,8 @@ class AIService:
             return self._format_services_display(formatted_result)
         if function_name == "find_services":
             return self._format_services_display(formatted_result)
+        if function_name == "k8s_check_service_connectivity":
+            return self._format_service_connectivity_display(formatted_result)
         if function_name == "get_node_list":
             return self._format_nodes_display(formatted_result)
         if function_name == "get_pvcs":
@@ -4540,6 +4588,22 @@ If namespace is not provided, search across namespaces first.""",
             {
                 "type": "function",
                 "function": {
+                    "name": "k8s_check_service_connectivity",
+                    "description": "Service/Endpoint 연결성 확인 (서비스에 Ready 엔드포인트가 있는지 점검).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "service_name": {"type": "string", "description": "서비스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "port": {"type": "string", "description": "서비스 포트(이름 또는 번호, 선택)"},
+                        },
+                        "required": ["service_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "k8s_describe_resource",
                     "description": "리소스 상세 조회 (kubectl describe).",
                     "parameters": {
@@ -4818,6 +4882,27 @@ If namespace is not provided, search across namespaces first.""",
             elif function_name == "k8s_get_cluster_configuration":
                 cfg = await self.k8s_service.get_cluster_configuration()
                 result = json.dumps(cfg, ensure_ascii=False)
+
+            elif function_name == "k8s_check_service_connectivity":
+                namespace = function_args.get("namespace")
+                service_name = function_args.get("service_name") or function_args.get("name") or function_args.get("service")
+                port = function_args.get("port")
+
+                if not service_name:
+                    raise Exception("service_name is required")
+
+                if not isinstance(namespace, str) or not namespace.strip():
+                    matches = await self._find_services(str(service_name), namespace=None, limit=20)
+                    chosen = await self._resolve_single("services", str(service_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    service_name = str(chosen.get("name", service_name))
+
+                result_data = await self.k8s_service.check_service_connectivity(
+                    namespace=str(namespace),
+                    service_name=str(service_name),
+                    port=str(port) if port is not None else None,
+                )
+                result = json.dumps(result_data, ensure_ascii=False)
 
             elif function_name == "k8s_generate_resource":
                 result = json.dumps(
