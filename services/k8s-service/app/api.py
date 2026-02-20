@@ -381,6 +381,18 @@ async def get_events(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/events")
+async def get_events_all(
+    resource_name: Optional[str] = Query(None, description="리소스 이름 필터")
+):
+    """전체 네임스페이스 이벤트 조회"""
+    try:
+        events = await k8s_service.get_events(None, resource_name)
+        return {"events": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/namespaces/{namespace}/deployments/{name}/yaml")
 async def get_deployment_yaml(namespace: str, name: str):
     """Deployment YAML 조회"""

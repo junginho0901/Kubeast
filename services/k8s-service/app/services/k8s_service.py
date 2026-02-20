@@ -1524,10 +1524,13 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get VolumeAttachments: {e}")
     
-    async def get_events(self, namespace: str, resource_name: Optional[str] = None) -> List[Dict]:
+    async def get_events(self, namespace: Optional[str], resource_name: Optional[str] = None) -> List[Dict]:
         """이벤트 조회"""
         try:
-            events = self.v1.list_namespaced_event(namespace)
+            if namespace:
+                events = self.v1.list_namespaced_event(namespace)
+            else:
+                events = self.v1.list_event_for_all_namespaces()
             result = []
             
             for event in events.items:
@@ -1538,6 +1541,7 @@ class K8sService:
                     "type": event.type,
                     "reason": event.reason,
                     "message": event.message,
+                    "namespace": getattr(event.metadata, "namespace", None),
                     "object": {
                         "kind": event.involved_object.kind,
                         "name": event.involved_object.name
