@@ -8,6 +8,7 @@ import json
 import sys
 from app.config import settings
 from datetime import datetime
+from app.security import decode_access_token
 from app.models.ai import (
     LogAnalysisRequest,
     LogAnalysisResponse,
@@ -36,9 +37,65 @@ class AIService:
         """OpenAI 클라이언트 초기화"""
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = settings.OPENAI_MODEL
+        self.user_role = self._resolve_user_role(authorization)
         self.k8s_service = K8sServiceClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
-        print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}", flush=True)
+        print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}, role: {self.user_role}", flush=True)
+
+    def _resolve_user_role(self, authorization: Optional[str]) -> str:
+        if not authorization:
+            return "read"
+        try:
+            parts = authorization.split(" ", 1)
+            token = parts[1].strip() if len(parts) == 2 else authorization.strip()
+            payload = decode_access_token(token)
+            role = (payload.role or "").strip().lower()
+            if role in {"admin", "read", "write"}:
+                return role
+        except Exception:
+            pass
+        return "read"
+
+    def _role_allows_write(self) -> bool:
+        return self.user_role in {"write", "admin"}
+
+    def _role_allows_admin(self) -> bool:
+        return self.user_role == "admin"
+
+    def _is_tool_allowed(self, function_name: str) -> bool:
+        write_tools = {
+            "k8s_apply_manifest",
+            "k8s_create_resource",
+            "k8s_create_resource_from_url",
+            "k8s_delete_resource",
+            "k8s_patch_resource",
+            "k8s_annotate_resource",
+            "k8s_remove_annotation",
+            "k8s_label_resource",
+            "k8s_remove_label",
+            "k8s_scale",
+            "k8s_rollout",
+            "k8s_execute_command",
+        }
+        admin_only_tools = set()
+
+        if function_name in admin_only_tools:
+            return self._role_allows_admin()
+        if function_name in write_tools:
+            return self._role_allows_write()
+        return True
+
+    def _filter_tools_by_role(self, tools: List[Dict]) -> List[Dict]:
+        filtered: List[Dict] = []
+        for tool in tools:
+            fn = (tool or {}).get("function", {})
+            name = fn.get("name") if isinstance(fn, dict) else None
+            if not isinstance(name, str) or not name:
+                filtered.append(tool)
+                continue
+            if self._is_tool_allowed(name):
+                filtered.append(tool)
+        return filtered
 
     def _sanitize_history_content(self, role: str, content: Optional[str]) -> str:
         """LLM 히스토리에 넣기 전에 tool 결과 블록을 제거/축약"""
@@ -2939,6 +2996,11 @@ Draft (rules-based, keep numbers unchanged):
         
         try:
             print(f"[DEBUG] Executing function: {function_name} with args: {function_args}")
+            if not self._is_tool_allowed(function_name):
+                return json.dumps(
+                    {"error": f"권한 없음: '{function_name}'는 {self.user_role} 역할에서 사용할 수 없습니다."},
+                    ensure_ascii=False,
+                )
             
             if function_name == "get_namespaces":
                 namespaces = await self.k8s_service.get_namespaces()
@@ -4068,7 +4130,7 @@ Remember: You're not just answering questions - you're **solving production prob
         ]
 
         tools.extend(self._get_k8s_readonly_tool_definitions())
-        return tools
+        return self._filter_tools_by_role(tools)
 
     def _get_k8s_readonly_tool_definitions(self) -> List[Dict]:
         """kagent 스타일의 read-only k8s tool 정의"""
@@ -4214,6 +4276,11 @@ Remember: You're not just answering questions - you're **solving production prob
         
         try:
             print(f"[DEBUG] Executing {function_name} with context, state keys: {list(tool_context.state.keys())}")
+            if not self._is_tool_allowed(function_name):
+                return json.dumps(
+                    {"error": f"권한 없음: '{function_name}'는 {self.user_role} 역할에서 사용할 수 없습니다."},
+                    ensure_ascii=False,
+                )
             
             # 캐시 확인
             cache_key = f"{function_name}_{json.dumps(function_args, sort_keys=True)}"
