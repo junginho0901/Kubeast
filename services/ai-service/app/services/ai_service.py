@@ -863,8 +863,9 @@ JSON 형식으로 응답해주세요:
 
     중요: 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
     사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-    먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 모든 네임스페이스에서 후보를 찾고
+    먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 모든 네임스페이스에서 후보를 찾고
     그 결과의 `namespace`/`name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
+    YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시합니다.
     """
         
         # 메시지 변환
@@ -885,132 +886,29 @@ JSON 형식으로 응답해주세요:
             {
                 "type": "function",
                 "function": {
-                    "name": "get_namespaces",
-                    "description": "클러스터의 모든 네임스페이스 목록을 조회합니다",
+                    "name": "get_cluster_overview",
+                    "description": "클러스터 전체 개요 (네임스페이스, Pod, Service 등의 총 개수)를 조회합니다",
                     "parameters": {"type": "object", "properties": {}}
                 }
             },
             {
                 "type": "function",
                 "function": {
-                    "name": "find_pods",
-                    "description": "Pod를 이름/라벨로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
+                    "name": "get_pod_metrics",
+                    "description": "Pod 리소스 사용량(CPU/Memory) 조회 (kubectl top pods)",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (pod name/label에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"}
+                        }
                     }
                 }
             },
             {
                 "type": "function",
                 "function": {
-                    "name": "find_services",
-                    "description": "Service를 이름/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (service name/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_deployments",
-                    "description": "Deployment를 이름/라벨/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (deployment name/labels/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pods",
-                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(wide/json) 요청에는 k8s_get_resources 사용.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "네임스페이스 이름 (예: default, kube-system)"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_deployments",
-                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(wide/json) 요청에는 k8s_get_resources 사용.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "네임스페이스 이름"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_services",
-                    "description": "특정 네임스페이스의 Service 목록을 조회합니다 (legacy JSON-only). 출력 형식(wide/json) 요청에는 k8s_get_resources 사용.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "네임스페이스 이름"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pod_logs",
-                    "description": "특정 Pod의 로그를 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "pod_name": {"type": "string", "description": "Pod 이름"},
-                            "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
-                            "tail_lines": {"type": "integer", "description": "마지막 N줄 (기본값: 50)"}
-                        },
-                        "required": ["pod_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_cluster_overview",
-                    "description": "클러스터 전체 개요 (네임스페이스, Pod, Service 등의 총 개수)를 조회합니다",
+                    "name": "get_node_metrics",
+                    "description": "Node 리소스 사용량(CPU/Memory) 조회 (kubectl top nodes)",
                     "parameters": {"type": "object", "properties": {}}
                 }
             }
@@ -2290,19 +2188,17 @@ Draft (rules-based, keep numbers unchanged):
 ## 사용 가능한 도구
 
 ### 정보 수집 도구
-- `get_namespaces`: 클러스터의 모든 네임스페이스 조회. 항상 먼저 사용하여 클러스터 구조 파악
-- `get_pods`: 특정 네임스페이스의 Pod 목록 조회. Pod 상태, 재시작 횟수, 준비 상태 확인
-- `get_deployments`: Deployment 목록 조회. 배포 상태 및 레플리카 확인
-- `get_services`: Service 목록 조회. 서비스 엔드포인트 및 포트 확인
 - `k8s_get_resources`: kubectl get (json/wide) 형식 지원. 출력 형식 요청 시 우선 사용
-- `get_node_list`: 클러스터의 노드 목록 조회. 노드 상태, 리소스 용량 확인
-- `get_pod_logs`: 특정 Pod의 로그 조회. 에러 메시지 및 스택 트레이스 분석
-- `describe_pod`: Pod의 상세 정보 조회. 이벤트, 조건, 구성 확인
-- `describe_deployment`: Deployment의 상세 정보 조회
-- `describe_service`: Service의 상세 정보 조회
-- `describe_node`: Node의 상세 정보 조회
-- `get_events`: 리소스와 관련된 이벤트 조회. 최근 발생한 문제 파악
-- `get_resource_top`: 리소스 사용량 (CPU, Memory) 조회. 성능 병목 지점 식별
+- `k8s_get_resource_yaml`: 단일 리소스 YAML 조회 (kubectl get -o yaml)
+- `k8s_describe_resource`: 리소스 상세 조회 (kubectl describe)
+- `k8s_get_pod_logs`: Pod 로그 조회 (kubectl logs)
+- `k8s_get_events`: 네임스페이스 이벤트 조회 (kubectl get events)
+- `k8s_get_available_api_resources`: api-resources 조회
+- `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
+- `k8s_check_service_connectivity`: Service/Endpoint 연결성 확인
+- `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
+- `get_pod_metrics`: Pod 리소스 사용량 조회(확장 기능, kubectl top pods)
+- `get_node_metrics`: Node 리소스 사용량 조회(확장 기능, kubectl top nodes)
 
 ## 도구 사용 원칙
 
@@ -2312,31 +2208,30 @@ Draft (rules-based, keep numbers unchanged):
 
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
 - 사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-  먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 **모든 네임스페이스에서 후보를 찾은 뒤**
+  먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 **모든 네임스페이스에서 후보를 찾은 뒤**
   해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
 - 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
 
 ## 출력 포맷/툴 선택 규칙 (중요)
 
 - 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
-- YAML 요청은 지원하지 않습니다. JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
-- `get_pods`, `get_deployments`, `get_services`는 legacy JSON-only이므로 출력 형식 요청 시 사용하지 마세요.
+- YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
    - 일반적인 설명보다 실제 데이터를 우선시하세요
 
 2. **구체적인 정보 수집 예시**: 
-   - "네임스페이스가 뭐가 있어?" → 즉시 `get_namespaces` 호출
-   - "Pod 상태 확인해줘" → 즉시 `get_pods` 호출
-   - "Failed Pod 있어?" → `get_pods` 호출 후 상태 분석, 발견 시 `describe_pod` 및 `get_pod_logs` 추가 호출
-   - "리소스 많이 쓰는 Pod는?" → `get_resource_top` 호출
-   - "죽어 있는 Pod들 알려줘" → 모든 네임스페이스에 대해 `get_pods` 호출 후 NotReady, Error, CrashLoopBackOff 상태 필터링
+   - "네임스페이스가 뭐가 있어?" → `k8s_get_resources`(resource_type=namespaces) 호출
+   - "Pod 상태 확인해줘" → `k8s_get_resources`(resource_type=pods, namespace=...) 호출
+   - "Failed Pod 있어?" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 상태 분석, 발견 시 `k8s_describe_resource` 및 `k8s_get_pod_logs`, `k8s_get_events` 추가 호출
+   - "리소스 많이 쓰는 Pod는?" → `get_pod_metrics` 호출
+   - "죽어 있는 Pod들 알려줘" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 NotReady/Error/CrashLoopBackOff 필터링
 
 3. **문제 발견 시 추가 조사**:
-   - Pod 문제 발견 → `describe_pod`, `get_pod_logs`, `get_events` 순차 호출
-   - 노드 문제 발견 → `get_node_list`, `describe_node` 호출
-   - 재시작이 많은 Pod → `get_pod_logs`로 크래시 원인 파악
+   - Pod 문제 발견 → `k8s_describe_resource`, `k8s_get_pod_logs`, `k8s_get_events` 순차 호출
+   - 노드 문제 발견 → `k8s_get_resources`(resource_type=nodes) 후 필요 시 `k8s_describe_resource`
+   - 재시작이 많은 Pod → `k8s_get_pod_logs`로 크래시 원인 파악
 
 4. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
 
@@ -2413,90 +2308,6 @@ Draft (rules-based, keep numbers unchanged):
             {
                 "type": "function",
                 "function": {
-                    "name": "get_namespaces",
-                    "description": "클러스터의 모든 네임스페이스 목록을 조회합니다",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_pods",
-                    "description": "Pod를 이름/라벨로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (pod name/label에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_services",
-                    "description": "Service를 이름/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (service name/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_deployments",
-                    "description": "Deployment를 이름/라벨/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (deployment name/labels/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pods",
-                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(wide/json) 요청에는 k8s_get_resources 사용.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_deployments",
-                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다 (legacy JSON-only). 출력 형식(wide/json) 요청에는 k8s_get_resources 사용.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
                     "name": "get_cluster_overview",
                     "description": "클러스터 전체 개요를 조회합니다",
                     "parameters": {"type": "object", "properties": {}}
@@ -2505,123 +2316,12 @@ Draft (rules-based, keep numbers unchanged):
             {
                 "type": "function",
                 "function": {
-                    "name": "describe_pod",
-                    "description": "특정 Pod의 상세 정보를 조회합니다 (kubectl describe pod와 동일). 컨테이너 상태, 이벤트, 조건 등을 포함합니다.",
+                    "name": "get_pod_metrics",
+                    "description": "Pod 리소스 사용량(CPU/Memory) 조회 (kubectl top pods)",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "name": {"type": "string", "description": "Pod 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_deployment",
-                    "description": "특정 Deployment의 상세 정보를 조회합니다 (kubectl describe deployment와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "name": {"type": "string", "description": "Deployment 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_service",
-                    "description": "특정 Service의 상세 정보를 조회합니다 (kubectl describe service와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "name": {"type": "string", "description": "Service 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pod_logs",
-                    "description": "특정 Pod의 로그를 조회합니다 (kubectl logs와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "pod_name": {"type": "string", "description": "Pod 이름"},
-                            "tail_lines": {"type": "integer", "description": "마지막 N줄만 조회 (기본값: 100)"}
-                        },
-                        "required": ["pod_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_services",
-                    "description": "특정 네임스페이스의 Service 목록을 조회합니다 (legacy JSON-only). 출력 형식(wide/json) 요청에는 k8s_get_resources 사용.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_events",
-                    "description": "특정 네임스페이스의 이벤트를 조회합니다 (kubectl get events와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_node_list",
-                    "description": "클러스터의 모든 노드 목록을 조회합니다 (kubectl get nodes와 동일)",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_node",
-                    "description": "특정 노드의 상세 정보를 조회합니다 (kubectl describe node와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "노드 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pvcs",
-                    "description": "PersistentVolumeClaim 목록을 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름 (선택사항, 없으면 전체 조회)"}
+                            "namespace": {"type": "string", "description": "네임스페이스 이름 (선택)"}
                         }
                     }
                 }
@@ -2629,8 +2329,8 @@ Draft (rules-based, keep numbers unchanged):
             {
                 "type": "function",
                 "function": {
-                    "name": "get_pvs",
-                    "description": "PersistentVolume 목록을 조회합니다",
+                    "name": "get_node_metrics",
+                    "description": "Node 리소스 사용량(CPU/Memory) 조회 (kubectl top nodes)",
                     "parameters": {"type": "object", "properties": {}}
                 }
             }
@@ -2969,6 +2669,99 @@ Draft (rules-based, keep numbers unchanged):
         hay = self._normalize_for_search(text)
         return all(t in hay for t in tokens)
 
+    def _extract_items_from_payload(self, payload: object) -> List[Dict]:
+        if isinstance(payload, dict):
+            data = payload.get("data") if "data" in payload else payload
+            if isinstance(data, dict) and isinstance(data.get("items"), list):
+                return list(data.get("items") or [])
+        return []
+
+    async def _find_resource_matches(
+        self,
+        resource_type: str,
+        query: str,
+        namespace: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict]:
+        payload = await self.k8s_service.get_resources(
+            resource_type=resource_type,
+            namespace=namespace if isinstance(namespace, str) else None,
+            all_namespaces=namespace is None,
+            output="json",
+        )
+        items = self._extract_items_from_payload(payload)
+
+        matches: List[Dict] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+            name = str(meta.get("name", ""))
+            if not name:
+                continue
+            if not self._all_tokens_in_text(query, name):
+                continue
+            matches.append(
+                {
+                    "name": name,
+                    "namespace": str(meta.get("namespace", "")),
+                    "kind": str(item.get("kind", "")),
+                    "resource_type": resource_type,
+                }
+            )
+            if len(matches) >= limit:
+                break
+        return matches
+
+    async def _locate_resource_for_yaml(
+        self,
+        resource_name: str,
+        namespace: Optional[str],
+        preferred_type: Optional[str],
+    ) -> Dict:
+        search_types = [
+            "deployments",
+            "statefulsets",
+            "daemonsets",
+            "pods",
+            "services",
+            "ingresses",
+            "jobs",
+            "cronjobs",
+        ]
+        if preferred_type:
+            preferred = str(preferred_type).strip()
+            if preferred:
+                search_types = [preferred] + [t for t in search_types if t != preferred]
+
+        # 1) If namespace is provided, try that namespace first (for preferred type)
+        if namespace and preferred_type:
+            matches = await self._find_resource_matches(preferred_type, resource_name, namespace=namespace, limit=20)
+            if matches:
+                chosen = await self._resolve_single(preferred_type, resource_name, matches)
+                return {
+                    "resource_type": preferred_type,
+                    "resource_name": chosen.get("name", resource_name),
+                    "namespace": chosen.get("namespace") or namespace,
+                }
+
+        # 2) Search across namespaces by type
+        for rtype in search_types:
+            try:
+                matches = await self._find_resource_matches(rtype, resource_name, namespace=None, limit=20)
+            except Exception:
+                continue
+            if not matches:
+                continue
+            chosen = await self._resolve_single(rtype, resource_name, matches)
+            return {
+                "resource_type": rtype,
+                "resource_name": chosen.get("name", resource_name),
+                "namespace": chosen.get("namespace"),
+            }
+
+        raise Exception(f"No resource matched '{resource_name}'. Provide namespace and resource type.")
+
     def _query_in_mapping(self, query: str, mapping: object) -> bool:
         if not isinstance(mapping, dict):
             return False
@@ -3294,10 +3087,59 @@ Draft (rules-based, keep numbers unchanged):
                 return self._render_k8s_resource_payload(payload)
 
             elif function_name == "k8s_get_resource_yaml":
-                return json.dumps(
-                    {"error": "YAML 출력은 비활성화되었습니다. k8s_get_resources(JSON)로 조회하세요."},
-                    ensure_ascii=False,
-                )
+                namespace = function_args.get("namespace")
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name", "")
+
+                # Support "pods/foo" style resource_name if resource_type is missing.
+                if isinstance(resource_name, str) and "/" in resource_name:
+                    prefix, name = resource_name.split("/", 1)
+                    if prefix and name and not (isinstance(resource_type, str) and resource_type.strip()):
+                        resource_type = prefix
+                        resource_name = name
+
+                resource_type = str(resource_type or "").strip()
+                resource_name = str(resource_name or "").strip()
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+
+                if not resource_name:
+                    raise Exception("resource_name is required for k8s_get_resource_yaml")
+
+                resolved = None
+                if not resource_type or ns is None:
+                    resolved = await self._locate_resource_for_yaml(
+                        resource_name=resource_name,
+                        namespace=ns,
+                        preferred_type=resource_type or None,
+                    )
+                    resource_type = str(resolved.get("resource_type") or resource_type)
+                    resource_name = str(resolved.get("resource_name") or resource_name)
+                    ns = resolved.get("namespace") or ns
+
+                try:
+                    yaml_text = await self.k8s_service.get_resource_yaml(
+                        resource_type=resource_type,
+                        resource_name=resource_name,
+                        namespace=ns,
+                    )
+                    return yaml_text
+                except Exception:
+                    if resolved is None:
+                        resolved = await self._locate_resource_for_yaml(
+                            resource_name=resource_name,
+                            namespace=ns,
+                            preferred_type=resource_type or None,
+                        )
+                        resource_type = str(resolved.get("resource_type") or resource_type)
+                        resource_name = str(resolved.get("resource_name") or resource_name)
+                        ns = resolved.get("namespace") or ns
+                        yaml_text = await self.k8s_service.get_resource_yaml(
+                            resource_type=resource_type,
+                            resource_name=resource_name,
+                            namespace=ns,
+                        )
+                        return yaml_text
+                    raise
 
             elif function_name == "k8s_describe_resource":
                 namespace = function_args.get("namespace")
@@ -3396,7 +3238,7 @@ Draft (rules-based, keep numbers unchanged):
         Returns:
             (formatted_text, is_json, is_yaml)
         """
-        is_yaml = False
+        is_yaml = function_name in {"k8s_get_resource_yaml"}
         try:
             # dict/list 는 그대로 pretty-print
             if isinstance(function_response, (dict, list)):
@@ -3425,7 +3267,7 @@ Draft (rules-based, keep numbers unchanged):
             return None
         lowered = text.lower()
         if "yaml" in lowered or "yml" in lowered:
-            return "json"
+            return "yaml"
         if "wide" in lowered:
             return "wide"
         if "json" in lowered:
@@ -3452,15 +3294,18 @@ Draft (rules-based, keep numbers unchanged):
 
     def _filter_tools_for_output_preference(self, tools: List[Dict], user_text: Optional[str]) -> List[Dict]:
         pref = self._detect_output_preference(user_text)
-        if pref not in {"json", "wide"}:
+        if pref not in {"json", "wide", "yaml"}:
             return tools
 
         want_events = self._mentions_events(user_text)
         want_logs = self._mentions_logs(user_text)
         want_describe = self._mentions_describe(user_text)
 
-        # Strongly prefer k8s_get_resources when output format is requested.
-        allow = {"k8s_get_resources"}
+        # Strongly prefer format-specific tools when output format is requested.
+        if pref == "yaml":
+            allow = {"k8s_get_resource_yaml"}
+        else:
+            allow = {"k8s_get_resources"}
         if want_events:
             allow.add("k8s_get_events")
         if want_logs:
@@ -3993,19 +3838,16 @@ Draft (rules-based, keep numbers unchanged):
 ## 사용 가능한 도구
 
 ### 정보 수집 도구
-- `get_namespaces`: 클러스터의 모든 네임스페이스 조회. 항상 먼저 사용
-- `get_pods`: 특정 네임스페이스의 Pod 목록 조회. Pod 상태, 재시작 횟수 확인
-- `get_deployments`: Deployment 목록 조회
-- `get_services`: Service 목록 조회
 - `k8s_get_resources`: kubectl get (json/wide) 형식 지원. 출력 형식 요청 시 우선 사용
-- `get_node_list`: 노드 목록 조회
-- `get_pod_logs`: Pod 로그 조회. 에러 메시지 분석
-- `describe_pod`: Pod 상세 정보 조회. 이벤트, 조건 확인
-- `describe_deployment`: Deployment 상세 정보 조회
-- `describe_service`: Service 상세 정보 조회
-- `describe_node`: Node 상세 정보 조회
-- `get_events`: 이벤트 조회. 최근 발생한 문제 파악
-- `get_resource_top`: 리소스 사용량 조회. 성능 병목 지점 식별
+- `k8s_get_resource_yaml`: 단일 리소스 YAML 조회 (kubectl get -o yaml)
+- `k8s_describe_resource`: 리소스 상세 조회 (kubectl describe)
+- `k8s_get_pod_logs`: Pod 로그 조회 (kubectl logs)
+- `k8s_get_events`: 네임스페이스 이벤트 조회 (kubectl get events)
+- `k8s_get_available_api_resources`: api-resources 조회
+- `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
+- `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
+- `get_pod_metrics`: Pod 리소스 사용량 조회(확장 기능, kubectl top pods)
+- `get_node_metrics`: Node 리소스 사용량 조회(확장 기능, kubectl top nodes)
 
 ## 도구 사용 원칙
 
@@ -4015,31 +3857,30 @@ Draft (rules-based, keep numbers unchanged):
 
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
 - 사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-  먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 **모든 네임스페이스에서 후보를 찾은 뒤**
+  먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 **모든 네임스페이스에서 후보를 찾은 뒤**
   해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
 - 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
 
 ### 출력 포맷/툴 선택 규칙 (중요)
 
 - 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
-- YAML 요청은 지원하지 않습니다. JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
-- `get_pods`, `get_deployments`, `get_services`는 legacy JSON-only이므로 출력 형식 요청 시 사용하지 마세요.
+- YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
    - 일반적인 설명보다 실제 데이터를 우선시하세요
 
 2. **구체적인 정보 수집 예시**: 
-   - "네임스페이스가 뭐가 있어?" → 즉시 `get_namespaces` 호출
-   - "Pod 상태 확인해줘" → 즉시 `get_pods` 호출
-   - "Failed Pod 있어?" → `get_pods` 호출 후 상태 분석, 발견 시 `describe_pod` 및 `get_pod_logs` 추가 호출
-   - "리소스 많이 쓰는 Pod는?" → `get_resource_top` 호출
-   - "죽어 있는 Pod들 알려줘" → 모든 네임스페이스에 대해 `get_pods` 호출 후 NotReady, Error, CrashLoopBackOff 상태 필터링
+   - "네임스페이스가 뭐가 있어?" → `k8s_get_resources`(resource_type=namespaces) 호출
+   - "Pod 상태 확인해줘" → `k8s_get_resources`(resource_type=pods, namespace=...) 호출
+   - "Failed Pod 있어?" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 상태 분석, 발견 시 `k8s_describe_resource` 및 `k8s_get_pod_logs`, `k8s_get_events` 추가 호출
+   - "리소스 많이 쓰는 Pod는?" → `get_pod_metrics` 호출
+   - "죽어 있는 Pod들 알려줘" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 NotReady/Error/CrashLoopBackOff 필터링
 
 3. **문제 발견 시 추가 조사**:
-   - Pod 문제 발견 → `describe_pod`, `get_pod_logs`, `get_events` 순차 호출
-   - 노드 문제 발견 → `get_node_list`, `describe_node` 호출
-   - 재시작이 많은 Pod → `get_pod_logs`로 크래시 원인 파악
+   - Pod 문제 발견 → `k8s_describe_resource`, `k8s_get_pod_logs`, `k8s_get_events` 순차 호출
+   - 노드 문제 발견 → `k8s_get_resources`(resource_type=nodes) 후 필요 시 `k8s_describe_resource`
+   - 재시작이 많은 Pod → `k8s_get_pod_logs`로 크래시 원인 파악
 
 4. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
 
@@ -4126,34 +3967,38 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 
 **Cluster Overview:**
 - `get_cluster_overview()` - Overall health snapshot
-- `get_namespaces()` - All namespaces
-- `get_node_list()` - Node status
-- `describe_node(name)` - Node details
+- `k8s_get_resources(resource_type=namespaces)` - Namespace list
+- `k8s_get_resources(resource_type=nodes)` - Node status
+- `k8s_describe_resource(resource_type=nodes, resource_name)` - Node details
 
 **Workload Analysis:**
-- `get_pods(namespace)` - Pod list with status
-- `describe_pod(namespace, name)` - Full pod details, events, conditions
-- `get_pod_logs(namespace, pod_name, tail_lines)` - Container logs
-- `get_deployments(namespace)` - Deployment status
-- `describe_deployment(namespace, name)` - Deployment details
-- `get_services(namespace)` - Service endpoints
-- `describe_service(namespace, name)` - Service configuration
+- `k8s_get_resources(resource_type=pods)` - Pod list with status
+- `k8s_describe_resource(resource_type=pods, resource_name)` - Pod details, events, conditions
+- `k8s_get_pod_logs(namespace, pod_name, tail_lines)` - Container logs
+- `k8s_get_resources(resource_type=deployments)` - Deployment status
+- `k8s_describe_resource(resource_type=deployments, resource_name)` - Deployment details
+- `k8s_get_resources(resource_type=services)` - Service endpoints
+- `k8s_describe_resource(resource_type=services, resource_name)` - Service configuration
 
 **Storage & Config:**
-- `get_pvcs(namespace)` - PVC status
-- `get_pvs()` - PV availability
-- `get_events(namespace)` - Recent events (critical for debugging!)
+- `k8s_get_resources(resource_type=pvcs)` - PVC status
+- `k8s_get_resources(resource_type=pvs)` - PV availability
+- `k8s_get_events(namespace)` - Recent events (critical for debugging!)
+
+**Metrics (extension):**
+- `get_pod_metrics(namespace)` - Top pods (CPU/Memory)
+- `get_node_metrics()` - Top nodes (CPU/Memory)
 
 # Example Workflow
 
 User: "My pod is not starting"
 
 Your thought process:
-1. Which namespace? If not specified, ask or search across namespaces (do NOT assume 'default')
-2. Get pods → Find the problematic one
-3. Describe pod → Check conditions, events
-4. Get logs → Look for startup errors
-5. Check events → Find scheduling/pulling issues
+1. Which namespace? If not specified, ask or list pods across namespaces (do NOT assume 'default')
+2. `k8s_get_resources` → Find the problematic pod
+3. `k8s_describe_resource` → Check conditions, events
+4. `k8s_get_pod_logs` → Look for startup errors
+5. `k8s_get_events` → Find scheduling/pulling issues
 6. Analyze → Determine root cause
 7. Provide solution with commands
 
@@ -4173,72 +4018,6 @@ Remember: You're not just answering questions - you're **solving production prob
             {
                 "type": "function",
                 "function": {
-                    "name": "find_pods",
-                    "description": """Search pods by name/label across namespaces.
-
-Use this FIRST when the user asks for logs but does not specify an exact namespace/pod name,
-or when they provide only an identifier/partial name.
-
-Returns: Array of {name, namespace, status, phase, restart_count, ready, containers, labels}""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search keyword. Matched against pod name and common label values."
-                            },
-                            "namespace": {
-                                "type": "string",
-                                "description": "Optional namespace to restrict the search. Omit to search all namespaces."
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Max number of matches to return (default: 20)."
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_services",
-                    "description": """Search services by name/selector across namespaces.
-
-Use this when the user mentions a Service name/identifier without specifying namespace.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Search keyword"},
-                            "namespace": {"type": "string", "description": "Optional namespace to restrict the search. Omit to search all namespaces."},
-                            "limit": {"type": "integer", "description": "Max number of matches to return (default: 20)."}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_deployments",
-                    "description": """Search deployments by name/labels/selector across namespaces.
-
-Use this when the user mentions a Deployment name/identifier without specifying namespace.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Search keyword"},
-                            "namespace": {"type": "string", "description": "Optional namespace to restrict the search. Omit to search all namespaces."},
-                            "limit": {"type": "integer", "description": "Max number of matches to return (default: 20)."}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
                     "name": "get_cluster_overview",
                     "description": """Get a comprehensive overview of the entire Kubernetes cluster health.
                     
@@ -4248,261 +4027,6 @@ Use this when the user mentions a Deployment name/identifier without specifying 
                     - Node count and cluster version
                     
                     Use this FIRST when user asks about cluster health or wants a general status check.""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_namespaces",
-                    "description": """List all namespaces in the cluster with their status.
-                    
-                    Returns: Array of {name, status}
-                    
-                    Use when user wants to see available namespaces or explore cluster organization.""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_all_pods",
-                    "description": """List ALL pods across ALL namespaces in the cluster with their current status.
-                    
-                    Returns: Array of {name, namespace, status, phase, restart_count, ready}
-                    
-                    **USE THIS FIRST** when user asks about:
-                    - "죽어 있는 Pod" / "Failed Pods" / "문제 있는 Pod"
-                    - Pod status across the entire cluster
-                    - Pods with high restart counts
-                    - Any cluster-wide Pod investigation
-                    
-                    This is MORE EFFICIENT than calling get_pods() for each namespace separately.
-                    Status values: Running, Pending, Failed, CrashLoopBackOff, ImagePullBackOff, etc.
-                    
-                    After getting results, filter for problematic pods:
-                    - status != "Running"
-                    - restart_count > 5
-                    - ready != "X/X" (not all containers ready)""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pods",
-                    "description": """List all pods in a specific namespace with their current status.
-                    
-                    Returns: Array of {name, status, phase, restart_count}
-                    
-                    IMPORTANT: Check restart_count! High values (>5) indicate instability.
-                    Status values: Running, Pending, Failed, CrashLoopBackOff, ImagePullBackOff, etc.
-                    
-                    Use this to identify problematic pods or get workload overview.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "Target namespace name (e.g., 'default', 'kube-system')"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_pod",
-                    "description": """Get detailed information about a specific pod (equivalent to kubectl describe pod).
-                    
-                    Returns:
-                    - Pod metadata (labels, annotations)
-                    - Container states (running/waiting/terminated with reasons)
-                    - Conditions (PodScheduled, Initialized, Ready, ContainersReady)
-                    - Recent events (critical for troubleshooting!)
-                    
-                    Use this when investigating WHY a pod is failing or not starting.
-                    Events often contain the root cause (e.g., ImagePullBackOff, OOMKilled).""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace containing the pod"},
-                            "name": {"type": "string", "description": "Exact pod name"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pod_logs",
-                    "description": """Retrieve container logs from a pod (kubectl logs).
-                    
-                    Returns: Recent log output (default: last 100 lines)
-                    
-                    Use this to:
-                    - Find application errors or stack traces
-                    - Check startup logs for initialization issues
-                    - Identify crash reasons
-                    
-                    Look for: ERROR, FATAL, Exception, panic, segfault, OOM, connection refused.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace"},
-                            "pod_name": {"type": "string", "description": "Pod name"},
-                            "container": {"type": "string", "description": "Container name (optional)"},
-                            "tail_lines": {
-                                "type": "integer",
-                                "description": "Number of recent lines to retrieve (default: 100)"
-                            }
-                        },
-                        "required": ["pod_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_deployments",
-                    "description": """List deployments in a namespace with replica status.
-                    
-                    Returns: Array of {name, replicas, ready_replicas, status}
-                    
-                    Check if ready_replicas < replicas → indicates deployment issues.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_deployment",
-                    "description": """Get detailed deployment information including rollout status and conditions.
-                    
-                    Use when investigating deployment failures or rollout issues.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string"},
-                            "name": {"type": "string"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_services",
-                    "description": """List services and their endpoints in a namespace.
-                    
-                    Use to check service discovery and networking configuration.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_service",
-                    "description": """Describe a Service (kubectl describe service).
-
-If namespace is not provided, search across namespaces first.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string"},
-                            "name": {"type": "string"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_events",
-                    "description": """Get recent Kubernetes events in a namespace.
-                    
-                    Events are CRITICAL for troubleshooting! They show:
-                    - Scheduling failures
-                    - Image pull errors
-                    - Volume mount issues
-                    - Resource constraints
-                    - Health check failures
-                    
-                    ALWAYS check events when investigating problems!""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace to get events from"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_node_list",
-                    "description": """List all nodes in the cluster with their status.
-                    
-                    Check for NotReady nodes or resource pressure.""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_node",
-                    "description": """Get detailed node information including capacity, allocatable resources, and conditions.
-                    
-                    Use to diagnose node-level issues (disk pressure, memory pressure, PID pressure).""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "Node name"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pvcs",
-                    "description": """List PersistentVolumeClaims and their binding status.
-                    
-                    Check for Pending PVCs (storage provisioning issues).""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Optional namespace filter"}
-                        }
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pvs",
-                    "description": """List PersistentVolumes and their availability.
-                    
-                    Use to check storage capacity and binding issues.""",
                     "parameters": {"type": "object", "properties": {}}
                 }
             },
@@ -4578,6 +4102,22 @@ If namespace is not provided, search across namespaces first.""",
                             },
                         },
                         "required": ["resource_type"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_resource_yaml",
+                    "description": "단일 리소스의 YAML을 조회합니다 (kubectl get -o yaml).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                        },
+                        "required": ["resource_type", "resource_name"],
                     },
                 },
             },
@@ -4861,10 +4401,58 @@ If namespace is not provided, search across namespaces first.""",
                 result = self._render_k8s_resource_payload(payload)
 
             elif function_name == "k8s_get_resource_yaml":
-                result = json.dumps(
-                    {"error": "YAML 출력은 비활성화되었습니다. k8s_get_resources(JSON)로 조회하세요."},
-                    ensure_ascii=False,
-                )
+                namespace = function_args.get("namespace")
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name", "")
+
+                # Support "pods/foo" style resource_name if resource_type is missing.
+                if isinstance(resource_name, str) and "/" in resource_name:
+                    prefix, name = resource_name.split("/", 1)
+                    if prefix and name and not (isinstance(resource_type, str) and resource_type.strip()):
+                        resource_type = prefix
+                        resource_name = name
+
+                resource_type = str(resource_type or "").strip()
+                resource_name = str(resource_name or "").strip()
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+
+                if not resource_name:
+                    raise Exception("resource_name is required for k8s_get_resource_yaml")
+
+                resolved = None
+                if not resource_type or ns is None:
+                    resolved = await self._locate_resource_for_yaml(
+                        resource_name=resource_name,
+                        namespace=ns,
+                        preferred_type=resource_type or None,
+                    )
+                    resource_type = str(resolved.get("resource_type") or resource_type)
+                    resource_name = str(resolved.get("resource_name") or resource_name)
+                    ns = resolved.get("namespace") or ns
+
+                try:
+                    result = await self.k8s_service.get_resource_yaml(
+                        resource_type=resource_type,
+                        resource_name=resource_name,
+                        namespace=ns,
+                    )
+                except Exception:
+                    if resolved is None:
+                        resolved = await self._locate_resource_for_yaml(
+                            resource_name=resource_name,
+                            namespace=ns,
+                            preferred_type=resource_type or None,
+                        )
+                        resource_type = str(resolved.get("resource_type") or resource_type)
+                        resource_name = str(resolved.get("resource_name") or resource_name)
+                        ns = resolved.get("namespace") or ns
+                        result = await self.k8s_service.get_resource_yaml(
+                            resource_type=resource_type,
+                            resource_name=resource_name,
+                            namespace=ns,
+                        )
+                    else:
+                        raise
 
             elif function_name == "k8s_describe_resource":
                 namespace = function_args.get("namespace")
