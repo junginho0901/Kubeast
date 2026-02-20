@@ -27,7 +27,7 @@ data:
   KUBECONFIG_PATH: /app/kubeconfig
   ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8000
   VITE_API_URL: http://localhost:8000
-  VITE_WS_URL: ws://localhost:8000
+  VITE_WS_URL: ws://localhost:30080
   KEY_DIR: /app/.keys
 ---
 apiVersion: v1
