@@ -3153,7 +3153,9 @@ Draft (rules-based, keep numbers unchanged):
             elif function_name == "k8s_get_pod_logs":
                 namespace = function_args.get("namespace")
                 pod_name = function_args.get("pod_name", "")
-                tail_lines = function_args.get("tail_lines", 50)
+                if isinstance(pod_name, str) and "/" in pod_name:
+                    pod_name = pod_name.split("/")[-1]
+                tail_lines = self._coerce_limit(function_args.get("tail_lines", 50), default=50, max_value=2000)
                 requested_container = function_args.get("container")
 
                 if not isinstance(namespace, str) or not namespace.strip():
@@ -4466,7 +4468,9 @@ Remember: You're not just answering questions - you're **solving production prob
             elif function_name == "k8s_get_pod_logs":
                 namespace = function_args.get("namespace")
                 pod_name = function_args.get("pod_name", "")
-                tail_lines = function_args.get("tail_lines", 50)
+                if isinstance(pod_name, str) and "/" in pod_name:
+                    pod_name = pod_name.split("/")[-1]
+                tail_lines = self._coerce_limit(function_args.get("tail_lines", 50), default=50, max_value=2000)
                 requested_container = function_args.get("container")
 
                 if not isinstance(namespace, str) or not namespace.strip():
