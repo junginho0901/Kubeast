@@ -106,7 +106,13 @@ class AIService:
             lines.append("  ".join(row[i].ljust(widths[i]) for i in range(len(headers))))
         return "\n".join(lines)
 
-    def _format_k8s_get_resources_display(self, resource_type: str, output: str, raw_text: str) -> Optional[str]:
+    def _format_k8s_get_resources_display(
+        self,
+        resource_type: str,
+        output: str,
+        raw_text: str,
+        include_namespace: bool = False,
+    ) -> Optional[str]:
         data = None
         try:
             data = json.loads(raw_text)
@@ -127,6 +133,8 @@ class AIService:
         key = (resource_type or "").strip().lower()
         if key in {"po", "pod", "pods"}:
             headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
+            if include_namespace:
+                headers = ["NAMESPACE"] + headers
             rows = []
             for item in items:
                 meta = item.get("metadata", {}) if isinstance(item, dict) else {}
@@ -158,11 +166,15 @@ class AIService:
                     str(restarts),
                     age,
                 ]
+                if include_namespace:
+                    row = [str(meta.get("namespace", ""))] + row
                 rows.append(row)
             return self._format_table(headers, rows)
 
         if key in {"deploy", "deployment", "deployments"}:
             headers = ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]
+            if include_namespace:
+                headers = ["NAMESPACE"] + headers
             rows = []
             for item in items:
                 meta = item.get("metadata", {}) if isinstance(item, dict) else {}
@@ -173,17 +185,22 @@ class AIService:
                 updated = int(status.get("updatedReplicas", 0) or 0)
                 available = int(status.get("availableReplicas", 0) or 0)
                 age = self._format_age(meta.get("creationTimestamp"))
-                rows.append([
+                row = [
                     str(meta.get("name", "")),
                     f"{ready}/{desired}",
                     str(updated),
                     str(available),
                     age,
-                ])
+                ]
+                if include_namespace:
+                    row = [str(meta.get("namespace", ""))] + row
+                rows.append(row)
             return self._format_table(headers, rows)
 
         if key in {"svc", "service", "services"}:
             headers = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
+            if include_namespace:
+                headers = ["NAMESPACE"] + headers
             rows = []
             for item in items:
                 meta = item.get("metadata", {}) if isinstance(item, dict) else {}
@@ -207,14 +224,17 @@ class AIService:
                         ports.append(f"{port}/{proto}")
                 ports_text = ",".join(ports)
                 age = self._format_age(meta.get("creationTimestamp"))
-                rows.append([
+                row = [
                     str(meta.get("name", "")),
                     str(svc_type),
                     str(cluster_ip),
                     external_ip,
                     ports_text,
                     age,
-                ])
+                ]
+                if include_namespace:
+                    row = [str(meta.get("namespace", ""))] + row
+                rows.append(row)
             return self._format_table(headers, rows)
 
         if key in {"ns", "namespace", "namespaces"}:
@@ -254,11 +274,16 @@ class AIService:
 
         # Fallback: name/age
         headers = ["NAME", "AGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
         rows = []
         for item in items:
             meta = item.get("metadata", {}) if isinstance(item, dict) else {}
             age = self._format_age(meta.get("creationTimestamp"))
-            rows.append([str(meta.get("name", "")), age])
+            row = [str(meta.get("name", "")), age]
+            if include_namespace:
+                row = [str(meta.get("namespace", ""))] + row
+            rows.append(row)
         return self._format_table(headers, rows)
 
     def _format_k8s_get_events_display(self, raw_text: str) -> Optional[str]:
@@ -631,10 +656,18 @@ class AIService:
             return self._format_api_resources_display(formatted_result)
         if function_name == "k8s_get_resources":
             output = function_args.get("output", "wide")
+            namespace = function_args.get("namespace")
+            all_namespaces_raw = function_args.get("all_namespaces", False)
+            if isinstance(all_namespaces_raw, str):
+                all_namespaces = all_namespaces_raw.strip().lower() == "true"
+            else:
+                all_namespaces = bool(all_namespaces_raw)
+            include_namespace = all_namespaces or not (isinstance(namespace, str) and namespace.strip())
             return self._format_k8s_get_resources_display(
                 function_args.get("resource_type", ""),
                 output if isinstance(output, str) else "wide",
                 formatted_result,
+                include_namespace=include_namespace,
             )
         if function_name == "k8s_get_events":
             return self._format_k8s_get_events_display(formatted_result)
@@ -3246,6 +3279,8 @@ Draft (rules-based, keep numbers unchanged):
                     all_namespaces = all_namespaces_raw.strip().lower() == "true"
                 else:
                     all_namespaces = bool(all_namespaces_raw)
+                if not isinstance(namespace, str) or not namespace.strip():
+                    all_namespaces = True
                 if isinstance(output, str) and output.strip().lower() == "yaml":
                     output = "json"
 
@@ -4811,6 +4846,8 @@ If namespace is not provided, search across namespaces first.""",
                     all_namespaces = all_namespaces_raw.strip().lower() == "true"
                 else:
                     all_namespaces = bool(all_namespaces_raw)
+                if not isinstance(namespace, str) or not namespace.strip():
+                    all_namespaces = True
                 if isinstance(output, str) and output.strip().lower() == "yaml":
                     output = "json"
 
