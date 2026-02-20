@@ -99,29 +99,58 @@ export default function Resources() {
   }
 
   const getPodReason = (pod: any) => {
-    const status = (pod?.status || '').toString()
-    if (status && status !== 'Running') return status
-
-    const containers = Array.isArray(pod?.containers) ? pod.containers : []
-    for (const c of containers) {
-      const waitingReason = c?.state?.waiting?.reason
-      if (waitingReason) return waitingReason
-    }
-    for (const c of containers) {
-      const terminatedReason = c?.state?.terminated?.reason || c?.last_state?.terminated?.reason
-      if (terminatedReason) return terminatedReason
-    }
-
     const phase = (pod?.phase || '').toString()
     if (phase && phase !== 'Running') return phase
 
     const ready = (pod?.ready || '').toString()
     const m = ready.match(/^(\d+)\/(\d+)$/)
-    if (m) {
+    const isNotReady = (() => {
+      if (!m) return false
       const a = Number(m[1])
       const b = Number(m[2])
-      if (!Number.isNaN(a) && !Number.isNaN(b) && b > 0 && a !== b) return 'NotReady'
+      if (Number.isNaN(a) || Number.isNaN(b) || b <= 0) return false
+      return a !== b
+    })()
+
+    const containers = Array.isArray(pod?.containers) ? pod.containers : []
+    const reasons: string[] = []
+
+    for (const c of containers) {
+      const waitingReason = c?.state?.waiting?.reason
+      if (waitingReason) reasons.push(String(waitingReason))
     }
+    for (const c of containers) {
+      const terminatedReason = c?.state?.terminated?.reason || c?.last_state?.terminated?.reason
+      if (terminatedReason) reasons.push(String(terminatedReason))
+    }
+
+    if (reasons.length > 0) {
+      const priority = [
+        'ImagePullBackOff',
+        'ErrImagePull',
+        'CrashLoopBackOff',
+        'CreateContainerConfigError',
+        'CreateContainerError',
+        'RunContainerError',
+        'OOMKilled',
+        'Error',
+        'ContainerCreating',
+        'PodInitializing',
+      ]
+      const best = reasons
+        .slice()
+        .sort((a, b) => {
+          const ai = priority.indexOf(a)
+          const bi = priority.indexOf(b)
+          const aa = ai === -1 ? 999 : ai
+          const bb = bi === -1 ? 999 : bi
+          if (aa !== bb) return aa - bb
+          return a.localeCompare(b)
+        })[0]
+      return best || 'Unknown'
+    }
+
+    if (isNotReady) return 'NotReady'
     return 'Running'
   }
 
@@ -151,7 +180,8 @@ export default function Resources() {
       .map(([k, v]) => `${k}:${v}`)
       .join(' · ')
 
-    return { total: list.length, topReasons, phaseSummary }
+    const hasIssue = topReasons.some(([r]) => r !== 'Running') || Array.from(phaseCounts.keys()).some((p) => p !== 'Running')
+    return { total: list.length, topReasons, phaseSummary, hasIssue }
   }, [activeTab, filteredPods])
 
   const compactSelector = (selectorObj: Record<string, string> | undefined | null) => {
@@ -815,7 +845,7 @@ export default function Resources() {
       {/* Pods */}
       {activeTab === 'pods' && (
         <div className="space-y-4">
-          {podTopSummary && podTopSummary.total > 0 && (
+          {podTopSummary && podTopSummary.total > 0 && (podLabelSelector || searchQuery || podTopSummary.hasIssue) && (
             <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm text-white font-semibold">Top reason 요약</div>

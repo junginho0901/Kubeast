@@ -1,21 +1,37 @@
 """
 AI Service API 라우터
 """
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
-from typing import List
-import httpx
-from pydantic import BaseModel
+from app.models.ai import ChatRequest
+from app.security import require_auth
 
 router = APIRouter()
+
+
+def _require_admin(payload):
+    role = (getattr(payload, "role", "") or "").lower()
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
 
 # K8s Service URL
 K8S_SERVICE_URL = "http://k8s-service:8002/api/v1"
 SESSION_SERVICE_URL = "http://session-service:8003/api/v1"
 
 
-class ChatRequest(BaseModel):
-    messages: List[dict]
+async def _build_ai_service(authorization: str):
+    from app.services.model_config_service import resolve_model_config
+    from app.services.ai_service import AIService
+
+    resolved = await resolve_model_config()
+    return AIService(
+        authorization=authorization,
+        model=resolved.model,
+        base_url=resolved.base_url,
+        api_key=resolved.api_key,
+        extra_headers=resolved.extra_headers,
+        tls_verify=resolved.tls_verify,
+    )
 
 
 @router.post("/chat/stream")
@@ -23,9 +39,7 @@ async def chat_stream(request: ChatRequest, authorization: str = Header(..., ali
     """
     AI 챗봇 스트리밍
     """
-    from app.services.ai_service import AIService
-    
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
     
     try:
         return StreamingResponse(
@@ -41,10 +55,9 @@ async def session_chat(session_id: str, message: str, authorization: str = Heade
     """
     세션 기반 AI 챗봇 (스트리밍)
     """
-    from app.services.ai_service import AIService
     from app.database import get_db_service
     
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
     
     try:
         return StreamingResponse(
@@ -58,9 +71,7 @@ async def session_chat(session_id: str, message: str, authorization: str = Heade
 @router.post("/analyze-logs")
 async def analyze_logs(request: dict, authorization: str = Header(..., alias="Authorization")):
     """로그 분석"""
-    from app.services.ai_service import AIService
-    
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
     
     try:
         from app.ai import LogAnalysisRequest
@@ -74,9 +85,7 @@ async def analyze_logs(request: dict, authorization: str = Header(..., alias="Au
 @router.post("/troubleshoot")
 async def troubleshoot(request: dict, authorization: str = Header(..., alias="Authorization")):
     """트러블슈팅"""
-    from app.services.ai_service import AIService
-    
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
     
     try:
         from app.ai import TroubleshootRequest
@@ -90,9 +99,7 @@ async def troubleshoot(request: dict, authorization: str = Header(..., alias="Au
 @router.post("/explain-resource")
 async def explain_resource(resource_type: str, resource_yaml: str, authorization: str = Header(..., alias="Authorization")):
     """리소스 YAML 설명"""
-    from app.services.ai_service import AIService
-    
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
     
     try:
         explanation = await ai_service.explain_resource(resource_type, resource_yaml)
@@ -104,9 +111,7 @@ async def explain_resource(resource_type: str, resource_yaml: str, authorization
 @router.post("/suggest-optimization")
 async def suggest_optimization(namespace: str, authorization: str = Header(..., alias="Authorization")):
     """리소스 최적화 제안"""
-    from app.services.ai_service import AIService
-    
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
     
     try:
         suggestions = await ai_service.suggest_optimization(namespace)
@@ -117,9 +122,7 @@ async def suggest_optimization(namespace: str, authorization: str = Header(..., 
 @router.get("/suggest-optimization/stream")
 async def suggest_optimization_stream(namespace: str, authorization: str = Header(..., alias="Authorization")):
     """리소스 최적화 제안 (SSE 스트리밍)"""
-    from app.services.ai_service import AIService
-    
-    ai_service = AIService(authorization=authorization)
+    ai_service = await _build_ai_service(authorization)
 
     try:
         return StreamingResponse(
@@ -138,9 +141,82 @@ async def suggest_optimization_stream(namespace: str, authorization: str = Heade
 async def get_config():
     """AI 서비스 설정 정보 조회"""
     from app.config import settings
+    from app.services.model_config_service import resolve_model_config
     
+    resolved = await resolve_model_config()
     return {
-        "model": settings.OPENAI_MODEL,
+        "model": resolved.model,
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION
     }
+
+
+# ===== Model Configs (DB 기반) =====
+@router.get("/model-configs", response_model=list)
+async def list_model_configs(
+    enabled_only: bool = Query(False),
+    payload=Depends(require_auth),
+):
+    from app.database import get_db_service
+    from app.models.model_config import ModelConfigResponse
+
+    _require_admin(payload)
+
+    db = await get_db_service()
+    configs = await db.list_model_configs(enabled_only=enabled_only)
+    return [ModelConfigResponse.model_validate(c) for c in configs]
+
+
+@router.get("/model-configs/active")
+async def get_active_model_config(payload=Depends(require_auth)):
+    from app.database import get_db_service
+    from app.models.model_config import ModelConfigResponse
+
+    _require_admin(payload)
+
+    db = await get_db_service()
+    config = await db.get_active_model_config()
+    return ModelConfigResponse.model_validate(config) if config else None
+
+
+@router.post("/model-configs")
+async def create_model_config(payload=Depends(require_auth), request: dict = None):
+    from app.database import get_db_service
+    from app.models.model_config import ModelConfigCreate, ModelConfigResponse
+
+    _require_admin(payload)
+
+    data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
+    db = await get_db_service()
+    try:
+        config = await db.create_model_config(data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return ModelConfigResponse.model_validate(config)
+
+
+@router.patch("/model-configs/{config_id}")
+async def update_model_config(config_id: int, payload=Depends(require_auth), request: dict = None):
+    from app.database import get_db_service
+    from app.models.model_config import ModelConfigUpdate, ModelConfigResponse
+
+    _require_admin(payload)
+
+    data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+    db = await get_db_service()
+    config = await db.update_model_config(config_id, data)
+    if not config:
+        raise HTTPException(status_code=404, detail="Model config not found")
+    return ModelConfigResponse.model_validate(config)
+
+
+@router.delete("/model-configs/{config_id}", status_code=204)
+async def delete_model_config(config_id: int, payload=Depends(require_auth)):
+    from app.database import get_db_service
+
+    _require_admin(payload)
+
+    db = await get_db_service()
+    ok = await db.delete_model_config(config_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Model config not found")

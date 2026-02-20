@@ -51,7 +51,8 @@ async def health_check():
     return {
         "status": "healthy",
         "openai": openai_status,
-        "model": settings.OPENAI_MODEL
+        "model": settings.OPENAI_MODEL,
+        "openai_base_url": (settings.OPENAI_BASE_URL or "").strip() or "default",
     }
 
 

@@ -67,7 +67,7 @@ dist/
 kubeconfig.yaml
 kubeconfig*.yaml
 .kubeconfig-kind
-k8s/
+k8s/secret.local.yaml
 
 # Docker
 .dockerignore
@@ -75,6 +75,4 @@ k8s/
 # External dependencies
 kagent/
 argo-cd/
-
-# Local temp
 .tmp/

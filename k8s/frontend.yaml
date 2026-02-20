@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: kube-assistant/frontend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5173
+          env:
+            - name: VITE_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: kube-assistant-config
+                  key: VITE_API_URL
+            - name: VITE_WS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: kube-assistant-config
+                  key: VITE_WS_URL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  ports:
+    - port: 5173
+      targetPort: 5173
+  selector:
+    app: frontend

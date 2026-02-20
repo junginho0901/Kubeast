@@ -73,6 +73,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}

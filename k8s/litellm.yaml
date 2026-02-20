@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm:latest
+          ports:
+            - containerPort: 4000
+          envFrom:
+            - configMapRef:
+                name: kube-assistant-config
+            - secretRef:
+                name: kube-assistant-secrets
+          command: ["litellm", "--file", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+          volumeMounts:
+            - name: litellm-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: litellm-config
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+spec:
+  ports:
+    - port: 4000
+      targetPort: 4000
+  selector:
+    app: litellm

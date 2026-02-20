@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: session-service
+  template:
+    metadata:
+      labels:
+        app: session-service
+    spec:
+      containers:
+        - name: session-service
+          image: kube-assistant/session-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef:
+                name: kube-assistant-config
+            - secretRef:
+                name: kube-assistant-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: session-service
+spec:
+  ports:
+    - port: 8003
+      targetPort: 8003
+  selector:
+    app: session-service
