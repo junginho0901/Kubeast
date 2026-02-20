@@ -969,6 +969,31 @@ export default function AIChat() {
         return next > 1 ? `${base}_${next}` : base
       }
 
+      const buildParamSuffix = (args: any) => {
+        if (!args || typeof args !== 'object') return ''
+        const parts: string[] = []
+        const pushPart = (label: string, value: unknown) => {
+          if (value == null) return
+          const raw = Array.isArray(value) ? value.join(',') : String(value)
+          const trimmed = raw.trim()
+          if (!trimmed) return
+          const limited = trimmed.length > 40 ? trimmed.slice(0, 40) : trimmed
+          parts.push(`${label}-${limited}`)
+        }
+        pushPart('ns', args.namespace)
+        pushPart('type', args.resource_type)
+        pushPart('name', args.resource_name)
+        pushPart('pod', args.pod_name)
+        pushPart('svc', args.service_name)
+        pushPart('name', args.name)
+        pushPart('out', args.output)
+        pushPart('ctr', args.container)
+        if (parts.length === 0) return ''
+        const joined = parts.slice(0, 4).join('_')
+        const safe = sanitizeName(joined).slice(0, 60)
+        return safe ? `_${safe}` : ''
+      }
+
       const downloadZip = async (content: Blob, filename: string) => {
         const url = URL.createObjectURL(content)
         const a = document.createElement('a')
@@ -997,6 +1022,7 @@ export default function AIChat() {
 
         const base = sanitizeName(functionName)
         const uniqueBase = getUniqueBase(base)
+        const paramSuffix = buildParamSuffix(args)
         let ext = 'txt'
         if (isLog) {
           ext = 'log'
@@ -1006,7 +1032,7 @@ export default function AIChat() {
           ext = 'json'
         }
 
-        const filename = `${uniqueBase}_${timestamp}.${ext}`
+        const filename = `${uniqueBase}${paramSuffix}_${timestamp}.${ext}`
         zip.file(filename, content)
       }
 
