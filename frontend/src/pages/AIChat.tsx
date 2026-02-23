@@ -1453,7 +1453,7 @@ export default function AIChat() {
               }}
               placeholder="메시지를 입력하세요... (Shift+Enter 줄바꿈)"
               disabled={isStreaming}
-              rows={2}
+              rows={1}
               className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 disabled:opacity-50 resize-none"
             />
             {isStreaming ? (
