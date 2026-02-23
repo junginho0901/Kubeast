@@ -1441,14 +1441,20 @@ export default function AIChat() {
         {/* 입력 영역 */}
         <div className="p-4 border-t border-slate-700 bg-slate-800">
           <div className="flex gap-3">
-            <input
-              type="text"
+            <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !isStreaming && handleSend()}
-              placeholder="메시지를 입력하세요..."
+              onKeyDown={(e) => {
+                if (e.isComposing) return
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  if (!isStreaming) handleSend()
+                }
+              }}
+              placeholder="메시지를 입력하세요... (Shift+Enter 줄바꿈)"
               disabled={isStreaming}
-              className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 disabled:opacity-50"
+              rows={1}
+              className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 disabled:opacity-50 resize-none"
             />
             {isStreaming ? (
               <button
