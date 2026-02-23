@@ -62,15 +62,6 @@ class K8sServiceClient:
         response.raise_for_status()
         data = response.json()
         return data.get("logs", "")
-
-    async def create_pod(self, namespace: str, pod_manifest: Dict) -> Dict:
-        """Pod 생성"""
-        response = await self.client.post(
-            f"/namespaces/{namespace}/pods",
-            json=pod_manifest,
-        )
-        response.raise_for_status()
-        return response.json()
     
     async def get_deployments(self, namespace: str) -> List[Dict]:
         """Deployment 목록 조회"""

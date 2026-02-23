@@ -1304,35 +1304,6 @@ class K8sService:
             return logs
         except ApiException as e:
             raise Exception(f"Failed to get pod logs: {e}")
-
-    async def create_pod(self, namespace: str, pod_manifest: Dict[str, Any]) -> Dict[str, Any]:
-        """파드 생성"""
-        try:
-            if not isinstance(pod_manifest, dict):
-                raise Exception("Pod manifest must be a JSON object")
-
-            metadata = pod_manifest.get("metadata")
-            if not isinstance(metadata, dict):
-                metadata = {}
-                pod_manifest["metadata"] = metadata
-
-            existing_ns = metadata.get("namespace")
-            if existing_ns and existing_ns != namespace:
-                raise Exception(
-                    f"Pod manifest namespace '{existing_ns}' does not match path namespace '{namespace}'"
-                )
-            metadata["namespace"] = namespace
-
-            created = self.v1.create_namespaced_pod(namespace=namespace, body=pod_manifest)
-            return {
-                "name": getattr(created.metadata, "name", None),
-                "namespace": getattr(created.metadata, "namespace", None),
-                "uid": getattr(created.metadata, "uid", None),
-                "phase": getattr(created.status, "phase", None),
-                "node_name": getattr(created.spec, "node_name", None),
-            }
-        except ApiException as e:
-            raise Exception(f"Failed to create pod: {e}")
     
     async def get_pvcs(self, namespace: Optional[str] = None, force_refresh: bool = False) -> List[PVCInfo]:
         """PVC 목록"""

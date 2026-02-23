@@ -88,7 +88,6 @@ class AIService:
             "k8s_apply_manifest",
             "k8s_create_resource",
             "k8s_create_resource_from_url",
-            "k8s_create_pod",
             "k8s_delete_resource",
             "k8s_patch_resource",
             "k8s_annotate_resource",
@@ -990,25 +989,9 @@ JSON 형식으로 응답해주세요:
                     "description": "Node 리소스 사용량(CPU/Memory) 조회 (kubectl top nodes)",
                     "parameters": {"type": "object", "properties": {}}
                 }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "k8s_create_pod",
-                    "description": "Pod 생성 (write/admin 전용). Pod manifest(JSON)를 받아 지정한 namespace에 생성합니다.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스"},
-                            "pod_manifest": {"type": "object", "description": "Pod manifest (JSON object)"},
-                        },
-                        "required": ["namespace", "pod_manifest"],
-                    },
-                },
             }
         ]
         tools.extend(self._get_k8s_readonly_tool_definitions())
-        tools = self._filter_tools_by_role(tools)
         # YAML/WIDE 요청 시 legacy JSON-only 도구는 제외
         latest_user_message = next((m.content for m in reversed(request.messages) if m.role == "user"), None)
         tools = self._filter_tools_for_output_preference(tools, latest_user_message)
@@ -2428,25 +2411,9 @@ Draft (rules-based, keep numbers unchanged):
                     "description": "Node 리소스 사용량(CPU/Memory) 조회 (kubectl top nodes)",
                     "parameters": {"type": "object", "properties": {}}
                 }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "k8s_create_pod",
-                    "description": "Pod 생성 (write/admin 전용). Pod manifest(JSON)를 받아 지정한 namespace에 생성합니다.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스"},
-                            "pod_manifest": {"type": "object", "description": "Pod manifest (JSON object)"},
-                        },
-                        "required": ["namespace", "pod_manifest"],
-                    },
-                },
             }
         ]
         tools.extend(self._get_k8s_readonly_tool_definitions())
-        tools = self._filter_tools_by_role(tools)
         
         try:
             # 첫 번째 호출 (function calling 체크)
@@ -3176,16 +3143,6 @@ Draft (rules-based, keep numbers unchanged):
             elif function_name == "get_events":
                 events = await self.k8s_service.get_events(function_args["namespace"])
                 return json.dumps(events, ensure_ascii=False)
-
-            elif function_name == "k8s_create_pod":
-                namespace = function_args.get("namespace")
-                pod_manifest = function_args.get("pod_manifest")
-                if not isinstance(namespace, str) or not namespace.strip():
-                    raise Exception("namespace is required for k8s_create_pod")
-                if not isinstance(pod_manifest, dict):
-                    raise Exception("pod_manifest must be an object for k8s_create_pod")
-                result = await self.k8s_service.create_pod(namespace.strip(), pod_manifest)
-                return json.dumps(result, ensure_ascii=False)
 
             elif function_name == "k8s_get_resources":
                 resource_type = function_args.get("resource_type", "")
@@ -4189,32 +4146,6 @@ Remember: You're not just answering questions - you're **solving production prob
                     - Diagnose node-level performance issues""",
                     "parameters": {"type": "object", "properties": {}}
                 }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "k8s_create_pod",
-                    "description": """Create a Pod in the given namespace from a Kubernetes manifest.
-
-                    Notes:
-                    - Only available to write/admin roles.
-                    - The manifest must be a Pod spec (apiVersion/kind/metadata/spec).
-                    - If metadata.namespace is set, it must match the namespace parameter.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "Target namespace to create the Pod in.",
-                            },
-                            "pod_manifest": {
-                                "type": "object",
-                                "description": "Full Pod manifest as JSON object.",
-                            },
-                        },
-                        "required": ["namespace", "pod_manifest"],
-                    },
-                },
             }
         ]
 

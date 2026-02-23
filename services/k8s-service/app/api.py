@@ -214,15 +214,6 @@ async def get_pods(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/namespaces/{namespace}/pods")
-async def create_pod(namespace: str, payload: dict):
-    """파드 생성"""
-    try:
-        return await k8s_service.create_pod(namespace, payload)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/namespaces/{namespace}/pods/{pod_name}/logs")
 async def get_pod_logs(
     namespace: str,
