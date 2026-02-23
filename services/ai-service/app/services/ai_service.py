@@ -7,6 +7,7 @@ import httpx
 import re
 import json
 import sys
+import uuid
 from app.config import settings
 from datetime import datetime
 from app.security import decode_access_token
@@ -184,6 +185,29 @@ class AIService:
         for row in rows:
             lines.append("  ".join(row[i].ljust(widths[i]) for i in range(len(headers))))
         return "\n".join(lines)
+
+    def _build_default_pod_manifest(self, namespace: str) -> Dict[str, object]:
+        suffix = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        random_part = uuid.uuid4().hex[:6]
+        name = f"nginx-{suffix}-{random_part}"
+        return {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": {"app": "nginx"},
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "nginx",
+                        "image": "nginx:latest",
+                        "ports": [{"containerPort": 80}],
+                    }
+                ]
+            },
+        }
 
     def _format_k8s_get_resources_display(
         self,
@@ -995,14 +1019,14 @@ JSON 형식으로 응답해주세요:
                 "type": "function",
                 "function": {
                     "name": "k8s_create_pod",
-                    "description": "Pod 생성 (write/admin 전용). Pod manifest(JSON)를 받아 지정한 namespace에 생성합니다.",
+                    "description": "Pod 생성 (write/admin 전용). Pod manifest(JSON)를 받아 지정한 namespace에 생성합니다. pod_manifest가 없으면 간단한 nginx Pod를 생성합니다.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "namespace": {"type": "string", "description": "네임스페이스"},
-                            "pod_manifest": {"type": "object", "description": "Pod manifest (JSON object)"},
+                            "pod_manifest": {"type": "object", "description": "Pod manifest (JSON object, 선택)"},
                         },
-                        "required": ["namespace", "pod_manifest"],
+                        "required": ["namespace"],
                     },
                 },
             }
@@ -2433,14 +2457,14 @@ Draft (rules-based, keep numbers unchanged):
                 "type": "function",
                 "function": {
                     "name": "k8s_create_pod",
-                    "description": "Pod 생성 (write/admin 전용). Pod manifest(JSON)를 받아 지정한 namespace에 생성합니다.",
+                    "description": "Pod 생성 (write/admin 전용). Pod manifest(JSON)를 받아 지정한 namespace에 생성합니다. pod_manifest가 없으면 간단한 nginx Pod를 생성합니다.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "namespace": {"type": "string", "description": "네임스페이스"},
-                            "pod_manifest": {"type": "object", "description": "Pod manifest (JSON object)"},
+                            "pod_manifest": {"type": "object", "description": "Pod manifest (JSON object, 선택)"},
                         },
-                        "required": ["namespace", "pod_manifest"],
+                        "required": ["namespace"],
                     },
                 },
             }
@@ -3182,9 +3206,10 @@ Draft (rules-based, keep numbers unchanged):
                 pod_manifest = function_args.get("pod_manifest")
                 if not isinstance(namespace, str) or not namespace.strip():
                     raise Exception("namespace is required for k8s_create_pod")
+                ns = namespace.strip()
                 if not isinstance(pod_manifest, dict):
-                    raise Exception("pod_manifest must be an object for k8s_create_pod")
-                result = await self.k8s_service.create_pod(namespace.strip(), pod_manifest)
+                    pod_manifest = self._build_default_pod_manifest(ns)
+                result = await self.k8s_service.create_pod(ns, pod_manifest)
                 return json.dumps(result, ensure_ascii=False)
 
             elif function_name == "k8s_get_resources":
@@ -4198,7 +4223,7 @@ Remember: You're not just answering questions - you're **solving production prob
 
                     Notes:
                     - Only available to write/admin roles.
-                    - The manifest must be a Pod spec (apiVersion/kind/metadata/spec).
+                    - If pod_manifest is omitted, a simple nginx Pod will be created.
                     - If metadata.namespace is set, it must match the namespace parameter.""",
                     "parameters": {
                         "type": "object",
@@ -4209,10 +4234,10 @@ Remember: You're not just answering questions - you're **solving production prob
                             },
                             "pod_manifest": {
                                 "type": "object",
-                                "description": "Full Pod manifest as JSON object.",
+                                "description": "Full Pod manifest as JSON object (optional).",
                             },
                         },
-                        "required": ["namespace", "pod_manifest"],
+                        "required": ["namespace"],
                     },
                 },
             }
@@ -4532,6 +4557,17 @@ Remember: You're not just answering questions - you're **solving production prob
                     "message": event["message"],
                     "count": event["count"]
                 } for event in events], ensure_ascii=False)
+
+            elif function_name == "k8s_create_pod":
+                namespace = function_args.get("namespace")
+                pod_manifest = function_args.get("pod_manifest")
+                if not isinstance(namespace, str) or not namespace.strip():
+                    raise Exception("namespace is required for k8s_create_pod")
+                ns = namespace.strip()
+                if not isinstance(pod_manifest, dict):
+                    pod_manifest = self._build_default_pod_manifest(ns)
+                created = await self.k8s_service.create_pod(ns, pod_manifest)
+                result = json.dumps(created, ensure_ascii=False)
 
             elif function_name == "k8s_get_resources":
                 resource_type = function_args.get("resource_type", "")
