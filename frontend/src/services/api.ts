@@ -488,13 +488,15 @@ export interface ChatResponse {
   actions: Array<any>
 }
 
+export type UserRole = 'admin' | 'read' | 'write'
+
 export interface Member {
   id: string
   name: string
   email?: string
   hq?: string
   team?: string
-  role: string
+  role: UserRole | string
   created_at: string
   updated_at: string
 }
@@ -579,7 +581,7 @@ export const api = {
     return data as Member[]
   },
 
-  adminUpdateUserRole: async (userId: string, role: 'admin' | 'user'): Promise<Member> => {
+  adminUpdateUserRole: async (userId: string, role: UserRole): Promise<Member> => {
     const { data } = await client.patch(`/auth/admin/users/${userId}`, { role })
     return data
   },

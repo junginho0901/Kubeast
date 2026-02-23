@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 import asyncio
+import json
 from app.config import settings
 from app.redis_cache import redis_cache
 from app.cluster import (
@@ -64,6 +65,10 @@ class K8sService:
                 self.policy_v1 = client.PolicyV1Api(api_client=api_client)
             except Exception:
                 self.policy_v1 = None
+
+            # Discovery cache (api-resources)
+            self._api_resources_cache: Optional[List[Dict[str, Any]]] = None
+            self._api_resources_cache_at: float = 0.0
             
         except Exception as e:
             print(f"Warning: Kubernetes client initialization failed: {e}")
@@ -86,6 +91,295 @@ class K8sService:
         except Exception as e:
             print(f"Error creating fresh CoreV1Api: {e}")
             return self.v1  # 실패 시 기존 클라이언트 반환 (Fallback)
+
+    def _raw_get_json(self, path: str) -> Dict[str, Any]:
+        """ApiClient를 통해 raw JSON 응답을 가져온다."""
+        if self.api_client is None:
+            raise Exception("Kubernetes client not initialized")
+        if not path.startswith("/"):
+            path = "/" + path
+        # call_api는 인증 헤더를 포함해 호출한다.
+        resp = self.api_client.call_api(
+            path,
+            "GET",
+            response_type="str",
+            auth_settings=["BearerToken"],
+            _preload_content=False,
+        )[0]
+        data = resp.data if hasattr(resp, "data") else resp
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
+        return json.loads(data)
+
+    def _normalize_resource_key(self, value: str) -> str:
+        return (value or "").strip().lower()
+
+    def _get_default_namespace(self) -> str:
+        sa_ns_path = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
+        # 1) In-cluster: service account namespace
+        if getattr(settings, "IN_CLUSTER", False):
+            try:
+                if os.path.exists(sa_ns_path):
+                    with open(sa_ns_path, "r", encoding="utf-8") as f:
+                        ns = f.read().strip()
+                        if ns:
+                            return ns
+            except Exception:
+                pass
+
+        # 2) Out-of-cluster: kubeconfig current-context namespace
+        kubeconfig_path = ""
+        if settings.KUBECONFIG_PATH and os.path.exists(settings.KUBECONFIG_PATH):
+            kubeconfig_path = settings.KUBECONFIG_PATH
+        else:
+            default_path = os.path.expanduser("~/.kube/config")
+            if os.path.exists(default_path):
+                kubeconfig_path = default_path
+
+        if kubeconfig_path:
+            try:
+                import yaml
+
+                with open(kubeconfig_path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                current = data.get("current-context")
+                if current:
+                    for ctx in data.get("contexts", []) or []:
+                        if ctx.get("name") == current:
+                            ns = (ctx.get("context") or {}).get("namespace")
+                            if ns:
+                                return ns
+            except Exception:
+                pass
+
+        return "default"
+
+    async def get_available_api_resources(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """kubectl api-resources와 유사한 목록을 반환한다."""
+        # 캐시 (60초)
+        now = datetime.utcnow().timestamp()
+        if self._api_resources_cache and not force_refresh and (now - self._api_resources_cache_at) < 60:
+            return self._api_resources_cache
+
+        resources: List[Dict[str, Any]] = []
+
+        def add_resources(group_version: str, group: str, items: List[Dict[str, Any]]) -> None:
+            for r in items or []:
+                name = r.get("name", "")
+                if not name or "/" in name:
+                    # subresource는 제외
+                    continue
+                resources.append(
+                    {
+                        "name": name,
+                        "singularName": r.get("singularName", ""),
+                        "shortNames": r.get("shortNames", []) or [],
+                        "kind": r.get("kind", ""),
+                        "namespaced": bool(r.get("namespaced", False)),
+                        "groupVersion": group_version,
+                        "group": group,
+                        "verbs": r.get("verbs", []) or [],
+                    }
+                )
+
+        # Core API (/api/v1)
+        core = self._raw_get_json("/api/v1")
+        add_resources("v1", "", core.get("resources", []))
+
+        # Aggregated APIs (/apis)
+        apis = self._raw_get_json("/apis")
+        for g in apis.get("groups", []) or []:
+            group = g.get("name", "")
+            for ver in g.get("versions", []) or []:
+                gv = ver.get("groupVersion", "")
+                if not gv:
+                    continue
+                gv_data = self._raw_get_json(f"/apis/{gv}")
+                add_resources(gv, group, gv_data.get("resources", []))
+
+        self._api_resources_cache = resources
+        self._api_resources_cache_at = now
+        return resources
+
+    async def _resolve_api_resource(self, resource_type: str) -> Dict[str, Any]:
+        key = self._normalize_resource_key(resource_type)
+        if not key:
+            raise Exception("resource_type is required")
+
+        resources = await self.get_available_api_resources()
+
+        # Handle "name.group" (e.g., deployments.apps)
+        name_part = key
+        group_part = ""
+        if "." in key:
+            name_part, group_part = key.split(".", 1)
+
+        for r in resources:
+            names = {self._normalize_resource_key(r.get("name", ""))}
+            singular = self._normalize_resource_key(r.get("singularName", ""))
+            if singular:
+                names.add(singular)
+            kind = self._normalize_resource_key(r.get("kind", ""))
+            if kind:
+                names.add(kind)
+            for sn in r.get("shortNames", []) or []:
+                names.add(self._normalize_resource_key(sn))
+
+            if name_part in names:
+                if group_part and self._normalize_resource_key(r.get("group", "")) != group_part:
+                    continue
+                return r
+
+        raise Exception(f"Unknown resource_type: {resource_type}")
+
+    def _build_resource_path(
+        self,
+        resource: Dict[str, Any],
+        namespace: Optional[str],
+        all_namespaces: bool,
+    ) -> str:
+        group_version = resource.get("groupVersion", "v1")
+        base = f"/api/{group_version}" if group_version == "v1" else f"/apis/{group_version}"
+        name = resource["name"]
+        namespaced = bool(resource.get("namespaced", False))
+
+        if namespaced and not all_namespaces:
+            ns = namespace or self._get_default_namespace()
+            return f"{base}/namespaces/{ns}/{name}"
+
+        return f"{base}/{name}"
+
+    async def get_resources(
+        self,
+        resource_type: str,
+        resource_name: Optional[str] = None,
+        namespace: Optional[str] = None,
+        all_namespaces: bool = False,
+        output: str = "wide",
+    ) -> Dict[str, Any]:
+        resource = await self._resolve_api_resource(resource_type)
+        verbs = set(resource.get("verbs", []) or [])
+        if resource_name and "get" not in verbs:
+            raise Exception(f"Resource {resource_type} does not support get")
+        if not resource_name and "list" not in verbs:
+            raise Exception(f"Resource {resource_type} does not support list")
+
+        path = self._build_resource_path(resource, namespace, all_namespaces)
+        if resource_name:
+            path = f"{path}/{resource_name}"
+
+        data = self._raw_get_json(path)
+
+        if output and output.lower() == "yaml":
+            import yaml
+
+            return {"format": "yaml", "data": yaml.dump(data, default_flow_style=False, allow_unicode=True)}
+
+        return {"format": "json", "data": data}
+
+    async def get_resource_yaml(
+        self,
+        resource_type: str,
+        resource_name: str,
+        namespace: Optional[str] = None,
+    ) -> str:
+        payload = await self.get_resources(
+            resource_type=resource_type,
+            resource_name=resource_name,
+            namespace=namespace,
+            all_namespaces=False,
+            output="yaml",
+        )
+        return payload.get("data", "")
+
+    async def describe_resource(
+        self,
+        resource_type: str,
+        resource_name: str,
+        namespace: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        key = self._normalize_resource_key(resource_type)
+
+        # Prefer specialized describe for core resources
+        if key in {"pod", "pods", "po"}:
+            ns = namespace or self._get_default_namespace()
+            return await self.describe_pod(ns, resource_name)
+        if key in {"deployment", "deployments", "deploy"}:
+            ns = namespace or self._get_default_namespace()
+            return await self.describe_deployment(ns, resource_name)
+        if key in {"service", "services", "svc"}:
+            ns = namespace or self._get_default_namespace()
+            return await self.describe_service(ns, resource_name)
+        if key in {"node", "nodes", "no"}:
+            return await self.describe_node(resource_name)
+        if key in {"namespace", "namespaces", "ns"}:
+            return await self.describe_namespace(resource_name)
+
+        # Fallback: return resource + related events (if namespaced)
+        resource_obj = await self.get_resources(
+            resource_type=resource_type,
+            resource_name=resource_name,
+            namespace=namespace,
+            all_namespaces=False,
+            output="json",
+        )
+        events = []
+        try:
+            ns = namespace or self._get_default_namespace()
+            events = await self.get_events(ns, resource_name=resource_name)
+        except Exception:
+            events = []
+
+        return {"resource": resource_obj.get("data"), "events": events}
+
+    async def get_cluster_configuration(self) -> Dict[str, Any]:
+        """kubectl config view -o json과 유사한 정보를 반환 (민감정보 제거)."""
+        import yaml
+
+        # 1) KUBECONFIG_PATH가 있으면 우선 사용
+        kubeconfig_path = ""
+        if settings.KUBECONFIG_PATH and os.path.exists(settings.KUBECONFIG_PATH):
+            kubeconfig_path = settings.KUBECONFIG_PATH
+        else:
+            default_path = os.path.expanduser("~/.kube/config")
+            if os.path.exists(default_path):
+                kubeconfig_path = default_path
+
+        if kubeconfig_path:
+            with open(kubeconfig_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            # 민감정보 제거
+            for user in data.get("users", []) or []:
+                u = user.get("user", {}) or {}
+                for key in ("token", "client-key-data", "client-certificate-data", "password"):
+                    if key in u:
+                        u[key] = "<redacted>"
+                user["user"] = u
+            return data
+
+        # 2) in-cluster 환경: 최소 정보 제공
+        cfg = client.Configuration.get_default_copy()
+        ns = self._get_default_namespace()
+        return {
+            "clusters": [
+                {
+                    "name": "in-cluster",
+                    "cluster": {
+                        "server": cfg.host,
+                        "certificate-authority": cfg.ssl_ca_cert,
+                    },
+                }
+            ],
+            "contexts": [
+                {
+                    "name": "in-cluster",
+                    "context": {"cluster": "in-cluster", "namespace": ns},
+                }
+            ],
+            "current-context": "in-cluster",
+            "users": [{"name": "in-cluster", "user": {"token": "<redacted>"}}],
+        }
 
     def _to_iso(self, value: Any) -> Optional[str]:
         if value is None:
@@ -513,6 +807,121 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get services: {e}")
+
+    async def check_service_connectivity(
+        self,
+        namespace: str,
+        service_name: str,
+        port: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Service/Endpoint 연결성 확인"""
+        try:
+            svc = self.v1.read_namespaced_service(service_name, namespace)
+        except ApiException as e:
+            raise Exception(f"Failed to get service: {e}")
+
+        ports: List[Dict[str, Any]] = []
+        for p in (svc.spec.ports or []):
+            ports.append(
+                {
+                    "name": p.name,
+                    "port": p.port,
+                    "target_port": str(p.target_port) if p.target_port is not None else None,
+                    "protocol": p.protocol,
+                    "node_port": getattr(p, "node_port", None),
+                }
+            )
+
+        requested_port = None
+        if port is not None:
+            requested_port = str(port).strip()
+
+        matched_port: Optional[Dict[str, Any]] = None
+        if requested_port:
+            for p in ports:
+                if requested_port == str(p.get("name") or ""):
+                    matched_port = p
+                    break
+                if requested_port == str(p.get("port") or ""):
+                    matched_port = p
+                    break
+                if requested_port == str(p.get("target_port") or ""):
+                    matched_port = p
+                    break
+
+        ready_addresses: List[str] = []
+        not_ready_addresses: List[str] = []
+        endpoints_source = "endpoints"
+
+        try:
+            ep = self.v1.read_namespaced_endpoints(service_name, namespace)
+            for subset in (ep.subsets or []):
+                for addr in (subset.addresses or []):
+                    ip = getattr(addr, "ip", None)
+                    if ip:
+                        ready_addresses.append(ip)
+                for addr in (subset.not_ready_addresses or []):
+                    ip = getattr(addr, "ip", None)
+                    if ip:
+                        not_ready_addresses.append(ip)
+        except ApiException as e:
+            if getattr(e, "status", None) != 404:
+                raise Exception(f"Failed to get endpoints: {e}")
+
+        ready_count = len(ready_addresses)
+        not_ready_count = len(not_ready_addresses)
+        endpoints_total = ready_count + not_ready_count
+
+        if endpoints_total == 0:
+            try:
+                slices = await self.get_endpointslices(namespace)
+                svc_slices = [s for s in slices if s.get("service_name") == service_name]
+                if svc_slices:
+                    endpoints_source = "endpointslices"
+                    ready_count = sum(int(s.get("endpoints_ready") or 0) for s in svc_slices)
+                    endpoints_total = sum(int(s.get("endpoints_total") or 0) for s in svc_slices)
+                    not_ready_count = max(endpoints_total - ready_count, 0)
+            except Exception:
+                pass
+
+        status = "ok"
+        message = "Service has ready endpoints."
+        if svc.spec.type == "ExternalName":
+            status = "external_name"
+            message = "ExternalName service uses external DNS; endpoints are not managed by the cluster."
+        elif requested_port and matched_port is None:
+            status = "port_not_found"
+            message = "Requested port was not found on the service."
+        elif endpoints_total == 0:
+            status = "no_endpoints"
+            message = "No endpoints found for this service."
+        elif ready_count == 0:
+            status = "no_ready_endpoints"
+            message = "Endpoints exist but none are ready."
+
+        return {
+            "namespace": namespace,
+            "service": service_name,
+            "type": svc.spec.type,
+            "cluster_ip": svc.spec.cluster_ip,
+            "external_name": getattr(svc.spec, "external_name", None),
+            "selector": svc.spec.selector or {},
+            "ports": ports,
+            "port_check": {
+                "requested": requested_port,
+                "matched": matched_port,
+            } if requested_port else None,
+            "endpoints": {
+                "ready": ready_count,
+                "not_ready": not_ready_count,
+                "total": endpoints_total,
+                "ready_addresses": ready_addresses[:50],
+                "not_ready_addresses": not_ready_addresses[:50],
+                "source": endpoints_source,
+            },
+            "status": status,
+            "message": message,
+        }
     
     async def get_deployments(self, namespace: str) -> List[DeploymentInfo]:
         """디플로이먼트 목록"""
@@ -1115,10 +1524,13 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get VolumeAttachments: {e}")
     
-    async def get_events(self, namespace: str, resource_name: Optional[str] = None) -> List[Dict]:
+    async def get_events(self, namespace: Optional[str], resource_name: Optional[str] = None) -> List[Dict]:
         """이벤트 조회"""
         try:
-            events = self.v1.list_namespaced_event(namespace)
+            if namespace:
+                events = self.v1.list_namespaced_event(namespace)
+            else:
+                events = self.v1.list_event_for_all_namespaces()
             result = []
             
             for event in events.items:
@@ -1129,6 +1541,7 @@ class K8sService:
                     "type": event.type,
                     "reason": event.reason,
                     "message": event.message,
+                    "namespace": getattr(event.metadata, "namespace", None),
                     "object": {
                         "kind": event.involved_object.kind,
                         "name": event.involved_object.name

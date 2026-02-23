@@ -65,6 +65,80 @@ async def get_namespaces(force_refresh: bool = Query(False, description="캐시 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/api-resources")
+async def get_api_resources(force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
+    """사용 가능한 API 리소스 목록 (kubectl api-resources 유사)"""
+    try:
+        return await k8s_service.get_available_api_resources(force_refresh=force_refresh)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/cluster-config")
+async def get_cluster_config():
+    """클러스터 구성 정보 (kubectl config view -o json 유사, 민감정보 제거)"""
+    try:
+        return await k8s_service.get_cluster_configuration()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/resources")
+async def get_resources(
+    resource_type: str = Query(..., description="리소스 타입 (pods, deployments, services 등)"),
+    resource_name: Optional[str] = Query(None, description="리소스 이름 (선택)"),
+    namespace: Optional[str] = Query(None, description="네임스페이스 (선택)"),
+    all_namespaces: bool = Query(False, description="모든 네임스페이스 조회"),
+    output: str = Query("wide", description="출력 포맷 (json, yaml, wide 등)"),
+):
+    """리소스 조회 (kubectl get 유사)"""
+    try:
+        return await k8s_service.get_resources(
+            resource_type=resource_type,
+            resource_name=resource_name,
+            namespace=namespace,
+            all_namespaces=all_namespaces,
+            output=output,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/resources/yaml")
+async def get_resource_yaml(
+    resource_type: str = Query(..., description="리소스 타입"),
+    resource_name: str = Query(..., description="리소스 이름"),
+    namespace: Optional[str] = Query(None, description="네임스페이스 (선택)"),
+):
+    """리소스 YAML 조회"""
+    try:
+        yaml_content = await k8s_service.get_resource_yaml(
+            resource_type=resource_type,
+            resource_name=resource_name,
+            namespace=namespace,
+        )
+        return {"yaml": yaml_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/resources/describe")
+async def describe_resource(
+    resource_type: str = Query(..., description="리소스 타입"),
+    resource_name: str = Query(..., description="리소스 이름"),
+    namespace: Optional[str] = Query(None, description="네임스페이스 (선택)"),
+):
+    """리소스 상세 조회 (kubectl describe 유사)"""
+    try:
+        return await k8s_service.describe_resource(
+            resource_type=resource_type,
+            resource_name=resource_name,
+            namespace=namespace,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/namespaces/{namespace}/describe")
 async def describe_namespace(namespace: str):
     """네임스페이스 상세 정보 조회 (kubectl describe namespace 유사)"""
@@ -307,6 +381,18 @@ async def get_events(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/events")
+async def get_events_all(
+    resource_name: Optional[str] = Query(None, description="리소스 이름 필터")
+):
+    """전체 네임스페이스 이벤트 조회"""
+    try:
+        events = await k8s_service.get_events(None, resource_name)
+        return {"events": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/namespaces/{namespace}/deployments/{name}/yaml")
 async def get_deployment_yaml(namespace: str, name: str):
     """Deployment YAML 조회"""
@@ -464,6 +550,23 @@ async def get_endpointslices(namespace: str, force_refresh: bool = Query(False, 
     """EndpointSlice 목록 조회"""
     try:
         return await k8s_service.get_endpointslices(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/services/{service_name}/connectivity")
+async def check_service_connectivity(
+    namespace: str,
+    service_name: str,
+    port: Optional[str] = Query(None, description="서비스 포트 (이름 또는 번호)"),
+):
+    """Service/Endpoint 연결성 확인"""
+    try:
+        return await k8s_service.check_service_connectivity(
+            namespace=namespace,
+            service_name=service_name,
+            port=port,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

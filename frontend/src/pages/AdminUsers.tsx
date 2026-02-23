@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, Member } from '@/services/api'
+import { api, Member, UserRole } from '@/services/api'
 import { CheckCircle, ChevronDown, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -11,7 +11,7 @@ export default function AdminUsers() {
   const queryClient = useQueryClient()
   const [limit] = useState(100)
   const [offset] = useState(0)
-  const [roleDrafts, setRoleDrafts] = useState<Record<string, 'admin' | 'user'>>({})
+  const [roleDrafts, setRoleDrafts] = useState<Record<string, UserRole>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
@@ -33,7 +33,7 @@ export default function AdminUsers() {
   })
 
   const updateRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: 'admin' | 'user' }) => api.adminUpdateUserRole(userId, role),
+    mutationFn: ({ userId, role }: { userId: string; role: UserRole }) => api.adminUpdateUserRole(userId, role),
     onSuccess: (_data, vars) => {
       // 본인 권한을 admin -> user 로 내린 경우: 안내 모달을 띄우고, 확인 시 로그아웃 + 재로그인 유도
       if (me?.id && vars.userId === me.id && vars.role !== 'admin') {
@@ -102,10 +102,10 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">유저 관리</h1>
-        <p className="mt-2 text-slate-400">유저 권한(user/admin)을 변경합니다.</p>
+        <p className="mt-2 text-slate-400">유저 권한(read/write/admin)을 변경합니다.</p>
       </div>
 
-      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-visible">
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr className="text-left text-slate-300">
@@ -121,7 +121,10 @@ export default function AdminUsers() {
               const isUpdating = updateRoleMutation.isPending && updateRoleMutation.variables?.userId === u.id
               const isResetting = resetPasswordMutation.isPending && resetPasswordMutation.variables?.userId === u.id
               const isDeleting = deleteUserMutation.isPending && deleteUserMutation.variables?.userId === u.id
-              const currentRole = (roleDrafts[u.id] ?? (u.role === 'admin' ? 'admin' : 'user')) as 'admin' | 'user'
+              const resolvedRole = (u.role === 'admin' || u.role === 'write' || u.role === 'read')
+                ? (u.role as UserRole)
+                : 'read'
+              const currentRole = (roleDrafts[u.id] ?? resolvedRole) as UserRole
               const isOpen = openRoleDropdownUserId === u.id
               const isSelf = !!me?.id && me.id === u.id
               return (
@@ -143,7 +146,9 @@ export default function AdminUsers() {
                         aria-haspopup="menu"
                         aria-expanded={isOpen}
                       >
-                        <span className="truncate">{currentRole === 'admin' ? 'ADMIN' : 'USER'}</span>
+                        <span className="truncate">
+                          {currentRole === 'admin' ? 'ADMIN' : currentRole === 'write' ? 'WRITE' : 'READ'}
+                        </span>
                         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                       </button>
 
@@ -152,7 +157,7 @@ export default function AdminUsers() {
                           role="menu"
                           className="absolute right-0 mt-2 w-32 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-50 overflow-hidden"
                         >
-                          {(['user', 'admin'] as const).map((role) => {
+                          {(['read', 'write', 'admin'] as const).map((role) => {
                             const isSelected = currentRole === role
                             return (
                               <button
@@ -169,7 +174,9 @@ export default function AdminUsers() {
                                   isSelected ? 'bg-slate-800 text-white' : 'text-slate-200'
                                 }`}
                               >
-                                <span className="flex-1 text-left">{role === 'admin' ? 'ADMIN' : 'USER'}</span>
+                                <span className="flex-1 text-left">
+                                  {role === 'admin' ? 'ADMIN' : role === 'write' ? 'WRITE' : 'READ'}
+                                </span>
                                 {isSelected && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
                               </button>
                             )

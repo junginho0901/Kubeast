@@ -30,10 +30,10 @@ def decode_access_token(token: str) -> TokenPayload:
             audience=JWT_AUDIENCE,
         )
         user_id = str(payload.get("sub") or "").strip()
-        role = str(payload.get("role") or "").strip()
+        role = str(payload.get("role") or "").strip().lower()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return TokenPayload(user_id=user_id, role=role or "user")
+        return TokenPayload(user_id=user_id, role=role or "read")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except HTTPException:

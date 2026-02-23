@@ -45,6 +45,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kagent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kagent}
       - REDIS_URL=redis://redis:6379/0
       - K8S_SERVICE_URL=http://k8s-service:8002

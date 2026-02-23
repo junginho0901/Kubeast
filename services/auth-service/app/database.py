@@ -19,7 +19,7 @@ class User(Base):
     email = Column(String, nullable=False, unique=True)
     hq = Column(String, nullable=True)  # 본부
     team = Column(String, nullable=True)  # 팀
-    role = Column(String, nullable=False, default="user")  # admin | user
+    role = Column(String, nullable=False, default="read")  # admin | read | write
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -119,7 +119,7 @@ class DatabaseService:
         name: str,
         email: str,
         password_hash: str,
-        role: str = "user",
+        role: str = "read",
         hq: Optional[str] = None,
         team: Optional[str] = None,
     ) -> User:

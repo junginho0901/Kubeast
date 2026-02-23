@@ -18,7 +18,7 @@ if not audit_logger.handlers:
 audit_logger.setLevel(logging.INFO)
 audit_logger.propagate = False
 
-ALLOWED_ROLES = {"admin", "user"}
+ALLOWED_ROLES = {"admin", "read", "write"}
 
 
 def _normalize_role(role: str) -> str:
@@ -104,7 +104,7 @@ async def register(request: RegisterRequest):
         name=request.name.strip() or "user",
         email=email,
         password_hash=hash_password(request.password),
-        role="user",
+        role="read",
         hq=hq,
         team=team,
     )

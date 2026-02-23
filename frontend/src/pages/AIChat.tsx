@@ -9,17 +9,28 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import JSZip from 'jszip'
 
 const TOOL_RESULT_DISPLAY_MAX_CHARS = 2000
 const TRUNCATED_MARKER = '... (truncated) ...'
 const SESSIONS_PAGE_SIZE = 50
+
+const hasTruncatedToolCalls = (toolCalls?: any[]) => {
+  if (!Array.isArray(toolCalls)) return false
+  return toolCalls.some((tc) => {
+    if (!tc) return false
+    const result = typeof tc.result === 'string' ? tc.result : ''
+    const display = typeof tc.display === 'string' ? tc.display : ''
+    return result.includes(TRUNCATED_MARKER) || display.includes(TRUNCATED_MARKER)
+  })
+}
 
 function truncateToolResultsInContent(content: string, maxChars = TOOL_RESULT_DISPLAY_MAX_CHARS) {
   if (!content) return content
 
   // Only truncate tool "📊 Results" blocks. Keep other code blocks intact.
   const resultsBlockRegex =
-    /(<summary><strong>📊 Results<\/strong><\/summary>[\s\S]*?```(?:json)?\r?\n)([\s\S]*?)(\r?\n```)/g
+    /(<summary><strong>📊 Results<\/strong><\/summary>[\s\S]*?```(?:json|yaml)?\r?\n)([\s\S]*?)(\r?\n```)/g
 
   return content.replace(resultsBlockRegex, (_match, prefix: string, body: string, suffix: string) => {
     if (body.includes(TRUNCATED_MARKER)) return `${prefix}${body}${suffix}`
@@ -831,225 +842,202 @@ export default function AIChat() {
     }
 
     try {
-      const toolCalls = message.toolCalls as any[]
+      const resolveToolCallsForDownload = async () => {
+        const current = (message.toolCalls as any[]) || []
+        const sessionId = viewSessionId || selectedSessionId
+        if (!sessionId) return current
 
-      // === Special case: get_pod_logs →
-      // 기본은 AI가 분석했던 시점의 스냅샷(tc.result)을 그대로 사용하되,
-      // 예전 세션처럼 tc.result 안에 '... (truncated) ...'가 포함된 경우에만
-      // 가능하면 K8s API를 다시 호출해서 전체 로그를 받아온다.
-      if (
-        toolCalls.length === 1 &&
-        toolCalls[0] &&
-        toolCalls[0].function === 'get_pod_logs' &&
-        typeof toolCalls[0].result === 'string'
-      ) {
-        const tc = toolCalls[0]
-        const args = (tc.args || {}) as any
+        try {
+          const session = await api.getSession(sessionId)
+          let dbMessage: any | undefined
+          const dbToolMessages = session.messages.filter(
+            (m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+          )
 
-        let rawLogs = String(tc.result)
-
-        // 예전 버전에서 저장된 truncated 결과라면, 한 번만 전체 로그 재조회 시도
-        if (rawLogs.includes('... (truncated) ...')) {
-          try {
-            let ns = typeof args.namespace === 'string' ? args.namespace : ''
-            const podName =
-              (args.pod_name as string) ||
-              (args.podName as string) ||
-              ''
-            const tailLines =
-              (args.tail_lines as number) ||
-              (args.tailLines as number) ||
-              100
-
-            if (podName) {
-              // namespace가 없으면 전체 Pod에서 namespace를 역으로 찾는다 (default로 가정하지 않음)
-              if (!ns) {
-                try {
-                  const allPods = await api.getAllPods()
-                  const candidates = allPods.filter((p) => p.name === podName)
-                  if (candidates.length >= 1) {
-                    ns = candidates[0].namespace
-                  }
-                } catch (e) {
-                  console.warn('[WARN] Failed to resolve namespace for log refetch:', e)
-                }
-              }
-
-              if (!ns) {
-                // namespace를 못 찾으면 잘린 스냅샷을 유지
-                throw new Error('namespace not resolved for log refetch')
-              }
-
-              // 컨테이너 자동 선택을 위해 먼저 Pod 목록에서 대상 파드를 찾는다
-              const podsInNs = await api.getPods(ns)
-              const targetPod = podsInNs.find((p) => p.name === podName)
-
-              if (targetPod && Array.isArray(targetPod.containers)) {
-                const containerNames = targetPod.containers
-                  .map((c: any) => c?.name)
-                  .filter((n: any) => typeof n === 'string' && n.length > 0)
-
-                let containerName: string | undefined
-
-                if (containerNames.length === 1) {
-                  containerName = containerNames[0]
-                } else if (containerNames.length > 1) {
-                  const sidecarExact = new Set(['istio-proxy', 'istio-init', 'linkerd-proxy'])
-                  const sidecarPrefixes = ['istio-', 'linkerd-', 'vault-', 'kube-rbac-proxy']
-
-                  const candidates = containerNames.filter(
-                    (n) =>
-                      !sidecarExact.has(n) &&
-                      !sidecarPrefixes.some((prefix) => n.startsWith(prefix)),
-                  )
-
-                  if (candidates.length === 1) {
-                    containerName = candidates[0]
-                  } else {
-                    // 여러 개면 첫 번째 컨테이너를 기본값으로 사용
-                    containerName = containerNames[0]
-                  }
-                }
-
-                rawLogs = await api.getPodLogs(ns, podName, containerName, tailLines)
-              } else {
-                // Pod 정보를 못 찾으면 container 없이 시도 (단일 컨테이너일 수도 있으므로)
-                rawLogs = await api.getPodLogs(ns, podName, undefined, tailLines)
-              }
-            }
-          } catch (e) {
-            console.error(
-              '[ERROR] Failed to refetch full logs for truncated result, keep stored snapshot:',
-              e,
-            )
+          if (message.id != null) {
+            dbMessage = session.messages.find((m) => m.id === message.id)
           }
+
+          if (!dbMessage) {
+            const candidates = dbToolMessages
+
+            const currentFns = current
+              .map((tc) => (tc && typeof tc.function === 'string' ? tc.function : ''))
+              .filter((f) => f.length > 0)
+
+            if (currentFns.length > 0) {
+              // Prefer exact ordered match of tool names
+              dbMessage = candidates.find((m) => {
+                const fns = (m.tool_calls || []).map((tc: any) => String(tc?.function || '')).filter((f: string) => f)
+                return fns.length === currentFns.length && fns.every((f: string, i: number) => f === currentFns[i])
+              })
+            }
+
+            if (!dbMessage && currentFns.length > 0) {
+              // Fallback to set match (unordered)
+              const currentSet = new Set(currentFns)
+              dbMessage = candidates.find((m) => {
+                const fns = (m.tool_calls || []).map((tc: any) => String(tc?.function || '')).filter((f: string) => f)
+                if (fns.length !== currentFns.length) return false
+                const set = new Set(fns)
+                if (set.size !== currentSet.size) return false
+                for (const f of set) if (!currentSet.has(f)) return false
+                return true
+              })
+            }
+
+            if (!dbMessage && candidates.length > 0) {
+              dbMessage = candidates[candidates.length - 1]
+            }
+          }
+
+          if (!dbMessage && dbToolMessages.length > 0) {
+            const uiToolMessages = messagesRef.current.filter(
+              (m) => m.role === 'assistant' && Array.isArray(m.toolCalls) && m.toolCalls.length > 0,
+            )
+            const uiIndex = uiToolMessages.findIndex((m) => m === message)
+            if (uiIndex >= 0 && uiIndex < dbToolMessages.length) {
+              dbMessage = dbToolMessages[uiIndex]
+            }
+          }
+
+          if (!dbMessage && dbToolMessages.length > 0 && message.content) {
+            const hint = message.content.trim().slice(0, 200)
+            if (hint.length >= 20) {
+              dbMessage = dbToolMessages.find(
+                (m) => typeof m.content === 'string' && m.content.includes(hint)
+              )
+            }
+          }
+
+          if (!dbMessage && dbToolMessages.length > 0) {
+            dbMessage = dbToolMessages[dbToolMessages.length - 1]
+          }
+
+          if (dbMessage?.tool_calls?.length) {
+            return dbMessage.tool_calls
+          }
+        } catch (e) {
+          console.warn('[WARN] Failed to load tool results from session:', e)
         }
 
-        const blob = new Blob([rawLogs], {
-          type: 'text/plain;charset=utf-8',
-        })
-        const url = URL.createObjectURL(blob)
+        return current
+      }
+
+      let toolCalls = await resolveToolCallsForDownload()
+
+      // If current toolCalls contain truncated markers, try to recover full results from DB
+      if (hasTruncatedToolCalls(toolCalls)) {
+        const sessionId = viewSessionId || selectedSessionId
+        if (sessionId) {
+          try {
+            const session = await api.getSession(sessionId)
+            const candidates = session.messages
+              .filter((m) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0)
+              .reverse()
+
+            const full = candidates.find((m) => !hasTruncatedToolCalls(m.tool_calls))
+            if (full?.tool_calls?.length) {
+              toolCalls = full.tool_calls
+            }
+          } catch (e) {
+            console.warn('[WARN] Failed to recover full tool results from session:', e)
+          }
+        }
+      }
+
+      if (hasTruncatedToolCalls(toolCalls)) {
+        console.warn('[WARN] Downloading truncated tool results (full results not available).')
+      }
+      const now = new Date()
+      const pad = (n: number) => n.toString().padStart(2, '0')
+      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
+        now.getDate()
+      )}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+
+      const sanitizeName = (value: string) =>
+        value
+          .replace(/[^a-zA-Z0-9._-]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 40) || 'tool'
+
+      const nameCounts = new Map<string, number>()
+      const getUniqueBase = (base: string) => {
+        const current = nameCounts.get(base) || 0
+        const next = current + 1
+        nameCounts.set(base, next)
+        return next > 1 ? `${base}_${next}` : base
+      }
+
+      const buildParamSuffix = (args: any) => {
+        if (!args || typeof args !== 'object') return ''
+        const parts: string[] = []
+        const pushPart = (label: string, value: unknown) => {
+          if (value == null) return
+          const raw = Array.isArray(value) ? value.join(',') : String(value)
+          const trimmed = raw.trim()
+          if (!trimmed) return
+          const limited = trimmed.length > 40 ? trimmed.slice(0, 40) : trimmed
+          parts.push(`${label}-${limited}`)
+        }
+        pushPart('ns', args.namespace)
+        pushPart('type', args.resource_type)
+        pushPart('name', args.resource_name)
+        pushPart('pod', args.pod_name)
+        pushPart('svc', args.service_name)
+        pushPart('name', args.name)
+        pushPart('out', args.output)
+        pushPart('ctr', args.container)
+        if (parts.length === 0) return ''
+        const joined = parts.slice(0, 4).join('_')
+        const safe = sanitizeName(joined).slice(0, 60)
+        return safe ? `_${safe}` : ''
+      }
+
+      const downloadZip = async (content: Blob, filename: string) => {
+        const url = URL.createObjectURL(content)
         const a = document.createElement('a')
         a.href = url
-
-        const now = new Date()
-        const pad = (n: number) => n.toString().padStart(2, '0')
-        const timestamp = `${now.getFullYear()}${pad(
-          now.getMonth() + 1,
-        )}${pad(now.getDate())}-${pad(now.getHours())}${pad(
-          now.getMinutes(),
-        )}${pad(now.getSeconds())}`
-
-        a.download = `get_pod_logs_${timestamp}.log`
+        a.download = filename
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        return
       }
 
-      // 1) JSON 결과(is_json === true)가 하나뿐인 경우:
-      //    -> 기본적으로 그 tool의 result 문자열만 그대로 파일로 저장
-      //    -> 단, result 안에 '... (truncated) ...' 가 포함되어 있으면
-      //       가능한 경우 직접 API를 다시 호출해서 전체 JSON을 가져온다
-      const jsonToolCalls = toolCalls.filter(
-        (tc) => tc && tc.is_json && typeof tc.result === 'string',
-      )
+      const zip = new JSZip()
 
-      let blobContent: string
-
-      if (jsonToolCalls.length === 1) {
-        const tc = jsonToolCalls[0]
-        const raw = String(tc.result)
-
-        const isTruncated = raw.includes('... (truncated) ...')
-        const fnName = tc.function as string | undefined
+      for (const tc of toolCalls) {
+        if (!tc) continue
+        const functionName = typeof tc.function === 'string' ? tc.function : 'tool'
         const args = (tc.args || {}) as any
+        const isJson = !!tc.is_json
+        const isYaml = !!tc.is_yaml
+        const isLog = functionName === 'get_pod_logs' || functionName === 'k8s_get_pod_logs'
 
-        // get_pods 처럼 다시 조회가 가능한 툴이고, 결과가 잘린 경우에는
-        // 직접 클러스터 API를 호출해서 전체 데이터를 가져와 JSON으로 저장
-        if (isTruncated && fnName) {
-          try {
-            if (fnName === 'get_pods' && typeof args.namespace === 'string') {
-              const pods = await api.getPods(args.namespace)
-              blobContent = JSON.stringify(pods, null, 2)
-            } else if (fnName === 'get_node_list') {
-              const nodes = await api.getNodes()
-              blobContent = JSON.stringify(nodes, null, 2)
-            } else if (fnName === 'get_cluster_overview') {
-              const overview = await api.getClusterOverview()
-              blobContent = JSON.stringify(overview, null, 2)
-            } else if (fnName === 'get_deployments' && typeof args.namespace === 'string') {
-              const deployments = await api.getDeployments(args.namespace)
-              blobContent = JSON.stringify(deployments, null, 2)
-            } else if (fnName === 'get_services' && typeof args.namespace === 'string') {
-              const services = await api.getServices(args.namespace)
-              blobContent = JSON.stringify(services, null, 2)
-            } else {
-              // 지원하지 않는 툴이거나 args 부족하면 원본 문자열 그대로 사용
-              blobContent = raw
-            }
-          } catch (e) {
-            console.error('[ERROR] Failed to refetch full JSON for download:', e)
-            blobContent = raw
-          }
-        } else {
-          // 잘리지 않았거나, 재조회 대상이 아니면 원본 result 그대로 사용
-          blobContent = raw
+        let content =
+          typeof tc.result === 'string'
+            ? String(tc.result)
+            : JSON.stringify(tc.result ?? null, null, 2)
+
+        const base = sanitizeName(functionName)
+        const uniqueBase = getUniqueBase(base)
+        const paramSuffix = buildParamSuffix(args)
+        let ext = 'txt'
+        if (isLog) {
+          ext = 'log'
+        } else if (isYaml) {
+          ext = 'yaml'
+        } else if (isJson) {
+          ext = 'json'
         }
-      } else if (jsonToolCalls.length > 1) {
-        // 2) JSON 결과가 여러 개면:
-        //    가능한 것은 실제 JSON으로 파싱해서 배열로 저장,
-        //    파싱 실패하면 해당 항목은 문자열 그대로 배열에 포함
-        const items: any[] = []
-        for (const tc of jsonToolCalls) {
-          const raw = String(tc.result)
-          const trimmed = raw.trim()
-          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-            try {
-              items.push(JSON.parse(trimmed))
-            } catch {
-              items.push(raw)
-            }
-          } else {
-            items.push(raw)
-          }
-        }
-        blobContent = JSON.stringify(items, null, 2)
-      } else {
-        // 3) is_json 표시가 없는 경우(로그 등)에는 기존처럼 전체 toolCalls 구조를 JSON으로 저장
-        blobContent = JSON.stringify(toolCalls, null, 2)
+
+        const filename = `${uniqueBase}${paramSuffix}_${timestamp}.${ext}`
+        zip.file(filename, content)
       }
 
-      const blob = new Blob([blobContent], {
-        type: 'application/json;charset=utf-8',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      // 파일 이름: 호출된 tool 이름들 + 타임스탬프
-      const toolNames = (message.toolCalls || [])
-        .map((tc: any) => tc?.function)
-        .filter((name: any) => typeof name === 'string' && name.length > 0)
-      const uniqueToolNames = Array.from(new Set(toolNames))
-      const toolPart =
-        uniqueToolNames.length > 0
-          ? uniqueToolNames.join('+').slice(0, 40)
-          : 'tool'
-
-      const now = new Date()
-      const pad = (n: number) => n.toString().padStart(2, '0')
-      const timestamp = `${now.getFullYear()}${pad(
-        now.getMonth() + 1
-      )}${pad(now.getDate())}-${pad(now.getHours())}${pad(
-        now.getMinutes()
-      )}${pad(now.getSeconds())}`
-
-      a.download = `${toolPart}_${timestamp}.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      await downloadZip(zipBlob, `tool_results_${timestamp}.zip`)
     } catch (err) {
       console.error('[ERROR] Failed to download JSON:', err)
     }
@@ -1399,7 +1387,7 @@ export default function AIChat() {
                                 }}
                                 className="px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
                               >
-                                Result 다운로드 
+                                Result ZIP 다운로드 
                               </button>
                             </div>
                           )}

@@ -3,10 +3,13 @@ AI 트러블슈팅 서비스
 """
 from openai import AsyncOpenAI
 from typing import List, Dict, Optional
+import httpx
 import re
 import json
 import sys
 from app.config import settings
+from datetime import datetime
+from app.security import decode_access_token
 from app.models.ai import (
     LogAnalysisRequest,
     LogAnalysisResponse,
@@ -31,13 +34,722 @@ class ToolContext:
 class AIService:
     """AI 트러블슈팅 서비스"""
     
-    def __init__(self, authorization: Optional[str] = None):
+    def __init__(
+        self,
+        authorization: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+        tls_verify: Optional[bool] = True,
+    ):
         """OpenAI 클라이언트 초기화"""
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = settings.OPENAI_MODEL
+        resolved_base_url = (base_url if base_url is not None else settings.OPENAI_BASE_URL)
+        resolved_base_url = (resolved_base_url or "").strip() or None
+        resolved_api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
+        resolved_model = model or settings.OPENAI_MODEL
+        headers = extra_headers or {}
+
+        http_client = httpx.AsyncClient(verify=tls_verify if tls_verify is not None else True)
+        self.client = AsyncOpenAI(
+            api_key=resolved_api_key,
+            base_url=resolved_base_url,
+            default_headers=headers if headers else None,
+            http_client=http_client,
+        )
+        self.model = resolved_model
+        self.user_role = self._resolve_user_role(authorization)
         self.k8s_service = K8sServiceClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
-        print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}", flush=True)
+        print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}, role: {self.user_role}", flush=True)
+
+    def _resolve_user_role(self, authorization: Optional[str]) -> str:
+        if not authorization:
+            return "read"
+        try:
+            parts = authorization.split(" ", 1)
+            token = parts[1].strip() if len(parts) == 2 else authorization.strip()
+            payload = decode_access_token(token)
+            role = (payload.role or "").strip().lower()
+            if role in {"admin", "read", "write"}:
+                return role
+        except Exception:
+            pass
+        return "read"
+
+    def _role_allows_write(self) -> bool:
+        return self.user_role in {"write", "admin"}
+
+    def _role_allows_admin(self) -> bool:
+        return self.user_role == "admin"
+
+    def _is_tool_allowed(self, function_name: str) -> bool:
+        write_tools = {
+            "k8s_apply_manifest",
+            "k8s_create_resource",
+            "k8s_create_resource_from_url",
+            "k8s_delete_resource",
+            "k8s_patch_resource",
+            "k8s_annotate_resource",
+            "k8s_remove_annotation",
+            "k8s_label_resource",
+            "k8s_remove_label",
+            "k8s_scale",
+            "k8s_rollout",
+            "k8s_execute_command",
+        }
+        admin_only_tools = set()
+
+        if function_name in admin_only_tools:
+            return self._role_allows_admin()
+        if function_name in write_tools:
+            return self._role_allows_write()
+        return True
+
+    def _filter_tools_by_role(self, tools: List[Dict]) -> List[Dict]:
+        filtered: List[Dict] = []
+        for tool in tools:
+            fn = (tool or {}).get("function", {})
+            name = fn.get("name") if isinstance(fn, dict) else None
+            if not isinstance(name, str) or not name:
+                filtered.append(tool)
+                continue
+            if self._is_tool_allowed(name):
+                filtered.append(tool)
+        return filtered
+
+    def _sanitize_history_content(self, role: str, content: Optional[str]) -> str:
+        """LLM 히스토리에 넣기 전에 tool 결과 블록을 제거/축약"""
+        if not isinstance(content, str):
+            return ""
+        if role != "assistant":
+            return content
+
+        # Remove tool result blocks (KAgent-style <details> with 🔧 summary)
+        sanitized = re.sub(
+            r"<details>\s*<summary>🔧.*?</details>\s*",
+            "",
+            content,
+            flags=re.DOTALL,
+        ).strip()
+
+        # Hard cap to avoid context blow-up even after stripping
+        max_chars = 8000
+        if len(sanitized) > max_chars:
+            sanitized = sanitized[:max_chars] + "\n... (truncated) ..."
+        return sanitized
+
+    def _truncate_tool_result_for_llm(self, content: Optional[str]) -> str:
+        """Tool 결과를 LLM 입력용으로 축약"""
+        if not isinstance(content, str):
+            content = "" if content is None else str(content)
+        max_chars = 6000
+        if len(content) > max_chars:
+            return content[:max_chars] + "\n... (truncated for LLM) ..."
+        return content
+
+    def _format_age(self, timestamp: Optional[str]) -> str:
+        if not timestamp:
+            return "-"
+        try:
+            ts = timestamp.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+        except Exception:
+            return "-"
+        now = datetime.now(dt.tzinfo)
+        delta = now - dt
+        seconds = int(delta.total_seconds())
+        if seconds < 0:
+            seconds = 0
+        days = seconds // 86400
+        if days > 0:
+            return f"{days}d"
+        hours = seconds // 3600
+        if hours > 0:
+            return f"{hours}h"
+        minutes = seconds // 60
+        if minutes > 0:
+            return f"{minutes}m"
+        return f"{seconds}s"
+
+    def _format_table(self, headers: List[str], rows: List[List[str]]) -> str:
+        if not rows:
+            return "No resources found."
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for idx, cell in enumerate(row):
+                widths[idx] = max(widths[idx], len(cell))
+        lines = ["  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))]
+        for row in rows:
+            lines.append("  ".join(row[i].ljust(widths[i]) for i in range(len(headers))))
+        return "\n".join(lines)
+
+    def _format_k8s_get_resources_display(
+        self,
+        resource_type: str,
+        output: str,
+        raw_text: str,
+        include_namespace: bool = False,
+    ) -> Optional[str]:
+        data = None
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            data = None
+
+        if not data:
+            return None
+
+        items = []
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            items = data.get("items") or []
+        elif isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = [data]
+
+        key = (resource_type or "").strip().lower()
+        if key in {"po", "pod", "pods"}:
+            headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
+            if include_namespace:
+                headers = ["NAMESPACE"] + headers
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                spec = item.get("spec", {}) if isinstance(item, dict) else {}
+                containers = (status.get("containerStatuses") or [])
+                ready = sum(1 for c in containers if c.get("ready"))
+                total = len(containers) or len(spec.get("containers") or [])
+                ready_text = f"{ready}/{total}" if total else "0/0"
+                restarts = sum(int(c.get("restartCount", 0)) for c in containers)
+
+                phase = status.get("phase", "Unknown")
+                reason = None
+                for c in containers:
+                    state = c.get("state") or {}
+                    if state.get("waiting") and state["waiting"].get("reason"):
+                        reason = state["waiting"]["reason"]
+                        break
+                    if state.get("terminated") and state["terminated"].get("reason"):
+                        reason = state["terminated"]["reason"]
+                        break
+                status_text = reason or phase or "Unknown"
+
+                age = self._format_age(meta.get("creationTimestamp"))
+                row = [
+                    str(meta.get("name", "")),
+                    ready_text,
+                    str(status_text),
+                    str(restarts),
+                    age,
+                ]
+                if include_namespace:
+                    row = [str(meta.get("namespace", ""))] + row
+                rows.append(row)
+            return self._format_table(headers, rows)
+
+        if key in {"deploy", "deployment", "deployments"}:
+            headers = ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]
+            if include_namespace:
+                headers = ["NAMESPACE"] + headers
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                spec = item.get("spec", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                desired = int(spec.get("replicas", 0) or 0)
+                ready = int(status.get("readyReplicas", 0) or 0)
+                updated = int(status.get("updatedReplicas", 0) or 0)
+                available = int(status.get("availableReplicas", 0) or 0)
+                age = self._format_age(meta.get("creationTimestamp"))
+                row = [
+                    str(meta.get("name", "")),
+                    f"{ready}/{desired}",
+                    str(updated),
+                    str(available),
+                    age,
+                ]
+                if include_namespace:
+                    row = [str(meta.get("namespace", ""))] + row
+                rows.append(row)
+            return self._format_table(headers, rows)
+
+        if key in {"svc", "service", "services"}:
+            headers = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
+            if include_namespace:
+                headers = ["NAMESPACE"] + headers
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                spec = item.get("spec", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                svc_type = spec.get("type", "")
+                cluster_ip = spec.get("clusterIP", "")
+                external_ips = spec.get("externalIPs") or []
+                lb_ingress = (status.get("loadBalancer") or {}).get("ingress") or []
+                if lb_ingress:
+                    external_ips = [ing.get("ip") or ing.get("hostname") for ing in lb_ingress if ing]
+                external_ip = ",".join([ip for ip in external_ips if ip]) or "<none>"
+                ports = []
+                for p in spec.get("ports") or []:
+                    port = p.get("port")
+                    node_port = p.get("nodePort")
+                    proto = p.get("protocol") or "TCP"
+                    if node_port:
+                        ports.append(f"{port}:{node_port}/{proto}")
+                    else:
+                        ports.append(f"{port}/{proto}")
+                ports_text = ",".join(ports)
+                age = self._format_age(meta.get("creationTimestamp"))
+                row = [
+                    str(meta.get("name", "")),
+                    str(svc_type),
+                    str(cluster_ip),
+                    external_ip,
+                    ports_text,
+                    age,
+                ]
+                if include_namespace:
+                    row = [str(meta.get("namespace", ""))] + row
+                rows.append(row)
+            return self._format_table(headers, rows)
+
+        if key in {"ns", "namespace", "namespaces"}:
+            headers = ["NAME", "STATUS", "AGE"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                phase = status.get("phase", "")
+                age = self._format_age(meta.get("creationTimestamp"))
+                rows.append([str(meta.get("name", "")), str(phase), age])
+            return self._format_table(headers, rows)
+
+        if key in {"no", "node", "nodes"}:
+            headers = ["NAME", "STATUS", "ROLES", "AGE", "VERSION"]
+            rows = []
+            for item in items:
+                meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                status = item.get("status", {}) if isinstance(item, dict) else {}
+                conditions = status.get("conditions") or []
+                ready = "NotReady"
+                for c in conditions:
+                    if c.get("type") == "Ready":
+                        ready = "Ready" if c.get("status") == "True" else "NotReady"
+                        break
+                labels = meta.get("labels") or {}
+                roles = []
+                for k in labels.keys():
+                    if k.startswith("node-role.kubernetes.io/"):
+                        role = k.split("/", 1)[1]
+                        roles.append(role or "<none>")
+                roles_text = ",".join(roles) if roles else "<none>"
+                age = self._format_age(meta.get("creationTimestamp"))
+                version = (status.get("nodeInfo") or {}).get("kubeletVersion", "")
+                rows.append([str(meta.get("name", "")), ready, roles_text, age, str(version)])
+            return self._format_table(headers, rows)
+
+        # Fallback: name/age
+        headers = ["NAME", "AGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for item in items:
+            meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+            age = self._format_age(meta.get("creationTimestamp"))
+            row = [str(meta.get("name", "")), age]
+            if include_namespace:
+                row = [str(meta.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_k8s_get_events_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        include_namespace = any(isinstance(ev, dict) and ev.get("namespace") for ev in data)
+        headers = ["LAST SEEN", "TYPE", "REASON", "OBJECT", "MESSAGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for ev in data:
+            last_ts = ev.get("last_timestamp") or ev.get("first_timestamp")
+            last_seen = self._format_age(last_ts) if isinstance(last_ts, str) else "-"
+            obj = ev.get("object") or {}
+            obj_name = obj.get("name") or ""
+            obj_kind = obj.get("kind") or ""
+            obj_text = f"{obj_kind}/{obj_name}" if obj_kind or obj_name else ""
+            row = [
+                last_seen,
+                str(ev.get("type", "")),
+                str(ev.get("reason", "")),
+                obj_text,
+                str(ev.get("message", "")),
+            ]
+            if include_namespace:
+                row = [str(ev.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_age_value(self, value) -> str:
+        if not value:
+            return "-"
+        if isinstance(value, str):
+            # Already formatted duration (e.g., "110 days, 7:31:18")
+            if ("day" in value or "days" in value or "h" in value or "m" in value or "s" in value) and "T" not in value:
+                return value
+            return self._format_age(value)
+        try:
+            return self._format_age(value)
+        except Exception:
+            return "-"
+
+    def _format_namespaces_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "STATUS", "AGE", "PODS", "SERVICES", "DEPLOYMENTS", "PVCS"]
+        rows = []
+        for ns in data:
+            rc = ns.get("resource_count") or {}
+            rows.append([
+                str(ns.get("name", "")),
+                str(ns.get("status", "")),
+                self._format_age_value(ns.get("created_at")),
+                str(rc.get("pods", 0)),
+                str(rc.get("services", 0)),
+                str(rc.get("deployments", 0)),
+                str(rc.get("pvcs", 0)),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_pods_display(self, raw_text: str, include_namespace: bool) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for pod in data:
+            row = [
+                str(pod.get("name", "")),
+                str(pod.get("ready", "")),
+                str(pod.get("status", "")),
+                str(pod.get("restart_count", 0)),
+                self._format_age_value(pod.get("created_at")),
+            ]
+            if include_namespace:
+                row = [str(pod.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_deployments_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"]
+        rows = []
+        for dep in data:
+            replicas = int(dep.get("replicas") or 0)
+            ready = int(dep.get("ready_replicas") or 0)
+            updated = int(dep.get("updated_replicas") or 0)
+            available = int(dep.get("available_replicas") or 0)
+            rows.append([
+                str(dep.get("name", "")),
+                f"{ready}/{replicas}",
+                str(updated),
+                str(available),
+                self._format_age_value(dep.get("created_at")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_services_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
+        rows = []
+        for svc in data:
+            ports = svc.get("ports") or []
+            port_texts = []
+            for p in ports:
+                port = p.get("port")
+                node_port = p.get("node_port")
+                proto = p.get("protocol") or ""
+                if node_port:
+                    port_texts.append(f"{port}:{node_port}/{proto}")
+                else:
+                    port_texts.append(f"{port}/{proto}")
+            rows.append([
+                str(svc.get("name", "")),
+                str(svc.get("type", "")),
+                str(svc.get("cluster_ip") or ""),
+                str(svc.get("external_ip") or "<none>"),
+                ",".join(port_texts) if port_texts else "",
+                self._format_age_value(svc.get("created_at")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_service_connectivity_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+
+        ports = data.get("ports") or []
+
+        def _fmt_port(p: Dict[str, object]) -> str:
+            name = p.get("name")
+            port = p.get("port")
+            proto = p.get("protocol") or ""
+            if name:
+                return f"{name}:{port}/{proto}"
+            return f"{port}/{proto}"
+
+        port_text = ""
+        port_check = data.get("port_check") or {}
+        matched = port_check.get("matched")
+        requested = port_check.get("requested")
+        if matched:
+            port_text = _fmt_port(matched)
+        elif requested:
+            port_text = str(requested)
+        else:
+            port_text = ",".join(_fmt_port(p) for p in ports) if ports else ""
+
+        endpoints = data.get("endpoints") or {}
+        ready = int(endpoints.get("ready") or 0)
+        total = endpoints.get("total")
+        if total is None:
+            total = ready + int(endpoints.get("not_ready") or 0)
+
+        headers = ["NAMESPACE", "SERVICE", "TYPE", "PORT(S)", "ENDPOINTS", "STATUS"]
+        rows = [[
+            str(data.get("namespace", "")),
+            str(data.get("service", "")),
+            str(data.get("type", "")),
+            port_text,
+            f"{ready}/{total}",
+            str(data.get("status", "")),
+        ]]
+        return self._format_table(headers, rows)
+
+    def _format_nodes_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "STATUS", "ROLES", "AGE", "VERSION", "INTERNAL-IP", "EXTERNAL-IP"]
+        rows = []
+        for node in data:
+            roles = node.get("roles") or []
+            roles_text = ",".join(roles) if roles else "<none>"
+            rows.append([
+                str(node.get("name", "")),
+                str(node.get("status", "")),
+                roles_text,
+                self._format_age_value(node.get("age")),
+                str(node.get("version", "")),
+                str(node.get("internal_ip") or ""),
+                str(node.get("external_ip") or "<none>"),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_pvcs_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        include_namespace = len({str(p.get("namespace", "")) for p in data}) > 1
+        headers = ["NAME", "STATUS", "VOLUME", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "AGE"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for pvc in data:
+            access_modes = pvc.get("access_modes") or []
+            row = [
+                str(pvc.get("name", "")),
+                str(pvc.get("status", "")),
+                str(pvc.get("volume_name") or ""),
+                str(pvc.get("capacity") or ""),
+                ",".join(access_modes) if access_modes else "",
+                str(pvc.get("storage_class") or ""),
+                self._format_age_value(pvc.get("created_at")),
+            ]
+            if include_namespace:
+                row = [str(pvc.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_pvs_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "CAPACITY", "ACCESS MODES", "RECLAIM POLICY", "STATUS", "CLAIM", "STORAGECLASS", "AGE"]
+        rows = []
+        for pv in data:
+            access_modes = pv.get("access_modes") or []
+            claim = pv.get("claim_ref") or {}
+            claim_text = ""
+            if isinstance(claim, dict):
+                ns = claim.get("namespace")
+                name = claim.get("name")
+                if ns or name:
+                    claim_text = f"{ns}/{name}" if ns and name else str(name or "")
+            rows.append([
+                str(pv.get("name", "")),
+                str(pv.get("capacity", "")),
+                ",".join(access_modes) if access_modes else "",
+                str(pv.get("reclaim_policy") or ""),
+                str(pv.get("status") or ""),
+                claim_text or "<none>",
+                str(pv.get("storage_class") or ""),
+                self._format_age_value(pv.get("created_at")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_api_resources_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "SHORTNAMES", "APIVERSION", "NAMESPACED", "KIND"]
+        rows = []
+        for r in data:
+            shortnames = r.get("shortNames") or []
+            rows.append([
+                str(r.get("name", "")),
+                ",".join(shortnames) if shortnames else "",
+                str(r.get("apiVersion", "")),
+                "true" if r.get("namespaced") else "false",
+                str(r.get("kind", "")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _format_pod_metrics_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        include_namespace = len({str(p.get("namespace", "")) for p in data}) > 1
+        headers = ["NAME", "CPU(cores)", "MEMORY(bytes)"]
+        if include_namespace:
+            headers = ["NAMESPACE"] + headers
+        rows = []
+        for m in data:
+            row = [
+                str(m.get("name", "")),
+                str(m.get("cpu", "")),
+                str(m.get("memory", "")),
+            ]
+            if include_namespace:
+                row = [str(m.get("namespace", ""))] + row
+            rows.append(row)
+        return self._format_table(headers, rows)
+
+    def _format_node_metrics_display(self, raw_text: str) -> Optional[str]:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if not isinstance(data, list):
+            return None
+        headers = ["NAME", "CPU(cores)", "MEMORY(bytes)"]
+        rows = []
+        for m in data:
+            rows.append([
+                str(m.get("name", "")),
+                str(m.get("cpu", "")),
+                str(m.get("memory", "")),
+            ])
+        return self._format_table(headers, rows)
+
+    def _build_tool_display(
+        self,
+        function_name: str,
+        function_args: Dict,
+        formatted_result: str,
+        is_json: bool,
+        is_yaml: bool,
+    ) -> Optional[str]:
+        if function_name == "get_namespaces":
+            return self._format_namespaces_display(formatted_result)
+        if function_name == "get_pods":
+            return self._format_pods_display(formatted_result, include_namespace=False)
+        if function_name == "get_all_pods":
+            return self._format_pods_display(formatted_result, include_namespace=True)
+        if function_name == "find_pods":
+            return self._format_pods_display(formatted_result, include_namespace=True)
+        if function_name == "get_deployments":
+            return self._format_deployments_display(formatted_result)
+        if function_name == "find_deployments":
+            return self._format_deployments_display(formatted_result)
+        if function_name == "get_services":
+            return self._format_services_display(formatted_result)
+        if function_name == "find_services":
+            return self._format_services_display(formatted_result)
+        if function_name == "k8s_check_service_connectivity":
+            return self._format_service_connectivity_display(formatted_result)
+        if function_name == "get_node_list":
+            return self._format_nodes_display(formatted_result)
+        if function_name == "get_pvcs":
+            return self._format_pvcs_display(formatted_result)
+        if function_name == "get_pvs":
+            return self._format_pvs_display(formatted_result)
+        if function_name == "get_pod_metrics":
+            return self._format_pod_metrics_display(formatted_result)
+        if function_name == "get_node_metrics":
+            return self._format_node_metrics_display(formatted_result)
+        if function_name == "k8s_get_available_api_resources":
+            return self._format_api_resources_display(formatted_result)
+        if function_name == "k8s_get_resources":
+            output = function_args.get("output", "wide")
+            namespace = function_args.get("namespace")
+            all_namespaces_raw = function_args.get("all_namespaces", False)
+            if isinstance(all_namespaces_raw, str):
+                all_namespaces = all_namespaces_raw.strip().lower() == "true"
+            else:
+                all_namespaces = bool(all_namespaces_raw)
+            include_namespace = all_namespaces or not (isinstance(namespace, str) and namespace.strip())
+            return self._format_k8s_get_resources_display(
+                function_args.get("resource_type", ""),
+                output if isinstance(output, str) else "wide",
+                formatted_result,
+                include_namespace=include_namespace,
+            )
+        if function_name == "k8s_get_events":
+            return self._format_k8s_get_events_display(formatted_result)
+        return None
     
     async def analyze_logs(self, request: LogAnalysisRequest) -> LogAnalysisResponse:
         """로그 분석"""
@@ -229,14 +941,18 @@ JSON 형식으로 응답해주세요:
 
     중요: 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
     사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-    먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 모든 네임스페이스에서 후보를 찾고
+    먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 모든 네임스페이스에서 후보를 찾고
     그 결과의 `namespace`/`name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
+    YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시합니다.
     """
         
         # 메시지 변환
         messages = [{"role": "system", "content": system_message}]
         for msg in request.messages:
-            messages.append({"role": msg.role, "content": msg.content})
+            messages.append({
+                "role": msg.role,
+                "content": self._sanitize_history_content(msg.role, msg.content),
+            })
         
         # 컨텍스트 추가
         if request.context:
@@ -248,136 +964,37 @@ JSON 형식으로 응답해주세요:
             {
                 "type": "function",
                 "function": {
-                    "name": "get_namespaces",
-                    "description": "클러스터의 모든 네임스페이스 목록을 조회합니다",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_pods",
-                    "description": "Pod를 이름/라벨로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (pod name/label에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_services",
-                    "description": "Service를 이름/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (service name/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_deployments",
-                    "description": "Deployment를 이름/라벨/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (deployment name/labels/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pods",
-                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "네임스페이스 이름 (예: default, kube-system)"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_deployments",
-                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "네임스페이스 이름"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_services",
-                    "description": "특정 네임스페이스의 Service 목록을 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "네임스페이스 이름"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pod_logs",
-                    "description": "특정 Pod의 로그를 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "pod_name": {"type": "string", "description": "Pod 이름"},
-                            "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
-                            "tail_lines": {"type": "integer", "description": "마지막 N줄 (기본값: 50)"}
-                        },
-                        "required": ["pod_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
                     "name": "get_cluster_overview",
                     "description": "클러스터 전체 개요 (네임스페이스, Pod, Service 등의 총 개수)를 조회합니다",
                     "parameters": {"type": "object", "properties": {}}
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_pod_metrics",
+                    "description": "Pod 리소스 사용량(CPU/Memory) 조회 (kubectl top pods)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_node_metrics",
+                    "description": "Node 리소스 사용량(CPU/Memory) 조회 (kubectl top nodes)",
+                    "parameters": {"type": "object", "properties": {}}
+                }
             }
         ]
+        tools.extend(self._get_k8s_readonly_tool_definitions())
+        # YAML/WIDE 요청 시 legacy JSON-only 도구는 제외
+        latest_user_message = next((m.content for m in reversed(request.messages) if m.role == "user"), None)
+        tools = self._filter_tools_for_output_preference(tools, latest_user_message)
         
         try:
             # 첫 번째 GPT 호출 (function calling 포함)
@@ -429,12 +1046,18 @@ JSON 형식으로 응답해주세요:
                     
                     # 함수 실행
                     function_response = await self._execute_function(function_name, function_args)
+                    formatted_result, _, _ = self._format_tool_result(
+                        function_name,
+                        function_args,
+                        function_response,
+                    )
+                    tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
                     
                     messages.append({
                         "tool_call_id": tool_call.id,
                         "role": "tool",
                         "name": function_name,
-                        "content": str(function_response)
+                        "content": tool_message_content
                     })
                 
                 # 함수 결과를 바탕으로 최종 답변 생성
@@ -642,7 +1265,7 @@ Draft (rules-based, keep numbers unchanged):
 출력:
 - 마크다운
 - High/Medium/Low 우선순위
-- 각 항목에 (효과: 비용/성능/안정성) + 근거 + 적용 예시(yaml 또는 kubectl 짧게)
+- 각 항목에 (효과: 비용/성능/안정성) + 근거 + 적용 예시(kubectl 짧게)
 
 금지:
 - 응답 전체를 ```markdown ... ``` 같은 코드 펜스로 감싸지 마세요. (그렇게 하면 UI에서 마크다운 렌더가 코드블록으로 깨집니다)
@@ -1403,7 +2026,7 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 if suspicious:
                     action_lines.append(
-                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod 스펙으로 컨테이너별 resources를 먼저 확인하세요."
                     )
                     continue
 
@@ -1413,12 +2036,13 @@ Draft (rules-based, keep numbers unchanged):
                     action_lines.append(
                         f"  - 권장(초안): requests.memory≈`{fmt_mi(rec_req)}` (pods avg snapshot*1.5, round) / limits.memory≈`{fmt_mi(rec_lim)}` (request*2)  \n"
                         f"    - 적용 예시:\n"
-                        f"      ```yaml\n"
-                        f"      resources:\n"
-                        f"        requests:\n"
-                        f"          memory: \"{rec_req}Mi\"\n"
-                        f"        limits:\n"
-                        f"          memory: \"{rec_lim}Mi\"\n"
+                        f"      ```json\n"
+                        f"      {{\n"
+                        f"        \"resources\": {{\n"
+                        f"          \"requests\": {{\"memory\": \"{rec_req}Mi\"}},\n"
+                        f"          \"limits\": {{\"memory\": \"{rec_lim}Mi\"}}\n"
+                        f"        }}\n"
+                        f"      }}\n"
                         f"      ```"
                     )
 
@@ -1454,7 +2078,7 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 if suspicious:
                     action_lines.append(
-                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod YAML로 컨테이너별 resources를 먼저 확인하세요."
+                        "  - 주의: **표상 usage(pods avg snapshot)가 limit보다 큼** → (1) 컨테이너별 limits 일부 누락 (2) 여러 컨테이너 합산/파싱 차이 가능. Pod 스펙으로 컨테이너별 resources를 먼저 확인하세요."
                     )
                     continue
 
@@ -1464,12 +2088,13 @@ Draft (rules-based, keep numbers unchanged):
                     action_lines.append(
                         f"  - 권장(초안): requests.cpu≈`{fmt_m(rec_req)}` (pods avg snapshot*2, round) / limits.cpu≈`{fmt_m(rec_lim)}`  \n"
                         f"    - 적용 예시:\n"
-                        f"      ```yaml\n"
-                        f"      resources:\n"
-                        f"        requests:\n"
-                        f"          cpu: \"{rec_req}m\"\n"
-                        f"        limits:\n"
-                        f"          cpu: \"{rec_lim}m\"\n"
+                        f"      ```json\n"
+                        f"      {{\n"
+                        f"        \"resources\": {{\n"
+                        f"          \"requests\": {{\"cpu\": \"{rec_req}m\"}},\n"
+                        f"          \"limits\": {{\"cpu\": \"{rec_lim}m\"}}\n"
+                        f"        }}\n"
+                        f"      }}\n"
                         f"      ```"
                     )
 
@@ -1641,18 +2266,17 @@ Draft (rules-based, keep numbers unchanged):
 ## 사용 가능한 도구
 
 ### 정보 수집 도구
-- `get_namespaces`: 클러스터의 모든 네임스페이스 조회. 항상 먼저 사용하여 클러스터 구조 파악
-- `get_pods`: 특정 네임스페이스의 Pod 목록 조회. Pod 상태, 재시작 횟수, 준비 상태 확인
-- `get_deployments`: Deployment 목록 조회. 배포 상태 및 레플리카 확인
-- `get_services`: Service 목록 조회. 서비스 엔드포인트 및 포트 확인
-- `get_node_list`: 클러스터의 노드 목록 조회. 노드 상태, 리소스 용량 확인
-- `get_pod_logs`: 특정 Pod의 로그 조회. 에러 메시지 및 스택 트레이스 분석
-- `describe_pod`: Pod의 상세 정보 조회. 이벤트, 조건, 구성 확인
-- `describe_deployment`: Deployment의 상세 정보 조회
-- `describe_service`: Service의 상세 정보 조회
-- `describe_node`: Node의 상세 정보 조회
-- `get_events`: 리소스와 관련된 이벤트 조회. 최근 발생한 문제 파악
-- `get_resource_top`: 리소스 사용량 (CPU, Memory) 조회. 성능 병목 지점 식별
+- `k8s_get_resources`: kubectl get (json/wide) 형식 지원. 출력 형식 요청 시 우선 사용
+- `k8s_get_resource_yaml`: 단일 리소스 YAML 조회 (kubectl get -o yaml)
+- `k8s_describe_resource`: 리소스 상세 조회 (kubectl describe)
+- `k8s_get_pod_logs`: Pod 로그 조회 (kubectl logs)
+- `k8s_get_events`: 네임스페이스 이벤트 조회 (kubectl get events)
+- `k8s_get_available_api_resources`: api-resources 조회
+- `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
+- `k8s_check_service_connectivity`: Service/Endpoint 연결성 확인
+- `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
+- `get_pod_metrics`: Pod 리소스 사용량 조회(확장 기능, kubectl top pods)
+- `get_node_metrics`: Node 리소스 사용량 조회(확장 기능, kubectl top nodes)
 
 ## 도구 사용 원칙
 
@@ -1662,25 +2286,30 @@ Draft (rules-based, keep numbers unchanged):
 
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
 - 사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-  먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 **모든 네임스페이스에서 후보를 찾은 뒤**
+  먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 **모든 네임스페이스에서 후보를 찾은 뒤**
   해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
 - 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
+
+## 출력 포맷/툴 선택 규칙 (중요)
+
+- 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
+- YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
    - 일반적인 설명보다 실제 데이터를 우선시하세요
 
 2. **구체적인 정보 수집 예시**: 
-   - "네임스페이스가 뭐가 있어?" → 즉시 `get_namespaces` 호출
-   - "Pod 상태 확인해줘" → 즉시 `get_pods` 호출
-   - "Failed Pod 있어?" → `get_pods` 호출 후 상태 분석, 발견 시 `describe_pod` 및 `get_pod_logs` 추가 호출
-   - "리소스 많이 쓰는 Pod는?" → `get_resource_top` 호출
-   - "죽어 있는 Pod들 알려줘" → 모든 네임스페이스에 대해 `get_pods` 호출 후 NotReady, Error, CrashLoopBackOff 상태 필터링
+   - "네임스페이스가 뭐가 있어?" → `k8s_get_resources`(resource_type=namespaces) 호출
+   - "Pod 상태 확인해줘" → `k8s_get_resources`(resource_type=pods, namespace=...) 호출
+   - "Failed Pod 있어?" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 상태 분석, 발견 시 `k8s_describe_resource` 및 `k8s_get_pod_logs`, `k8s_get_events` 추가 호출
+   - "리소스 많이 쓰는 Pod는?" → `get_pod_metrics` 호출
+   - "죽어 있는 Pod들 알려줘" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 NotReady/Error/CrashLoopBackOff 필터링
 
 3. **문제 발견 시 추가 조사**:
-   - Pod 문제 발견 → `describe_pod`, `get_pod_logs`, `get_events` 순차 호출
-   - 노드 문제 발견 → `get_node_list`, `describe_node` 호출
-   - 재시작이 많은 Pod → `get_pod_logs`로 크래시 원인 파악
+   - Pod 문제 발견 → `k8s_describe_resource`, `k8s_get_pod_logs`, `k8s_get_events` 순차 호출
+   - 노드 문제 발견 → `k8s_get_resources`(resource_type=nodes) 후 필요 시 `k8s_describe_resource`
+   - 재시작이 많은 Pod → `k8s_get_pod_logs`로 크래시 원인 파악
 
 4. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
 
@@ -1757,90 +2386,6 @@ Draft (rules-based, keep numbers unchanged):
             {
                 "type": "function",
                 "function": {
-                    "name": "get_namespaces",
-                    "description": "클러스터의 모든 네임스페이스 목록을 조회합니다",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_pods",
-                    "description": "Pod를 이름/라벨로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (pod name/label에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_services",
-                    "description": "Service를 이름/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (service name/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_deployments",
-                    "description": "Deployment를 이름/라벨/셀렉터로 검색합니다 (네임스페이스 미지정 시 전체 네임스페이스에서 검색)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "검색 키워드 (deployment name/labels/selector에서 매칭)"},
-                            "namespace": {"type": "string", "description": "검색 범위를 제한할 네임스페이스 (선택)"},
-                            "limit": {"type": "integer", "description": "최대 반환 개수 (기본값: 20)"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pods",
-                    "description": "특정 네임스페이스의 Pod 목록과 상태를 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_deployments",
-                    "description": "특정 네임스페이스의 Deployment 목록과 상태를 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
                     "name": "get_cluster_overview",
                     "description": "클러스터 전체 개요를 조회합니다",
                     "parameters": {"type": "object", "properties": {}}
@@ -1849,123 +2394,12 @@ Draft (rules-based, keep numbers unchanged):
             {
                 "type": "function",
                 "function": {
-                    "name": "describe_pod",
-                    "description": "특정 Pod의 상세 정보를 조회합니다 (kubectl describe pod와 동일). 컨테이너 상태, 이벤트, 조건 등을 포함합니다.",
+                    "name": "get_pod_metrics",
+                    "description": "Pod 리소스 사용량(CPU/Memory) 조회 (kubectl top pods)",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "name": {"type": "string", "description": "Pod 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_deployment",
-                    "description": "특정 Deployment의 상세 정보를 조회합니다 (kubectl describe deployment와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "name": {"type": "string", "description": "Deployment 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_service",
-                    "description": "특정 Service의 상세 정보를 조회합니다 (kubectl describe service와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "name": {"type": "string", "description": "Service 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pod_logs",
-                    "description": "특정 Pod의 로그를 조회합니다 (kubectl logs와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"},
-                            "pod_name": {"type": "string", "description": "Pod 이름"},
-                            "tail_lines": {"type": "integer", "description": "마지막 N줄만 조회 (기본값: 100)"}
-                        },
-                        "required": ["pod_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_services",
-                    "description": "특정 네임스페이스의 Service 목록을 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_events",
-                    "description": "특정 네임스페이스의 이벤트를 조회합니다 (kubectl get events와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_node_list",
-                    "description": "클러스터의 모든 노드 목록을 조회합니다 (kubectl get nodes와 동일)",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_node",
-                    "description": "특정 노드의 상세 정보를 조회합니다 (kubectl describe node와 동일)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "노드 이름"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pvcs",
-                    "description": "PersistentVolumeClaim 목록을 조회합니다",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 이름 (선택사항, 없으면 전체 조회)"}
+                            "namespace": {"type": "string", "description": "네임스페이스 이름 (선택)"}
                         }
                     }
                 }
@@ -1973,12 +2407,13 @@ Draft (rules-based, keep numbers unchanged):
             {
                 "type": "function",
                 "function": {
-                    "name": "get_pvs",
-                    "description": "PersistentVolume 목록을 조회합니다",
+                    "name": "get_node_metrics",
+                    "description": "Node 리소스 사용량(CPU/Memory) 조회 (kubectl top nodes)",
                     "parameters": {"type": "object", "properties": {}}
                 }
             }
         ]
+        tools.extend(self._get_k8s_readonly_tool_definitions())
         
         try:
             # 첫 번째 호출 (function calling 체크)
@@ -2044,12 +2479,19 @@ Draft (rules-based, keep numbers unchanged):
                     function_response = await self._execute_function(function_name, function_args)
                     
                     print(f"[DEBUG] Function response length: {len(str(function_response))}")
+
+                    formatted_result, _, _ = self._format_tool_result(
+                        function_name,
+                        function_args,
+                        function_response,
+                    )
+                    tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
                     
                     messages.append({
                         "tool_call_id": tool_call.id,
                         "role": "tool",
                         "name": function_name,
-                        "content": str(function_response)
+                        "content": tool_message_content
                     })
                 
                 print(f"[DEBUG] Starting second GPT call for analysis with {len(messages)} messages")
@@ -2305,6 +2747,99 @@ Draft (rules-based, keep numbers unchanged):
         hay = self._normalize_for_search(text)
         return all(t in hay for t in tokens)
 
+    def _extract_items_from_payload(self, payload: object) -> List[Dict]:
+        if isinstance(payload, dict):
+            data = payload.get("data") if "data" in payload else payload
+            if isinstance(data, dict) and isinstance(data.get("items"), list):
+                return list(data.get("items") or [])
+        return []
+
+    async def _find_resource_matches(
+        self,
+        resource_type: str,
+        query: str,
+        namespace: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict]:
+        payload = await self.k8s_service.get_resources(
+            resource_type=resource_type,
+            namespace=namespace if isinstance(namespace, str) else None,
+            all_namespaces=namespace is None,
+            output="json",
+        )
+        items = self._extract_items_from_payload(payload)
+
+        matches: List[Dict] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+            name = str(meta.get("name", ""))
+            if not name:
+                continue
+            if not self._all_tokens_in_text(query, name):
+                continue
+            matches.append(
+                {
+                    "name": name,
+                    "namespace": str(meta.get("namespace", "")),
+                    "kind": str(item.get("kind", "")),
+                    "resource_type": resource_type,
+                }
+            )
+            if len(matches) >= limit:
+                break
+        return matches
+
+    async def _locate_resource_for_yaml(
+        self,
+        resource_name: str,
+        namespace: Optional[str],
+        preferred_type: Optional[str],
+    ) -> Dict:
+        search_types = [
+            "deployments",
+            "statefulsets",
+            "daemonsets",
+            "pods",
+            "services",
+            "ingresses",
+            "jobs",
+            "cronjobs",
+        ]
+        if preferred_type:
+            preferred = str(preferred_type).strip()
+            if preferred:
+                search_types = [preferred] + [t for t in search_types if t != preferred]
+
+        # 1) If namespace is provided, try that namespace first (for preferred type)
+        if namespace and preferred_type:
+            matches = await self._find_resource_matches(preferred_type, resource_name, namespace=namespace, limit=20)
+            if matches:
+                chosen = await self._resolve_single(preferred_type, resource_name, matches)
+                return {
+                    "resource_type": preferred_type,
+                    "resource_name": chosen.get("name", resource_name),
+                    "namespace": chosen.get("namespace") or namespace,
+                }
+
+        # 2) Search across namespaces by type
+        for rtype in search_types:
+            try:
+                matches = await self._find_resource_matches(rtype, resource_name, namespace=None, limit=20)
+            except Exception:
+                continue
+            if not matches:
+                continue
+            chosen = await self._resolve_single(rtype, resource_name, matches)
+            return {
+                "resource_type": rtype,
+                "resource_name": chosen.get("name", resource_name),
+                "namespace": chosen.get("namespace"),
+            }
+
+        raise Exception(f"No resource matched '{resource_name}'. Provide namespace and resource type.")
+
     def _query_in_mapping(self, query: str, mapping: object) -> bool:
         if not isinstance(mapping, dict):
             return False
@@ -2482,6 +3017,11 @@ Draft (rules-based, keep numbers unchanged):
         
         try:
             print(f"[DEBUG] Executing function: {function_name} with args: {function_args}")
+            if not self._is_tool_allowed(function_name):
+                return json.dumps(
+                    {"error": f"권한 없음: '{function_name}'는 {self.user_role} 역할에서 사용할 수 없습니다."},
+                    ensure_ascii=False,
+                )
             
             if function_name == "get_namespaces":
                 namespaces = await self.k8s_service.get_namespaces()
@@ -2603,6 +3143,149 @@ Draft (rules-based, keep numbers unchanged):
             elif function_name == "get_events":
                 events = await self.k8s_service.get_events(function_args["namespace"])
                 return json.dumps(events, ensure_ascii=False)
+
+            elif function_name == "k8s_get_resources":
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name")
+                namespace = function_args.get("namespace")
+                all_namespaces_raw = function_args.get("all_namespaces", False)
+                output = function_args.get("output", "wide")
+
+                if isinstance(all_namespaces_raw, str):
+                    all_namespaces = all_namespaces_raw.strip().lower() == "true"
+                else:
+                    all_namespaces = bool(all_namespaces_raw)
+                if not isinstance(namespace, str) or not namespace.strip():
+                    all_namespaces = True
+                if isinstance(output, str) and output.strip().lower() == "yaml":
+                    output = "json"
+
+                payload = await self.k8s_service.get_resources(
+                    resource_type=resource_type,
+                    resource_name=resource_name,
+                    namespace=namespace if isinstance(namespace, str) else None,
+                    all_namespaces=all_namespaces,
+                    output=output if isinstance(output, str) else "wide",
+                )
+                return self._render_k8s_resource_payload(payload)
+
+            elif function_name == "k8s_get_resource_yaml":
+                namespace = function_args.get("namespace")
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name", "")
+
+                # Support "pods/foo" style resource_name if resource_type is missing.
+                if isinstance(resource_name, str) and "/" in resource_name:
+                    prefix, name = resource_name.split("/", 1)
+                    if prefix and name and not (isinstance(resource_type, str) and resource_type.strip()):
+                        resource_type = prefix
+                        resource_name = name
+
+                resource_type = str(resource_type or "").strip()
+                resource_name = str(resource_name or "").strip()
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+
+                if not resource_name:
+                    raise Exception("resource_name is required for k8s_get_resource_yaml")
+
+                resolved = None
+                if not resource_type or ns is None:
+                    resolved = await self._locate_resource_for_yaml(
+                        resource_name=resource_name,
+                        namespace=ns,
+                        preferred_type=resource_type or None,
+                    )
+                    resource_type = str(resolved.get("resource_type") or resource_type)
+                    resource_name = str(resolved.get("resource_name") or resource_name)
+                    ns = resolved.get("namespace") or ns
+
+                try:
+                    yaml_text = await self.k8s_service.get_resource_yaml(
+                        resource_type=resource_type,
+                        resource_name=resource_name,
+                        namespace=ns,
+                    )
+                    return yaml_text
+                except Exception:
+                    if resolved is None:
+                        resolved = await self._locate_resource_for_yaml(
+                            resource_name=resource_name,
+                            namespace=ns,
+                            preferred_type=resource_type or None,
+                        )
+                        resource_type = str(resolved.get("resource_type") or resource_type)
+                        resource_name = str(resolved.get("resource_name") or resource_name)
+                        ns = resolved.get("namespace") or ns
+                        yaml_text = await self.k8s_service.get_resource_yaml(
+                            resource_type=resource_type,
+                            resource_name=resource_name,
+                            namespace=ns,
+                        )
+                        return yaml_text
+                    raise
+
+            elif function_name == "k8s_describe_resource":
+                namespace = function_args.get("namespace")
+                result = await self.k8s_service.describe_resource(
+                    resource_type=function_args.get("resource_type", ""),
+                    resource_name=function_args.get("resource_name", ""),
+                    namespace=namespace if isinstance(namespace, str) else None,
+                )
+                return json.dumps(result, ensure_ascii=False)
+
+            elif function_name == "k8s_get_pod_logs":
+                namespace = function_args.get("namespace")
+                pod_name = function_args.get("pod_name", "")
+                if isinstance(pod_name, str) and "/" in pod_name:
+                    pod_name = pod_name.split("/")[-1]
+                tail_lines = self._coerce_limit(function_args.get("tail_lines", 50), default=50, max_value=2000)
+                requested_container = function_args.get("container")
+
+                if not isinstance(namespace, str) or not namespace.strip():
+                    matches = await self._find_pods(str(pod_name), namespace=None, limit=20)
+                    chosen = await self._resolve_single("pods", str(pod_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    pod_name = str(chosen.get("name", pod_name))
+
+                chosen_container, all_containers = await self._pick_log_container(
+                    namespace,
+                    pod_name,
+                    explicit_container=requested_container,
+                )
+
+                if chosen_container is None and all_containers:
+                    raise Exception(
+                        f"Pod '{pod_name}' in namespace '{namespace}' has multiple containers "
+                        f"({', '.join(all_containers)}). 'container' 인자를 사용해 로그를 볼 컨테이너를 명시해주세요."
+                    )
+
+                logs = await self.k8s_service.get_pod_logs(
+                    namespace,
+                    pod_name,
+                    tail_lines=tail_lines,
+                    container=chosen_container,
+                )
+                return logs
+
+            elif function_name == "k8s_get_events":
+                namespace = function_args.get("namespace")
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+                events = await self.k8s_service.get_events(ns)
+                return json.dumps(events, ensure_ascii=False)
+
+            elif function_name == "k8s_get_available_api_resources":
+                resources = await self.k8s_service.get_available_api_resources()
+                return json.dumps(resources, ensure_ascii=False)
+
+            elif function_name == "k8s_get_cluster_configuration":
+                cfg = await self.k8s_service.get_cluster_configuration()
+                return json.dumps(cfg, ensure_ascii=False)
+
+            elif function_name == "k8s_generate_resource":
+                return json.dumps(
+                    {"error": "YAML 생성은 비활성화되었습니다."},
+                    ensure_ascii=False,
+                )
             
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()
@@ -2629,16 +3312,22 @@ Draft (rules-based, keep numbers unchanged):
             print(f"[DEBUG] {error_msg}")
             return json.dumps({"error": error_msg}, ensure_ascii=False)
     
-    def _format_tool_result(self, function_response) -> (str, bool):
+    def _format_tool_result(
+        self,
+        function_name: str,
+        function_args: Dict,
+        function_response,
+    ) -> (str, bool, bool):
         """Tool 실행 결과를 사용자 친화적으로 포맷 (JSON은 pretty-print)
 
         Returns:
-            (formatted_text, is_json)
+            (formatted_text, is_json, is_yaml)
         """
+        is_yaml = function_name in {"k8s_get_resource_yaml"}
         try:
             # dict/list 는 그대로 pretty-print
             if isinstance(function_response, (dict, list)):
-                return json.dumps(function_response, ensure_ascii=False, indent=2), True
+                return json.dumps(function_response, ensure_ascii=False, indent=2), True, False
             
             # 문자열인 경우 JSON 여부를 감지해서 포맷
             if isinstance(function_response, str):
@@ -2646,17 +3335,86 @@ Draft (rules-based, keep numbers unchanged):
                 if stripped.startswith("{") or stripped.startswith("["):
                     try:
                         parsed = json.loads(stripped)
-                        return json.dumps(parsed, ensure_ascii=False, indent=2), True
+                        return json.dumps(parsed, ensure_ascii=False, indent=2), True, False
                     except json.JSONDecodeError:
                         # JSON 이 아니면 원본 그대로 사용
-                        return function_response, False
-                return function_response, False
+                        return function_response, False, is_yaml
+                return function_response, False, is_yaml
             
             # 그 외 타입은 문자열로 변환
-            return str(function_response), False
+            return str(function_response), False, is_yaml
         except Exception as e:
             print(f"[DEBUG] Failed to format tool result: {e}")
-            return str(function_response), False
+            return str(function_response), False, is_yaml
+
+    def _detect_output_preference(self, text: Optional[str]) -> Optional[str]:
+        if not isinstance(text, str):
+            return None
+        lowered = text.lower()
+        if "yaml" in lowered or "yml" in lowered:
+            return "yaml"
+        if "wide" in lowered:
+            return "wide"
+        if "json" in lowered:
+            return "json"
+        return None
+
+    def _mentions_events(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        return "event" in lowered or "이벤트" in lowered
+
+    def _mentions_logs(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        return "log" in lowered or "로그" in lowered
+
+    def _mentions_describe(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        return "describe" in lowered or "상세" in lowered or "디스크라이브" in lowered
+
+    def _filter_tools_for_output_preference(self, tools: List[Dict], user_text: Optional[str]) -> List[Dict]:
+        pref = self._detect_output_preference(user_text)
+        if pref not in {"json", "wide", "yaml"}:
+            return tools
+
+        want_events = self._mentions_events(user_text)
+        want_logs = self._mentions_logs(user_text)
+        want_describe = self._mentions_describe(user_text)
+
+        # Strongly prefer format-specific tools when output format is requested.
+        if pref == "yaml":
+            allow = {"k8s_get_resource_yaml"}
+        else:
+            allow = {"k8s_get_resources"}
+        if want_events:
+            allow.add("k8s_get_events")
+        if want_logs:
+            allow.add("k8s_get_pod_logs")
+        if want_describe:
+            allow.add("k8s_describe_resource")
+
+        filtered = []
+        for tool in tools:
+            fn = tool.get("function", {}).get("name")
+            if fn in allow:
+                filtered.append(tool)
+
+        # If for some reason nothing matched, fall back to original tools
+        return filtered or tools
+
+    def _render_k8s_resource_payload(self, payload) -> str:
+        """k8s_get_resources 결과 포맷을 문자열로 변환"""
+        try:
+            if isinstance(payload, dict) and "format" in payload:
+                return json.dumps(payload.get("data"), ensure_ascii=False)
+            return json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            return str(payload)
     
     def _extract_suggestions(self, message: str) -> List[str]:
         """메시지에서 제안 추출"""
@@ -2706,7 +3464,10 @@ Draft (rules-based, keep numbers unchanged):
 
             messages = [{"role": "system", "content": self._get_system_message()}]
             for msg in recent_history:
-                messages.append({"role": msg.role, "content": msg.content})
+                messages.append({
+                    "role": msg.role,
+                    "content": self._sanitize_history_content(msg.role, msg.content),
+                })
             
             # Tool Context 가져오기 또는 생성
             if session_id not in self.tool_contexts:
@@ -2723,6 +3484,8 @@ Draft (rules-based, keep numbers unchanged):
             
             # Function definitions
             tools = self._get_tools_definition()
+            # YAML/WIDE 요청 시 legacy JSON-only 도구는 제외
+            tools = self._filter_tools_for_output_preference(tools, message)
             
             # ===== Multi-turn Tool Calling Loop =====
             max_iterations = 5  # 최대 5번까지 tool call 반복 허용
@@ -2751,7 +3514,6 @@ Draft (rules-based, keep numbers unchanged):
                     print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
 
                     # OpenAI 응답 전체 로그 출력
-                    import json
                     response_dict = {
                         "id": response.id,
                         "model": response.model,
@@ -2830,7 +3592,19 @@ Draft (rules-based, keep numbers unchanged):
                         print(f"[DEBUG] Function response length: {len(str(function_response))}")
                         
                         # 결과를 사용자 친화적으로 포맷 (JSON이면 pretty-print)
-                        formatted_result, is_json = self._format_tool_result(function_response)
+                        formatted_result, is_json, is_yaml = self._format_tool_result(
+                            function_name,
+                            function_args,
+                            function_response,
+                        )
+
+                        display_result = self._build_tool_display(
+                            function_name,
+                            function_args,
+                            formatted_result,
+                            is_json,
+                            is_yaml,
+                        )
                         
                         # 결과 미리보기 (너무 길면 잘라서 전송하되, 표시를 남김)
                         max_preview_len = 2500
@@ -2838,24 +3612,44 @@ Draft (rules-based, keep numbers unchanged):
                             result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..."
                         else:
                             result_preview = formatted_result
+
+                        display_preview = None
+                        if display_result is not None:
+                            if len(display_result) > max_preview_len:
+                                display_preview = display_result[:max_preview_len] + "\n... (truncated) ..."
+                            else:
+                                display_preview = display_result
                         
                         # Function 결과를 프론트엔드로 전송 (스트리밍) - 실행 후
                         # 👉 프론트에는 미리보기만 전달 (약 2500자)
-                        yield f"data: {json.dumps({'function_result': function_name, 'result': result_preview, 'is_json': is_json}, ensure_ascii=False)}\n\n"
+                        payload = {
+                            "function_result": function_name,
+                            "result": result_preview,
+                            "is_json": is_json,
+                            "is_yaml": is_yaml,
+                        }
+                        if display_preview is not None:
+                            payload["display"] = display_preview
+                            payload["display_format"] = "kubectl"
+                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                         
                         # Tool call 정보 + 실행 결과 전체 저장 (DB에는 전체 결과 보관)
                         tool_calls_log.append({
                             'function': function_name, 
                             'args': function_args,
                             'result': formatted_result,
-                            'is_json': is_json
+                            'is_json': is_json,
+                            'is_yaml': is_yaml,
+                            'display': display_result,
+                            'display_format': "kubectl" if display_result is not None else None,
                         })
                         
+                        tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
                         messages.append({
                             "tool_call_id": tool_call.id,
                             "role": "tool",
                             "name": function_name,
-                            "content": str(function_response)
+                            "content": tool_message_content
                         })
                     
                     # 다음 iteration으로 계속
@@ -3040,9 +3834,15 @@ Draft (rules-based, keep numbers unchanged):
                         args_section = '<p><strong>📋 Arguments:</strong> No arguments</p>'
                     
                     # Results 섹션 - 실제 tool 실행 결과
-                    result_preview = tc.get('result', 'No result')
+                    result_preview = tc.get('display') or tc.get('result', 'No result')
                     is_json = tc.get('is_json', False)
-                    code_fence = "```json" if is_json else "```"
+                    is_yaml = tc.get('is_yaml', False)
+                    if tc.get('display'):
+                        code_fence = "```"
+                    elif is_yaml:
+                        code_fence = "```yaml"
+                    else:
+                        code_fence = "```json" if is_json else "```"
                     
                     results_section = f"""<details>
 <summary><strong>📊 Results</strong></summary>
@@ -3122,18 +3922,16 @@ Draft (rules-based, keep numbers unchanged):
 ## 사용 가능한 도구
 
 ### 정보 수집 도구
-- `get_namespaces`: 클러스터의 모든 네임스페이스 조회. 항상 먼저 사용
-- `get_pods`: 특정 네임스페이스의 Pod 목록 조회. Pod 상태, 재시작 횟수 확인
-- `get_deployments`: Deployment 목록 조회
-- `get_services`: Service 목록 조회
-- `get_node_list`: 노드 목록 조회
-- `get_pod_logs`: Pod 로그 조회. 에러 메시지 분석
-- `describe_pod`: Pod 상세 정보 조회. 이벤트, 조건 확인
-- `describe_deployment`: Deployment 상세 정보 조회
-- `describe_service`: Service 상세 정보 조회
-- `describe_node`: Node 상세 정보 조회
-- `get_events`: 이벤트 조회. 최근 발생한 문제 파악
-- `get_resource_top`: 리소스 사용량 조회. 성능 병목 지점 식별
+- `k8s_get_resources`: kubectl get (json/wide) 형식 지원. 출력 형식 요청 시 우선 사용
+- `k8s_get_resource_yaml`: 단일 리소스 YAML 조회 (kubectl get -o yaml)
+- `k8s_describe_resource`: 리소스 상세 조회 (kubectl describe)
+- `k8s_get_pod_logs`: Pod 로그 조회 (kubectl logs)
+- `k8s_get_events`: 네임스페이스 이벤트 조회 (kubectl get events)
+- `k8s_get_available_api_resources`: api-resources 조회
+- `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
+- `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
+- `get_pod_metrics`: Pod 리소스 사용량 조회(확장 기능, kubectl top pods)
+- `get_node_metrics`: Node 리소스 사용량 조회(확장 기능, kubectl top nodes)
 
 ## 도구 사용 원칙
 
@@ -3143,25 +3941,30 @@ Draft (rules-based, keep numbers unchanged):
 
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
 - 사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-  먼저 find 도구(`find_pods`, `find_services`, `find_deployments`)로 **모든 네임스페이스에서 후보를 찾은 뒤**
+  먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 **모든 네임스페이스에서 후보를 찾은 뒤**
   해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
 - 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
+
+### 출력 포맷/툴 선택 규칙 (중요)
+
+- 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
+- YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
    - 일반적인 설명보다 실제 데이터를 우선시하세요
 
 2. **구체적인 정보 수집 예시**: 
-   - "네임스페이스가 뭐가 있어?" → 즉시 `get_namespaces` 호출
-   - "Pod 상태 확인해줘" → 즉시 `get_pods` 호출
-   - "Failed Pod 있어?" → `get_pods` 호출 후 상태 분석, 발견 시 `describe_pod` 및 `get_pod_logs` 추가 호출
-   - "리소스 많이 쓰는 Pod는?" → `get_resource_top` 호출
-   - "죽어 있는 Pod들 알려줘" → 모든 네임스페이스에 대해 `get_pods` 호출 후 NotReady, Error, CrashLoopBackOff 상태 필터링
+   - "네임스페이스가 뭐가 있어?" → `k8s_get_resources`(resource_type=namespaces) 호출
+   - "Pod 상태 확인해줘" → `k8s_get_resources`(resource_type=pods, namespace=...) 호출
+   - "Failed Pod 있어?" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 상태 분석, 발견 시 `k8s_describe_resource` 및 `k8s_get_pod_logs`, `k8s_get_events` 추가 호출
+   - "리소스 많이 쓰는 Pod는?" → `get_pod_metrics` 호출
+   - "죽어 있는 Pod들 알려줘" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 NotReady/Error/CrashLoopBackOff 필터링
 
 3. **문제 발견 시 추가 조사**:
-   - Pod 문제 발견 → `describe_pod`, `get_pod_logs`, `get_events` 순차 호출
-   - 노드 문제 발견 → `get_node_list`, `describe_node` 호출
-   - 재시작이 많은 Pod → `get_pod_logs`로 크래시 원인 파악
+   - Pod 문제 발견 → `k8s_describe_resource`, `k8s_get_pod_logs`, `k8s_get_events` 순차 호출
+   - 노드 문제 발견 → `k8s_get_resources`(resource_type=nodes) 후 필요 시 `k8s_describe_resource`
+   - 재시작이 많은 Pod → `k8s_get_pod_logs`로 크래시 원인 파악
 
 4. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
 
@@ -3248,34 +4051,38 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 
 **Cluster Overview:**
 - `get_cluster_overview()` - Overall health snapshot
-- `get_namespaces()` - All namespaces
-- `get_node_list()` - Node status
-- `describe_node(name)` - Node details
+- `k8s_get_resources(resource_type=namespaces)` - Namespace list
+- `k8s_get_resources(resource_type=nodes)` - Node status
+- `k8s_describe_resource(resource_type=nodes, resource_name)` - Node details
 
 **Workload Analysis:**
-- `get_pods(namespace)` - Pod list with status
-- `describe_pod(namespace, name)` - Full pod details, events, conditions
-- `get_pod_logs(namespace, pod_name, tail_lines)` - Container logs
-- `get_deployments(namespace)` - Deployment status
-- `describe_deployment(namespace, name)` - Deployment details
-- `get_services(namespace)` - Service endpoints
-- `describe_service(namespace, name)` - Service configuration
+- `k8s_get_resources(resource_type=pods)` - Pod list with status
+- `k8s_describe_resource(resource_type=pods, resource_name)` - Pod details, events, conditions
+- `k8s_get_pod_logs(namespace, pod_name, tail_lines)` - Container logs
+- `k8s_get_resources(resource_type=deployments)` - Deployment status
+- `k8s_describe_resource(resource_type=deployments, resource_name)` - Deployment details
+- `k8s_get_resources(resource_type=services)` - Service endpoints
+- `k8s_describe_resource(resource_type=services, resource_name)` - Service configuration
 
 **Storage & Config:**
-- `get_pvcs(namespace)` - PVC status
-- `get_pvs()` - PV availability
-- `get_events(namespace)` - Recent events (critical for debugging!)
+- `k8s_get_resources(resource_type=pvcs)` - PVC status
+- `k8s_get_resources(resource_type=pvs)` - PV availability
+- `k8s_get_events(namespace)` - Recent events (critical for debugging!)
+
+**Metrics (extension):**
+- `get_pod_metrics(namespace)` - Top pods (CPU/Memory)
+- `get_node_metrics()` - Top nodes (CPU/Memory)
 
 # Example Workflow
 
 User: "My pod is not starting"
 
 Your thought process:
-1. Which namespace? If not specified, ask or search across namespaces (do NOT assume 'default')
-2. Get pods → Find the problematic one
-3. Describe pod → Check conditions, events
-4. Get logs → Look for startup errors
-5. Check events → Find scheduling/pulling issues
+1. Which namespace? If not specified, ask or list pods across namespaces (do NOT assume 'default')
+2. `k8s_get_resources` → Find the problematic pod
+3. `k8s_describe_resource` → Check conditions, events
+4. `k8s_get_pod_logs` → Look for startup errors
+5. `k8s_get_events` → Find scheduling/pulling issues
 6. Analyze → Determine root cause
 7. Provide solution with commands
 
@@ -3291,73 +4098,7 @@ Remember: You're not just answering questions - you're **solving production prob
     
     def _get_tools_definition(self) -> List[Dict]:
         """Tools 정의 반환 (상세한 설명 포함)"""
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_pods",
-                    "description": """Search pods by name/label across namespaces.
-
-Use this FIRST when the user asks for logs but does not specify an exact namespace/pod name,
-or when they provide only an identifier/partial name.
-
-Returns: Array of {name, namespace, status, phase, restart_count, ready, containers, labels}""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search keyword. Matched against pod name and common label values."
-                            },
-                            "namespace": {
-                                "type": "string",
-                                "description": "Optional namespace to restrict the search. Omit to search all namespaces."
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Max number of matches to return (default: 20)."
-                            }
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_services",
-                    "description": """Search services by name/selector across namespaces.
-
-Use this when the user mentions a Service name/identifier without specifying namespace.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Search keyword"},
-                            "namespace": {"type": "string", "description": "Optional namespace to restrict the search. Omit to search all namespaces."},
-                            "limit": {"type": "integer", "description": "Max number of matches to return (default: 20)."}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "find_deployments",
-                    "description": """Search deployments by name/labels/selector across namespaces.
-
-Use this when the user mentions a Deployment name/identifier without specifying namespace.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Search keyword"},
-                            "namespace": {"type": "string", "description": "Optional namespace to restrict the search. Omit to search all namespaces."},
-                            "limit": {"type": "integer", "description": "Max number of matches to return (default: 20)."}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            },
+        tools = [
             {
                 "type": "function",
                 "function": {
@@ -3370,261 +4111,6 @@ Use this when the user mentions a Deployment name/identifier without specifying 
                     - Node count and cluster version
                     
                     Use this FIRST when user asks about cluster health or wants a general status check.""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_namespaces",
-                    "description": """List all namespaces in the cluster with their status.
-                    
-                    Returns: Array of {name, status}
-                    
-                    Use when user wants to see available namespaces or explore cluster organization.""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_all_pods",
-                    "description": """List ALL pods across ALL namespaces in the cluster with their current status.
-                    
-                    Returns: Array of {name, namespace, status, phase, restart_count, ready}
-                    
-                    **USE THIS FIRST** when user asks about:
-                    - "죽어 있는 Pod" / "Failed Pods" / "문제 있는 Pod"
-                    - Pod status across the entire cluster
-                    - Pods with high restart counts
-                    - Any cluster-wide Pod investigation
-                    
-                    This is MORE EFFICIENT than calling get_pods() for each namespace separately.
-                    Status values: Running, Pending, Failed, CrashLoopBackOff, ImagePullBackOff, etc.
-                    
-                    After getting results, filter for problematic pods:
-                    - status != "Running"
-                    - restart_count > 5
-                    - ready != "X/X" (not all containers ready)""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pods",
-                    "description": """List all pods in a specific namespace with their current status.
-                    
-                    Returns: Array of {name, status, phase, restart_count}
-                    
-                    IMPORTANT: Check restart_count! High values (>5) indicate instability.
-                    Status values: Running, Pending, Failed, CrashLoopBackOff, ImagePullBackOff, etc.
-                    
-                    Use this to identify problematic pods or get workload overview.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {
-                                "type": "string",
-                                "description": "Target namespace name (e.g., 'default', 'kube-system')"
-                            }
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_pod",
-                    "description": """Get detailed information about a specific pod (equivalent to kubectl describe pod).
-                    
-                    Returns:
-                    - Pod metadata (labels, annotations)
-                    - Container states (running/waiting/terminated with reasons)
-                    - Conditions (PodScheduled, Initialized, Ready, ContainersReady)
-                    - Recent events (critical for troubleshooting!)
-                    
-                    Use this when investigating WHY a pod is failing or not starting.
-                    Events often contain the root cause (e.g., ImagePullBackOff, OOMKilled).""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace containing the pod"},
-                            "name": {"type": "string", "description": "Exact pod name"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pod_logs",
-                    "description": """Retrieve container logs from a pod (kubectl logs).
-                    
-                    Returns: Recent log output (default: last 100 lines)
-                    
-                    Use this to:
-                    - Find application errors or stack traces
-                    - Check startup logs for initialization issues
-                    - Identify crash reasons
-                    
-                    Look for: ERROR, FATAL, Exception, panic, segfault, OOM, connection refused.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace"},
-                            "pod_name": {"type": "string", "description": "Pod name"},
-                            "container": {"type": "string", "description": "Container name (optional)"},
-                            "tail_lines": {
-                                "type": "integer",
-                                "description": "Number of recent lines to retrieve (default: 100)"
-                            }
-                        },
-                        "required": ["pod_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_deployments",
-                    "description": """List deployments in a namespace with replica status.
-                    
-                    Returns: Array of {name, replicas, ready_replicas, status}
-                    
-                    Check if ready_replicas < replicas → indicates deployment issues.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_deployment",
-                    "description": """Get detailed deployment information including rollout status and conditions.
-                    
-                    Use when investigating deployment failures or rollout issues.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string"},
-                            "name": {"type": "string"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_services",
-                    "description": """List services and their endpoints in a namespace.
-                    
-                    Use to check service discovery and networking configuration.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_service",
-                    "description": """Describe a Service (kubectl describe service).
-
-If namespace is not provided, search across namespaces first.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string"},
-                            "name": {"type": "string"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_events",
-                    "description": """Get recent Kubernetes events in a namespace.
-                    
-                    Events are CRITICAL for troubleshooting! They show:
-                    - Scheduling failures
-                    - Image pull errors
-                    - Volume mount issues
-                    - Resource constraints
-                    - Health check failures
-                    
-                    ALWAYS check events when investigating problems!""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Namespace to get events from"}
-                        },
-                        "required": ["namespace"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_node_list",
-                    "description": """List all nodes in the cluster with their status.
-                    
-                    Check for NotReady nodes or resource pressure.""",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "describe_node",
-                    "description": """Get detailed node information including capacity, allocatable resources, and conditions.
-                    
-                    Use to diagnose node-level issues (disk pressure, memory pressure, PID pressure).""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "Node name"}
-                        },
-                        "required": ["name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pvcs",
-                    "description": """List PersistentVolumeClaims and their binding status.
-                    
-                    Check for Pending PVCs (storage provisioning issues).""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "Optional namespace filter"}
-                        }
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_pvs",
-                    "description": """List PersistentVolumes and their availability.
-                    
-                    Use to check storage capacity and binding issues.""",
                     "parameters": {"type": "object", "properties": {}}
                 }
             },
@@ -3662,6 +4148,142 @@ If namespace is not provided, search across namespaces first.""",
                 }
             }
         ]
+
+        tools.extend(self._get_k8s_readonly_tool_definitions())
+        return self._filter_tools_by_role(tools)
+
+    def _get_k8s_readonly_tool_definitions(self) -> List[Dict]:
+        """kagent 스타일의 read-only k8s tool 정의"""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_resources",
+                    "description": "Kubernetes 리소스를 조회합니다 (kubectl get). 출력 형식(wide/json) 요청 시 우선 사용.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {
+                                "type": "string",
+                                "description": "리소스 타입 (pods, deployments, services 등)",
+                            },
+                            "resource_name": {
+                                "type": "string",
+                                "description": "리소스 이름 (선택)",
+                            },
+                            "namespace": {
+                                "type": "string",
+                                "description": "네임스페이스 (선택)",
+                            },
+                            "all_namespaces": {
+                                "type": "string",
+                                "description": "모든 네임스페이스 조회 (true/false)",
+                            },
+                            "output": {
+                                "type": "string",
+                                "description": "출력 포맷 (json, wide)",
+                                "default": "wide",
+                            },
+                        },
+                        "required": ["resource_type"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_resource_yaml",
+                    "description": "단일 리소스의 YAML을 조회합니다 (kubectl get -o yaml).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                        },
+                        "required": ["resource_type", "resource_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_pod_logs",
+                    "description": "Pod 로그를 조회합니다 (kubectl logs).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "pod_name": {"type": "string", "description": "Pod 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                            "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
+                            "tail_lines": {"type": "integer", "description": "마지막 N줄 (기본: 50)"},
+                        },
+                        "required": ["pod_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_events",
+                    "description": "네임스페이스 이벤트 조회 (kubectl get events).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                        },
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_available_api_resources",
+                    "description": "사용 가능한 API 리소스 목록 조회 (kubectl api-resources).",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_get_cluster_configuration",
+                    "description": "클러스터 구성 정보 조회 (kubectl config view -o json 유사).",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_check_service_connectivity",
+                    "description": "Service/Endpoint 연결성 확인 (서비스에 Ready 엔드포인트가 있는지 점검).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "service_name": {"type": "string", "description": "서비스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "port": {"type": "string", "description": "서비스 포트(이름 또는 번호, 선택)"},
+                        },
+                        "required": ["service_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_describe_resource",
+                    "description": "리소스 상세 조회 (kubectl describe).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                        },
+                        "required": ["resource_type", "resource_name"],
+                    },
+                },
+            },
+        ]
     
     async def _execute_function_with_context(
         self,
@@ -3674,6 +4296,11 @@ If namespace is not provided, search across namespaces first.""",
         
         try:
             print(f"[DEBUG] Executing {function_name} with context, state keys: {list(tool_context.state.keys())}")
+            if not self._is_tool_allowed(function_name):
+                return json.dumps(
+                    {"error": f"권한 없음: '{function_name}'는 {self.user_role} 역할에서 사용할 수 없습니다."},
+                    ensure_ascii=False,
+                )
             
             # 캐시 확인
             cache_key = f"{function_name}_{json.dumps(function_args, sort_keys=True)}"
@@ -3836,6 +4463,176 @@ If namespace is not provided, search across namespaces first.""",
                     "message": event["message"],
                     "count": event["count"]
                 } for event in events], ensure_ascii=False)
+
+            elif function_name == "k8s_get_resources":
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name")
+                namespace = function_args.get("namespace")
+                all_namespaces_raw = function_args.get("all_namespaces", False)
+                output = function_args.get("output", "wide")
+
+                if isinstance(all_namespaces_raw, str):
+                    all_namespaces = all_namespaces_raw.strip().lower() == "true"
+                else:
+                    all_namespaces = bool(all_namespaces_raw)
+                if not isinstance(namespace, str) or not namespace.strip():
+                    all_namespaces = True
+                if isinstance(output, str) and output.strip().lower() == "yaml":
+                    output = "json"
+
+                payload = await self.k8s_service.get_resources(
+                    resource_type=resource_type,
+                    resource_name=resource_name,
+                    namespace=namespace if isinstance(namespace, str) else None,
+                    all_namespaces=all_namespaces,
+                    output=output if isinstance(output, str) else "wide",
+                )
+                result = self._render_k8s_resource_payload(payload)
+
+            elif function_name == "k8s_get_resource_yaml":
+                namespace = function_args.get("namespace")
+                resource_type = function_args.get("resource_type", "")
+                resource_name = function_args.get("resource_name", "")
+
+                # Support "pods/foo" style resource_name if resource_type is missing.
+                if isinstance(resource_name, str) and "/" in resource_name:
+                    prefix, name = resource_name.split("/", 1)
+                    if prefix and name and not (isinstance(resource_type, str) and resource_type.strip()):
+                        resource_type = prefix
+                        resource_name = name
+
+                resource_type = str(resource_type or "").strip()
+                resource_name = str(resource_name or "").strip()
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+
+                if not resource_name:
+                    raise Exception("resource_name is required for k8s_get_resource_yaml")
+
+                resolved = None
+                if not resource_type or ns is None:
+                    resolved = await self._locate_resource_for_yaml(
+                        resource_name=resource_name,
+                        namespace=ns,
+                        preferred_type=resource_type or None,
+                    )
+                    resource_type = str(resolved.get("resource_type") or resource_type)
+                    resource_name = str(resolved.get("resource_name") or resource_name)
+                    ns = resolved.get("namespace") or ns
+
+                try:
+                    result = await self.k8s_service.get_resource_yaml(
+                        resource_type=resource_type,
+                        resource_name=resource_name,
+                        namespace=ns,
+                    )
+                except Exception:
+                    if resolved is None:
+                        resolved = await self._locate_resource_for_yaml(
+                            resource_name=resource_name,
+                            namespace=ns,
+                            preferred_type=resource_type or None,
+                        )
+                        resource_type = str(resolved.get("resource_type") or resource_type)
+                        resource_name = str(resolved.get("resource_name") or resource_name)
+                        ns = resolved.get("namespace") or ns
+                        result = await self.k8s_service.get_resource_yaml(
+                            resource_type=resource_type,
+                            resource_name=resource_name,
+                            namespace=ns,
+                        )
+                    else:
+                        raise
+
+            elif function_name == "k8s_describe_resource":
+                namespace = function_args.get("namespace")
+                result_data = await self.k8s_service.describe_resource(
+                    resource_type=function_args.get("resource_type", ""),
+                    resource_name=function_args.get("resource_name", ""),
+                    namespace=namespace if isinstance(namespace, str) else None,
+                )
+                result = json.dumps(result_data, ensure_ascii=False)
+
+            elif function_name == "k8s_get_pod_logs":
+                namespace = function_args.get("namespace")
+                pod_name = function_args.get("pod_name", "")
+                if isinstance(pod_name, str) and "/" in pod_name:
+                    pod_name = pod_name.split("/")[-1]
+                tail_lines = self._coerce_limit(function_args.get("tail_lines", 50), default=50, max_value=2000)
+                requested_container = function_args.get("container")
+
+                if not isinstance(namespace, str) or not namespace.strip():
+                    matches = await self._find_pods(str(pod_name), namespace=None, limit=20)
+                    chosen = await self._resolve_single("pods", str(pod_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    pod_name = str(chosen.get("name", pod_name))
+
+                chosen_container, all_containers = await self._pick_log_container(
+                    namespace,
+                    pod_name,
+                    explicit_container=requested_container,
+                )
+
+                if chosen_container is None and all_containers:
+                    result = json.dumps(
+                        {
+                            "error": (
+                                f"Pod '{pod_name}' in namespace '{namespace}' has multiple containers "
+                                f"({', '.join(all_containers)}). "
+                                "로그를 조회할 컨테이너를 'container' 인자로 명시해주세요."
+                            )
+                        },
+                        ensure_ascii=False,
+                    )
+                else:
+                    logs = await self.k8s_service.get_pod_logs(
+                        namespace,
+                        pod_name,
+                        tail_lines=tail_lines,
+                        container=chosen_container,
+                    )
+                    result = logs
+                    tool_context.state["last_log_pod"] = pod_name
+
+            elif function_name == "k8s_get_events":
+                namespace = function_args.get("namespace")
+                ns = namespace if isinstance(namespace, str) and namespace.strip() else None
+                events = await self.k8s_service.get_events(ns)
+                result = json.dumps(events, ensure_ascii=False)
+
+            elif function_name == "k8s_get_available_api_resources":
+                resources = await self.k8s_service.get_available_api_resources()
+                result = json.dumps(resources, ensure_ascii=False)
+
+            elif function_name == "k8s_get_cluster_configuration":
+                cfg = await self.k8s_service.get_cluster_configuration()
+                result = json.dumps(cfg, ensure_ascii=False)
+
+            elif function_name == "k8s_check_service_connectivity":
+                namespace = function_args.get("namespace")
+                service_name = function_args.get("service_name") or function_args.get("name") or function_args.get("service")
+                port = function_args.get("port")
+
+                if not service_name:
+                    raise Exception("service_name is required")
+
+                if not isinstance(namespace, str) or not namespace.strip():
+                    matches = await self._find_services(str(service_name), namespace=None, limit=20)
+                    chosen = await self._resolve_single("services", str(service_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    service_name = str(chosen.get("name", service_name))
+
+                result_data = await self.k8s_service.check_service_connectivity(
+                    namespace=str(namespace),
+                    service_name=str(service_name),
+                    port=str(port) if port is not None else None,
+                )
+                result = json.dumps(result_data, ensure_ascii=False)
+
+            elif function_name == "k8s_generate_resource":
+                result = json.dumps(
+                    {"error": "YAML 생성은 비활성화되었습니다."},
+                    ensure_ascii=False,
+                )
             
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()

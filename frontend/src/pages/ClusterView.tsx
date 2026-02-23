@@ -31,7 +31,11 @@ interface PodDetail {
     name: string
     image: string
     ready: boolean
-    state: string
+    state: {
+      waiting?: { reason?: string | null; message?: string | null }
+      terminated?: { reason?: string | null; message?: string | null; exit_code?: number | null }
+      running?: { started_at?: string | null }
+    } | null
     restart_count: number
   }>
 }
@@ -281,7 +285,16 @@ export default function ClusterView() {
         
         // WebSocket 연결
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${window.location.hostname}:8000/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/logs/ws?container=${selectedContainer}&tail_lines=100`
+        const rawWsBase = (import.meta.env.VITE_WS_URL || '').trim()
+        let wsBase = rawWsBase
+        if (wsBase && wsBase.startsWith('http')) {
+          wsBase = wsBase.replace(/^http/, 'ws')
+        }
+        if (!wsBase) {
+          wsBase = `${protocol}//${window.location.host}`
+        }
+        wsBase = wsBase.replace(/\/$/, '')
+        const wsUrl = `${wsBase}/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/logs/ws?container=${selectedContainer}&tail_lines=100`
         
         const ws = new WebSocket(wsUrl)
         abortControllerRef.current = ws as any
@@ -485,14 +498,84 @@ export default function ClusterView() {
     return nodeA.localeCompare(nodeB)
   })
 
-  const getHealthIcon = (status: string, phase: string) => {
-    if (phase === 'Running' && status === 'Running') {
-      return <CheckCircle className="w-5 h-5 text-green-400" />
-    } else if (phase === 'Failed' || status === 'CrashLoopBackOff') {
-      return <XCircle className="w-5 h-5 text-red-400" />
-    } else {
-      return <AlertCircle className="w-5 h-5 text-yellow-400" />
+  const pickReason = (reasons: string[], priority: string[]) => {
+    for (const p of priority) {
+      if (reasons.includes(p)) return p
     }
+    return reasons[0] || ''
+  }
+
+  const getPodHealth = (pod: any) => {
+    const phase = pod?.phase || pod?.status || 'Unknown'
+    const containers = Array.isArray(pod?.containers) ? pod.containers : []
+    const waitingReasons = containers
+      .map((c: any) => c?.state?.waiting?.reason)
+      .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
+    const terminatedReasons = containers
+      .map((c: any) => c?.state?.terminated?.reason)
+      .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
+
+    const errorPriority = [
+      'CrashLoopBackOff',
+      'ImagePullBackOff',
+      'ErrImagePull',
+      'CreateContainerConfigError',
+      'CreateContainerError',
+      'RunContainerError',
+      'ContainerCannotRun',
+      'InvalidImageName',
+      'ImageInspectError',
+      'RegistryUnavailable',
+      'ErrImageNeverPull',
+      'OOMKilled',
+      'Error',
+    ]
+
+    const warnPriority = [
+      'ContainerCreating',
+      'PodInitializing',
+      'Pending',
+      'NotReady',
+    ]
+
+    const errorReason = pickReason([...waitingReasons, ...terminatedReasons], errorPriority)
+    if (errorReason || phase === 'Failed') {
+      return { level: 'error' as const, reason: errorReason || 'Failed', phase }
+    }
+
+    const readyCount = containers.filter((c: any) => c?.ready).length
+    const totalCount = containers.length
+    const notReady = totalCount > 0 && readyCount < totalCount
+
+    if (phase === 'Pending' || phase === 'Unknown') {
+      return { level: 'warn' as const, reason: phase, phase }
+    }
+
+    if (notReady) {
+      const warnReason = pickReason(waitingReasons, warnPriority) || 'NotReady'
+      return { level: 'warn' as const, reason: warnReason, phase }
+    }
+
+    if (phase === 'Succeeded') {
+      return { level: 'ok' as const, reason: 'Succeeded', phase }
+    }
+
+    const warnReason = pickReason(waitingReasons, warnPriority)
+    if (warnReason) {
+      return { level: 'warn' as const, reason: warnReason, phase }
+    }
+
+    return { level: 'ok' as const, reason: phase, phase }
+  }
+
+  const getHealthIcon = (level: 'ok' | 'warn' | 'error') => {
+    if (level === 'ok') {
+      return <CheckCircle className="w-5 h-5 text-green-400" />
+    }
+    if (level === 'error') {
+      return <XCircle className="w-5 h-5 text-red-400" />
+    }
+    return <AlertCircle className="w-5 h-5 text-yellow-400" />
   }
 
   const handlePodClick = async (pod: any) => {
@@ -745,12 +828,15 @@ export default function ClusterView() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <Box className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                      {getHealthIcon(pod.status, pod.phase)}
+                      {getHealthIcon(getPodHealth(pod).level)}
                     </div>
                     <div className="text-sm font-medium text-white truncate" title={pod.name}>
                       {pod.name}
                     </div>
                     <div className="text-xs text-slate-400 mt-1">{pod.namespace}</div>
+                    <div className="text-xs text-slate-300 mt-1 min-h-[16px]">
+                      {getPodHealth(pod).reason}
+                    </div>
                     <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
                       {pod.restart_count > 0 && `재시작: ${pod.restart_count}`}
                     </div>
@@ -909,7 +995,7 @@ export default function ClusterView() {
                     </div>
                     <div>
                       <p className="text-sm text-slate-400">STATE</p>
-                      <p className="text-white font-medium">{selectedPod.phase || selectedPod.status || 'Unknown'}</p>
+                      <p className="text-white font-medium">{getPodHealth(selectedPod).reason}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-400">NODE</p>
@@ -1036,9 +1122,9 @@ export default function ClusterView() {
                   <div>
                     <h3 className="text-lg font-bold text-white mb-3">Health</h3>
                     <div className="flex items-center gap-2">
-                      {getHealthIcon(selectedPod.status, selectedPod.phase)}
+                      {getHealthIcon(getPodHealth(selectedPod).level)}
                       <span className="text-white font-medium">
-                        {selectedPod.phase === 'Running' ? 'Healthy' : selectedPod.phase}
+                        {getPodHealth(selectedPod).reason}
                       </span>
                     </div>
                   </div>
