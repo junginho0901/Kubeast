@@ -1446,11 +1446,7 @@ export default function AIChat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.isComposing) return
-                if (e.key === 'Enter' && e.shiftKey) {
-                  e.preventDefault()
-                  return
-                }
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   if (!isStreaming) handleSend()
                 }
