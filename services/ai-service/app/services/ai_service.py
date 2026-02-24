@@ -21,6 +21,7 @@ from app.models.ai import (
     SeverityLevel
 )
 from app.services.k8s_client import K8sServiceClient
+from app.services.tool_server_client import ToolServerClient
 
 
 class ToolContext:
@@ -60,6 +61,7 @@ class AIService:
         self.model = resolved_model
         self.user_role = self._resolve_user_role(authorization)
         self.k8s_service = K8sServiceClient(authorization=authorization)
+        self.tool_server = ToolServerClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}, role: {self.user_role}", flush=True)
 
@@ -76,6 +78,9 @@ class AIService:
         except Exception:
             pass
         return "read"
+
+    async def _call_tool_server(self, function_name: str, function_args: Dict) -> str:
+        return await self.tool_server.call_tool(function_name, function_args)
 
     def _role_allows_write(self) -> bool:
         return self.user_role in {"write", "admin"}
