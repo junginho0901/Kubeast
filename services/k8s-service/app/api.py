@@ -117,6 +117,8 @@ async def create_resource(payload: dict):
         )
     except ApiException as e:
         detail = e.body or e.reason or str(e)
+        if isinstance(detail, (bytes, bytearray)):
+            detail = detail.decode("utf-8", errors="replace")
         status = getattr(e, "status", None) or 500
         raise HTTPException(status_code=status, detail=detail)
     except Exception as e:
