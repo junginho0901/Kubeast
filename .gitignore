@@ -77,3 +77,4 @@ k8s/secret.yaml
 kagent/
 argo-cd/
 .tmp/
+tools/
