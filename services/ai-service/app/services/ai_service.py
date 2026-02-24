@@ -4434,6 +4434,24 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_label_resource",
+                    "description": "리소스 라벨 추가/수정 (kubectl label).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "labels": {"type": "object", "description": "추가할 labels"},
+                            "overwrite": {"type": "boolean", "description": "기존 값 덮어쓰기"},
+                        },
+                        "required": ["resource_type", "resource_name", "labels"],
+                    },
+                },
+            },
         ]
     
     async def _execute_function_with_context(

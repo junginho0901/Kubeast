@@ -227,6 +227,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Remove annotations from a Kubernetes resource (kubectl annotate key-)",
 		Handler:     handleRemoveAnnotation,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_label_resource",
+		Description: "Label a Kubernetes resource (kubectl label)",
+		Handler:     handleLabelResource,
+	})
 
 	return registry
 }
@@ -640,6 +645,32 @@ func handleRemoveAnnotation(ctx context.Context, args map[string]interface{}, he
 	cmdArgs := []string{"annotate", resourceType, resourceName}
 	for _, k := range keys {
 		cmdArgs = append(cmdArgs, fmt.Sprintf("%s-", k))
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if overwrite {
+		cmdArgs = append(cmdArgs, "--overwrite")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleLabelResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	labels := argStringMap(args, "labels")
+	if len(labels) == 0 {
+		return "", wrapBadRequest("labels parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+	overwrite := argBool(args, "overwrite")
+
+	cmdArgs := []string{"label", resourceType, resourceName}
+	for k, v := range labels {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", k, v))
 	}
 	if namespace != "" {
 		cmdArgs = append(cmdArgs, "-n", namespace)
