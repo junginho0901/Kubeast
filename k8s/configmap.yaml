@@ -30,7 +30,7 @@ data:
   IN_CLUSTER: "false"
   KUBECONFIG_PATH: "/app/kubeconfig.yaml"
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
-  TOOL_SERVER_URL: "http://tool-server:8086"
+  TOOL_SERVER_URL: "http://tool-server-read:8086"
 
   VITE_API_URL: "http://localhost:30080"
   VITE_WS_URL: "ws://localhost:30080"
