@@ -117,6 +117,7 @@ class K8sService:
             raise Exception("Kubernetes client not initialized")
         if not path.startswith("/"):
             path = "/" + path
+        header_params = {"Content-Type": "application/json"}
 
         resp = self.api_client.call_api(
             path,
@@ -125,7 +126,7 @@ class K8sService:
             response_type="str",
             auth_settings=["BearerToken"],
             _preload_content=False,
-            _headers={"Content-Type": "application/json"},
+            header_params=header_params,
         )[0]
         data = resp.data if hasattr(resp, "data") else resp
         if isinstance(data, bytes):
