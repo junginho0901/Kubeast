@@ -217,6 +217,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Patch a Kubernetes resource (kubectl patch)",
 		Handler:     handlePatchResource,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_annotate_resource",
+		Description: "Annotate a Kubernetes resource (kubectl annotate)",
+		Handler:     handleAnnotateResource,
+	})
 
 	return registry
 }
@@ -584,6 +589,32 @@ func handlePatchResource(ctx context.Context, args map[string]interface{}, heade
 	}
 	if patchType != "" {
 		cmdArgs = append(cmdArgs, "--type", patchType)
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleAnnotateResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	annotations := argStringMap(args, "annotations")
+	if len(annotations) == 0 {
+		return "", wrapBadRequest("annotations parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+	overwrite := argBool(args, "overwrite")
+
+	cmdArgs := []string{"annotate", resourceType, resourceName}
+	for k, v := range annotations {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", k, v))
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if overwrite {
+		cmdArgs = append(cmdArgs, "--overwrite")
 	}
 	return runKubectl(ctx, headers, cmdArgs...)
 }
