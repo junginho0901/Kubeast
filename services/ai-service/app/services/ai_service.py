@@ -4356,6 +4356,27 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_delete_resource",
+                    "description": "리소스 삭제 (kubectl delete).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름 (all=true일 때 생략 가능)"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "all": {"type": "boolean", "description": "모두 삭제"},
+                            "force": {"type": "boolean", "description": "강제 삭제"},
+                            "grace_period": {"type": "integer", "description": "grace period(초)"},
+                            "wait": {"type": "boolean", "description": "삭제 완료 대기"},
+                            "ignore_not_found": {"type": "boolean", "description": "없으면 무시"},
+                        },
+                        "required": ["resource_type"],
+                    },
+                },
+            },
         ]
     
     async def _execute_function_with_context(

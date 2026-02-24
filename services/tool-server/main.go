@@ -207,6 +207,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Create resources from manifest URL (kubectl create -f URL)",
 		Handler:     handleCreateResourceFromURL,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_delete_resource",
+		Description: "Delete a Kubernetes resource (kubectl delete)",
+		Handler:     handleDeleteResource,
+	})
 
 	return registry
 }
@@ -512,6 +517,47 @@ func handleCreateResourceFromURL(ctx context.Context, args map[string]interface{
 		return "", wrapBadRequest("url parameter is required")
 	}
 	return runKubectl(ctx, headers, "create", "-f", url)
+}
+
+func handleDeleteResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	if resourceType == "" {
+		return "", wrapBadRequest("resource_type parameter is required")
+	}
+	resourceName := argString(args, "resource_name", "")
+	all := argBool(args, "all")
+	if resourceName == "" && !all {
+		return "", wrapBadRequest("resource_name parameter is required unless all=true")
+	}
+	namespace := argString(args, "namespace", "")
+	grace := argInt(args, "grace_period", -1)
+	force := argBool(args, "force")
+	wait := argBool(args, "wait")
+	ignoreNotFound := argBool(args, "ignore_not_found")
+
+	cmdArgs := []string{"delete", resourceType}
+	if resourceName != "" {
+		cmdArgs = append(cmdArgs, resourceName)
+	}
+	if all {
+		cmdArgs = append(cmdArgs, "--all")
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if grace >= 0 {
+		cmdArgs = append(cmdArgs, "--grace-period", strconv.Itoa(grace))
+	}
+	if force {
+		cmdArgs = append(cmdArgs, "--force")
+	}
+	if wait {
+		cmdArgs = append(cmdArgs, "--wait=true")
+	}
+	if ignoreNotFound {
+		cmdArgs = append(cmdArgs, "--ignore-not-found=true")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
 }
 
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {
