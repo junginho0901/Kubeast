@@ -4470,6 +4470,23 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_scale",
+                    "description": "리소스 스케일 조정 (kubectl scale).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "replicas": {"type": "integer", "description": "replica 수"},
+                        },
+                        "required": ["resource_type", "resource_name", "replicas"],
+                    },
+                },
+            },
         ]
     
     async def _execute_function_with_context(

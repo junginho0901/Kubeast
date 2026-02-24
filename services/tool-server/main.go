@@ -237,6 +237,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Remove labels from a Kubernetes resource (kubectl label key-)",
 		Handler:     handleRemoveLabel,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_scale",
+		Description: "Scale a Kubernetes workload (kubectl scale)",
+		Handler:     handleScaleResource,
+	})
 
 	return registry
 }
@@ -708,6 +713,25 @@ func handleRemoveLabel(ctx context.Context, args map[string]interface{}, headers
 	}
 	if overwrite {
 		cmdArgs = append(cmdArgs, "--overwrite")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleScaleResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	replicas := argInt(args, "replicas", -1)
+	if replicas < 0 {
+		return "", wrapBadRequest("replicas parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+
+	cmdArgs := []string{"scale", resourceType, resourceName, "--replicas", strconv.Itoa(replicas)}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
 	}
 	return runKubectl(ctx, headers, cmdArgs...)
 }
