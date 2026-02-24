@@ -31,6 +31,9 @@ data:
   KUBECONFIG_PATH: "/app/kubeconfig.yaml"
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
   TOOL_SERVER_URL: "http://tool-server-read:8086"
+  TOOL_SERVER_URL_READ: "http://tool-server-read:8086"
+  TOOL_SERVER_URL_WRITE: "http://tool-server-write:8086"
+  TOOL_SERVER_URL_ADMIN: "http://tool-server-admin:8086"
 
   VITE_API_URL: "http://localhost:30080"
   VITE_WS_URL: "ws://localhost:30080"
