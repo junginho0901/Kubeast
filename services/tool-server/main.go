@@ -197,6 +197,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Apply a Kubernetes manifest (kubectl apply -f -)",
 		Handler:     handleApplyManifest,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_create_resource",
+		Description: "Create a Kubernetes resource from manifest (kubectl create -f -)",
+		Handler:     handleCreateResource,
+	})
 
 	return registry
 }
@@ -483,6 +488,14 @@ func handleApplyManifest(ctx context.Context, args map[string]interface{}, heade
 		return "", err
 	}
 	return runKubectlWithInput(ctx, headers, manifest, "apply", "-f", "-")
+}
+
+func handleCreateResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	manifest, err := manifestFromArgs(args)
+	if err != nil {
+		return "", err
+	}
+	return runKubectlWithInput(ctx, headers, manifest, "create", "-f", "-")
 }
 
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {

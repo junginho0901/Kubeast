@@ -4325,6 +4325,23 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_create_resource",
+                    "description": "리소스 생성 (kubectl create -f -).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "yaml_content": {"type": "string", "description": "YAML 매니페스트 문자열"},
+                            "resource_manifest": {
+                                "type": "object",
+                                "description": "매니페스트 JSON 객체 (선택)",
+                            },
+                        },
+                    },
+                },
+            },
         ]
     
     async def _execute_function_with_context(
