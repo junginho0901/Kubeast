@@ -15,6 +15,7 @@ declare -a IMAGES=(
   "kube-assistant/auth-service:local services/auth-service"
   "kube-assistant/ai-service:local services/ai-service"
   "kube-assistant/k8s-service:local services/k8s-service"
+  "kube-assistant/tool-server:local services/tool-server"
   "kube-assistant/session-service:local services/session-service"
   "kube-assistant/frontend:local frontend"
   "kube-assistant/model-config-controller-go:local services/model-config-controller-go"
