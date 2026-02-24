@@ -4452,6 +4452,24 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_remove_label",
+                    "description": "리소스 라벨 제거 (kubectl label key-).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "keys": {"type": "array", "items": {"type": "string"}, "description": "제거할 키 목록"},
+                            "overwrite": {"type": "boolean", "description": "기존 값 덮어쓰기"},
+                        },
+                        "required": ["resource_type", "resource_name", "keys"],
+                    },
+                },
+            },
         ]
     
     async def _execute_function_with_context(
