@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tool-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tool-server
+  template:
+    metadata:
+      labels:
+        app: tool-server
+    spec:
+      containers:
+        - name: tool-server
+          image: kube-assistant/tool-server:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+          envFrom:
+            - configMapRef:
+                name: kube-assistant-config
+            - secretRef:
+                name: kube-assistant-secrets
+          env:
+            - name: TOKEN_PASSTHROUGH
+              value: "true"
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /app/kubeconfig.yaml
+              subPath: kubeconfig.yaml
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: k8s-kubeconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tool-server
+spec:
+  ports:
+    - port: 8086
+      targetPort: 8086
+  selector:
+    app: tool-server

@@ -5,6 +5,7 @@
 docker build -t kube-assistant/auth-service:local services/auth-service
 docker build -t kube-assistant/ai-service:local services/ai-service
 docker build -t kube-assistant/k8s-service:local services/k8s-service
+docker build -t kube-assistant/tool-server:local services/tool-server
 docker build -t kube-assistant/session-service:local services/session-service
 docker build -t kube-assistant/frontend:local frontend
 docker build -t kube-assistant/model-config-controller-go:local services/model-config-controller-go
@@ -15,6 +16,7 @@ docker build -t kube-assistant/model-config-controller-go:local services/model-c
 kind load docker-image kube-assistant/auth-service:local --name kube-assistant
 kind load docker-image kube-assistant/ai-service:local --name kube-assistant
 kind load docker-image kube-assistant/k8s-service:local --name kube-assistant
+kind load docker-image kube-assistant/tool-server:local --name kube-assistant
 kind load docker-image kube-assistant/session-service:local --name kube-assistant
 kind load docker-image kube-assistant/frontend:local --name kube-assistant
 kind load docker-image kube-assistant/model-config-controller-go:local --name kube-assistant

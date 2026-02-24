@@ -21,6 +21,7 @@ from app.models.ai import (
     SeverityLevel
 )
 from app.services.k8s_client import K8sServiceClient
+from app.services.tool_server_client import ToolServerClient
 
 
 class ToolContext:
@@ -60,6 +61,7 @@ class AIService:
         self.model = resolved_model
         self.user_role = self._resolve_user_role(authorization)
         self.k8s_service = K8sServiceClient(authorization=authorization)
+        self.tool_server = ToolServerClient(authorization=authorization)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}, role: {self.user_role}", flush=True)
 
@@ -76,6 +78,9 @@ class AIService:
         except Exception:
             pass
         return "read"
+
+    async def _call_tool_server(self, function_name: str, function_args: Dict) -> str:
+        return await self.tool_server.call_tool(function_name, function_args)
 
     def _role_allows_write(self) -> bool:
         return self.user_role in {"write", "admin"}
@@ -3104,8 +3109,7 @@ Draft (rules-based, keep numbers unchanged):
                 return logs
             
             elif function_name == "get_cluster_overview":
-                overview = await self.k8s_service.get_cluster_overview()
-                return json.dumps(overview, ensure_ascii=False)
+                return await self._call_tool_server(function_name, function_args)
             
             elif function_name == "describe_pod":
                 namespace = function_args.get("namespace")
@@ -3160,14 +3164,14 @@ Draft (rules-based, keep numbers unchanged):
                 if isinstance(output, str) and output.strip().lower() == "yaml":
                     output = "json"
 
-                payload = await self.k8s_service.get_resources(
-                    resource_type=resource_type,
-                    resource_name=resource_name,
-                    namespace=namespace if isinstance(namespace, str) else None,
-                    all_namespaces=all_namespaces,
-                    output=output if isinstance(output, str) else "wide",
-                )
-                return self._render_k8s_resource_payload(payload)
+                tool_args = {
+                    "resource_type": resource_type,
+                    "resource_name": resource_name,
+                    "namespace": namespace if isinstance(namespace, str) else None,
+                    "all_namespaces": all_namespaces,
+                    "output": output if isinstance(output, str) else "wide",
+                }
+                return await self._call_tool_server(function_name, tool_args)
 
             elif function_name == "k8s_get_resource_yaml":
                 namespace = function_args.get("namespace")
@@ -3200,12 +3204,14 @@ Draft (rules-based, keep numbers unchanged):
                     ns = resolved.get("namespace") or ns
 
                 try:
-                    yaml_text = await self.k8s_service.get_resource_yaml(
-                        resource_type=resource_type,
-                        resource_name=resource_name,
-                        namespace=ns,
+                    return await self._call_tool_server(
+                        function_name,
+                        {
+                            "resource_type": resource_type,
+                            "resource_name": resource_name,
+                            "namespace": ns,
+                        },
                     )
-                    return yaml_text
                 except Exception:
                     if resolved is None:
                         resolved = await self._locate_resource_for_yaml(
@@ -3216,22 +3222,26 @@ Draft (rules-based, keep numbers unchanged):
                         resource_type = str(resolved.get("resource_type") or resource_type)
                         resource_name = str(resolved.get("resource_name") or resource_name)
                         ns = resolved.get("namespace") or ns
-                        yaml_text = await self.k8s_service.get_resource_yaml(
-                            resource_type=resource_type,
-                            resource_name=resource_name,
-                            namespace=ns,
+                        return await self._call_tool_server(
+                            function_name,
+                            {
+                                "resource_type": resource_type,
+                                "resource_name": resource_name,
+                                "namespace": ns,
+                            },
                         )
-                        return yaml_text
                     raise
 
             elif function_name == "k8s_describe_resource":
                 namespace = function_args.get("namespace")
-                result = await self.k8s_service.describe_resource(
-                    resource_type=function_args.get("resource_type", ""),
-                    resource_name=function_args.get("resource_name", ""),
-                    namespace=namespace if isinstance(namespace, str) else None,
+                return await self._call_tool_server(
+                    function_name,
+                    {
+                        "resource_type": function_args.get("resource_type", ""),
+                        "resource_name": function_args.get("resource_name", ""),
+                        "namespace": namespace if isinstance(namespace, str) else None,
+                    },
                 )
-                return json.dumps(result, ensure_ascii=False)
 
             elif function_name == "k8s_get_pod_logs":
                 namespace = function_args.get("namespace")
@@ -3259,27 +3269,26 @@ Draft (rules-based, keep numbers unchanged):
                         f"({', '.join(all_containers)}). 'container' 인자를 사용해 로그를 볼 컨테이너를 명시해주세요."
                     )
 
-                logs = await self.k8s_service.get_pod_logs(
-                    namespace,
-                    pod_name,
-                    tail_lines=tail_lines,
-                    container=chosen_container,
+                return await self._call_tool_server(
+                    function_name,
+                    {
+                        "namespace": namespace,
+                        "pod_name": pod_name,
+                        "tail_lines": tail_lines,
+                        "container": chosen_container,
+                    },
                 )
-                return logs
 
             elif function_name == "k8s_get_events":
                 namespace = function_args.get("namespace")
                 ns = namespace if isinstance(namespace, str) and namespace.strip() else None
-                events = await self.k8s_service.get_events(ns)
-                return json.dumps(events, ensure_ascii=False)
+                return await self._call_tool_server(function_name, {"namespace": ns})
 
             elif function_name == "k8s_get_available_api_resources":
-                resources = await self.k8s_service.get_available_api_resources()
-                return json.dumps(resources, ensure_ascii=False)
+                return await self._call_tool_server(function_name, {})
 
             elif function_name == "k8s_get_cluster_configuration":
-                cfg = await self.k8s_service.get_cluster_configuration()
-                return json.dumps(cfg, ensure_ascii=False)
+                return await self._call_tool_server(function_name, {})
 
             elif function_name == "k8s_generate_resource":
                 return json.dumps(
@@ -4310,8 +4319,7 @@ Remember: You're not just answering questions - you're **solving production prob
             
             # 함수 실행
             if function_name == "get_cluster_overview":
-                overview = await self.k8s_service.get_cluster_overview()
-                result = json.dumps(overview, ensure_ascii=False)
+                result = await self._call_tool_server(function_name, function_args)
             
             elif function_name == "get_namespaces":
                 namespaces = await self.k8s_service.get_namespaces()
@@ -4480,14 +4488,14 @@ Remember: You're not just answering questions - you're **solving production prob
                 if isinstance(output, str) and output.strip().lower() == "yaml":
                     output = "json"
 
-                payload = await self.k8s_service.get_resources(
-                    resource_type=resource_type,
-                    resource_name=resource_name,
-                    namespace=namespace if isinstance(namespace, str) else None,
-                    all_namespaces=all_namespaces,
-                    output=output if isinstance(output, str) else "wide",
-                )
-                result = self._render_k8s_resource_payload(payload)
+                tool_args = {
+                    "resource_type": resource_type,
+                    "resource_name": resource_name,
+                    "namespace": namespace if isinstance(namespace, str) else None,
+                    "all_namespaces": all_namespaces,
+                    "output": output if isinstance(output, str) else "wide",
+                }
+                result = await self._call_tool_server(function_name, tool_args)
 
             elif function_name == "k8s_get_resource_yaml":
                 namespace = function_args.get("namespace")
@@ -4520,10 +4528,13 @@ Remember: You're not just answering questions - you're **solving production prob
                     ns = resolved.get("namespace") or ns
 
                 try:
-                    result = await self.k8s_service.get_resource_yaml(
-                        resource_type=resource_type,
-                        resource_name=resource_name,
-                        namespace=ns,
+                    result = await self._call_tool_server(
+                        function_name,
+                        {
+                            "resource_type": resource_type,
+                            "resource_name": resource_name,
+                            "namespace": ns,
+                        },
                     )
                 except Exception:
                     if resolved is None:
@@ -4535,22 +4546,27 @@ Remember: You're not just answering questions - you're **solving production prob
                         resource_type = str(resolved.get("resource_type") or resource_type)
                         resource_name = str(resolved.get("resource_name") or resource_name)
                         ns = resolved.get("namespace") or ns
-                        result = await self.k8s_service.get_resource_yaml(
-                            resource_type=resource_type,
-                            resource_name=resource_name,
-                            namespace=ns,
+                        result = await self._call_tool_server(
+                            function_name,
+                            {
+                                "resource_type": resource_type,
+                                "resource_name": resource_name,
+                                "namespace": ns,
+                            },
                         )
                     else:
                         raise
 
             elif function_name == "k8s_describe_resource":
                 namespace = function_args.get("namespace")
-                result_data = await self.k8s_service.describe_resource(
-                    resource_type=function_args.get("resource_type", ""),
-                    resource_name=function_args.get("resource_name", ""),
-                    namespace=namespace if isinstance(namespace, str) else None,
+                result = await self._call_tool_server(
+                    function_name,
+                    {
+                        "resource_type": function_args.get("resource_type", ""),
+                        "resource_name": function_args.get("resource_name", ""),
+                        "namespace": namespace if isinstance(namespace, str) else None,
+                    },
                 )
-                result = json.dumps(result_data, ensure_ascii=False)
 
             elif function_name == "k8s_get_pod_logs":
                 namespace = function_args.get("namespace")
@@ -4584,28 +4600,27 @@ Remember: You're not just answering questions - you're **solving production prob
                         ensure_ascii=False,
                     )
                 else:
-                    logs = await self.k8s_service.get_pod_logs(
-                        namespace,
-                        pod_name,
-                        tail_lines=tail_lines,
-                        container=chosen_container,
+                    result = await self._call_tool_server(
+                        function_name,
+                        {
+                            "namespace": namespace,
+                            "pod_name": pod_name,
+                            "tail_lines": tail_lines,
+                            "container": chosen_container,
+                        },
                     )
-                    result = logs
                     tool_context.state["last_log_pod"] = pod_name
 
             elif function_name == "k8s_get_events":
                 namespace = function_args.get("namespace")
                 ns = namespace if isinstance(namespace, str) and namespace.strip() else None
-                events = await self.k8s_service.get_events(ns)
-                result = json.dumps(events, ensure_ascii=False)
+                result = await self._call_tool_server(function_name, {"namespace": ns})
 
             elif function_name == "k8s_get_available_api_resources":
-                resources = await self.k8s_service.get_available_api_resources()
-                result = json.dumps(resources, ensure_ascii=False)
+                result = await self._call_tool_server(function_name, {})
 
             elif function_name == "k8s_get_cluster_configuration":
-                cfg = await self.k8s_service.get_cluster_configuration()
-                result = json.dumps(cfg, ensure_ascii=False)
+                result = await self._call_tool_server(function_name, {})
 
             elif function_name == "k8s_check_service_connectivity":
                 namespace = function_args.get("namespace")
@@ -4621,12 +4636,14 @@ Remember: You're not just answering questions - you're **solving production prob
                     namespace = str(chosen.get("namespace", ""))
                     service_name = str(chosen.get("name", service_name))
 
-                result_data = await self.k8s_service.check_service_connectivity(
-                    namespace=str(namespace),
-                    service_name=str(service_name),
-                    port=str(port) if port is not None else None,
+                result = await self._call_tool_server(
+                    function_name,
+                    {
+                        "namespace": str(namespace),
+                        "service_name": str(service_name),
+                        "port": str(port) if port is not None else None,
+                    },
                 )
-                result = json.dumps(result_data, ensure_ascii=False)
 
             elif function_name == "k8s_generate_resource":
                 result = json.dumps(
@@ -4653,12 +4670,13 @@ Remember: You're not just answering questions - you're **solving production prob
             
             elif function_name == "get_pod_metrics":
                 namespace = function_args.get("namespace")
-                metrics = await self.k8s_service.get_pod_metrics(namespace)
-                result = json.dumps(metrics, ensure_ascii=False)
+                result = await self._call_tool_server(
+                    function_name,
+                    {"namespace": namespace} if namespace else {},
+                )
             
             elif function_name == "get_node_metrics":
-                metrics = await self.k8s_service.get_node_metrics()
-                result = json.dumps(metrics, ensure_ascii=False)
+                result = await self._call_tool_server(function_name, {})
             
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})
