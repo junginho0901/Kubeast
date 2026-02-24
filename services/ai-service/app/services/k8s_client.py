@@ -199,15 +199,6 @@ class K8sServiceClient:
         data = response.json()
         return data.get("yaml", "")
 
-    async def create_resource(self, resource_manifest: Dict, namespace: Optional[str] = None) -> Dict:
-        """리소스 생성"""
-        payload: Dict[str, object] = {"resource_manifest": resource_manifest}
-        if namespace:
-            payload["namespace"] = namespace
-        response = await self.client.post("/resources", json=payload)
-        response.raise_for_status()
-        return response.json()
-
     async def describe_resource(
         self,
         resource_type: str,

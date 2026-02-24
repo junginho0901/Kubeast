@@ -83,8 +83,8 @@ class AIService:
     def _role_allows_admin(self) -> bool:
         return self.user_role == "admin"
 
-    def _write_tools(self) -> set:
-        return {
+    def _is_tool_allowed(self, function_name: str) -> bool:
+        write_tools = {
             "k8s_apply_manifest",
             "k8s_create_resource",
             "k8s_create_resource_from_url",
@@ -98,12 +98,6 @@ class AIService:
             "k8s_rollout",
             "k8s_execute_command",
         }
-
-    def _is_write_tool(self, function_name: str) -> bool:
-        return function_name in self._write_tools()
-
-    def _is_tool_allowed(self, function_name: str) -> bool:
-        write_tools = self._write_tools()
         admin_only_tools = set()
 
         if function_name in admin_only_tools:
@@ -950,11 +944,6 @@ JSON 형식으로 응답해주세요:
     먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 모든 네임스페이스에서 후보를 찾고
     그 결과의 `namespace`/`name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
     YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시합니다.
-
-    생성/수정 요청 처리:
-    - `k8s_create_resource` 호출 시 `resource_manifest`가 **필수**입니다.
-    - 요청이 모호하면 리소스 종류/이름/이미지/네임스페이스 등을 먼저 질문하세요.
-    - "nginx 파드 하나"처럼 구체적이면 최소 Pod manifest를 구성해 `k8s_create_resource`로 호출하세요.
     """
         
         # 메시지 변환
@@ -1050,16 +1039,7 @@ JSON 형식으로 응답해주세요:
             # Function calling이 있으면 실행
             if tool_calls:
                 messages.append(response_message)
-
-                write_calls = [tc for tc in tool_calls if self._is_write_tool(tc.function.name)]
-                if write_calls:
-                    # write 도구가 포함되면 가장 첫 write만 실행하고 나머지는 생략
-                    tool_calls = [write_calls[0]]
-                    print(
-                        f"[DEBUG] Write tool detected; executing only {write_calls[0].function.name} and skipping {len(response_message.tool_calls) - 1} tool calls.",
-                        flush=True,
-                    )
-
+                
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     function_args = eval(tool_call.function.arguments)
@@ -2315,12 +2295,6 @@ Draft (rules-based, keep numbers unchanged):
 - 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
 - YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
 
-## 생성/수정 요청 처리 (중요)
-
-- `k8s_create_resource` 호출 시 `resource_manifest`가 **필수**입니다.
-- 사용자의 요청이 모호하면 **어떤 리소스를 만들지**(종류/이름/이미지/네임스페이스 등) 먼저 질문하세요.
-- 사용자가 "nginx 파드 하나"처럼 구체적으로 말하면, 최소 Pod manifest를 생성해 `k8s_create_resource`로 호출하세요.
-
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
    - 일반적인 설명보다 실제 데이터를 우선시하세요
@@ -3259,23 +3233,6 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 return json.dumps(result, ensure_ascii=False)
 
-            elif function_name == "k8s_create_resource":
-                resource_manifest = function_args.get("resource_manifest")
-                if not isinstance(resource_manifest, dict):
-                    return json.dumps(
-                        {
-                            "error": "resource_manifest가 필요합니다. 만들 리소스(kind), 이름, 이미지, 네임스페이스 등 구체 정보를 먼저 사용자에게 확인하세요. "
-                                     "예: 'nginx 파드 하나'처럼 구체적이면 최소 Pod manifest를 구성해 다시 호출하세요."
-                        },
-                        ensure_ascii=False,
-                    )
-                namespace = function_args.get("namespace")
-                result = await self.k8s_service.create_resource(
-                    resource_manifest=resource_manifest,
-                    namespace=namespace if isinstance(namespace, str) else None,
-                )
-                return json.dumps(result, ensure_ascii=False)
-
             elif function_name == "k8s_get_pod_logs":
                 namespace = function_args.get("namespace")
                 pod_name = function_args.get("pod_name", "")
@@ -3535,7 +3492,6 @@ Draft (rules-based, keep numbers unchanged):
             iteration = 0
             assistant_content = ""
             tool_calls_log = []  # Tool call 정보 저장
-            write_tool_executed = False
             
             while iteration < max_iterations:
                 iteration += 1
@@ -3614,22 +3570,10 @@ Draft (rules-based, keep numbers unchanged):
                 
                 # Function calling이 있으면 실행
                 if response_message.tool_calls:
-                    tool_calls = list(response_message.tool_calls or [])
-                    print(f"[DEBUG] Tool calls detected: {len(tool_calls)}")
+                    print(f"[DEBUG] Tool calls detected: {len(response_message.tool_calls)}")
                     messages.append(response_message)
-
-                    write_calls = [tc for tc in tool_calls if self._is_write_tool(tc.function.name)]
-                    if write_calls:
-                        # write 도구가 포함되면 가장 첫 write만 실행하고 나머지는 생략
-                        skipped = len(tool_calls) - 1
-                        tool_calls = [write_calls[0]]
-                        if skipped > 0:
-                            print(
-                                f"[DEBUG] Write tool detected; executing only {write_calls[0].function.name} and skipping {skipped} tool calls.",
-                                flush=True,
-                            )
                     
-                    for tool_call in tool_calls:
+                    for tool_call in response_message.tool_calls:
                         function_name = tool_call.function.name
                         function_args = json.loads(tool_call.function.arguments)
                         
@@ -3644,8 +3588,6 @@ Draft (rules-based, keep numbers unchanged):
                             function_args,
                             tool_context
                         )
-                        if self._is_write_tool(function_name):
-                            write_tool_executed = True
                         
                         print(f"[DEBUG] Function response length: {len(str(function_response))}")
                         
@@ -3709,154 +3651,7 @@ Draft (rules-based, keep numbers unchanged):
                             "name": function_name,
                             "content": tool_message_content
                         })
-
-                    if write_tool_executed:
-                        # write 도구 실행 후에는 추가 tool 호출을 막고 결과 요약만 반환
-                        messages.append(
-                            {
-                                "role": "system",
-                                "content": (
-                                    "방금 write 도구가 실행되었습니다. 추가 도구 호출 없이 결과만 요약하고, "
-                                    "추가 조사가 필요하면 사용자에게 먼저 확인하세요."
-                                ),
-                            }
-                        )
-
-                        try:
-                            stream = await self.client.chat.completions.create(
-                                model=self.model,
-                                messages=messages,
-                                temperature=0.7,
-                                max_tokens=1200,
-                                stream=True,
-                                stream_options={"include_usage": True},
-                            )
-                        except TypeError:
-                            stream = await self.client.chat.completions.create(
-                                model=self.model,
-                                messages=messages,
-                                temperature=0.7,
-                                max_tokens=1200,
-                                stream=True,
-                            )
-
-                        last_finish_reason = None
-                        stream_usage = None
-                        async for chunk in stream:
-                            if getattr(chunk, "usage", None) is not None:
-                                stream_usage = chunk.usage
-                            if chunk.choices and getattr(chunk.choices[0], "delta", None):
-                                delta = chunk.choices[0].delta
-                                if delta.content:
-                                    assistant_content += delta.content
-                                    yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
-                            if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
-                                last_finish_reason = chunk.choices[0].finish_reason
-
-                        if stream_usage is not None:
-                            print(
-                                f"[TOKENS][session_chat final stream] prompt={stream_usage.prompt_tokens}, "
-                                f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
-                                flush=True,
-                            )
-                            yield (
-                                "data: "
-                                + json.dumps(
-                                    {
-                                        "usage_phase": "session_chat_final_stream",
-                                        "usage": {
-                                            "prompt_tokens": stream_usage.prompt_tokens,
-                                            "completion_tokens": stream_usage.completion_tokens,
-                                            "total_tokens": stream_usage.total_tokens,
-                                        },
-                                    },
-                                    ensure_ascii=False,
-                                )
-                                + "\n\n"
-                            )
-
-                        if assistant_content:
-                            messages.append({"role": "assistant", "content": assistant_content})
-
-                        # 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
-                        if last_finish_reason == "length":
-                            max_continuations = 3
-                            for continuation_index in range(1, max_continuations + 1):
-                                messages.append(
-                                    {
-                                        "role": "user",
-                                        "content": (
-                                            "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
-                                            "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
-                                            "이미 출력한 내용은 반복하지 마세요."
-                                        ),
-                                    }
-                                )
-
-                                try:
-                                    cont_stream = await self.client.chat.completions.create(
-                                        model=self.model,
-                                        messages=messages,
-                                        temperature=0.7,
-                                        max_tokens=1200,
-                                        stream=True,
-                                        stream_options={"include_usage": True},
-                                    )
-                                except TypeError:
-                                    cont_stream = await self.client.chat.completions.create(
-                                        model=self.model,
-                                        messages=messages,
-                                        temperature=0.7,
-                                        max_tokens=1200,
-                                        stream=True,
-                                    )
-                                cont_usage = None
-
-                                continuation_text = ""
-                                cont_finish_reason = None
-                                async for chunk in cont_stream:
-                                    if getattr(chunk, "usage", None) is not None:
-                                        cont_usage = chunk.usage
-                                    if chunk.choices and getattr(chunk.choices[0], "delta", None):
-                                        delta = chunk.choices[0].delta
-                                        if delta.content:
-                                            continuation_text += delta.content
-                                            assistant_content += delta.content
-                                            yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
-                                    if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
-                                        cont_finish_reason = chunk.choices[0].finish_reason
-
-                                if cont_usage is not None:
-                                    print(
-                                        f"[TOKENS][session_chat continuation {continuation_index}] prompt={cont_usage.prompt_tokens}, "
-                                        f"completion={cont_usage.completion_tokens}, total={cont_usage.total_tokens}",
-                                        flush=True,
-                                    )
-                                    yield (
-                                        "data: "
-                                        + json.dumps(
-                                            {
-                                                "usage_phase": f"session_chat_continuation_{continuation_index}",
-                                                "usage": {
-                                                    "prompt_tokens": cont_usage.prompt_tokens,
-                                                    "completion_tokens": cont_usage.completion_tokens,
-                                                    "total_tokens": cont_usage.total_tokens,
-                                                },
-                                            },
-                                            ensure_ascii=False,
-                                        )
-                                        + "\n\n"
-                                    )
-
-                                if continuation_text:
-                                    messages.append({"role": "assistant", "content": continuation_text})
-
-                                if cont_finish_reason != "length":
-                                    break
-
-                        # 최종 응답 완료, 루프 종료
-                        break
-
+                    
                     # 다음 iteration으로 계속
                     continue
                 
@@ -4154,12 +3949,6 @@ Draft (rules-based, keep numbers unchanged):
 
 - 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
 - YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
-
-### 생성/수정 요청 처리 (중요)
-
-- `k8s_create_resource` 호출 시 `resource_manifest`가 **필수**입니다.
-- 사용자의 요청이 모호하면 **어떤 리소스를 만들지**(종류/이름/이미지/네임스페이스 등) 먼저 질문하세요.
-- 사용자가 "nginx 파드 하나"처럼 구체적으로 말하면, 최소 Pod manifest를 생성해 `k8s_create_resource`로 호출하세요.
 
 1. **항상 도구를 적극적으로 사용**: 
    - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
@@ -4494,22 +4283,6 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
-            {
-                "type": "function",
-                "function": {
-                    "name": "k8s_create_resource",
-                    "description": "리소스 생성 (kubectl create). resource_manifest는 필수이며, 요청이 모호하면 먼저 사용자에게 상세를 확인하세요. "
-                                   "예: 'nginx 파드'처럼 구체적이면 최소 Pod manifest를 생성해 호출하세요.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
-                            "resource_manifest": {"type": "object", "description": "Kubernetes manifest (JSON object)"},
-                        },
-                        "required": ["resource_manifest"],
-                    },
-                },
-            },
         ]
     
     async def _execute_function_with_context(
@@ -4690,24 +4463,6 @@ Remember: You're not just answering questions - you're **solving production prob
                     "message": event["message"],
                     "count": event["count"]
                 } for event in events], ensure_ascii=False)
-
-            elif function_name == "k8s_create_resource":
-                resource_manifest = function_args.get("resource_manifest")
-                if not isinstance(resource_manifest, dict):
-                    result = json.dumps(
-                        {
-                            "error": "resource_manifest가 필요합니다. 만들 리소스(kind), 이름, 이미지, 네임스페이스 등 구체 정보를 먼저 사용자에게 확인하세요. "
-                                     "예: 'nginx 파드 하나'처럼 구체적이면 최소 Pod manifest를 구성해 다시 호출하세요."
-                        },
-                        ensure_ascii=False,
-                    )
-                else:
-                    namespace = function_args.get("namespace")
-                    created = await self.k8s_service.create_resource(
-                        resource_manifest=resource_manifest,
-                        namespace=namespace if isinstance(namespace, str) else None,
-                    )
-                    result = json.dumps(created, ensure_ascii=False)
 
             elif function_name == "k8s_get_resources":
                 resource_type = function_args.get("resource_type", "")

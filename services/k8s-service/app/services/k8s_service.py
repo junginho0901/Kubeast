@@ -111,30 +111,6 @@ class K8sService:
             data = data.decode("utf-8")
         return json.loads(data)
 
-    def _raw_request_json(self, path: str, method: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """ApiClient를 통해 raw JSON 요청을 수행한다."""
-        if self.api_client is None:
-            raise Exception("Kubernetes client not initialized")
-        if not path.startswith("/"):
-            path = "/" + path
-        header_params = {"Content-Type": "application/json"}
-
-        resp = self.api_client.call_api(
-            path,
-            method,
-            body=body,
-            response_type="str",
-            auth_settings=["BearerToken"],
-            _preload_content=False,
-            header_params=header_params,
-        )[0]
-        data = resp.data if hasattr(resp, "data") else resp
-        if isinstance(data, bytes):
-            data = data.decode("utf-8")
-        if not data:
-            return {}
-        return json.loads(data)
-
     def _normalize_resource_key(self, value: str) -> str:
         return (value or "").strip().lower()
 
@@ -257,46 +233,6 @@ class K8sService:
 
         raise Exception(f"Unknown resource_type: {resource_type}")
 
-    def _parse_api_version(self, api_version: str) -> tuple[str, str]:
-        version = (api_version or "").strip()
-        if not version:
-            return "", ""
-        if "/" in version:
-            group, ver = version.split("/", 1)
-            return group, ver
-        return "", version
-
-    async def _resolve_api_resource_for_manifest(self, api_version: str, kind: str) -> Dict[str, Any]:
-        group, version = self._parse_api_version(api_version)
-        if not version:
-            raise Exception("apiVersion is required")
-
-        kind_key = self._normalize_resource_key(kind)
-        if not kind_key:
-            raise Exception("kind is required")
-
-        resources = await self.get_available_api_resources()
-        group_key = self._normalize_resource_key(group)
-        version_key = self._normalize_resource_key(version)
-
-        for r in resources:
-            if self._normalize_resource_key(r.get("kind", "")) != kind_key:
-                continue
-            if group_key and self._normalize_resource_key(r.get("group", "")) != group_key:
-                continue
-            gv = str(r.get("groupVersion", "") or "")
-            if not gv:
-                continue
-            gv_group, gv_version = self._parse_api_version(gv)
-            if group_key:
-                if self._normalize_resource_key(gv_group) != group_key:
-                    continue
-            if self._normalize_resource_key(gv_version) != version_key:
-                continue
-            return r
-
-        raise Exception(f"Unknown resource for apiVersion={api_version}, kind={kind}")
-
     def _build_resource_path(
         self,
         resource: Dict[str, Any],
@@ -341,47 +277,6 @@ class K8sService:
             return {"format": "yaml", "data": yaml.dump(data, default_flow_style=False, allow_unicode=True)}
 
         return {"format": "json", "data": data}
-
-    async def create_resource(
-        self,
-        resource_manifest: Dict[str, Any],
-        namespace: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        if not isinstance(resource_manifest, dict):
-            raise Exception("resource_manifest must be an object")
-
-        api_version = str(resource_manifest.get("apiVersion", "") or "").strip()
-        kind = str(resource_manifest.get("kind", "") or "").strip()
-        if not api_version or not kind:
-            raise Exception("resource_manifest must include apiVersion and kind")
-
-        resource = await self._resolve_api_resource_for_manifest(api_version, kind)
-        verbs = set(resource.get("verbs", []) or [])
-        if "create" not in verbs:
-            raise Exception(f"Resource {kind} does not support create")
-
-        manifest = dict(resource_manifest)
-        metadata = manifest.get("metadata")
-        if not isinstance(metadata, dict):
-            metadata = {}
-        manifest["metadata"] = metadata
-
-        namespaced = bool(resource.get("namespaced", False))
-        ns = None
-        if namespaced:
-            manifest_ns = metadata.get("namespace")
-            if namespace and manifest_ns and manifest_ns != namespace:
-                raise Exception(
-                    f"resource_manifest namespace '{manifest_ns}' does not match namespace '{namespace}'"
-                )
-            ns = namespace or manifest_ns or self._get_default_namespace()
-            metadata["namespace"] = ns
-        else:
-            if "namespace" in metadata:
-                metadata.pop("namespace", None)
-
-        path = self._build_resource_path(resource, ns, all_namespaces=False)
-        return self._raw_request_json(path, "POST", body=manifest)
 
     async def get_resource_yaml(
         self,

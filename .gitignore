@@ -68,7 +68,6 @@ kubeconfig.yaml
 kubeconfig*.yaml
 .kubeconfig-kind
 k8s/secret.local.yaml
-k8s/secret.yaml
 
 # Docker
 .dockerignore
@@ -77,4 +76,3 @@ k8s/secret.yaml
 kagent/
 argo-cd/
 .tmp/
-tools/
