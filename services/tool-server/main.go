@@ -247,6 +247,11 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Rollout operations (restart/undo/pause/resume/status)",
 		Handler:     handleRollout,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_execute_command",
+		Description: "Execute a command inside a pod container (kubectl exec)",
+		Handler:     handleExecuteCommand,
+	})
 
 	return registry
 }
@@ -765,6 +770,30 @@ func handleRollout(ctx context.Context, args map[string]interface{}, headers htt
 	if timeout != "" {
 		cmdArgs = append(cmdArgs, "--timeout", timeout)
 	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleExecuteCommand(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	podName := argString(args, "pod_name", "")
+	if podName == "" {
+		return "", wrapBadRequest("pod_name parameter is required")
+	}
+	namespace := argString(args, "namespace", "default")
+	container := argString(args, "container", "")
+	command := argStringSlice(args, "command")
+	if len(command) == 0 {
+		command = argStringSlice(args, "cmd")
+	}
+	if len(command) == 0 {
+		return "", wrapBadRequest("command parameter is required")
+	}
+
+	cmdArgs := []string{"exec", podName, "-n", namespace}
+	if container != "" {
+		cmdArgs = append(cmdArgs, "-c", container)
+	}
+	cmdArgs = append(cmdArgs, "--")
+	cmdArgs = append(cmdArgs, command...)
 	return runKubectl(ctx, headers, cmdArgs...)
 }
 

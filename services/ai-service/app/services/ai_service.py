@@ -4506,6 +4506,27 @@ Remember: You're not just answering questions - you're **solving production prob
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_execute_command",
+                    "description": "Pod 내 명령 실행 (kubectl exec).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "pod_name": {"type": "string", "description": "Pod 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                            "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
+                            "command": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "실행할 명령 배열 (예: [\"ls\", \"/\"])",
+                            },
+                        },
+                        "required": ["pod_name", "command"],
+                    },
+                },
+            },
         ]
     
     async def _execute_function_with_context(
