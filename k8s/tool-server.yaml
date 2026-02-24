@@ -1,17 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tool-server
+  name: tool-server-read
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: tool-server
+      app: tool-server-read
   template:
     metadata:
       labels:
-        app: tool-server
+        app: tool-server-read
     spec:
+      serviceAccountName: tool-server-read
       containers:
         - name: tool-server
           image: kube-assistant/tool-server:local
@@ -25,7 +26,10 @@ spec:
                 name: kube-assistant-secrets
           env:
             - name: TOKEN_PASSTHROUGH
-              value: "true"
+              valueFrom:
+                configMapKeyRef:
+                  name: kube-assistant-config
+                  key: TOOL_SERVER_TOKEN_PASSTHROUGH
           volumeMounts:
             - name: kubeconfig
               mountPath: /app/kubeconfig.yaml
@@ -38,10 +42,177 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: tool-server
+  name: tool-server-read
 spec:
   ports:
     - port: 8086
       targetPort: 8086
   selector:
-    app: tool-server
+    app: tool-server-read
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tool-server-write
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tool-server-write
+  template:
+    metadata:
+      labels:
+        app: tool-server-write
+    spec:
+      serviceAccountName: tool-server-write
+      containers:
+        - name: tool-server
+          image: kube-assistant/tool-server:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+          envFrom:
+            - configMapRef:
+                name: kube-assistant-config
+            - secretRef:
+                name: kube-assistant-secrets
+          env:
+            - name: TOKEN_PASSTHROUGH
+              valueFrom:
+                configMapKeyRef:
+                  name: kube-assistant-config
+                  key: TOOL_SERVER_TOKEN_PASSTHROUGH
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /app/kubeconfig.yaml
+              subPath: kubeconfig.yaml
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: k8s-kubeconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tool-server-write
+spec:
+  ports:
+    - port: 8086
+      targetPort: 8086
+  selector:
+    app: tool-server-write
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tool-server-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tool-server-admin
+  template:
+    metadata:
+      labels:
+        app: tool-server-admin
+    spec:
+      serviceAccountName: tool-server-admin
+      containers:
+        - name: tool-server
+          image: kube-assistant/tool-server:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+          envFrom:
+            - configMapRef:
+                name: kube-assistant-config
+            - secretRef:
+                name: kube-assistant-secrets
+          env:
+            - name: TOKEN_PASSTHROUGH
+              valueFrom:
+                configMapKeyRef:
+                  name: kube-assistant-config
+                  key: TOOL_SERVER_TOKEN_PASSTHROUGH
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /app/kubeconfig.yaml
+              subPath: kubeconfig.yaml
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: k8s-kubeconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tool-server-admin
+spec:
+  ports:
+    - port: 8086
+      targetPort: 8086
+  selector:
+    app: tool-server-admin
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tool-server-read
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tool-server-write
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tool-server-admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tool-server-read
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tool-server-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tool-server-read
+subjects:
+  - kind: ServiceAccount
+    name: tool-server-read
+    namespace: kube-assistant
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tool-server-write
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: tool-server-write
+    namespace: kube-assistant
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tool-server-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: tool-server-admin
+    namespace: kube-assistant

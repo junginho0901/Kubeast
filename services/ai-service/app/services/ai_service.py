@@ -6,6 +6,7 @@ from typing import List, Dict, Optional
 import httpx
 import re
 import json
+import os
 import sys
 from app.config import settings
 from datetime import datetime
@@ -61,7 +62,8 @@ class AIService:
         self.model = resolved_model
         self.user_role = self._resolve_user_role(authorization)
         self.k8s_service = K8sServiceClient(authorization=authorization)
-        self.tool_server = ToolServerClient(authorization=authorization)
+        tool_server_url = self._resolve_tool_server_url(self.user_role)
+        self.tool_server = ToolServerClient(authorization=authorization, base_url=tool_server_url)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - 사용 모델: {self.model}, role: {self.user_role}", flush=True)
 
@@ -78,6 +80,14 @@ class AIService:
         except Exception:
             pass
         return "read"
+
+    def _resolve_tool_server_url(self, role: str) -> Optional[str]:
+        role_key = (role or "").strip().lower()
+        if role_key == "admin":
+            return os.getenv("TOOL_SERVER_URL_ADMIN")
+        if role_key == "write":
+            return os.getenv("TOOL_SERVER_URL_WRITE")
+        return os.getenv("TOOL_SERVER_URL_READ")
 
     async def _call_tool_server(self, function_name: str, function_args: Dict) -> str:
         return await self.tool_server.call_tool(function_name, function_args)
@@ -4159,6 +4169,7 @@ Remember: You're not just answering questions - you're **solving production prob
         ]
 
         tools.extend(self._get_k8s_readonly_tool_definitions())
+        tools.extend(self._get_k8s_write_tool_definitions())
         return self._filter_tools_by_role(tools)
 
     def _get_k8s_readonly_tool_definitions(self) -> List[Dict]:
@@ -4293,6 +4304,230 @@ Remember: You're not just answering questions - you're **solving production prob
                 },
             },
         ]
+
+    def _get_k8s_write_tool_definitions(self) -> List[Dict]:
+        """kagent 스타일의 write k8s tool 정의"""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_apply_manifest",
+                    "description": "매니페스트 적용 (kubectl apply -f -).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "yaml_content": {"type": "string", "description": "YAML 매니페스트 문자열"},
+                            "resource_manifest": {
+                                "type": "object",
+                                "description": "매니페스트 JSON 객체 (선택)",
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_create_resource",
+                    "description": "리소스 생성 (kubectl create -f -).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "yaml_content": {"type": "string", "description": "YAML 매니페스트 문자열"},
+                            "resource_manifest": {
+                                "type": "object",
+                                "description": "매니페스트 JSON 객체 (선택)",
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_create_resource_from_url",
+                    "description": "URL 매니페스트로 리소스 생성 (kubectl create -f URL).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string", "description": "매니페스트 URL"},
+                        },
+                        "required": ["url"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_delete_resource",
+                    "description": "리소스 삭제 (kubectl delete).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름 (all=true일 때 생략 가능)"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "all": {"type": "boolean", "description": "모두 삭제"},
+                            "force": {"type": "boolean", "description": "강제 삭제"},
+                            "grace_period": {"type": "integer", "description": "grace period(초)"},
+                            "wait": {"type": "boolean", "description": "삭제 완료 대기"},
+                            "ignore_not_found": {"type": "boolean", "description": "없으면 무시"},
+                        },
+                        "required": ["resource_type"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_patch_resource",
+                    "description": "리소스 패치 (kubectl patch).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "patch": {"type": "object", "description": "패치 JSON 객체 또는 문자열"},
+                            "patch_type": {
+                                "type": "string",
+                                "description": "패치 타입 (strategic, merge, json)",
+                            },
+                        },
+                        "required": ["resource_type", "resource_name", "patch"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_annotate_resource",
+                    "description": "리소스 어노테이션 추가/수정 (kubectl annotate).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "annotations": {"type": "object", "description": "추가할 annotations"},
+                            "overwrite": {"type": "boolean", "description": "기존 값 덮어쓰기"},
+                        },
+                        "required": ["resource_type", "resource_name", "annotations"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_remove_annotation",
+                    "description": "리소스 어노테이션 제거 (kubectl annotate key-).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "keys": {"type": "array", "items": {"type": "string"}, "description": "제거할 키 목록"},
+                            "overwrite": {"type": "boolean", "description": "기존 값 덮어쓰기"},
+                        },
+                        "required": ["resource_type", "resource_name", "keys"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_label_resource",
+                    "description": "리소스 라벨 추가/수정 (kubectl label).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "labels": {"type": "object", "description": "추가할 labels"},
+                            "overwrite": {"type": "boolean", "description": "기존 값 덮어쓰기"},
+                        },
+                        "required": ["resource_type", "resource_name", "labels"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_remove_label",
+                    "description": "리소스 라벨 제거 (kubectl label key-).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "keys": {"type": "array", "items": {"type": "string"}, "description": "제거할 키 목록"},
+                            "overwrite": {"type": "boolean", "description": "기존 값 덮어쓰기"},
+                        },
+                        "required": ["resource_type", "resource_name", "keys"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_scale",
+                    "description": "리소스 스케일 조정 (kubectl scale).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "replicas": {"type": "integer", "description": "replica 수"},
+                        },
+                        "required": ["resource_type", "resource_name", "replicas"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_rollout",
+                    "description": "롤아웃 작업 (restart/undo/pause/resume/status).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string", "description": "restart/undo/pause/resume/status"},
+                            "resource_type": {"type": "string", "description": "리소스 타입"},
+                            "resource_name": {"type": "string", "description": "리소스 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
+                            "revision": {"type": "integer", "description": "undo revision"},
+                            "timeout": {"type": "string", "description": "timeout (예: 60s)"},
+                        },
+                        "required": ["action", "resource_type", "resource_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "k8s_execute_command",
+                    "description": "Pod 내 명령 실행 (kubectl exec).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "pod_name": {"type": "string", "description": "Pod 이름"},
+                            "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                            "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
+                            "command": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "실행할 명령 배열 (예: [\"ls\", \"/\"])",
+                            },
+                        },
+                        "required": ["pod_name", "command"],
+                    },
+                },
+            },
+        ]
     
     async def _execute_function_with_context(
         self,
@@ -4316,7 +4551,24 @@ Remember: You're not just answering questions - you're **solving production prob
             if cache_key in tool_context.cache:
                 print(f"[DEBUG] Cache hit for {cache_key}")
                 return tool_context.cache[cache_key]
-            
+
+            write_tools = {
+                "k8s_apply_manifest",
+                "k8s_create_resource",
+                "k8s_create_resource_from_url",
+                "k8s_delete_resource",
+                "k8s_patch_resource",
+                "k8s_annotate_resource",
+                "k8s_remove_annotation",
+                "k8s_label_resource",
+                "k8s_remove_label",
+                "k8s_scale",
+                "k8s_rollout",
+                "k8s_execute_command",
+            }
+            if function_name in write_tools:
+                return await self._call_tool_server(function_name, function_args)
+
             # 함수 실행
             if function_name == "get_cluster_overview":
                 result = await self._call_tool_server(function_name, function_args)

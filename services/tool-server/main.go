@@ -192,6 +192,66 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Description: "Check Service/Endpoint connectivity",
 		Handler:     handleCheckServiceConnectivity,
 	})
+	register(ToolDefinition{
+		Name:        "k8s_apply_manifest",
+		Description: "Apply a Kubernetes manifest (kubectl apply -f -)",
+		Handler:     handleApplyManifest,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_create_resource",
+		Description: "Create a Kubernetes resource from manifest (kubectl create -f -)",
+		Handler:     handleCreateResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_create_resource_from_url",
+		Description: "Create resources from manifest URL (kubectl create -f URL)",
+		Handler:     handleCreateResourceFromURL,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_delete_resource",
+		Description: "Delete a Kubernetes resource (kubectl delete)",
+		Handler:     handleDeleteResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_patch_resource",
+		Description: "Patch a Kubernetes resource (kubectl patch)",
+		Handler:     handlePatchResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_annotate_resource",
+		Description: "Annotate a Kubernetes resource (kubectl annotate)",
+		Handler:     handleAnnotateResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_remove_annotation",
+		Description: "Remove annotations from a Kubernetes resource (kubectl annotate key-)",
+		Handler:     handleRemoveAnnotation,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_label_resource",
+		Description: "Label a Kubernetes resource (kubectl label)",
+		Handler:     handleLabelResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_remove_label",
+		Description: "Remove labels from a Kubernetes resource (kubectl label key-)",
+		Handler:     handleRemoveLabel,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_scale",
+		Description: "Scale a Kubernetes workload (kubectl scale)",
+		Handler:     handleScaleResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_rollout",
+		Description: "Rollout operations (restart/undo/pause/resume/status)",
+		Handler:     handleRollout,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_execute_command",
+		Description: "Execute a command inside a pod container (kubectl exec)",
+		Handler:     handleExecuteCommand,
+	})
 
 	return registry
 }
@@ -472,6 +532,271 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 	return marshalJSON(result)
 }
 
+func handleApplyManifest(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	manifest, err := manifestFromArgs(args)
+	if err != nil {
+		return "", err
+	}
+	return runKubectlWithInput(ctx, headers, manifest, "apply", "-f", "-")
+}
+
+func handleCreateResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	manifest, err := manifestFromArgs(args)
+	if err != nil {
+		return "", err
+	}
+	return runKubectlWithInput(ctx, headers, manifest, "create", "-f", "-")
+}
+
+func handleCreateResourceFromURL(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	url := argString(args, "url", "")
+	if url == "" {
+		url = argString(args, "manifest_url", "")
+	}
+	if url == "" {
+		return "", wrapBadRequest("url parameter is required")
+	}
+	return runKubectl(ctx, headers, "create", "-f", url)
+}
+
+func handleDeleteResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	if resourceType == "" {
+		return "", wrapBadRequest("resource_type parameter is required")
+	}
+	resourceName := argString(args, "resource_name", "")
+	all := argBool(args, "all")
+	if resourceName == "" && !all {
+		return "", wrapBadRequest("resource_name parameter is required unless all=true")
+	}
+	namespace := argString(args, "namespace", "")
+	grace := argInt(args, "grace_period", -1)
+	force := argBool(args, "force")
+	wait := argBool(args, "wait")
+	ignoreNotFound := argBool(args, "ignore_not_found")
+
+	cmdArgs := []string{"delete", resourceType}
+	if resourceName != "" {
+		cmdArgs = append(cmdArgs, resourceName)
+	}
+	if all {
+		cmdArgs = append(cmdArgs, "--all")
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if grace >= 0 {
+		cmdArgs = append(cmdArgs, "--grace-period", strconv.Itoa(grace))
+	}
+	if force {
+		cmdArgs = append(cmdArgs, "--force")
+	}
+	if wait {
+		cmdArgs = append(cmdArgs, "--wait=true")
+	}
+	if ignoreNotFound {
+		cmdArgs = append(cmdArgs, "--ignore-not-found=true")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handlePatchResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	patchContent, err := patchFromArgs(args)
+	if err != nil {
+		return "", err
+	}
+	namespace := argString(args, "namespace", "")
+	patchType := argString(args, "patch_type", "")
+
+	cmdArgs := []string{"patch", resourceType, resourceName, "-p", patchContent}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if patchType != "" {
+		cmdArgs = append(cmdArgs, "--type", patchType)
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleAnnotateResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	annotations := argStringMap(args, "annotations")
+	if len(annotations) == 0 {
+		return "", wrapBadRequest("annotations parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+	overwrite := argBool(args, "overwrite")
+
+	cmdArgs := []string{"annotate", resourceType, resourceName}
+	for k, v := range annotations {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", k, v))
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if overwrite {
+		cmdArgs = append(cmdArgs, "--overwrite")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleRemoveAnnotation(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	keys := argStringSlice(args, "keys")
+	if len(keys) == 0 {
+		return "", wrapBadRequest("keys parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+	overwrite := argBool(args, "overwrite")
+
+	cmdArgs := []string{"annotate", resourceType, resourceName}
+	for _, k := range keys {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("%s-", k))
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if overwrite {
+		cmdArgs = append(cmdArgs, "--overwrite")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleLabelResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	labels := argStringMap(args, "labels")
+	if len(labels) == 0 {
+		return "", wrapBadRequest("labels parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+	overwrite := argBool(args, "overwrite")
+
+	cmdArgs := []string{"label", resourceType, resourceName}
+	for k, v := range labels {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", k, v))
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if overwrite {
+		cmdArgs = append(cmdArgs, "--overwrite")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleRemoveLabel(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	keys := argStringSlice(args, "keys")
+	if len(keys) == 0 {
+		return "", wrapBadRequest("keys parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+	overwrite := argBool(args, "overwrite")
+
+	cmdArgs := []string{"label", resourceType, resourceName}
+	for _, k := range keys {
+		cmdArgs = append(cmdArgs, fmt.Sprintf("%s-", k))
+	}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if overwrite {
+		cmdArgs = append(cmdArgs, "--overwrite")
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleScaleResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	replicas := argInt(args, "replicas", -1)
+	if replicas < 0 {
+		return "", wrapBadRequest("replicas parameter is required")
+	}
+	namespace := argString(args, "namespace", "")
+
+	cmdArgs := []string{"scale", resourceType, resourceName, "--replicas", strconv.Itoa(replicas)}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleRollout(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	action := argString(args, "action", "")
+	if action == "" {
+		return "", wrapBadRequest("action parameter is required")
+	}
+	resourceType := argString(args, "resource_type", "")
+	resourceName := argString(args, "resource_name", "")
+	if resourceType == "" || resourceName == "" {
+		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	namespace := argString(args, "namespace", "")
+	revision := argInt(args, "revision", 0)
+	timeout := argString(args, "timeout", "")
+
+	cmdArgs := []string{"rollout", action, fmt.Sprintf("%s/%s", resourceType, resourceName)}
+	if namespace != "" {
+		cmdArgs = append(cmdArgs, "-n", namespace)
+	}
+	if revision > 0 {
+		cmdArgs = append(cmdArgs, "--revision", strconv.Itoa(revision))
+	}
+	if timeout != "" {
+		cmdArgs = append(cmdArgs, "--timeout", timeout)
+	}
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
+func handleExecuteCommand(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
+	podName := argString(args, "pod_name", "")
+	if podName == "" {
+		return "", wrapBadRequest("pod_name parameter is required")
+	}
+	namespace := argString(args, "namespace", "default")
+	container := argString(args, "container", "")
+	command := argStringSlice(args, "command")
+	if len(command) == 0 {
+		command = argStringSlice(args, "cmd")
+	}
+	if len(command) == 0 {
+		return "", wrapBadRequest("command parameter is required")
+	}
+
+	cmdArgs := []string{"exec", podName, "-n", namespace}
+	if container != "" {
+		cmdArgs = append(cmdArgs, "-c", container)
+	}
+	cmdArgs = append(cmdArgs, "--")
+	cmdArgs = append(cmdArgs, command...)
+	return runKubectl(ctx, headers, cmdArgs...)
+}
+
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {
 	token, err := tokenForKubectl(headers)
 	if err != nil {
@@ -497,6 +822,34 @@ func runKubectl(ctx context.Context, headers http.Header, args ...string) (strin
 		return "", fmt.Errorf("kubectl failed: %s", errText)
 	}
 
+	return string(output), nil
+}
+
+func runKubectlWithInput(ctx context.Context, headers http.Header, input string, args ...string) (string, error) {
+	token, err := tokenForKubectl(headers)
+	if err != nil {
+		return "", err
+	}
+
+	finalArgs := make([]string, 0, len(args)+4)
+	if kubeconfigPath != "" {
+		finalArgs = append(finalArgs, "--kubeconfig", kubeconfigPath)
+	}
+	if token != "" {
+		finalArgs = append(finalArgs, "--token", token)
+	}
+	finalArgs = append(finalArgs, args...)
+
+	cmd := exec.CommandContext(ctx, "kubectl", finalArgs...)
+	cmd.Stdin = strings.NewReader(input)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errText := strings.TrimSpace(string(output))
+		if errText == "" {
+			errText = err.Error()
+		}
+		return "", fmt.Errorf("kubectl failed: %s", errText)
+	}
 	return string(output), nil
 }
 
@@ -527,6 +880,12 @@ func extractBearerToken(headers http.Header) string {
 }
 
 func resolveKubeconfigPath() string {
+	if strings.EqualFold(os.Getenv("TOOL_SERVER_USE_INCLUSTER"), "true") {
+		return ""
+	}
+	if v := os.Getenv("TOOL_SERVER_KUBECONFIG_PATH"); v != "" {
+		return v
+	}
 	if v := os.Getenv("KUBECONFIG_PATH"); v != "" {
 		return v
 	}
@@ -609,6 +968,135 @@ func argInt(args map[string]interface{}, key string, def int) int {
 	default:
 		return def
 	}
+}
+
+func argStringSlice(args map[string]interface{}, key string) []string {
+	if args == nil {
+		return nil
+	}
+	val, ok := args[key]
+	if !ok || val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if item == nil {
+				continue
+			}
+			s := strings.TrimSpace(fmt.Sprint(item))
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		raw := strings.TrimSpace(v)
+		if raw == "" {
+			return nil
+		}
+		parts := strings.Split(raw, ",")
+		if len(parts) == 1 {
+			return strings.Fields(raw)
+		}
+		out := make([]string, 0, len(parts))
+		for _, p := range parts {
+			s := strings.TrimSpace(p)
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func argStringMap(args map[string]interface{}, key string) map[string]string {
+	if args == nil {
+		return nil
+	}
+	val, ok := args[key]
+	if !ok || val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case map[string]string:
+		return v
+	case map[string]interface{}:
+		out := make(map[string]string, len(v))
+		for k, raw := range v {
+			if k == "" || raw == nil {
+				continue
+			}
+			out[k] = fmt.Sprint(raw)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func manifestFromArgs(args map[string]interface{}) (string, error) {
+	if args == nil {
+		return "", wrapBadRequest("resource_manifest or yaml_content is required")
+	}
+	if v, ok := args["yaml_content"]; ok && v != nil {
+		raw := strings.TrimSpace(fmt.Sprint(v))
+		if raw != "" {
+			return raw, nil
+		}
+	}
+	if v, ok := args["manifest"]; ok && v != nil {
+		raw := strings.TrimSpace(fmt.Sprint(v))
+		if raw != "" {
+			return raw, nil
+		}
+	}
+	if v, ok := args["resource_manifest"]; ok && v != nil {
+		switch typed := v.(type) {
+		case string:
+			raw := strings.TrimSpace(typed)
+			if raw != "" {
+				return raw, nil
+			}
+		default:
+			data, err := json.Marshal(typed)
+			if err != nil {
+				return "", err
+			}
+			return string(data), nil
+		}
+	}
+	return "", wrapBadRequest("resource_manifest or yaml_content is required")
+}
+
+func patchFromArgs(args map[string]interface{}) (string, error) {
+	if args == nil {
+		return "", wrapBadRequest("patch parameter is required")
+	}
+	for _, key := range []string{"patch", "patch_content", "patch_body"} {
+		if v, ok := args[key]; ok && v != nil {
+			switch typed := v.(type) {
+			case string:
+				raw := strings.TrimSpace(typed)
+				if raw == "" {
+					break
+				}
+				return raw, nil
+			default:
+				data, err := json.Marshal(typed)
+				if err != nil {
+					return "", err
+				}
+				return string(data), nil
+			}
+		}
+	}
+	return "", wrapBadRequest("patch parameter is required")
 }
 
 type listItems struct {
