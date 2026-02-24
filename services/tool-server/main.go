@@ -527,6 +527,12 @@ func extractBearerToken(headers http.Header) string {
 }
 
 func resolveKubeconfigPath() string {
+	if strings.EqualFold(os.Getenv("TOOL_SERVER_USE_INCLUSTER"), "true") {
+		return ""
+	}
+	if v := os.Getenv("TOOL_SERVER_KUBECONFIG_PATH"); v != "" {
+		return v
+	}
 	if v := os.Getenv("KUBECONFIG_PATH"); v != "" {
 		return v
 	}
