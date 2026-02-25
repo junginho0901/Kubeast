@@ -1,7 +1,7 @@
 """
 Kubernetes 클러스터 서비스
 """
-from kubernetes import client, config
+from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -154,6 +154,71 @@ class K8sService:
                 pass
 
         return "default"
+
+    def _pod_to_info(self, pod: client.V1Pod) -> PodInfo:
+        containers = []
+        restart_count = 0
+        container_specs = {}
+
+        if pod.spec and pod.spec.containers:
+            for spec in pod.spec.containers:
+                limits = None
+                requests = None
+                ports = []
+                if getattr(spec, "ports", None):
+                    for p in (spec.ports or []):
+                        ports.append({
+                            "name": getattr(p, "name", None),
+                            "container_port": getattr(p, "container_port", None),
+                            "protocol": getattr(p, "protocol", None),
+                        })
+                if spec.resources:
+                    if spec.resources.limits:
+                        limits = {k: str(v) for k, v in spec.resources.limits.items()}
+                    if spec.resources.requests:
+                        requests = {k: str(v) for k, v in spec.resources.requests.items()}
+                container_specs[spec.name] = {
+                    "limits": limits,
+                    "requests": requests,
+                    "ports": ports,
+                }
+
+        if pod.status and pod.status.container_statuses:
+            for container in pod.status.container_statuses:
+                container_info = {
+                    "name": container.name,
+                    "image": container.image,
+                    "ready": container.ready,
+                    "restart_count": container.restart_count,
+                    "state": self._serialize_container_state(container.state),
+                    "last_state": self._serialize_container_state(container.last_state),
+                    "limits": None,
+                    "requests": None,
+                    "ports": [],
+                }
+                if container.name in container_specs:
+                    container_info["limits"] = container_specs[container.name].get("limits")
+                    container_info["requests"] = container_specs[container.name].get("requests")
+                    container_info["ports"] = container_specs[container.name].get("ports") or []
+                containers.append(container_info)
+                restart_count += container.restart_count
+
+        ready_containers = sum(1 for c in containers if c["ready"])
+        ready = f"{ready_containers}/{len(containers)}"
+
+        return PodInfo(
+            name=pod.metadata.name,
+            namespace=pod.metadata.namespace,
+            status=pod.status.phase if pod.status else None,
+            phase=pod.status.phase if pod.status else None,
+            node_name=pod.spec.node_name if pod.spec else None,
+            pod_ip=pod.status.pod_ip if pod.status else None,
+            containers=containers,
+            labels=pod.metadata.labels or {},
+            created_at=pod.metadata.creation_timestamp,
+            restart_count=restart_count,
+            ready=ready,
+        )
 
     async def get_available_api_resources(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """kubectl api-resources와 유사한 목록을 반환한다."""
@@ -1209,80 +1274,7 @@ class K8sService:
         """파드 목록"""
         try:
             pods = self.v1.list_namespaced_pod(namespace, label_selector=label_selector)
-            result = []
-            
-            for pod in pods.items:
-                containers = []
-                restart_count = 0
-                
-                # 컨테이너 스펙에서 limits/requests 추출
-                container_specs = {}
-                if pod.spec.containers:
-                    for spec in pod.spec.containers:
-                        limits = None
-                        requests = None
-                        ports = []
-                        if getattr(spec, "ports", None):
-                            for p in (spec.ports or []):
-                                ports.append({
-                                    "name": getattr(p, "name", None),
-                                    "container_port": getattr(p, "container_port", None),
-                                    "protocol": getattr(p, "protocol", None),
-                                })
-                        if spec.resources:
-                            if spec.resources.limits:
-                                # Quantity 객체를 문자열로 변환
-                                limits = {k: str(v) for k, v in spec.resources.limits.items()}
-                                print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Limits: {limits}")
-                            if spec.resources.requests:
-                                requests = {k: str(v) for k, v in spec.resources.requests.items()}
-                                print(f"[DEBUG] Pod {pod.metadata.name}, Container {spec.name}, Requests: {requests}")
-                        container_specs[spec.name] = {
-                            "limits": limits,
-                            "requests": requests,
-                            "ports": ports,
-                        }
-                
-                if pod.status.container_statuses:
-                    for container in pod.status.container_statuses:
-                        container_info = {
-                            "name": container.name,
-                            "image": container.image,
-                            "ready": container.ready,
-                            "restart_count": container.restart_count,
-                            "state": self._serialize_container_state(container.state),
-                            "last_state": self._serialize_container_state(container.last_state),
-                            "limits": None,
-                            "requests": None,
-                            "ports": [],
-                        }
-                        # limits/requests 추가
-                        if container.name in container_specs:
-                            container_info["limits"] = container_specs[container.name].get("limits")
-                            container_info["requests"] = container_specs[container.name].get("requests")
-                            container_info["ports"] = container_specs[container.name].get("ports") or []
-                        containers.append(container_info)
-                        restart_count += container.restart_count
-                
-                # Ready 상태
-                ready_containers = sum(1 for c in containers if c["ready"])
-                ready = f"{ready_containers}/{len(containers)}"
-                
-                result.append(PodInfo(
-                    name=pod.metadata.name,
-                    namespace=pod.metadata.namespace,
-                    status=pod.status.phase,
-                    phase=pod.status.phase,
-                    node_name=pod.spec.node_name,
-                    pod_ip=pod.status.pod_ip,
-                    containers=containers,
-                    labels=pod.metadata.labels or {},
-                    created_at=pod.metadata.creation_timestamp,
-                    restart_count=restart_count,
-                    ready=ready
-                ))
-            
-            return result
+            return [self._pod_to_info(pod) for pod in pods.items]
         except ApiException as e:
             raise Exception(f"Failed to get pods: {e}")
     
@@ -1304,6 +1296,36 @@ class K8sService:
             return logs
         except ApiException as e:
             raise Exception(f"Failed to get pod logs: {e}")
+
+    def iter_pod_watch_events(
+        self,
+        namespace: Optional[str],
+        resource_version: Optional[str],
+        timeout_seconds: int = 300,
+    ):
+        if self.v1 is None:
+            raise Exception("Kubernetes client not initialized")
+        w = watch.Watch()
+        list_fn = self.v1.list_pod_for_all_namespaces
+        kwargs: Dict[str, Any] = {
+            "watch": True,
+            "timeout_seconds": timeout_seconds,
+        }
+        if namespace:
+            list_fn = self.v1.list_namespaced_pod
+            kwargs["namespace"] = namespace
+        if resource_version:
+            kwargs["resource_version"] = resource_version
+
+        for event in w.stream(list_fn, **kwargs):
+            pod_obj = event.get("object")
+            if pod_obj is None:
+                continue
+            yield {
+                "type": event.get("type"),
+                "pod": self._pod_to_info(pod_obj),
+                "resource_version": getattr(pod_obj.metadata, "resource_version", None),
+            }
     
     async def get_pvcs(self, namespace: Optional[str] = None, force_refresh: bool = False) -> List[PVCInfo]:
         """PVC 목록"""
