@@ -11,6 +11,7 @@ type PodWatchOptions = {
   resourceVersion?: string
   timeoutSeconds?: number
   onEvent: (event: PodWatchEvent) => void
+  onOpen?: () => void
   onError?: (error: any) => void
 }
 
@@ -40,6 +41,7 @@ export function startPodWatch(options: PodWatchOptions): EventSource {
   source.addEventListener('MODIFIED', handle)
   source.addEventListener('DELETED', handle)
   source.addEventListener('ERROR', handle)
+  source.onopen = () => options.onOpen?.()
   source.onerror = (err) => options.onError?.(err)
 
   return source
