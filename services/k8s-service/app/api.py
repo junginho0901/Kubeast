@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from app.services.k8s_service import K8sService
+from app.streaming import sse_event
 from app.cluster import (
     NamespaceInfo,
     ServiceInfo,
@@ -298,6 +299,35 @@ async def get_pod_logs(
             return {"logs": logs}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/pods/watch")
+def watch_pods(
+    namespace: str,
+    resource_version: Optional[str] = Query(None, alias="resourceVersion"),
+    timeout_seconds: int = Query(300, ge=10, le=600),
+):
+    """파드 watch (SSE)"""
+
+    def event_stream():
+        try:
+            for event in k8s_service.iter_pod_watch_events(
+                namespace=namespace,
+                resource_version=resource_version,
+                timeout_seconds=timeout_seconds,
+            ):
+                yield sse_event(event.get("type") or "MODIFIED", event)
+        except Exception as e:
+            yield sse_event("ERROR", {"message": str(e)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @router.get("/namespaces/{namespace}/pvcs", response_model=List[PVCInfo])
 async def get_namespace_pvcs(
