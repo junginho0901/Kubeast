@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 import jwt
 from fastapi import HTTPException
+from http.cookies import SimpleCookie
+from typing import Optional
 
 
 AUTH_JWKS_URL = os.getenv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json")
@@ -39,3 +41,14 @@ def decode_access_token(token: str) -> TokenPayload:
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def extract_token_from_cookie(cookie_header: Optional[str], cookie_name: str) -> Optional[str]:
+    if not cookie_header or not cookie_name:
+        return None
+    cookie = SimpleCookie()
+    cookie.load(cookie_header)
+    morsel = cookie.get(cookie_name)
+    if morsel and morsel.value:
+        return morsel.value
+    return None
