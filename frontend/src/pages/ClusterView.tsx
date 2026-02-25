@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import type { PodInfo } from '@/services/api'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import { startPodWatch } from '@/services/podWatch'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { 
   Server, 
@@ -62,6 +64,8 @@ export default function ClusterView() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const podWatchRef = useRef<EventSource | null>(null)
+  const lastPodResourceVersionRef = useRef<string | undefined>(undefined)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const containerDropdownRef = useRef<HTMLDivElement>(null)
   const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
@@ -87,6 +91,24 @@ export default function ClusterView() {
       default:
         return reason
     }
+  }
+
+  const applyPodWatchEvent = (prev: PodInfo[] | undefined, event: { type: string; pod: PodInfo }) => {
+    const items = Array.isArray(prev) ? [...prev] : []
+    const key = `${event.pod.namespace}/${event.pod.name}`
+    const index = items.findIndex((p) => `${p.namespace}/${p.name}` === key)
+
+    if (event.type === 'DELETED') {
+      if (index >= 0) items.splice(index, 1)
+      return items
+    }
+
+    if (index >= 0) {
+      items[index] = event.pod
+    } else {
+      items.push(event.pod)
+    }
+    return items
   }
 
   const getBindingMatchPathText = (binding: any) => {
@@ -241,6 +263,42 @@ export default function ClusterView() {
     },
     enabled: !!namespaces,
   })
+
+  // Pod watch (SSE)
+  useEffect(() => {
+    if (!namespaces) return
+    if (podWatchRef.current) {
+      podWatchRef.current.close()
+      podWatchRef.current = null
+    }
+    lastPodResourceVersionRef.current = undefined
+
+    const namespace = selectedNamespace === 'all' ? undefined : selectedNamespace
+    const source = startPodWatch({
+      namespace,
+      resourceVersion: lastPodResourceVersionRef.current,
+      onEvent: (event) => {
+        if (!event?.pod) return
+        if (event.resource_version) {
+          lastPodResourceVersionRef.current = event.resource_version || undefined
+        }
+        queryClient.setQueryData(['all-pods', selectedNamespace], (prev?: PodInfo[]) =>
+          applyPodWatchEvent(prev, event)
+        )
+      },
+      onError: (err) => {
+        console.warn('Pod watch error', err)
+      },
+    })
+
+    podWatchRef.current = source
+    return () => {
+      source.close()
+      if (podWatchRef.current === source) {
+        podWatchRef.current = null
+      }
+    }
+  }, [namespaces, queryClient, selectedNamespace])
 
   // 노드 목록 (정렬용)
   const { data: nodes } = useQuery({
