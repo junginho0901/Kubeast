@@ -329,6 +329,34 @@ def watch_pods(
         },
     )
 
+
+@router.get("/pods/watch")
+def watch_all_pods(
+    resource_version: Optional[str] = Query(None, alias="resourceVersion"),
+    timeout_seconds: int = Query(300, ge=10, le=600),
+):
+    """전체 파드 watch (SSE)"""
+
+    def event_stream():
+        try:
+            for event in k8s_service.iter_pod_watch_events(
+                namespace=None,
+                resource_version=resource_version,
+                timeout_seconds=timeout_seconds,
+            ):
+                yield sse_event(event.get("type") or "MODIFIED", event)
+        except Exception as e:
+            yield sse_event("ERROR", {"message": str(e)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 @router.get("/namespaces/{namespace}/pvcs", response_model=List[PVCInfo])
 async def get_namespace_pvcs(
     namespace: str,
