@@ -3379,6 +3379,45 @@ Draft (rules-based, keep numbers unchanged):
             return "json"
         return None
 
+    def _detect_write_intent(self, text: Optional[str]) -> bool:
+        if not isinstance(text, str):
+            return False
+        lowered = text.lower()
+        keywords = [
+            "create",
+            "apply",
+            "delete",
+            "patch",
+            "scale",
+            "rollout",
+            "restart",
+            "exec",
+            "annotate",
+            "label",
+            "kubectl apply",
+            "kubectl delete",
+            "manifest",
+            "deploy",
+            "배포",
+            "적용",
+            "생성",
+            "만들어",
+            "만들기",
+            "삭제",
+            "지워",
+            "패치",
+            "수정",
+            "스케일",
+            "롤아웃",
+            "재시작",
+            "실행",
+            "명령",
+            "어노테이션",
+            "라벨",
+            "레이블",
+        ]
+        return any(k in lowered for k in keywords)
+
     def _mentions_events(self, text: Optional[str]) -> bool:
         if not isinstance(text, str):
             return False
