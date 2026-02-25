@@ -69,6 +69,9 @@ async def list_sessions(
             for row in rows
         ]
     except Exception as e:
+        import traceback
+        print(f"[ERROR] get_session failed: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -193,4 +196,3 @@ async def delete_session(session_id: str, payload: TokenPayload = Depends(requir
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
