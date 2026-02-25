@@ -111,9 +111,10 @@ class AIService:
             "k8s_remove_label",
             "k8s_scale",
             "k8s_rollout",
+        }
+        admin_only_tools = {
             "k8s_execute_command",
         }
-        admin_only_tools = set()
 
         if function_name in admin_only_tools:
             return self._role_allows_admin()
