@@ -69,6 +69,11 @@ export default function ClusterView() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [podWatchStatus, setPodWatchStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  const [podContextMenu, setPodContextMenu] = useState<{ x: number; y: number; pod: PodInfo } | null>(null)
+  const [deleteTargetPod, setDeleteTargetPod] = useState<PodInfo | null>(null)
+  const [deleteForce, setDeleteForce] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeletingPod, setIsDeletingPod] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const podWatchRef = useRef<EventSource | null>(null)
@@ -596,6 +601,8 @@ export default function ClusterView() {
     // 같은 그룹 내에서는 이름 순으로 정렬
     return nodeA.localeCompare(nodeB)
   })
+
+  const canDeletePod = ['admin', 'write'].includes(String(me?.role || '').toLowerCase())
 
   const pickReason = (reasons: string[], priority: string[]) => {
     for (const p of priority) {
