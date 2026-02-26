@@ -13,6 +13,7 @@ import {
   AlertCircle,
   RefreshCw,
   Trash2,
+  HelpCircle,
   X,
   FileCode,
   Terminal,
@@ -2238,6 +2239,23 @@ export default function ClusterView() {
               of deleting this resource before continuing. Consider asking someone to review the
               change first.
             </p>
+
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                id="force-delete-checkbox"
+                type="checkbox"
+                checked={deleteForce}
+                onChange={(event) => setDeleteForce(event.target.checked)}
+                className="w-4 h-4 rounded border-slate-500 bg-slate-700"
+              />
+              <label htmlFor="force-delete-checkbox" className="text-sm text-slate-300">
+                Force delete
+              </label>
+              <HelpCircle
+                className="w-4 h-4 text-slate-400"
+                title="If checked, ignore any configured grace period and delete the resource immediately"
+              />
+            </div>
 
             <div className="mt-6 flex justify-end gap-3">
               <button
