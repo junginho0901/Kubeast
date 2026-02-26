@@ -1,7 +1,7 @@
 """
 Kubernetes 클러스터 리소스 API
 """
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from app.services.k8s_service import K8sService
@@ -297,6 +297,23 @@ async def get_pod_logs(
             # 일반 모드
             logs = await k8s_service.get_pod_logs(namespace, pod_name, container, tail_lines)
             return {"logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/namespaces/{namespace}/pods/{pod_name}")
+async def delete_pod(
+    namespace: str,
+    pod_name: str,
+    request: Request,
+    force: bool = Query(False, description="강제 삭제 여부"),
+):
+    """파드 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        return await k8s_service.delete_pod(namespace, pod_name, force=force)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
