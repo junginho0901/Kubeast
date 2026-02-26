@@ -317,9 +317,12 @@ export interface PodInfo {
   namespace: string
   status: string
   phase: string
+  status_reason?: string | null
+  status_message?: string | null
   node_name?: string
   pod_ip?: string
   containers: Array<any>
+  init_containers?: Array<any>
   labels: Record<string, string>
   created_at: string
   restart_count: number
