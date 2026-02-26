@@ -157,11 +157,14 @@ class K8sService:
 
     def _pod_to_info(self, pod: client.V1Pod) -> PodInfo:
         containers = []
+        init_containers = []
         restart_count = 0
         container_specs = {}
+        init_container_specs = {}
 
-        if pod.spec and pod.spec.containers:
-            for spec in pod.spec.containers:
+        def build_container_specs(specs):
+            result = {}
+            for spec in specs or []:
                 limits = None
                 requests = None
                 ports = []
@@ -177,31 +180,47 @@ class K8sService:
                         limits = {k: str(v) for k, v in spec.resources.limits.items()}
                     if spec.resources.requests:
                         requests = {k: str(v) for k, v in spec.resources.requests.items()}
-                container_specs[spec.name] = {
+                result[spec.name] = {
                     "limits": limits,
                     "requests": requests,
                     "ports": ports,
                 }
+            return result
+
+        def container_status_to_info(container, specs):
+            info = {
+                "name": container.name,
+                "image": container.image,
+                "ready": container.ready,
+                "restart_count": container.restart_count,
+                "state": self._serialize_container_state(container.state),
+                "last_state": self._serialize_container_state(container.last_state),
+                "limits": None,
+                "requests": None,
+                "ports": [],
+            }
+            if container.name in specs:
+                info["limits"] = specs[container.name].get("limits")
+                info["requests"] = specs[container.name].get("requests")
+                info["ports"] = specs[container.name].get("ports") or []
+            return info
+
+        if pod.spec:
+            if pod.spec.containers:
+                container_specs = build_container_specs(pod.spec.containers)
+            if getattr(pod.spec, "init_containers", None):
+                init_container_specs = build_container_specs(pod.spec.init_containers)
 
         if pod.status and pod.status.container_statuses:
             for container in pod.status.container_statuses:
-                container_info = {
-                    "name": container.name,
-                    "image": container.image,
-                    "ready": container.ready,
-                    "restart_count": container.restart_count,
-                    "state": self._serialize_container_state(container.state),
-                    "last_state": self._serialize_container_state(container.last_state),
-                    "limits": None,
-                    "requests": None,
-                    "ports": [],
-                }
-                if container.name in container_specs:
-                    container_info["limits"] = container_specs[container.name].get("limits")
-                    container_info["requests"] = container_specs[container.name].get("requests")
-                    container_info["ports"] = container_specs[container.name].get("ports") or []
+                container_info = container_status_to_info(container, container_specs)
                 containers.append(container_info)
                 restart_count += container.restart_count
+
+        if pod.status and getattr(pod.status, "init_container_statuses", None):
+            for container in pod.status.init_container_statuses:
+                container_info = container_status_to_info(container, init_container_specs)
+                init_containers.append(container_info)
 
         ready_containers = sum(1 for c in containers if c["ready"])
         ready = f"{ready_containers}/{len(containers)}"
@@ -211,9 +230,12 @@ class K8sService:
             namespace=pod.metadata.namespace,
             status=pod.status.phase if pod.status else None,
             phase=pod.status.phase if pod.status else None,
+            status_reason=getattr(pod.status, "reason", None) if pod.status else None,
+            status_message=getattr(pod.status, "message", None) if pod.status else None,
             node_name=pod.spec.node_name if pod.spec else None,
             pod_ip=pod.status.pod_ip if pod.status else None,
             containers=containers,
+            init_containers=init_containers,
             labels=pod.metadata.labels or {},
             created_at=pod.metadata.creation_timestamp,
             restart_count=restart_count,
@@ -226,9 +248,12 @@ class K8sService:
             "namespace": info.namespace,
             "status": info.status,
             "phase": info.phase,
+            "status_reason": info.status_reason,
+            "status_message": info.status_message,
             "node_name": info.node_name,
             "pod_ip": info.pod_ip,
             "containers": info.containers,
+            "init_containers": info.init_containers,
             "labels": info.labels,
             "created_at": info.created_at.isoformat() if info.created_at else None,
             "restart_count": info.restart_count,
@@ -2358,6 +2383,8 @@ class K8sService:
                 "namespace": pod.metadata.namespace,
                 "status": phase,
                 "phase": phase,  # 프론트엔드에서 사용하는 필드
+                "status_reason": getattr(pod.status, "reason", None) if hasattr(pod, "status") else None,
+                "status_message": getattr(pod.status, "message", None) if hasattr(pod, "status") else None,
                 "node": node,
                 "pod_ip": pod.status.pod_ip if hasattr(pod.status, 'pod_ip') else None,
                 "start_time": str(pod.status.start_time) if hasattr(pod.status, 'start_time') and pod.status.start_time else None,
@@ -2365,6 +2392,7 @@ class K8sService:
                 "labels": pod.metadata.labels or {},
                 "annotations": pod.metadata.annotations or {},
                 "containers": [],
+                "init_containers": [],
                 "conditions": [],
                 "events": []
             }
@@ -2393,6 +2421,25 @@ class K8sService:
                         container_info["state"] = {"terminated": {"reason": container.state.terminated.reason, "exit_code": container.state.terminated.exit_code}}
                     
                     describe_info["containers"].append(container_info)
+
+            if getattr(pod.status, "init_container_statuses", None):
+                for container in pod.status.init_container_statuses:
+                    container_info = {
+                        "name": container.name,
+                        "image": container.image,
+                        "ready": container.ready,
+                        "restart_count": container.restart_count,
+                        "state": {}
+                    }
+
+                    if container.state.running:
+                        container_info["state"] = {"running": {"started_at": str(container.state.running.started_at)}}
+                    elif container.state.waiting:
+                        container_info["state"] = {"waiting": {"reason": container.state.waiting.reason, "message": container.state.waiting.message}}
+                    elif container.state.terminated:
+                        container_info["state"] = {"terminated": {"reason": container.state.terminated.reason, "exit_code": container.state.terminated.exit_code}}
+
+                    describe_info["init_containers"].append(container_info)
             
             # Conditions
             if pod.status.conditions:

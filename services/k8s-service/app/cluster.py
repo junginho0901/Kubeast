@@ -92,9 +92,12 @@ class PodInfo(BaseModel):
     namespace: str
     status: str
     phase: str
+    status_reason: Optional[str] = None
+    status_message: Optional[str] = None
     node_name: Optional[str]
     pod_ip: Optional[str]
     containers: List[Dict[str, Any]]
+    init_containers: List[Dict[str, Any]] = []
     labels: Dict[str, str] = {}
     created_at: datetime
     restart_count: int
