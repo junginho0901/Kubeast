@@ -625,23 +625,38 @@ export default function ClusterView() {
     return reasons[0] || ''
   }
 
+  const isCompletedReason = (reason?: string | null) => {
+    if (!reason) return false
+    return reason === 'Completed' || reason === 'Succeeded'
+  }
+
   const getPodHealth = (pod: any) => {
     const phase = pod?.phase || pod?.status || 'Unknown'
     const containers = Array.isArray(pod?.containers) ? pod.containers : []
     const initContainers = Array.isArray(pod?.init_containers) ? pod.init_containers : []
-    const statusReason = pod?.status_reason
+    const statusReason = isCompletedReason(pod?.status_reason) ? null : pod?.status_reason
     const waitingReasons = containers
       .map((c: any) => c?.state?.waiting?.reason)
       .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
     const terminatedReasons = containers
-      .map((c: any) => c?.state?.terminated?.reason)
-      .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
+      .map((c: any) => ({
+        reason: c?.state?.terminated?.reason,
+        exitCode: c?.state?.terminated?.exit_code,
+      }))
+      .filter((r: any) => typeof r?.reason === 'string' && r.reason.trim())
+      .filter((r: any) => !isCompletedReason(r.reason))
+      .map((r: any) => r.reason) as string[]
     const initWaitingReasons = initContainers
       .map((c: any) => c?.state?.waiting?.reason)
       .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
     const initTerminatedReasons = initContainers
-      .map((c: any) => c?.state?.terminated?.reason)
-      .filter((r: any) => typeof r === 'string' && r.trim()) as string[]
+      .map((c: any) => ({
+        reason: c?.state?.terminated?.reason,
+        exitCode: c?.state?.terminated?.exit_code,
+      }))
+      .filter((r: any) => typeof r?.reason === 'string' && r.reason.trim())
+      .filter((r: any) => !isCompletedReason(r.reason))
+      .map((r: any) => r.reason) as string[]
 
     const errorPriority = [
       'CrashLoopBackOff',
@@ -683,7 +698,16 @@ export default function ClusterView() {
     const readyCount = containers.filter((c: any) => c?.ready).length
     const totalCount = containers.length
     const notReady = totalCount > 0 && readyCount < totalCount
-    const initNotReady = initContainers.length > 0 && initContainers.some((c: any) => !c?.ready)
+    const initNotReady = initContainers.length > 0 && initContainers.some((c: any) => {
+      const state = c?.state || {}
+      if (state.waiting) return true
+      if (state.running) return true
+      if (state.terminated) {
+        const code = state.terminated.exit_code
+        return typeof code === 'number' ? code !== 0 : true
+      }
+      return false
+    })
 
     if (phase === 'Pending' || phase === 'Unknown') {
       return { level: 'warn' as const, reason: phase, phase }
