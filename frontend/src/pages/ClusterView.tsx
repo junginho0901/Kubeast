@@ -2238,6 +2238,9 @@ export default function ClusterView() {
           <div
             className="bg-slate-800 rounded-lg w-full max-w-lg p-6"
             onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete pod"
           >
             <h2 className="text-xl font-bold text-white mb-4">Delete pod</h2>
             <p className="text-slate-300 leading-relaxed">
