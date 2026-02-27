@@ -89,5 +89,86 @@
       "podIp": "파드 IP"
     },
     "noResults": "파드가 없습니다."
+  },
+  "aiChat": {
+    "newChat": "새 대화",
+    "newChatTitle": "새 대화",
+    "multiSelectCancel": "취소",
+    "multiSelectDelete": "채팅 내역 선택 삭제",
+    "selectAll": "전체 선택",
+    "deselectAll": "선택 해제",
+    "deleteWithCount": "삭제 ({{count}})",
+    "loading": "로딩 중...",
+    "loadMoreLoading": "더 불러오는 중...",
+    "loadMore": "더 불러오기",
+    "endOfHistory": "마지막 히스토리입니다.",
+    "messageCount": "{{count}}개 메시지",
+    "noSessions": "대화 내역이 없습니다",
+    "rename": "제목 바꾸기",
+    "delete": "삭제",
+    "title": "AI 어시스턴트",
+    "subtitle": "자연어로 클러스터를 질의하고 문제를 해결하세요",
+    "emptyTitle": "새 대화를 시작하세요",
+    "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요",
+    "resultZipDownload": "Result ZIP 다운로드",
+    "inputPlaceholder": "메시지를 입력하세요...",
+    "stop": "중단",
+    "send": "전송",
+    "confirmDeleteStreaming": "현재 답변 생성 중입니다. 중단하고 이 대화를 삭제하시겠습니까?",
+    "confirmDelete": "이 대화를 삭제하시겠습니까?",
+    "confirmDeleteSelectedWithStreaming": "선택한 {{count}}개의 대화를 삭제하시겠습니까?\\n(현재 답변 생성 중인 대화가 포함되어 있어 중단 후 삭제됩니다.)",
+    "confirmDeleteSelected": "선택한 {{count}}개의 대화를 삭제하시겠습니까?",
+    "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
+    "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",
+    "quickQuestions": [
+      "현재 메모리 많이 쓰는 파드들 알려줘",
+      "현재 노드들 상태 알려줘",
+      "kube-system 네임스페이스의 Pod 상태를 확인해줘",
+      "okestro-cmp 네임스페이스의 Service 목록을 조회해줘"
+    ]
+  },
+  "monitoring": {
+    "title": "리소스 모니터링",
+    "subtitle": "Node 및 Pod의 실시간 리소스 사용량을 모니터링하세요",
+    "tabs": {
+      "nodes": "Node 리소스",
+      "pods": "Pod 리소스"
+    },
+    "nodes": {
+      "title": "Node 리소스 사용량",
+      "total": "총 {{count}}개 Node",
+      "unavailable": "Node 메트릭을 사용할 수 없습니다"
+    },
+    "pods": {
+      "title": "Pod 리소스 사용량",
+      "subtitle": "네임스페이스별 필터링 지원",
+      "totalPods": "총 Pod 수",
+      "totalCpu": "총 CPU 사용량",
+      "totalMemory": "총 Memory 사용량",
+      "errorTitle": "Pod 메트릭을 불러오는 중 오류가 발생했습니다",
+      "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
+      "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
+      "noPodsInNamespace": "{{namespace}} 네임스페이스에 Pod가 없습니다"
+    },
+    "autoRefresh": "5초마다 자동 갱신",
+    "metricTimestamp": "메트릭 기준 수집 시각: {{time}}",
+    "fetchNote": "* 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다",
+    "loading": "데이터를 불러오는 중...",
+    "metricsServerHint": "metrics-server가 설치되어 있는지 확인하세요",
+    "namespace": {
+      "label": "네임스페이스 선택",
+      "placeholder": "네임스페이스를 선택하세요",
+      "all": "전체 네임스페이스",
+      "promptTitle": "네임스페이스를 선택하세요",
+      "promptSubtitle": "Pod 리소스 사용량을 확인하려면 위에서 네임스페이스를 선택하세요"
+    },
+    "table": {
+      "pod": "Pod",
+      "namespace": "Namespace",
+      "cpuUsage": "CPU (사용량)",
+      "cpuLimit": "CPU Limit",
+      "memoryUsage": "Memory (사용량)",
+      "memoryLimit": "Memory Limit"
+    }
   }
 }

@@ -89,5 +89,86 @@
       "podIp": "Pod IP"
     },
     "noResults": "No pods found."
+  },
+  "aiChat": {
+    "newChat": "New Chat",
+    "newChatTitle": "New Chat",
+    "multiSelectCancel": "Cancel",
+    "multiSelectDelete": "Delete selected chats",
+    "selectAll": "Select all",
+    "deselectAll": "Clear selection",
+    "deleteWithCount": "Delete ({{count}})",
+    "loading": "Loading...",
+    "loadMoreLoading": "Loading more...",
+    "loadMore": "Load more",
+    "endOfHistory": "End of history.",
+    "messageCount": "{{count}} messages",
+    "noSessions": "No chat history.",
+    "rename": "Rename",
+    "delete": "Delete",
+    "title": "AI Assistant",
+    "subtitle": "Ask the cluster in natural language and solve problems.",
+    "emptyTitle": "Start a new chat",
+    "emptySubtitle": "Click a question below or type your own.",
+    "resultZipDownload": "Download result ZIP",
+    "inputPlaceholder": "Type a message...",
+    "stop": "Stop",
+    "send": "Send",
+    "confirmDeleteStreaming": "An answer is still generating. Stop and delete this chat?",
+    "confirmDelete": "Delete this chat?",
+    "confirmDeleteSelectedWithStreaming": "Delete {{count}} selected chats?\\n(A chat that is currently generating will be stopped and removed.)",
+    "confirmDeleteSelected": "Delete {{count}} selected chats?",
+    "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
+    "errorSessionCreate": "Failed to create session: {{error}}",
+    "quickQuestions": [
+      "Show pods using the most memory",
+      "Show current node status",
+      "Check pod status in kube-system namespace",
+      "List services in okestro-cmp namespace"
+    ]
+  },
+  "monitoring": {
+    "title": "Resource Monitoring",
+    "subtitle": "Monitor real-time resource usage for nodes and pods.",
+    "tabs": {
+      "nodes": "Node resources",
+      "pods": "Pod resources"
+    },
+    "nodes": {
+      "title": "Node resource usage",
+      "total": "Total {{count}} nodes",
+      "unavailable": "Node metrics are not available"
+    },
+    "pods": {
+      "title": "Pod resource usage",
+      "subtitle": "Namespace filtering supported",
+      "totalPods": "Total pods",
+      "totalCpu": "Total CPU usage",
+      "totalMemory": "Total memory usage",
+      "errorTitle": "Failed to load pod metrics",
+      "retrying": "Retrying automatically... (every 5 seconds)",
+      "unavailableAll": "Pod metrics are not available",
+      "noPodsInNamespace": "No pods in {{namespace}} namespace"
+    },
+    "autoRefresh": "Auto refresh every 5 seconds",
+    "metricTimestamp": "Metrics sampled at: {{time}}",
+    "fetchNote": "* Data fetch can take longer than 5 seconds",
+    "loading": "Loading data...",
+    "metricsServerHint": "Check if metrics-server is installed",
+    "namespace": {
+      "label": "Select namespace",
+      "placeholder": "Choose a namespace",
+      "all": "All namespaces",
+      "promptTitle": "Choose a namespace",
+      "promptSubtitle": "Select a namespace above to see pod resource usage."
+    },
+    "table": {
+      "pod": "Pod",
+      "namespace": "Namespace",
+      "cpuUsage": "CPU (usage)",
+      "cpuLimit": "CPU limit",
+      "memoryUsage": "Memory (usage)",
+      "memoryLimit": "Memory limit"
+    }
   }
 }

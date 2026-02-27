@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import JSZip from 'jszip'
+import { useTranslation } from 'react-i18next'
 
 const TOOL_RESULT_DISPLAY_MAX_CHARS = 2000
 const TRUNCATED_MARKER = '... (truncated) ...'
@@ -58,6 +59,7 @@ type SessionsPageParam = {
 
 export default function AIChat() {
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [viewSessionId, setViewSessionId] = useState<string | null>(null) // 현재 화면에 표시 중인 메시지의 세션
   const [messages, setMessages] = useState<Message[]>([])
@@ -471,7 +473,7 @@ export default function AIChat() {
     if (next === 'error' && streamState.error && streamState.sessionId && selectedSessionId === streamState.sessionId) {
       setMessages((prevMessages) => [
         ...prevMessages,
-        { role: 'assistant', content: `죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: ${streamState.error}` },
+        { role: 'assistant', content: t('aiChat.errorAnswer', { error: streamState.error }) },
       ])
     }
   }, [queryClient, selectedSessionId, streamState.error, streamState.sessionId, streamState.status])
@@ -583,7 +585,7 @@ export default function AIChat() {
       const nowIso = new Date().toISOString()
       const optimisticSession: Session = {
         id: optimisticId,
-        title: initialTitle || 'New Chat',
+        title: initialTitle || t('aiChat.newChatTitle'),
         created_at: nowIso,
         updated_at: nowIso,
         message_count: 0,
@@ -616,7 +618,7 @@ export default function AIChat() {
         setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: `죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: ${String(error)}` },
+          { role: 'assistant', content: t('aiChat.errorAnswer', { error: String(error) }) },
         ])
       })
     }
@@ -651,7 +653,7 @@ export default function AIChat() {
           setMessages((prev) => prev.filter((msg) => !msg.isTemporary))
           setMessages((prev) => [
             ...prev,
-            { role: 'assistant', content: `세션 생성에 실패했습니다: ${String(error)}` },
+            { role: 'assistant', content: t('aiChat.errorSessionCreate', { error: String(error) }) },
           ])
         },
       },
@@ -717,8 +719,8 @@ export default function AIChat() {
     const isStreamingThisSession = isStreaming && streamState.sessionId === sessionId
 
     const ok = isStreamingThisSession
-      ? confirm('현재 답변 생성 중입니다. 중단하고 이 대화를 삭제하시겠습니까?')
-      : confirm('이 대화를 삭제하시겠습니까?')
+      ? confirm(t('aiChat.confirmDeleteStreaming'))
+      : confirm(t('aiChat.confirmDelete'))
 
     if (!ok) return
 
@@ -754,9 +756,9 @@ export default function AIChat() {
 
     const ok = includesStreaming
       ? confirm(
-          `선택한 ${selectedSessionIds.size}개의 대화를 삭제하시겠습니까?\n(현재 답변 생성 중인 대화가 포함되어 있어 중단 후 삭제됩니다.)`,
+          t('aiChat.confirmDeleteSelectedWithStreaming', { count: selectedSessionIds.size }),
         )
-      : confirm(`선택한 ${selectedSessionIds.size}개의 대화를 삭제하시겠습니까?`)
+      : confirm(t('aiChat.confirmDeleteSelected', { count: selectedSessionIds.size }))
 
     if (ok) {
       if (includesStreaming) {
@@ -828,12 +830,10 @@ export default function AIChat() {
     setEditingTitle('')
   }
 
-  const quickQuestions = [
-    '현재 메모리 많이 쓰는 파드들 알려줘',
-    '현재 노드들 상태 알려줘',
-    'kube-system 네임스페이스의 Pod 상태를 확인해줘',
-    'okestro-cmp 네임스페이스의 Service 목록을 조회해줘',
-  ]
+  const quickQuestions = useMemo(
+    () => (t('aiChat.quickQuestions', { returnObjects: true }) as string[]) || [],
+    [t],
+  )
 
   const handleDownloadJson = async (message: Message) => {
     if (!message.toolCalls || message.toolCalls.length === 0) {
@@ -1056,7 +1056,7 @@ export default function AIChat() {
             disabled={createSessionMutation.isPending}
           >
             <Plus className="w-4 h-4" />
-            새 대화
+            {t('aiChat.newChat')}
           </button>
           
           {/* 다중 선택 모드 토글 */}
@@ -1070,12 +1070,12 @@ export default function AIChat() {
               {isMultiSelectMode ? (
                 <>
                   <X className="w-4 h-4" />
-                  취소
+                  {t('aiChat.multiSelectCancel')}
                 </>
               ) : (
                 <>
                   <Trash2 className="w-4 h-4" />
-                  채팅 내역 선택 삭제
+                  {t('aiChat.multiSelectDelete')}
                 </>
               )}
             </button>
@@ -1088,20 +1088,20 @@ export default function AIChat() {
                 onClick={handleSelectAll}
                 className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-300"
               >
-                전체 선택
+                {t('aiChat.selectAll')}
               </button>
               <button
                 onClick={handleDeselectAll}
                 className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-300"
               >
-                선택 해제
+                {t('aiChat.deselectAll')}
               </button>
               <button
                 onClick={handleDeleteSelected}
                 disabled={selectedSessionIds.size === 0}
                 className="flex-1 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 rounded text-white"
               >
-                삭제 ({selectedSessionIds.size})
+                {t('aiChat.deleteWithCount', { count: selectedSessionIds.size })}
               </button>
             </div>
           )}
@@ -1109,7 +1109,7 @@ export default function AIChat() {
 
         <div className="flex-1 overflow-y-auto p-2" ref={sessionsScrollRef} onScroll={handleSessionsScroll}>
           {sessionsLoading && sessionsList.length === 0 ? (
-            <div className="text-slate-400 text-sm text-center py-4">로딩 중...</div>
+            <div className="text-slate-400 text-sm text-center py-4">{t('aiChat.loading')}</div>
           ) : sessionsList.length > 0 ? (
             (() => {
               const rowHeight = 76
@@ -1136,10 +1136,10 @@ export default function AIChat() {
                       }}
                     >
                       {sessionsFetchingNextPage
-                        ? '더 불러오는 중...'
+                        ? t('aiChat.loadMoreLoading')
                         : sessionsHasNextPage
-                          ? '더 불러오기'
-                          : '마지막 히스토리입니다.'}
+                          ? t('aiChat.loadMore')
+                          : t('aiChat.endOfHistory')}
                     </div>,
                   )
                   continue
@@ -1218,7 +1218,9 @@ export default function AIChat() {
                           <div className="text-sm font-medium truncate" title={session.title}>
                             {session.title}
                           </div>
-                          <div className="text-xs text-slate-400 mt-1">{session.message_count}개 메시지</div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {t('aiChat.messageCount', { count: session.message_count })}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1233,7 +1235,7 @@ export default function AIChat() {
               )
             })()
           ) : (
-            <div className="text-slate-400 text-sm text-center py-4">대화 내역이 없습니다</div>
+            <div className="text-slate-400 text-sm text-center py-4">{t('aiChat.noSessions')}</div>
           )}
         </div>
       </div>
@@ -1269,7 +1271,7 @@ export default function AIChat() {
                     className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-600 flex items-center gap-2"
                   >
                     <Edit2 className="w-4 h-4" />
-                    제목 바꾸기
+                    {t('aiChat.rename')}
                   </button>
                   <button
                     onClick={(e) => {
@@ -1280,7 +1282,7 @@ export default function AIChat() {
                     className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-600 flex items-center gap-2"
                   >
                     <Trash2 className="w-4 h-4" />
-                    삭제
+                    {t('aiChat.delete')}
                   </button>
                 </>
               )
@@ -1296,7 +1298,7 @@ export default function AIChat() {
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-white flex items-center gap-3">
                 <Sparkles className="w-6 h-6 text-yellow-400" />
-                AI 어시스턴트
+                {t('aiChat.title')}
               </h1>
               {aiConfig && (
                 <span className="px-2.5 py-1 text-xs font-medium bg-primary-500/20 text-primary-400 rounded-full border border-primary-500/30">
@@ -1305,7 +1307,7 @@ export default function AIChat() {
               )}
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              자연어로 클러스터를 질의하고 문제를 해결하세요
+              {t('aiChat.subtitle')}
             </p>
           </div>
         </div>
@@ -1317,10 +1319,10 @@ export default function AIChat() {
                 <ParticleWaveLoader className="w-[clamp(220px,24vh,360px)] h-[clamp(220px,24vh,360px)]" />
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 text-center">
-                새 대화를 시작하세요
+                {t('aiChat.emptyTitle')}
               </h2>
               <p className="text-slate-400 mb-8 text-center text-sm sm:text-base">
-                아래 질문을 클릭하거나 직접 입력하세요
+                {t('aiChat.emptySubtitle')}
               </p>
 
               <div className="grid grid-cols-2 gap-3 w-full px-8">
@@ -1387,7 +1389,7 @@ export default function AIChat() {
                                 }}
                                 className="px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
                               >
-                                Result ZIP 다운로드 
+                                {t('aiChat.resultZipDownload')}
                               </button>
                             </div>
                           )}
@@ -1451,7 +1453,7 @@ export default function AIChat() {
                   if (!isStreaming) handleSend()
                 }
               }}
-              placeholder="메시지를 입력하세요..."
+              placeholder={t('aiChat.inputPlaceholder')}
               disabled={isStreaming}
               rows={1}
               className="flex-1 px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 disabled:opacity-50 resize-none"
@@ -1462,7 +1464,7 @@ export default function AIChat() {
                 className="btn bg-red-600 hover:bg-red-700 text-white px-6 flex items-center gap-2"
               >
                 <StopCircle className="w-4 h-4" />
-                중단
+                {t('aiChat.stop')}
               </button>
             ) : (
               <button
@@ -1471,7 +1473,7 @@ export default function AIChat() {
                 className="btn btn-primary px-6 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
-                전송
+                {t('aiChat.send')}
               </button>
             )}
           </div>
