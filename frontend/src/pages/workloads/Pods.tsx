@@ -116,7 +116,7 @@ export default function Pods() {
     if (phase && phase !== 'Running') return phase
 
     const ready = (pod?.ready || '').toString()
-    const m = ready.match(/^(\\d+)\\/(\\d+)$/)
+    const m = ready.match(/^(\d+)\/(\d+)$/)
     const isNotReady = (() => {
       if (!m) return false
       const a = Number(m[1])
