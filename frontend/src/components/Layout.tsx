@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, Boxes, MessageSquare, Activity, Layers, LogOut, Shield, HardDrive } from 'lucide-react'
+import { LayoutDashboard, Boxes, MessageSquare, Activity, Layers, LogOut, Shield, HardDrive, Database } from 'lucide-react'
 import { api } from '@/services/api'
 import { clearAccessToken } from '@/services/auth'
 
@@ -65,10 +65,10 @@ export default function Layout() {
     : navigation
 
   const storageTabs = [
-    { name: 'PVC', tab: 'pvcs' },
-    { name: 'PV', tab: 'pvs' },
-    { name: 'StorageClass', tab: 'storageclasses' },
-    { name: 'VolumeAttachment', tab: 'volumeattachments' },
+    { name: 'PVC', tab: 'pvcs', icon: Database },
+    { name: 'PV', tab: 'pvs', icon: HardDrive },
+    { name: 'StorageClass', tab: 'storageclasses', icon: Database },
+    { name: 'VolumeAttachment', tab: 'volumeattachments', icon: HardDrive },
   ]
   const isStorageRoute = location.pathname.startsWith('/storage')
   const storageTabParam = new URLSearchParams(location.search).get('tab') || 'pvcs'
@@ -110,10 +110,11 @@ export default function Layout() {
                               key={tab.tab}
                               to={`/storage?tab=${tab.tab}`}
                               className={`
-                                block rounded-md px-3 py-2 text-sm transition-colors
+                                flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors
                                 ${isTabActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white'}
                               `}
                             >
+                              <tab.icon className="h-4 w-4 text-slate-400" />
                               {tab.name}
                             </Link>
                           )
