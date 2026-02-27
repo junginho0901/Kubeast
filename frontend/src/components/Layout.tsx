@@ -251,7 +251,15 @@ export default function Layout() {
   }, [activeGroup])
 
   const toggleGroup = (groupId: string) => {
-    setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))
+    setOpenGroups((prev) => {
+      const next: Record<string, boolean> = {}
+      const willOpen = !prev[groupId]
+      for (const key of Object.keys(prev)) {
+        next[key] = false
+      }
+      next[groupId] = willOpen
+      return next
+    })
   }
 
   return (
