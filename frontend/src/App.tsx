@@ -15,6 +15,7 @@ import Login from './pages/Login'
 import AdminUsers from './pages/AdminUsers'
 import Account from './pages/Account'
 import ComingSoon from './pages/ComingSoon'
+import Pods from './pages/workloads/Pods'
 
 function App() {
   return (
@@ -27,7 +28,7 @@ function App() {
           <Route path="cluster/namespaces" element={<Namespaces />} />
           <Route path="cluster/nodes" element={<ComingSoon title="Nodes" />} />
           <Route path="cluster/search" element={<ComingSoon title="Advanced Search (Beta)" />} />
-          <Route path="workloads/pods" element={<ComingSoon title="Pods" />} />
+          <Route path="workloads/pods" element={<Pods />} />
           <Route path="workloads/deployments" element={<ComingSoon title="Deployments" />} />
           <Route path="workloads/statefulsets" element={<ComingSoon title="Stateful Sets" />} />
           <Route path="workloads/daemonsets" element={<ComingSoon title="Daemon Sets" />} />
