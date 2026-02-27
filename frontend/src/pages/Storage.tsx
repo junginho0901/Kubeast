@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { Database, HardDrive, RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp, Info } from 'lucide-react'
@@ -41,6 +42,7 @@ type StorageClassSortKey =
 type VolumeAttachmentSortKey = 'name' | 'attached' | 'persistent_volume_name' | 'node_name' | 'attacher' | 'error'
 
 export default function Storage() {
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<StorageTab>('pvcs')
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -116,6 +118,17 @@ export default function Storage() {
     if (dec[unit] !== undefined) return num * dec[unit]
     return null
   }, [])
+
+  useEffect(() => {
+    const param = (searchParams.get('tab') || '').toLowerCase()
+    const allowed: StorageTab[] = ['pvcs', 'pvs', 'storageclasses', 'volumeattachments']
+    if (allowed.includes(param as StorageTab) && param !== activeTab) {
+      setActiveTab(param as StorageTab)
+    }
+    if (!param && activeTab !== 'pvcs') {
+      setActiveTab('pvcs')
+    }
+  }, [searchParams, activeTab])
 
   useEffect(() => {
     if (activeTab !== 'pvcs') setSelectedPvc(null)
