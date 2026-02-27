@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { 
   Server, 
@@ -11,9 +13,8 @@ import {
   ChevronDown,
   CheckCircle
 } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
-
 export default function Monitoring() {
+  const { t } = useTranslation()
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
@@ -113,10 +114,8 @@ export default function Monitoring() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">리소스 모니터링</h1>
-          <p className="mt-2 text-slate-400">
-            Node 및 Pod의 실시간 리소스 사용량을 모니터링하세요
-          </p>
+          <h1 className="text-3xl font-bold text-white">{t('monitoring.title')}</h1>
+          <p className="mt-2 text-slate-400">{t('monitoring.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
@@ -129,7 +128,7 @@ export default function Monitoring() {
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
-              Node 리소스
+              {t('monitoring.tabs.nodes')}
             </button>
             <button
               type="button"
@@ -140,7 +139,7 @@ export default function Monitoring() {
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
-              Pod 리소스
+              {t('monitoring.tabs.pods')}
             </button>
           </div>
         </div>
@@ -155,29 +154,26 @@ export default function Monitoring() {
               <Server className="w-6 h-6 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Node 리소스 사용량</h2>
+              <h2 className="text-xl font-bold text-white">{t('monitoring.nodes.title')}</h2>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-400">5초마다 자동 갱신</span>
+              <span className="text-green-400">{t('monitoring.autoRefresh')}</span>
             </div>
             {latestNodeMetricTime && (
               <p className="text-xs text-slate-400 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 <span>
-                  메트릭 기준 수집 시각:{' '}
-                  {latestNodeMetricTime.toLocaleTimeString()}
+                  {t('monitoring.metricTimestamp', { time: latestNodeMetricTime.toLocaleTimeString() })}
                 </span>
               </p>
             )}
-            <p className="text-xs text-slate-500">
-              * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
-            </p>
+            <p className="text-xs text-slate-500">{t('monitoring.fetchNote')}</p>
             {nodeMetrics && (
               <p className="text-xs text-slate-400">
-                총 {nodeMetrics.length}개 Node
+                {t('monitoring.nodes.total', { count: nodeMetrics.length })}
               </p>
             )}
           </div>
@@ -186,7 +182,7 @@ export default function Monitoring() {
         {isLoadingNodes ? (
           <div className="flex flex-col items-center justify-center py-12">
             <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
-            <p className="text-slate-400">데이터를 불러오는 중...</p>
+            <p className="text-slate-400">{t('monitoring.loading')}</p>
           </div>
         ) : nodeMetrics && nodeMetrics.length > 0 ? (
           <div className="space-y-6">
@@ -272,9 +268,9 @@ export default function Monitoring() {
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-slate-400">Node 메트릭을 사용할 수 없습니다</p>
+            <p className="text-slate-400">{t('monitoring.nodes.unavailable')}</p>
             <p className="text-sm text-slate-500 mt-2">
-              metrics-server가 설치되어 있는지 확인하세요
+              {t('monitoring.metricsServerHint')}
             </p>
           </div>
         )}
@@ -290,28 +286,25 @@ export default function Monitoring() {
               <Box className="w-6 h-6 text-green-400" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Pod 리소스 사용량</h2>
-              <p className="text-sm text-slate-400">네임스페이스별 필터링 지원</p>
+              <h2 className="text-xl font-bold text-white">{t('monitoring.pods.title')}</h2>
+              <p className="text-sm text-slate-400">{t('monitoring.pods.subtitle')}</p>
             </div>
           </div>
           {selectedNamespace && (
             <div className="flex flex-col items-end gap-1 text-right">
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-green-400">5초마다 자동 갱신</span>
+                <span className="text-green-400">{t('monitoring.autoRefresh')}</span>
               </div>
               {latestPodMetricTime && (
                 <p className="text-xs text-slate-400 flex items-center gap-2">
                   <Clock className="w-4 h-4" />
                   <span>
-                    메트릭 기준 수집 시각:{' '}
-                    {latestPodMetricTime.toLocaleTimeString()}
+                    {t('monitoring.metricTimestamp', { time: latestPodMetricTime.toLocaleTimeString() })}
                   </span>
                 </p>
               )}
-              <p className="text-xs text-slate-500">
-                * 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다
-              </p>
+              <p className="text-xs text-slate-500">{t('monitoring.fetchNote')}</p>
             </div>
           )}
         </div>
@@ -319,7 +312,7 @@ export default function Monitoring() {
         {/* 네임스페이스 선택 */}
         <div className="mb-6 overflow-visible">
           <label className="block text-sm font-medium text-slate-400 mb-2">
-            네임스페이스 선택
+            {t('monitoring.namespace.label')}
           </label>
           <div className="relative w-full md:w-64" ref={namespaceDropdownRef}>
             <button
@@ -328,9 +321,9 @@ export default function Monitoring() {
             >
               <span className="text-sm font-medium">
                 {selectedNamespace === '' 
-                  ? '네임스페이스를 선택하세요' 
+                  ? t('monitoring.namespace.placeholder') 
                   : selectedNamespace === 'all' 
-                    ? '전체 네임스페이스' 
+                    ? t('monitoring.namespace.all') 
                     : selectedNamespace}
               </span>
               <ChevronDown 
@@ -353,7 +346,7 @@ export default function Monitoring() {
                     <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                   )}
                   <span className={selectedNamespace === '' ? 'font-medium' : ''}>
-                    네임스페이스를 선택하세요
+                    {t('monitoring.namespace.placeholder')}
                   </span>
                 </button>
                 <button
@@ -367,7 +360,7 @@ export default function Monitoring() {
                     <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                   )}
                   <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
-                    전체 네임스페이스
+                    {t('monitoring.namespace.all')}
                   </span>
                 </button>
                 {Array.isArray(namespaces) && namespaces.map((ns) => (
@@ -396,9 +389,9 @@ export default function Monitoring() {
         {!selectedNamespace && (
           <div className="text-center py-12 bg-slate-700/50 rounded-lg border-2 border-dashed border-slate-600">
             <Box className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-            <p className="text-slate-400 text-lg font-medium">네임스페이스를 선택하세요</p>
+            <p className="text-slate-400 text-lg font-medium">{t('monitoring.namespace.promptTitle')}</p>
             <p className="text-sm text-slate-500 mt-2">
-              Pod 리소스 사용량을 확인하려면 위에서 네임스페이스를 선택하세요
+              {t('monitoring.namespace.promptSubtitle')}
             </p>
           </div>
         )}
@@ -409,7 +402,7 @@ export default function Monitoring() {
             <div className="p-4 bg-slate-700 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">총 Pod 수</p>
+                  <p className="text-sm text-slate-400">{t('monitoring.pods.totalPods')}</p>
                   <p className="text-2xl font-bold text-white mt-1">{podStats.totalPods}</p>
                 </div>
                 <Box className="w-8 h-8 text-green-400" />
@@ -418,7 +411,7 @@ export default function Monitoring() {
             <div className="p-4 bg-slate-700 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">총 CPU 사용량</p>
+                  <p className="text-sm text-slate-400">{t('monitoring.pods.totalCpu')}</p>
                   <p className="text-2xl font-bold text-white mt-1">{podStats.totalCpu}m</p>
                 </div>
                 <Cpu className="w-8 h-8 text-green-400" />
@@ -427,7 +420,7 @@ export default function Monitoring() {
             <div className="p-4 bg-slate-700 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">총 Memory 사용량</p>
+                  <p className="text-sm text-slate-400">{t('monitoring.pods.totalMemory')}</p>
                   <p className="text-2xl font-bold text-white mt-1">{podStats.totalMemory}Mi</p>
                 </div>
                 <HardDrive className="w-8 h-8 text-blue-400" />
@@ -439,37 +432,37 @@ export default function Monitoring() {
         {selectedNamespace && isLoadingPods ? (
           <div className="flex flex-col items-center justify-center py-12">
             <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
-            <p className="text-slate-400">데이터를 불러오는 중...</p>
+            <p className="text-slate-400">{t('monitoring.loading')}</p>
           </div>
         ) : selectedNamespace && podMetrics && podMetrics.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-700">
-                  <th className="text-left py-3 px-4 text-slate-400 font-medium">Pod</th>
-                  <th className="text-left py-3 px-4 text-slate-400 font-medium">Namespace</th>
+                  <th className="text-left py-3 px-4 text-slate-400 font-medium">{t('monitoring.table.pod')}</th>
+                  <th className="text-left py-3 px-4 text-slate-400 font-medium">{t('monitoring.table.namespace')}</th>
                   <th className="text-left py-3 px-4 text-slate-400 font-medium">
                     <div className="flex items-center gap-2">
                       <Cpu className="w-4 h-4" />
-                      CPU (사용량)
+                      {t('monitoring.table.cpuUsage')}
                     </div>
                   </th>
                   <th className="text-left py-3 px-4 text-slate-400 font-medium">
                     <div className="flex items-center gap-2">
                       <Cpu className="w-4 h-4" />
-                      CPU Limit
+                      {t('monitoring.table.cpuLimit')}
                     </div>
                   </th>
                   <th className="text-left py-3 px-4 text-slate-400 font-medium">
                     <div className="flex items-center gap-2">
                       <HardDrive className="w-4 h-4" />
-                      Memory (사용량)
+                      {t('monitoring.table.memoryUsage')}
                     </div>
                   </th>
                   <th className="text-left py-3 px-4 text-slate-400 font-medium">
                     <div className="flex items-center gap-2">
                       <HardDrive className="w-4 h-4" />
-                      Memory Limit
+                      {t('monitoring.table.memoryLimit')}
                     </div>
                   </th>
                 </tr>
@@ -575,9 +568,9 @@ export default function Monitoring() {
             <div className="flex flex-col items-center gap-4">
               <Activity className="w-12 h-12 text-red-400 animate-pulse" />
               <div>
-                <p className="text-red-400 font-medium">Pod 메트릭을 불러오는 중 오류가 발생했습니다</p>
+                <p className="text-red-400 font-medium">{t('monitoring.pods.errorTitle')}</p>
                 <p className="text-sm text-slate-500 mt-2">
-                  자동으로 재시도 중입니다... (5초마다 갱신)
+                  {t('monitoring.pods.retrying')}
                 </p>
               </div>
             </div>
@@ -586,12 +579,12 @@ export default function Monitoring() {
           <div className="text-center py-12">
             <p className="text-slate-400">
               {selectedNamespace === 'all' 
-                ? 'Pod 메트릭을 사용할 수 없습니다' 
-                : `${selectedNamespace} 네임스페이스에 Pod가 없습니다`}
+                ? t('monitoring.pods.unavailableAll') 
+                : t('monitoring.pods.noPodsInNamespace', { namespace: selectedNamespace })}
             </p>
             {selectedNamespace === 'all' && (
               <p className="text-sm text-slate-500 mt-2">
-                metrics-server가 설치되어 있는지 확인하세요
+                {t('monitoring.metricsServerHint')}
               </p>
             )}
           </div>
