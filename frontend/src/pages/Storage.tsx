@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp, Info } from 'lucide-react'
+import { RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp, Info, ChevronDown, CheckCircle } from 'lucide-react'
 
 type StorageTab = 'pvcs' | 'pvs' | 'storageclasses' | 'volumeattachments'
 type PvcSortKey =
@@ -49,6 +49,8 @@ export default function Storage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
   const [selectedPvc, setSelectedPvc] = useState<any | null>(null)
+  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
+  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [pvcSort, setPvcSort] = useState<{ key: PvcSortKey; dir: 'asc' | 'desc' }>({
     key: 'namespace',
     dir: 'asc',
@@ -133,6 +135,25 @@ export default function Storage() {
   useEffect(() => {
     if (activeTab !== 'pvcs') setSelectedPvc(null)
   }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'pvcs') {
+      setIsNamespaceDropdownOpen(false)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (!isNamespaceDropdownOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
+        setIsNamespaceDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isNamespaceDropdownOpen])
 
   useEffect(() => {
     // 과거 버전에서 사용하던 단건 PV/StorageClass 쿼리 키가 남아있으면(react-query 캐시),
