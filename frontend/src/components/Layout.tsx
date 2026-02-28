@@ -89,12 +89,11 @@ export default function Layout() {
 
   const { t } = useTranslation()
   const isAdmin = me?.role === 'admin'
-  const searchParams = new URLSearchParams(location.search)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
-  const storageTabMatch = (tab: string) => {
-    if (!location.pathname.startsWith('/storage')) return false
-    const current = searchParams.get('tab') || 'pvcs'
+  const storageTabMatch = (tab: string, pathname: string, search: string) => {
+    if (!pathname.startsWith('/storage')) return false
+    const current = new URLSearchParams(search).get('tab') || 'pvcs'
     return current === tab
   }
 
@@ -139,25 +138,25 @@ export default function Layout() {
           name: t('nav.pvcs'),
           href: '/storage?tab=pvcs',
           icon: Database,
-          match: () => storageTabMatch('pvcs'),
+          match: (pathname, search) => storageTabMatch('pvcs', pathname, search),
         },
         {
           name: t('nav.pvs'),
           href: '/storage?tab=pvs',
           icon: HardDrive,
-          match: () => storageTabMatch('pvs'),
+          match: (pathname, search) => storageTabMatch('pvs', pathname, search),
         },
         {
           name: t('nav.storageClasses'),
           href: '/storage?tab=storageclasses',
           icon: Layers,
-          match: () => storageTabMatch('storageclasses'),
+          match: (pathname, search) => storageTabMatch('storageclasses', pathname, search),
         },
         {
           name: t('nav.volumeAttachments'),
           href: '/storage?tab=volumeattachments',
           icon: Waypoints,
-          match: () => storageTabMatch('volumeattachments'),
+          match: (pathname, search) => storageTabMatch('volumeattachments', pathname, search),
         },
       ],
     },
