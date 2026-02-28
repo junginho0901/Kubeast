@@ -2800,6 +2800,7 @@ class K8sService:
                 "annotations": node.metadata.annotations or {},
                 "conditions": [],
                 "addresses": [],
+                "taints": [],
                 "capacity": {},
                 "allocatable": {},
                 "system_info": {}
@@ -2822,6 +2823,15 @@ class K8sService:
                         "type": addr.type,
                         "address": addr.address
                     })
+
+            # Taints
+            if node.spec and node.spec.taints:
+                for taint in node.spec.taints:
+                    describe_info["taints"].append({
+                        "key": taint.key,
+                        "value": taint.value,
+                        "effect": taint.effect
+                    })
             
             # Capacity & Allocatable
             if node.status.capacity:
@@ -2833,6 +2843,8 @@ class K8sService:
             if node.status.node_info:
                 info = node.status.node_info
                 describe_info["system_info"] = {
+                    "architecture": info.architecture,
+                    "operating_system": info.operating_system,
                     "os_image": info.os_image,
                     "kernel_version": info.kernel_version,
                     "container_runtime": info.container_runtime_version,
