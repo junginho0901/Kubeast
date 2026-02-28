@@ -3,13 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { Box, ArrowRight, Network, RefreshCw, Search, Waypoints, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { ko } from 'date-fns/locale'
+import { ko, enUS } from 'date-fns/locale'
 import { useState, useMemo } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useTranslation } from 'react-i18next'
 
 export default function Namespaces() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { t, i18n } = useTranslation()
+  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
+    t(key, { defaultValue: fallback, ...options })
+  const distanceLocale = i18n.language === 'ko' ? ko : enUS
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespaceForDescribe, setSelectedNamespaceForDescribe] = useState<string | null>(null)
@@ -97,7 +102,7 @@ export default function Namespaces() {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
         <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
-        <p className="text-slate-400">데이터를 불러오는 중...</p>
+        <p className="text-slate-400">{tr('namespaces.loading', 'Loading data...')}</p>
       </div>
     )
   }
@@ -106,9 +111,9 @@ export default function Namespaces() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">네임스페이스</h1>
+          <h1 className="text-3xl font-bold text-white">{tr('namespaces.title', 'Namespaces')}</h1>
           <p className="mt-2 text-slate-400">
-            클러스터의 모든 네임스페이스를 확인하고 리소스를 관리하세요
+            {tr('namespaces.subtitle', 'Review all namespaces in the cluster and manage resources')}
           </p>
         </div>
         <button
@@ -117,7 +122,7 @@ export default function Namespaces() {
           className="btn btn-secondary flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          새로고침
+          {tr('namespaces.refresh', 'Refresh')}
         </button>
       </div>
 
@@ -126,7 +131,7 @@ export default function Namespaces() {
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
-          placeholder="네임스페이스 검색..."
+          placeholder={tr('namespaces.searchPlaceholder', 'Search namespaces...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -136,7 +141,7 @@ export default function Namespaces() {
       {/* 검색 결과 개수 표시 */}
       {searchQuery && (
         <p className="text-sm text-slate-400">
-          {filteredNamespaces.length}개의 네임스페이스가 검색되었습니다
+          {tr('namespaces.matchCount', '{{count}} namespaces found', { count: filteredNamespaces.length })}
         </p>
       )}
 
@@ -156,9 +161,9 @@ export default function Namespaces() {
                 <div>
                   <h3 className="text-xl font-bold text-white">{ns.name}</h3>
                   <p className="text-sm text-slate-400">
-                    생성: {formatDistanceToNow(new Date(ns.created_at), { 
+                    {tr('namespaces.created', 'Created')}: {formatDistanceToNow(new Date(ns.created_at), { 
                       addSuffix: true, 
-                      locale: ko 
+                      locale: distanceLocale 
                     })}
                   </p>
                 </div>
@@ -172,25 +177,25 @@ export default function Namespaces() {
 
             <div className="mt-6 grid grid-cols-4 gap-4">
               <div>
-                <p className="text-sm text-slate-400">Pods</p>
+                <p className="text-sm text-slate-400">{tr('namespaces.metrics.pods', 'Pods')}</p>
                 <p className="text-2xl font-bold text-white">
                   {ns.resource_count?.pods || 0}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">Services</p>
+                <p className="text-sm text-slate-400">{tr('namespaces.metrics.services', 'Services')}</p>
                 <p className="text-2xl font-bold text-white">
                   {ns.resource_count?.services || 0}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">Deployments</p>
+                <p className="text-sm text-slate-400">{tr('namespaces.metrics.deployments', 'Deployments')}</p>
                 <p className="text-2xl font-bold text-white">
                   {ns.resource_count?.deployments || 0}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-slate-400">PVCs</p>
+                <p className="text-sm text-slate-400">{tr('namespaces.metrics.pvcs', 'PVCs')}</p>
                 <p className="text-2xl font-bold text-white">
                   {ns.resource_count?.pvcs || 0}
                 </p>
@@ -205,7 +210,7 @@ export default function Namespaces() {
                 }}
                 className="btn btn-primary flex items-center justify-center gap-2"
               >
-                리소스 보기
+                {tr('namespaces.actions.resources', 'View resources')}
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
@@ -216,7 +221,7 @@ export default function Namespaces() {
                 className="btn btn-secondary flex items-center justify-center gap-2"
               >
                 <Waypoints className="w-4 h-4" />
-                Network 보기
+                {tr('namespaces.actions.network', 'View network')}
               </button>
               <button
                 onClick={(e) => {
@@ -226,7 +231,7 @@ export default function Namespaces() {
                 className="btn btn-secondary flex items-center justify-center gap-2"
               >
                 <Network className="w-4 h-4" />
-                YAML 보기
+                {tr('namespaces.actions.yaml', 'View YAML')}
               </button>
             </div>
           </div>
@@ -234,7 +239,9 @@ export default function Namespaces() {
         ) : (
           <div className="col-span-full text-center py-12">
             <p className="text-slate-400">
-              {searchQuery ? '검색 결과가 없습니다' : '네임스페이스가 없습니다'}
+              {searchQuery
+                ? tr('namespaces.noSearchResults', 'No results found')
+                : tr('namespaces.empty', 'No namespaces found')}
             </p>
           </div>
         )}
@@ -249,10 +256,12 @@ export default function Namespaces() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
               <div>
                 <h2 className="text-lg font-semibold text-white">
-                  네임스페이스 상세: {selectedNamespaceForDescribe}
+                  {tr('namespaces.describe.title', 'Namespace details')}: {selectedNamespaceForDescribe}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  kubectl describe namespace {selectedNamespaceForDescribe} 에 해당하는 정보
+                  {tr('namespaces.describe.subtitle', 'Details from kubectl describe namespace {{name}}', {
+                    name: selectedNamespaceForDescribe,
+                  })}
                 </p>
               </div>
               <button
@@ -264,46 +273,46 @@ export default function Namespaces() {
             </div>
             <div className="p-4 max-h-[60vh] overflow-y-auto text-sm space-y-4">
               {isLoadingNamespaceDescribe ? (
-                <p className="text-slate-400">네임스페이스 정보를 불러오는 중...</p>
+                <p className="text-slate-400">{tr('namespaces.describe.loading', 'Loading namespace details...')}</p>
               ) : namespaceDescribeError ? (
-                <p className="text-red-400">네임스페이스 상세 정보를 가져오는데 실패했습니다.</p>
+                <p className="text-red-400">{tr('namespaces.describe.error', 'Failed to load namespace details.')}</p>
               ) : namespaceDescribe ? (
                 <>
                   <div>
-                    <p className="text-xs text-slate-400 mb-1">기본 정보</p>
+                    <p className="text-xs text-slate-400 mb-1">{tr('namespaces.describe.basicInfo', 'Basic information')}</p>
                     <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
-{`이름: ${namespaceDescribe.name}
-상태: ${namespaceDescribe.status || 'N/A'}
-생성 시각: ${namespaceDescribe.created_at || 'N/A'}`}
+{`${tr('namespaces.describe.name', 'Name')}: ${namespaceDescribe.name}
+${tr('namespaces.describe.status', 'Status')}: ${namespaceDescribe.status || tr('common.notAvailable', 'N/A')}
+${tr('namespaces.describe.createdAt', 'Created at')}: ${namespaceDescribe.created_at || tr('common.notAvailable', 'N/A')}`}
                     </pre>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-slate-400 mb-1">Labels</p>
+                      <p className="text-xs text-slate-400 mb-1">{tr('namespaces.describe.labels', 'Labels')}</p>
                       <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
                         {namespaceDescribe.labels &&
                         Object.keys(namespaceDescribe.labels).length > 0
                           ? Object.entries(namespaceDescribe.labels)
                               .map(([k, v]) => `${k}=${v}`)
                               .join('\n')
-                          : '(없음)'}
+                          : tr('common.none', '(none)')}
                       </pre>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400 mb-1">Annotations</p>
+                      <p className="text-xs text-slate-400 mb-1">{tr('namespaces.describe.annotations', 'Annotations')}</p>
                       <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
                         {namespaceDescribe.annotations &&
                         Object.keys(namespaceDescribe.annotations).length > 0
                           ? Object.entries(namespaceDescribe.annotations)
                               .map(([k, v]) => `${k}=${v}`)
                               .join('\n')
-                          : '(없음)'}
+                          : tr('common.none', '(none)')}
                       </pre>
                     </div>
                   </div>
                   {namespaceDescribe.events && namespaceDescribe.events.length > 0 && (
                     <div>
-                      <p className="text-xs text-slate-400 mb-1">최근 이벤트</p>
+                      <p className="text-xs text-slate-400 mb-1">{tr('namespaces.describe.recentEvents', 'Recent events')}</p>
                       <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
                         {namespaceDescribe.events
                           .map(
@@ -318,7 +327,7 @@ export default function Namespaces() {
                   )}
                 </>
               ) : (
-                <p className="text-slate-400">네임스페이스 정보를 찾을 수 없습니다.</p>
+                <p className="text-slate-400">{tr('namespaces.describe.notFound', 'Namespace details not found.')}</p>
               )}
             </div>
           </div>
