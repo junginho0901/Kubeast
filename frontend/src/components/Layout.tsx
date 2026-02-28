@@ -22,7 +22,6 @@ import {
   Server,
   Shield,
   Waypoints,
-  ChevronDown,
 } from 'lucide-react'
 import { api } from '@/services/api'
 import { clearAccessToken } from '@/services/auth'
@@ -288,9 +287,6 @@ export default function Layout() {
                     `}
                   >
                     <span>{group.label}</span>
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 transition-transform ${openGroups[group.id] ? 'rotate-180' : ''}`}
-                    />
                   </button>
                   <div
                     className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
