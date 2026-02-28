@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { RefreshCw, Search, X, ExternalLink, ArrowDown, ArrowUp, Info, ChevronDown, CheckCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 type StorageTab = 'pvcs' | 'pvs' | 'storageclasses' | 'volumeattachments'
 type PvcSortKey =
@@ -44,6 +45,10 @@ type VolumeAttachmentSortKey = 'name' | 'attached' | 'persistent_volume_name' | 
 export default function Storage() {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
+  const { t, i18n } = useTranslation()
+  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
+    t(key, { defaultValue: fallback, ...options })
+  const locale = i18n.language === 'ko' ? 'ko-KR' : 'en-US'
   const [activeTab, setActiveTab] = useState<StorageTab>('pvcs')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -669,10 +674,10 @@ export default function Storage() {
   }
 
   const searchPlaceholder: Record<StorageTab, string> = {
-    pvcs: 'PVC 이름 검색...',
-    pvs: 'PV 이름 검색...',
-    storageclasses: 'StorageClass 이름 검색...',
-    volumeattachments: 'VolumeAttachment 이름 검색...',
+    pvcs: tr('storage.search.pvcs', 'Search PVC name...'),
+    pvs: tr('storage.search.pvs', 'Search PV name...'),
+    storageclasses: tr('storage.search.storageClasses', 'Search StorageClass name...'),
+    volumeattachments: tr('storage.search.volumeAttachments', 'Search VolumeAttachment name...'),
   }
 
   const isPvCompact = activeTab === 'pvs' && pvColumnMode === 'compact'
@@ -685,16 +690,16 @@ export default function Storage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">스토리지</h1>
+          <h1 className="text-3xl font-bold text-white">{tr('storage.title', 'Storage')}</h1>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          title="새로고침 (강제 갱신)"
+          title={tr('storage.refreshTitle', 'Refresh (force reload)')}
           className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          새로고침
+          {tr('storage.refresh', 'Refresh')}
         </button>
       </div>
 
@@ -720,7 +725,7 @@ export default function Storage() {
               className="w-full py-3 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
             >
               <span className="text-sm font-medium">
-                {selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace}
+                {selectedNamespace === 'all' ? tr('storage.allNamespaces', 'All namespaces') : selectedNamespace}
               </span>
               <ChevronDown
                 className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`}
@@ -740,7 +745,7 @@ export default function Storage() {
                     <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                   )}
                   <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
-                    전체 네임스페이스
+                    {tr('storage.allNamespaces', 'All namespaces')}
                   </span>
                 </button>
                 {(namespaces || []).map((ns) => (
@@ -773,9 +778,9 @@ export default function Storage() {
                 className={`px-3 py-3 text-sm font-medium transition-colors ${
                   pvColumnMode === 'compact' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
                 }`}
-                title="핵심 컬럼만 표시"
+                title={tr('storage.columns.compactTitle', 'Show key columns only')}
               >
-                기본
+                {tr('storage.columns.compact', 'Compact')}
               </button>
               <button
                 type="button"
@@ -783,9 +788,9 @@ export default function Storage() {
                 className={`px-3 py-3 text-sm font-medium transition-colors ${
                   pvColumnMode === 'full' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
                 }`}
-                title="상세 컬럼까지 표시"
+                title={tr('storage.columns.fullTitle', 'Show all columns')}
               >
-                상세
+                {tr('storage.columns.full', 'Full')}
               </button>
             </div>
           </div>
@@ -798,9 +803,9 @@ export default function Storage() {
                 className={`px-3 py-3 text-sm font-medium transition-colors ${
                   storageClassColumnMode === 'compact' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
                 }`}
-                title="핵심 컬럼만 표시"
+                title={tr('storage.columns.compactTitle', 'Show key columns only')}
               >
-                기본
+                {tr('storage.columns.compact', 'Compact')}
               </button>
               <button
                 type="button"
@@ -808,24 +813,30 @@ export default function Storage() {
                 className={`px-3 py-3 text-sm font-medium transition-colors ${
                   storageClassColumnMode === 'full' ? 'bg-primary-600 text-white' : 'text-slate-200 hover:text-white'
                 }`}
-                title="상세 컬럼까지 표시"
+                title={tr('storage.columns.fullTitle', 'Show all columns')}
               >
-                상세
+                {tr('storage.columns.full', 'Full')}
               </button>
 	            </div>
 	          </div>
 	        ) : activeTab === 'volumeattachments' ? (
-	          <div className="hidden md:flex items-start justify-end gap-2 text-xs text-slate-400 leading-snug text-right">
-              <Info
-                className="mt-0.5 h-4 w-4 text-slate-400"
-                title="VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다. (예: NFS 계열은 생성되지 않을 수 있음)"
-              />
-              <div>
-                VolumeAttachment는 attach/detach가 필요한 CSI 볼륨에서 생성됩니다.
-                <br />
-                (예: NFS 계열은 생성되지 않을 수 있음)
-              </div>
-	          </div>
+          <div className="hidden md:flex items-start justify-end gap-2 text-xs text-slate-400 leading-snug text-right">
+            <Info
+              className="mt-0.5 h-4 w-4 text-slate-400"
+              title={tr(
+                'storage.volumeAttachment.infoTitle',
+                'VolumeAttachments are created for CSI volumes that require attach/detach. (e.g., NFS may not create them)',
+              )}
+            />
+            <div>
+              {tr(
+                'storage.volumeAttachment.infoLine1',
+                'VolumeAttachments are created for CSI volumes that require attach/detach.',
+              )}
+              <br />
+              {tr('storage.volumeAttachment.infoLine2', '(e.g., NFS may not create them)')}
+            </div>
+          </div>
 	        ) : (
 	          <div />
 	        )}
@@ -833,7 +844,10 @@ export default function Storage() {
 
       {activeTab === 'volumeattachments' && volumeAttachmentError && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
-          VolumeAttachment 조회에 실패했습니다. (클러스터 권한/환경에 따라 불가할 수 있습니다)
+          {tr(
+            'storage.volumeAttachment.loadError',
+            'Failed to load VolumeAttachments. (This may be restricted by cluster permissions or environment)',
+          )}
         </div>
       )}
 
@@ -900,14 +914,14 @@ export default function Storage() {
                       key={`${pvc.namespace}/${pvc.name}`}
                       className={`cursor-pointer ${isSelected ? 'bg-primary-600/15' : 'hover:bg-slate-700/30'}`}
                       onClick={() => setSelectedPvc(pvc)}
-                      title="클릭하면 PV/StorageClass 연결 정보를 확인합니다"
+                      title={tr('storage.pvc.linkHint', 'Click to view PV/StorageClass links')}
                     >
                       <td className="py-3 px-4 text-slate-300">{pvc.namespace}</td>
                       <td className="py-3 px-4 text-white font-mono">{pvc.name}</td>
                       <td className="py-3 px-4 text-slate-200">{pvc.status}</td>
                       <td
                         className="py-3 px-4 text-slate-200 font-mono whitespace-nowrap"
-                        title={pvc.created_at ? new Date(pvc.created_at).toLocaleString('ko-KR') : ''}
+                        title={pvc.created_at ? new Date(pvc.created_at).toLocaleString(locale) : ''}
                       >
                         {formatAge(pvc.created_at)}
                       </td>
@@ -922,7 +936,7 @@ export default function Storage() {
                 {filteredItems.length === 0 && (
                   <tr>
                     <td className="py-6 px-4 text-slate-400" colSpan={9}>
-                      (없음)
+                      {tr('common.none', '(none)')}
                     </td>
                   </tr>
                 )}
@@ -942,13 +956,15 @@ export default function Storage() {
               <div className="card">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-bold text-white">연결 보기</h3>
+                    <h3 className="text-lg font-bold text-white">
+                      {tr('storage.pvc.linkTitle', 'View links')}
+                    </h3>
                     <p className="text-sm text-slate-400 mt-1">PVC → PV / StorageClass</p>
                   </div>
                   <button
                     onClick={() => setSelectedPvc(null)}
                     className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                    title="닫기"
+                    title={tr('common.close', 'Close')}
                   >
                     <X className="w-4 h-4 text-slate-300" />
                   </button>
@@ -968,10 +984,10 @@ export default function Storage() {
                           setSearchQuery(selectedPvc.name)
                         }}
                         className="text-xs text-slate-300 hover:text-white flex items-center gap-1"
-                        title="검색어로 설정"
+                        title={tr('storage.pvc.setSearch', 'Set as search')}
                       >
                         <ExternalLink className="w-3 h-3" />
-                        검색
+                        {tr('storage.search.action', 'Search')}
                       </button>
                     </div>
                   </div>
@@ -998,7 +1014,7 @@ export default function Storage() {
 
                 <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-white font-semibold">PV 요약</div>
+                    <div className="text-white font-semibold">{tr('storage.pv.summary', 'PV summary')}</div>
                     {selectedPvc.volume_name && (
                       <button
                         onClick={() => {
@@ -1006,20 +1022,20 @@ export default function Storage() {
                           setSearchQuery(selectedPvc.volume_name)
                         }}
                         className="text-xs text-slate-300 hover:text-white flex items-center gap-1"
-                        title="PV 탭으로 이동"
+                        title={tr('storage.pv.gotoTitle', 'Go to PV tab')}
                       >
                         <ExternalLink className="w-3 h-3" />
-                        PV로 이동
+                        {tr('storage.pv.goto', 'Go to PV')}
                       </button>
                     )}
                   </div>
                   <div className="mt-3 text-sm text-slate-300">
                     {isPvsLoading ? (
-                      <div className="text-slate-400">로딩 중...</div>
+                      <div className="text-slate-400">{tr('storage.loading', 'Loading...')}</div>
                     ) : !selectedPvc.volume_name ? (
-                      <div className="text-slate-400">(PV 없음)</div>
+                      <div className="text-slate-400">{tr('storage.pv.none', '(no PV)')}</div>
                     ) : !selectedPv ? (
-                      <div className="text-slate-400">(조회 실패 또는 없음)</div>
+                      <div className="text-slate-400">{tr('storage.lookupNone', '(not found or failed)')}</div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -1045,7 +1061,9 @@ export default function Storage() {
 
                 <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-white font-semibold">StorageClass 요약</div>
+                    <div className="text-white font-semibold">
+                      {tr('storage.storageClass.summary', 'StorageClass summary')}
+                    </div>
                     {selectedPvc.storage_class && (
                       <button
                         onClick={() => {
@@ -1053,20 +1071,20 @@ export default function Storage() {
                           setSearchQuery(selectedPvc.storage_class)
                         }}
                         className="text-xs text-slate-300 hover:text-white flex items-center gap-1"
-                        title="StorageClass 탭으로 이동"
+                        title={tr('storage.storageClass.gotoTitle', 'Go to StorageClass tab')}
                       >
                         <ExternalLink className="w-3 h-3" />
-                        SC로 이동
+                        {tr('storage.storageClass.goto', 'Go to SC')}
                       </button>
                     )}
                   </div>
                   <div className="mt-3 text-sm text-slate-300">
                     {isStorageClassesLoading ? (
-                      <div className="text-slate-400">로딩 중...</div>
+                      <div className="text-slate-400">{tr('storage.loading', 'Loading...')}</div>
                     ) : !selectedPvc.storage_class ? (
-                      <div className="text-slate-400">(StorageClass 없음)</div>
+                      <div className="text-slate-400">{tr('storage.storageClass.none', '(no StorageClass)')}</div>
                     ) : !selectedStorageClass ? (
-                      <div className="text-slate-400">(조회 실패 또는 없음)</div>
+                      <div className="text-slate-400">{tr('storage.lookupNone', '(not found or failed)')}</div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
                         <div className="col-span-2">
@@ -1200,7 +1218,7 @@ export default function Storage() {
                   <td className={`py-3 ${pvPx} text-slate-200`}>{pv.status}</td>
                   <td
                     className={`py-3 ${pvPx} text-slate-200 font-mono whitespace-nowrap`}
-                    title={pv.created_at ? new Date(pv.created_at).toLocaleString('ko-KR') : ''}
+                    title={pv.created_at ? new Date(pv.created_at).toLocaleString(locale) : ''}
                   >
                     {formatAge(pv.created_at)}
                   </td>
@@ -1235,7 +1253,7 @@ export default function Storage() {
               {sortedPvItems.length === 0 && (
                 <tr>
                   <td className="py-6 px-4 text-slate-400" colSpan={pvColSpan}>
-                    (없음)
+                    {tr('common.none', '(none)')}
                   </td>
                 </tr>
               )}
@@ -1336,7 +1354,7 @@ export default function Storage() {
                   </td>
                   <td
                     className="py-3 px-4 text-slate-200 font-mono whitespace-nowrap"
-                    title={sc.created_at ? new Date(sc.created_at).toLocaleString('ko-KR') : ''}
+                    title={sc.created_at ? new Date(sc.created_at).toLocaleString(locale) : ''}
                   >
                     {formatAge(sc.created_at)}
                   </td>
@@ -1388,7 +1406,7 @@ export default function Storage() {
               {sortedStorageClassItems.length === 0 && (
                 <tr>
                   <td className="py-6 px-4 text-slate-400" colSpan={scColSpan}>
-                    (없음)
+                    {tr('common.none', '(none)')}
                   </td>
                 </tr>
               )}
@@ -1452,7 +1470,7 @@ export default function Storage() {
               {sortedVolumeAttachmentItems.length === 0 && (
                 <tr>
                   <td className="py-6 px-4 text-slate-400" colSpan={6}>
-                    (없음)
+                    {tr('common.none', '(none)')}
                   </td>
                 </tr>
               )}
