@@ -115,6 +115,134 @@ export default function ClusterNodes() {
     return map
   }, [metrics])
 
+  const formatTimestamp = (iso?: string | null) => {
+    if (!iso) return '-'
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleString()
+  }
+
+  const formatRelative = (iso?: string | null) => {
+    if (!iso) return '-'
+    const date = new Date(iso)
+    const diffMs = Date.now() - date.getTime()
+    if (!Number.isFinite(diffMs) || diffMs < 0) return '-'
+    const minutes = Math.floor(diffMs / 60000)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+    if (days >= 30) {
+      const months = Math.floor(days / 30)
+      return `${months}mo`
+    }
+    if (days > 0) return `${days}d`
+    if (hours > 0) return `${hours}h`
+    return `${minutes}m`
+  }
+
+  const formatPodAge = (iso?: string | null) => {
+    if (!iso) return '-'
+    const date = new Date(iso)
+    const diffSec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
+    const days = Math.floor(diffSec / 86400)
+    const hours = Math.floor((diffSec % 86400) / 3600)
+    const minutes = Math.floor((diffSec % 3600) / 60)
+    if (days > 0) return `${days}d ${hours}h`
+    if (hours > 0) return `${hours}h ${minutes}m`
+    return `${minutes}m`
+  }
+
+  const renderKeyValueList = (obj?: Record<string, string>) => {
+    const entries = obj ? Object.entries(obj) : []
+    if (entries.length === 0) {
+      return <span className="text-slate-400">{tr('common.none', '(none)')}</span>
+    }
+    return (
+      <div className="flex flex-wrap gap-2 text-xs text-slate-200">
+        {entries.map(([key, value]) => (
+          <span
+            key={`${key}-${value}`}
+            className="relative inline-flex items-center rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1 max-w-full group"
+          >
+            <span className="font-mono text-slate-300 max-w-[160px] truncate">{key}</span>
+            <span className="mx-1 text-slate-500">:</span>
+            <span className="max-w-[260px] truncate">{value}</span>
+            <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 w-max max-w-[520px] rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="break-words">{`${key}: ${value}`}</span>
+            </span>
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  const sortedEvents = useMemo(() => {
+    if (!Array.isArray(nodeEvents)) return []
+    const getTime = (e: NodeEvent) => {
+      const ts = e.last_timestamp || e.first_timestamp
+      if (!ts) return 0
+      const d = new Date(ts).getTime()
+      return Number.isFinite(d) ? d : 0
+    }
+    return [...nodeEvents].sort((a, b) => getTime(b) - getTime(a))
+  }, [nodeEvents])
+
+  const getEventBadge = (type?: string | null) => {
+    const tval = (type || '').toLowerCase()
+    if (tval.includes('warning')) return 'badge-warning'
+    if (tval.includes('error') || tval.includes('failed')) return 'badge-error'
+    return 'badge-info'
+  }
+
+  useEffect(() => {
+    setPodPage(1)
+  }, [podFilter, selectedNodeName])
+
+  const filteredNodePods = useMemo(() => {
+    if (!Array.isArray(nodePods)) return []
+    if (!podFilter.trim()) return nodePods
+    const q = podFilter.toLowerCase()
+    return nodePods.filter(
+      (pod) =>
+        pod.name.toLowerCase().includes(q) ||
+        pod.namespace.toLowerCase().includes(q)
+    )
+  }, [nodePods, podFilter])
+
+  const podsPageSize = 10
+  const podTotalPages = Math.max(1, Math.ceil(filteredNodePods.length / podsPageSize))
+  const pagedPods = useMemo(() => {
+    const start = (podPage - 1) * podsPageSize
+    return filteredNodePods.slice(start, start + podsPageSize)
+  }, [filteredNodePods, podPage])
+  const emptyPodRows = Math.max(0, podsPageSize - pagedPods.length)
+
+  const metricForSelected = selectedNodeName ? metricsMap.get(selectedNodeName) : undefined
+  const cpuPercent = metricForSelected ? parseFloat(metricForSelected.cpu_percent) : 0
+  const memPercent = metricForSelected ? parseFloat(metricForSelected.memory_percent) : 0
+
+  const UsageCard = ({
+    label,
+    value,
+    percent,
+    color,
+  }: {
+    label: string
+    value: string
+    percent: number
+    color: string
+  }) => (
+    <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-base text-white mt-1">{value}</p>
+      <div className="mt-3 w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${Math.min(Math.max(percent, 0), 100)}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
+  )
+
   const filteredNodes = useMemo(() => {
     if (!Array.isArray(nodes)) return [] as NodeInfo[]
     if (!searchQuery.trim()) return nodes as NodeInfo[]
