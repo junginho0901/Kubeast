@@ -1186,6 +1186,36 @@ async def describe_node(name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/nodes/{name}/pods")
+async def get_node_pods(name: str):
+    """노드에 스케줄된 Pod 목록 조회"""
+    try:
+        pods = await k8s_service.get_node_pods(name)
+        return pods
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/nodes/{name}/events")
+async def get_node_events(name: str):
+    """노드 이벤트 조회"""
+    try:
+        events = await k8s_service.get_node_events(name)
+        return events
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/nodes/{name}/yaml")
+async def get_node_yaml(name: str):
+    """Node YAML 조회"""
+    try:
+        yaml_content = await k8s_service.get_node_yaml(name)
+        return {"yaml": yaml_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/componentstatuses")
 async def get_component_statuses():
     """컴포넌트 상태 조회"""
