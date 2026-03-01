@@ -540,30 +540,82 @@ export default function ClusterNodes() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-4 max-h-[60vh] overflow-y-auto text-sm space-y-4">
+
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-6 text-sm">
               {isLoadingDescribe ? (
                 <p className="text-slate-400">{tr('nodes.detail.loading', 'Loading node details...')}</p>
               ) : isDescribeError ? (
                 <p className="text-red-400">{tr('nodes.detail.error', 'Failed to load node details.')}</p>
               ) : nodeDescribe ? (
                 <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
+                      <p className="text-xs text-slate-400">{tr('nodes.detail.uptime', 'Uptime')}</p>
+                      <p className="text-base text-white mt-1">
+                        {formatRelative(
+                          nodeDescribe.conditions?.find((c) => c.type === 'Ready')?.last_transition_time
+                        )}
+                      </p>
+                    </div>
+                    <UsageCard
+                      label={tr('nodes.detail.cpuUsage', 'CPU Usage')}
+                      value={`${metricForSelected?.cpu || '-'} (${metricForSelected?.cpu_percent || '-'})`}
+                      percent={Number.isFinite(cpuPercent) ? cpuPercent : 0}
+                      color={cpuPercent >= 80 ? '#ef4444' : cpuPercent >= 60 ? '#f59e0b' : '#10b981'}
+                    />
+                    <UsageCard
+                      label={tr('nodes.detail.memoryUsage', 'Memory Usage')}
+                      value={`${metricForSelected?.memory || '-'} (${metricForSelected?.memory_percent || '-'})`}
+                      percent={Number.isFinite(memPercent) ? memPercent : 0}
+                      color={memPercent >= 80 ? '#ef4444' : memPercent >= 60 ? '#f59e0b' : '#3b82f6'}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+                    <p className="text-xs text-slate-400 mb-2">{tr('nodes.detail.system', 'System info')}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">
+                      <div>{tr('nodes.detail.systemOs', 'OS')}: {nodeDescribe.system_info?.operating_system || '-'}</div>
+                      <div>{tr('nodes.detail.systemArch', 'Arch')}: {nodeDescribe.system_info?.architecture || '-'}</div>
+                      <div>{tr('nodes.detail.systemImage', 'OS Image')}: {nodeDescribe.system_info?.os_image || '-'}</div>
+                      <div>{tr('nodes.detail.systemKernel', 'Kernel')}: {nodeDescribe.system_info?.kernel_version || '-'}</div>
+                      <div>{tr('nodes.detail.systemRuntime', 'Runtime')}: {nodeDescribe.system_info?.container_runtime || '-'}</div>
+                      <div>{tr('nodes.detail.systemKubelet', 'Kubelet')}: {nodeDescribe.system_info?.kubelet_version || '-'}</div>
+                      <div>{tr('nodes.detail.systemProxy', 'Kube Proxy')}: {nodeDescribe.system_info?.kube_proxy_version || '-'}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+                    <p className="text-xs text-slate-400 mb-2">{tr('nodes.detail.conditions', 'Conditions')}</p>
+                    <div className="space-y-2 text-xs text-slate-200">
+                      {nodeDescribe.conditions && nodeDescribe.conditions.length > 0
+                        ? nodeDescribe.conditions.map((c, idx) => (
+                            <div key={`${c.type}-${idx}`} className="flex items-start justify-between gap-4">
+                              <div>
+                                <div className="font-medium text-white">{c.type}</div>
+                                <div className="text-slate-400">{c.reason || '-'}</div>
+                              </div>
+                              <div className="text-right text-slate-400">
+                                <div>{c.status}</div>
+                                <div>{formatRelative(c.last_transition_time)}</div>
+                              </div>
+                            </div>
+                          ))
+                        : tr('common.none', '(none)')}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">{tr('nodes.detail.conditions', 'Conditions')}</p>
-                      <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
-                        {nodeDescribe.conditions && nodeDescribe.conditions.length > 0
-                          ? nodeDescribe.conditions
-                              .map(
-                                (c: NodeDescribe['conditions'][number]) =>
-                                  `${c.type}: ${c.status}${c.reason ? ` (${c.reason})` : ''}`
-                              )
-                              .join('\n')
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+                      <p className="text-xs text-slate-400 mb-2">{tr('nodes.detail.addresses', 'Addresses')}</p>
+                      <pre className="text-xs text-slate-200 whitespace-pre-wrap">
+                        {nodeDescribe.addresses && nodeDescribe.addresses.length > 0
+                          ? nodeDescribe.addresses.map((a) => `${a.type}: ${a.address}`).join('\n')
                           : tr('common.none', '(none)')}
                       </pre>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">{tr('nodes.detail.taints', 'Taints')}</p>
-                      <pre className="bg-slate-800 rounded-md p-2 text-xs whitespace-pre-wrap text-slate-200">
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+                      <p className="text-xs text-slate-400 mb-2">{tr('nodes.detail.taints', 'Taints')}</p>
+                      <pre className="text-xs text-slate-200 whitespace-pre-wrap">
                         {nodeDescribe.taints && nodeDescribe.taints.length > 0
                           ? nodeDescribe.taints
                               .map((t) => `${t.key || ''}=${t.value || ''}:${t.effect || ''}`)
