@@ -521,14 +521,12 @@ export default function ClusterNodes() {
       {selectedNodeName && (
         <ModalOverlay onClose={() => setSelectedNodeName(null)}>
           <div
-            className="bg-slate-900 border border-slate-700 rounded-xl max-w-3xl w-full max-h-[80vh] overflow-hidden shadow-xl"
+            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
               <div>
-                <h2 className="text-lg font-semibold text-white">
-                  {tr('nodes.detail.title', 'Node details')}: {selectedNodeName}
-                </h2>
+                <h2 className="text-lg font-semibold text-white">{selectedNodeName}</h2>
                 <p className="text-xs text-slate-400">
                   {tr('nodes.detail.subtitle', 'Details from kubectl describe node {{name}}', {
                     name: selectedNodeName,
