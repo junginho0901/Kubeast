@@ -27,7 +27,20 @@ interface NodeMetric {
 
 interface NodeDescribe {
   name: string
-  conditions: Array<{ type: string; status: string; reason?: string | null; message?: string | null }>
+  created_at?: string | null
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  conditions: Array<{
+    type: string
+    status: string
+    reason?: string | null
+    message?: string | null
+    last_transition_time?: string | null
+    last_update_time?: string | null
+  }>
+  pod_cidr?: string | null
+  pod_cidrs?: string[] | null
+  unschedulable?: boolean | null
   addresses: Array<{ type: string; address: string }>
   taints: Array<{ key?: string | null; value?: string | null; effect?: string | null }>
   system_info: {
