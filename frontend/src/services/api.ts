@@ -999,6 +999,21 @@ export const api = {
     return data
   },
 
+  getNodePods: async (name: string): Promise<PodInfo[]> => {
+    const { data } = await client.get(`/cluster/nodes/${name}/pods`)
+    return data
+  },
+
+  getNodeEvents: async (name: string): Promise<any[]> => {
+    const { data } = await client.get(`/cluster/nodes/${name}/events`)
+    return data
+  },
+
+  getNodeYaml: async (name: string): Promise<{ yaml: string }> => {
+    const { data } = await client.get(`/cluster/nodes/${name}/yaml`)
+    return data
+  },
+
   getPodMetrics: async (namespace?: string): Promise<any[]> => {
     const { data } = await client.get('/cluster/metrics/pods', {
       params: { namespace },
