@@ -493,27 +493,21 @@ export default function ClusterNodes() {
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => setSelectedNodeName(node.name)}
                 >
-                  <td className="py-3 px-4 font-medium text-white">{node.name}</td>
+                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{node.name}</span></td>
                   <td className="py-3 px-4">
                     <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
                   </td>
-                  <td className="py-3 px-4 text-xs font-mono">
-                    {node.roles && node.roles.length > 0 ? node.roles.join(', ') : '-'}
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono">
-                    {metric ? `${metric.cpu} (${metric.cpu_percent})` : '-'}
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono">
-                    {metric ? `${metric.memory} (${metric.memory_percent})` : '-'}
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono">{node.version || '-'}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{node.internal_ip || '-'}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{node.external_ip || '-'}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{node.age}</td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.roles && node.roles.length > 0 ? node.roles.join(', ') : '-'}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{metric ? `${metric.cpu} (${metric.cpu_percent})` : '-'}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{metric ? `${metric.memory} (${metric.memory_percent})` : '-'}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.version || '-'}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.internal_ip || '-'}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.external_ip || '-'}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAgeDays(node.age)}</span></td>
                 </tr>
               )
             })}
-            {filteredNodes.length === 0 && !isLoadingNodes && (
+            {sortedNodes.length === 0 && !isLoadingNodes && (
               <tr>
                 <td colSpan={9} className="py-6 px-4 text-slate-400">
                   {tr('nodes.noResults', 'No nodes found.')}
