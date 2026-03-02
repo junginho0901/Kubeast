@@ -114,6 +114,12 @@
       "externalIp": "External IP",
       "age": "Age"
     },
+    "actions": {
+      "cordon": "Cordon",
+      "uncordon": "Uncordon",
+      "cordoning": "Cordoning...",
+      "uncordoning": "Uncordoning..."
+    },
     "detail": {
       "title": "Node details",
       "subtitle": "Details from kubectl describe node {{name}}",
