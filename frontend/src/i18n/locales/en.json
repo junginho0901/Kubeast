@@ -123,6 +123,13 @@
     "detail": {
       "title": "Node details",
       "subtitle": "Details from kubectl describe node {{name}}",
+      "summary": {
+        "ready": "Ready",
+        "readyYes": "Yes",
+        "readyNo": "No",
+        "taints": "Taints",
+        "conditions": "Conditions"
+      },
       "tabs": {
         "info": "Info",
         "yaml": "YAML"

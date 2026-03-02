@@ -123,6 +123,13 @@
     "detail": {
       "title": "노드 상세",
       "subtitle": "kubectl describe node {{name}} 결과",
+      "summary": {
+        "ready": "Ready",
+        "readyYes": "예",
+        "readyNo": "아니오",
+        "taints": "Taints",
+        "conditions": "Conditions"
+      },
       "tabs": {
         "info": "정보",
         "yaml": "YAML"
