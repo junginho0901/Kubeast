@@ -1207,11 +1207,28 @@ async def get_node_events(name: str):
 
 
 @router.get("/nodes/{name}/yaml")
-async def get_node_yaml(name: str):
+async def get_node_yaml(name: str, force_refresh: bool = Query(False)):
     """Node YAML 조회"""
     try:
-        yaml_content = await k8s_service.get_node_yaml(name)
+        yaml_content = await k8s_service.get_node_yaml(name, force_refresh=force_refresh)
         return {"yaml": yaml_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/nodes/{name}/yaml/apply")
+async def apply_node_yaml(name: str, body: dict, request: Request):
+    """Node YAML 적용"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden")
+        yaml_content = body.get("yaml") if isinstance(body, dict) else None
+        if not yaml_content:
+            raise HTTPException(status_code=400, detail="yaml is required")
+        return await k8s_service.apply_node_yaml(name, yaml_content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
