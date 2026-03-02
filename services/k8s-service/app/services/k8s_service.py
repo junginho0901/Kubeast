@@ -2924,6 +2924,24 @@ class K8sService:
         except Exception as e:
             raise Exception(f"Failed to get node yaml: {e}")
 
+    async def cordon_node(self, name: str) -> Dict[str, Any]:
+        """Node cordon (unschedulable=true)"""
+        try:
+            self.v1.patch_node(name, {"spec": {"unschedulable": True}})
+            self._invalidate_yaml_cache("nodes", name, namespace=None)
+            return {"status": "ok", "unschedulable": True}
+        except ApiException as e:
+            raise Exception(f"Failed to cordon node: {e}")
+
+    async def uncordon_node(self, name: str) -> Dict[str, Any]:
+        """Node uncordon (unschedulable=false)"""
+        try:
+            self.v1.patch_node(name, {"spec": {"unschedulable": False}})
+            self._invalidate_yaml_cache("nodes", name, namespace=None)
+            return {"status": "ok", "unschedulable": False}
+        except ApiException as e:
+            raise Exception(f"Failed to uncordon node: {e}")
+
     async def apply_node_yaml(self, name: str, yaml_content: str) -> Dict[str, Any]:
         """Node YAML 적용 (spec 업데이트)"""
         try:

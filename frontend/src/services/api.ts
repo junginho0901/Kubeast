@@ -1021,6 +1021,16 @@ export const api = {
     return data
   },
 
+  cordonNode: async (name: string): Promise<{ status: string; unschedulable: boolean }> => {
+    const { data } = await client.post(`/cluster/nodes/${name}/cordon`)
+    return data
+  },
+
+  uncordonNode: async (name: string): Promise<{ status: string; unschedulable: boolean }> => {
+    const { data } = await client.post(`/cluster/nodes/${name}/uncordon`)
+    return data
+  },
+
   getPodMetrics: async (namespace?: string): Promise<any[]> => {
     const { data } = await client.get('/cluster/metrics/pods', {
       params: { namespace },

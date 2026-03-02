@@ -1233,6 +1233,34 @@ async def apply_node_yaml(name: str, body: dict, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/nodes/{name}/cordon")
+async def cordon_node(name: str, request: Request):
+    """Node cordon"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return await k8s_service.cordon_node(name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/nodes/{name}/uncordon")
+async def uncordon_node(name: str, request: Request):
+    """Node uncordon"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return await k8s_service.uncordon_node(name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/componentstatuses")
 async def get_component_statuses():
     """컴포넌트 상태 조회"""

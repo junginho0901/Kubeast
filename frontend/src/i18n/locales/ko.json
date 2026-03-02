@@ -114,9 +114,22 @@
       "externalIp": "외부 IP",
       "age": "생성 시각"
     },
+    "actions": {
+      "cordon": "스케줄링 비활성화",
+      "uncordon": "스케줄링 활성화",
+      "cordoning": "스케줄링 비활성화 중...",
+      "uncordoning": "스케줄링 활성화 중..."
+    },
     "detail": {
       "title": "노드 상세",
       "subtitle": "kubectl describe node {{name}} 결과",
+      "summary": {
+        "ready": "Ready",
+        "readyYes": "예",
+        "readyNo": "아니오",
+        "taints": "Taints",
+        "conditions": "Conditions"
+      },
       "tabs": {
         "info": "정보",
         "yaml": "YAML"

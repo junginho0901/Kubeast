@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { ChevronDown, ChevronUp, RefreshCw, Search, Server, X } from 'lucide-react'
@@ -137,6 +137,25 @@ export default function ClusterNodes() {
   }, [metrics])
 
   const canEditYaml = me?.role === 'admin'
+  const isAdmin = me?.role === 'admin'
+
+  const cordonMutation = useMutation({
+    mutationFn: (nodeName: string) => api.cordonNode(nodeName),
+    onSuccess: async (_data, nodeName) => {
+      await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+      await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', nodeName] })
+    },
+  })
+
+  const uncordonMutation = useMutation({
+    mutationFn: (nodeName: string) => api.uncordonNode(nodeName),
+    onSuccess: async (_data, nodeName) => {
+      await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+      await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', nodeName] })
+    },
+  })
+
+  const isSchedulingMutation = cordonMutation.isPending || uncordonMutation.isPending
 
   const handleApplyYaml = async (nextValue: string) => {
     if (!selectedNodeName) return
@@ -144,6 +163,15 @@ export default function ClusterNodes() {
     setYamlRefreshNonce((prev) => prev + 1)
     await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', selectedNodeName] })
     await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+  }
+
+  const handleToggleScheduling = () => {
+    if (!selectedNodeName || !nodeDescribe || isSchedulingMutation) return
+    if (nodeDescribe.unschedulable) {
+      uncordonMutation.mutate(selectedNodeName)
+    } else {
+      cordonMutation.mutate(selectedNodeName)
+    }
   }
 
   const formatTimestamp = (iso?: string | null) => {
@@ -569,12 +597,30 @@ export default function ClusterNodes() {
                   })}
                 </p>
               </div>
-              <button
-                onClick={() => setSelectedNodeName(null)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {isAdmin && nodeDescribe && (
+                  <button
+                    type="button"
+                    onClick={handleToggleScheduling}
+                    disabled={isSchedulingMutation}
+                    className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                  >
+                    {isSchedulingMutation
+                      ? nodeDescribe.unschedulable
+                        ? tr('nodes.actions.uncordoning', 'Uncordoning...')
+                        : tr('nodes.actions.cordoning', 'Cordoning...')
+                      : nodeDescribe.unschedulable
+                        ? tr('nodes.actions.uncordon', 'Uncordon')
+                        : tr('nodes.actions.cordon', 'Cordon')}
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedNodeName(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
@@ -635,6 +681,43 @@ export default function ClusterNodes() {
                 <p className="text-red-400">{tr('nodes.detail.error', 'Failed to load node details.')}</p>
               ) : nodeDescribe ? (
                 <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(() => {
+                      const readyCondition = nodeDescribe.conditions?.find((c) => c.type === 'Ready')
+                      const isReady = readyCondition?.status === 'True'
+                      const taintCount = nodeDescribe.taints?.length || 0
+                      const conditionCount = nodeDescribe.conditions?.length || 0
+                      const unhealthyCount = nodeDescribe.conditions?.filter((c) => c.status !== 'True').length || 0
+
+                      return (
+                        <>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                              isReady ? 'border-emerald-500/60 text-emerald-300' : 'border-red-500/60 text-red-300'
+                            }`}
+                          >
+                            {tr('nodes.detail.summary.ready', 'Ready')}:{' '}
+                            {isReady ? tr('nodes.detail.summary.readyYes', 'Yes') : tr('nodes.detail.summary.readyNo', 'No')}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                              taintCount > 0 ? 'border-amber-500/60 text-amber-300' : 'border-slate-600 text-slate-300'
+                            }`}
+                          >
+                            {tr('nodes.detail.summary.taints', 'Taints')}: {taintCount}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                              unhealthyCount > 0 ? 'border-amber-500/60 text-amber-300' : 'border-slate-600 text-slate-300'
+                            }`}
+                          >
+                            {tr('nodes.detail.summary.conditions', 'Conditions')}: {conditionCount}
+                          </span>
+                        </>
+                      )
+                    })()}
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
                       <p className="text-xs text-slate-400">{tr('nodes.detail.uptime', 'Uptime')}</p>
