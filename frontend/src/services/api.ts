@@ -1009,8 +1009,15 @@ export const api = {
     return data
   },
 
-  getNodeYaml: async (name: string): Promise<{ yaml: string }> => {
-    const { data } = await client.get(`/cluster/nodes/${name}/yaml`)
+  getNodeYaml: async (name: string, forceRefresh: boolean = false): Promise<{ yaml: string }> => {
+    const { data } = await client.get(`/cluster/nodes/${name}/yaml`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  applyNodeYaml: async (name: string, yaml: string): Promise<{ status: string }> => {
+    const { data } = await client.post(`/cluster/nodes/${name}/yaml/apply`, { yaml })
     return data
   },
 

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { ChevronDown, ChevronUp, RefreshCw, Search, Server, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import YamlEditor from '@/components/YamlEditor'
 
 interface NodeInfo {
   name: string
@@ -72,6 +73,8 @@ export default function ClusterNodes() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedNodeName, setSelectedNodeName] = useState<string | null>(null)
+  const [detailTab, setDetailTab] = useState<'info' | 'yaml'>('info')
+  const [yamlRefreshNonce, setYamlRefreshNonce] = useState(0)
   const [podFilter, setPodFilter] = useState('')
   const [podPage, setPodPage] = useState(1)
   const [sortKey, setSortKey] = useState<null | 'name' | 'status' | 'roles' | 'cpu' | 'memory' | 'version' | 'internal_ip' | 'external_ip' | 'age'>(null)
@@ -87,10 +90,28 @@ export default function ClusterNodes() {
     queryFn: () => api.getNodeMetrics(),
   })
 
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: api.me,
+    staleTime: 30000,
+  })
+
   const { data: nodeDescribe, isLoading: isLoadingDescribe, isError: isDescribeError } = useQuery({
     queryKey: ['cluster', 'nodes', 'describe', selectedNodeName],
     queryFn: () => api.describeNode(selectedNodeName as string),
     enabled: Boolean(selectedNodeName),
+  })
+
+  const {
+    data: nodeYaml,
+    isLoading: isYamlLoading,
+    isFetching: isYamlFetching,
+    isError: isYamlError,
+  } = useQuery({
+    queryKey: ['cluster', 'nodes', 'yaml', selectedNodeName, yamlRefreshNonce],
+    queryFn: () =>
+      api.getNodeYaml(selectedNodeName as string, yamlRefreshNonce > 0),
+    enabled: Boolean(selectedNodeName) && detailTab === 'yaml',
   })
 
   const { data: nodePods } = useQuery({
@@ -114,6 +135,16 @@ export default function ClusterNodes() {
     }
     return map
   }, [metrics])
+
+  const canEditYaml = me?.role === 'admin'
+
+  const handleApplyYaml = async (nextValue: string) => {
+    if (!selectedNodeName) return
+    await api.applyNodeYaml(selectedNodeName, nextValue)
+    setYamlRefreshNonce((prev) => prev + 1)
+    await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', selectedNodeName] })
+    await queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+  }
 
   const formatTimestamp = (iso?: string | null) => {
     if (!iso) return '-'
@@ -196,6 +227,11 @@ export default function ClusterNodes() {
   useEffect(() => {
     setPodPage(1)
   }, [podFilter, selectedNodeName])
+
+  useEffect(() => {
+    setDetailTab('info')
+    setYamlRefreshNonce(0)
+  }, [selectedNodeName])
 
   const filteredNodePods = useMemo(() => {
     if (!Array.isArray(nodePods)) return []
@@ -541,8 +577,59 @@ export default function ClusterNodes() {
               </button>
             </div>
 
+            <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={() => setDetailTab('info')}
+                className={`px-3 py-1 rounded-md border ${
+                  detailTab === 'info'
+                    ? 'border-slate-500 bg-slate-800 text-white'
+                    : 'border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                {tr('nodes.detail.tabs.info', 'Info')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab('yaml')}
+                className={`px-3 py-1 rounded-md border ${
+                  detailTab === 'yaml'
+                    ? 'border-slate-500 bg-slate-800 text-white'
+                    : 'border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                {tr('nodes.detail.tabs.yaml', 'YAML')}
+              </button>
+            </div>
+
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-6 text-sm">
-              {isLoadingDescribe ? (
+              {detailTab === 'yaml' ? (
+                <YamlEditor
+                  key={`${selectedNodeName || 'node'}-${detailTab}`}
+                  value={nodeYaml?.yaml || ''}
+                  canEdit={canEditYaml}
+                  isLoading={isYamlLoading}
+                  isRefreshing={isYamlFetching}
+                  error={isYamlError ? tr('nodes.detail.yaml.error', 'Failed to load YAML.') : null}
+                  onRefresh={() => setYamlRefreshNonce((prev) => prev + 1)}
+                  onApply={handleApplyYaml}
+                  labels={{
+                    title: tr('nodes.detail.yaml.title', 'Node YAML'),
+                    refresh: tr('nodes.detail.yaml.refresh', 'Refresh'),
+                    copy: tr('nodes.detail.yaml.copy', 'Copy'),
+                    edit: tr('nodes.detail.yaml.edit', 'Edit'),
+                    apply: tr('nodes.detail.yaml.apply', 'Apply'),
+                    applying: tr('nodes.detail.yaml.applying', 'Applying...'),
+                    cancel: tr('nodes.detail.yaml.cancel', 'Cancel'),
+                    loading: tr('nodes.detail.yaml.loading', 'Loading YAML...'),
+                    error: tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
+                    readonly: tr('nodes.detail.yaml.readonly', 'Read-only for non-admin users.'),
+                    editHint: tr('nodes.detail.yaml.editHint', 'Edit is available for admin users.'),
+                    applied: tr('nodes.detail.yaml.applied', 'Applied'),
+                    refreshing: tr('nodes.detail.yaml.refreshing', 'Refreshing...'),
+                  }}
+                />
+              ) : isLoadingDescribe ? (
                 <p className="text-slate-400">{tr('nodes.detail.loading', 'Loading node details...')}</p>
               ) : isDescribeError ? (
                 <p className="text-red-400">{tr('nodes.detail.error', 'Failed to load node details.')}</p>

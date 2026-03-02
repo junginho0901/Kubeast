@@ -5,6 +5,7 @@ from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import time
 import os
 import asyncio
 import json
@@ -26,6 +27,7 @@ from app.cluster import (
 
 METRICS_REQUEST_TIMEOUT = 6  # seconds for metrics.k8s.io calls
 METRICS_MAX_RETRIES = 2      # max retries for metrics fetch
+YAML_CACHE_TTL = 10          # seconds
 
 
 class K8sService:
@@ -69,6 +71,8 @@ class K8sService:
             # Discovery cache (api-resources)
             self._api_resources_cache: Optional[List[Dict[str, Any]]] = None
             self._api_resources_cache_at: float = 0.0
+            # YAML cache (resource yaml)
+            self._yaml_cache: Dict[str, Dict[str, Any]] = {}
             
         except Exception as e:
             print(f"Warning: Kubernetes client initialization failed: {e}")
@@ -388,7 +392,15 @@ class K8sService:
         resource_type: str,
         resource_name: str,
         namespace: Optional[str] = None,
+        force_refresh: bool = False,
     ) -> str:
+        cache_key = f"{resource_type}|{namespace or '_'}|{resource_name}"
+        now = time.time()
+        if not force_refresh:
+            cached = self._yaml_cache.get(cache_key)
+            if cached and (now - cached.get("at", 0)) < YAML_CACHE_TTL:
+                return cached.get("value", "")
+
         payload = await self.get_resources(
             resource_type=resource_type,
             resource_name=resource_name,
@@ -396,7 +408,13 @@ class K8sService:
             all_namespaces=False,
             output="yaml",
         )
-        return payload.get("data", "")
+        yaml_text = payload.get("data", "")
+        self._yaml_cache[cache_key] = {"value": yaml_text, "at": now}
+        return yaml_text
+
+    def _invalidate_yaml_cache(self, resource_type: str, resource_name: str, namespace: Optional[str] = None) -> None:
+        cache_key = f"{resource_type}|{namespace or '_'}|{resource_name}"
+        self._yaml_cache.pop(cache_key, None)
 
     async def describe_resource(
         self,
@@ -2899,12 +2917,91 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get node events: {e}")
 
-    async def get_node_yaml(self, name: str) -> str:
+    async def get_node_yaml(self, name: str, force_refresh: bool = False) -> str:
         """Node YAML 조회"""
         try:
-            return await self.get_resource_yaml("nodes", name, namespace=None)
+            return await self.get_resource_yaml("nodes", name, namespace=None, force_refresh=force_refresh)
         except Exception as e:
             raise Exception(f"Failed to get node yaml: {e}")
+
+    async def apply_node_yaml(self, name: str, yaml_content: str) -> Dict[str, Any]:
+        """Node YAML 적용 (spec 업데이트)"""
+        try:
+            import yaml
+
+            data = yaml.safe_load(yaml_content)
+            if not isinstance(data, dict):
+                raise Exception("Invalid YAML content")
+
+            kind = data.get("kind")
+            if kind != "Node":
+                raise Exception("YAML kind must be Node")
+
+            metadata = data.get("metadata") or {}
+            yaml_name = metadata.get("name")
+            if yaml_name and yaml_name != name:
+                raise Exception("YAML name does not match target node")
+
+            # Only allow safe fields via patch
+            current = self.v1.read_node(name)
+            current_labels = (current.metadata.labels or {}) if current and current.metadata else {}
+            current_annotations = (current.metadata.annotations or {}) if current and current.metadata else {}
+
+            def is_protected_label(key: str) -> bool:
+                prefixes = (
+                    "kubernetes.io/",
+                    "node-role.kubernetes.io/",
+                    "beta.kubernetes.io/",
+                    "node.kubernetes.io/",
+                    "topology.kubernetes.io/",
+                )
+                return key.startswith(prefixes)
+
+            def is_protected_annotation(key: str) -> bool:
+                prefixes = (
+                    "kubeadm.",
+                    "node.alpha.kubernetes.io/",
+                    "volumes.kubernetes.io/",
+                    "csi.volume.kubernetes.io/",
+                )
+                return key.startswith(prefixes)
+
+            patch: Dict[str, Any] = {"metadata": {}, "spec": {}}
+            if metadata.get("labels") is not None:
+                desired = metadata.get("labels") or {}
+                patch_labels = dict(desired)
+                # Remove labels that were explicitly deleted (non-protected only)
+                for key in current_labels:
+                    if key not in desired and not is_protected_label(key):
+                        patch_labels[key] = None
+                patch["metadata"]["labels"] = patch_labels
+            if metadata.get("annotations") is not None:
+                desired = metadata.get("annotations") or {}
+                patch_annotations = dict(desired)
+                for key in current_annotations:
+                    if key not in desired and not is_protected_annotation(key):
+                        patch_annotations[key] = None
+                patch["metadata"]["annotations"] = patch_annotations
+
+            spec = data.get("spec") or {}
+            if "unschedulable" in spec:
+                patch["spec"]["unschedulable"] = spec.get("unschedulable")
+
+            # Clean empty sections
+            if not patch["metadata"]:
+                patch.pop("metadata")
+            if not patch["spec"]:
+                patch.pop("spec")
+            if not patch:
+                raise Exception("No supported fields to apply (labels/annotations/unschedulable only)")
+
+            self.v1.patch_node(name, patch)
+            self._invalidate_yaml_cache("nodes", name, namespace=None)
+            return {"status": "ok"}
+        except ApiException as e:
+            raise Exception(f"Failed to apply node yaml: {e}")
+        except Exception as e:
+            raise Exception(f"Failed to apply node yaml: {e}")
     
     def _parse_cpu_usage(self, cpu_str: str) -> float:
         """CPU 사용량을 millicores 단위로 변환"""

@@ -117,6 +117,26 @@
     "detail": {
       "title": "노드 상세",
       "subtitle": "kubectl describe node {{name}} 결과",
+      "tabs": {
+        "info": "정보",
+        "yaml": "YAML"
+      },
+      "yaml": {
+        "title": "노드 YAML",
+        "refresh": "새로고침",
+        "copy": "복사",
+        "edit": "편집",
+        "apply": "적용",
+        "applying": "적용 중...",
+        "applied": "적용 완료",
+        "cancel": "취소",
+        "loading": "YAML 로딩 중...",
+        "error": "YAML을 불러오지 못했습니다.",
+        "readonly": "관리자 권한이 아니면 읽기 전용입니다.",
+        "editHint": "admin 권한에서 편집할 수 있습니다.",
+        "applyError": "YAML 적용에 실패했습니다.",
+        "refreshing": "새로고침 중..."
+      },
       "loading": "노드 상세 로딩 중...",
       "error": "노드 상세를 불러오지 못했습니다.",
       "notFound": "노드 상세 정보가 없습니다.",

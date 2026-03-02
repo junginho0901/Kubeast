@@ -117,6 +117,26 @@
     "detail": {
       "title": "Node details",
       "subtitle": "Details from kubectl describe node {{name}}",
+      "tabs": {
+        "info": "Info",
+        "yaml": "YAML"
+      },
+      "yaml": {
+        "title": "Node YAML",
+        "refresh": "Refresh",
+        "copy": "Copy",
+        "edit": "Edit",
+        "apply": "Apply",
+        "applying": "Applying...",
+        "applied": "Applied.",
+        "cancel": "Cancel",
+        "loading": "Loading YAML...",
+        "error": "Failed to load YAML.",
+        "readonly": "Read-only for non-admin users.",
+        "editHint": "Edit is available for admin users.",
+        "applyError": "Failed to apply YAML.",
+        "refreshing": "Refreshing..."
+      },
       "loading": "Loading node details...",
       "error": "Failed to load node details.",
       "notFound": "Node details not found.",
