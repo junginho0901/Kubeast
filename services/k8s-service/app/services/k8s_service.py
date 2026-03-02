@@ -5,6 +5,7 @@ from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import time
 import os
 import asyncio
 import json
@@ -26,6 +27,7 @@ from app.cluster import (
 
 METRICS_REQUEST_TIMEOUT = 6  # seconds for metrics.k8s.io calls
 METRICS_MAX_RETRIES = 2      # max retries for metrics fetch
+YAML_CACHE_TTL = 10          # seconds
 
 
 class K8sService:
@@ -69,6 +71,8 @@ class K8sService:
             # Discovery cache (api-resources)
             self._api_resources_cache: Optional[List[Dict[str, Any]]] = None
             self._api_resources_cache_at: float = 0.0
+            # YAML cache (resource yaml)
+            self._yaml_cache: Dict[str, Dict[str, Any]] = {}
             
         except Exception as e:
             print(f"Warning: Kubernetes client initialization failed: {e}")
@@ -388,7 +392,15 @@ class K8sService:
         resource_type: str,
         resource_name: str,
         namespace: Optional[str] = None,
+        force_refresh: bool = False,
     ) -> str:
+        cache_key = f"{resource_type}|{namespace or '_'}|{resource_name}"
+        now = time.time()
+        if not force_refresh:
+            cached = self._yaml_cache.get(cache_key)
+            if cached and (now - cached.get("at", 0)) < YAML_CACHE_TTL:
+                return cached.get("value", "")
+
         payload = await self.get_resources(
             resource_type=resource_type,
             resource_name=resource_name,
@@ -396,7 +408,13 @@ class K8sService:
             all_namespaces=False,
             output="yaml",
         )
-        return payload.get("data", "")
+        yaml_text = payload.get("data", "")
+        self._yaml_cache[cache_key] = {"value": yaml_text, "at": now}
+        return yaml_text
+
+    def _invalidate_yaml_cache(self, resource_type: str, resource_name: str, namespace: Optional[str] = None) -> None:
+        cache_key = f"{resource_type}|{namespace or '_'}|{resource_name}"
+        self._yaml_cache.pop(cache_key, None)
 
     async def describe_resource(
         self,
@@ -2899,7 +2917,7 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get node events: {e}")
 
-    async def get_node_yaml(self, name: str) -> str:
+    async def get_node_yaml(self, name: str, force_refresh: bool = False) -> str:
         """Node YAML 조회"""
         try:
             return await self.get_resource_yaml("nodes", name, namespace=None)
