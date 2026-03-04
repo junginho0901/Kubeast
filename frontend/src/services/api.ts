@@ -1031,6 +1031,21 @@ export const api = {
     return data
   },
 
+  drainNode: async (name: string): Promise<{ status: string; drain_id: string }> => {
+    const { data } = await client.post(`/cluster/nodes/${name}/drain`)
+    return data
+  },
+
+  getNodeDrainStatus: async (
+    name: string,
+    drainId: string
+  ): Promise<{ id: string; node: string; status: string; message?: string | null }> => {
+    const { data } = await client.get(`/cluster/nodes/${name}/drain/status`, {
+      params: { drain_id: drainId },
+    })
+    return data
+  },
+
   getPodMetrics: async (namespace?: string): Promise<any[]> => {
     const { data } = await client.get('/cluster/metrics/pods', {
       params: { namespace },

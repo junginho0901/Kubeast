@@ -118,7 +118,33 @@
       "cordon": "Cordon",
       "uncordon": "Uncordon",
       "cordoning": "Cordoning...",
-      "uncordoning": "Uncordoning..."
+      "uncordoning": "Uncordoning...",
+      "drain": "Drain",
+      "draining": "Draining...",
+      "drainSuccess": "Drained successfully.",
+      "schedulingDisabled": "Action disabled while another operation is running.",
+      "drainDisabled": "Drain is disabled while another operation is running.",
+      "drainInProgress": "Drain in progress. Actions are temporarily disabled.",
+      "schedulingInProgress": "Scheduling update in progress. Actions are temporarily disabled."
+    },
+    "drain": {
+      "title": "Drain node",
+      "confirm": "Are you sure you want to drain node {{name}}?",
+      "warning": "Draining will evict pods from this node. Be sure you understand the impact before continuing.",
+      "confirmButton": "Drain",
+      "error": "Failed to drain node."
+      ,
+      "status": {
+        "title": "Drain status",
+        "id": "ID",
+        "pending": "Queued",
+        "pendingMessage": "Drain request accepted. Waiting to start...",
+        "draining": "Draining",
+        "progressMessage": "Evicting pods from the node...",
+        "success": "Completed",
+        "doneMessage": "Node drain completed.",
+        "error": "Failed"
+      }
     },
     "detail": {
       "title": "Node details",
@@ -148,7 +174,8 @@
         "readonly": "Read-only for non-admin users.",
         "editHint": "Edit is available for admin users.",
         "applyError": "Failed to apply YAML.",
-        "refreshing": "Refreshing..."
+        "refreshing": "Refreshing...",
+        "unsaved": "You have unsaved YAML changes. Discard them?"
       },
       "loading": "Loading node details...",
       "error": "Failed to load node details.",
@@ -176,7 +203,10 @@
       "systemKernel": "Kernel",
       "systemRuntime": "Runtime",
       "systemKubelet": "Kubelet",
-      "systemProxy": "Kube Proxy"
+      "systemProxy": "Kube Proxy",
+      "systemBootId": "Boot ID",
+      "systemMachineId": "Machine ID",
+      "systemUuid": "System UUID"
     },
     "pods": {
       "search": "Filter pods...",

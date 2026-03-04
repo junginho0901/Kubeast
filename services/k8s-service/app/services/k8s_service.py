@@ -6,6 +6,7 @@ from kubernetes.client.rest import ApiException
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import time
+import uuid
 import os
 import asyncio
 import json
@@ -28,6 +29,7 @@ from app.cluster import (
 METRICS_REQUEST_TIMEOUT = 6  # seconds for metrics.k8s.io calls
 METRICS_MAX_RETRIES = 2      # max retries for metrics fetch
 YAML_CACHE_TTL = 10          # seconds
+DRAIN_STATUS_TTL = 600       # seconds
 
 
 class K8sService:
@@ -73,6 +75,8 @@ class K8sService:
             self._api_resources_cache_at: float = 0.0
             # YAML cache (resource yaml)
             self._yaml_cache: Dict[str, Dict[str, Any]] = {}
+            # Drain status cache
+            self._drain_status: Dict[str, Dict[str, Any]] = {}
             
         except Exception as e:
             print(f"Warning: Kubernetes client initialization failed: {e}")
@@ -2868,12 +2872,15 @@ class K8sService:
                 info = node.status.node_info
                 describe_info["system_info"] = {
                     "architecture": info.architecture,
+                    "boot_id": getattr(info, "boot_id", None),
+                    "machine_id": getattr(info, "machine_id", None),
                     "operating_system": info.operating_system,
                     "os_image": info.os_image,
                     "kernel_version": info.kernel_version,
                     "container_runtime": info.container_runtime_version,
                     "kubelet_version": info.kubelet_version,
-                    "kube_proxy_version": info.kube_proxy_version
+                    "kube_proxy_version": info.kube_proxy_version,
+                    "system_uuid": getattr(info, "system_uuid", None),
                 }
             
             return describe_info
@@ -2941,6 +2948,107 @@ class K8sService:
             return {"status": "ok", "unschedulable": False}
         except ApiException as e:
             raise Exception(f"Failed to uncordon node: {e}")
+
+    def _set_drain_status(self, drain_id: str, node_name: str, status: str, message: Optional[str] = None) -> None:
+        self._drain_status[drain_id] = {
+            "id": drain_id,
+            "node": node_name,
+            "status": status,
+            "message": message,
+            "expires_at": time.time() + DRAIN_STATUS_TTL,
+        }
+
+    def get_drain_status(self, drain_id: str) -> Dict[str, Any]:
+        item = self._drain_status.get(drain_id)
+        if not item:
+            raise Exception("Drain status not found")
+        if item.get("expires_at", 0) < time.time():
+            self._drain_status.pop(drain_id, None)
+            raise Exception("Drain status expired")
+        return {"id": item.get("id"), "node": item.get("node"), "status": item.get("status"), "message": item.get("message")}
+
+    async def start_node_drain(self, name: str) -> Dict[str, Any]:
+        drain_id = uuid.uuid4().hex
+        self._set_drain_status(drain_id, name, "pending")
+        asyncio.create_task(self._run_drain_node(drain_id, name))
+        return {"drain_id": drain_id, "status": "accepted"}
+
+    async def _run_drain_node(self, drain_id: str, name: str) -> None:
+        await asyncio.to_thread(self._drain_node_worker, drain_id, name)
+
+    def _drain_node_worker(self, drain_id: str, name: str) -> None:
+        try:
+            self._set_drain_status(drain_id, name, "draining")
+            # Cordon first
+            self.v1.patch_node(name, {"spec": {"unschedulable": True}})
+
+            pods = self.v1.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={name}")
+            for pod in pods.items:
+                owners = pod.metadata.owner_references or []
+                if any(owner.kind == "DaemonSet" for owner in owners):
+                    continue
+                if pod.metadata.annotations and pod.metadata.annotations.get("kubernetes.io/config.mirror"):
+                    continue
+
+                try:
+                    self._create_pod_eviction_raw(pod.metadata.namespace, pod.metadata.name, 0)
+                except ApiException as e:
+                    if e.status == 404:
+                        continue
+                    raise
+
+            self._set_drain_status(drain_id, name, "success")
+        except Exception as e:
+            self._set_drain_status(drain_id, name, "error", str(e))
+
+    def _create_pod_eviction_raw(self, namespace: str, name: str, grace_period_seconds: int = 0) -> None:
+        """Fallback eviction call for kubernetes clients missing eviction helpers."""
+        if not self.api_client:
+            raise Exception("API client not initialized for eviction")
+
+        # Try core/v1 eviction subresource first, then policy groups
+        candidates = [
+            ("v1", f"/api/v1/namespaces/{namespace}/pods/{name}/eviction"),
+            ("policy/v1", f"/apis/policy/v1/namespaces/{namespace}/pods/{name}/eviction"),
+            ("policy/v1beta1", f"/apis/policy/v1beta1/namespaces/{namespace}/pods/{name}/eviction"),
+        ]
+        for api_version, path in candidates:
+            body = {
+                "apiVersion": api_version,
+                "kind": "Eviction",
+                "metadata": {"name": name, "namespace": namespace},
+                "deleteOptions": {"gracePeriodSeconds": grace_period_seconds},
+            }
+            try:
+                self.api_client.call_api(
+                    path,
+                    "POST",
+                    body=body,
+                    response_type="object",
+                    _preload_content=False,
+                )
+                return
+            except ApiException as e:
+                if e.status == 404:
+                    continue
+                if e.status == 400 and api_version == "v1":
+                    # Some clusters expose pods/eviction under core/v1 path but don't support v1 Eviction.
+                    # Treat as unsupported and try the policy group endpoints.
+                    continue
+                raise
+        # Fallback: delete pod directly (PDB not honored)
+        try:
+            self.v1.delete_namespaced_pod(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(grace_period_seconds=grace_period_seconds),
+            )
+            return
+        except ApiException as e:
+            if e.status == 404:
+                return
+            raise
+        raise Exception("Eviction API not available")
 
     async def apply_node_yaml(self, name: str, yaml_content: str) -> Dict[str, Any]:
         """Node YAML 적용 (spec 업데이트)"""

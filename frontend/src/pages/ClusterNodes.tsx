@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { ChevronDown, ChevronUp, RefreshCw, Search, Server, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, Loader2, RefreshCw, Search, Server, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import YamlEditor from '@/components/YamlEditor'
 
@@ -46,12 +46,15 @@ interface NodeDescribe {
   taints: Array<{ key?: string | null; value?: string | null; effect?: string | null }>
   system_info: {
     architecture?: string | null
+    boot_id?: string | null
+    machine_id?: string | null
     operating_system?: string | null
     os_image?: string | null
     kernel_version?: string | null
     container_runtime?: string | null
     kubelet_version?: string | null
     kube_proxy_version?: string | null
+    system_uuid?: string | null
   }
 }
 
@@ -75,10 +78,16 @@ export default function ClusterNodes() {
   const [selectedNodeName, setSelectedNodeName] = useState<string | null>(null)
   const [detailTab, setDetailTab] = useState<'info' | 'yaml'>('info')
   const [yamlRefreshNonce, setYamlRefreshNonce] = useState(0)
+  const [drainDialogOpen, setDrainDialogOpen] = useState(false)
+  const [drainId, setDrainId] = useState<string | null>(null)
+  const [drainStatus, setDrainStatus] = useState<'idle' | 'pending' | 'draining' | 'success' | 'error'>('idle')
+  const [drainError, setDrainError] = useState<string | null>(null)
   const [podFilter, setPodFilter] = useState('')
   const [podPage, setPodPage] = useState(1)
   const [sortKey, setSortKey] = useState<null | 'name' | 'status' | 'roles' | 'cpu' | 'memory' | 'version' | 'internal_ip' | 'external_ip' | 'age'>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [isYamlDirty, setIsYamlDirty] = useState(false)
+  const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const { data: nodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['cluster', 'nodes'],
@@ -126,6 +135,22 @@ export default function ClusterNodes() {
     enabled: Boolean(selectedNodeName),
   })
 
+  const { data: drainStatusData } = useQuery({
+    queryKey: ['cluster', 'nodes', 'drain-status', drainId],
+    queryFn: () => api.getNodeDrainStatus(selectedNodeName as string, drainId as string),
+    enabled: Boolean(selectedNodeName && drainId),
+    refetchInterval: drainId ? 1000 : false,
+  })
+
+  useEffect(() => {
+    setDrainDialogOpen(false)
+    setDrainId(null)
+    setDrainStatus('idle')
+    setDrainError(null)
+    setIsYamlDirty(false)
+    setApplyToast(null)
+  }, [selectedNodeName])
+
   const metricsMap = useMemo(() => {
     const map = new Map<string, NodeMetric>()
     if (Array.isArray(metrics)) {
@@ -155,7 +180,86 @@ export default function ClusterNodes() {
     },
   })
 
+  const drainMutation = useMutation({
+    mutationFn: (nodeName: string) => api.drainNode(nodeName),
+    onSuccess: (data) => {
+      setDrainId(data.drain_id)
+      setDrainStatus('draining')
+      setDrainError(null)
+    },
+    onError: (error: any) => {
+      setDrainStatus('error')
+      setDrainError(error?.response?.data?.detail || error?.message || tr('nodes.drain.error', 'Failed to drain node.'))
+    },
+  })
+
   const isSchedulingMutation = cordonMutation.isPending || uncordonMutation.isPending
+  const isDrainMutation = drainMutation.isPending || drainStatus === 'draining' || drainStatus === 'pending'
+  const disableSchedulingAction = isSchedulingMutation || isDrainMutation
+  const disableDrainAction = isDrainMutation || isSchedulingMutation
+  const showDrainStatus = drainStatus !== 'idle' || Boolean(drainId) || Boolean(drainError)
+
+  const drainStatusMeta = useMemo(() => {
+    const status = drainStatus
+    if (status === 'success') {
+      return {
+        icon: CheckCircle2,
+        label: tr('nodes.drain.status.success', 'Completed'),
+        tone: 'text-emerald-400',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/20',
+      }
+    }
+    if (status === 'error') {
+      return {
+        icon: AlertTriangle,
+        label: tr('nodes.drain.status.error', 'Failed'),
+        tone: 'text-red-400',
+        bg: 'bg-red-500/10',
+        border: 'border-red-500/20',
+      }
+    }
+    if (status === 'pending') {
+      return {
+        icon: Clock,
+        label: tr('nodes.drain.status.pending', 'Queued'),
+        tone: 'text-amber-300',
+        bg: 'bg-amber-500/10',
+        border: 'border-amber-500/20',
+      }
+    }
+    if (status === 'draining') {
+      return {
+        icon: Loader2,
+        label: tr('nodes.drain.status.draining', 'Draining'),
+        tone: 'text-sky-300',
+        bg: 'bg-sky-500/10',
+        border: 'border-sky-500/20',
+      }
+    }
+    return {
+      icon: Clock,
+      label: tr('nodes.drain.status.pending', 'Queued'),
+      tone: 'text-amber-300',
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-500/20',
+    }
+  }, [drainStatus, tr])
+
+  const drainStatusMessage =
+    drainError || drainStatusData?.message || (drainStatus === 'success'
+      ? tr('nodes.drain.status.doneMessage', 'Node drain completed.')
+      : drainStatus === 'draining'
+        ? tr('nodes.drain.status.progressMessage', 'Evicting pods from the node...')
+        : drainStatus === 'pending'
+          ? tr('nodes.drain.status.pendingMessage', 'Drain request accepted. Waiting to start...')
+          : '')
+
+  useEffect(() => {
+    if (!applyToast) return
+    const timer = setTimeout(() => setApplyToast(null), 2500)
+    return () => clearTimeout(timer)
+  }, [applyToast])
 
   const handleApplyYaml = async (nextValue: string) => {
     if (!selectedNodeName) return
@@ -173,6 +277,63 @@ export default function ClusterNodes() {
       cordonMutation.mutate(selectedNodeName)
     }
   }
+
+  const openDrainDialog = () => {
+    setDrainDialogOpen(true)
+    setDrainError(null)
+  }
+
+  const closeDrainDialog = () => {
+    setDrainDialogOpen(false)
+  }
+
+  const confirmDiscardYaml = () => {
+    if (!isYamlDirty) return true
+    return window.confirm(
+      tr('nodes.detail.yaml.unsaved', 'You have unsaved YAML changes. Discard them?')
+    )
+  }
+
+  const handleCloseDetail = () => {
+    if (!confirmDiscardYaml()) return
+    setSelectedNodeName(null)
+    setIsYamlDirty(false)
+  }
+
+  const handleTabChange = (next: 'info' | 'yaml') => {
+    if (detailTab === next) return
+    if (detailTab === 'yaml' && !confirmDiscardYaml()) return
+    setDetailTab(next)
+  }
+
+  const handleDrainConfirm = () => {
+    if (!selectedNodeName) return
+    setDrainStatus('pending')
+    setDrainError(null)
+    setDrainDialogOpen(false)
+    drainMutation.mutate(selectedNodeName)
+  }
+
+  useEffect(() => {
+    if (!drainStatusData) return
+    const status = drainStatusData.status
+    if (status === 'success') {
+      setDrainStatus('success')
+      setDrainId(null)
+      queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+      if (selectedNodeName) {
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', selectedNodeName] })
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'pods', selectedNodeName] })
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'events', selectedNodeName] })
+      }
+    } else if (status === 'error') {
+      setDrainStatus('error')
+      setDrainError(drainStatusData.message || tr('nodes.drain.error', 'Failed to drain node.'))
+      setDrainId(null)
+    } else {
+      setDrainStatus(status as typeof drainStatus)
+    }
+  }, [drainStatusData, queryClient, selectedNodeName, tr])
 
   const formatTimestamp = (iso?: string | null) => {
     if (!iso) return '-'
@@ -583,12 +744,12 @@ export default function ClusterNodes() {
       </div>
 
       {selectedNodeName && (
-        <ModalOverlay onClose={() => setSelectedNodeName(null)}>
+        <ModalOverlay onClose={handleCloseDetail}>
           <div
-            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden"
+            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden relative"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
+              <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selectedNodeName}</h2>
                 <p className="text-xs text-slate-400">
@@ -602,7 +763,12 @@ export default function ClusterNodes() {
                   <button
                     type="button"
                     onClick={handleToggleScheduling}
-                    disabled={isSchedulingMutation}
+                    disabled={disableSchedulingAction}
+                    title={
+                      disableSchedulingAction
+                        ? tr('nodes.actions.schedulingDisabled', 'Action disabled while another operation is running.')
+                        : undefined
+                    }
                     className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
                   >
                     {isSchedulingMutation
@@ -614,8 +780,25 @@ export default function ClusterNodes() {
                         : tr('nodes.actions.cordon', 'Cordon')}
                   </button>
                 )}
+                {isAdmin && nodeDescribe && (
+                  <button
+                    type="button"
+                    onClick={openDrainDialog}
+                    disabled={disableDrainAction}
+                    title={
+                      disableDrainAction
+                        ? tr('nodes.actions.drainDisabled', 'Drain is disabled while another operation is running.')
+                        : undefined
+                    }
+                    className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                  >
+                    {isDrainMutation
+                      ? tr('nodes.actions.draining', 'Draining...')
+                      : tr('nodes.actions.drain', 'Drain')}
+                  </button>
+                )}
                 <button
-                  onClick={() => setSelectedNodeName(null)}
+                  onClick={handleCloseDetail}
                   className="text-slate-400 hover:text-white"
                 >
                   <X className="w-4 h-4" />
@@ -623,10 +806,32 @@ export default function ClusterNodes() {
               </div>
             </div>
 
+            {(isSchedulingMutation || isDrainMutation) && (
+              <div className="px-5 pb-2 text-[11px] text-slate-400">
+                {isDrainMutation
+                  ? tr('nodes.actions.drainInProgress', 'Drain in progress. Actions are temporarily disabled.')
+                  : tr('nodes.actions.schedulingInProgress', 'Scheduling update in progress. Actions are temporarily disabled.')}
+              </div>
+            )}
+
+            {applyToast && (
+              <div className="absolute top-4 right-4 z-20">
+                <div
+                  className={`rounded-lg border px-3 py-2 text-xs shadow-lg ${
+                    applyToast.type === 'success'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                      : 'border-red-500/30 bg-red-500/10 text-red-200'
+                  }`}
+                >
+                  {applyToast.message}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
               <button
                 type="button"
-                onClick={() => setDetailTab('info')}
+                onClick={() => handleTabChange('info')}
                 className={`px-3 py-1 rounded-md border ${
                   detailTab === 'info'
                     ? 'border-slate-500 bg-slate-800 text-white'
@@ -637,7 +842,7 @@ export default function ClusterNodes() {
               </button>
               <button
                 type="button"
-                onClick={() => setDetailTab('yaml')}
+                onClick={() => handleTabChange('yaml')}
                 className={`px-3 py-1 rounded-md border ${
                   detailTab === 'yaml'
                     ? 'border-slate-500 bg-slate-800 text-white'
@@ -647,6 +852,34 @@ export default function ClusterNodes() {
                 {tr('nodes.detail.tabs.yaml', 'YAML')}
               </button>
             </div>
+
+            {showDrainStatus && (
+              <div className="px-5 py-3 border-b border-slate-800">
+                <div className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${drainStatusMeta.bg} ${drainStatusMeta.border}`}>
+                  <div className={`mt-0.5 ${drainStatusMeta.tone}`}>
+                    <drainStatusMeta.icon className={`w-4 h-4 ${drainStatus === 'draining' ? 'animate-spin' : ''}`} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold ${drainStatusMeta.tone}`}>
+                        {tr('nodes.drain.status.title', 'Drain status')}: {drainStatusMeta.label}
+                      </span>
+                      {drainId && (
+                        <span className="text-[11px] text-slate-400">
+                          {tr('nodes.drain.status.id', 'ID')}: {drainId.slice(0, 8)}
+                        </span>
+                      )}
+                    </div>
+                    {drainStatusMessage && (
+                      <div className="mt-1 text-xs text-slate-300">{drainStatusMessage}</div>
+                    )}
+                    {drainStatus === 'error' && drainError && (
+                      <div className="mt-2 text-[11px] text-red-300 break-all">{drainError}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-6 text-sm">
               {detailTab === 'yaml' ? (
@@ -659,6 +892,19 @@ export default function ClusterNodes() {
                   error={isYamlError ? tr('nodes.detail.yaml.error', 'Failed to load YAML.') : null}
                   onRefresh={() => setYamlRefreshNonce((prev) => prev + 1)}
                   onApply={handleApplyYaml}
+                  onApplySuccess={() =>
+                    setApplyToast({
+                      type: 'success',
+                      message: tr('nodes.detail.yaml.applied', 'Applied'),
+                    })
+                  }
+                  onApplyError={(message) =>
+                    setApplyToast({
+                      type: 'error',
+                      message: message || tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
+                    })
+                  }
+                  onDirtyChange={setIsYamlDirty}
                   labels={{
                     title: tr('nodes.detail.yaml.title', 'Node YAML'),
                     refresh: tr('nodes.detail.yaml.refresh', 'Refresh'),
@@ -751,6 +997,9 @@ export default function ClusterNodes() {
                       <div>{tr('nodes.detail.systemRuntime', 'Runtime')}: {nodeDescribe.system_info?.container_runtime || '-'}</div>
                       <div>{tr('nodes.detail.systemKubelet', 'Kubelet')}: {nodeDescribe.system_info?.kubelet_version || '-'}</div>
                       <div>{tr('nodes.detail.systemProxy', 'Kube Proxy')}: {nodeDescribe.system_info?.kube_proxy_version || '-'}</div>
+                      <div>{tr('nodes.detail.systemBootId', 'Boot ID')}: {nodeDescribe.system_info?.boot_id || '-'}</div>
+                      <div>{tr('nodes.detail.systemMachineId', 'Machine ID')}: {nodeDescribe.system_info?.machine_id || '-'}</div>
+                      <div>{tr('nodes.detail.systemUuid', 'System UUID')}: {nodeDescribe.system_info?.system_uuid || '-'}</div>
                     </div>
                   </div>
 
@@ -777,21 +1026,21 @@ export default function ClusterNodes() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
                       <p className="text-xs text-slate-400 mb-2">{tr('nodes.detail.addresses', 'Addresses')}</p>
-                      <pre className="text-xs text-slate-200 whitespace-pre-wrap">
+                      <div className="text-xs text-slate-200 whitespace-pre-wrap break-all">
                         {nodeDescribe.addresses && nodeDescribe.addresses.length > 0
                           ? nodeDescribe.addresses.map((a) => `${a.type}: ${a.address}`).join('\n')
                           : tr('common.none', '(none)')}
-                      </pre>
+                      </div>
                     </div>
                     <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
                       <p className="text-xs text-slate-400 mb-2">{tr('nodes.detail.taints', 'Taints')}</p>
-                      <pre className="text-xs text-slate-200 whitespace-pre-wrap">
+                      <div className="text-xs text-slate-200 whitespace-pre-wrap break-all">
                         {nodeDescribe.taints && nodeDescribe.taints.length > 0
                           ? nodeDescribe.taints
                               .map((t) => `${t.key || ''}=${t.value || ''}:${t.effect || ''}`)
                               .join('\n')
                           : tr('common.none', '(none)')}
-                      </pre>
+                      </div>
                     </div>
                   </div>
 
@@ -949,6 +1198,56 @@ export default function ClusterNodes() {
               ) : (
                 <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
               )}
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {drainDialogOpen && selectedNodeName && (
+        <ModalOverlay onClose={closeDrainDialog}>
+          <div
+            className="bg-slate-800 rounded-lg w-full max-w-lg p-6"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={tr('nodes.drain.title', 'Drain node')}
+          >
+            <h2 className="text-xl font-bold text-white mb-4">
+              {tr('nodes.drain.title', 'Drain node')}
+            </h2>
+            <p className="text-slate-300 leading-relaxed">
+              {tr('nodes.drain.confirm', 'Are you sure you want to drain node {{name}}?', {
+                name: selectedNodeName,
+              })}
+            </p>
+            <p className="text-slate-400 mt-3">
+              {tr(
+                'nodes.drain.warning',
+                'Draining will evict pods from this node. Be sure you understand the impact before continuing.'
+              )}
+            </p>
+
+            {drainError && (
+              <div className="mt-4 text-sm text-red-400">{drainError}</div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={closeDrainDialog}
+                disabled={isDrainMutation}
+              >
+                {tr('common.cancel', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"
+                onClick={handleDrainConfirm}
+                disabled={isDrainMutation}
+              >
+                {tr('nodes.drain.confirmButton', 'Drain')}
+              </button>
             </div>
           </div>
         </ModalOverlay>

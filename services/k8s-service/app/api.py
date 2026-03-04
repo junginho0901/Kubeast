@@ -1261,6 +1261,37 @@ async def uncordon_node(name: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/nodes/{name}/drain")
+async def drain_node(name: str, request: Request):
+    """Node drain"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return await k8s_service.start_node_drain(name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/nodes/{name}/drain/status")
+async def drain_node_status(name: str, request: Request, drain_id: str = Query(...)):
+    """Node drain status"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden")
+        status = k8s_service.get_drain_status(drain_id)
+        if status.get("node") != name:
+            raise HTTPException(status_code=404, detail="Drain status not found")
+        return status
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/componentstatuses")
 async def get_component_statuses():
     """컴포넌트 상태 조회"""

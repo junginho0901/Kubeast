@@ -118,7 +118,33 @@
       "cordon": "스케줄링 비활성화",
       "uncordon": "스케줄링 활성화",
       "cordoning": "스케줄링 비활성화 중...",
-      "uncordoning": "스케줄링 활성화 중..."
+      "uncordoning": "스케줄링 활성화 중...",
+      "drain": "Drain",
+      "draining": "Draining...",
+      "drainSuccess": "드레인 완료",
+      "schedulingDisabled": "다른 작업이 진행 중이라 비활성화되었습니다.",
+      "drainDisabled": "다른 작업이 진행 중이라 드레인이 비활성화되었습니다.",
+      "drainInProgress": "드레인 진행 중입니다. 작업이 일시적으로 비활성화됩니다.",
+      "schedulingInProgress": "스케줄링 변경 중입니다. 작업이 일시적으로 비활성화됩니다."
+    },
+    "drain": {
+      "title": "노드 드레인",
+      "confirm": "노드 {{name}}를 드레인할까요?",
+      "warning": "드레인은 해당 노드의 파드를 축출합니다. 영향 범위를 충분히 이해한 후 진행하세요.",
+      "confirmButton": "드레인",
+      "error": "노드 드레인에 실패했습니다."
+      ,
+      "status": {
+        "title": "드레인 상태",
+        "id": "ID",
+        "pending": "대기",
+        "pendingMessage": "요청이 접수되었습니다. 시작을 대기 중입니다...",
+        "draining": "진행 중",
+        "progressMessage": "노드에서 파드를 축출하는 중입니다...",
+        "success": "완료",
+        "doneMessage": "노드 드레인이 완료되었습니다.",
+        "error": "실패"
+      }
     },
     "detail": {
       "title": "노드 상세",
@@ -148,7 +174,8 @@
         "readonly": "관리자 권한이 아니면 읽기 전용입니다.",
         "editHint": "admin 권한에서 편집할 수 있습니다.",
         "applyError": "YAML 적용에 실패했습니다.",
-        "refreshing": "새로고침 중..."
+        "refreshing": "새로고침 중...",
+        "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
       },
       "loading": "노드 상세 로딩 중...",
       "error": "노드 상세를 불러오지 못했습니다.",
@@ -176,7 +203,10 @@
       "systemKernel": "커널",
       "systemRuntime": "런타임",
       "systemKubelet": "Kubelet",
-      "systemProxy": "Kube Proxy"
+      "systemProxy": "Kube Proxy",
+      "systemBootId": "Boot ID",
+      "systemMachineId": "Machine ID",
+      "systemUuid": "System UUID"
     },
     "pods": {
       "search": "파드 필터...",
