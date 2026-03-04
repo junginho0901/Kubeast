@@ -2872,12 +2872,15 @@ class K8sService:
                 info = node.status.node_info
                 describe_info["system_info"] = {
                     "architecture": info.architecture,
+                    "boot_id": getattr(info, "boot_id", None),
+                    "machine_id": getattr(info, "machine_id", None),
                     "operating_system": info.operating_system,
                     "os_image": info.os_image,
                     "kernel_version": info.kernel_version,
                     "container_runtime": info.container_runtime_version,
                     "kubelet_version": info.kubelet_version,
-                    "kube_proxy_version": info.kube_proxy_version
+                    "kube_proxy_version": info.kube_proxy_version,
+                    "system_uuid": getattr(info, "system_uuid", None),
                 }
             
             return describe_info
