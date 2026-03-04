@@ -762,7 +762,7 @@ export default function ClusterNodes() {
       {selectedNodeName && (
         <ModalOverlay onClose={handleCloseDetail}>
           <div
-            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl overflow-x-hidden"
+            className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 shadow-2xl overflow-x-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative flex h-full flex-col">
