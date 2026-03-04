@@ -1209,6 +1209,17 @@ async def websocket_node_debug_shell(
         pass
 
 
+@router.websocket("/cluster/nodes/{node_name}/debug-shell/ws")
+async def websocket_node_debug_shell_cluster(
+    websocket: WebSocket,
+    node_name: str,
+    namespace: Optional[str] = Query(None),
+    image: Optional[str] = Query(None),
+):
+    """/cluster prefix compatibility for gateway websocket routing"""
+    return await websocket_node_debug_shell(websocket, node_name, namespace, image)
+
+
 @router.get("/metrics/pods")
 async def get_pod_metrics(namespace: Optional[str] = Query(None, description="특정 네임스페이스 필터")):
     """Pod 리소스 사용량 조회 (kubectl top pods)"""
