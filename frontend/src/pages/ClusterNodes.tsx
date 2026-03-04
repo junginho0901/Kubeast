@@ -86,6 +86,8 @@ export default function ClusterNodes() {
   const [podPage, setPodPage] = useState(1)
   const [sortKey, setSortKey] = useState<null | 'name' | 'status' | 'roles' | 'cpu' | 'memory' | 'version' | 'internal_ip' | 'external_ip' | 'age'>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [isYamlDirty, setIsYamlDirty] = useState(false)
+  const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const { data: nodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['cluster', 'nodes'],
@@ -145,6 +147,8 @@ export default function ClusterNodes() {
     setDrainId(null)
     setDrainStatus('idle')
     setDrainError(null)
+    setIsYamlDirty(false)
+    setApplyToast(null)
   }, [selectedNodeName])
 
   const metricsMap = useMemo(() => {
@@ -251,6 +255,12 @@ export default function ClusterNodes() {
           ? tr('nodes.drain.status.pendingMessage', 'Drain request accepted. Waiting to start...')
           : '')
 
+  useEffect(() => {
+    if (!applyToast) return
+    const timer = setTimeout(() => setApplyToast(null), 2500)
+    return () => clearTimeout(timer)
+  }, [applyToast])
+
   const handleApplyYaml = async (nextValue: string) => {
     if (!selectedNodeName) return
     await api.applyNodeYaml(selectedNodeName, nextValue)
@@ -275,6 +285,25 @@ export default function ClusterNodes() {
 
   const closeDrainDialog = () => {
     setDrainDialogOpen(false)
+  }
+
+  const confirmDiscardYaml = () => {
+    if (!isYamlDirty) return true
+    return window.confirm(
+      tr('nodes.detail.yaml.unsaved', 'You have unsaved YAML changes. Discard them?')
+    )
+  }
+
+  const handleCloseDetail = () => {
+    if (!confirmDiscardYaml()) return
+    setSelectedNodeName(null)
+    setIsYamlDirty(false)
+  }
+
+  const handleTabChange = (next: 'info' | 'yaml') => {
+    if (detailTab === next) return
+    if (detailTab === 'yaml' && !confirmDiscardYaml()) return
+    setDetailTab(next)
   }
 
   const handleDrainConfirm = () => {
@@ -715,9 +744,9 @@ export default function ClusterNodes() {
       </div>
 
       {selectedNodeName && (
-        <ModalOverlay onClose={() => setSelectedNodeName(null)}>
+        <ModalOverlay onClose={handleCloseDetail}>
           <div
-            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden"
+            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden relative"
             onClick={(e) => e.stopPropagation()}
           >
               <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
@@ -769,7 +798,7 @@ export default function ClusterNodes() {
                   </button>
                 )}
                 <button
-                  onClick={() => setSelectedNodeName(null)}
+                  onClick={handleCloseDetail}
                   className="text-slate-400 hover:text-white"
                 >
                   <X className="w-4 h-4" />
@@ -785,10 +814,24 @@ export default function ClusterNodes() {
               </div>
             )}
 
+            {applyToast && (
+              <div className="absolute top-4 right-4 z-20">
+                <div
+                  className={`rounded-lg border px-3 py-2 text-xs shadow-lg ${
+                    applyToast.type === 'success'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                      : 'border-red-500/30 bg-red-500/10 text-red-200'
+                  }`}
+                >
+                  {applyToast.message}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
               <button
                 type="button"
-                onClick={() => setDetailTab('info')}
+                onClick={() => handleTabChange('info')}
                 className={`px-3 py-1 rounded-md border ${
                   detailTab === 'info'
                     ? 'border-slate-500 bg-slate-800 text-white'
@@ -799,7 +842,7 @@ export default function ClusterNodes() {
               </button>
               <button
                 type="button"
-                onClick={() => setDetailTab('yaml')}
+                onClick={() => handleTabChange('yaml')}
                 className={`px-3 py-1 rounded-md border ${
                   detailTab === 'yaml'
                     ? 'border-slate-500 bg-slate-800 text-white'
@@ -849,6 +892,19 @@ export default function ClusterNodes() {
                   error={isYamlError ? tr('nodes.detail.yaml.error', 'Failed to load YAML.') : null}
                   onRefresh={() => setYamlRefreshNonce((prev) => prev + 1)}
                   onApply={handleApplyYaml}
+                  onApplySuccess={() =>
+                    setApplyToast({
+                      type: 'success',
+                      message: tr('nodes.detail.yaml.applied', 'Applied'),
+                    })
+                  }
+                  onApplyError={(message) =>
+                    setApplyToast({
+                      type: 'error',
+                      message: message || tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
+                    })
+                  }
+                  onDirtyChange={setIsYamlDirty}
                   labels={{
                     title: tr('nodes.detail.yaml.title', 'Node YAML'),
                     refresh: tr('nodes.detail.yaml.refresh', 'Refresh'),
