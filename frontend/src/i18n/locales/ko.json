@@ -129,6 +129,18 @@
       "warning": "드레인은 해당 노드의 파드를 축출합니다. 영향 범위를 충분히 이해한 후 진행하세요.",
       "confirmButton": "드레인",
       "error": "노드 드레인에 실패했습니다."
+      ,
+      "status": {
+        "title": "드레인 상태",
+        "id": "ID",
+        "pending": "대기",
+        "pendingMessage": "요청이 접수되었습니다. 시작을 대기 중입니다...",
+        "draining": "진행 중",
+        "progressMessage": "노드에서 파드를 축출하는 중입니다...",
+        "success": "완료",
+        "doneMessage": "노드 드레인이 완료되었습니다.",
+        "error": "실패"
+      }
     },
     "detail": {
       "title": "노드 상세",

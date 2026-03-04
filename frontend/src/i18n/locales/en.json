@@ -129,6 +129,18 @@
       "warning": "Draining will evict pods from this node. Be sure you understand the impact before continuing.",
       "confirmButton": "Drain",
       "error": "Failed to drain node."
+      ,
+      "status": {
+        "title": "Drain status",
+        "id": "ID",
+        "pending": "Queued",
+        "pendingMessage": "Drain request accepted. Waiting to start...",
+        "draining": "Draining",
+        "progressMessage": "Evicting pods from the node...",
+        "success": "Completed",
+        "doneMessage": "Node drain completed.",
+        "error": "Failed"
+      }
     },
     "detail": {
       "title": "Node details",

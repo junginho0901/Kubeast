@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { ChevronDown, ChevronUp, RefreshCw, Search, Server, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, Loader2, RefreshCw, Search, Server, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import YamlEditor from '@/components/YamlEditor'
 
@@ -188,6 +188,63 @@ export default function ClusterNodes() {
 
   const isSchedulingMutation = cordonMutation.isPending || uncordonMutation.isPending
   const isDrainMutation = drainMutation.isPending || drainStatus === 'draining' || drainStatus === 'pending'
+  const showDrainStatus = drainStatus !== 'idle' || Boolean(drainId) || Boolean(drainError)
+
+  const drainStatusMeta = useMemo(() => {
+    const status = drainStatus
+    if (status === 'success') {
+      return {
+        icon: CheckCircle2,
+        label: tr('nodes.drain.status.success', 'Completed'),
+        tone: 'text-emerald-400',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/20',
+      }
+    }
+    if (status === 'error') {
+      return {
+        icon: AlertTriangle,
+        label: tr('nodes.drain.status.error', 'Failed'),
+        tone: 'text-red-400',
+        bg: 'bg-red-500/10',
+        border: 'border-red-500/20',
+      }
+    }
+    if (status === 'pending') {
+      return {
+        icon: Clock,
+        label: tr('nodes.drain.status.pending', 'Queued'),
+        tone: 'text-amber-300',
+        bg: 'bg-amber-500/10',
+        border: 'border-amber-500/20',
+      }
+    }
+    if (status === 'draining') {
+      return {
+        icon: Loader2,
+        label: tr('nodes.drain.status.draining', 'Draining'),
+        tone: 'text-sky-300',
+        bg: 'bg-sky-500/10',
+        border: 'border-sky-500/20',
+      }
+    }
+    return {
+      icon: Clock,
+      label: tr('nodes.drain.status.pending', 'Queued'),
+      tone: 'text-amber-300',
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-500/20',
+    }
+  }, [drainStatus, tr])
+
+  const drainStatusMessage =
+    drainError || drainStatusData?.message || (drainStatus === 'success'
+      ? tr('nodes.drain.status.doneMessage', 'Node drain completed.')
+      : drainStatus === 'draining'
+        ? tr('nodes.drain.status.progressMessage', 'Evicting pods from the node...')
+        : drainStatus === 'pending'
+          ? tr('nodes.drain.status.pendingMessage', 'Drain request accepted. Waiting to start...')
+          : '')
 
   const handleApplyYaml = async (nextValue: string) => {
     if (!selectedNodeName) return
@@ -729,14 +786,31 @@ export default function ClusterNodes() {
               </button>
             </div>
 
-            {drainStatus === 'success' && (
-              <div className="px-5 py-2 text-xs text-emerald-400 border-b border-slate-800">
-                {tr('nodes.actions.drainSuccess', 'Drained successfully.')}
-              </div>
-            )}
-            {drainError && (
-              <div className="px-5 py-2 text-xs text-red-400 border-b border-slate-800">
-                {drainError}
+            {showDrainStatus && (
+              <div className="px-5 py-3 border-b border-slate-800">
+                <div className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${drainStatusMeta.bg} ${drainStatusMeta.border}`}>
+                  <div className={`mt-0.5 ${drainStatusMeta.tone}`}>
+                    <drainStatusMeta.icon className={`w-4 h-4 ${drainStatus === 'draining' ? 'animate-spin' : ''}`} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold ${drainStatusMeta.tone}`}>
+                        {tr('nodes.drain.status.title', 'Drain status')}: {drainStatusMeta.label}
+                      </span>
+                      {drainId && (
+                        <span className="text-[11px] text-slate-400">
+                          {tr('nodes.drain.status.id', 'ID')}: {drainId.slice(0, 8)}
+                        </span>
+                      )}
+                    </div>
+                    {drainStatusMessage && (
+                      <div className="mt-1 text-xs text-slate-300">{drainStatusMessage}</div>
+                    )}
+                    {drainStatus === 'error' && drainError && (
+                      <div className="mt-2 text-[11px] text-red-300 break-all">{drainError}</div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
