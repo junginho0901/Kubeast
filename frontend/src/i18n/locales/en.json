@@ -174,7 +174,8 @@
         "readonly": "Read-only for non-admin users.",
         "editHint": "Edit is available for admin users.",
         "applyError": "Failed to apply YAML.",
-        "refreshing": "Refreshing..."
+        "refreshing": "Refreshing...",
+        "unsaved": "You have unsaved YAML changes. Discard them?"
       },
       "loading": "Loading node details...",
       "error": "Failed to load node details.",
