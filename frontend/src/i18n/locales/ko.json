@@ -125,15 +125,16 @@
       "schedulingDisabled": "다른 작업이 진행 중이라 비활성화되었습니다.",
       "drainDisabled": "다른 작업이 진행 중이라 드레인이 비활성화되었습니다.",
       "drainInProgress": "드레인 진행 중입니다. 작업이 일시적으로 비활성화됩니다.",
-      "schedulingInProgress": "스케줄링 변경 중입니다. 작업이 일시적으로 비활성화됩니다."
+      "schedulingInProgress": "스케줄링 변경 중입니다. 작업이 일시적으로 비활성화됩니다.",
+      "debug": "디버그",
+      "debugDisabled": "디버그 셸은 Linux 노드에서만 지원됩니다."
     },
     "drain": {
       "title": "노드 드레인",
       "confirm": "노드 {{name}}를 드레인할까요?",
       "warning": "드레인은 해당 노드의 파드를 축출합니다. 영향 범위를 충분히 이해한 후 진행하세요.",
       "confirmButton": "드레인",
-      "error": "노드 드레인에 실패했습니다."
-      ,
+      "error": "노드 드레인에 실패했습니다.",
       "status": {
         "title": "드레인 상태",
         "id": "ID",
@@ -230,6 +231,16 @@
         "lastSeen": "최근",
         "count": "횟수"
       }
+    },
+    "shell": {
+      "title": "셸: {{node}}",
+      "connectingTo": "{{node}}에 연결 중...",
+      "connected": "연결됨.",
+      "connectionError": "연결 오류.",
+      "disconnected": "연결 종료.",
+      "statusConnecting": "연결 중...",
+      "statusConnected": "연결됨",
+      "statusError": "연결 오류"
     }
   },
   "aiChat": {
@@ -770,6 +781,14 @@
       "hq": "본부",
       "team": "팀",
       "role": "Role"
+    },
+    "nodeShell": {
+      "title": "노드 셸",
+      "subtitle": "노드 디버그 셸 설정을 관리합니다.",
+      "enable": "노드 셸 사용",
+      "enableHint": "노드 상세 화면에 디버그 셸 액션을 표시합니다.",
+      "namespace": "네임스페이스",
+      "image": "리눅스 이미지"
     }
   },
   "storage": {

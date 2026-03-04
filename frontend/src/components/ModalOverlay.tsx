@@ -4,13 +4,14 @@ import { createPortal } from 'react-dom'
 interface ModalOverlayProps {
   children: ReactNode
   onClose?: () => void
+  closeOnOverlayClick?: boolean
 }
 
-export function ModalOverlay({ children, onClose }: ModalOverlayProps) {
+export function ModalOverlay({ children, onClose, closeOnOverlayClick = true }: ModalOverlayProps) {
   return createPortal(
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4"
-      onClick={onClose}
+      onClick={closeOnOverlayClick ? onClose : undefined}
     >
       {children}
     </div>,

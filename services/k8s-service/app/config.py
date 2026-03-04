@@ -56,6 +56,10 @@ class Settings(BaseSettings):
 
     # Auth cookie (HttpOnly cookie for browser WS/SSE streaming)
     AUTH_COOKIE_NAME: str = "kube-assistant.token"
+
+    # Node Debug Shell
+    NODE_SHELL_NAMESPACE: str = "default"
+    NODE_SHELL_LINUX_IMAGE: str = "docker.io/library/busybox:latest"
     
     class Config:
         # 프로젝트 루트의 .env 파일 사용

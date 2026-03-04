@@ -2931,6 +2931,71 @@ class K8sService:
         except Exception as e:
             raise Exception(f"Failed to get node yaml: {e}")
 
+    def get_node_os(self, name: str) -> Optional[str]:
+        """노드 OS 확인"""
+        try:
+            node = self.v1.read_node(name)
+            info = getattr(node.status, "node_info", None)
+            return getattr(info, "operating_system", None) if info else None
+        except ApiException as e:
+            raise Exception(f"Failed to get node OS: {e}")
+
+    def create_node_debug_pod(self, node_name: str, namespace: str, image: str) -> str:
+        """노드 디버그용 파드 생성"""
+        try:
+            suffix = uuid.uuid4().hex[:6]
+            pod_name = f"node-debugger-{node_name}-{suffix}"
+            pod_manifest = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {
+                    "name": pod_name,
+                    "namespace": namespace,
+                    "labels": {
+                        "app": "node-debugger",
+                        "node": node_name,
+                    },
+                },
+                "spec": {
+                    "nodeName": node_name,
+                    "restartPolicy": "Never",
+                    "terminationGracePeriodSeconds": 30,
+                    "hostPID": True,
+                    "hostIPC": True,
+                    "hostNetwork": True,
+                    "tolerations": [{"operator": "Exists"}],
+                    "containers": [
+                        {
+                            "name": "debugger",
+                            "image": image,
+                            "tty": True,
+                            "stdin": True,
+                            "stdinOnce": True,
+                            "volumeMounts": [{"name": "host-root", "mountPath": "/host"}],
+                        }
+                    ],
+                    "volumes": [
+                        {"name": "host-root", "hostPath": {"path": "/", "type": "Directory"}}
+                    ],
+                },
+            }
+            self.v1.create_namespaced_pod(namespace=namespace, body=pod_manifest)
+            return pod_name
+        except ApiException as e:
+            raise Exception(f"Failed to create debug pod: {e}")
+
+    def delete_pod(self, namespace: str, name: str) -> None:
+        """파드 삭제 (best-effort)"""
+        try:
+            self.v1.delete_namespaced_pod(
+                name=name,
+                namespace=namespace,
+                grace_period_seconds=0,
+                propagation_policy="Background",
+            )
+        except ApiException:
+            pass
+
     async def cordon_node(self, name: str) -> Dict[str, Any]:
         """Node cordon (unschedulable=true)"""
         try:

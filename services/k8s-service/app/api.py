@@ -3,9 +3,11 @@ Kubernetes 클러스터 리소스 API
 """
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from app.services.k8s_service import K8sService
 from app.streaming import sse_event
+from app.config import settings
+from app.security import decode_access_token, extract_token_from_cookie
 from app.cluster import (
     NamespaceInfo,
     ServiceInfo,
@@ -1050,6 +1052,197 @@ async def websocket_pod_logs(
             await websocket.close()
         except:
             pass
+
+
+@router.websocket("/nodes/{node_name}/debug-shell/ws")
+async def websocket_node_debug_shell(
+    websocket: WebSocket,
+    node_name: str,
+    namespace: Optional[str] = Query(None),
+    image: Optional[str] = Query(None),
+):
+    """노드 디버그 쉘 (admin 전용, linux 전용)"""
+    import ssl
+    import aiohttp
+    from aiohttp import WSMsgType
+
+    # Auth (HttpOnly cookie)
+    try:
+        token = extract_token_from_cookie(
+            websocket.headers.get("cookie"),
+            settings.AUTH_COOKIE_NAME,
+        )
+        if not token:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Missing auth token")
+            return
+        payload = decode_access_token(token)
+        if payload.role != "admin":
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Admin only")
+            return
+    except Exception:
+        try:
+            await websocket.accept()
+        except Exception:
+            pass
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # OS check
+    try:
+        node_os = await asyncio.to_thread(k8s_service.get_node_os, node_name)
+        if (node_os or "").lower() != "linux":
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Linux only")
+            return
+    except Exception:
+        await websocket.accept()
+        await websocket.close(code=1008, reason="Failed to check node OS")
+        return
+
+    await websocket.accept()
+
+    namespace = (namespace or settings.NODE_SHELL_NAMESPACE or "default").strip()
+    image = (image or settings.NODE_SHELL_LINUX_IMAGE or "docker.io/library/busybox:latest").strip()
+    pod_name = None
+    k8s_ws = None
+
+    async def wait_for_pod_ready(
+        ns: str, name: str, timeout_sec: int = 60
+    ) -> Tuple[bool, Optional[str]]:
+        deadline = asyncio.get_event_loop().time() + timeout_sec
+        terminal_wait_reasons = {
+            "ErrImagePull",
+            "ImagePullBackOff",
+            "CreateContainerConfigError",
+            "CreateContainerError",
+        }
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                pod = await asyncio.to_thread(k8s_service.v1.read_namespaced_pod, name, ns)
+                phase = getattr(pod.status, "phase", "")
+                if phase == "Running":
+                    return True, None
+                statuses = getattr(pod.status, "container_statuses", None) or []
+                for status in statuses:
+                    state = getattr(status, "state", None)
+                    waiting = getattr(state, "waiting", None) if state else None
+                    reason = getattr(waiting, "reason", None) if waiting else None
+                    if reason in terminal_wait_reasons:
+                        message = getattr(waiting, "message", "") if waiting else ""
+                        detail = f"{reason}: {message}".strip()
+                        return False, detail or reason
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+        return False, None
+
+    try:
+        await websocket.send_text("Creating debug pod...")
+        pod_name = await asyncio.to_thread(
+            k8s_service.create_node_debug_pod, node_name, namespace, image
+        )
+
+        await websocket.send_text("Waiting for debug pod to start...")
+        ready, wait_error = await wait_for_pod_ready(namespace, pod_name, timeout_sec=90)
+        if not ready:
+            if wait_error:
+                await websocket.send_text(f"Error: {wait_error}")
+            else:
+                await websocket.send_text("Error: Debug pod did not become ready.")
+            return
+
+        # Build K8s WebSocket URL
+        config = k8s_service.v1.api_client.configuration
+        host = config.host
+        ws_base = host.replace("https://", "wss://").replace("http://", "ws://")
+        path = f"/api/v1/namespaces/{namespace}/pods/{pod_name}/attach"
+        params = "container=debugger&stdin=1&stdout=1&stderr=1&tty=1"
+        url = f"{ws_base}{path}?{params}"
+
+        headers = {}
+        api_key_prefix = config.api_key_prefix.get("authorization", "Bearer")
+        api_key = config.api_key.get("authorization")
+        if api_key:
+            headers["Authorization"] = f"{api_key_prefix} {api_key}"
+
+        ssl_context = None
+        if config.verify_ssl:
+            ssl_context = ssl.create_default_context(cafile=config.ssl_ca_cert)
+        else:
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        if config.cert_file and config.key_file:
+            ssl_context.load_cert_chain(certfile=config.cert_file, keyfile=config.key_file)
+
+        await websocket.send_text("Connecting to debug shell...")
+        protocols = [
+            "v4.channel.k8s.io",
+            "v3.channel.k8s.io",
+            "v2.channel.k8s.io",
+            "channel.k8s.io",
+        ]
+
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(
+                url, headers=headers, ssl=ssl_context, protocols=protocols
+            ) as k8s_ws:
+                try:
+                    await websocket.send_text("Shell ready.")
+                    await k8s_ws.send_bytes(b"\x00\r")
+                except Exception:
+                    pass
+
+                async def pump_k8s_to_client():
+                    async for msg in k8s_ws:
+                        if msg.type == WSMsgType.BINARY:
+                            await websocket.send_bytes(msg.data)
+                        elif msg.type == WSMsgType.TEXT:
+                            await websocket.send_text(msg.data)
+                        elif msg.type == WSMsgType.ERROR:
+                            break
+
+                async def pump_client_to_k8s():
+                    while True:
+                        data = await websocket.receive()
+                        if data["type"] == "websocket.disconnect":
+                            try:
+                                await k8s_ws.send_bytes(b"\x00exit\r")
+                            except Exception:
+                                pass
+                            break
+                        if data["type"] == "websocket.receive":
+                            if data.get("bytes") is not None:
+                                payload = data["bytes"]
+                            else:
+                                payload = (data.get("text") or "").encode()
+                            if payload:
+                                await k8s_ws.send_bytes(b"\x00" + payload)
+
+                await asyncio.gather(pump_k8s_to_client(), pump_client_to_k8s())
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        try:
+            await websocket.send_text(f"Error: {str(e)}")
+        except Exception:
+            pass
+    finally:
+        pass
+
+
+@router.websocket("/cluster/nodes/{node_name}/debug-shell/ws")
+async def websocket_node_debug_shell_cluster(
+    websocket: WebSocket,
+    node_name: str,
+    namespace: Optional[str] = Query(None),
+    image: Optional[str] = Query(None),
+):
+    """/cluster prefix compatibility for gateway websocket routing"""
+    return await websocket_node_debug_shell(websocket, node_name, namespace, image)
 
 
 @router.get("/metrics/pods")

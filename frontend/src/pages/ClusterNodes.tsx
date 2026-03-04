@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, Loader2, RefreshCw, Search, Server, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import YamlEditor from '@/components/YamlEditor'
+import NodeShellTerminal from '@/components/NodeShellTerminal'
 
 interface NodeInfo {
   name: string
@@ -88,6 +90,7 @@ export default function ClusterNodes() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [isYamlDirty, setIsYamlDirty] = useState(false)
   const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [showNodeShell, setShowNodeShell] = useState(false)
 
   const { data: nodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['cluster', 'nodes'],
@@ -149,7 +152,17 @@ export default function ClusterNodes() {
     setDrainError(null)
     setIsYamlDirty(false)
     setApplyToast(null)
+    setShowNodeShell(false)
   }, [selectedNodeName])
+
+  useEffect(() => {
+    if (!selectedNodeName) return
+    if (drainStatus === 'success' && nodeDescribe?.unschedulable === false) {
+      setDrainStatus('idle')
+      setDrainId(null)
+      setDrainError(null)
+    }
+  }, [drainStatus, nodeDescribe?.unschedulable, selectedNodeName])
 
   const metricsMap = useMemo(() => {
     const map = new Map<string, NodeMetric>()
@@ -163,6 +176,9 @@ export default function ClusterNodes() {
 
   const canEditYaml = me?.role === 'admin'
   const isAdmin = me?.role === 'admin'
+  const nodeShellSettings = useNodeShellSettings()
+  const isNodeShellEnabled = nodeShellSettings.isEnabled
+  const isLinuxNode = (nodeDescribe?.system_info?.operating_system || '').toLowerCase() === 'linux'
 
   const cordonMutation = useMutation({
     mutationFn: (nodeName: string) => api.cordonNode(nodeName),
@@ -746,112 +762,114 @@ export default function ClusterNodes() {
       {selectedNodeName && (
         <ModalOverlay onClose={handleCloseDetail}>
           <div
-            className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden relative"
+            className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 shadow-2xl overflow-x-hidden"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="relative flex h-full flex-col">
               <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
-              <div>
-                <h2 className="text-lg font-semibold text-white">{selectedNodeName}</h2>
-                <p className="text-xs text-slate-400">
-                  {tr('nodes.detail.subtitle', 'Details from kubectl describe node {{name}}', {
-                    name: selectedNodeName,
-                  })}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {isAdmin && nodeDescribe && (
+                <div>
+                  <h2 className="text-lg font-semibold text-white">{selectedNodeName}</h2>
+                  <p className="text-xs text-slate-400">
+                    {tr('nodes.detail.subtitle', 'Details from kubectl describe node {{name}}', {
+                      name: selectedNodeName,
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isAdmin && nodeDescribe && (
+                    <button
+                      type="button"
+                      onClick={handleToggleScheduling}
+                      disabled={disableSchedulingAction}
+                      title={
+                        disableSchedulingAction
+                          ? tr('nodes.actions.schedulingDisabled', 'Action disabled while another operation is running.')
+                          : undefined
+                      }
+                      className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                    >
+                      {isSchedulingMutation
+                        ? nodeDescribe.unschedulable
+                          ? tr('nodes.actions.uncordoning', 'Uncordoning...')
+                          : tr('nodes.actions.cordoning', 'Cordoning...')
+                        : nodeDescribe.unschedulable
+                          ? tr('nodes.actions.uncordon', 'Uncordon')
+                          : tr('nodes.actions.cordon', 'Cordon')}
+                    </button>
+                  )}
+                  {isAdmin && nodeDescribe && (
+                    <button
+                      type="button"
+                      onClick={openDrainDialog}
+                      disabled={disableDrainAction}
+                      title={
+                        disableDrainAction
+                          ? tr('nodes.actions.drainDisabled', 'Drain is disabled while another operation is running.')
+                          : undefined
+                      }
+                      className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                    >
+                      {isDrainMutation
+                        ? tr('nodes.actions.draining', 'Draining...')
+                        : tr('nodes.actions.drain', 'Drain')}
+                    </button>
+                  )}
+                  {isAdmin && isNodeShellEnabled && nodeDescribe && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNodeShell(true)}
+                      disabled={!isLinuxNode}
+                      title={
+                        isLinuxNode
+                          ? tr('nodes.actions.debug', 'Debug Node')
+                          : tr('nodes.actions.debugDisabled', 'Debug shell is supported only on Linux nodes.')
+                      }
+                      className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                    >
+                      {tr('nodes.actions.debug', 'Debug')}
+                    </button>
+                  )}
                   <button
-                    type="button"
-                    onClick={handleToggleScheduling}
-                    disabled={disableSchedulingAction}
-                    title={
-                      disableSchedulingAction
-                        ? tr('nodes.actions.schedulingDisabled', 'Action disabled while another operation is running.')
-                        : undefined
-                    }
-                    className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                    onClick={handleCloseDetail}
+                    className="text-slate-400 hover:text-white"
                   >
-                    {isSchedulingMutation
-                      ? nodeDescribe.unschedulable
-                        ? tr('nodes.actions.uncordoning', 'Uncordoning...')
-                        : tr('nodes.actions.cordoning', 'Cordoning...')
-                      : nodeDescribe.unschedulable
-                        ? tr('nodes.actions.uncordon', 'Uncordon')
-                        : tr('nodes.actions.cordon', 'Cordon')}
+                    <X className="w-4 h-4" />
                   </button>
-                )}
-                {isAdmin && nodeDescribe && (
-                  <button
-                    type="button"
-                    onClick={openDrainDialog}
-                    disabled={disableDrainAction}
-                    title={
-                      disableDrainAction
-                        ? tr('nodes.actions.drainDisabled', 'Drain is disabled while another operation is running.')
-                        : undefined
-                    }
-                    className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
-                  >
-                    {isDrainMutation
-                      ? tr('nodes.actions.draining', 'Draining...')
-                      : tr('nodes.actions.drain', 'Drain')}
-                  </button>
-                )}
-                <button
-                  onClick={handleCloseDetail}
-                  className="text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {(isSchedulingMutation || isDrainMutation) && (
-              <div className="px-5 pb-2 text-[11px] text-slate-400">
-                {isDrainMutation
-                  ? tr('nodes.actions.drainInProgress', 'Drain in progress. Actions are temporarily disabled.')
-                  : tr('nodes.actions.schedulingInProgress', 'Scheduling update in progress. Actions are temporarily disabled.')}
-              </div>
-            )}
-
-            {applyToast && (
-              <div className="absolute top-4 right-4 z-20">
-                <div
-                  className={`rounded-lg border px-3 py-2 text-xs shadow-lg ${
-                    applyToast.type === 'success'
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-red-500/30 bg-red-500/10 text-red-200'
-                  }`}
-                >
-                  {applyToast.message}
                 </div>
               </div>
-            )}
 
-            <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
-              <button
-                type="button"
-                onClick={() => handleTabChange('info')}
-                className={`px-3 py-1 rounded-md border ${
-                  detailTab === 'info'
-                    ? 'border-slate-500 bg-slate-800 text-white'
-                    : 'border-slate-800 text-slate-400 hover:text-white'
-                }`}
-              >
-                {tr('nodes.detail.tabs.info', 'Info')}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTabChange('yaml')}
-                className={`px-3 py-1 rounded-md border ${
-                  detailTab === 'yaml'
-                    ? 'border-slate-500 bg-slate-800 text-white'
-                    : 'border-slate-800 text-slate-400 hover:text-white'
-                }`}
-              >
-                {tr('nodes.detail.tabs.yaml', 'YAML')}
-              </button>
-            </div>
+              {(isSchedulingMutation || isDrainMutation) && (
+                <div className="px-5 pb-2 text-[11px] text-slate-400">
+                  {isDrainMutation
+                    ? tr('nodes.actions.drainInProgress', 'Drain in progress. Actions are temporarily disabled.')
+                    : tr('nodes.actions.schedulingInProgress', 'Scheduling update in progress. Actions are temporarily disabled.')}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('info')}
+                  className={`px-3 py-1 rounded-md border ${
+                    detailTab === 'info'
+                      ? 'border-slate-500 bg-slate-800 text-white'
+                      : 'border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {tr('nodes.detail.tabs.info', 'Info')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('yaml')}
+                  className={`px-3 py-1 rounded-md border ${
+                    detailTab === 'yaml'
+                      ? 'border-slate-500 bg-slate-800 text-white'
+                      : 'border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {tr('nodes.detail.tabs.yaml', 'YAML')}
+                </button>
+              </div>
 
             {showDrainStatus && (
               <div className="px-5 py-3 border-b border-slate-800">
@@ -883,44 +901,48 @@ export default function ClusterNodes() {
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-6 text-sm">
               {detailTab === 'yaml' ? (
-                <YamlEditor
-                  key={`${selectedNodeName || 'node'}-${detailTab}`}
-                  value={nodeYaml?.yaml || ''}
-                  canEdit={canEditYaml}
-                  isLoading={isYamlLoading}
-                  isRefreshing={isYamlFetching}
-                  error={isYamlError ? tr('nodes.detail.yaml.error', 'Failed to load YAML.') : null}
-                  onRefresh={() => setYamlRefreshNonce((prev) => prev + 1)}
-                  onApply={handleApplyYaml}
-                  onApplySuccess={() =>
-                    setApplyToast({
-                      type: 'success',
-                      message: tr('nodes.detail.yaml.applied', 'Applied'),
-                    })
-                  }
-                  onApplyError={(message) =>
-                    setApplyToast({
-                      type: 'error',
-                      message: message || tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
-                    })
-                  }
-                  onDirtyChange={setIsYamlDirty}
-                  labels={{
-                    title: tr('nodes.detail.yaml.title', 'Node YAML'),
-                    refresh: tr('nodes.detail.yaml.refresh', 'Refresh'),
-                    copy: tr('nodes.detail.yaml.copy', 'Copy'),
-                    edit: tr('nodes.detail.yaml.edit', 'Edit'),
-                    apply: tr('nodes.detail.yaml.apply', 'Apply'),
-                    applying: tr('nodes.detail.yaml.applying', 'Applying...'),
-                    cancel: tr('nodes.detail.yaml.cancel', 'Cancel'),
-                    loading: tr('nodes.detail.yaml.loading', 'Loading YAML...'),
-                    error: tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
-                    readonly: tr('nodes.detail.yaml.readonly', 'Read-only for non-admin users.'),
-                    editHint: tr('nodes.detail.yaml.editHint', 'Edit is available for admin users.'),
-                    applied: tr('nodes.detail.yaml.applied', 'Applied'),
-                    refreshing: tr('nodes.detail.yaml.refreshing', 'Refreshing...'),
-                  }}
-                />
+                <>
+                  <YamlEditor
+                    key={`${selectedNodeName || 'node'}-${detailTab}`}
+                    value={nodeYaml?.yaml || ''}
+                    canEdit={canEditYaml}
+                    isLoading={isYamlLoading}
+                    isRefreshing={isYamlFetching}
+                    error={isYamlError ? tr('nodes.detail.yaml.error', 'Failed to load YAML.') : null}
+                    onRefresh={() => setYamlRefreshNonce((prev) => prev + 1)}
+                    onApply={handleApplyYaml}
+                    onApplySuccess={() =>
+                      setApplyToast({
+                        type: 'success',
+                        message: tr('nodes.detail.yaml.applied', 'Applied'),
+                      })
+                    }
+                    onApplyError={(message) =>
+                      setApplyToast({
+                        type: 'error',
+                        message: message || tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
+                      })
+                    }
+                    onDirtyChange={setIsYamlDirty}
+                    showInlineApplied={false}
+                    toast={applyToast}
+                    labels={{
+                      title: tr('nodes.detail.yaml.title', 'Node YAML'),
+                      refresh: tr('nodes.detail.yaml.refresh', 'Refresh'),
+                      copy: tr('nodes.detail.yaml.copy', 'Copy'),
+                      edit: tr('nodes.detail.yaml.edit', 'Edit'),
+                      apply: tr('nodes.detail.yaml.apply', 'Apply'),
+                      applying: tr('nodes.detail.yaml.applying', 'Applying...'),
+                      cancel: tr('nodes.detail.yaml.cancel', 'Cancel'),
+                      loading: tr('nodes.detail.yaml.loading', 'Loading YAML...'),
+                      error: tr('nodes.detail.yaml.error', 'Failed to load YAML.'),
+                      readonly: tr('nodes.detail.yaml.readonly', 'Read-only for non-admin users.'),
+                      editHint: tr('nodes.detail.yaml.editHint', 'Edit is available for admin users.'),
+                      applied: tr('nodes.detail.yaml.applied', 'Applied'),
+                      refreshing: tr('nodes.detail.yaml.refreshing', 'Refreshing...'),
+                    }}
+                  />
+                </>
               ) : isLoadingDescribe ? (
                 <p className="text-slate-400">{tr('nodes.detail.loading', 'Loading node details...')}</p>
               ) : isDescribeError ? (
@@ -1199,6 +1221,23 @@ export default function ClusterNodes() {
                 <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
               )}
             </div>
+          </div>
+        </div>
+        </ModalOverlay>
+      )}
+
+      {showNodeShell && selectedNodeName && (
+        <ModalOverlay closeOnOverlayClick={false}>
+          <div
+            className="w-full max-w-5xl h-[80vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <NodeShellTerminal
+              nodeName={selectedNodeName}
+              namespace={nodeShellSettings.namespace}
+              image={nodeShellSettings.linuxImage}
+              onClose={() => setShowNodeShell(false)}
+            />
           </div>
         </ModalOverlay>
       )}

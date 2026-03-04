@@ -125,15 +125,16 @@
       "schedulingDisabled": "Action disabled while another operation is running.",
       "drainDisabled": "Drain is disabled while another operation is running.",
       "drainInProgress": "Drain in progress. Actions are temporarily disabled.",
-      "schedulingInProgress": "Scheduling update in progress. Actions are temporarily disabled."
+      "schedulingInProgress": "Scheduling update in progress. Actions are temporarily disabled.",
+      "debug": "Debug",
+      "debugDisabled": "Debug shell is supported only on Linux nodes."
     },
     "drain": {
       "title": "Drain node",
       "confirm": "Are you sure you want to drain node {{name}}?",
       "warning": "Draining will evict pods from this node. Be sure you understand the impact before continuing.",
       "confirmButton": "Drain",
-      "error": "Failed to drain node."
-      ,
+      "error": "Failed to drain node.",
       "status": {
         "title": "Drain status",
         "id": "ID",
@@ -230,6 +231,16 @@
         "lastSeen": "Last Seen",
         "count": "Count"
       }
+    },
+    "shell": {
+      "title": "Shell: {{node}}",
+      "connectingTo": "Connecting to {{node}}...",
+      "connected": "Connected.",
+      "connectionError": "Connection error.",
+      "disconnected": "Disconnected.",
+      "statusConnecting": "Connecting...",
+      "statusConnected": "Connected",
+      "statusError": "Connection error"
     }
   },
   "aiChat": {
@@ -770,6 +781,14 @@
       "hq": "HQ",
       "team": "Team",
       "role": "Role"
+    },
+    "nodeShell": {
+      "title": "Node Shell",
+      "subtitle": "Configure debug shell settings for nodes.",
+      "enable": "Enable Node Shell",
+      "enableHint": "Show debug shell action in node details.",
+      "namespace": "Namespace",
+      "image": "Linux image"
     }
   },
   "storage": {

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
+import Editor from '@monaco-editor/react'
 
 type Labels = {
   title: string
@@ -28,6 +29,8 @@ type YamlEditorProps = {
   onApplySuccess?: () => void
   onApplyError?: (message: string) => void
   onDirtyChange?: (dirty: boolean) => void
+  toast?: { type: 'success' | 'error'; message: string } | null
+  showInlineApplied?: boolean
   labels: Labels
 }
 
@@ -42,6 +45,8 @@ export default function YamlEditor({
   onApplySuccess,
   onApplyError,
   onDirtyChange,
+  toast,
+  showInlineApplied = true,
   labels,
 }: YamlEditorProps) {
   const [draft, setDraft] = useState(value || '')
@@ -50,6 +55,20 @@ export default function YamlEditor({
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applySuccess, setApplySuccess] = useState(false)
   const [copied, setCopied] = useState(false)
+  const isReady = !isLoading && !error && value !== undefined
+  const editorOptions = useMemo(
+    () => ({
+      readOnly: !canEdit || !isEditing,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      renderLineHighlight: 'none',
+      wordWrap: 'off',
+      fontSize: 12,
+      fontFamily:
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    }),
+    [canEdit, isEditing]
+  )
 
   useEffect(() => {
     if (!isEditing) {
@@ -92,18 +111,8 @@ export default function YamlEditor({
     setCopied(true)
   }
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Tab') return
-    event.preventDefault()
-    const target = event.currentTarget
-    const start = target.selectionStart ?? 0
-    const end = target.selectionEnd ?? 0
-    const insert = '  '
-    const next = `${draft.slice(0, start)}${insert}${draft.slice(end)}`
-    setDraft(next)
-    requestAnimationFrame(() => {
-      target.selectionStart = target.selectionEnd = start + insert.length
-    })
+  const handleEditorChange = (nextValue?: string) => {
+    setDraft(nextValue ?? '')
   }
 
   const handleApply = async () => {
@@ -136,14 +145,16 @@ export default function YamlEditor({
           <button
             type="button"
             onClick={onRefresh}
-            className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white"
+            disabled={!isReady || isRefreshing}
+            className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white disabled:opacity-50"
           >
             {labels.refresh}
           </button>
           <button
             type="button"
             onClick={handleCopy}
-            className={`relative inline-flex items-center justify-center px-2 py-1 text-xs rounded border border-slate-700 min-w-[52px] ${
+            disabled={!isReady || !draft}
+            className={`relative inline-flex items-center justify-center px-2 py-1 text-xs rounded border border-slate-700 min-w-[52px] disabled:opacity-50 ${
               copied ? 'text-emerald-300' : 'text-slate-300 hover:text-white'
             }`}
           >
@@ -157,7 +168,7 @@ export default function YamlEditor({
                   <button
                     type="button"
                     onClick={handleApply}
-                    disabled={isApplying}
+                    disabled={isApplying || !isReady}
                     className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white disabled:opacity-50"
                   >
                     {isApplying ? labels.applying : labels.apply}
@@ -168,6 +179,7 @@ export default function YamlEditor({
                       setIsEditing(false)
                       setDraft(value || '')
                     }}
+                    disabled={!isReady}
                     className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white"
                   >
                     {labels.cancel}
@@ -177,7 +189,8 @@ export default function YamlEditor({
                 <button
                   type="button"
                   onClick={() => setIsEditing(true)}
-                  className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white"
+                  disabled={!isReady}
+                  className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white disabled:opacity-50"
                 >
                   {labels.edit}
                 </button>
@@ -192,13 +205,30 @@ export default function YamlEditor({
       ) : error ? (
         <p className="text-red-400">{labels.error}</p>
       ) : (
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKeyDown}
-          readOnly={!canEdit || !isEditing}
-          className="w-full flex-1 min-h-[420px] rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-200 font-mono whitespace-pre overflow-auto"
-        />
+        <div className="relative flex-1 min-h-[520px]">
+          {toast && (
+            <div
+              className={`pointer-events-none absolute right-2 top-2 rounded-lg border px-3 py-1 text-xs ${
+                toast.type === 'success'
+                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
+                  : 'border-red-500/40 bg-red-500/15 text-red-200'
+              }`}
+            >
+              {toast.message}
+            </div>
+          )}
+          <div className="h-full min-h-[520px] rounded-lg border border-slate-700 overflow-hidden">
+            <Editor
+              height="100%"
+              theme="vs-dark"
+              language="yaml"
+              value={draft}
+              onChange={handleEditorChange}
+              options={editorOptions}
+              loading={<div className="p-3 text-xs text-slate-400">{labels.loading}</div>}
+            />
+          </div>
+        </div>
       )}
 
       {isRefreshing && (
@@ -208,7 +238,9 @@ export default function YamlEditor({
         {canEdit ? labels.editHint : labels.readonly}
       </p>
       {applyError && <p className="text-xs text-red-400">{applyError}</p>}
-      {applySuccess && <p className="text-xs text-emerald-300">{labels.applied}</p>}
+      {showInlineApplied && applySuccess && !toast && (
+        <p className="text-xs text-emerald-300">{labels.applied}</p>
+      )}
     </div>
   )
 }
