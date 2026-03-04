@@ -191,6 +191,8 @@ export default function ClusterNodes() {
 
   const isSchedulingMutation = cordonMutation.isPending || uncordonMutation.isPending
   const isDrainMutation = drainMutation.isPending || drainStatus === 'draining' || drainStatus === 'pending'
+  const disableSchedulingAction = isSchedulingMutation || isDrainMutation
+  const disableDrainAction = isDrainMutation || isSchedulingMutation
   const showDrainStatus = drainStatus !== 'idle' || Boolean(drainId) || Boolean(drainError)
 
   const drainStatusMeta = useMemo(() => {
@@ -293,6 +295,7 @@ export default function ClusterNodes() {
       if (selectedNodeName) {
         queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', selectedNodeName] })
         queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'pods', selectedNodeName] })
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'events', selectedNodeName] })
       }
     } else if (status === 'error') {
       setDrainStatus('error')
@@ -731,7 +734,12 @@ export default function ClusterNodes() {
                   <button
                     type="button"
                     onClick={handleToggleScheduling}
-                    disabled={isSchedulingMutation}
+                    disabled={disableSchedulingAction}
+                    title={
+                      disableSchedulingAction
+                        ? tr('nodes.actions.schedulingDisabled', 'Action disabled while another operation is running.')
+                        : undefined
+                    }
                     className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
                   >
                     {isSchedulingMutation
@@ -747,7 +755,12 @@ export default function ClusterNodes() {
                   <button
                     type="button"
                     onClick={openDrainDialog}
-                    disabled={isDrainMutation}
+                    disabled={disableDrainAction}
+                    title={
+                      disableDrainAction
+                        ? tr('nodes.actions.drainDisabled', 'Drain is disabled while another operation is running.')
+                        : undefined
+                    }
                     className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
                   >
                     {isDrainMutation
@@ -763,6 +776,14 @@ export default function ClusterNodes() {
                 </button>
               </div>
             </div>
+
+            {(isSchedulingMutation || isDrainMutation) && (
+              <div className="px-5 pb-2 text-[11px] text-slate-400">
+                {isDrainMutation
+                  ? tr('nodes.actions.drainInProgress', 'Drain in progress. Actions are temporarily disabled.')
+                  : tr('nodes.actions.schedulingInProgress', 'Scheduling update in progress. Actions are temporarily disabled.')}
+              </div>
+            )}
 
             <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-800 text-xs">
               <button
