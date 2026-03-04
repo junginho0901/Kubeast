@@ -2981,6 +2981,12 @@ class K8sService:
 
             pods = self.v1.list_pod_for_all_namespaces(field_selector=f"spec.nodeName={name}")
             policy_api = getattr(self, "policy_v1", None) or client.PolicyV1Api(api_client=self.api_client)
+            use_beta_eviction = not hasattr(policy_api, "create_namespaced_pod_eviction")
+            if use_beta_eviction:
+                try:
+                    policy_api = client.PolicyV1beta1Api(api_client=self.api_client)
+                except Exception:
+                    policy_api = client.PolicyV1beta1Api()
 
             for pod in pods.items:
                 owners = pod.metadata.owner_references or []
@@ -2989,7 +2995,10 @@ class K8sService:
                 if pod.metadata.annotations and pod.metadata.annotations.get("kubernetes.io/config.mirror"):
                     continue
 
-                eviction = client.V1Eviction(
+                EvictionCls = getattr(client, "V1beta1Eviction", None) if use_beta_eviction else getattr(client, "V1Eviction", None)
+                if EvictionCls is None:
+                    EvictionCls = client.V1Eviction
+                eviction = EvictionCls(
                     metadata=client.V1ObjectMeta(name=pod.metadata.name, namespace=pod.metadata.namespace),
                     delete_options=client.V1DeleteOptions(grace_period_seconds=0),
                 )
