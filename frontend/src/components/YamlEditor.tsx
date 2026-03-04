@@ -25,6 +25,9 @@ type YamlEditorProps = {
   error?: string | null
   onRefresh?: () => void
   onApply?: (nextValue: string) => Promise<void>
+  onApplySuccess?: () => void
+  onApplyError?: (message: string) => void
+  onDirtyChange?: (dirty: boolean) => void
   labels: Labels
 }
 
@@ -36,6 +39,9 @@ export default function YamlEditor({
   error,
   onRefresh,
   onApply,
+  onApplySuccess,
+  onApplyError,
+  onDirtyChange,
   labels,
 }: YamlEditorProps) {
   const [draft, setDraft] = useState(value || '')
@@ -62,6 +68,12 @@ export default function YamlEditor({
     const timer = setTimeout(() => setApplySuccess(false), 3000)
     return () => clearTimeout(timer)
   }, [applySuccess])
+
+  useEffect(() => {
+    if (!onDirtyChange) return
+    const dirty = isEditing && draft !== (value || '')
+    onDirtyChange(dirty)
+  }, [draft, isEditing, onDirtyChange, value])
 
   const handleCopy = async () => {
     if (!draft) return
@@ -106,9 +118,11 @@ export default function YamlEditor({
       await onApply(sanitized)
       setIsEditing(false)
       setApplySuccess(true)
+      onApplySuccess?.()
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || labels.error
       setApplyError(String(detail))
+      onApplyError?.(String(detail))
     } finally {
       setIsApplying(false)
     }
