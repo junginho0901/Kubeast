@@ -3017,15 +3017,19 @@ class K8sService:
         if not self.api_client:
             raise Exception("API client not initialized for eviction")
 
-        # Try policy/v1, then policy/v1beta1
-        for api_version in ("policy/v1", "policy/v1beta1"):
+        # Try core/v1 eviction subresource first, then policy groups
+        candidates = [
+            ("v1", f"/api/v1/namespaces/{namespace}/pods/{name}/eviction"),
+            ("policy/v1", f"/apis/policy/v1/namespaces/{namespace}/pods/{name}/eviction"),
+            ("policy/v1beta1", f"/apis/policy/v1beta1/namespaces/{namespace}/pods/{name}/eviction"),
+        ]
+        for api_version, path in candidates:
             body = {
                 "apiVersion": api_version,
                 "kind": "Eviction",
                 "metadata": {"name": name, "namespace": namespace},
                 "deleteOptions": {"gracePeriodSeconds": grace_period_seconds},
             }
-            path = f"/apis/{api_version}/namespaces/{namespace}/pods/{name}/eviction"
             try:
                 self.api_client.call_api(
                     path,
