@@ -174,7 +174,8 @@
         "readonly": "관리자 권한이 아니면 읽기 전용입니다.",
         "editHint": "admin 권한에서 편집할 수 있습니다.",
         "applyError": "YAML 적용에 실패했습니다.",
-        "refreshing": "새로고침 중..."
+        "refreshing": "새로고침 중...",
+        "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
       },
       "loading": "노드 상세 로딩 중...",
       "error": "노드 상세를 불러오지 못했습니다.",
