@@ -3042,6 +3042,10 @@ class K8sService:
             except ApiException as e:
                 if e.status == 404:
                     continue
+                if e.status == 400:
+                    msg = (e.body or "").lower()
+                    if "eviction" in msg and ("no kind" in msg or "cannot be handled as a eviction" in msg):
+                        continue
                 raise
         # Fallback: delete pod directly (PDB not honored)
         try:
