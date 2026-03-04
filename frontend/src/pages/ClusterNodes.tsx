@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, Loader2, RefreshCw, Search, Server, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import YamlEditor from '@/components/YamlEditor'
+import NodeShellTerminal from '@/components/NodeShellTerminal'
 
 interface NodeInfo {
   name: string
@@ -88,6 +90,7 @@ export default function ClusterNodes() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [isYamlDirty, setIsYamlDirty] = useState(false)
   const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [showNodeShell, setShowNodeShell] = useState(false)
 
   const { data: nodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['cluster', 'nodes'],
@@ -149,6 +152,7 @@ export default function ClusterNodes() {
     setDrainError(null)
     setIsYamlDirty(false)
     setApplyToast(null)
+    setShowNodeShell(false)
   }, [selectedNodeName])
 
   const metricsMap = useMemo(() => {
@@ -163,6 +167,9 @@ export default function ClusterNodes() {
 
   const canEditYaml = me?.role === 'admin'
   const isAdmin = me?.role === 'admin'
+  const nodeShellSettings = useNodeShellSettings()
+  const isNodeShellEnabled = nodeShellSettings.isEnabled
+  const isLinuxNode = (nodeDescribe?.system_info?.operating_system || '').toLowerCase() === 'linux'
 
   const cordonMutation = useMutation({
     mutationFn: (nodeName: string) => api.cordonNode(nodeName),
@@ -798,6 +805,21 @@ export default function ClusterNodes() {
                         : tr('nodes.actions.drain', 'Drain')}
                     </button>
                   )}
+                  {isAdmin && isNodeShellEnabled && nodeDescribe && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNodeShell(true)}
+                      disabled={!isLinuxNode}
+                      title={
+                        isLinuxNode
+                          ? tr('nodes.actions.debug', 'Debug Node')
+                          : tr('nodes.actions.debugDisabled', 'Debug shell is supported only on Linux nodes.')
+                      }
+                      className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                    >
+                      {tr('nodes.actions.debug', 'Debug')}
+                    </button>
+                  )}
                   <button
                     onClick={handleCloseDetail}
                     className="text-slate-400 hover:text-white"
@@ -1200,6 +1222,23 @@ export default function ClusterNodes() {
                 <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
               )}
             </div>
+          </div>
+        </div>
+        </ModalOverlay>
+      )}
+
+      {showNodeShell && selectedNodeName && (
+        <ModalOverlay onClose={() => setShowNodeShell(false)}>
+          <div
+            className="w-full max-w-5xl h-[80vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <NodeShellTerminal
+              nodeName={selectedNodeName}
+              namespace={nodeShellSettings.namespace}
+              image={nodeShellSettings.linuxImage}
+              onClose={() => setShowNodeShell(false)}
+            />
           </div>
         </ModalOverlay>
       )}
