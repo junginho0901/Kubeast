@@ -75,6 +75,10 @@ export default function ClusterNodes() {
   const [selectedNodeName, setSelectedNodeName] = useState<string | null>(null)
   const [detailTab, setDetailTab] = useState<'info' | 'yaml'>('info')
   const [yamlRefreshNonce, setYamlRefreshNonce] = useState(0)
+  const [drainDialogOpen, setDrainDialogOpen] = useState(false)
+  const [drainId, setDrainId] = useState<string | null>(null)
+  const [drainStatus, setDrainStatus] = useState<'idle' | 'pending' | 'draining' | 'success' | 'error'>('idle')
+  const [drainError, setDrainError] = useState<string | null>(null)
   const [podFilter, setPodFilter] = useState('')
   const [podPage, setPodPage] = useState(1)
   const [sortKey, setSortKey] = useState<null | 'name' | 'status' | 'roles' | 'cpu' | 'memory' | 'version' | 'internal_ip' | 'external_ip' | 'age'>(null)
@@ -126,6 +130,20 @@ export default function ClusterNodes() {
     enabled: Boolean(selectedNodeName),
   })
 
+  const { data: drainStatusData } = useQuery({
+    queryKey: ['cluster', 'nodes', 'drain-status', drainId],
+    queryFn: () => api.getNodeDrainStatus(selectedNodeName as string, drainId as string),
+    enabled: Boolean(selectedNodeName && drainId),
+    refetchInterval: drainId ? 1000 : false,
+  })
+
+  useEffect(() => {
+    setDrainDialogOpen(false)
+    setDrainId(null)
+    setDrainStatus('idle')
+    setDrainError(null)
+  }, [selectedNodeName])
+
   const metricsMap = useMemo(() => {
     const map = new Map<string, NodeMetric>()
     if (Array.isArray(metrics)) {
@@ -155,7 +173,21 @@ export default function ClusterNodes() {
     },
   })
 
+  const drainMutation = useMutation({
+    mutationFn: (nodeName: string) => api.drainNode(nodeName),
+    onSuccess: (data) => {
+      setDrainId(data.drain_id)
+      setDrainStatus('draining')
+      setDrainError(null)
+    },
+    onError: (error: any) => {
+      setDrainStatus('error')
+      setDrainError(error?.response?.data?.detail || error?.message || tr('nodes.drain.error', 'Failed to drain node.'))
+    },
+  })
+
   const isSchedulingMutation = cordonMutation.isPending || uncordonMutation.isPending
+  const isDrainMutation = drainMutation.isPending || drainStatus === 'draining' || drainStatus === 'pending'
 
   const handleApplyYaml = async (nextValue: string) => {
     if (!selectedNodeName) return
@@ -173,6 +205,43 @@ export default function ClusterNodes() {
       cordonMutation.mutate(selectedNodeName)
     }
   }
+
+  const openDrainDialog = () => {
+    setDrainDialogOpen(true)
+    setDrainError(null)
+  }
+
+  const closeDrainDialog = () => {
+    setDrainDialogOpen(false)
+  }
+
+  const handleDrainConfirm = () => {
+    if (!selectedNodeName) return
+    setDrainStatus('pending')
+    setDrainError(null)
+    setDrainDialogOpen(false)
+    drainMutation.mutate(selectedNodeName)
+  }
+
+  useEffect(() => {
+    if (!drainStatusData) return
+    const status = drainStatusData.status
+    if (status === 'success') {
+      setDrainStatus('success')
+      setDrainId(null)
+      queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes'] })
+      if (selectedNodeName) {
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', selectedNodeName] })
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'pods', selectedNodeName] })
+      }
+    } else if (status === 'error') {
+      setDrainStatus('error')
+      setDrainError(drainStatusData.message || tr('nodes.drain.error', 'Failed to drain node.'))
+      setDrainId(null)
+    } else {
+      setDrainStatus(status as typeof drainStatus)
+    }
+  }, [drainStatusData, queryClient, selectedNodeName, tr])
 
   const formatTimestamp = (iso?: string | null) => {
     if (!iso) return '-'
@@ -588,7 +657,7 @@ export default function ClusterNodes() {
             className="fixed inset-y-0 right-0 w-full max-w-[560px] bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col overflow-x-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
+              <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selectedNodeName}</h2>
                 <p className="text-xs text-slate-400">
@@ -612,6 +681,18 @@ export default function ClusterNodes() {
                       : nodeDescribe.unschedulable
                         ? tr('nodes.actions.uncordon', 'Uncordon')
                         : tr('nodes.actions.cordon', 'Cordon')}
+                  </button>
+                )}
+                {isAdmin && nodeDescribe && (
+                  <button
+                    type="button"
+                    onClick={openDrainDialog}
+                    disabled={isDrainMutation}
+                    className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
+                  >
+                    {isDrainMutation
+                      ? tr('nodes.actions.draining', 'Draining...')
+                      : tr('nodes.actions.drain', 'Drain')}
                   </button>
                 )}
                 <button
@@ -647,6 +728,17 @@ export default function ClusterNodes() {
                 {tr('nodes.detail.tabs.yaml', 'YAML')}
               </button>
             </div>
+
+            {drainStatus === 'success' && (
+              <div className="px-5 py-2 text-xs text-emerald-400 border-b border-slate-800">
+                {tr('nodes.actions.drainSuccess', 'Drained successfully.')}
+              </div>
+            )}
+            {drainError && (
+              <div className="px-5 py-2 text-xs text-red-400 border-b border-slate-800">
+                {drainError}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-6 text-sm">
               {detailTab === 'yaml' ? (
@@ -949,6 +1041,56 @@ export default function ClusterNodes() {
               ) : (
                 <p className="text-slate-400">{tr('nodes.detail.notFound', 'Node details not found.')}</p>
               )}
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {drainDialogOpen && selectedNodeName && (
+        <ModalOverlay onClose={closeDrainDialog}>
+          <div
+            className="bg-slate-800 rounded-lg w-full max-w-lg p-6"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={tr('nodes.drain.title', 'Drain node')}
+          >
+            <h2 className="text-xl font-bold text-white mb-4">
+              {tr('nodes.drain.title', 'Drain node')}
+            </h2>
+            <p className="text-slate-300 leading-relaxed">
+              {tr('nodes.drain.confirm', 'Are you sure you want to drain node {{name}}?', {
+                name: selectedNodeName,
+              })}
+            </p>
+            <p className="text-slate-400 mt-3">
+              {tr(
+                'nodes.drain.warning',
+                'Draining will evict pods from this node. Be sure you understand the impact before continuing.'
+              )}
+            </p>
+
+            {drainError && (
+              <div className="mt-4 text-sm text-red-400">{drainError}</div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={closeDrainDialog}
+                disabled={isDrainMutation}
+              >
+                {tr('common.cancel', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"
+                onClick={handleDrainConfirm}
+                disabled={isDrainMutation}
+              >
+                {tr('nodes.drain.confirmButton', 'Drain')}
+              </button>
             </div>
           </div>
         </ModalOverlay>
