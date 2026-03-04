@@ -46,12 +46,15 @@ interface NodeDescribe {
   taints: Array<{ key?: string | null; value?: string | null; effect?: string | null }>
   system_info: {
     architecture?: string | null
+    boot_id?: string | null
+    machine_id?: string | null
     operating_system?: string | null
     os_image?: string | null
     kernel_version?: string | null
     container_runtime?: string | null
     kubelet_version?: string | null
     kube_proxy_version?: string | null
+    system_uuid?: string | null
   }
 }
 
@@ -917,6 +920,9 @@ export default function ClusterNodes() {
                       <div>{tr('nodes.detail.systemRuntime', 'Runtime')}: {nodeDescribe.system_info?.container_runtime || '-'}</div>
                       <div>{tr('nodes.detail.systemKubelet', 'Kubelet')}: {nodeDescribe.system_info?.kubelet_version || '-'}</div>
                       <div>{tr('nodes.detail.systemProxy', 'Kube Proxy')}: {nodeDescribe.system_info?.kube_proxy_version || '-'}</div>
+                      <div>{tr('nodes.detail.systemBootId', 'Boot ID')}: {nodeDescribe.system_info?.boot_id || '-'}</div>
+                      <div>{tr('nodes.detail.systemMachineId', 'Machine ID')}: {nodeDescribe.system_info?.machine_id || '-'}</div>
+                      <div>{tr('nodes.detail.systemUuid', 'System UUID')}: {nodeDescribe.system_info?.system_uuid || '-'}</div>
                     </div>
                   </div>
 

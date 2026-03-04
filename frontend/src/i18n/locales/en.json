@@ -198,7 +198,10 @@
       "systemKernel": "Kernel",
       "systemRuntime": "Runtime",
       "systemKubelet": "Kubelet",
-      "systemProxy": "Kube Proxy"
+      "systemProxy": "Kube Proxy",
+      "systemBootId": "Boot ID",
+      "systemMachineId": "Machine ID",
+      "systemUuid": "System UUID"
     },
     "pods": {
       "search": "Filter pods...",

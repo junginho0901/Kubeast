@@ -198,7 +198,10 @@
       "systemKernel": "커널",
       "systemRuntime": "런타임",
       "systemKubelet": "Kubelet",
-      "systemProxy": "Kube Proxy"
+      "systemProxy": "Kube Proxy",
+      "systemBootId": "Boot ID",
+      "systemMachineId": "Machine ID",
+      "systemUuid": "System UUID"
     },
     "pods": {
       "search": "파드 필터...",
