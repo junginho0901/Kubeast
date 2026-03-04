@@ -3036,7 +3036,6 @@ class K8sService:
                     "POST",
                     body=body,
                     response_type="object",
-                    auth_settings=["BearerToken"],
                     _preload_content=False,
                 )
                 return
@@ -3044,6 +3043,18 @@ class K8sService:
                 if e.status == 404:
                     continue
                 raise
+        # Fallback: delete pod directly (PDB not honored)
+        try:
+            self.v1.delete_namespaced_pod(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(grace_period_seconds=grace_period_seconds),
+            )
+            return
+        except ApiException as e:
+            if e.status == 404:
+                return
+            raise
         raise Exception("Eviction API not available")
 
     async def apply_node_yaml(self, name: str, yaml_content: str) -> Dict[str, Any]:
