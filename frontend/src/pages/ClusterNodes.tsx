@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useNodeShellSettings } from '@/services/nodeShellSettings'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, Loader2, RefreshCw, Search, Server, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import YamlEditor from '@/components/YamlEditor'
@@ -64,6 +65,11 @@ interface NodeEvent {
   type?: string | null
   reason?: string | null
   message?: string | null
+  namespace?: string | null
+  object?: {
+    kind?: string | null
+    name?: string | null
+  }
   count?: number | null
   first_timestamp?: string | null
   last_timestamp?: string | null
@@ -92,9 +98,46 @@ export default function ClusterNodes() {
   const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [showNodeShell, setShowNodeShell] = useState(false)
 
+  const applyNodeEvent = (prev: NodeEvent[] | undefined, event: { type?: string; object?: any }) => {
+    const items = Array.isArray(prev) ? [...prev] : []
+    const obj = event?.object
+    if (!obj) return items
+
+    const key = `${obj?.object?.kind || ''}:${obj?.object?.name || ''}:${obj?.reason || ''}:${obj?.message || ''}`
+    const index = items.findIndex((item) => {
+      const itemKey = `${item?.object?.kind || ''}:${item?.object?.name || ''}:${item?.reason || ''}:${item?.message || ''}`
+      return itemKey === key
+    })
+
+    if (event.type === 'DELETED') {
+      if (index >= 0) items.splice(index, 1)
+      return items
+    }
+
+    if (index >= 0) {
+      items[index] = obj
+    } else {
+      items.push(obj)
+    }
+    return items
+  }
+
   const { data: nodes, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['cluster', 'nodes'],
     queryFn: () => api.getNodes(false),
+  })
+
+  useKubeWatchList({
+    enabled: true,
+    queryKey: ['cluster', 'nodes'],
+    path: '/api/v1/nodes',
+    query: 'watch=1',
+    onEvent: (event) => {
+      const name = event?.object?.name
+      if (name) {
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', name] })
+      }
+    },
   })
 
   const { data: metrics, isLoading: isLoadingMetrics, isError: isMetricsError } = useQuery({
@@ -136,6 +179,26 @@ export default function ClusterNodes() {
     queryKey: ['cluster', 'nodes', 'events', selectedNodeName],
     queryFn: () => api.getNodeEvents(selectedNodeName as string),
     enabled: Boolean(selectedNodeName),
+  })
+
+  const nodeEventQuery = selectedNodeName
+    ? `watch=1&fieldSelector=${encodeURIComponent(
+        `involvedObject.kind=Node,involvedObject.name=${selectedNodeName}`
+      )}`
+    : 'watch=1'
+
+  useKubeWatchList({
+    enabled: Boolean(selectedNodeName),
+    queryKey: ['cluster', 'nodes', 'events', selectedNodeName],
+    path: '/api/v1/events',
+    query: nodeEventQuery,
+    applyEvent: applyNodeEvent,
+    onEvent: (event) => {
+      const name = event?.object?.object?.name
+      if (name) {
+        queryClient.invalidateQueries({ queryKey: ['cluster', 'nodes', 'describe', name] })
+      }
+    },
   })
 
   const { data: drainStatusData } = useQuery({

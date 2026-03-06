@@ -35,3 +35,4 @@ if [[ -f "$ROOT/k8s/secret.local.yaml" ]]; then
 fi
 
 kubectl -n kube-assistant rollout restart deploy/model-config-controller-go || true
+kubectl -n kube-assistant rollout restart deploy/k8s-service deploy/frontend || true

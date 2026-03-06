@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PodInfo } from '@/services/api'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
-import { startPodWatch } from '@/services/podWatch'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { 
   Server, 
@@ -77,7 +77,6 @@ export default function ClusterView() {
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [podWatchStatus, setPodWatchStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
   const [podContextMenu, setPodContextMenu] = useState<{ x: number; y: number; pod: PodInfo } | null>(null)
   const [deleteTargetPod, setDeleteTargetPod] = useState<PodInfo | null>(null)
   const [deleteForce, setDeleteForce] = useState(false)
@@ -85,10 +84,6 @@ export default function ClusterView() {
   const [isDeletingPod, setIsDeletingPod] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
-  const podWatchRef = useRef<EventSource | null>(null)
-  const lastPodResourceVersionRef = useRef<string | undefined>(undefined)
-  const podWatchRetryRef = useRef<number>(0)
-  const podWatchRetryTimerRef = useRef<number | null>(null)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const containerDropdownRef = useRef<HTMLDivElement>(null)
   const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
@@ -114,24 +109,6 @@ export default function ClusterView() {
       default:
         return reason
     }
-  }
-
-  const applyPodWatchEvent = (prev: PodInfo[] | undefined, event: { type: string; pod: PodInfo }) => {
-    const items = Array.isArray(prev) ? [...prev] : []
-    const key = `${event.pod.namespace}/${event.pod.name}`
-    const index = items.findIndex((p) => `${p.namespace}/${p.name}` === key)
-
-    if (event.type === 'DELETED') {
-      if (index >= 0) items.splice(index, 1)
-      return items
-    }
-
-    if (index >= 0) {
-      items[index] = event.pod
-    } else {
-      items.push(event.pod)
-    }
-    return items
   }
 
   const getBindingMatchPathText = (binding: any) => {
@@ -299,73 +276,15 @@ export default function ClusterView() {
     enabled: !!namespaces,
   })
 
-  // Pod watch (SSE)
-  useEffect(() => {
-    if (!namespaces) return
-    if (podWatchRef.current) {
-      podWatchRef.current.close()
-      podWatchRef.current = null
-    }
-    lastPodResourceVersionRef.current = undefined
-
-    let isStopped = false
-    const namespace = selectedNamespace === 'all' ? undefined : selectedNamespace
-
-    const scheduleReconnect = () => {
-      if (isStopped || podWatchRetryTimerRef.current) return
-      setPodWatchStatus('error')
-      const delay = Math.min(1000 * Math.pow(2, podWatchRetryRef.current), 10000)
-      podWatchRetryRef.current += 1
-      podWatchRetryTimerRef.current = window.setTimeout(() => {
-        podWatchRetryTimerRef.current = null
-        setPodWatchStatus('connecting')
-        startWatch()
-      }, delay)
-    }
-
-    const startWatch = () => {
-      if (isStopped) return
-      const source = startPodWatch({
-        namespace,
-        resourceVersion: lastPodResourceVersionRef.current,
-        onOpen: () => setPodWatchStatus('connected'),
-        onEvent: (event) => {
-          if (!event?.pod) return
-          if (event.resource_version) {
-            lastPodResourceVersionRef.current = event.resource_version || undefined
-          }
-          queryClient.setQueryData(['all-pods', selectedNamespace], (prev?: PodInfo[]) =>
-            applyPodWatchEvent(prev, event)
-          )
-          setPodWatchStatus('connected')
-        },
-        onError: (err) => {
-          console.warn('Pod watch error', err)
-          scheduleReconnect()
-        },
-      })
-
-      if (podWatchRef.current) {
-        podWatchRef.current.close()
-      }
-      podWatchRef.current = source
-    }
-
-    startWatch()
-    return () => {
-      isStopped = true
-      setPodWatchStatus('connecting')
-      if (podWatchRef.current) {
-        podWatchRef.current.close()
-        podWatchRef.current = null
-      }
-      if (podWatchRetryTimerRef.current) {
-        window.clearTimeout(podWatchRetryTimerRef.current)
-        podWatchRetryTimerRef.current = null
-      }
-      podWatchRetryRef.current = 0
-    }
-  }, [namespaces, queryClient, selectedNamespace])
+  useKubeWatchList({
+    enabled: !!namespaces,
+    queryKey: ['all-pods', selectedNamespace],
+    path:
+      selectedNamespace === 'all'
+        ? '/api/v1/pods'
+        : `/api/v1/namespaces/${selectedNamespace}/pods`,
+    query: 'watch=1',
+  })
 
   // 노드 목록 (정렬용)
   const { data: nodes } = useQuery({
