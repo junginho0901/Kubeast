@@ -27,8 +27,12 @@ data:
   OPENAI_BASE_URL: "https://api.openai.com/v1"
   OPENAI_OPTIMIZATION_MAX_TOKENS: "1800"
 
-  IN_CLUSTER: "false"
+  IN_CLUSTER: "true"
   KUBECONFIG_PATH: "/app/kubeconfig.yaml"
+  SETUP_NAMESPACE: "kube-assistant"
+  SETUP_KUBECONFIG_SECRET: "k8s-kubeconfig"
+  SETUP_CONFIGMAP_NAME: "kube-assistant-config"
+  SETUP_RESTART_DEPLOYMENT: "k8s-service"
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
   TOOL_SERVER_URL: "http://tool-server-read:8086"
   TOOL_SERVER_URL_READ: "http://tool-server-read:8086"
