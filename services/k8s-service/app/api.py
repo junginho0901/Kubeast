@@ -26,7 +26,7 @@ from collections import defaultdict
 
 router = APIRouter()
 k8s_service = K8sService()
-multiplexer = WebSocketMultiplexer()
+multiplexer = WebSocketMultiplexer(k8s_service)
 
 # WebSocket 연결 추적 (Pod별 활성 연결 관리)
 # Key: "namespace/pod_name", Value: list of WebSocket objects

@@ -1,6 +1,7 @@
 import asyncio
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs
 
@@ -15,9 +16,10 @@ class Subscription:
 
 
 class WebSocketMultiplexer:
-    def __init__(self) -> None:
+    def __init__(self, k8s_service) -> None:
         self._subs: Dict[str, Subscription] = {}
         self._ws_keys: Dict[int, set[str]] = {}
+        self._k8s = k8s_service
 
     def _make_key(self, ws_id: int, cluster_id: str, path: str, query: str) -> str:
         return f"{ws_id}:{cluster_id}:{path}?{query}"
@@ -73,6 +75,50 @@ class WebSocketMultiplexer:
             mapped_key = key_map.get(key, key)
             mapped[mapped_key] = val
         return mapped
+
+    def _node_to_info(self, node: Any) -> Dict[str, Any]:
+        node_info = {
+            "name": node.metadata.name,
+            "status": "Ready"
+            if any(c.type == "Ready" and c.status == "True" for c in node.status.conditions)
+            else "NotReady",
+            "roles": [],
+            "age": str(datetime.now() - node.metadata.creation_timestamp.replace(tzinfo=None)),
+            "version": node.status.node_info.kubelet_version,
+            "internal_ip": None,
+            "external_ip": None,
+        }
+
+        if node.metadata.labels:
+            for label, value in node.metadata.labels.items():
+                if "node-role.kubernetes.io/" in label:
+                    role = label.split("/")[1]
+                    if role:
+                        node_info["roles"].append(role)
+
+        if node.status.addresses:
+            for addr in node.status.addresses:
+                if addr.type == "InternalIP":
+                    node_info["internal_ip"] = addr.address
+                elif addr.type == "ExternalIP":
+                    node_info["external_ip"] = addr.address
+
+        return node_info
+
+    def _event_to_info(self, event: Any) -> Dict[str, Any]:
+        return {
+            "type": event.type,
+            "reason": event.reason,
+            "message": event.message,
+            "namespace": getattr(event.metadata, "namespace", None),
+            "object": {
+                "kind": event.involved_object.kind,
+                "name": event.involved_object.name,
+            },
+            "first_timestamp": event.first_timestamp,
+            "last_timestamp": event.last_timestamp,
+            "count": event.count,
+        }
 
     async def handle_message(self, websocket, msg: Dict[str, Any]) -> None:
         msg_type = (msg.get("type") or "").upper()
@@ -135,7 +181,7 @@ class WebSocketMultiplexer:
     async def _watch_stream(self, path: str, query: str, stop_event: asyncio.Event):
         resource, namespace = self._parse_path(path)
         params = self._parse_query(query)
-        core = client.CoreV1Api()
+        core = self._k8s.v1
         w = watch.Watch()
 
         last_resource_version = params.get("resource_version")
@@ -177,7 +223,17 @@ class WebSocketMultiplexer:
                         obj = event.get("object")
                         if obj is not None and hasattr(obj, "metadata"):
                             last_resource_version = getattr(obj.metadata, "resource_version", last_resource_version)
-                        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+                        if resource == "pods" and obj is not None:
+                            obj = self._k8s._pod_to_info(obj).dict()
+                        elif resource == "nodes" and obj is not None:
+                            obj = self._node_to_info(obj)
+                        elif resource == "events" and obj is not None:
+                            obj = self._event_to_info(obj)
+
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait, {"type": event.get("type"), "object": obj}
+                        )
 
                     if stop_event.is_set():
                         break
@@ -193,7 +249,4 @@ class WebSocketMultiplexer:
             item = await queue.get()
             if item is None:
                 break
-            obj = item.get("object")
-            if obj is not None and hasattr(obj, "to_dict"):
-                obj = obj.to_dict()
-            yield {"type": item.get("type"), "object": obj}
+            yield {"type": item.get("type"), "object": item.get("object")}
