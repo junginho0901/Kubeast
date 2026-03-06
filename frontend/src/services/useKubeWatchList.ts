@@ -74,5 +74,11 @@ export function useKubeWatchList(options: {
     return () => {
       cleanup?.()
     }
-  }, [options.enabled, options.path, query, JSON.stringify(options.queryKey)])
+  }, [
+    options.enabled,
+    options.path,
+    query,
+    options.applyEvent,
+    JSON.stringify(options.queryKey),
+  ])
 }
