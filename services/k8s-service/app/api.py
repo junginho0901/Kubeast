@@ -8,6 +8,7 @@ from app.services.k8s_service import K8sService
 from app.streaming import sse_event
 from app.config import settings
 from app.security import decode_access_token, extract_token_from_cookie
+from app.ws_multiplexer import WebSocketMultiplexer
 from app.cluster import (
     NamespaceInfo,
     ServiceInfo,
@@ -25,6 +26,7 @@ from collections import defaultdict
 
 router = APIRouter()
 k8s_service = K8sService()
+multiplexer = WebSocketMultiplexer()
 
 # WebSocket 연결 추적 (Pod별 활성 연결 관리)
 # Key: "namespace/pod_name", Value: list of WebSocket objects
@@ -375,6 +377,40 @@ def watch_all_pods(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.websocket("/wsMultiplexer")
+async def websocket_multiplexer(websocket: WebSocket):
+    """Headlamp-style WebSocket multiplexer for watch streams."""
+    try:
+        token = extract_token_from_cookie(
+            websocket.headers.get("cookie"),
+            settings.AUTH_COOKIE_NAME,
+        )
+        if not token:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Missing auth token")
+            return
+
+        decode_access_token(token)
+    except Exception:
+        try:
+            await websocket.accept()
+        except Exception:
+            pass
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    await websocket.accept()
+
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            await multiplexer.handle_message(websocket, msg)
+    except WebSocketDisconnect:
+        await multiplexer.stop_all_for_ws(websocket)
+    except Exception:
+        await multiplexer.stop_all_for_ws(websocket)
 
 @router.get("/namespaces/{namespace}/pvcs", response_model=List[PVCInfo])
 async def get_namespace_pvcs(
