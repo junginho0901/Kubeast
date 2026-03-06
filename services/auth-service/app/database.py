@@ -48,6 +48,16 @@ class AuditLog(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class ClusterSetup(Base):
+    __tablename__ = "cluster_setup"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    mode = Column(String, nullable=False)  # in_cluster | external
+    secret_name = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class DatabaseService:
     def __init__(self, database_url: str = None):
         import os
@@ -351,6 +361,32 @@ class DatabaseService:
             await db.commit()
             await db.refresh(audit)
             return True, audit
+
+    async def get_cluster_setup(self) -> Optional[ClusterSetup]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(ClusterSetup).order_by(ClusterSetup.id.asc()).limit(1))
+            return result.scalar_one_or_none()
+
+    async def set_cluster_setup(self, mode: str, secret_name: Optional[str]) -> ClusterSetup:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            existing = (await db.execute(select(ClusterSetup).order_by(ClusterSetup.id.asc()).limit(1))).scalar_one_or_none()
+            if existing:
+                existing.mode = mode
+                existing.secret_name = secret_name
+                existing.updated_at = datetime.utcnow()
+                await db.commit()
+                await db.refresh(existing)
+                return existing
+
+            row = ClusterSetup(mode=mode, secret_name=secret_name)
+            db.add(row)
+            await db.commit()
+            await db.refresh(row)
+            return row
 
     async def ensure_bootstrap_admin(self):
         from app.config import settings

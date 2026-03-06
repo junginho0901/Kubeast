@@ -5,9 +5,12 @@ from datetime import datetime
 import uuid
 import json
 import logging
+import yaml
 
 from app.database import get_db_service
 from app.security import create_access_token, hash_password, jwks, require_auth, TokenPayload, verify_password
+from app.k8s_setup import upsert_kubeconfig_secret, patch_configmap, restart_deployment
+from app.config import settings
 
 router = APIRouter()
 audit_logger = logging.getLogger("auth.audit")
@@ -70,6 +73,17 @@ class UpdateUserRoleRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class ClusterSetupStatus(BaseModel):
+    configured: bool
+    mode: Optional[str] = None
+    secret_name: Optional[str] = None
+
+
+class ClusterSetupRequest(BaseModel):
+    mode: str  # in_cluster | external
+    kubeconfig: Optional[str] = None
 
 
 @router.get("/jwks.json")
@@ -170,6 +184,64 @@ async def logout(response: Response):
 
     response.delete_cookie(key=settings.AUTH_COOKIE_NAME, path="/")
     return {"success": True}
+
+
+@router.get("/setup", response_model=ClusterSetupStatus)
+async def get_setup_status():
+    db = await get_db_service()
+    setup = await db.get_cluster_setup()
+    if not setup:
+        return ClusterSetupStatus(configured=False)
+    return ClusterSetupStatus(configured=True, mode=setup.mode, secret_name=setup.secret_name)
+
+
+@router.post("/setup", response_model=ClusterSetupStatus)
+async def setup_cluster(request: ClusterSetupRequest):
+    mode = (request.mode or "").strip().lower()
+    if mode not in {"in_cluster", "external"}:
+        raise HTTPException(status_code=400, detail="Invalid mode. Use in_cluster or external.")
+
+    db = await get_db_service()
+    existing = await db.get_cluster_setup()
+    if existing:
+        raise HTTPException(status_code=409, detail="Cluster setup already completed.")
+
+    kubeconfig_text = (request.kubeconfig or "").strip()
+    if mode == "external":
+        if not kubeconfig_text:
+            raise HTTPException(status_code=400, detail="kubeconfig is required for external mode.")
+        try:
+            data = yaml.safe_load(kubeconfig_text) or {}
+            if not data.get("clusters") or not data.get("users"):
+                raise ValueError("missing clusters/users")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid kubeconfig format.")
+    else:
+        kubeconfig_text = ""
+
+    try:
+        upsert_kubeconfig_secret(
+            namespace=settings.SETUP_NAMESPACE,
+            name=settings.SETUP_KUBECONFIG_SECRET,
+            kubeconfig_text=kubeconfig_text,
+        )
+        patch_configmap(
+            namespace=settings.SETUP_NAMESPACE,
+            name=settings.SETUP_CONFIGMAP_NAME,
+            data={
+                "IN_CLUSTER": "true" if mode == "in_cluster" else "false",
+                "KUBECONFIG_PATH": "/app/kubeconfig.yaml",
+            },
+        )
+        restart_deployment(
+            namespace=settings.SETUP_NAMESPACE,
+            name=settings.SETUP_RESTART_DEPLOYMENT,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply cluster setup: {e}")
+
+    setup = await db.set_cluster_setup(mode=mode, secret_name=settings.SETUP_KUBECONFIG_SECRET)
+    return ClusterSetupStatus(configured=True, mode=setup.mode, secret_name=setup.secret_name)
 
 
 @router.get("/me", response_model=UserResponse)

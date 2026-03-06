@@ -12,6 +12,7 @@ import ClusterView from './pages/ClusterView'
 import Monitoring from './pages/Monitoring'
 import Storage from './pages/Storage'
 import Login from './pages/Login'
+import Setup from './pages/Setup'
 import AdminUsers from './pages/AdminUsers'
 import Account from './pages/Account'
 import ComingSoon from './pages/ComingSoon'
@@ -24,6 +25,7 @@ function App() {
     <MonacoEditorLoaderInitializer>
       <BrowserRouter>
         <Routes>
+          <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />

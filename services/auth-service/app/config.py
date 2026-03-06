@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     # Auth cookie (Argo CD style: HttpOnly cookie for browser streaming/WS)
     AUTH_COOKIE_NAME: str = "kube-assistant.token"
 
+    # Cluster setup (bootstrap)
+    SETUP_NAMESPACE: str = "kube-assistant"
+    SETUP_KUBECONFIG_SECRET: str = "k8s-kubeconfig"
+    SETUP_CONFIGMAP_NAME: str = "kube-assistant-config"
+    SETUP_RESTART_DEPLOYMENT: str = "k8s-service"
+
     class Config:
         env_file = str(PROJECT_ROOT / ".env")
         case_sensitive = True

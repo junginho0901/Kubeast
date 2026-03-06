@@ -32,6 +32,7 @@ spec:
         - name: kubeconfig
           secret:
             secretName: k8s-kubeconfig
+            optional: true
 ---
 apiVersion: v1
 kind: Service

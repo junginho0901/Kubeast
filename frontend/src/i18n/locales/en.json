@@ -880,5 +880,30 @@
       "submitLogin": "Sign in",
       "submitRegister": "Create account"
     }
+  },
+  "setup": {
+    "badge": "Initial cluster setup",
+    "title": "Connect a Kubernetes cluster",
+    "subtitle": "Choose the cluster to manage before signing in.",
+    "option": {
+      "incluster": {
+        "title": "Use this cluster",
+        "desc": "Manage the cluster where this solution is installed."
+      },
+      "external": {
+        "title": "Connect external cluster",
+        "desc": "Provide a kubeconfig to connect another cluster."
+      }
+    },
+    "external": {
+      "title": "Kubeconfig",
+      "upload": "Upload file",
+      "placeholder": "Paste kubeconfig content here..."
+    },
+    "submit": "Continue",
+    "submit.loading": "Applying...",
+    "errors": {
+      "failed": "Failed to apply setup."
+    }
   }
 }

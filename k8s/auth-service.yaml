@@ -12,6 +12,7 @@ spec:
       labels:
         app: auth-service
     spec:
+      serviceAccountName: auth-service
       containers:
         - name: auth-service
           image: kube-assistant/auth-service:local

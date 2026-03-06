@@ -880,5 +880,30 @@
       "submitLogin": "로그인",
       "submitRegister": "회원가입"
     }
+  },
+  "setup": {
+    "badge": "초기 클러스터 설정",
+    "title": "Kubernetes 클러스터 연결",
+    "subtitle": "로그인 전에 사용할 클러스터를 선택하세요.",
+    "option": {
+      "incluster": {
+        "title": "이 클러스터 사용",
+        "desc": "현재 솔루션이 설치된 클러스터를 관리합니다."
+      },
+      "external": {
+        "title": "외부 클러스터 연결",
+        "desc": "다른 클러스터에 연결할 kubeconfig를 입력합니다."
+      }
+    },
+    "external": {
+      "title": "Kubeconfig",
+      "upload": "파일 업로드",
+      "placeholder": "kubeconfig 내용을 붙여넣어 주세요..."
+    },
+    "submit": "계속",
+    "submit.loading": "적용 중...",
+    "errors": {
+      "failed": "설정 적용에 실패했습니다."
+    }
   }
 }

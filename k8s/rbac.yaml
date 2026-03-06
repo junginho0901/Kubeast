@@ -15,3 +15,35 @@ subjects:
   - kind: ServiceAccount
     name: k8s-service
     namespace: kube-assistant
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: auth-service
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: auth-service-setup
+  namespace: kube-assistant
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: auth-service-setup
+  namespace: kube-assistant
+subjects:
+  - kind: ServiceAccount
+    name: auth-service
+    namespace: kube-assistant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: auth-service-setup
