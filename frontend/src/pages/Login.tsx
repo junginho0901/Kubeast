@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { clearRedirectAfterLogin, getRedirectAfterLogin, setAccessToken } from '@/services/auth'
@@ -15,6 +15,18 @@ export default function Login() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
+
+  const { data: setupStatus } = useQuery({
+    queryKey: ['setup-status'],
+    queryFn: api.getSetupStatus,
+    staleTime: 10000,
+  })
+
+  useEffect(() => {
+    if (setupStatus && !setupStatus.configured) {
+      navigate('/setup', { replace: true })
+    }
+  }, [setupStatus, navigate])
 
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')

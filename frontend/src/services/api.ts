@@ -1061,6 +1061,17 @@ export const api = {
     return data
   },
 
+  // Cluster Setup
+  getSetupStatus: async (): Promise<{ configured: boolean; mode?: string; secret_name?: string }> => {
+    const { data } = await client.get('/auth/setup')
+    return data
+  },
+
+  submitSetup: async (payload: { mode: 'in_cluster' | 'external'; kubeconfig?: string }) => {
+    const { data } = await client.post('/auth/setup', payload)
+    return data
+  },
+
   // Health check
   getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
     // /health는 /api/v1가 아닌 루트에 있음
