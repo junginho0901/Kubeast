@@ -33,6 +33,7 @@ dist/
 
 # Environment
 .env
+.kind-data/
 .env.local
 .env.*.local
 .env.bak

@@ -2,6 +2,7 @@
 Database models and user management
 """
 from datetime import datetime
+import uuid
 from typing import Optional, List, Dict, Any, Tuple
 
 from sqlalchemy import Column, String, DateTime, Integer, JSON, text
@@ -355,21 +356,28 @@ class DatabaseService:
         from app.config import settings
         from app.security import hash_password
 
-        email = settings.DEFAULT_ADMIN_EMAIL.strip().lower()
-        if not email:
-            return
+        async def ensure_user(email: str, password: str, role: str, name: str):
+            if not email:
+                return
+            existing = await self.get_user_by_email(email)
+            if existing:
+                return
+            await self.create_user(
+                user_id=str(uuid.uuid4()),
+                name=name,
+                email=email,
+                password_hash=hash_password(password),
+                role=role,
+            )
 
-        existing = await self.get_user_by_email(email)
-        if existing:
-            return
+        admin_email = settings.DEFAULT_ADMIN_EMAIL.strip().lower()
+        await ensure_user(admin_email, settings.DEFAULT_ADMIN_PASSWORD, "admin", "admin")
 
-        await self.create_user(
-            user_id="default",
-            name="admin",
-            email=email,
-            password_hash=hash_password(settings.DEFAULT_ADMIN_PASSWORD),
-            role="admin",
-        )
+        read_email = settings.DEFAULT_READ_EMAIL.strip().lower()
+        await ensure_user(read_email, settings.DEFAULT_READ_PASSWORD, "read", "read")
+
+        write_email = settings.DEFAULT_WRITE_EMAIL.strip().lower()
+        await ensure_user(write_email, settings.DEFAULT_WRITE_PASSWORD, "write", "write")
 
 
 db_service: Optional[DatabaseService] = None

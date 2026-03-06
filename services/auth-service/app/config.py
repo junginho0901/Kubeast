@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Bootstrap admin
     DEFAULT_ADMIN_EMAIL: str = "admin@local"
     DEFAULT_ADMIN_PASSWORD: str = "admin"
+    DEFAULT_READ_EMAIL: str = "read@local"
+    DEFAULT_READ_PASSWORD: str = "read"
+    DEFAULT_WRITE_EMAIL: str = "write@local"
+    DEFAULT_WRITE_PASSWORD: str = "write"
 
     # Key storage (dev)
     KEY_DIR: str = "/app/.keys"
