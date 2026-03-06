@@ -41,16 +41,54 @@ const makeKey = (path: string, query: string) => `${path}?${query}`
 class WebSocketMultiplexer {
   private socket: WebSocket | null = null
   private listeners = new Map<string, Set<Listener>>()
+  private connecting: Promise<WebSocket> | null = null
+
+  private waitForOpen(socket: WebSocket): Promise<void> {
+    if (socket.readyState === WebSocket.OPEN) return Promise.resolve()
+
+    return new Promise<void>((resolve, reject) => {
+      const handleOpen = () => {
+        cleanup()
+        resolve()
+      }
+      const handleError = () => {
+        cleanup()
+        reject(new Error('WebSocket connection failed'))
+      }
+      const handleClose = () => {
+        cleanup()
+        reject(new Error('WebSocket closed before open'))
+      }
+      const cleanup = () => {
+        socket.removeEventListener('open', handleOpen)
+        socket.removeEventListener('error', handleError)
+        socket.removeEventListener('close', handleClose)
+      }
+      socket.addEventListener('open', handleOpen)
+      socket.addEventListener('error', handleError)
+      socket.addEventListener('close', handleClose)
+    })
+  }
 
   private async connect(): Promise<WebSocket> {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       return this.socket
     }
 
-    const wsUrl = `${getWsBase()}/api/v1/cluster/wsMultiplexer`
-    this.socket = new WebSocket(wsUrl)
+    if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
+      await this.waitForOpen(this.socket)
+      return this.socket
+    }
 
-    this.socket.onmessage = (evt) => {
+    if (this.connecting) {
+      return this.connecting
+    }
+
+    const wsUrl = `${getWsBase()}/api/v1/cluster/wsMultiplexer`
+    const socket = new WebSocket(wsUrl)
+    this.socket = socket
+
+    socket.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data) as ServerMessage
         const key = makeKey(msg.path, msg.query)
@@ -63,28 +101,21 @@ class WebSocketMultiplexer {
       }
     }
 
-    this.socket.onclose = () => {
+    socket.onclose = () => {
       this.socket = null
+      this.connecting = null
     }
 
-    await new Promise<void>((resolve, reject) => {
-      if (!this.socket) return reject(new Error('Failed to create socket'))
-      const sock = this.socket
-      const handleOpen = () => {
-        sock.removeEventListener('open', handleOpen)
-        sock.removeEventListener('error', handleError)
-        resolve()
-      }
-      const handleError = () => {
-        sock.removeEventListener('open', handleOpen)
-        sock.removeEventListener('error', handleError)
-        reject(new Error('WebSocket connection failed'))
-      }
-      sock.addEventListener('open', handleOpen)
-      sock.addEventListener('error', handleError)
-    })
+    this.connecting = (async () => {
+      await this.waitForOpen(socket)
+      return socket
+    })()
 
-    return this.socket!
+    try {
+      return await this.connecting
+    } finally {
+      this.connecting = null
+    }
   }
 
   async subscribe(msg: ClientMessage, onMessage: Listener): Promise<() => void> {
@@ -94,6 +125,9 @@ class WebSocketMultiplexer {
     this.listeners.set(key, set)
 
     const socket = await this.connect()
+    if (socket.readyState !== WebSocket.OPEN) {
+      await this.waitForOpen(socket)
+    }
     socket.send(JSON.stringify(msg))
 
     return () => this.unsubscribe(msg, onMessage)
