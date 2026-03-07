@@ -789,6 +789,31 @@
       "enableHint": "노드 상세 화면에 디버그 셸 액션을 표시합니다.",
       "namespace": "네임스페이스",
       "image": "리눅스 이미지"
+    },
+    "cluster": {
+      "title": "클러스터 연결",
+      "subtitle": "이 UI에서 관리할 클러스터를 등록하고 전환합니다.",
+      "add": "클러스터 추가",
+      "loading": "클러스터 불러오는 중...",
+      "empty": "등록된 클러스터가 없습니다.",
+      "active": "활성",
+      "activate": "전환",
+      "activating": "전환 중...",
+      "mode": {
+        "incluster": "현재 클러스터",
+        "external": "외부 클러스터"
+      },
+      "errors": {
+        "failed": "클러스터 저장에 실패했습니다."
+      },
+      "modal": {
+        "title": "클러스터 추가",
+        "name": "이름",
+        "mode": "모드",
+        "kubeconfig": "Kubeconfig",
+        "save": "저장",
+        "saving": "저장 중..."
+      }
     }
   },
   "storage": {
