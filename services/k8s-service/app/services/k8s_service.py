@@ -2984,7 +2984,7 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to create debug pod: {e}")
 
-    def delete_pod(self, namespace: str, name: str) -> None:
+    def delete_pod_best_effort(self, namespace: str, name: str) -> None:
         """파드 삭제 (best-effort)"""
         try:
             self.v1.delete_namespaced_pod(

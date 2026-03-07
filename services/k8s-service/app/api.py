@@ -1188,7 +1188,7 @@ async def websocket_node_debug_shell(
             else:
                 await websocket.send_text("Error: Debug pod did not become ready.")
             if pod_name:
-                await asyncio.to_thread(k8s_service.delete_pod, namespace, pod_name)
+                await asyncio.to_thread(k8s_service.delete_pod_best_effort, namespace, pod_name)
             return
 
         # Build K8s WebSocket URL
@@ -1270,7 +1270,7 @@ async def websocket_node_debug_shell(
             pass
     finally:
         if pod_name:
-            await asyncio.to_thread(k8s_service.delete_pod, namespace, pod_name)
+            await asyncio.to_thread(k8s_service.delete_pod_best_effort, namespace, pod_name)
 
 
 @router.websocket("/cluster/nodes/{node_name}/debug-shell/ws")
