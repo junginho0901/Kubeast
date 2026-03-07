@@ -13,6 +13,7 @@ import {
   XCircle, 
   AlertCircle,
   RefreshCw,
+  Loader2,
   Trash2,
   HelpCircle,
   X,
@@ -82,6 +83,7 @@ export default function ClusterView() {
   const [deleteForce, setDeleteForce] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeletingPod, setIsDeletingPod] = useState(false)
+  const [deletingPods, setDeletingPods] = useState<Set<string>>(new Set())
   const logsEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
@@ -256,7 +258,7 @@ export default function ClusterView() {
   // 네임스페이스 목록
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
+    queryFn: () => api.getNamespaces(),
   })
 
   // 전체 Pod 조회
@@ -756,6 +758,8 @@ export default function ClusterView() {
     setIsDeletingPod(true)
     setDeleteError(null)
     const target = deleteTargetPod
+    const podKey = `${target.namespace}/${target.name}`
+    setDeletingPods(prev => new Set(prev).add(podKey))
     try {
       await api.deletePod(target.namespace, target.name, deleteForce)
       if (selectedPod?.name === target.name && selectedPod?.namespace === target.namespace) {
@@ -763,11 +767,28 @@ export default function ClusterView() {
       }
       closeDeleteModal()
     } catch (error: any) {
+      setDeletingPods(prev => {
+        const next = new Set(prev)
+        next.delete(podKey)
+        return next
+      })
       setDeleteError(error?.response?.data?.detail || error?.message || '삭제에 실패했습니다.')
     } finally {
       setIsDeletingPod(false)
     }
   }
+
+  useEffect(() => {
+    if (!allPods) return
+    setDeletingPods(prev => {
+      const remaining = new Set<string>()
+      const keys = new Set(allPods.map(pod => `${pod.namespace}/${pod.name}`))
+      for (const key of prev) {
+        if (keys.has(key)) remaining.add(key)
+      }
+      return remaining
+    })
+  }, [allPods])
 
   const handleDownloadLogs = async () => {
     if (!selectedPod || !selectedContainer) return
@@ -938,30 +959,44 @@ export default function ClusterView() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-                {pods.map((pod, idx) => (
-                  <button
-                    key={`${pod.namespace}-${pod.name}-${idx}`}
-                    onClick={() => handlePodClick(pod)}
-                    onContextMenu={(event) => handlePodContextMenu(event, pod)}
-                    className="p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-left"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <Box className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                      {getHealthIcon(getPodHealth(pod).level, getPodHealth(pod).reason)}
-                    </div>
-                    <div className="text-sm font-medium text-white truncate" title={pod.name}>
-                      {pod.name}
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1">{pod.namespace}</div>
-                    <div className="text-xs text-slate-300 mt-1 min-h-[16px]">
-                      {getPodHealth(pod).reason}
-                    </div>
-                    <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
-                      {pod.restart_count > 0 &&
-                        tr('clusterView.restarts', 'Restarts: {{count}}', { count: pod.restart_count })}
-                    </div>
-                  </button>
-                ))}
+                {pods.map((pod, idx) => {
+                  const podKey = `${pod.namespace}/${pod.name}`
+                  const isDeleting = deletingPods.has(podKey)
+                  const health = getPodHealth(pod)
+                  return (
+                    <button
+                      key={`${pod.namespace}-${pod.name}-${idx}`}
+                      onClick={() => handlePodClick(pod)}
+                      onContextMenu={(event) => {
+                        if (!isDeleting) handlePodContextMenu(event, pod)
+                      }}
+                      disabled={isDeleting}
+                      className={`p-3 bg-slate-700 rounded-lg transition-colors text-left ${
+                        isDeleting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <Box className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        {isDeleting ? (
+                          <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                        ) : (
+                          getHealthIcon(health.level, health.reason)
+                        )}
+                      </div>
+                      <div className="text-sm font-medium text-white truncate" title={pod.name}>
+                        {pod.name}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1">{pod.namespace}</div>
+                      <div className={`text-xs mt-1 min-h-[16px] ${isDeleting ? 'text-amber-400' : 'text-slate-300'}`}>
+                        {isDeleting ? tr('clusterView.podDeleting', 'Deleting...') : health.reason}
+                      </div>
+                      <div className="text-xs text-yellow-400 mt-1 min-h-[16px]">
+                        {pod.restart_count > 0 &&
+                          tr('clusterView.restarts', 'Restarts: {{count}}', { count: pod.restart_count })}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
             ))
