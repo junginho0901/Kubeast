@@ -774,73 +774,19 @@ class K8sService:
             raise Exception(f"Failed to get cluster overview: {e}")
     
     async def get_namespaces(self, force_refresh: bool = False) -> List[NamespaceInfo]:
-        """네임스페이스 목록 (캐시 + 병렬 처리)"""
+        """네임스페이스 목록 (Redis 캐시 없음 – Watch 기반 실시간 업데이트)"""
         try:
-            cache_key = "k8s:namespaces"
-            
-            # force_refresh이면 캐시 삭제
-            if force_refresh:
-                redis_cache.delete(cache_key)
-                print(f"🗑️  Cache DELETED: {cache_key}")
-            else:
-                # 캐시 확인
-                cached = redis_cache.get(cache_key)
-                if cached:
-                    print(f"✅ Cache HIT: {cache_key}")
-                    return [NamespaceInfo(**ns) for ns in cached]
-            
-            print(f"🔄 Cache MISS: {cache_key}, fetching from K8s API...")
-            
-            # 전체 네임스페이스 조회
             namespaces = self.v1.list_namespace()
-            
-            # 모든 네임스페이스의 리소스를 한 번에 조회 (병렬)
-            all_pods = self.v1.list_pod_for_all_namespaces()
-            all_services = self.v1.list_service_for_all_namespaces()
-            all_deployments = self.apps_v1.list_deployment_for_all_namespaces()
-            all_pvcs = self.v1.list_persistent_volume_claim_for_all_namespaces()
-            
-            # 네임스페이스별로 집계
-            pod_counts = {}
-            service_counts = {}
-            deployment_counts = {}
-            pvc_counts = {}
-            
-            for pod in all_pods.items:
-                ns = pod.metadata.namespace
-                pod_counts[ns] = pod_counts.get(ns, 0) + 1
-            
-            for svc in all_services.items:
-                ns = svc.metadata.namespace
-                service_counts[ns] = service_counts.get(ns, 0) + 1
-            
-            for deploy in all_deployments.items:
-                ns = deploy.metadata.namespace
-                deployment_counts[ns] = deployment_counts.get(ns, 0) + 1
-            
-            for pvc in all_pvcs.items:
-                ns = pvc.metadata.namespace
-                pvc_counts[ns] = pvc_counts.get(ns, 0) + 1
-            
+
             result = []
             for ns in namespaces.items:
-                ns_name = ns.metadata.name
                 result.append(NamespaceInfo(
-                    name=ns_name,
+                    name=ns.metadata.name,
                     status=ns.status.phase,
                     created_at=ns.metadata.creation_timestamp,
                     labels=ns.metadata.labels or {},
-                    resource_count={
-                        "pods": pod_counts.get(ns_name, 0),
-                        "services": service_counts.get(ns_name, 0),
-                        "deployments": deployment_counts.get(ns_name, 0),
-                        "pvcs": pvc_counts.get(ns_name, 0)
-                    }
                 ))
-            
-            # Redis 캐시에 저장 (30초 TTL)
-            redis_cache.set(cache_key, [ns.model_dump() for ns in result], ttl=30)
-            
+
             return result
         except ApiException as e:
             raise Exception(f"Failed to get namespaces: {e}")
