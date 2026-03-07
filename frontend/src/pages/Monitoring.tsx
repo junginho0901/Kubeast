@@ -49,7 +49,7 @@ export default function Monitoring() {
   // 네임스페이스 목록
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(false),
+    queryFn: () => api.getNamespaces(),
     staleTime: 30000,
   })
 

@@ -115,6 +115,18 @@ class WebSocketMultiplexer:
 
         return node_info
 
+    def _namespace_to_info(self, ns: Any) -> Dict[str, Any]:
+        created_at = None
+        if ns.metadata and ns.metadata.creation_timestamp:
+            created_at = self._to_iso(ns.metadata.creation_timestamp)
+        return {
+            "name": ns.metadata.name,
+            "status": getattr(ns.status, "phase", None) if getattr(ns, "status", None) else None,
+            "created_at": created_at,
+            "labels": dict(ns.metadata.labels) if ns.metadata.labels else {},
+            "resource_count": {},
+        }
+
     def _event_to_info(self, event: Any) -> Dict[str, Any]:
         return {
             "type": event.type,
@@ -231,6 +243,8 @@ class WebSocketMultiplexer:
                             stream = w.stream(core.list_pod_for_all_namespaces, **stream_params)
                     elif resource == "nodes":
                         stream = w.stream(core.list_node, **stream_params)
+                    elif resource == "namespaces":
+                        stream = w.stream(core.list_namespace, **stream_params)
                     elif resource == "events":
                         if namespace:
                             stream = w.stream(core.list_namespaced_event, namespace, **stream_params)
@@ -251,6 +265,8 @@ class WebSocketMultiplexer:
                             obj = self._k8s._pod_to_info(obj).dict()
                         elif resource == "nodes" and obj is not None:
                             obj = self._node_to_info(obj)
+                        elif resource == "namespaces" and obj is not None:
+                            obj = self._namespace_to_info(obj)
                         elif resource == "events" and obj is not None:
                             obj = self._event_to_info(obj)
 

@@ -9,7 +9,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
-import JSZip from 'jszip'
+// JSZip은 Monaco Editor AMD loader와 충돌하므로 dynamic import 사용
+// import JSZip from 'jszip'
 import { useTranslation } from 'react-i18next'
 
 const TOOL_RESULT_DISPLAY_MAX_CHARS = 2000
@@ -1005,6 +1006,7 @@ export default function AIChat() {
         URL.revokeObjectURL(url)
       }
 
+      const { default: JSZip } = await import('jszip')
       const zip = new JSZip()
 
       for (const tc of toolCalls) {

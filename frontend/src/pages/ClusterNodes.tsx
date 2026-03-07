@@ -244,7 +244,7 @@ export default function ClusterNodes() {
     return map
   }, [metrics])
 
-  const canEditYaml = me?.role === 'admin'
+  const canEditYaml = me?.role === 'admin' || me?.role === 'write'
   const isAdmin = me?.role === 'admin'
   const nodeShellSettings = useNodeShellSettings()
   const isNodeShellEnabled = nodeShellSettings.isEnabled

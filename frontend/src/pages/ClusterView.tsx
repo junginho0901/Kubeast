@@ -258,7 +258,7 @@ export default function ClusterView() {
   // 네임스페이스 목록
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
+    queryFn: () => api.getNamespaces(),
   })
 
   // 전체 Pod 조회

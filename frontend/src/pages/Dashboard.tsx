@@ -84,7 +84,7 @@ export default function Dashboard() {
   // 네임스페이스 목록
   const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
+    queryFn: () => api.getNamespaces(),
     enabled: selectedResourceType === 'namespaces',
   })
 
@@ -98,7 +98,7 @@ export default function Dashboard() {
   // 전체 Services 목록 (모든 네임스페이스)
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
     queryKey: ['all-namespaces'],
-    queryFn: () => api.getNamespaces(false), // 자동 갱신은 캐시 사용
+    queryFn: () => api.getNamespaces(),
     enabled:
       selectedResourceType === 'services' ||
       selectedResourceType === 'deployments' ||
@@ -268,7 +268,7 @@ export default function Dashboard() {
       console.log('📡 API 호출 중 (force_refresh=true)...')
 
       // 먼저 네임스페이스 목록을 가져옴 (다른 API 호출에 필요)
-      const namespacesData = await api.getNamespaces(true)
+      const namespacesData = await api.getNamespaces()
 
       // 나머지를 병렬로 호출 (네임스페이스별 리소스 조회 포함)
       const [overviewData, nodesData, allPodsData, allServicesData, allDeploymentsData, allPVCsData] = await Promise.all([

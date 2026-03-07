@@ -774,73 +774,19 @@ class K8sService:
             raise Exception(f"Failed to get cluster overview: {e}")
     
     async def get_namespaces(self, force_refresh: bool = False) -> List[NamespaceInfo]:
-        """네임스페이스 목록 (캐시 + 병렬 처리)"""
+        """네임스페이스 목록 (Redis 캐시 없음 – Watch 기반 실시간 업데이트)"""
         try:
-            cache_key = "k8s:namespaces"
-            
-            # force_refresh이면 캐시 삭제
-            if force_refresh:
-                redis_cache.delete(cache_key)
-                print(f"🗑️  Cache DELETED: {cache_key}")
-            else:
-                # 캐시 확인
-                cached = redis_cache.get(cache_key)
-                if cached:
-                    print(f"✅ Cache HIT: {cache_key}")
-                    return [NamespaceInfo(**ns) for ns in cached]
-            
-            print(f"🔄 Cache MISS: {cache_key}, fetching from K8s API...")
-            
-            # 전체 네임스페이스 조회
             namespaces = self.v1.list_namespace()
-            
-            # 모든 네임스페이스의 리소스를 한 번에 조회 (병렬)
-            all_pods = self.v1.list_pod_for_all_namespaces()
-            all_services = self.v1.list_service_for_all_namespaces()
-            all_deployments = self.apps_v1.list_deployment_for_all_namespaces()
-            all_pvcs = self.v1.list_persistent_volume_claim_for_all_namespaces()
-            
-            # 네임스페이스별로 집계
-            pod_counts = {}
-            service_counts = {}
-            deployment_counts = {}
-            pvc_counts = {}
-            
-            for pod in all_pods.items:
-                ns = pod.metadata.namespace
-                pod_counts[ns] = pod_counts.get(ns, 0) + 1
-            
-            for svc in all_services.items:
-                ns = svc.metadata.namespace
-                service_counts[ns] = service_counts.get(ns, 0) + 1
-            
-            for deploy in all_deployments.items:
-                ns = deploy.metadata.namespace
-                deployment_counts[ns] = deployment_counts.get(ns, 0) + 1
-            
-            for pvc in all_pvcs.items:
-                ns = pvc.metadata.namespace
-                pvc_counts[ns] = pvc_counts.get(ns, 0) + 1
-            
+
             result = []
             for ns in namespaces.items:
-                ns_name = ns.metadata.name
                 result.append(NamespaceInfo(
-                    name=ns_name,
+                    name=ns.metadata.name,
                     status=ns.status.phase,
                     created_at=ns.metadata.creation_timestamp,
                     labels=ns.metadata.labels or {},
-                    resource_count={
-                        "pods": pod_counts.get(ns_name, 0),
-                        "services": service_counts.get(ns_name, 0),
-                        "deployments": deployment_counts.get(ns_name, 0),
-                        "pvcs": pvc_counts.get(ns_name, 0)
-                    }
                 ))
-            
-            # Redis 캐시에 저장 (30초 TTL)
-            redis_cache.set(cache_key, [ns.model_dump() for ns in result], ttl=30)
-            
+
             return result
         except ApiException as e:
             raise Exception(f"Failed to get namespaces: {e}")
@@ -868,12 +814,25 @@ class K8sService:
                     print(f"[WARN] Failed to format namespace.creation_timestamp: {e}")
                     created_at = str(ns.metadata.creation_timestamp)
 
+            # conditions 파싱
+            conditions = []
+            if getattr(ns, "status", None) and getattr(ns.status, "conditions", None):
+                for cond in ns.status.conditions:
+                    conditions.append({
+                        "type": getattr(cond, "type", None),
+                        "status": getattr(cond, "status", None),
+                        "last_transition_time": str(cond.last_transition_time) if getattr(cond, "last_transition_time", None) else None,
+                        "reason": getattr(cond, "reason", None),
+                        "message": getattr(cond, "message", None),
+                    })
+
             describe_info: Dict[str, Any] = {
                 "name": ns.metadata.name,
                 "status": getattr(ns.status, "phase", None) if getattr(ns, "status", None) else None,
                 "created_at": created_at,
                 "labels": ns.metadata.labels or {},
                 "annotations": ns.metadata.annotations or {},
+                "conditions": conditions,
                 "events": [],
             }
 
@@ -897,7 +856,179 @@ class K8sService:
             return describe_info
         except ApiException as e:
             raise Exception(f"Failed to describe namespace: {e}")
-    
+
+    async def get_namespace_resource_quotas(self, name: str) -> List[Dict[str, Any]]:
+        """네임스페이스의 ResourceQuota 목록 조회"""
+        try:
+            rqs = self.v1.list_namespaced_resource_quota(namespace=name)
+            result = []
+            for rq in (rqs.items or []):
+                hard = {}
+                used = {}
+                if getattr(rq, "status", None):
+                    hard = dict(rq.status.hard) if getattr(rq.status, "hard", None) else {}
+                    used = dict(rq.status.used) if getattr(rq.status, "used", None) else {}
+                spec_hard = {}
+                if getattr(rq, "spec", None) and getattr(rq.spec, "hard", None):
+                    spec_hard = dict(rq.spec.hard)
+                result.append({
+                    "name": rq.metadata.name,
+                    "namespace": rq.metadata.namespace,
+                    "created_at": rq.metadata.creation_timestamp.isoformat() if getattr(rq.metadata, "creation_timestamp", None) and hasattr(rq.metadata.creation_timestamp, "isoformat") else str(rq.metadata.creation_timestamp) if getattr(rq.metadata, "creation_timestamp", None) else None,
+                    "spec_hard": spec_hard,
+                    "status_hard": hard,
+                    "status_used": used,
+                })
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get resource quotas for namespace {name}: {e}")
+
+    async def get_namespace_limit_ranges(self, name: str) -> List[Dict[str, Any]]:
+        """네임스페이스의 LimitRange 목록 조회"""
+        try:
+            lrs = self.v1.list_namespaced_limit_range(namespace=name)
+            result = []
+            for lr in (lrs.items or []):
+                limits = []
+                if getattr(lr, "spec", None) and getattr(lr.spec, "limits", None):
+                    for lim in lr.spec.limits:
+                        limits.append({
+                            "type": getattr(lim, "type", None),
+                            "default": dict(lim.default) if getattr(lim, "default", None) else {},
+                            "default_request": dict(lim.default_request) if getattr(lim, "default_request", None) else {},
+                            "max": dict(getattr(lim, "max", None) or {}),
+                            "min": dict(getattr(lim, "min", None) or {}),
+                        })
+                result.append({
+                    "name": lr.metadata.name,
+                    "namespace": lr.metadata.namespace,
+                    "created_at": lr.metadata.creation_timestamp.isoformat() if getattr(lr.metadata, "creation_timestamp", None) and hasattr(lr.metadata.creation_timestamp, "isoformat") else str(lr.metadata.creation_timestamp) if getattr(lr.metadata, "creation_timestamp", None) else None,
+                    "limits": limits,
+                })
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get limit ranges for namespace {name}: {e}")
+
+    async def get_namespace_pods(self, name: str) -> List[Dict[str, Any]]:
+        """네임스페이스의 Pod 목록 조회 (간소화)"""
+        try:
+            pods = self.v1.list_namespaced_pod(namespace=name)
+            result = []
+            for pod in (pods.items or []):
+                # 컨테이너 상태 집계
+                ready_count = 0
+                total_count = 0
+                restarts = 0
+                if getattr(pod, "status", None) and getattr(pod.status, "container_statuses", None):
+                    for cs in pod.status.container_statuses:
+                        total_count += 1
+                        if getattr(cs, "ready", False):
+                            ready_count += 1
+                        restarts += getattr(cs, "restart_count", 0) or 0
+                elif getattr(pod, "spec", None) and getattr(pod.spec, "containers", None):
+                    total_count = len(pod.spec.containers)
+
+                result.append({
+                    "name": pod.metadata.name,
+                    "namespace": pod.metadata.namespace,
+                    "status": pod.status.phase if getattr(pod, "status", None) and getattr(pod.status, "phase", None) else "Unknown",
+                    "ready": f"{ready_count}/{total_count}",
+                    "restarts": restarts,
+                    "node": getattr(pod.spec, "node_name", None) if getattr(pod, "spec", None) else None,
+                    "created_at": pod.metadata.creation_timestamp.isoformat() if getattr(pod.metadata, "creation_timestamp", None) and hasattr(pod.metadata.creation_timestamp, "isoformat") else str(pod.metadata.creation_timestamp) if getattr(pod.metadata, "creation_timestamp", None) else None,
+                })
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get pods for namespace {name}: {e}")
+
+    async def create_namespace(self, name: str) -> Dict[str, Any]:
+        """새 네임스페이스 생성"""
+        try:
+            body = {
+                "apiVersion": "v1",
+                "kind": "Namespace",
+                "metadata": {"name": name},
+            }
+            self.v1.create_namespace(body=body)
+            return {"status": "ok", "name": name}
+        except ApiException as e:
+            if e.status == 409:
+                raise Exception(f"Namespace '{name}' already exists")
+            raise Exception(f"Failed to create namespace: {e}")
+
+    async def delete_namespace(self, name: str) -> Dict[str, Any]:
+        """네임스페이스 삭제"""
+        try:
+            self.v1.delete_namespace(name=name)
+            self._invalidate_yaml_cache("namespaces", name, namespace=None)
+            return {"status": "ok", "name": name}
+        except ApiException as e:
+            raise Exception(f"Failed to delete namespace: {e}")
+
+    async def apply_namespace_yaml(self, name: str, yaml_content: str) -> Dict[str, Any]:
+        """Namespace YAML 적용 (labels/annotations 수정)"""
+        try:
+            import yaml
+
+            data = yaml.safe_load(yaml_content)
+            if not isinstance(data, dict):
+                raise Exception("Invalid YAML content")
+
+            kind = data.get("kind")
+            if kind != "Namespace":
+                raise Exception("YAML kind must be Namespace")
+
+            metadata = data.get("metadata") or {}
+            yaml_name = metadata.get("name")
+            if yaml_name and yaml_name != name:
+                raise Exception("YAML name does not match target namespace")
+
+            current = self.v1.read_namespace(name)
+            current_labels = (current.metadata.labels or {}) if current and current.metadata else {}
+            current_annotations = (current.metadata.annotations or {}) if current and current.metadata else {}
+
+            def is_protected_label(key: str) -> bool:
+                prefixes = (
+                    "kubernetes.io/",
+                    "app.kubernetes.io/",
+                )
+                return key.startswith(prefixes)
+
+            def is_protected_annotation(key: str) -> bool:
+                prefixes = (
+                    "kubectl.kubernetes.io/",
+                )
+                return key.startswith(prefixes)
+
+            patch: Dict[str, Any] = {"metadata": {}}
+            if metadata.get("labels") is not None:
+                desired = metadata.get("labels") or {}
+                patch_labels = dict(desired)
+                for key in current_labels:
+                    if key not in desired and not is_protected_label(key):
+                        patch_labels[key] = None
+                patch["metadata"]["labels"] = patch_labels
+            if metadata.get("annotations") is not None:
+                desired = metadata.get("annotations") or {}
+                patch_annotations = dict(desired)
+                for key in current_annotations:
+                    if key not in desired and not is_protected_annotation(key):
+                        patch_annotations[key] = None
+                patch["metadata"]["annotations"] = patch_annotations
+
+            if not patch["metadata"]:
+                patch.pop("metadata")
+            if not patch:
+                raise Exception("No supported fields to apply (labels/annotations only)")
+
+            self.v1.patch_namespace(name, patch)
+            self._invalidate_yaml_cache("namespaces", name, namespace=None)
+            return {"status": "ok"}
+        except ApiException as e:
+            raise Exception(f"Failed to apply namespace yaml: {e}")
+        except Exception as e:
+            raise Exception(f"Failed to apply namespace yaml: {e}")
+
     async def get_services(self, namespace: str) -> List[ServiceInfo]:
         """서비스 목록"""
         try:

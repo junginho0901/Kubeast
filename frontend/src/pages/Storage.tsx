@@ -183,7 +183,7 @@ export default function Storage() {
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(false),
+    queryFn: () => api.getNamespaces(),
     staleTime: 30000,
   })
 

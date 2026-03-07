@@ -173,8 +173,8 @@
         "cancel": "Cancel",
         "loading": "Loading YAML...",
         "error": "Failed to load YAML.",
-        "readonly": "Read-only for non-admin users.",
-        "editHint": "Edit is available for admin users.",
+        "readonly": "Read-only for read-only users.",
+        "editHint": "Edit is available for write or admin users.",
         "applyError": "Failed to apply YAML.",
         "refreshing": "Refreshing...",
         "unsaved": "You have unsaved YAML changes. Discard them?"
@@ -694,32 +694,115 @@
     "searchPlaceholder": "Search namespaces...",
     "matchCount": "{{count}} namespaces found",
     "created": "Created",
-    "metrics": {
-      "pods": "Pods",
-      "services": "Services",
-      "deployments": "Deployments",
-      "pvcs": "PVCs"
-    },
-    "actions": {
-      "resources": "View resources",
-      "network": "View network",
-      "yaml": "View YAML"
-    },
     "noSearchResults": "No results found",
     "empty": "No namespaces found",
-    "describe": {
+    "table": {
+      "name": "Name",
+      "status": "Status",
+      "labels": "Labels",
+      "age": "Age"
+    },
+    "detail": {
       "title": "Namespace details",
       "subtitle": "Details from kubectl describe namespace {{name}}",
       "loading": "Loading namespace details...",
       "error": "Failed to load namespace details.",
+      "notFound": "Namespace details not found.",
       "basicInfo": "Basic information",
       "name": "Name",
       "status": "Status",
-      "createdAt": "Created at",
+      "createdAt": "Created",
       "labels": "Labels",
       "annotations": "Annotations",
-      "recentEvents": "Recent events",
-      "notFound": "Namespace details not found."
+      "events": "Events",
+      "tabs": {
+        "info": "Info",
+        "yaml": "YAML"
+      },
+      "yaml": {
+        "title": "Namespace YAML",
+        "refresh": "Refresh",
+        "copy": "Copy",
+        "edit": "Edit",
+        "apply": "Apply",
+        "applying": "Applying...",
+        "applied": "Applied",
+        "cancel": "Cancel",
+        "loading": "Loading YAML...",
+        "error": "Failed to load YAML.",
+        "readonly": "Read-only for read-only users.",
+        "editHint": "Edit is available for write or admin users.",
+        "applyError": "Failed to apply YAML.",
+        "refreshing": "Refreshing...",
+        "unsaved": "You have unsaved YAML changes. Discard them?"
+      },
+      "events": {
+        "type": "Type",
+        "reason": "Reason",
+        "message": "Message",
+        "lastSeen": "Last Seen",
+        "count": "Count"
+      },
+      "conditions": "Conditions",
+      "conditionsEmpty": "No conditions.",
+      "conditionsTable": {
+        "type": "Type",
+        "status": "Status",
+        "reason": "Reason",
+        "message": "Message",
+        "lastTransition": "Last Transition"
+      },
+      "resourceQuotas": "Resource Quotas",
+      "resourceQuotasEmpty": "No resource quotas.",
+      "resourceQuotaTable": {
+        "resource": "Resource",
+        "used": "Used",
+        "hard": "Hard"
+      },
+      "limitRanges": "Limit Ranges",
+      "limitRangesEmpty": "No limit ranges.",
+      "limitRangeTable": {
+        "type": "Type",
+        "resource": "Resource",
+        "min": "Min",
+        "max": "Max",
+        "default": "Default",
+        "defaultRequest": "Default Request"
+      },
+      "pods": "Pods",
+      "podsEmpty": "No pods.",
+      "podsTable": {
+        "name": "Name",
+        "status": "Status",
+        "ready": "Ready",
+        "restarts": "Restarts",
+        "node": "Node",
+        "age": "Age"
+      }
+    },
+    "create": {
+      "button": "Create Namespace",
+      "title": "Create New Namespace",
+      "namePlaceholder": "Enter namespace name",
+      "nameHelp": "Lowercase, numbers, and hyphens only (max 63 chars)",
+      "nameInvalid": "Invalid name. Use lowercase letters, numbers, and hyphens only, starting and ending with an alphanumeric character.",
+      "nameTooLong": "Name must be 63 characters or less.",
+      "creating": "Creating...",
+      "submit": "Create",
+      "cancel": "Cancel",
+      "success": "Namespace '{{name}}' created successfully.",
+      "error": "Failed to create namespace.",
+      "exists": "Namespace already exists."
+    },
+    "delete": {
+      "button": "Delete Namespace",
+      "title": "Delete Namespace",
+      "confirm": "Are you sure you want to delete namespace \"{{name}}\"? This action cannot be undone and will remove all resources within the namespace.",
+      "warning": "⚠ All resources (Pods, Services, Deployments, etc.) in this namespace will be permanently deleted.",
+      "cancel": "Cancel",
+      "submit": "Delete",
+      "deleting": "Deleting...",
+      "error": "Failed to delete namespace."
     }
   },
   "adminUsers": {

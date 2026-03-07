@@ -150,6 +150,94 @@ async def describe_namespace(namespace: str):
     try:
         return await k8s_service.describe_namespace(namespace)
     except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"Namespace '{namespace}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+
+@router.get("/namespaces/{namespace}/yaml")
+async def get_namespace_yaml(namespace: str, force_refresh: bool = Query(False)):
+    """Namespace YAML 조회"""
+    try:
+        yaml_content = await k8s_service.get_resource_yaml("namespaces", namespace, namespace=None, force_refresh=force_refresh)
+        return {"yaml": yaml_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/namespaces/{namespace}/yaml/apply")
+async def apply_namespace_yaml(namespace: str, body: dict, request: Request):
+    """Namespace YAML 적용 (labels/annotations 수정)"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role not in ("admin", "write"):
+            raise HTTPException(status_code=403, detail="Forbidden: write or admin role required")
+        yaml_content = body.get("yaml") if isinstance(body, dict) else None
+        if not yaml_content:
+            raise HTTPException(status_code=400, detail="yaml is required")
+        return await k8s_service.apply_namespace_yaml(namespace, yaml_content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/resource-quotas")
+async def get_namespace_resource_quotas(namespace: str):
+    """네임스페이스의 ResourceQuota 목록"""
+    try:
+        return await k8s_service.get_namespace_resource_quotas(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/limit-ranges")
+async def get_namespace_limit_ranges(namespace: str):
+    """네임스페이스의 LimitRange 목록"""
+    try:
+        return await k8s_service.get_namespace_limit_ranges(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/owned-pods")
+async def get_namespace_pods_list(namespace: str):
+    """네임스페이스의 Pod 목록 (간소화)"""
+    try:
+        return await k8s_service.get_namespace_pods(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/namespaces")
+async def create_namespace(body: dict, request: Request):
+    """새 네임스페이스 생성"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: admin only")
+        name = body.get("name") if isinstance(body, dict) else None
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+        return await k8s_service.create_namespace(name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/namespaces/{namespace}")
+async def delete_namespace(namespace: str, request: Request):
+    """네임스페이스 삭제"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: admin only")
+        return await k8s_service.delete_namespace(namespace)
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1478,8 +1566,8 @@ async def apply_node_yaml(name: str, body: dict, request: Request):
     """Node YAML 적용"""
     try:
         role = getattr(request.state, "role", "read")
-        if role != "admin":
-            raise HTTPException(status_code=403, detail="Forbidden")
+        if role not in ("admin", "write"):
+            raise HTTPException(status_code=403, detail="Forbidden: write or admin role required")
         yaml_content = body.get("yaml") if isinstance(body, dict) else None
         if not yaml_content:
             raise HTTPException(status_code=400, detail="yaml is required")

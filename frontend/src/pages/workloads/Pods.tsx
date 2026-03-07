@@ -15,7 +15,7 @@ export default function Pods() {
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(false),
+    queryFn: () => api.getNamespaces(),
   })
 
   const { data: pods } = useQuery({
