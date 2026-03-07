@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, TopResources } from '@/services/api'
+import { api, TopResources, disableMetrics, isMetricsDisabled, isMetricsUnavailableError } from '@/services/api'
 import {
   Server,
   Box,
@@ -41,7 +41,6 @@ export default function Dashboard() {
   const [includeRestartHistory, setIncludeRestartHistory] = useState(false)
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false)
   const [storageActiveTab, setStorageActiveTab] = useState<'pvcs' | 'pvs' | 'topology'>('pvcs')
-  const [metricsAvailable, setMetricsAvailable] = useState(true)
   const [storageSearchQuery, setStorageSearchQuery] = useState<string>('')
   const [storageNamespaceFilter, setStorageNamespaceFilter] = useState<string>('all')
   const [isStorageNamespaceDropdownOpen, setIsStorageNamespaceDropdownOpen] = useState(false)
@@ -73,6 +72,7 @@ export default function Dashboard() {
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<any | null>(null)
+  const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
   const { data: overview, isLoading } = useQuery({
     queryKey: ['cluster-overview'],
@@ -173,7 +173,8 @@ export default function Dashboard() {
   const {
     data: topResources,
     isLoading: isLoadingTopResources,
-    isError: isTopResourcesError
+    isError: isTopResourcesError,
+    error: topResourcesError
   } = useQuery<TopResources>({
     queryKey: ['top-resources'],
     queryFn: async () => {
@@ -191,9 +192,12 @@ export default function Dashboard() {
       
       return result
     },
-    enabled: metricsAvailable,
+    enabled: !metricsUnavailable && !isMetricsDisabled(),
     staleTime: 5000, // 5초간 fresh 상태 유지
-    refetchInterval: 5000, // 5초마다 백그라운드 갱신
+    refetchInterval: () => {
+      if (metricsUnavailable || isMetricsDisabled()) return false
+      return 5000
+    },
     placeholderData: (previousData) => {
       // 이전 데이터가 있고 유효한 경우에만 유지
       // 에러 발생 시에도 이전 데이터를 유지하여 깜빡임 방지
@@ -205,16 +209,34 @@ export default function Dashboard() {
       }
       return undefined
     },
-    retry: 1, // 실패 시 1번만 재시도
+    retry: (failureCount, error) => {
+      if (isMetricsUnavailableError(error)) return false
+      return failureCount < 1
+    },
     retryDelay: 1000, // 1초 대기 후 재시도
     // 에러 발생 시에도 이전 데이터를 유지
     gcTime: 60000, // 캐시 유지 시간 (기본값보다 길게)
-    onError: (error: any) => {
-      if ((error as any)?.code === 'metrics_unavailable') {
-        setMetricsAvailable(false)
+    onError: (error) => {
+      if (isMetricsUnavailableError(error)) {
+        disableMetrics()
+        setMetricsUnavailable(true)
+        queryClient.cancelQueries({ queryKey: ['top-resources'] })
       }
     },
   })
+
+  useEffect(() => {
+    if (isMetricsUnavailableError(topResourcesError)) {
+      disableMetrics()
+      setMetricsUnavailable(true)
+    }
+  }, [topResourcesError])
+
+  useEffect(() => {
+    if (metricsUnavailable) {
+      queryClient.cancelQueries({ queryKey: ['top-resources'] })
+    }
+  }, [metricsUnavailable, queryClient])
 
   // 노드 목록 (모달용)
   const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
@@ -1486,7 +1508,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          ) : !metricsAvailable ? (
+          ) : metricsUnavailable ? (
             <div className="text-center py-12">
               <div className="flex flex-col items-center gap-2">
                 <AlertCircle className="w-8 h-8 text-slate-400" />
@@ -1588,7 +1610,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          ) : !metricsAvailable ? (
+          ) : metricsUnavailable ? (
             <div className="text-center py-12">
               <div className="flex flex-col items-center gap-2">
                 <AlertCircle className="w-8 h-8 text-slate-400" />

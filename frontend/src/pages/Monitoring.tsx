@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/services/api'
+import { api, disableMetrics, isMetricsDisabled, isMetricsUnavailableError } from '@/services/api'
 import { 
   Server, 
   Box,
@@ -15,25 +15,33 @@ import {
 } from 'lucide-react'
 export default function Monitoring() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<'nodes' | 'pods'>('nodes')
-  const [metricsAvailable, setMetricsAvailable] = useState(true)
+  const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
   // Node 리소스 사용량 (5초마다 자동 갱신)
   const { data: nodeMetrics, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['node-metrics'],
     queryFn: api.getNodeMetrics,
+    enabled: activeTab === 'nodes' && !metricsUnavailable && !isMetricsDisabled(),
     staleTime: 5000,
-    refetchInterval: 5000,
-    retry: 2, // 2번 재시도
+    refetchInterval: () => {
+      if (metricsUnavailable || isMetricsDisabled()) return false
+      return 5000
+    },
+    retry: (failureCount, error) => {
+      if (isMetricsUnavailableError(error)) return false
+      return failureCount < 2
+    },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
-    enabled: activeTab === 'nodes' && metricsAvailable,
-    onError: (error: any) => {
-      if ((error as any)?.code === 'metrics_unavailable') {
-        setMetricsAvailable(false)
+    onError: (error) => {
+      if (isMetricsUnavailableError(error)) {
+        disableMetrics()
+        setMetricsUnavailable(true)
       }
     },
   })
@@ -50,14 +58,21 @@ export default function Monitoring() {
     queryKey: ['pod-metrics', selectedNamespace],
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace),
     staleTime: 5000,
-    refetchInterval: 5000,
-    enabled: activeTab === 'pods' && !!selectedNamespace && metricsAvailable, // Pod 탭 + 네임스페이스 선택 시에만 활성화
-    retry: 2, // 2번 재시도 (너무 많은 재시도는 오히려 지연 증가)
+    refetchInterval: () => {
+      if (metricsUnavailable || isMetricsDisabled()) return false
+      return 5000
+    },
+    enabled: activeTab === 'pods' && !!selectedNamespace && !metricsUnavailable && !isMetricsDisabled(), // Pod 탭 + 네임스페이스 선택 시에만 활성화
+    retry: (failureCount, error) => {
+      if (isMetricsUnavailableError(error)) return false
+      return failureCount < 2
+    },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프 (최대 5초)
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
-    onError: (error: any) => {
-      if ((error as any)?.code === 'metrics_unavailable') {
-        setMetricsAvailable(false)
+    onError: (error) => {
+      if (isMetricsUnavailableError(error)) {
+        disableMetrics()
+        setMetricsUnavailable(true)
       }
     },
   })
@@ -87,6 +102,13 @@ export default function Monitoring() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isNamespaceDropdownOpen])
+
+  useEffect(() => {
+    if (metricsUnavailable) {
+      queryClient.cancelQueries({ queryKey: ['node-metrics'] })
+      queryClient.cancelQueries({ queryKey: ['pod-metrics'] })
+    }
+  }, [metricsUnavailable, queryClient])
 
   // Pod 메트릭 통계
   const podStats = podMetrics ? {
@@ -156,7 +178,7 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {!metricsAvailable && (
+      {metricsUnavailable && (
         <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
           {t('monitoring.metricsUnavailable', 'Metrics server not available for this cluster')}
         </div>
