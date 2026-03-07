@@ -4,7 +4,7 @@ Kubernetes 클러스터 리소스 API
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from typing import List, Optional, Tuple
-from app.services.k8s_service import K8sService, MetricsUnavailable
+from app.services.k8s_service import K8sService, MetricsUnavailableError
 from app.streaming import sse_event
 from app.config import settings
 from app.security import decode_access_token, extract_token_from_cookie
@@ -1289,8 +1289,13 @@ async def get_pod_metrics(namespace: Optional[str] = Query(None, description="�
     """Pod 리소스 사용량 조회 (kubectl top pods)"""
     try:
         return await k8s_service.get_pod_metrics(namespace)
-    except MetricsUnavailable as e:
-        raise HTTPException(status_code=503, detail="metrics_unavailable")
+    except MetricsUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "metrics_unavailable", "message": "metrics.k8s.io API not available"},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1300,8 +1305,13 @@ async def get_node_metrics():
     """Node 리소스 사용량 조회 (kubectl top nodes)"""
     try:
         return await k8s_service.get_node_metrics()
-    except MetricsUnavailable as e:
-        raise HTTPException(status_code=503, detail="metrics_unavailable")
+    except MetricsUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "metrics_unavailable", "message": "metrics.k8s.io API not available"},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1324,7 +1334,7 @@ async def get_top_resources(
                 print(f"[WARN] API layer: No pod metrics retrieved.")
                 pod_metrics = None
                 pod_metrics_error = True
-        except MetricsUnavailable:
+        except MetricsUnavailableError:
             pod_metrics = None
             pod_metrics_error = True
         except Exception as e:
@@ -1340,7 +1350,7 @@ async def get_top_resources(
                 print(f"[WARN] API layer: No node metrics retrieved.")
                 node_metrics = None
                 node_metrics_error = True
-        except MetricsUnavailable:
+        except MetricsUnavailableError:
             node_metrics = None
             node_metrics_error = True
         except Exception as e:
@@ -1350,7 +1360,10 @@ async def get_top_resources(
         
         # 둘 다 실패한 경우에만 에러 반환
         if pod_metrics is None and node_metrics is None:
-            raise HTTPException(status_code=503, detail="metrics_unavailable")
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "metrics_unavailable", "message": "metrics.k8s.io API not available"},
+            )
         
         # 실패한 부분은 빈 배열로 처리 (프론트엔드에서 이전 데이터 유지하도록)
         if pod_metrics is None:
@@ -1414,6 +1427,8 @@ async def get_top_resources(
             "pod_error": pod_metrics_error,
             "node_error": node_metrics_error
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

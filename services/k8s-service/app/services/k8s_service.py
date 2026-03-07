@@ -32,15 +32,6 @@ YAML_CACHE_TTL = 10          # seconds
 DRAIN_STATUS_TTL = 600       # seconds
 
 
-class MetricsUnavailable(Exception):
-    """Raised when metrics.k8s.io API is not available in the cluster."""
-    pass
-
-
-def _is_metrics_api_missing(exc: ApiException) -> bool:
-    return getattr(exc, "status", None) in (403, 404)
-
-
 class K8sService:
     """Kubernetes 클러스터 서비스"""
     
@@ -3299,17 +3290,16 @@ class K8sService:
                 
                 print(f"[DEBUG] Pod metrics result count: {len(result)}")
                 
-                # 전체 네임스페이스 조회 시 결과가 없으면(빈 배열) 에러로 처리
-                # (K8s Metrics Server가 일시적으로 데이터를 못 가져오는 경우 등)
+                # 전체 네임스페이스 조회 시 결과가 없으면 metrics API 미사용으로 판단
                 if not namespace and not result:
-                    print(f"[WARN] No pod metrics found for all namespaces. Treating as error to preserve stale data.")
-                    raise Exception("No pod metrics found (empty list returned from K8s API)")
+                    print("[WARN] No pod metrics found for all namespaces. Treating as metrics unavailable.")
+                    raise MetricsUnavailableError("metrics.k8s.io API not available")
 
                 return result
                 
             except ApiException as e:
-                if _is_metrics_api_missing(e):
-                    raise MetricsUnavailable("metrics.k8s.io is not available") from e
+                if self._is_metrics_unavailable(e):
+                    raise MetricsUnavailableError("metrics.k8s.io API not available") from e
                 print(f"[ERROR] Failed to get pod metrics (attempt {attempt}/{max_retries}): {e.status} - {e.reason}")
                 if attempt < max_retries:
                     print(f"[INFO] Retrying in {retry_delay}s...")
@@ -3396,9 +3386,24 @@ class K8sService:
             
             return result
         except ApiException as e:
-            if _is_metrics_api_missing(e):
-                raise MetricsUnavailable("metrics.k8s.io is not available") from e
+            if self._is_metrics_unavailable(e):
+                raise MetricsUnavailableError("metrics.k8s.io API not available") from e
             raise Exception(f"Failed to get node metrics: {e}")
+
+    @staticmethod
+    def _is_metrics_unavailable(exc: ApiException) -> bool:
+        status = getattr(exc, "status", None)
+        if status in (403, 404):
+            return True
+        body = str(getattr(exc, "body", "") or "")
+        reason = str(getattr(exc, "reason", "") or "")
+        indicators = [
+            "metrics.k8s.io",
+            "the server could not find the requested resource",
+            "NotFound",
+            "Forbidden",
+        ]
+        return any(indicator in body or indicator in reason for indicator in indicators)
 
     async def get_component_statuses(self) -> List[Dict]:
         """컴포넌트 상태 조회"""
@@ -3408,3 +3413,8 @@ class K8sService:
             return []
         except Exception as e:
             raise Exception(f"Failed to get component statuses: {str(e)}")
+
+
+class MetricsUnavailableError(Exception):
+    """Raised when metrics.k8s.io API is not available in the cluster."""
+    pass
