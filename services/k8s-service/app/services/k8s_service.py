@@ -1510,6 +1510,13 @@ class K8sService:
                 "details": response.to_dict() if hasattr(response, "to_dict") else response,
             }
         except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": pod_name,
+                    "namespace": namespace,
+                    "force": force,
+                }
             raise Exception(f"Failed to delete pod: {e}")
 
     def iter_pod_watch_events(
