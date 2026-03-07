@@ -453,6 +453,19 @@ class DatabaseService:
             await db.commit()
             return True
 
+    async def update_cluster_connection_name(self, connection_id: str, name: str) -> Optional[ClusterConnection]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            row = (await db.execute(select(ClusterConnection).where(ClusterConnection.id == connection_id))).scalar_one_or_none()
+            if not row:
+                return None
+            row.name = name
+            row.updated_at = datetime.utcnow()
+            await db.commit()
+            await db.refresh(row)
+            return row
+
     async def get_cluster_active(self) -> Optional[ClusterActive]:
         async with self.async_session() as db:
             from sqlalchemy import select

@@ -98,6 +98,10 @@ class ClusterConnectionRequest(BaseModel):
     kubeconfig: Optional[str] = None
 
 
+class ClusterConnectionUpdateRequest(BaseModel):
+    name: str
+
+
 class ClusterConnectionResponse(BaseModel):
     id: str
     name: str
@@ -412,6 +416,35 @@ async def activate_cluster_connection(
 
     await db.set_cluster_active(connection_id)
     return {"success": True, "active_id": connection_id}
+
+
+@router.patch("/cluster-connections/{connection_id}", response_model=ClusterConnectionResponse)
+async def update_cluster_connection(
+    connection_id: str,
+    request: ClusterConnectionUpdateRequest,
+    payload: TokenPayload = Depends(require_auth),
+):
+    _require_admin(payload)
+    name = (request.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required.")
+
+    db = await get_db_service()
+    row = await db.update_cluster_connection_name(connection_id, name)
+    if not row:
+        raise HTTPException(status_code=404, detail="Cluster connection not found.")
+
+    active = await db.get_cluster_active()
+    active_id = active.active_id if active else None
+    return ClusterConnectionResponse(
+        id=row.id,
+        name=row.name,
+        mode=row.mode,
+        secret_name=row.secret_name,
+        is_active=row.id == active_id,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
 
 
 @router.delete("/cluster-connections/{connection_id}")
