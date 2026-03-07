@@ -908,12 +908,14 @@
     "submit": "Continue",
     "submit.loading": "Applying...",
     "applying": {
-      "title": "Applying cluster configuration",
-      "subtitle": "Waiting for the cluster to become available..."
+      "title": "Applying cluster setup",
+      "subtitle": "Waiting for cluster connection...",
+      "waiting": "Waiting for cluster connection...",
+      "retry": "Retrying connection..."
     },
     "errors": {
       "failed": "Failed to apply setup.",
-      "timeout": "Setup applied but cluster is still starting. Please try again."
+      "timeout": "Cluster connection timed out. Please check the kubeconfig and try again."
     }
   }
 }

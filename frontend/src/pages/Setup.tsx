@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, Database, UploadCloud } from 'lucide-react'
+import { CheckCircle2, Database, Loader2, UploadCloud } from 'lucide-react'
 
 type SetupMode = 'in_cluster' | 'external'
 
@@ -17,6 +17,7 @@ export default function Setup() {
   const [kubeconfigText, setKubeconfigText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isApplying, setIsApplying] = useState(false)
+  const [applyMessage, setApplyMessage] = useState<string | null>(null)
 
   const { data: status, isLoading: isLoadingStatus } = useQuery({
     queryKey: ['setup-status'],
@@ -29,34 +30,15 @@ export default function Setup() {
     }
   }, [status, navigate, isApplying])
 
-  const waitForHealth = async (timeoutMs: number = 60000, intervalMs: number = 2000) => {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      try {
-        await api.getHealth()
-        return true
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, intervalMs))
-      }
-    }
-    return false
-  }
-
   const submitMutation = useMutation({
     mutationFn: () =>
       api.submitSetup({
         mode,
         kubeconfig: mode === 'external' ? kubeconfigText.trim() : undefined,
       }),
-    onSuccess: async () => {
+    onSuccess: () => {
+      setApplyMessage(null)
       setIsApplying(true)
-      const ok = await waitForHealth()
-      if (ok) {
-        navigate('/login', { replace: true })
-        return
-      }
-      setError(tr('setup.errors.timeout', 'Setup applied but cluster is still starting. Please try again.'))
-      setIsApplying(false)
     },
     onError: (err: any) => {
       setError(err?.response?.data?.detail || tr('setup.errors.failed', 'Failed to apply setup.'))
@@ -88,6 +70,62 @@ export default function Setup() {
     submitMutation.mutate()
   }
 
+  useEffect(() => {
+    if (!isApplying) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const startedAt = Date.now()
+    const timeoutMs = 60_000
+    const intervalMs = 2000
+
+    const pollHealth = async () => {
+      try {
+        const health = await api.getHealth()
+        const kubeStatus = String(health?.kubernetes || '')
+        if (health?.status === 'healthy' && kubeStatus === 'connected') {
+          if (!cancelled) {
+            setIsApplying(false)
+            navigate('/login', { replace: true })
+          }
+          return
+        }
+
+        if (!cancelled) {
+          setApplyMessage(
+            kubeStatus && kubeStatus !== 'connected'
+              ? kubeStatus
+              : tr('setup.applying.waiting', 'Waiting for cluster connection...')
+          )
+        }
+      } catch {
+        if (!cancelled) {
+          setApplyMessage(tr('setup.applying.retry', 'Retrying connection...'))
+        }
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        if (!cancelled) {
+          setIsApplying(false)
+          setError(
+            tr(
+              'setup.errors.timeout',
+              'Cluster connection timed out. Please check the kubeconfig and try again.'
+            )
+          )
+        }
+        return
+      }
+
+      timer = setTimeout(pollHealth, intervalMs)
+    }
+
+    pollHealth()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [isApplying, navigate, tr])
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0">
@@ -96,17 +134,6 @@ export default function Setup() {
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-[min(92vw,1200px)] items-center px-6 py-12">
-        {isApplying && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-8 py-6 text-center shadow-xl backdrop-blur">
-              <div className="mx-auto mb-4 h-10 w-10 rounded-full border-2 border-primary-500 border-t-transparent animate-spin" />
-              <h2 className="text-lg font-semibold">{tr('setup.applying.title', 'Applying cluster configuration')}</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                {tr('setup.applying.subtitle', 'Waiting for the cluster to become available...')}
-              </p>
-            </div>
-          </div>
-        )}
         <div className={`mx-auto w-full max-w-3xl space-y-8 ${isApplying ? 'pointer-events-none opacity-60' : ''}`}>
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs text-slate-300">
@@ -203,6 +230,20 @@ export default function Setup() {
           </div>
         </div>
       </div>
+
+      {isApplying && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80">
+          <div className="w-[min(90vw,420px)] rounded-2xl border border-slate-800 bg-slate-900/80 px-6 py-5 text-center shadow-xl">
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary-400" />
+            <div className="mt-3 text-sm font-semibold text-slate-100">
+              {tr('setup.applying.title', 'Applying cluster setup')}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              {applyMessage ?? tr('setup.applying.subtitle', 'Waiting for cluster connection...')}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
