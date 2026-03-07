@@ -9,7 +9,13 @@ import yaml
 
 from app.database import get_db_service
 from app.security import create_access_token, hash_password, jwks, require_auth, TokenPayload, verify_password
-from app.k8s_setup import upsert_kubeconfig_secret, patch_configmap, restart_deployment
+from app.k8s_setup import (
+    upsert_kubeconfig_secret,
+    patch_configmap,
+    restart_deployment,
+    get_kubeconfig_from_secret,
+    delete_secret,
+)
 from app.config import settings
 
 router = APIRouter()
@@ -84,6 +90,22 @@ class ClusterSetupStatus(BaseModel):
 class ClusterSetupRequest(BaseModel):
     mode: str  # in_cluster | external
     kubeconfig: Optional[str] = None
+
+
+class ClusterConnectionRequest(BaseModel):
+    name: str
+    mode: str  # in_cluster | external
+    kubeconfig: Optional[str] = None
+
+
+class ClusterConnectionResponse(BaseModel):
+    id: str
+    name: str
+    mode: str
+    secret_name: Optional[str] = None
+    is_active: bool = False
+    created_at: datetime
+    updated_at: datetime
 
 
 @router.get("/jwks.json")
@@ -242,6 +264,180 @@ async def setup_cluster(request: ClusterSetupRequest):
 
     setup = await db.set_cluster_setup(mode=mode, secret_name=settings.SETUP_KUBECONFIG_SECRET)
     return ClusterSetupStatus(configured=True, mode=setup.mode, secret_name=setup.secret_name)
+
+
+@router.get("/cluster-connections", response_model=list[ClusterConnectionResponse])
+async def list_cluster_connections(payload: TokenPayload = Depends(require_auth)):
+    _require_admin(payload)
+    db = await get_db_service()
+    rows = await db.list_cluster_connections()
+    if not rows:
+        setup = await db.get_cluster_setup()
+        if setup:
+            connection_id = str(uuid.uuid4())
+            row = await db.create_cluster_connection(
+                connection_id=connection_id,
+                name="Default cluster",
+                mode=setup.mode,
+                secret_name=setup.secret_name,
+            )
+            await db.set_cluster_active(connection_id)
+            rows = [row]
+    active = await db.get_cluster_active()
+    active_id = active.active_id if active else None
+    return [
+        ClusterConnectionResponse(
+            id=row.id,
+            name=row.name,
+            mode=row.mode,
+            secret_name=row.secret_name,
+            is_active=row.id == active_id,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/cluster-connections", response_model=ClusterConnectionResponse)
+async def create_cluster_connection(
+    request: ClusterConnectionRequest,
+    payload: TokenPayload = Depends(require_auth),
+):
+    _require_admin(payload)
+    name = (request.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required.")
+
+    mode = (request.mode or "").strip().lower()
+    if mode not in {"in_cluster", "external"}:
+        raise HTTPException(status_code=400, detail="Invalid mode. Use in_cluster or external.")
+
+    kubeconfig_text = (request.kubeconfig or "").strip()
+    if mode == "external":
+        if not kubeconfig_text:
+            raise HTTPException(status_code=400, detail="kubeconfig is required for external mode.")
+        try:
+            data = yaml.safe_load(kubeconfig_text) or {}
+            if not data.get("clusters") or not data.get("users"):
+                raise ValueError("missing clusters/users")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid kubeconfig format.")
+    else:
+        kubeconfig_text = ""
+
+    connection_id = str(uuid.uuid4())
+    secret_name = None
+    if mode == "external":
+        secret_name = f"{settings.SETUP_KUBECONFIG_PREFIX}{connection_id}"
+        try:
+            upsert_kubeconfig_secret(
+                namespace=settings.SETUP_NAMESPACE,
+                name=secret_name,
+                kubeconfig_text=kubeconfig_text,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save kubeconfig: {e}")
+
+    db = await get_db_service()
+    row = await db.create_cluster_connection(
+        connection_id=connection_id,
+        name=name,
+        mode=mode,
+        secret_name=secret_name,
+    )
+    return ClusterConnectionResponse(
+        id=row.id,
+        name=row.name,
+        mode=row.mode,
+        secret_name=row.secret_name,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@router.patch("/cluster-connections/{connection_id}/activate")
+async def activate_cluster_connection(
+    connection_id: str,
+    payload: TokenPayload = Depends(require_auth),
+):
+    _require_admin(payload)
+    db = await get_db_service()
+    row = await db.get_cluster_connection(connection_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Cluster connection not found.")
+
+    try:
+        if row.mode == "in_cluster":
+            patch_configmap(
+                namespace=settings.SETUP_NAMESPACE,
+                name=settings.SETUP_CONFIGMAP_NAME,
+                data={
+                    "IN_CLUSTER": "true",
+                    "KUBECONFIG_PATH": "/app/kubeconfig.yaml",
+                },
+            )
+        else:
+            if not row.secret_name:
+                raise HTTPException(status_code=400, detail="Missing kubeconfig secret.")
+            kubeconfig_text = get_kubeconfig_from_secret(
+                namespace=settings.SETUP_NAMESPACE,
+                name=row.secret_name,
+            )
+            if not kubeconfig_text:
+                raise HTTPException(status_code=400, detail="kubeconfig secret is empty.")
+
+            upsert_kubeconfig_secret(
+                namespace=settings.SETUP_NAMESPACE,
+                name=settings.SETUP_KUBECONFIG_SECRET,
+                kubeconfig_text=kubeconfig_text,
+            )
+            patch_configmap(
+                namespace=settings.SETUP_NAMESPACE,
+                name=settings.SETUP_CONFIGMAP_NAME,
+                data={
+                    "IN_CLUSTER": "false",
+                    "KUBECONFIG_PATH": "/app/kubeconfig.yaml",
+                },
+            )
+
+        restart_deployment(
+            namespace=settings.SETUP_NAMESPACE,
+            name=settings.SETUP_RESTART_DEPLOYMENT,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to activate cluster: {e}")
+
+    await db.set_cluster_active(connection_id)
+    return {"success": True, "active_id": connection_id}
+
+
+@router.delete("/cluster-connections/{connection_id}")
+async def delete_cluster_connection(
+    connection_id: str,
+    payload: TokenPayload = Depends(require_auth),
+):
+    _require_admin(payload)
+    db = await get_db_service()
+    active = await db.get_cluster_active()
+    if active and active.active_id == connection_id:
+        raise HTTPException(status_code=400, detail="Cannot delete the active cluster connection.")
+    row = await db.get_cluster_connection(connection_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Cluster connection not found.")
+
+    if row.secret_name and row.secret_name.startswith(settings.SETUP_KUBECONFIG_PREFIX):
+        try:
+            delete_secret(namespace=settings.SETUP_NAMESPACE, name=row.secret_name)
+        except Exception:
+            pass
+
+    deleted = await db.delete_cluster_connection(connection_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Cluster connection not found.")
+    return {"success": True}
 
 
 @router.get("/me", response_model=UserResponse)
