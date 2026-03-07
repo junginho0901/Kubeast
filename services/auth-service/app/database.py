@@ -58,6 +58,26 @@ class ClusterSetup(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ClusterConnection(Base):
+    __tablename__ = "cluster_connections"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    mode = Column(String, nullable=False)  # in_cluster | external
+    secret_name = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ClusterActive(Base):
+    __tablename__ = "cluster_active"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    active_id = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class DatabaseService:
     def __init__(self, database_url: str = None):
         import os
@@ -383,6 +403,76 @@ class DatabaseService:
                 return existing
 
             row = ClusterSetup(mode=mode, secret_name=secret_name)
+            db.add(row)
+            await db.commit()
+            await db.refresh(row)
+            return row
+
+    async def list_cluster_connections(self) -> List[ClusterConnection]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(ClusterConnection).order_by(ClusterConnection.created_at.asc()))
+            return list(result.scalars().all())
+
+    async def get_cluster_connection(self, connection_id: str) -> Optional[ClusterConnection]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(ClusterConnection).where(ClusterConnection.id == connection_id))
+            return result.scalar_one_or_none()
+
+    async def create_cluster_connection(
+        self,
+        *,
+        connection_id: str,
+        name: str,
+        mode: str,
+        secret_name: Optional[str],
+    ) -> ClusterConnection:
+        async with self.async_session() as db:
+            row = ClusterConnection(
+                id=connection_id,
+                name=name,
+                mode=mode,
+                secret_name=secret_name,
+            )
+            db.add(row)
+            await db.commit()
+            await db.refresh(row)
+            return row
+
+    async def delete_cluster_connection(self, connection_id: str) -> bool:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            row = (await db.execute(select(ClusterConnection).where(ClusterConnection.id == connection_id))).scalar_one_or_none()
+            if not row:
+                return False
+            await db.delete(row)
+            await db.commit()
+            return True
+
+    async def get_cluster_active(self) -> Optional[ClusterActive]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(ClusterActive).order_by(ClusterActive.id.asc()).limit(1))
+            return result.scalar_one_or_none()
+
+    async def set_cluster_active(self, connection_id: str) -> ClusterActive:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            existing = (await db.execute(select(ClusterActive).order_by(ClusterActive.id.asc()).limit(1))).scalar_one_or_none()
+            if existing:
+                existing.active_id = connection_id
+                existing.updated_at = datetime.utcnow()
+                await db.commit()
+                await db.refresh(existing)
+                return existing
+
+            row = ClusterActive(active_id=connection_id)
             db.add(row)
             await db.commit()
             await db.refresh(row)
