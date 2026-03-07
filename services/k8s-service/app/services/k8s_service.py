@@ -909,6 +909,38 @@ class K8sService:
         except ApiException as e:
             raise Exception(f"Failed to get limit ranges for namespace {name}: {e}")
 
+    async def get_namespace_pods(self, name: str) -> List[Dict[str, Any]]:
+        """네임스페이스의 Pod 목록 조회 (간소화)"""
+        try:
+            pods = self.v1.list_namespaced_pod(namespace=name)
+            result = []
+            for pod in (pods.items or []):
+                # 컨테이너 상태 집계
+                ready_count = 0
+                total_count = 0
+                restarts = 0
+                if getattr(pod, "status", None) and getattr(pod.status, "container_statuses", None):
+                    for cs in pod.status.container_statuses:
+                        total_count += 1
+                        if getattr(cs, "ready", False):
+                            ready_count += 1
+                        restarts += getattr(cs, "restart_count", 0) or 0
+                elif getattr(pod, "spec", None) and getattr(pod.spec, "containers", None):
+                    total_count = len(pod.spec.containers)
+
+                result.append({
+                    "name": pod.metadata.name,
+                    "namespace": pod.metadata.namespace,
+                    "status": pod.status.phase if getattr(pod, "status", None) and getattr(pod.status, "phase", None) else "Unknown",
+                    "ready": f"{ready_count}/{total_count}",
+                    "restarts": restarts,
+                    "node": getattr(pod.spec, "node_name", None) if getattr(pod, "spec", None) else None,
+                    "created_at": pod.metadata.creation_timestamp.isoformat() if getattr(pod.metadata, "creation_timestamp", None) and hasattr(pod.metadata.creation_timestamp, "isoformat") else str(pod.metadata.creation_timestamp) if getattr(pod.metadata, "creation_timestamp", None) else None,
+                })
+            return result
+        except ApiException as e:
+            raise Exception(f"Failed to get pods for namespace {name}: {e}")
+
     async def get_services(self, namespace: str) -> List[ServiceInfo]:
         """서비스 목록"""
         try:
