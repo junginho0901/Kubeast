@@ -1,4 +1,5 @@
 from datetime import datetime
+import base64
 from typing import Optional, Tuple
 
 from kubernetes import client, config
@@ -37,6 +38,27 @@ def upsert_kubeconfig_secret(
         if e.status == 404:
             v1.create_namespaced_secret(namespace=namespace, body=body)
         else:
+            raise
+
+
+def get_kubeconfig_from_secret(*, namespace: str, name: str) -> str:
+    v1, _ = _get_clients()
+    secret = v1.read_namespaced_secret(name=name, namespace=namespace)
+    data = getattr(secret, "data", None) or {}
+    raw = data.get("kubeconfig.yaml")
+    if not raw:
+        return ""
+    if isinstance(raw, str):
+        return base64.b64decode(raw).decode("utf-8")
+    return base64.b64decode(raw).decode("utf-8")
+
+
+def delete_secret(*, namespace: str, name: str) -> None:
+    v1, _ = _get_clients()
+    try:
+        v1.delete_namespaced_secret(name=name, namespace=namespace)
+    except ApiException as e:
+        if e.status != 404:
             raise
 
 
