@@ -31,6 +31,12 @@ client.interceptors.response.use(
   }
 )
 
+const isMetricsUnavailableResponse = (error: any) => {
+  const status = error?.response?.status
+  const detail = error?.response?.data?.detail
+  return status === 503 && detail === 'metrics_unavailable'
+}
+
 // Types
 export interface ClusterOverview {
   total_namespaces: number
@@ -992,11 +998,20 @@ export const api = {
   },
 
   getNodeMetrics: async (): Promise<any[]> => {
-    const { data } = await client.get('/cluster/metrics/nodes', {
-      // 메트릭 수집은 최대 수 초 이상 걸릴 수 있으므로 일반 API보다 여유 있게 설정
-      timeout: 20000,
-    })
-    return data
+    try {
+      const { data } = await client.get('/cluster/metrics/nodes', {
+        // 메트릭 수집은 최대 수 초 이상 걸릴 수 있으므로 일반 API보다 여유 있게 설정
+        timeout: 20000,
+      })
+      return data
+    } catch (error: any) {
+      if (isMetricsUnavailableResponse(error)) {
+        const err = new Error('metrics_unavailable')
+        ;(err as any).code = 'metrics_unavailable'
+        throw err
+      }
+      throw error
+    }
   },
 
   getNodePods: async (name: string): Promise<PodInfo[]> => {
@@ -1047,18 +1062,36 @@ export const api = {
   },
 
   getPodMetrics: async (namespace?: string): Promise<any[]> => {
-    const { data } = await client.get('/cluster/metrics/pods', {
-      params: { namespace },
-      timeout: 20000,
-    })
-    return data
+    try {
+      const { data } = await client.get('/cluster/metrics/pods', {
+        params: { namespace },
+        timeout: 20000,
+      })
+      return data
+    } catch (error: any) {
+      if (isMetricsUnavailableResponse(error)) {
+        const err = new Error('metrics_unavailable')
+        ;(err as any).code = 'metrics_unavailable'
+        throw err
+      }
+      throw error
+    }
   },
 
   getTopResources: async (podLimit: number = 5, nodeLimit: number = 3): Promise<TopResources> => {
-    const { data } = await client.get('/cluster/metrics/top-resources', {
-      params: { pod_limit: podLimit, node_limit: nodeLimit },
-    })
-    return data
+    try {
+      const { data } = await client.get('/cluster/metrics/top-resources', {
+        params: { pod_limit: podLimit, node_limit: nodeLimit },
+      })
+      return data
+    } catch (error: any) {
+      if (isMetricsUnavailableResponse(error)) {
+        const err = new Error('metrics_unavailable')
+        ;(err as any).code = 'metrics_unavailable'
+        throw err
+      }
+      throw error
+    }
   },
 
   // Cluster Setup

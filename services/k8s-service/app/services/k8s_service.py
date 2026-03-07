@@ -32,6 +32,15 @@ YAML_CACHE_TTL = 10          # seconds
 DRAIN_STATUS_TTL = 600       # seconds
 
 
+class MetricsUnavailable(Exception):
+    """Raised when metrics.k8s.io API is not available in the cluster."""
+    pass
+
+
+def _is_metrics_api_missing(exc: ApiException) -> bool:
+    return getattr(exc, "status", None) in (403, 404)
+
+
 class K8sService:
     """Kubernetes 클러스터 서비스"""
     
@@ -3299,6 +3308,8 @@ class K8sService:
                 return result
                 
             except ApiException as e:
+                if _is_metrics_api_missing(e):
+                    raise MetricsUnavailable("metrics.k8s.io is not available") from e
                 print(f"[ERROR] Failed to get pod metrics (attempt {attempt}/{max_retries}): {e.status} - {e.reason}")
                 if attempt < max_retries:
                     print(f"[INFO] Retrying in {retry_delay}s...")
@@ -3385,6 +3396,8 @@ class K8sService:
             
             return result
         except ApiException as e:
+            if _is_metrics_api_missing(e):
+                raise MetricsUnavailable("metrics.k8s.io is not available") from e
             raise Exception(f"Failed to get node metrics: {e}")
 
     async def get_component_statuses(self) -> List[Dict]:

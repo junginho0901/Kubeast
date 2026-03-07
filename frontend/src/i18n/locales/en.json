@@ -101,7 +101,8 @@
       "title": "Top nodes by resource usage",
       "loading": "Loading metrics...",
       "error": "Metrics unavailable",
-      "empty": "No metrics available"
+      "empty": "No metrics available",
+      "unavailable": "Metrics server not available for this cluster"
     },
     "table": {
       "name": "Name",
@@ -283,6 +284,7 @@
   "monitoring": {
     "title": "Resource Monitoring",
     "subtitle": "Monitor real-time resource usage for nodes and pods.",
+    "metricsUnavailable": "Metrics server not available for this cluster",
     "tabs": {
       "nodes": "Node resources",
       "pods": "Pod resources"
@@ -422,6 +424,9 @@
     "topResources": {
       "error": "Failed to fetch data",
       "empty": "No resource usage data"
+    },
+    "metrics": {
+      "unavailable": "Metrics server not available for this cluster"
     },
     "cpu": "CPU",
     "memory": "Memory",

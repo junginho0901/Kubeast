@@ -92,6 +92,7 @@ export default function ClusterNodes() {
   const [drainError, setDrainError] = useState<string | null>(null)
   const [podFilter, setPodFilter] = useState('')
   const [podPage, setPodPage] = useState(1)
+  const [metricsAvailable, setMetricsAvailable] = useState(true)
   const [sortKey, setSortKey] = useState<null | 'name' | 'status' | 'roles' | 'cpu' | 'memory' | 'version' | 'internal_ip' | 'external_ip' | 'age'>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [isYamlDirty, setIsYamlDirty] = useState(false)
@@ -143,6 +144,12 @@ export default function ClusterNodes() {
   const { data: metrics, isLoading: isLoadingMetrics, isError: isMetricsError } = useQuery({
     queryKey: ['cluster', 'node-metrics'],
     queryFn: () => api.getNodeMetrics(),
+    enabled: metricsAvailable,
+    onError: (error: any) => {
+      if ((error as any)?.code === 'metrics_unavailable') {
+        setMetricsAvailable(false)
+      }
+    },
   })
 
   const { data: me } = useQuery({
@@ -663,10 +670,15 @@ export default function ClusterNodes() {
     if (isRefreshing) return
     setIsRefreshing(true)
     try {
-      const [nodesData, metricsData] = await Promise.all([api.getNodes(true), api.getNodeMetrics()])
+      const [nodesData, metricsData] = await Promise.all([
+        api.getNodes(true),
+        metricsAvailable ? api.getNodeMetrics() : Promise.resolve([]),
+      ])
       queryClient.removeQueries({ queryKey: ['cluster', 'nodes'] })
       queryClient.setQueryData(['cluster', 'nodes'], nodesData)
-      queryClient.setQueryData(['cluster', 'node-metrics'], metricsData)
+      if (metricsAvailable) {
+        queryClient.setQueryData(['cluster', 'node-metrics'], metricsData)
+      }
     } catch (error) {
       console.error('Nodes refresh failed:', error)
     }
@@ -709,7 +721,9 @@ export default function ClusterNodes() {
           </h2>
           <Server className="w-4 h-4 text-slate-400" />
         </div>
-        {isLoadingMetrics ? (
+        {!metricsAvailable ? (
+          <p className="text-sm text-slate-400">{tr('nodes.top.unavailable', 'Metrics server not available for this cluster')}</p>
+        ) : isLoadingMetrics ? (
           <p className="text-sm text-slate-400">{tr('nodes.top.loading', 'Loading metrics...')}</p>
         ) : isMetricsError ? (
           <p className="text-sm text-slate-400">{tr('nodes.top.error', 'Metrics unavailable')}</p>

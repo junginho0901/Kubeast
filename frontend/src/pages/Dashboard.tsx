@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [includeRestartHistory, setIncludeRestartHistory] = useState(false)
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false)
   const [storageActiveTab, setStorageActiveTab] = useState<'pvcs' | 'pvs' | 'topology'>('pvcs')
+  const [metricsAvailable, setMetricsAvailable] = useState(true)
   const [storageSearchQuery, setStorageSearchQuery] = useState<string>('')
   const [storageNamespaceFilter, setStorageNamespaceFilter] = useState<string>('all')
   const [isStorageNamespaceDropdownOpen, setIsStorageNamespaceDropdownOpen] = useState(false)
@@ -190,6 +191,7 @@ export default function Dashboard() {
       
       return result
     },
+    enabled: metricsAvailable,
     staleTime: 5000, // 5초간 fresh 상태 유지
     refetchInterval: 5000, // 5초마다 백그라운드 갱신
     placeholderData: (previousData) => {
@@ -207,6 +209,11 @@ export default function Dashboard() {
     retryDelay: 1000, // 1초 대기 후 재시도
     // 에러 발생 시에도 이전 데이터를 유지
     gcTime: 60000, // 캐시 유지 시간 (기본값보다 길게)
+    onError: (error: any) => {
+      if ((error as any)?.code === 'metrics_unavailable') {
+        setMetricsAvailable(false)
+      }
+    },
   })
 
   // 노드 목록 (모달용)
@@ -1479,6 +1486,13 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          ) : !metricsAvailable ? (
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <AlertCircle className="w-8 h-8 text-slate-400" />
+                <p className="text-slate-400">{tr('dashboard.metrics.unavailable', 'Metrics server not available for this cluster')}</p>
+              </div>
+            </div>
           ) : isTopResourcesError && !topResources?.top_pods ? (
             // 에러 상태: 이전 데이터가 없을 때만 에러 표시
             <div className="text-center py-12">
@@ -1573,6 +1587,13 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : !metricsAvailable ? (
+            <div className="text-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <AlertCircle className="w-8 h-8 text-slate-400" />
+                <p className="text-slate-400">{tr('dashboard.metrics.unavailable', 'Metrics server not available for this cluster')}</p>
+              </div>
             </div>
           ) : isTopResourcesError && !topResources?.top_nodes ? (
             // 에러 상태: 이전 데이터가 없을 때만 에러 표시

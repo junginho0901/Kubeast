@@ -19,6 +19,7 @@ export default function Monitoring() {
   const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<'nodes' | 'pods'>('nodes')
+  const [metricsAvailable, setMetricsAvailable] = useState(true)
 
   // Node 리소스 사용량 (5초마다 자동 갱신)
   const { data: nodeMetrics, isLoading: isLoadingNodes } = useQuery({
@@ -29,7 +30,12 @@ export default function Monitoring() {
     retry: 2, // 2번 재시도
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
-    enabled: activeTab === 'nodes',
+    enabled: activeTab === 'nodes' && metricsAvailable,
+    onError: (error: any) => {
+      if ((error as any)?.code === 'metrics_unavailable') {
+        setMetricsAvailable(false)
+      }
+    },
   })
 
   // 네임스페이스 목록
@@ -45,10 +51,15 @@ export default function Monitoring() {
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace),
     staleTime: 5000,
     refetchInterval: 5000,
-    enabled: activeTab === 'pods' && !!selectedNamespace, // Pod 탭 + 네임스페이스 선택 시에만 활성화
+    enabled: activeTab === 'pods' && !!selectedNamespace && metricsAvailable, // Pod 탭 + 네임스페이스 선택 시에만 활성화
     retry: 2, // 2번 재시도 (너무 많은 재시도는 오히려 지연 증가)
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프 (최대 5초)
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
+    onError: (error: any) => {
+      if ((error as any)?.code === 'metrics_unavailable') {
+        setMetricsAvailable(false)
+      }
+    },
   })
 
   // Pod 상세 정보 (Limit/Request 포함) - 네임스페이스 선택 시에만 활성화
@@ -144,6 +155,12 @@ export default function Monitoring() {
           </div>
         </div>
       </div>
+
+      {!metricsAvailable && (
+        <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
+          {t('monitoring.metricsUnavailable', 'Metrics server not available for this cluster')}
+        </div>
+      )}
 
       {/* Node 리소스 사용량 */}
       {activeTab === 'nodes' && (
