@@ -23,8 +23,8 @@ data:
   REDIS_DB: "0"
   K8S_SERVICE_URL: http://k8s-service:8002
   SESSION_SERVICE_URL: http://session-service:8003
-  IN_CLUSTER: "false"
-  KUBECONFIG_PATH: /app/kubeconfig
+  IN_CLUSTER: "true"
+  KUBECONFIG_PATH: /app/kubeconfig.yaml
   ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8000
   VITE_API_URL: http://localhost:8000
   VITE_WS_URL: ws://localhost:30080
@@ -470,19 +470,15 @@ spec:
                 name: kube-assistant-config
             - secretRef:
                 name: kube-assistant-secrets
-          env:
-            - name: IN_CLUSTER
-              value: "false"
-            - name: KUBECONFIG_PATH
-              value: /app/kubeconfig
           volumeMounts:
             - name: kubeconfig
-              mountPath: /app/kubeconfig
-              subPath: kubeconfig
+              mountPath: /app/kubeconfig.yaml
+              subPath: kubeconfig.yaml
       volumes:
         - name: kubeconfig
           secret:
-            secretName: kubeconfig-secret
+            secretName: k8s-kubeconfig
+            optional: true
 ---
 apiVersion: v1
 kind: Service
