@@ -799,12 +799,14 @@
       "active": "활성",
       "activate": "전환",
       "activating": "전환 중...",
+      "renameSaving": "저장 중...",
       "mode": {
         "incluster": "현재 클러스터",
         "external": "외부 클러스터"
       },
       "errors": {
-        "failed": "클러스터 저장에 실패했습니다."
+        "failed": "클러스터 저장에 실패했습니다.",
+        "rename": "클러스터 이름 변경에 실패했습니다."
       },
       "modal": {
         "title": "클러스터 추가",

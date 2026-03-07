@@ -1089,6 +1089,11 @@ export const api = {
     return data
   },
 
+  updateClusterConnection: async (id: string, payload: { name: string }) => {
+    const { data } = await client.patch(`/auth/cluster-connections/${id}`, payload)
+    return data
+  },
+
   deleteClusterConnection: async (id: string) => {
     const { data } = await client.delete(`/auth/cluster-connections/${id}`)
     return data

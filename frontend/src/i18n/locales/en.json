@@ -799,12 +799,14 @@
       "active": "Active",
       "activate": "Activate",
       "activating": "Activating...",
+      "renameSaving": "Saving...",
       "mode": {
         "incluster": "In-cluster",
         "external": "External"
       },
       "errors": {
-        "failed": "Failed to save cluster."
+        "failed": "Failed to save cluster.",
+        "rename": "Failed to rename cluster."
       },
       "modal": {
         "title": "Add cluster connection",
