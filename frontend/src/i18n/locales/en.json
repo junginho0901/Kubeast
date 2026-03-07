@@ -907,8 +907,13 @@
     },
     "submit": "Continue",
     "submit.loading": "Applying...",
+    "applying": {
+      "title": "Applying cluster configuration",
+      "subtitle": "Waiting for the cluster to become available..."
+    },
     "errors": {
-      "failed": "Failed to apply setup."
+      "failed": "Failed to apply setup.",
+      "timeout": "Setup applied but cluster is still starting. Please try again."
     }
   }
 }
