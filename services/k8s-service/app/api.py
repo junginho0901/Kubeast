@@ -1566,8 +1566,8 @@ async def apply_node_yaml(name: str, body: dict, request: Request):
     """Node YAML 적용"""
     try:
         role = getattr(request.state, "role", "read")
-        if role != "admin":
-            raise HTTPException(status_code=403, detail="Forbidden")
+        if role not in ("admin", "write"):
+            raise HTTPException(status_code=403, detail="Forbidden: write or admin role required")
         yaml_content = body.get("yaml") if isinstance(body, dict) else None
         if not yaml_content:
             raise HTTPException(status_code=400, detail="yaml is required")
