@@ -1344,7 +1344,7 @@ export default function AIChat() {
           <div className="flex-1 overflow-y-auto">
             {messages.map((message, idx) => (
               <div
-                key={message.id ?? idx}
+                key={message.id != null ? `db-${message.id}` : `tmp-${idx}`}
                 className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
               >
                 <div
