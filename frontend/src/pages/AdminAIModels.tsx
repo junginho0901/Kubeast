@@ -78,6 +78,7 @@ export default function AdminAIModels() {
     mutationFn: (data: any) => api.createModelConfig(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['model-configs'] })
+      qc.invalidateQueries({ queryKey: ['ai-config'] })
       resetForm()
     },
   })
@@ -86,18 +87,25 @@ export default function AdminAIModels() {
     mutationFn: ({ id, data }: { id: number; data: any }) => api.updateModelConfig(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['model-configs'] })
+      qc.invalidateQueries({ queryKey: ['ai-config'] })
       resetForm()
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteModelConfig(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-configs'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['model-configs'] })
+      qc.invalidateQueries({ queryKey: ['ai-config'] })
+    },
   })
 
   const activateMutation = useMutation({
     mutationFn: (id: number) => api.updateModelConfig(id, { is_default: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-configs'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['model-configs'] })
+      qc.invalidateQueries({ queryKey: ['ai-config'] })
+    },
   })
 
   const currentProviderDef: ProviderDef = getProvider(formProvider) ?? PROVIDER_CATALOG[0]
