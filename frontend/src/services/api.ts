@@ -37,6 +37,40 @@ const isMetricsUnavailableResponse = (error: any) => {
   return status === 503 && detail === 'metrics_unavailable'
 }
 
+// ===== Model Config Types =====
+export interface ModelConfigCreate {
+  name: string
+  provider: string
+  model: string
+  base_url?: string
+  api_key?: string                    // actual API key (stored in DB)
+  api_key_env?: string                // env var name (fallback)
+  api_key_secret_name?: string
+  api_key_secret_key?: string
+  extra_headers?: Record<string, string>
+  tls_verify?: boolean
+  enabled?: boolean
+  is_default?: boolean
+}
+
+export interface ModelConfigResponse {
+  id: number
+  name: string
+  provider: string
+  model: string
+  base_url: string | null
+  api_key_set: boolean                // true if api_key is stored in DB
+  api_key_env: string | null
+  api_key_secret_name: string | null
+  api_key_secret_key: string | null
+  extra_headers: Record<string, string>
+  tls_verify: boolean
+  enabled: boolean
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
 // Types
 export interface ClusterOverview {
   total_namespaces: number
@@ -1183,6 +1217,12 @@ export const api = {
     return data
   },
 
+  /** 롤아웃 상태 확인 — Setup에서 서비스 재시작 완료 여부 확인 */
+  getRolloutStatus: async (): Promise<{ ready: boolean; deployments: Record<string, any> }> => {
+    const { data } = await client.get('/auth/setup/rollout-status')
+    return data
+  },
+
   // Health check
   getHealth: async (): Promise<{ status: string; kubernetes: string; openai: string }> => {
     // /health는 /api/v1가 아닌 루트에 있음
@@ -1195,6 +1235,49 @@ export const api = {
   // AI Config
   getAIConfig: async (): Promise<{ model: string; app_name: string; version: string }> => {
     const { data } = await client.get('/ai/config')
+    return data
+  },
+
+  // ===== Model Configs =====
+  listModelConfigs: async (enabledOnly = false): Promise<ModelConfigResponse[]> => {
+    const { data } = await client.get('/ai/model-configs', { params: { enabled_only: enabledOnly } })
+    return data
+  },
+
+  getActiveModelConfig: async (): Promise<ModelConfigResponse | null> => {
+    const { data } = await client.get('/ai/model-configs/active')
+    return data
+  },
+
+  createModelConfig: async (payload: ModelConfigCreate): Promise<ModelConfigResponse> => {
+    const { data } = await client.post('/ai/model-configs', payload)
+    return data
+  },
+
+  /** Setup 전용 — 인증 없이 모델 등록 (로그인 전 Setup 화면에서 사용) */
+  createModelConfigSetup: async (payload: ModelConfigCreate): Promise<any> => {
+    const { data } = await client.post('/ai/model-configs/setup', payload)
+    return data
+  },
+
+  updateModelConfig: async (id: number, payload: Partial<ModelConfigCreate>): Promise<ModelConfigResponse> => {
+    const { data } = await client.patch(`/ai/model-configs/${id}`, payload)
+    return data
+  },
+
+  deleteModelConfig: async (id: number): Promise<void> => {
+    await client.delete(`/ai/model-configs/${id}`)
+  },
+
+  testModelConnection: async (payload: {
+    provider: string
+    model: string
+    base_url?: string
+    api_key?: string
+    tls_verify?: boolean
+    azure_api_version?: string
+  }): Promise<{ success: boolean; model?: string; message: string }> => {
+    const { data } = await client.post('/ai/model-configs/test', payload)
     return data
   },
 }
