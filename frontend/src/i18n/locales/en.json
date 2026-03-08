@@ -58,7 +58,8 @@
     "validatingWebhooks": "Validating Webhook Configurations",
     "customInstances": "Custom Resource Instances",
     "customGroups": "Custom Resource Definitions",
-    "userManagement": "User Management"
+    "userManagement": "User Management",
+    "aiModels": "AI Models"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -991,15 +992,39 @@
     },
     "submit": "Continue",
     "submit.loading": "Applying...",
+    "steps": {
+      "validate": "Validate",
+      "save": "Save config",
+      "rollout": "Restart service",
+      "connect": "Connect cluster"
+    },
     "applying": {
       "title": "Applying cluster setup",
       "subtitle": "Waiting for cluster connection...",
       "waiting": "Waiting for cluster connection...",
-      "retry": "Retrying connection..."
+      "retry": "Retrying connection...",
+      "desc": "This may take up to 2 minutes."
     },
     "errors": {
       "failed": "Failed to apply setup.",
       "timeout": "Cluster connection timed out. Please check the kubeconfig and try again."
+    },
+    "wizard": {
+      "cluster": "Cluster",
+      "ai": "AI Model"
+    },
+    "ai": {
+      "badge": "AI Configuration",
+      "title": "Configure AI Model",
+      "subtitle": "Select an LLM provider for the AI assistant. You can change this later.",
+      "model": "Model",
+      "apiKey": "API Key",
+      "apiKeyHint": "Your API key will be stored securely as a Kubernetes Secret.",
+      "baseUrl": "Base URL",
+      "test": "Test Connection",
+      "skip": "Skip — use defaults",
+      "save": "Save & Continue",
+      "saving": "Saving..."
     }
   }
 }
