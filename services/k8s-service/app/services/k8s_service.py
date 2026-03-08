@@ -777,7 +777,7 @@ class K8sService:
         """네임스페이스 목록 (Redis 캐시 없음 – Watch 기반 실시간 업데이트)"""
         try:
             namespaces = self.v1.list_namespace()
-
+            
             result = []
             for ns in namespaces.items:
                 result.append(NamespaceInfo(
@@ -786,7 +786,7 @@ class K8sService:
                     created_at=ns.metadata.creation_timestamp,
                     labels=ns.metadata.labels or {},
                 ))
-
+            
             return result
         except ApiException as e:
             raise Exception(f"Failed to get namespaces: {e}")
@@ -856,7 +856,7 @@ class K8sService:
             return describe_info
         except ApiException as e:
             raise Exception(f"Failed to describe namespace: {e}")
-
+    
     async def get_namespace_resource_quotas(self, name: str) -> List[Dict[str, Any]]:
         """네임스페이스의 ResourceQuota 목록 조회"""
         try:

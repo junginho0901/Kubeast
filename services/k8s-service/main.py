@@ -91,13 +91,16 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """상세 헬스 체크"""
-    from app.services.k8s_service import K8sService
+    """상세 헬스 체크 – api.py 모듈의 k8s_service 싱글턴을 사용"""
+    from app.api import k8s_service
     
     kubernetes_status = "disconnected"
     try:
-        k8s_service = K8sService()
-        k8s_service.v1.list_namespace(limit=1)
+        # 이전 초기화 실패(v1=None) → 재초기화 시도
+        if k8s_service.v1 is None:
+            k8s_service.__init__()
+        if k8s_service.v1 is not None:
+            k8s_service.v1.list_namespace(limit=1, _request_timeout=5)
         kubernetes_status = "connected"
     except Exception as e:
         kubernetes_status = f"error: {str(e)[:50]}"
