@@ -21,6 +21,7 @@
     "date-fns": "^3.0.6",
     "i18next": "^23.12.2",
     "i18next-browser-languagedetector": "^7.2.0",
+    "jsep": "^1.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.307.0",
     "monaco-editor": "^0.55.1",
@@ -33,7 +34,8 @@
     "react-syntax-highlighter": "^16.1.0",
     "recharts": "^2.10.3",
     "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "simple-eval": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
