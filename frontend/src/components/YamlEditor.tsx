@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
-import Editor from '@monaco-editor/react'
+import Editor, { loader } from '@monaco-editor/react'
+
+loader.init().catch(() => {})
 
 type Labels = {
   title: string
@@ -61,8 +63,8 @@ export default function YamlEditor({
       readOnly: !canEdit || !isEditing,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
-      renderLineHighlight: 'none',
-      wordWrap: 'off',
+      renderLineHighlight: 'none' as const,
+      wordWrap: 'off' as const,
       fontSize: 12,
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
@@ -138,15 +140,16 @@ export default function YamlEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3 h-full">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-slate-400">{labels.title}</p>
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col h-full">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
+        <p className="text-xs text-slate-400 truncate">{labels.title}</p>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={onRefresh}
             disabled={!isReady || isRefreshing}
-            className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white disabled:opacity-50"
+            className="px-2.5 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 transition-colors"
           >
             {labels.refresh}
           </button>
@@ -154,8 +157,8 @@ export default function YamlEditor({
             type="button"
             onClick={handleCopy}
             disabled={!isReady || !draft}
-            className={`relative inline-flex items-center justify-center px-2 py-1 text-xs rounded border border-slate-700 min-w-[52px] disabled:opacity-50 ${
-              copied ? 'text-emerald-300' : 'text-slate-300 hover:text-white'
+            className={`relative inline-flex items-center justify-center px-2.5 py-1 text-xs rounded border border-slate-700 min-w-[52px] disabled:opacity-50 transition-colors ${
+              copied ? 'text-emerald-300 border-emerald-500/40' : 'text-slate-300 hover:text-white hover:border-slate-500'
             }`}
           >
             <span className={copied ? 'opacity-0' : 'opacity-100'}>{labels.copy}</span>
@@ -169,7 +172,7 @@ export default function YamlEditor({
                     type="button"
                     onClick={handleApply}
                     disabled={isApplying || !isReady}
-                    className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white disabled:opacity-50"
+                    className="px-2.5 py-1 text-xs rounded border border-sky-600 bg-sky-600/20 text-sky-300 hover:bg-sky-600/30 disabled:opacity-50 transition-colors"
                   >
                     {isApplying ? labels.applying : labels.apply}
                   </button>
@@ -180,7 +183,7 @@ export default function YamlEditor({
                       setDraft(value || '')
                     }}
                     disabled={!isReady}
-                    className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white"
+                    className="px-2.5 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
                   >
                     {labels.cancel}
                   </button>
@@ -190,7 +193,7 @@ export default function YamlEditor({
                   type="button"
                   onClick={() => setIsEditing(true)}
                   disabled={!isReady}
-                  className="px-2 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white disabled:opacity-50"
+                  className="px-2.5 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 transition-colors"
                 >
                   {labels.edit}
                 </button>
@@ -200,15 +203,16 @@ export default function YamlEditor({
         </div>
       </div>
 
+      {/* Editor */}
       {isLoading && !value ? (
-        <p className="text-slate-400">{labels.loading}</p>
+        <div className="px-5 py-8 text-slate-400 text-sm">{labels.loading}</div>
       ) : error ? (
-        <p className="text-red-400">{labels.error}</p>
+        <div className="px-5 py-8 text-red-400 text-sm">{labels.error}</div>
       ) : (
         <div className="relative flex-1 min-h-[520px]">
           {toast && (
             <div
-              className={`pointer-events-none absolute right-2 top-2 rounded-lg border px-3 py-1 text-xs ${
+              className={`pointer-events-none absolute right-3 top-3 z-10 rounded-lg border px-3 py-1.5 text-xs shadow-lg ${
                 toast.type === 'success'
                   ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
                   : 'border-red-500/40 bg-red-500/15 text-red-200'
@@ -217,7 +221,7 @@ export default function YamlEditor({
               {toast.message}
             </div>
           )}
-          <div className="h-full min-h-[520px] rounded-lg border border-slate-700 overflow-hidden">
+          <div className="h-full min-h-[520px] border-y border-slate-700 overflow-hidden">
             <Editor
               height="100%"
               theme="vs-dark"
@@ -231,16 +235,19 @@ export default function YamlEditor({
         </div>
       )}
 
-      {isRefreshing && (
-        <p className="text-[11px] text-slate-500">{labels.refreshing}</p>
-      )}
-      <p className="text-[11px] text-slate-500">
-        {canEdit ? labels.editHint : labels.readonly}
-      </p>
-      {applyError && <p className="text-xs text-red-400">{applyError}</p>}
-      {showInlineApplied && applySuccess && !toast && (
-        <p className="text-xs text-emerald-300">{labels.applied}</p>
-      )}
+      {/* Footer hints */}
+      <div className="px-5 py-3 space-y-1">
+        {isRefreshing && (
+          <p className="text-[11px] text-slate-500">{labels.refreshing}</p>
+        )}
+        <p className="text-[11px] text-slate-500">
+          {canEdit ? labels.editHint : labels.readonly}
+        </p>
+        {applyError && <p className="text-xs text-red-400">{applyError}</p>}
+        {showInlineApplied && applySuccess && !toast && (
+          <p className="text-xs text-emerald-300">{labels.applied}</p>
+        )}
+      </div>
     </div>
   )
 }
