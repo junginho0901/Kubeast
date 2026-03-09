@@ -21,10 +21,13 @@ import {
   Search,
   Server,
   Shield,
+  Terminal,
   Waypoints,
 } from 'lucide-react'
 import { api } from '@/services/api'
 import { clearAccessToken } from '@/services/auth'
+import { ResourceDetailProvider } from './ResourceDetailContext'
+import ResourceDetailDrawer from './ResourceDetailDrawer'
 
 type NavItem = {
   name: string
@@ -227,6 +230,7 @@ export default function Layout() {
       items: [
         { name: t('nav.userManagement'), href: '/admin/users', icon: Shield },
         { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
+        { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
       ],
     },
   ], [t])
@@ -264,7 +268,9 @@ export default function Layout() {
   }
 
   return (
+    <ResourceDetailProvider>
     <div className="min-h-screen bg-slate-900">
+      <ResourceDetailDrawer />
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-3 px-6 border-b border-slate-700 h-[100px]">
@@ -375,5 +381,6 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </ResourceDetailProvider>
   )
 }
