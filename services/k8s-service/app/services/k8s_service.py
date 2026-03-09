@@ -420,6 +420,43 @@ class K8sService:
         cache_key = f"{resource_type}|{namespace or '_'}|{resource_name}"
         self._yaml_cache.pop(cache_key, None)
 
+    async def apply_resource_yaml(
+        self,
+        resource_type: str,
+        resource_name: str,
+        yaml_content: str,
+        namespace: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """범용 리소스 YAML 적용 (kubectl apply 유사) - Strategic Merge Patch 사용"""
+        import yaml as _yaml
+
+        data = _yaml.safe_load(yaml_content)
+        if not isinstance(data, dict):
+            raise Exception("Invalid YAML content")
+
+        resource = await self._resolve_api_resource(resource_type)
+        path = self._build_resource_path(resource, namespace, all_namespaces=False)
+        path = f"{path}/{resource_name}"
+        if not path.startswith("/"):
+            path = "/" + path
+
+        url = self.api_client.configuration.host + path
+        headers = {}
+        self.api_client.update_params_for_auth(headers, None, ["BearerToken"])
+        headers["Content-Type"] = "application/strategic-merge-patch+json"
+        headers["Accept"] = "application/json"
+
+        resp = self.api_client.rest_client.PATCH(
+            url,
+            headers=headers,
+            body=data,
+        )
+        if resp.status >= 400:
+            raise Exception(f"Kubernetes API error ({resp.status}): {resp.data.decode('utf-8') if isinstance(resp.data, bytes) else resp.data}")
+
+        self._invalidate_yaml_cache(resource_type, resource_name, namespace)
+        return {"status": "ok"}
+
     async def describe_resource(
         self,
         resource_type: str,
