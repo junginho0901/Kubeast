@@ -17,22 +17,268 @@ import {
   Copy,
   StopCircle
 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+// recharts unused for status charts – kept for potential future use
+// import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Customized } from 'recharts'
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 type ResourceType = 'namespaces' | 'pods' | 'services' | 'deployments' | 'pvcs' | 'nodes'
 
+interface Iso3DChartColors {
+  front: [string, string]
+  side: string
+  top: string
+  accent: string
+}
+
+function Iso3DChart({
+  data,
+  chartHeight = 340,
+  colors,
+  uid,
+  onBarClick,
+}: {
+  data: { name: string; value: number }[]
+  chartHeight?: number
+  colors: Iso3DChartColors
+  uid: string
+  onBarClick?: (name: string) => void
+}) {
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  const VW = 540, VH = 340
+  const M = { t: 30, r: 55, b: 40, l: 48 }
+  const CW = VW - M.l - M.r
+  const CH = VH - M.t - M.b
+
+  const DX = 22, DY = -11
+  const BDX = 16, BDY = -8
+
+  const maxVal = Math.max(...data.map(d => d.value), 1)
+  const niceMax = Math.ceil(maxVal / 10) * 10 || 10
+
+  const n = data.length
+  const groupW = CW / n
+  const barW = Math.min(groupW * 0.48, 52)
+
+  const baseY = M.t + CH
+  const yTicks = 5
+  const ticks = Array.from({ length: yTicks + 1 }, (_, i) =>
+    Math.round(niceMax * i / yTicks)
+  )
+
+  const gF = `iso-f-${uid}`
+  const gW = `iso-w-${uid}`
+
+  return (
+    <div style={{ width: '100%' }}>
+      <style>{`
+        @keyframes iso-grow-${uid} {
+          from { transform: scaleY(0); }
+          to   { transform: scaleY(1); }
+        }
+      `}</style>
+      <svg
+        width="100%"
+        height={chartHeight}
+        viewBox={`0 0 ${VW} ${VH}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <linearGradient id={gF} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={colors.front[0]} />
+            <stop offset="100%" stopColor={colors.front[1]} />
+          </linearGradient>
+          <linearGradient id={`${gF}-floor`} x1="0" y1="0" x2="0.3" y2="1">
+            <stop offset="0%" stopColor={colors.accent} stopOpacity={0.07} />
+            <stop offset="100%" stopColor={colors.accent} stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id={gW} x1="1" y1="0" x2="0" y2="0">
+            <stop offset="0%" stopColor={colors.accent} stopOpacity={0.05} />
+            <stop offset="100%" stopColor={colors.accent} stopOpacity={0.01} />
+          </linearGradient>
+        </defs>
+
+        {/* ═══ LEFT WALL ═══ */}
+        <polygon
+          points={`${M.l},${baseY} ${M.l + DX},${baseY + DY} ${M.l + DX},${M.t + DY} ${M.l},${M.t}`}
+          fill={`url(#${gW})`}
+        />
+        {ticks.map(tick => {
+          if (tick === 0) return null
+          const y = baseY - (tick / niceMax) * CH
+          return (
+            <line key={`lw-${tick}`}
+              x1={M.l} y1={y} x2={M.l + DX} y2={y + DY}
+              stroke={colors.accent} strokeWidth={0.5} opacity={0.1}
+            />
+          )
+        })}
+        <line x1={M.l} y1={M.t} x2={M.l} y2={baseY}
+          stroke={colors.accent} strokeWidth={0.6} opacity={0.12} />
+
+        {/* ═══ BACK WALL (no dashed lines, just subtle fill) ═══ */}
+        <polygon
+          points={`${M.l + DX},${baseY + DY} ${M.l + CW + DX},${baseY + DY} ${M.l + CW + DX},${M.t + DY} ${M.l + DX},${M.t + DY}`}
+          fill={`url(#${gW})`}
+        />
+
+        {/* ═══ FLOOR PLANE ═══ */}
+        <polygon
+          points={`${M.l},${baseY} ${M.l + CW},${baseY} ${M.l + CW + DX},${baseY + DY} ${M.l + DX},${baseY + DY}`}
+          fill={`url(#${gF}-floor)`}
+        />
+        {data.map((_, i) => {
+          const x = M.l + i * groupW + groupW / 2
+          return (
+            <line key={`fd-${i}`}
+              x1={x} y1={baseY} x2={x + DX} y2={baseY + DY}
+              stroke={colors.accent} strokeWidth={0.4} opacity={0.08}
+            />
+          )
+        })}
+        {[0.5, 1].map(t => (
+          <line key={`fc-${t}`}
+            x1={M.l + DX * t} y1={baseY + DY * t}
+            x2={M.l + CW + DX * t} y2={baseY + DY * t}
+            stroke={colors.accent} strokeWidth={0.3} opacity={0.06}
+          />
+        ))}
+
+        {/* Floor edges */}
+        <line x1={M.l} y1={baseY} x2={M.l + CW} y2={baseY}
+          stroke={colors.accent} strokeWidth={1.2} opacity={0.2} />
+        <line x1={M.l + CW} y1={baseY} x2={M.l + CW + DX} y2={baseY + DY}
+          stroke={colors.accent} strokeWidth={0.6} opacity={0.12} />
+        <line x1={M.l} y1={baseY} x2={M.l + DX} y2={baseY + DY}
+          stroke={colors.accent} strokeWidth={0.5} opacity={0.08} />
+
+        {/* ═══ Y AXIS LABELS + subtle front lines ═══ */}
+        {ticks.map(tick => {
+          const y = baseY - (tick / niceMax) * CH
+          return (
+            <g key={`yt-${tick}`}>
+              {tick > 0 && (
+                <line x1={M.l} y1={y} x2={M.l + CW} y2={y}
+                  stroke={colors.accent} strokeWidth={0.25} opacity={0.05} />
+              )}
+              <text x={M.l - 10} y={y + 3.5}
+                textAnchor="end" fill="#64748b" fontSize={10}
+              >
+                {tick}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* ═══ 3D BARS (animated) ═══ */}
+        {data.map((d, i) => {
+          const rawH = (d.value / niceMax) * CH
+          const barH = Math.max(rawH, d.value > 0 ? 5 : 0)
+          if (barH <= 0) return null
+
+          const bx = M.l + i * groupW + (groupW - barW) / 2
+          const by = baseY - barH
+          const isHov = hovered === i
+          const delay = i * 0.08
+
+          return (
+            <g key={d.name}
+              style={{
+                cursor: 'pointer',
+                transition: 'opacity 0.2s',
+                transformOrigin: `${bx + barW / 2}px ${baseY}px`,
+                animation: `iso-grow-${uid} 0.7s cubic-bezier(0.34,1.56,0.64,1) ${delay}s both`,
+              }}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => onBarClick?.(d.name)}
+              opacity={hovered !== null && !isHov ? 0.5 : 1}
+            >
+              {/* Floor shadow */}
+              <polygon
+                points={`${bx + 2},${baseY} ${bx + barW + 2},${baseY} ${bx + barW + BDX + 2},${baseY + BDY} ${bx + BDX + 2},${baseY + BDY}`}
+                fill="#000" opacity={0.08}
+              />
+
+              {/* FRONT FACE */}
+              <rect x={bx} y={by} width={barW} height={barH}
+                fill={`url(#${gF})`}
+                stroke={isHov ? colors.front[0] : 'transparent'}
+                strokeWidth={isHov ? 1.2 : 0}
+              />
+
+              {/* RIGHT SIDE FACE */}
+              <polygon
+                points={`${bx + barW},${by} ${bx + barW + BDX},${by + BDY} ${bx + barW + BDX},${baseY + BDY} ${bx + barW},${baseY}`}
+                fill={colors.side}
+              />
+
+              {/* TOP FACE */}
+              <polygon
+                points={`${bx},${by} ${bx + BDX},${by + BDY} ${bx + barW + BDX},${by + BDY} ${bx + barW},${by}`}
+                fill={colors.top}
+              />
+
+              {/* Top face front edge */}
+              <line x1={bx} y1={by} x2={bx + barW} y2={by}
+                stroke="#fff" strokeWidth={0.5} opacity={0.1} />
+
+              {/* Hover tooltip */}
+              {isHov && d.value > 0 && (
+                <g>
+                  <rect
+                    x={bx + barW / 2 + BDX / 2 - 22}
+                    y={by + BDY - 28}
+                    width={44} height={22} rx={6}
+                    fill="rgba(15,23,42,0.92)"
+                    stroke={colors.accent} strokeWidth={1} strokeOpacity={0.4}
+                  />
+                  <text
+                    x={bx + barW / 2 + BDX / 2}
+                    y={by + BDY - 13}
+                    textAnchor="middle" fill="#f1f5f9"
+                    fontSize={11} fontWeight={600}
+                  >
+                    {d.value}
+                  </text>
+                </g>
+              )}
+            </g>
+          )
+        })}
+
+        {/* ═══ X AXIS LABELS ═══ */}
+        {data.map((d, i) => {
+          const x = M.l + i * groupW + groupW / 2
+          return (
+            <text key={`xl-${i}`}
+              x={x} y={baseY + 20}
+              textAnchor="middle" fill="#94a3b8"
+              fontSize={10.5} fontWeight={500}
+              style={{ cursor: 'pointer' }}
+              onClick={() => onBarClick?.(d.name)}
+            >
+              {d.name}
+            </text>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
+  const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options })
   const na = tr('common.notAvailable', 'N/A')
   const none = tr('common.none', 'None')
-  const emptyValue = tr('common.empty', '-')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
   const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
@@ -71,7 +317,6 @@ export default function Dashboard() {
   } | null>(null)
   const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
   const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
-  const [selectedNode, setSelectedNode] = useState<any | null>(null)
   const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
   const { data: overview, isLoading } = useQuery({
@@ -213,16 +458,8 @@ export default function Dashboard() {
       if (isMetricsUnavailableError(error)) return false
       return failureCount < 1
     },
-    retryDelay: 1000, // 1초 대기 후 재시도
-    // 에러 발생 시에도 이전 데이터를 유지
-    gcTime: 60000, // 캐시 유지 시간 (기본값보다 길게)
-    onError: (error) => {
-      if (isMetricsUnavailableError(error)) {
-        disableMetrics()
-        setMetricsUnavailable(true)
-        queryClient.cancelQueries({ queryKey: ['top-resources'] })
-      }
-    },
+    retryDelay: 1000,
+    gcTime: 60000,
   })
 
   useEffect(() => {
@@ -245,19 +482,6 @@ export default function Dashboard() {
     enabled: selectedResourceType === 'nodes',
   })
 
-  // 선택된 노드의 상세 정보
-  const { data: nodeDetail, isLoading: isLoadingNodeDetail } = useQuery({
-    queryKey: ['node-detail', selectedNode?.name],
-    queryFn: () => api.describeNode(selectedNode.name),
-    enabled: !!selectedNode,
-  })
-
-  // 컴포넌트 상태
-  const { data: componentStatuses, isLoading: isLoadingComponents } = useQuery({
-    queryKey: ['component-statuses'],
-    queryFn: api.getComponentStatuses,
-    enabled: !!selectedNode,
-  })
 
   const handleRefresh = async () => {
     console.log('🔄 새로고침 시작...')
@@ -348,18 +572,14 @@ export default function Dashboard() {
   }
 
   const handleOpenIssuesModal = () => {
-    // 다른 모달이 열려있으면 겹치지 않도록 정리
     handleCloseModal()
-    setSelectedNode(null)
     setIsStorageModalOpen(false)
     setIsOptimizationModalOpen(false)
     setIsIssuesModalOpen(true)
   }
 
   const handleOpenStorageModal = () => {
-    // 다른 모달이 열려있으면 겹치지 않도록 정리
     handleCloseModal()
-    setSelectedNode(null)
     setIsIssuesModalOpen(false)
     setIsOptimizationModalOpen(false)
     setStorageActiveTab('pvcs')
@@ -370,9 +590,7 @@ export default function Dashboard() {
   }
 
   const handleOpenOptimizationModal = () => {
-    // 다른 모달이 열려있으면 겹치지 않도록 정리
     handleCloseModal()
-    setSelectedNode(null)
     setIsIssuesModalOpen(false)
     setIsStorageModalOpen(false)
     setIsStorageNamespaceDropdownOpen(false)
@@ -658,11 +876,7 @@ export default function Dashboard() {
   }, [isOptimizationModalOpen, allNamespaces, optimizationNamespace])
 
   const handleNodeClick = (node: any) => {
-    setSelectedNode(node)
-  }
-
-  const handleCloseNodeDetail = () => {
-    setSelectedNode(null)
+    openDetail({ kind: 'Node', name: node.name })
   }
 
   const handlePodStatusClick = (status: string) => {
@@ -691,16 +905,13 @@ export default function Dashboard() {
           setSelectedNodeStatus(null)
           setModalSearchQuery('')
         }
-        if (selectedNode) {
-          setSelectedNode(null)
-        }
       }
     }
     document.addEventListener('keydown', handleEscape)
     return () => {
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [selectedResourceType, selectedNode, isIssuesModalOpen, isStorageModalOpen])
+  }, [selectedResourceType, isIssuesModalOpen, isStorageModalOpen])
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
   const getSelectedStat = () => {
@@ -859,28 +1070,59 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Charts — exact same card structure, chart area is a pulse block */}
+        {/* Charts — 3D skeleton */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {[
-            { title: tr('dashboard.podStatus.title', 'Pod status'), sub: tr('dashboard.podStatus.subtitle', 'Click to view pods in each status') },
-            { title: tr('dashboard.nodeStatus.title', 'Node status'), sub: tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status') },
-          ].map((chart) => (
-            <div key={chart.title} className="card">
-              <h2 className="text-xl font-bold text-white mb-4">{chart.title}</h2>
-              <p className="text-sm text-slate-400 mb-4">{chart.sub}</p>
-              {/* same height as <ResponsiveContainer height={300}> */}
-              <div className="h-[300px] flex items-end gap-[10%] px-8 pb-6">
-                {[45, 80, 15, 55, 8].map((h, j) => (
-                  <div key={j} className="flex-1 flex flex-col justify-end h-full">
-                    <div
-                      className="w-full rounded-t-lg bg-slate-700/35 animate-pulse"
-                      style={{ height: `${h}%` }}
-                    />
-                  </div>
-                ))}
+            { title: tr('dashboard.podStatus.title', 'Pod status'), sub: tr('dashboard.podStatus.subtitle', 'Click to view pods in each status'), accent: '#38bdf8' },
+            { title: tr('dashboard.nodeStatus.title', 'Node status'), sub: tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status'), accent: '#22d3ee' },
+          ].map((chart, ci) => {
+            const skelBars = ci === 0 ? [50, 85, 12, 40, 6] : [75, 20]
+            const dx = 16, dy = -8
+            return (
+              <div key={chart.title} className="card relative overflow-hidden">
+                <h2 className="text-xl font-bold text-white mb-4">{chart.title}</h2>
+                <p className="text-sm text-slate-400 mb-4">{chart.sub}</p>
+                <svg width="100%" height={300} viewBox="0 0 540 300" preserveAspectRatio="xMidYMid meet">
+                  <defs>
+                    <linearGradient id={`skel-g-${ci}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={chart.accent} stopOpacity={0.12} />
+                      <stop offset="100%" stopColor={chart.accent} stopOpacity={0.04} />
+                    </linearGradient>
+                  </defs>
+                  {/* floor */}
+                  <polygon points={`48,260 490,260 ${490 + dx},${260 + dy} ${48 + dx},${260 + dy}`}
+                    fill={chart.accent} opacity={0.04} />
+                  <line x1={48} y1={260} x2={490} y2={260}
+                    stroke={chart.accent} strokeWidth={1} opacity={0.12} />
+                  {/* left wall */}
+                  <polygon points={`48,260 ${48 + dx},${260 + dy} ${48 + dx},${30 + dy} 48,30`}
+                    fill={chart.accent} opacity={0.03} />
+                  <line x1={48} y1={30} x2={48} y2={260}
+                    stroke={chart.accent} strokeWidth={0.5} opacity={0.08} />
+                  {/* bars */}
+                  {skelBars.map((pct, j) => {
+                    const groupW = 442 / skelBars.length
+                    const bw = groupW * 0.48
+                    const bx = 48 + j * groupW + (groupW - bw) / 2
+                    const barH = (pct / 100) * 230
+                    const by = 260 - barH
+                    return (
+                      <g key={j} className="animate-pulse" style={{ animationDelay: `${j * 0.15}s` }}>
+                        <rect x={bx} y={by} width={bw} height={barH}
+                          fill={`url(#skel-g-${ci})`} />
+                        <polygon
+                          points={`${bx + bw},${by} ${bx + bw + dx},${by + dy} ${bx + bw + dx},${260 + dy} ${bx + bw},${260}`}
+                          fill={chart.accent} opacity={0.05} />
+                        <polygon
+                          points={`${bx},${by} ${bx + dx},${by + dy} ${bx + bw + dx},${by + dy} ${bx + bw},${by}`}
+                          fill={chart.accent} opacity={0.08} />
+                      </g>
+                    )
+                  })}
+                </svg>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Top resources — exact same card headers */}
@@ -1592,107 +1834,45 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Pod Status Chart */}
         {podStatusData.length > 0 && (
-          <div className="card">
-            <h2 className="text-xl font-bold text-white mb-4">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
-            <p className="text-sm text-slate-400 mb-4">
+          <div className="card relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 via-transparent to-blue-500/5 pointer-events-none" />
+            <h2 className="text-xl font-bold text-white mb-4 relative">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
+            <p className="text-sm text-slate-400 mb-4 relative">
               {tr('dashboard.podStatus.subtitle', 'Click to view pods in each status')}
             </p>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={podStatusData}
-                onClick={(data) => {
-                  if (data && data.activeLabel) {
-                    handlePodStatusClick(data.activeLabel)
-                  }
-                }}
-              >
-                <defs>
-                  <linearGradient id="podStatusBarFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#38bdf8" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#0284c7" stopOpacity={1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="name"
-                  stroke="#94a3b8"
-                  style={{ cursor: 'pointer' }}
-                />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px'
-                  }}
-                  cursor={{ fill: 'rgba(14, 165, 233, 0.1)' }}
-                />
-                <Bar
-                  dataKey="value"
-                  fill="url(#podStatusBarFill)"
-                  stroke="#7dd3fc"
-                  strokeOpacity={0.25}
-                  radius={[8, 8, 2, 2]}
-                  isAnimationActive
-                  animationDuration={800}
-                  animationEasing="ease-out"
-                  cursor="pointer"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <Iso3DChart
+              data={podStatusData}
+              uid="pod"
+              colors={{
+                front: ['#38bdf8', '#0369a1'],
+                side: '#0c4a6e',
+                top: '#7dd3fc',
+                accent: '#38bdf8',
+              }}
+              onBarClick={handlePodStatusClick}
+            />
           </div>
         )}
 
         {/* Node Status Chart */}
         {nodeStatusChartData.length > 0 && (
-          <div className="card">
-            <h2 className="text-xl font-bold text-white mb-4">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
-            <p className="text-sm text-slate-400 mb-4">
+          <div className="card relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-teal-500/5 pointer-events-none" />
+            <h2 className="text-xl font-bold text-white mb-4 relative">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
+            <p className="text-sm text-slate-400 mb-4 relative">
               {tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status')}
             </p>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={nodeStatusChartData}
-                onClick={(data) => {
-                  if (data && data.activeLabel) {
-                    handleNodeStatusClick(data.activeLabel)
-                  }
-                }}
-              >
-                <defs>
-                  <linearGradient id="nodeStatusBarFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#67e8f9" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#0891b2" stopOpacity={1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="name"
-                  stroke="#94a3b8"
-                  style={{ cursor: 'pointer' }}
-                />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px'
-                  }}
-                  cursor={{ fill: 'rgba(6, 182, 212, 0.1)' }}
-                />
-                <Bar
-                  dataKey="value"
-                  fill="url(#nodeStatusBarFill)"
-                  stroke="#a5f3fc"
-                  strokeOpacity={0.2}
-                  radius={[8, 8, 2, 2]}
-                  isAnimationActive
-                  animationDuration={800}
-                  animationEasing="ease-out"
-                  cursor="pointer"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <Iso3DChart
+              data={nodeStatusChartData}
+              uid="node"
+              colors={{
+                front: ['#22d3ee', '#0e7490'],
+                side: '#164e63',
+                top: '#a5f3fc',
+                accent: '#22d3ee',
+              }}
+              onBarClick={handleNodeStatusClick}
+            />
           </div>
         )}
       </div>
@@ -2979,243 +3159,6 @@ export default function Dashboard() {
         </ModalOverlay>
       )}
 
-      {/* Node 상세 모달 */}
-      {selectedNode && (
-        <ModalOverlay onClose={handleCloseNodeDetail}>
-          <div
-            className="bg-slate-800 rounded-lg max-w-6xl w-full h-[85vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 모달 헤더 */}
-            <div className="p-6 border-b border-slate-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-cyan-500/10">
-                    <Server className="w-5 h-5 text-cyan-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{selectedNode.name}</h2>
-                    <p className="text-sm text-slate-400">{tr('dashboard.nodeModal.title', 'Node details')}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleCloseNodeDetail}
-                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-slate-400" />
-                </button>
-              </div>
-            </div>
-
-            {/* 모달 내용 */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {isLoadingNodeDetail || isLoadingComponents ? (
-                <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
-                  <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
-                  <p className="text-slate-400">{tr('dashboard.loading', 'Loading data...')}</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* 컴포넌트 상태 */}
-                  {componentStatuses && componentStatuses.length > 0 && (
-                    <div className="card">
-                      <h3 className="text-lg font-bold text-white mb-4">
-                        {tr('dashboard.nodeModal.componentStatus', 'Component Status')}
-                      </h3>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-slate-700">
-                              <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                {tr('dashboard.nodeModal.componentTable.name', 'NAME')}
-                              </th>
-                              <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                {tr('dashboard.nodeModal.componentTable.status', 'STATUS')}
-                              </th>
-                              <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                {tr('dashboard.nodeModal.componentTable.message', 'MESSAGE')}
-                              </th>
-                              <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                {tr('dashboard.nodeModal.componentTable.error', 'ERROR')}
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {componentStatuses.map((comp: any) => (
-                              <tr key={comp.name} className="border-b border-slate-700/50">
-                                <td className="py-3 px-3 text-white font-mono text-sm">{comp.name}</td>
-                                <td className="py-3 px-3">
-                                  <span className={`badge ${comp.status === 'Healthy' ? 'badge-success' :
-                                    comp.status === 'Unavailable' ? 'badge-warning' : 'badge-error'
-                                    }`}>
-                                    {comp.status}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 text-slate-300 text-sm">{comp.message || emptyValue}</td>
-                                <td className="py-3 px-3 text-slate-300 text-sm">{comp.error || emptyValue}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Node Describe 정보 */}
-                  {nodeDetail && (
-                    <>
-                      {/* 기본 정보 */}
-                      <div className="card">
-                        <h3 className="text-lg font-bold text-white mb-4">
-                          {tr('dashboard.nodeModal.basicInfo', 'Basic information')}
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-slate-400 mb-1">
-                              {tr('dashboard.nodeModal.name', 'Name')}
-                            </p>
-                            <p className="text-white font-mono">{nodeDetail.name}</p>
-                          </div>
-                          {nodeDetail.system_info && (
-                            <>
-                              <div>
-                                <p className="text-sm text-slate-400 mb-1">
-                                  {tr('dashboard.nodeModal.osImage', 'OS Image')}
-                                </p>
-                                <p className="text-white">{nodeDetail.system_info.os_image}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-slate-400 mb-1">
-                                  {tr('dashboard.nodeModal.kernelVersion', 'Kernel Version')}
-                                </p>
-                                <p className="text-white font-mono">{nodeDetail.system_info.kernel_version}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-slate-400 mb-1">
-                                  {tr('dashboard.nodeModal.containerRuntime', 'Container Runtime')}
-                                </p>
-                                <p className="text-white font-mono">{nodeDetail.system_info.container_runtime}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-slate-400 mb-1">
-                                  {tr('dashboard.nodeModal.kubeletVersion', 'Kubelet Version')}
-                                </p>
-                                <p className="text-white font-mono">{nodeDetail.system_info.kubelet_version}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-slate-400 mb-1">
-                                  {tr('dashboard.nodeModal.kubeProxyVersion', 'Kube-Proxy Version')}
-                                </p>
-                                <p className="text-white font-mono">{nodeDetail.system_info.kube_proxy_version}</p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 주소 */}
-                      {nodeDetail.addresses && nodeDetail.addresses.length > 0 && (
-                        <div className="card">
-                          <h3 className="text-lg font-bold text-white mb-4">
-                            {tr('dashboard.nodeModal.addresses', 'Addresses')}
-                          </h3>
-                          <div className="space-y-2">
-                            {nodeDetail.addresses.map((addr: any, idx: number) => (
-                              <div key={idx} className="flex items-center gap-3 p-2 bg-slate-700 rounded">
-                                <span className="text-slate-400 text-sm font-medium w-32">{addr.type}</span>
-                                <span className="text-white font-mono">{addr.address}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Conditions */}
-                      {nodeDetail.conditions && nodeDetail.conditions.length > 0 && (
-                        <div className="card">
-                          <h3 className="text-lg font-bold text-white mb-4">
-                            {tr('dashboard.nodeModal.conditions', 'Conditions')}
-                          </h3>
-                          <div className="overflow-x-auto">
-                            <table className="w-full">
-                              <thead>
-                                <tr className="border-b border-slate-700">
-                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                    {tr('dashboard.nodeModal.conditionsTable.type', 'Type')}
-                                  </th>
-                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                    {tr('dashboard.nodeModal.conditionsTable.status', 'Status')}
-                                  </th>
-                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                    {tr('dashboard.nodeModal.conditionsTable.reason', 'Reason')}
-                                  </th>
-                                  <th className="text-left py-2 px-3 text-slate-400 font-medium">
-                                    {tr('dashboard.nodeModal.conditionsTable.message', 'Message')}
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {nodeDetail.conditions.map((condition: any, idx: number) => (
-                                  <tr key={idx} className="border-b border-slate-700/50">
-                                    <td className="py-3 px-3 text-white font-medium">{condition.type}</td>
-                                    <td className="py-3 px-3">
-                                      <span className={`badge ${condition.status === 'True' ? 'badge-success' :
-                                        condition.status === 'False' ? 'badge-error' : 'badge-warning'
-                                        }`}>
-                                        {condition.status}
-                                      </span>
-                                    </td>
-                                    <td className="py-3 px-3 text-slate-300 text-sm">{condition.reason || emptyValue}</td>
-                                    <td className="py-3 px-3 text-slate-300 text-sm">{condition.message || emptyValue}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Labels */}
-                      {nodeDetail.labels && Object.keys(nodeDetail.labels).length > 0 && (
-                        <div className="card">
-                          <h3 className="text-lg font-bold text-white mb-4">
-                            {tr('dashboard.nodeModal.labels', 'Labels')}
-                          </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-                            {Object.entries(nodeDetail.labels).map(([key, value]) => (
-                              <div key={key} className="p-2 bg-slate-700 rounded text-xs">
-                                <span className="text-slate-400">{key}:</span>{' '}
-                                <span className="text-white font-mono">{value as string}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Annotations */}
-                      {nodeDetail.annotations && Object.keys(nodeDetail.annotations).length > 0 && (
-                        <div className="card">
-                          <h3 className="text-lg font-bold text-white mb-4">
-                            {tr('dashboard.nodeModal.annotations', 'Annotations')}
-                          </h3>
-                          <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
-                            {Object.entries(nodeDetail.annotations).map(([key, value]) => (
-                              <div key={key} className="p-2 bg-slate-700 rounded text-xs">
-                                <span className="text-slate-400 break-all">{key}:</span>{' '}
-                                <span className="text-white font-mono break-all">{value as string}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
     </div>
   )
 }
