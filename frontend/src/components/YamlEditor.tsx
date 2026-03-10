@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
-import Editor, { loader } from '@monaco-editor/react'
-
-loader.init().catch(() => {})
+import Editor from '@monaco-editor/react'
 
 type Labels = {
   title: string
