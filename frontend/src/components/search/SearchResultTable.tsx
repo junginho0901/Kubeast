@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Eye, ChevronLeft, ChevronRight, Copy, Check, ArrowUpDown } from 'lucide-react'
 import { SearchResult } from './searchEngine'
@@ -12,14 +12,36 @@ interface Props {
 type SortKey = 'kind' | 'name' | 'namespace' | 'status' | 'age'
 type SortDir = 'asc' | 'desc'
 
-export default function SearchResultTable({ results, maxDisplay = 200 }: Props) {
+const ROW_HEIGHT = 41
+const HEADER_HEIGHT = 41
+const PAGINATION_HEIGHT = 44
+const WARNING_HEIGHT = 44
+
+export default function SearchResultTable({ results, maxDisplay = 500 }: Props) {
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
+  const containerRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(0)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
-  const pageSize = 50
+  const [pageSize, setPageSize] = useState(15)
+
+  const calcPageSize = useCallback(() => {
+    if (!containerRef.current) return
+    const containerH = containerRef.current.clientHeight
+    const overhead = HEADER_HEIGHT + PAGINATION_HEIGHT + (results.length > maxDisplay ? WARNING_HEIGHT : 0)
+    const available = containerH - overhead
+    const rows = Math.max(1, Math.floor(available / ROW_HEIGHT))
+    setPageSize(rows)
+  }, [results.length, maxDisplay])
+
+  useEffect(() => {
+    calcPageSize()
+    const obs = new ResizeObserver(calcPageSize)
+    if (containerRef.current) obs.observe(containerRef.current)
+    return () => obs.disconnect()
+  }, [calcPageSize])
 
   const sorted = [...results].sort((a, b) => {
     const va = a[sortKey] ?? ''
@@ -28,8 +50,12 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
     return sortDir === 'asc' ? cmp : -cmp
   })
 
-  const totalPages = Math.ceil(Math.min(sorted.length, maxDisplay) / pageSize)
-  const pageItems = sorted.slice(page * pageSize, Math.min((page + 1) * pageSize, maxDisplay))
+  const capped = Math.min(sorted.length, maxDisplay)
+  const totalPages = Math.max(1, Math.ceil(capped / pageSize))
+  const safePage = Math.min(page, totalPages - 1)
+  const pageItems = sorted.slice(safePage * pageSize, Math.min((safePage + 1) * pageSize, maxDisplay))
+
+  useEffect(() => { setPage(0) }, [results])
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -65,9 +91,9 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
   if (results.length === 0) return null
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
       {results.length > maxDisplay && (
-        <div className="mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
+        <div className="shrink-0 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
           {t('advancedSearch.tooManyResults', 'Found {{total}} results. Showing first {{max}}.', {
             total: results.length,
             max: maxDisplay,
@@ -75,14 +101,14 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-slate-700/50">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-slate-800/95 backdrop-blur">
+      <div className="flex-1 min-h-0 rounded-xl border border-slate-700/50 overflow-hidden">
+        <table className="w-full text-sm table-fixed">
+          <thead>
+            <tr className="bg-slate-800/95">
               {columns.map(col => (
                 <th
                   key={col.key}
-                  className={`px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors ${col.className}`}
+                  className={`px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors ${col.className}`}
                   onClick={() => toggleSort(col.key)}
                 >
                   <span className="flex items-center gap-1">
@@ -91,25 +117,25 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
                   </span>
                 </th>
               ))}
-              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider w-24">
+              <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider w-24">
                 {t('advancedSearch.colActions', 'Actions')}
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700/30">
             {pageItems.map((item, i) => {
-              const globalIdx = page * pageSize + i
+              const globalIdx = safePage * pageSize + i
               return (
                 <tr
                   key={`${item.kind}-${item.namespace}-${item.name}-${i}`}
-                  className="hover:bg-slate-700/30 transition-colors"
+                  className="hover:bg-slate-700/30 transition-colors h-[41px]"
                 >
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-2">
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-700/50 text-xs font-medium text-slate-300">
                       {item.kind}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 font-medium text-white truncate max-w-0">
+                  <td className="px-4 py-2 font-medium text-white truncate max-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button
                         onClick={() => openDetail({
@@ -131,8 +157,8 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
                       </button>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-400 truncate">
-                    {item.namespace ? (
+                  <td className="px-4 py-2 text-slate-400 truncate">
+                    {item.namespace && item.namespace !== '-' ? (
                       <button
                         onClick={() => openDetail({ kind: 'Namespace', name: item.namespace, rawJson: undefined })}
                         className="text-slate-400 hover:text-sky-400 hover:underline transition-colors"
@@ -141,25 +167,23 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
                       </button>
                     ) : '-'}
                   </td>
-                  <td className={`px-4 py-2.5 font-medium ${statusColor(item.status ?? '-')}`}>
+                  <td className={`px-4 py-2 font-medium ${statusColor(item.status ?? '-')}`}>
                     {item.status}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-500">{item.age}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    {(
-                      <button
-                        onClick={() => openDetail({
-                          kind: item.kind,
-                          name: item.name,
-                          namespace: item.namespace || undefined,
-                          rawJson: item.raw,
-                        })}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        Detail
-                      </button>
-                    )}
+                  <td className="px-4 py-2 text-slate-500">{item.age}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      onClick={() => openDetail({
+                        kind: item.kind,
+                        name: item.name,
+                        namespace: item.namespace || undefined,
+                        rawJson: item.raw,
+                      })}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Detail
+                    </button>
                   </td>
                 </tr>
               )
@@ -168,29 +192,33 @@ export default function SearchResultTable({ results, maxDisplay = 200 }: Props) 
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-3 px-1">
-          <span className="text-xs text-slate-500">
-            {t('advancedSearch.page', 'Page {{current}} of {{total}}', { current: page + 1, total: totalPages })}
-          </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+      {/* Pagination */}
+      <div className="shrink-0 flex items-center justify-between pt-2 px-1">
+        <span className="text-xs text-slate-500">
+          {t('advancedSearch.pageInfo', '{{start}}-{{end}} of {{total}}', {
+            start: safePage * pageSize + 1,
+            end: Math.min((safePage + 1) * pageSize, capped),
+            total: capped,
+          })}
+          {totalPages > 1 && ` (${t('advancedSearch.page', 'Page {{current}} of {{total}}', { current: safePage + 1, total: totalPages })})`}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={safePage >= totalPages - 1}
+            className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
