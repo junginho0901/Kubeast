@@ -790,6 +790,17 @@ export const api = {
     return data
   },
 
+  getAllDeployments: async (forceRefresh = false): Promise<DeploymentInfo[]> => {
+    const { data } = await client.get('/cluster/deployments/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  deleteDeployment: async (namespace: string, deploymentName: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/deployments/${deploymentName}`)
+  },
+
   getReplicaSets: async (namespace: string, forceRefresh = false): Promise<ReplicaSetInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/replicasets`, {
       params: { force_refresh: forceRefresh },
@@ -1095,6 +1106,21 @@ export const api = {
     return data
   },
 
+  createResourcesFromYaml: async (
+    yaml: string,
+    namespace?: string
+  ): Promise<{
+    status: string
+    count: number
+    created: Array<{ apiVersion: string; kind: string; name: string; namespace?: string | null }>
+  }> => {
+    const { data } = await client.post('/cluster/resources/yaml/create', {
+      yaml,
+      namespace: namespace && namespace !== '-' ? namespace : undefined,
+    })
+    return data
+  },
+
   // Cluster View
   getAllPods: async (forceRefresh: boolean = false): Promise<PodInfo[]> => {
     const { data } = await client.get('/cluster/pods/all', {
@@ -1162,6 +1188,10 @@ export const api = {
   applyNodeYaml: async (name: string, yaml: string): Promise<{ status: string }> => {
     const { data } = await client.post(`/cluster/nodes/${name}/yaml/apply`, { yaml })
     return data
+  },
+
+  deleteNode: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/nodes/${name}`)
   },
 
   cordonNode: async (name: string): Promise<{ status: string; unschedulable: boolean }> => {

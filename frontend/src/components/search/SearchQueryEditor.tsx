@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
-import MonacoEditor, { useMonaco, loader } from '@monaco-editor/react'
+import MonacoEditor, { useMonaco } from '@monaco-editor/react'
 import type { Monaco } from '@monaco-editor/react'
 import { generateGlobalVarDeclarations } from './inferTypes'
-
-loader.init().catch(() => { /* suppress Monaco cancelation errors on unmount */ })
 
 interface Props {
   value: string

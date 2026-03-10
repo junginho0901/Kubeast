@@ -73,24 +73,24 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
   if (!conditions || conditions.length === 0) return <span className="text-slate-400 text-xs">(none)</span>
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs table-fixed min-w-[580px]">
+      <table className="w-full text-xs table-fixed min-w-[700px]">
         <thead className="text-slate-400">
           <tr>
-            <th className="text-left py-2 w-[22%]">Type</th>
+            <th className="text-left py-2 w-[28%]">Type</th>
             <th className="text-left py-2 w-[10%]">Status</th>
-            <th className="text-left py-2 w-[18%]">Reason</th>
-            <th className="text-left py-2 w-[35%]">Message</th>
+            <th className="text-left py-2 w-[17%]">Reason</th>
+            <th className="text-left py-2 w-[30%]">Message</th>
             <th className="text-left py-2 w-[15%]">Last Transition</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
           {conditions.map((c: any, idx: number) => (
             <tr key={`${c.type}-${idx}`} className="text-slate-200">
-              <td className="py-2 pr-2 font-medium">{c.type || '-'}</td>
-              <td className="py-2 pr-2"><StatusBadge status={c.status} /></td>
-              <td className="py-2 pr-2 break-words whitespace-normal">{c.reason || '-'}</td>
-              <td className="py-2 pr-2 break-words whitespace-normal">{c.message || '-'}</td>
-              <td className="py-2 pr-2">{fmtRel(c.lastTransitionTime || c.last_transition_time)}</td>
+              <td className="py-2 pr-2 font-medium break-all whitespace-normal align-top">{c.type || '-'}</td>
+              <td className="py-2 pr-2 whitespace-nowrap align-top"><StatusBadge status={c.status} /></td>
+              <td className="py-2 pr-2 break-words whitespace-normal align-top">{c.reason || '-'}</td>
+              <td className="py-2 pr-2 break-words whitespace-normal align-top">{c.message || '-'}</td>
+              <td className="py-2 pr-2 whitespace-nowrap align-top">{fmtRel(c.lastTransitionTime || c.last_transition_time)}</td>
             </tr>
           ))}
         </tbody>

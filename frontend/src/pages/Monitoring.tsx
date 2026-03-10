@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, disableMetrics, isMetricsDisabled, isMetricsUnavailableError } from '@/services/api'
+import { api, disableMetrics, isMetricsDisabled, isMetricsUnavailableError, type PodInfo } from '@/services/api'
 import { 
   Server, 
   Box,
@@ -13,6 +13,24 @@ import {
   ChevronDown,
   CheckCircle
 } from 'lucide-react'
+
+interface NodeMetric {
+  name: string
+  cpu: string
+  cpu_percent: string
+  memory: string
+  memory_percent: string
+  timestamp?: string
+}
+
+interface PodMetric {
+  name: string
+  namespace: string
+  cpu: string
+  memory: string
+  timestamp?: string
+}
+
 export default function Monitoring() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -23,7 +41,7 @@ export default function Monitoring() {
   const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
   // Node 리소스 사용량 (5초마다 자동 갱신)
-  const { data: nodeMetrics, isLoading: isLoadingNodes } = useQuery({
+  const { data: nodeMetrics, isLoading: isLoadingNodes, error: nodeMetricsError } = useQuery<NodeMetric[], Error>({
     queryKey: ['node-metrics'],
     queryFn: api.getNodeMetrics,
     enabled: activeTab === 'nodes' && !metricsUnavailable && !isMetricsDisabled(),
@@ -38,12 +56,6 @@ export default function Monitoring() {
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
-    onError: (error) => {
-      if (isMetricsUnavailableError(error)) {
-        disableMetrics()
-        setMetricsUnavailable(true)
-      }
-    },
   })
 
   // 네임스페이스 목록
@@ -54,7 +66,7 @@ export default function Monitoring() {
   })
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
-  const { data: podMetrics, isLoading: isLoadingPods, error: podMetricsError } = useQuery({
+  const { data: podMetrics, isLoading: isLoadingPods, error: podMetricsError } = useQuery<PodMetric[], Error>({
     queryKey: ['pod-metrics', selectedNamespace],
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace),
     staleTime: 5000,
@@ -69,16 +81,10 @@ export default function Monitoring() {
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // 지수 백오프 (최대 5초)
     placeholderData: (previousData) => previousData, // 이전 데이터 유지 (깜빡임 방지)
-    onError: (error) => {
-      if (isMetricsUnavailableError(error)) {
-        disableMetrics()
-        setMetricsUnavailable(true)
-      }
-    },
   })
 
   // Pod 상세 정보 (Limit/Request 포함) - 네임스페이스 선택 시에만 활성화
-  const { data: allPods } = useQuery({
+  const { data: allPods } = useQuery<PodInfo[], Error>({
     queryKey: ['all-pods-detail'],
     queryFn: () => api.getAllPods(false),
     staleTime: 10000,
@@ -110,6 +116,20 @@ export default function Monitoring() {
     }
   }, [metricsUnavailable, queryClient])
 
+  useEffect(() => {
+    if (nodeMetricsError && isMetricsUnavailableError(nodeMetricsError)) {
+      disableMetrics()
+      setMetricsUnavailable(true)
+    }
+  }, [nodeMetricsError])
+
+  useEffect(() => {
+    if (podMetricsError && isMetricsUnavailableError(podMetricsError)) {
+      disableMetrics()
+      setMetricsUnavailable(true)
+    }
+  }, [podMetricsError])
+
   // Pod 메트릭 통계
   const podStats = podMetrics ? {
     totalPods: podMetrics.length,
@@ -124,7 +144,7 @@ export default function Monitoring() {
   } : null
 
   // 메트릭 수집 시각 (metrics-server 기준)
-  const getLatestMetricTimestamp = (items: any[] | undefined | null): Date | null => {
+  const getLatestMetricTimestamp = (items: Array<{ timestamp?: string }> | undefined | null): Date | null => {
     if (!items || !Array.isArray(items) || items.length === 0) return null
     let latest: Date | null = null
     for (const item of items) {

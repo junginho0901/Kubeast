@@ -24,6 +24,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     queryKey: ['pod-describe', namespace, name],
     queryFn: () => api.describePod(namespace, name),
     enabled: !!name && !!namespace,
+    retry: false,
   })
 
   const { data: logData, isFetching: logsFetching, refetch: refetchLogs } = useQuery({
@@ -38,7 +39,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? podDescribe?.labels ?? {}) as Record<string, string>
   const annotations = (meta.annotations ?? podDescribe?.annotations ?? {}) as Record<string, string>
-  const containers = (podDescribe?.containers ?? (spec.containers as any[]) ?? []) as any[]
+  const containers = useMemo(() => (
+    (podDescribe?.containers ?? (spec.containers as any[]) ?? []) as any[]
+  ), [podDescribe?.containers, spec.containers])
   const conditions = (podDescribe?.conditions ?? (status.conditions as any[]) ?? []) as any[]
   const events = (podDescribe?.events ?? []) as any[]
 
@@ -49,6 +52,21 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const serviceAccount = podDescribe?.service_account || (spec.serviceAccountName as string) || '-'
   const createdAt = podDescribe?.created_at || (meta.creationTimestamp as string)
   const restartCount = podDescribe?.restart_count ?? containers.reduce((sum: number, c: any) => sum + (c.restart_count || c.restartCount || 0), 0)
+  const readyPair = String(podDescribe?.ready || '').match(/^(\d+)\/(\d+)$/)
+  const readyContainers = readyPair ? Number(readyPair[1]) || 0 : containers.filter((c: any) => c.ready).length
+  const totalContainers = readyPair ? Number(readyPair[2]) || 0 : containers.length
+  const waitingCount = containers.filter((c: any) => Boolean(c?.state?.waiting)).length
+  const terminatedCount = containers.filter((c: any) => Boolean(c?.state?.terminated)).length
+  const crashLoopCount = containers.filter((c: any) => c?.state?.waiting?.reason === 'CrashLoopBackOff').length
+  const statusReason = useMemo(() => {
+    if (typeof podDescribe?.status_reason === 'string' && podDescribe.status_reason) return podDescribe.status_reason
+    const reasons = containers
+      .map((c: any) => c?.state?.waiting?.reason || c?.state?.terminated?.reason || c?.last_state?.terminated?.reason)
+      .filter(Boolean)
+    if (reasons.length > 0) return String(reasons[0])
+    if (phase === 'Running' && totalContainers > 0 && readyContainers < totalContainers) return 'NotReady'
+    return phase
+  }, [podDescribe?.status_reason, containers, phase, totalContainers, readyContainers])
 
   const containerNames = useMemo(() => {
     if (containers.length > 0) return containers.map((c: any) => c.name)
@@ -70,6 +88,32 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <SummaryBadge label="Restarts" value={restartCount} color={restartCount > 5 ? 'amber' : 'default'} />
         <SummaryBadge label="Containers" value={containerNames.length} />
       </div>
+
+      {/* Top Summary */}
+      <InfoSection title="Top">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+            <div className="text-[11px] text-slate-400">Status</div>
+            <div className="mt-1 text-xs text-white font-medium truncate" title={statusReason}>{statusReason || '-'}</div>
+          </div>
+          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+            <div className="text-[11px] text-slate-400">Ready</div>
+            <div className="mt-1 text-xs text-white font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
+          </div>
+          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+            <div className="text-[11px] text-slate-400">Waiting</div>
+            <div className="mt-1 text-xs text-white font-medium">{waitingCount}</div>
+          </div>
+          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+            <div className="text-[11px] text-slate-400">CrashLoop</div>
+            <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-white'}`}>{crashLoopCount}</div>
+          </div>
+          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+            <div className="text-[11px] text-slate-400">Terminated</div>
+            <div className="mt-1 text-xs text-white font-medium">{terminatedCount}</div>
+          </div>
+        </div>
+      </InfoSection>
 
       {/* Basic Info */}
       <InfoSection title="Basic Info">

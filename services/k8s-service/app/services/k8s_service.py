@@ -457,6 +457,113 @@ class K8sService:
         self._invalidate_yaml_cache(resource_type, resource_name, namespace)
         return {"status": "ok"}
 
+    async def _resolve_api_resource_for_object(self, api_version: str, kind: str) -> Dict[str, Any]:
+        resources = await self.get_available_api_resources()
+        target_kind = self._normalize_resource_key(kind)
+        target_api_version = self._normalize_resource_key(api_version)
+
+        for r in resources:
+            r_kind = self._normalize_resource_key(r.get("kind", ""))
+            r_group_version = self._normalize_resource_key(r.get("groupVersion", ""))
+            if r_kind == target_kind and r_group_version == target_api_version:
+                return r
+
+        # fallback: resolve by kind only
+        return await self._resolve_api_resource(kind)
+
+    async def create_resources_from_yaml(
+        self,
+        yaml_content: str,
+        namespace: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """범용 리소스 YAML 생성 (kubectl create -f 유사)"""
+        import yaml as _yaml
+
+        docs = list(_yaml.safe_load_all(yaml_content or ""))
+        if not docs:
+            raise Exception("Invalid YAML content")
+
+        to_create: List[Dict[str, Any]] = []
+        for doc in docs:
+            if doc is None:
+                continue
+            if not isinstance(doc, dict):
+                raise Exception("YAML document must be an object")
+
+            if str(doc.get("kind", "")) == "List" and isinstance(doc.get("items"), list):
+                for item in doc.get("items", []):
+                    if item is None:
+                        continue
+                    if not isinstance(item, dict):
+                        raise Exception("items in List must be objects")
+                    to_create.append(item)
+            else:
+                to_create.append(doc)
+
+        if not to_create:
+            raise Exception("No resources found in YAML")
+
+        created: List[Dict[str, Any]] = []
+        for obj in to_create:
+            api_version = str(obj.get("apiVersion") or "v1")
+            kind = str(obj.get("kind") or "").strip()
+            metadata = obj.get("metadata") or {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+
+            name = str(metadata.get("name") or "").strip()
+            resource_ns = metadata.get("namespace")
+            target_namespace = namespace or (str(resource_ns).strip() if resource_ns else None)
+
+            if not kind:
+                raise Exception("kind is required in YAML")
+            if not name:
+                raise Exception("metadata.name is required in YAML")
+
+            resource = await self._resolve_api_resource_for_object(api_version, kind)
+            namespaced = bool(resource.get("namespaced", False))
+
+            body = dict(obj)
+            body_metadata = body.get("metadata")
+            if not isinstance(body_metadata, dict):
+                body_metadata = {}
+
+            if namespaced:
+                effective_namespace = target_namespace or self._get_default_namespace()
+                body_metadata["namespace"] = effective_namespace
+                target_namespace = effective_namespace
+            else:
+                body_metadata.pop("namespace", None)
+
+            body["metadata"] = body_metadata
+
+            path = self._build_resource_path(resource, target_namespace, all_namespaces=False)
+            if not path.startswith("/"):
+                path = "/" + path
+
+            url = self.api_client.configuration.host + path
+            headers: Dict[str, Any] = {}
+            self.api_client.update_params_for_auth(headers, None, ["BearerToken"])
+            headers["Content-Type"] = "application/json"
+            headers["Accept"] = "application/json"
+
+            resp = self.api_client.rest_client.POST(url, headers=headers, body=body)
+            if resp.status >= 400:
+                payload = resp.data.decode("utf-8") if isinstance(resp.data, bytes) else resp.data
+                raise Exception(f"Kubernetes API error ({resp.status}): {payload}")
+
+            created.append({
+                "apiVersion": api_version,
+                "kind": kind,
+                "name": name,
+                "namespace": target_namespace,
+            })
+
+            # invalidate cache used by YAML drawer
+            self._invalidate_yaml_cache(resource.get("name", kind.lower()), name, target_namespace)
+
+        return {"status": "ok", "count": len(created), "created": created}
+
     async def describe_resource(
         self,
         resource_type: str,
@@ -1222,36 +1329,83 @@ class K8sService:
         """디플로이먼트 목록"""
         try:
             deployments = self.apps_v1.list_namespaced_deployment(namespace)
-            result = []
-            
-            for deploy in deployments.items:
-                # 첫 번째 컨테이너의 이미지
-                image = deploy.spec.template.spec.containers[0].image if deploy.spec.template.spec.containers else ""
-                
-                # 상태 판단
-                status = "Healthy"
-                if deploy.status.ready_replicas != deploy.spec.replicas:
-                    status = "Degraded"
-                if deploy.status.ready_replicas == 0:
-                    status = "Unavailable"
-                
-                result.append(DeploymentInfo(
-                    name=deploy.metadata.name,
-                    namespace=deploy.metadata.namespace,
-                    replicas=deploy.spec.replicas or 0,
-                    ready_replicas=deploy.status.ready_replicas or 0,
-                    available_replicas=deploy.status.available_replicas or 0,
-                    updated_replicas=deploy.status.updated_replicas or 0,
-                    image=image,
-                    labels=deploy.metadata.labels or {},
-                    selector=deploy.spec.selector.match_labels or {},
-                    created_at=deploy.metadata.creation_timestamp,
-                    status=status
-                ))
-            
-            return result
+            return [self._deployment_to_info(deploy) for deploy in deployments.items]
         except ApiException as e:
             raise Exception(f"Failed to get deployments: {e}")
+
+    async def get_all_deployments(self) -> List[DeploymentInfo]:
+        """전체 네임스페이스 디플로이먼트 목록"""
+        try:
+            deployments = self.apps_v1.list_deployment_for_all_namespaces()
+            return [self._deployment_to_info(deploy) for deploy in deployments.items]
+        except ApiException as e:
+            raise Exception(f"Failed to get all deployments: {e}")
+
+    async def delete_deployment(self, namespace: str, name: str) -> Dict[str, Any]:
+        """디플로이먼트 삭제"""
+        try:
+            delete_options = client.V1DeleteOptions()
+            response = self.apps_v1.delete_namespaced_deployment(
+                name=name,
+                namespace=namespace,
+                body=delete_options,
+            )
+            self._invalidate_yaml_cache("deployment", name, namespace=namespace)
+            self._invalidate_yaml_cache("deployments", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete deployment: {e}")
+
+    def _deployment_to_info(self, deploy: Any) -> DeploymentInfo:
+        desired = getattr(getattr(deploy, "spec", None), "replicas", None) or 0
+        ready = getattr(getattr(deploy, "status", None), "ready_replicas", None) or 0
+        available = getattr(getattr(deploy, "status", None), "available_replicas", None) or 0
+        updated = getattr(getattr(deploy, "status", None), "updated_replicas", None) or 0
+
+        image = ""
+        try:
+            containers = list(getattr(getattr(getattr(deploy, "spec", None), "template", None), "spec", None).containers or [])
+            if containers:
+                image = getattr(containers[0], "image", "") or ""
+        except Exception:
+            image = ""
+
+        status = "Healthy"
+        if ready != desired:
+            status = "Degraded"
+        if ready == 0:
+            status = "Unavailable"
+
+        selector = {}
+        try:
+            selector = getattr(getattr(getattr(deploy, "spec", None), "selector", None), "match_labels", None) or {}
+        except Exception:
+            selector = {}
+
+        return DeploymentInfo(
+            name=deploy.metadata.name,
+            namespace=deploy.metadata.namespace,
+            replicas=desired,
+            ready_replicas=ready,
+            available_replicas=available,
+            updated_replicas=updated,
+            image=image,
+            labels=deploy.metadata.labels or {},
+            selector=selector,
+            created_at=deploy.metadata.creation_timestamp,
+            status=status,
+        )
 
     async def get_replicasets(self, namespace: str, force_refresh: bool = False) -> List[ReplicaSetInfo]:
         """ReplicaSet 목록"""
@@ -3098,6 +3252,26 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get node events: {e}")
+
+    async def delete_node(self, name: str) -> Dict[str, Any]:
+        """Node 삭제"""
+        try:
+            delete_options = client.V1DeleteOptions()
+            response = self.v1.delete_node(name=name, body=delete_options)
+            self._invalidate_yaml_cache("nodes", name, namespace=None)
+            self._invalidate_yaml_cache("node", name, namespace=None)
+            return {
+                "status": "deleted",
+                "name": name,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                }
+            raise Exception(f"Failed to delete node: {e}")
 
     async def get_node_yaml(self, name: str, force_refresh: bool = False) -> str:
         """Node YAML 조회"""

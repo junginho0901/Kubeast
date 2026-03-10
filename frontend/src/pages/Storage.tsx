@@ -821,13 +821,14 @@ export default function Storage() {
 	          </div>
 	        ) : activeTab === 'volumeattachments' ? (
           <div className="hidden md:flex items-start justify-end gap-2 text-xs text-slate-400 leading-snug text-right">
-            <Info
-              className="mt-0.5 h-4 w-4 text-slate-400"
+            <span
               title={tr(
                 'storage.volumeAttachment.infoTitle',
                 'VolumeAttachments are created for CSI volumes that require attach/detach. (e.g., NFS may not create them)',
               )}
-            />
+            >
+              <Info className="mt-0.5 h-4 w-4 text-slate-400" />
+            </span>
             <div>
               {tr(
                 'storage.volumeAttachment.infoLine1',

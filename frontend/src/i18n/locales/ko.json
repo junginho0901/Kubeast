@@ -73,6 +73,11 @@
   "pods": {
     "title": "파드",
     "subtitle": "네임스페이스 전반의 파드 상태와 배치를 확인합니다.",
+    "create": "파드 생성",
+    "createTitle": "YAML로 파드 생성",
+    "delete": "파드 삭제",
+    "deleteTitle": "파드 삭제",
+    "deleteConfirm": "\"{{namespace}}\" 네임스페이스의 파드 \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
     "searchPlaceholder": "파드 이름 검색...",
     "refresh": "새로고침",
     "forceRefreshTitle": "새로고침 (강제 갱신)",
@@ -92,9 +97,38 @@
     },
     "noResults": "파드가 없습니다."
   },
+  "deployments": {
+    "title": "디플로이먼트",
+    "subtitle": "네임스페이스 전반의 롤아웃 상태를 확인합니다.",
+    "create": "디플로이먼트 생성",
+    "createTitle": "YAML로 디플로이먼트 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "디플로이먼트 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 디플로이먼트가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "ready": "준비됨",
+      "updated": "최신 반영",
+      "available": "가용",
+      "status": "상태",
+      "image": "이미지",
+      "age": "생성 시각"
+    },
+    "noResults": "디플로이먼트를 찾을 수 없습니다.",
+    "delete": {
+      "button": "디플로이먼트 삭제",
+      "title": "디플로이먼트 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 디플로이먼트 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "nodes": {
     "title": "노드",
     "subtitle": "클러스터 노드 상태와 용량을 확인합니다.",
+    "create": "노드 생성",
+    "createTitle": "YAML로 노드 생성",
     "searchPlaceholder": "노드 이름 검색...",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
@@ -122,8 +156,8 @@
       "uncordon": "스케줄링 활성화",
       "cordoning": "스케줄링 비활성화 중...",
       "uncordoning": "스케줄링 활성화 중...",
-      "drain": "Drain",
-      "draining": "Draining...",
+      "drain": "드레인",
+      "draining": "드레인 중...",
       "drainSuccess": "드레인 완료",
       "schedulingDisabled": "다른 작업이 진행 중이라 비활성화되었습니다.",
       "drainDisabled": "다른 작업이 진행 중이라 드레인이 비활성화되었습니다.",
@@ -131,6 +165,12 @@
       "schedulingInProgress": "스케줄링 변경 중입니다. 작업이 일시적으로 비활성화됩니다.",
       "debug": "디버그",
       "debugDisabled": "디버그 셸은 Linux 노드에서만 지원됩니다."
+    },
+    "delete": {
+      "button": "노드 삭제",
+      "title": "노드 삭제",
+      "confirm": "노드 \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
+      "warning": "노드를 삭제하면 해당 노드에 스케줄된 워크로드에 영향이 생길 수 있습니다."
     },
     "drain": {
       "title": "노드 드레인",
@@ -176,7 +216,7 @@
         "loading": "YAML 로딩 중...",
         "error": "YAML을 불러오지 못했습니다.",
         "readonly": "읽기 전용 계정입니다.",
-        "editHint": "write 또는 admin 권한에서 편집할 수 있습니다.",
+        "editHint": "admin 권한에서만 편집할 수 있습니다.",
         "applyError": "YAML 적용에 실패했습니다.",
         "refreshing": "새로고침 중...",
         "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
@@ -195,6 +235,7 @@
       "labels": "라벨",
       "annotations": "어노테이션",
       "pods": "파드",
+      "eventsTitle": "이벤트",
       "events": "이벤트",
       "createdAt": "생성 시각",
       "podCidr": "Pod CIDR",
@@ -333,7 +374,28 @@
     "none": "(없음)",
     "empty": "-",
     "unknown": "알 수 없음",
-    "close": "닫기"
+    "close": "닫기",
+    "info": "정보",
+    "loading": "로딩 중...",
+    "refresh": "새로고침",
+    "refreshing": "새로고침 중...",
+    "copy": "복사",
+    "edit": "편집",
+    "editHint": "YAML 편집",
+    "error": "오류",
+    "apply": "적용",
+    "applying": "적용 중...",
+    "applied": "적용됨",
+    "applyError": "적용에 실패했습니다.",
+    "readonly": "읽기 전용",
+    "yamlError": "YAML을 불러오지 못했습니다.",
+    "yamlUnsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?",
+    "cancel": "취소",
+    "delete": "삭제",
+    "deleting": "삭제 중...",
+    "prev": "이전",
+    "next": "다음",
+    "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시"
   },
   "dashboard": {
     "optimization": {
@@ -716,6 +778,7 @@
       "createdAt": "생성 시각",
       "labels": "라벨",
       "annotations": "어노테이션",
+      "eventsTitle": "이벤트",
       "events": "이벤트",
       "tabs": {
         "info": "정보",
@@ -805,6 +868,16 @@
       "submit": "삭제",
       "deleting": "삭제 중...",
       "error": "네임스페이스 삭제에 실패했습니다."
+    }
+  },
+  "admin": {
+    "aiModels": {
+      "title": "AI 모델 설정",
+      "subtitle": "AI 서비스에서 사용할 모델 연결 정보를 관리합니다.",
+      "add": "모델 추가",
+      "new": "새 모델",
+      "edit": "모델 편집",
+      "empty": "등록된 모델이 없습니다."
     }
   },
   "adminUsers": {
@@ -1022,6 +1095,7 @@
       "apiKey": "API Key",
       "apiKeyHint": "API 키는 Kubernetes Secret으로 안전하게 저장됩니다.",
       "baseUrl": "Base URL",
+      "noToolCalling": "이 모델은 툴 호출(Function Calling)을 지원하지 않습니다.",
       "test": "연결 테스트",
       "skip": "건너뛰기 — 기본값 사용",
       "save": "저장 후 계속",
@@ -1041,6 +1115,8 @@
     "resultsCount": "{{count}}건 결과",
     "outOf": "(전체 {{total}}건 중)",
     "loading": "리소스 로딩 중...",
+    "loadingData": "데이터를 불러오는 중...",
+    "loadingHint": "리소스 양이 많으면 시간이 다소 걸릴 수 있습니다.",
     "loaded": "{{count}}개 항목 로드됨",
     "refresh": "새로고침",
     "noResults": "쿼리에 일치하는 리소스가 없습니다",
@@ -1055,6 +1131,8 @@
     "colAge": "나이",
     "colActions": "작업",
     "page": "{{current}} / {{total}} 페이지",
+    "pageInfo": "{{current}} / {{total}} 페이지",
+    "manual": "수동",
     "settings": "설정",
     "maxItemsLabel": "리소스당 최대 항목 수",
     "maxItemsHelp": "이 수를 초과하는 리소스는 성능 저하 방지를 위해 제외됩니다.",

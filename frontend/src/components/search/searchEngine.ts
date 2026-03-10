@@ -44,8 +44,15 @@ export async function searchWithExpression(
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
+    const meta = (item.metadata ?? {}) as Record<string, unknown>
+    const shortcuts = {
+      namespace: meta.namespace ?? '',
+      name: meta.name ?? '',
+      labels: meta.labels ?? {},
+      annotations: meta.annotations ?? {},
+    }
     try {
-      const res = evaluate(parsed as any, { ...dummyKeys, ...item })
+      const res = evaluate(parsed as any, { ...dummyKeys, ...shortcuts, ...item })
       if (res === true) results.push(item)
     } catch { /* expression doesn't match this item */ }
 

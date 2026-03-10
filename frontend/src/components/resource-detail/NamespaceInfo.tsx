@@ -1,24 +1,19 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
-import { RefreshCw, Search, Trash2 } from 'lucide-react'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { Search } from 'lucide-react'
 import { InfoSection, InfoRow, InfoGrid, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
 
 interface Props { name: string }
 
 export default function NamespaceInfo({ name }: Props) {
-  const qc = useQueryClient()
   const { t } = useTranslation()
   const tr = (k: string, fb: string, o?: Record<string, any>) => t(k, { defaultValue: fb, ...o })
 
   const [podFilter, setPodFilter] = useState('')
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30000 })
-  const isAdmin = me?.role === 'admin'
+  const [podPage, setPodPage] = useState(1)
 
   const { data: nsDescribe, isLoading, isError } = useQuery({
     queryKey: ['namespace-describe', name],
@@ -63,16 +58,6 @@ export default function NamespaceInfo({ name }: Props) {
     applyEvent: applyNsEvent,
   })
 
-  const deleteMut = useMutation({
-    mutationFn: (n: string) => api.deleteNamespace(n),
-    onSuccess: async (_data, deletedName) => {
-      setDeleteDialogOpen(false)
-      qc.setQueryData(['namespaces'], (prev: any[] | undefined) =>
-        Array.isArray(prev) ? prev.filter((ns: any) => ns.name !== deletedName) : prev
-      )
-    },
-  })
-
   const sortedEvents = useMemo(() => {
     if (!nsDescribe?.events || !Array.isArray(nsDescribe.events)) return []
     return [...nsDescribe.events].sort((a: any, b: any) => {
@@ -89,6 +74,20 @@ export default function NamespaceInfo({ name }: Props) {
     return nsPods.filter((p: any) => p.name.toLowerCase().includes(q) || (p.status || '').toLowerCase().includes(q) || (p.node || '').toLowerCase().includes(q))
   }, [nsPods, podFilter])
 
+  const podPageSize = 10
+  const podTotalPages = Math.max(1, Math.ceil(filteredPods.length / podPageSize))
+  const pagedPods = filteredPods.slice((podPage - 1) * podPageSize, podPage * podPageSize)
+
+  useEffect(() => {
+    if (podPage > podTotalPages) {
+      setPodPage(podTotalPages)
+    }
+  }, [podPage, podTotalPages])
+
+  useEffect(() => {
+    setPodPage(1)
+  }, [podFilter, name])
+
   const podStatusColor = (s: string) => {
     const l = (s || '').toLowerCase()
     if (l === 'running') return 'badge-success'
@@ -104,18 +103,6 @@ export default function NamespaceInfo({ name }: Props) {
 
   return (
     <>
-      {/* Action Buttons */}
-      {isAdmin && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setDeleteDialogOpen(true)}
-            className="text-xs px-3 py-1 rounded-md border border-red-700/60 bg-red-900/20 text-red-300 hover:bg-red-900/40 flex items-center gap-1"
-          >
-            <Trash2 className="w-3 h-3" /> Delete
-          </button>
-        </div>
-      )}
-
       {/* Summary Badges */}
       <div className="flex flex-wrap items-center gap-2">
         <SummaryBadge label="Status" value={nsDescribe.status || '-'} color={nsDescribe.status === 'Active' ? 'green' : 'amber'} />
@@ -210,63 +197,73 @@ export default function NamespaceInfo({ name }: Props) {
       <InfoSection
         title={`Pods${Array.isArray(nsPods) ? ` (${nsPods.length})` : ''}`}
         actions={
-          Array.isArray(nsPods) && nsPods.length > 5 ? (
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
-              <input type="text" value={podFilter} onChange={e => setPodFilter(e.target.value)} placeholder="Filter..."
-                className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none w-36" />
-            </div>
-          ) : undefined
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+            <input
+              type="text"
+              value={podFilter}
+              onChange={e => setPodFilter(e.target.value)}
+              placeholder="Filter..."
+              className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none w-36"
+            />
+          </div>
         }
       >
         {Array.isArray(nsPods) && nsPods.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[620px]">
-              <thead className="text-slate-400"><tr><th className="text-left py-2 w-[30%]">Name</th><th className="text-left py-2 w-[12%]">Status</th><th className="text-left py-2 w-[10%]">Ready</th><th className="text-left py-2 w-[10%]">Restarts</th><th className="text-left py-2 w-[23%]">Node</th><th className="text-left py-2 w-[15%]">Age</th></tr></thead>
-              <tbody className="divide-y divide-slate-800">
-                {filteredPods.slice(0, 100).map((pod: any) => (
-                  <tr key={pod.name} className="text-slate-200">
-                    <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}>{pod.name}</span></td>
-                    <td className="py-2 pr-2"><span className={`badge ${podStatusColor(pod.status)}`}>{pod.status}</span></td>
-                    <td className="py-2 pr-2">{pod.ready}</td>
-                    <td className="py-2 pr-2">{pod.restarts}</td>
-                    <td className="py-2 pr-2"><span className="block truncate">{pod.node || '-'}</span></td>
-                    <td className="py-2 pr-2">{fmtRel(pod.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredPods.length > 100 && <p className="text-[11px] text-slate-500 mt-1">{filteredPods.length - 100} more not shown</p>}
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs table-fixed min-w-[620px]">
+                <thead className="text-slate-400"><tr><th className="text-left py-2 w-[30%]">Name</th><th className="text-left py-2 w-[12%]">Status</th><th className="text-left py-2 w-[10%]">Ready</th><th className="text-left py-2 w-[10%]">Restarts</th><th className="text-left py-2 w-[23%]">Node</th><th className="text-left py-2 w-[15%]">Age</th></tr></thead>
+                <tbody className="divide-y divide-slate-800">
+                  {pagedPods.map((pod: any) => (
+                    <tr key={pod.name} className="text-slate-200">
+                      <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}>{pod.name}</span></td>
+                      <td className="py-2 pr-2"><span className={`badge ${podStatusColor(pod.status)}`}>{pod.status}</span></td>
+                      <td className="py-2 pr-2">{pod.ready}</td>
+                      <td className="py-2 pr-2">{pod.restarts}</td>
+                      <td className="py-2 pr-2"><span className="block truncate">{pod.node || '-'}</span></td>
+                      <td className="py-2 pr-2">{fmtRel(pod.created_at)}</td>
+                    </tr>
+                  ))}
+                  {pagedPods.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-3 text-slate-400">(none)</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
+              <span>
+                {filteredPods.length === 0
+                  ? '(none)'
+                  : `${(podPage - 1) * podPageSize + 1}-${Math.min(podPage * podPageSize, filteredPods.length)} / ${filteredPods.length}`}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPodPage((p) => Math.max(1, p - 1))}
+                  disabled={podPage <= 1}
+                  className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setPodPage((p) => Math.min(podTotalPages, p + 1))}
+                  disabled={podPage >= podTotalPages}
+                  className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         ) : <span className="text-slate-400 text-xs">(none)</span>}
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title={tr('namespaces.detail.events', 'Events')}>
+      <InfoSection title={tr('namespaces.detail.eventsTitle', 'Events')}>
         <EventsTable events={sortedEvents} />
       </InfoSection>
-
-      {/* Delete Dialog */}
-      {deleteDialogOpen && (
-        <ModalOverlay onClose={() => setDeleteDialogOpen(false)}>
-          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md mx-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-2">Delete Namespace</h3>
-            <p className="text-sm text-slate-300 mb-4">{tr('namespaces.delete.confirm', 'Are you sure you want to delete namespace "{{name}}"?', { name })}</p>
-            <p className="text-xs text-red-400 mb-4 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">All resources in this namespace will be permanently deleted.</p>
-            {deleteMut.isError && <p className="text-sm text-red-400 mb-3">{(deleteMut.error as Error)?.message || 'Failed'}</p>}
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteDialogOpen(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800">Cancel</button>
-              <button
-                onClick={() => deleteMut.mutate(name)}
-                disabled={deleteMut.isPending}
-                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
-              >
-                {deleteMut.isPending ? <><RefreshCw className="w-3 h-3 animate-spin" /> Deleting...</> : <><Trash2 className="w-3 h-3" /> Delete</>}
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
     </>
   )
 }

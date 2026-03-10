@@ -1006,7 +1006,10 @@ export default function AIChat() {
         URL.revokeObjectURL(url)
       }
 
+      const savedDefine = (window as any).define
+      delete (window as any).define
       const { default: JSZip } = await import('jszip')
+      if (savedDefine) (window as any).define = savedDefine
       const zip = new JSZip()
 
       for (const tc of toolCalls) {

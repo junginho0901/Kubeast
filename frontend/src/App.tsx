@@ -20,6 +20,7 @@ import Account from './pages/Account'
 import ComingSoon from './pages/ComingSoon'
 import AdvancedSearch from './pages/AdvancedSearch'
 import Pods from './pages/workloads/Pods'
+import Deployments from './pages/workloads/Deployments'
 import ClusterNodes from './pages/ClusterNodes'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
@@ -37,7 +38,7 @@ function App() {
             <Route path="cluster/nodes" element={<ClusterNodes />} />
             <Route path="cluster/search" element={<AdvancedSearch />} />
             <Route path="workloads/pods" element={<Pods />} />
-            <Route path="workloads/deployments" element={<ComingSoon title="Deployments" />} />
+            <Route path="workloads/deployments" element={<Deployments />} />
             <Route path="workloads/statefulsets" element={<ComingSoon title="Stateful Sets" />} />
             <Route path="workloads/daemonsets" element={<ComingSoon title="Daemon Sets" />} />
             <Route path="workloads/replicasets" element={<ComingSoon title="Replica Sets" />} />

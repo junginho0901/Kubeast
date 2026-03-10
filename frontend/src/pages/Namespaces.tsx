@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -6,6 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { ChevronDown, ChevronUp, RefreshCw, Search, Boxes, Plus } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
 
 /* ──────────── types ──────────── */
 interface NamespaceInfo {
@@ -29,6 +30,8 @@ export default function Namespaces() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<null | 'name' | 'status' | 'age'>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   /* create namespace dialog */
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -63,7 +66,7 @@ export default function Namespaces() {
     staleTime: 30000,
   })
 
-  const isAdmin = me?.role === 'admin'
+  const isWriteRole = me?.role === 'admin' || me?.role === 'write'
 
   /* ── helpers ── */
   const formatRelative = (iso?: string | null) => {
@@ -164,6 +167,26 @@ export default function Namespaces() {
     return list
   }, [filteredNamespaces, sortDir, sortKey])
 
+  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
+    recalculationKey: sortedNamespaces.length,
+  })
+  const totalPages = Math.max(1, Math.ceil(sortedNamespaces.length / rowsPerPage))
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const pagedNamespaces = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage
+    return sortedNamespaces.slice(start, start + rowsPerPage)
+  }, [sortedNamespaces, currentPage, rowsPerPage])
+
   /* ── handlers ── */
   const handleRefresh = async () => {
     if (isRefreshing) return
@@ -209,7 +232,7 @@ export default function Namespaces() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {isWriteRole && (
             <button
               onClick={() => {
                 setCreateDialogOpen(true)
@@ -247,83 +270,117 @@ export default function Namespaces() {
       </div>
 
       {/* table */}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm min-w-[700px] table-fixed">
-          <thead className="text-slate-400">
-            <tr>
-              <th className="text-left py-3 px-4 w-[40%] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">
-                  {tr('namespaces.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
-              </th>
-              <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">
-                  {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
-                </span>
-              </th>
-              <th className="text-left py-3 px-4 w-[30%]">
-                {tr('namespaces.table.labels', 'Labels')}
-              </th>
-              <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">
-                  {tr('namespaces.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700">
-            {sortedNamespaces.map((ns) => {
-              const labelEntries = ns.labels ? Object.entries(ns.labels) : []
-              return (
-                <tr
-            key={ns.name}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({ kind: 'Namespace', name: ns.name })}
-          >
-                  <td className="py-3 px-4 font-medium text-white">
-                    <div className="flex items-center gap-2">
-                      <Boxes className="w-4 h-4 text-primary-400 flex-shrink-0" />
-                      <span className="block truncate">{ns.name}</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${getStatusColor(ns.status)}`}>{ns.status}</span>
-                  </td>
-                  <td className="py-3 px-4 text-xs">
-                    <div className="flex flex-wrap gap-1 max-w-full overflow-hidden">
-                      {labelEntries.length > 0
-                        ? labelEntries.slice(0, 2).map(([k, v]) => (
-                            <span
-                              key={k}
-                              className="inline-block rounded-full border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300 truncate max-w-[160px]"
-                              title={`${k}: ${v}`}
-                            >
-                              {k}
-                            </span>
-                          ))
-                        : <span className="text-slate-500">-</span>}
-                      {labelEntries.length > 2 && (
-                        <span className="text-slate-500">+{labelEntries.length - 2}</span>
-                      )}
-                </div>
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono">
-                    <span className="block truncate">{formatRelative(ns.created_at)}</span>
+      <div ref={tableContainerRef} className="card">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[700px] table-fixed">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="text-left py-3 px-4 w-[40%] cursor-pointer" onClick={() => handleSort('name')}>
+                  <span className="inline-flex items-center gap-1">
+                    {tr('namespaces.table.name', 'Name')}{renderSortIcon('name')}
+                  </span>
+                </th>
+                <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => handleSort('status')}>
+                  <span className="inline-flex items-center gap-1">
+                    {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
+                  </span>
+                </th>
+                <th className="text-left py-3 px-4 w-[30%]">
+                  {tr('namespaces.table.labels', 'Labels')}
+                </th>
+                <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => handleSort('age')}>
+                  <span className="inline-flex items-center gap-1">
+                    {tr('namespaces.table.age', 'Age')}{renderSortIcon('age')}
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700">
+              {pagedNamespaces.map((ns) => {
+                const labelEntries = ns.labels ? Object.entries(ns.labels) : []
+                return (
+                  <tr
+                    key={ns.name}
+                    className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'Namespace', name: ns.name })}
+                  >
+                    <td className="py-3 px-4 font-medium text-white">
+                      <div className="flex items-center gap-2">
+                        <Boxes className="w-4 h-4 text-primary-400 flex-shrink-0" />
+                        <span className="block truncate">{ns.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`badge ${getStatusColor(ns.status)}`}>{ns.status}</span>
+                    </td>
+                    <td className="py-3 px-4 text-xs">
+                      <div className="flex flex-nowrap items-center gap-1 max-w-full overflow-hidden min-w-0 whitespace-nowrap">
+                        {labelEntries.length > 0
+                          ? labelEntries.slice(0, 2).map(([k, v]) => (
+                              <span
+                                key={k}
+                                className="inline-block rounded-full border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300 truncate max-w-[160px]"
+                                title={`${k}: ${v}`}
+                              >
+                                {k}
+                              </span>
+                            ))
+                          : <span className="text-slate-500">-</span>}
+                        {labelEntries.length > 2 && (
+                          <span className="text-slate-500 shrink-0">+{labelEntries.length - 2}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-xs font-mono">
+                      <span className="block truncate">{formatRelative(ns.created_at)}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {sortedNamespaces.length === 0 && !isLoadingNs && (
+                <tr>
+                  <td colSpan={4} className="py-6 px-4 text-slate-400">
+                    {searchQuery
+                      ? tr('namespaces.noSearchResults', 'No results found')
+                      : tr('namespaces.empty', 'No namespaces found')}
                   </td>
                 </tr>
-              )
-            })}
-            {sortedNamespaces.length === 0 && !isLoadingNs && (
-              <tr>
-                <td colSpan={4} className="py-6 px-4 text-slate-400">
-                  {searchQuery
-                    ? tr('namespaces.noSearchResults', 'No results found')
-                    : tr('namespaces.empty', 'No namespaces found')}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {sortedNamespaces.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700">
+            <div className="text-xs text-slate-400">
+              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
+                start: (currentPage - 1) * rowsPerPage + 1,
+                end: Math.min(currentPage * rowsPerPage, sortedNamespaces.length),
+                total: sortedNamespaces.length,
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+              >
+                {tr('common.prev', 'Prev')}
+              </button>
+              <span className="text-xs text-slate-300 min-w-[72px] text-center">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+              >
+                {tr('common.next', 'Next')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ──── Create Namespace Dialog ──── */}
