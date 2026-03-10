@@ -23,6 +23,7 @@ from app.cluster import (
 )
 import asyncio
 from collections import defaultdict
+import yaml
 
 router = APIRouter()
 k8s_service = K8sService()
@@ -40,6 +41,30 @@ global_connection_order = []
 
 MAX_CONNECTIONS_PER_POD = 2  # Pod당 최대 2개 연결 (초과 시 이전 연결 자동 종료)
 MAX_TOTAL_CONNECTIONS = 200  # 전체 최대 연결 수
+
+
+def _normalize_token(value: Optional[str]) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _yaml_contains_kind(yaml_content: str, target_kind: str) -> bool:
+    normalized_target = _normalize_token(target_kind)
+    if not normalized_target:
+        return False
+
+    docs = list(yaml.safe_load_all(yaml_content or ""))
+    for doc in docs:
+        if doc is None:
+            continue
+        if not isinstance(doc, dict):
+            continue
+        if _normalize_token(doc.get("kind")) == normalized_target:
+            return True
+        if _normalize_token(doc.get("kind")) == "list" and isinstance(doc.get("items"), list):
+            for item in doc["items"]:
+                if isinstance(item, dict) and _normalize_token(item.get("kind")) == normalized_target:
+                    return True
+    return False
 
 # 이벤트 루프 상태 모니터링 (Heartbeat)
 @router.on_event("startup")
@@ -187,6 +212,8 @@ async def apply_resource_yaml(body: dict, request: Request):
 
         if not yaml_content or not resource_type or not resource_name:
             raise HTTPException(status_code=400, detail="yaml, resource_type, resource_name are required")
+        if role != "admin" and _normalize_token(resource_type) in ("node", "nodes"):
+            raise HTTPException(status_code=403, detail="Forbidden: node yaml apply is admin only")
 
         result = await k8s_service.apply_resource_yaml(
             resource_type=resource_type,
@@ -195,6 +222,35 @@ async def apply_resource_yaml(body: dict, request: Request):
             namespace=namespace,
         )
         return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/resources/yaml/create")
+async def create_resources_from_yaml(body: dict, request: Request):
+    """범용 리소스 YAML 생성 (kubectl create -f 유사)"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role not in ("admin", "write"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+        yaml_content = body.get("yaml", "")
+        namespace = body.get("namespace")
+        if not yaml_content:
+            raise HTTPException(status_code=400, detail="yaml is required")
+        if role != "admin":
+            try:
+                if _yaml_contains_kind(yaml_content, "Node"):
+                    raise HTTPException(status_code=403, detail="Forbidden: node create is admin only")
+            except yaml.YAMLError as exc:
+                raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}")
+
+        return await k8s_service.create_resources_from_yaml(
+            yaml_content=yaml_content,
+            namespace=namespace,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -289,8 +345,8 @@ async def create_namespace(body: dict, request: Request):
     """새 네임스페이스 생성"""
     try:
         role = getattr(request.state, "role", "read")
-        if role != "admin":
-            raise HTTPException(status_code=403, detail="Forbidden: admin only")
+        if role not in ("admin", "write"):
+            raise HTTPException(status_code=403, detail="Forbidden: write or admin role required")
         name = body.get("name") if isinstance(body, dict) else None
         if not name:
             raise HTTPException(status_code=400, detail="name is required")
@@ -306,8 +362,8 @@ async def delete_namespace(namespace: str, request: Request):
     """네임스페이스 삭제"""
     try:
         role = getattr(request.state, "role", "read")
-        if role != "admin":
-            raise HTTPException(status_code=403, detail="Forbidden: admin only")
+        if role not in ("admin", "write"):
+            raise HTTPException(status_code=403, detail="Forbidden: write or admin role required")
         return await k8s_service.delete_namespace(namespace)
     except HTTPException:
         raise
@@ -329,6 +385,18 @@ async def get_deployments(namespace: str):
     """특정 네임스페이스의 디플로이먼트 목록"""
     try:
         return await k8s_service.get_deployments(namespace)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/namespaces/{namespace}/deployments/{deployment_name}")
+async def delete_deployment(namespace: str, deployment_name: str, request: Request):
+    """디플로이먼트 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        return await k8s_service.delete_deployment(namespace, deployment_name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -951,6 +1019,15 @@ async def get_all_pods(force_refresh: bool = Query(False)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/deployments/all", response_model=List[DeploymentInfo])
+async def get_all_deployments(force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
+    """전체 네임스페이스의 Deployment 목록 조회"""
+    try:
+        return await k8s_service.get_all_deployments()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/namespaces/{namespace}/pods/{name}/describe")
 async def describe_pod(namespace: str, name: str):
     """Pod 상세 정보 조회"""
@@ -958,7 +1035,10 @@ async def describe_pod(namespace: str, name: str):
         pod_detail = await k8s_service.describe_pod(namespace, name)
         return pod_detail
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"Pod '{namespace}/{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/namespaces/{namespace}/pods/{name}/rbac")
@@ -1635,13 +1715,27 @@ async def get_node_yaml(name: str, force_refresh: bool = Query(False)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/nodes/{name}")
+async def delete_node(name: str, request: Request):
+    """Node 삭제"""
+    try:
+        role = getattr(request.state, "role", "read")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: admin only")
+        return await k8s_service.delete_node(name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/nodes/{name}/yaml/apply")
 async def apply_node_yaml(name: str, body: dict, request: Request):
     """Node YAML 적용"""
     try:
         role = getattr(request.state, "role", "read")
-        if role not in ("admin", "write"):
-            raise HTTPException(status_code=403, detail="Forbidden: write or admin role required")
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: admin role required")
         yaml_content = body.get("yaml") if isinstance(body, dict) else None
         if not yaml_content:
             raise HTTPException(status_code=400, detail="yaml is required")
