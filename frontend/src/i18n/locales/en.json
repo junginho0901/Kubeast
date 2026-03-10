@@ -92,6 +92,33 @@
     },
     "noResults": "No pods found."
   },
+  "deployments": {
+    "title": "Deployments",
+    "subtitle": "Inspect rollout health across namespaces.",
+    "create": "Create Deployment",
+    "createTitle": "Create Deployment from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search deployments by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} deployment{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "ready": "Ready",
+      "updated": "Up to date",
+      "available": "Available",
+      "status": "Status",
+      "image": "Image",
+      "age": "Age"
+    },
+    "noResults": "No deployments found.",
+    "delete": {
+      "button": "Delete Deployment",
+      "title": "Delete Deployment",
+      "confirm": "Are you sure you want to delete deployment \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "nodes": {
     "title": "Nodes",
     "subtitle": "Inspect cluster node status and capacity.",
@@ -131,6 +158,12 @@
       "schedulingInProgress": "Scheduling update in progress. Actions are temporarily disabled.",
       "debug": "Debug",
       "debugDisabled": "Debug shell is supported only on Linux nodes."
+    },
+    "delete": {
+      "button": "Delete Node",
+      "title": "Delete Node",
+      "confirm": "Are you sure you want to delete node \"{{name}}\"?",
+      "warning": "Deleting a node can disrupt workloads scheduled on it."
     },
     "drain": {
       "title": "Drain node",
@@ -176,7 +209,7 @@
         "loading": "Loading YAML...",
         "error": "Failed to load YAML.",
         "readonly": "Read-only for read-only users.",
-        "editHint": "Edit is available for write or admin users.",
+        "editHint": "Edit is available for admin users only.",
         "applyError": "Failed to apply YAML.",
         "refreshing": "Refreshing...",
         "unsaved": "You have unsaved YAML changes. Discard them?"
