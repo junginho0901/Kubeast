@@ -357,7 +357,7 @@ export default function NodeInfo({ name }: Props) {
       </InfoSection>
 
       {/* Events */}
-      <InfoSection title={tr('nodes.detail.events', 'Events')}>
+      <InfoSection title={tr('nodes.detail.eventsTitle', 'Events')}>
         <EventsTable events={sortedEvents} />
       </InfoSection>
 
