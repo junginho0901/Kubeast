@@ -176,6 +176,46 @@ class WebSocketMultiplexer:
             "created_at": self._to_iso(getattr(sts.metadata, "creation_timestamp", None)),
         }
 
+    def _daemonset_to_info(self, ds: Any) -> Dict[str, Any]:
+        desired = getattr(ds.status, "desired_number_scheduled", 0) or 0
+        current = getattr(ds.status, "current_number_scheduled", 0) or 0
+        ready = getattr(ds.status, "number_ready", 0) or 0
+        updated = getattr(ds.status, "updated_number_scheduled", 0) or 0
+        available = getattr(ds.status, "number_available", 0) or 0
+        misscheduled = getattr(ds.status, "number_misscheduled", 0) or 0
+        unavailable = getattr(ds.status, "number_unavailable", None)
+        if unavailable is None:
+            unavailable = max(desired - ready, 0)
+
+        template_spec = getattr(getattr(ds.spec, "template", None), "spec", None)
+        containers = list(getattr(template_spec, "containers", None) or [])
+        images = [c.image for c in containers if getattr(c, "image", None)]
+        node_selector = dict(getattr(template_spec, "node_selector", None) or {})
+
+        status = "Healthy"
+        if desired == 0 and current == 0:
+            status = "Idle"
+        elif ready != desired or misscheduled > 0 or unavailable > 0:
+            status = "Degraded"
+        if desired > 0 and ready == 0:
+            status = "Unavailable"
+
+        return {
+            "name": ds.metadata.name,
+            "namespace": ds.metadata.namespace,
+            "desired": desired,
+            "current": current,
+            "ready": ready,
+            "updated": updated,
+            "available": available,
+            "misscheduled": misscheduled,
+            "unavailable": unavailable,
+            "node_selector": node_selector,
+            "images": images,
+            "status": status,
+            "created_at": self._to_iso(getattr(ds.metadata, "creation_timestamp", None)),
+        }
+
     async def handle_message(self, websocket, msg: Dict[str, Any]) -> None:
         msg_type = (msg.get("type") or "").upper()
         if msg_type == "REQUEST":
@@ -289,6 +329,11 @@ class WebSocketMultiplexer:
                             stream = w.stream(apps.list_namespaced_stateful_set, namespace, **stream_params)
                         else:
                             stream = w.stream(apps.list_stateful_set_for_all_namespaces, **stream_params)
+                    elif resource == "daemonsets":
+                        if namespace:
+                            stream = w.stream(apps.list_namespaced_daemon_set, namespace, **stream_params)
+                        else:
+                            stream = w.stream(apps.list_daemon_set_for_all_namespaces, **stream_params)
                     else:
                         raise ValueError(f"unsupported watch resource: {resource}")
 
@@ -310,6 +355,8 @@ class WebSocketMultiplexer:
                             obj = self._event_to_info(obj)
                         elif resource == "statefulsets" and obj is not None:
                             obj = self._statefulset_to_info(obj)
+                        elif resource == "daemonsets" and obj is not None:
+                            obj = self._daemonset_to_info(obj)
 
                         loop.call_soon_threadsafe(
                             queue.put_nowait, {"type": event.get("type"), "object": obj}
