@@ -45,12 +45,13 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet') && !!namespace && !!name
+  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet') && !!namespace && !!name
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['workload-describe', kind, namespace, name],
     queryFn: () => {
       if (kind === 'Deployment') return api.describeDeployment(namespace as string, name)
-      return api.describeStatefulSet(namespace as string, name)
+      if (kind === 'StatefulSet') return api.describeStatefulSet(namespace as string, name)
+      return api.describeDaemonSet(namespace as string, name)
     },
     enabled: needsDescribe,
     retry: false,
@@ -64,6 +65,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const isCronJob = kind === 'CronJob'
   const isDeployment = kind === 'Deployment'
   const isStatefulSet = kind === 'StatefulSet'
+  const isDaemonSet = kind === 'DaemonSet'
 
   const labels = ((describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = ((describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {})
@@ -144,15 +146,48 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     }
 
     return {
-      desired: spec.replicas ?? '-',
-      current: status.replicas ?? '-',
-      ready: status.readyReplicas ?? 0,
-      updated: status.updatedReplicas ?? 0,
-      available: status.availableReplicas ?? 0,
+      desired: isDaemonSet ? (status.desiredNumberScheduled as number | undefined) ?? 0 : spec.replicas ?? '-',
+      current: isDaemonSet ? (status.currentNumberScheduled as number | undefined) ?? 0 : status.replicas ?? '-',
+      ready: isDaemonSet ? (status.numberReady as number | undefined) ?? 0 : status.readyReplicas ?? 0,
+      updated: isDaemonSet ? (status.updatedNumberScheduled as number | undefined) ?? 0 : status.updatedReplicas ?? 0,
+      available: isDaemonSet ? (status.numberAvailable as number | undefined) ?? 0 : status.availableReplicas ?? 0,
     }
-  }, [describe?.replicas_status, describe?.replicas, spec.replicas, status.replicas, status.readyReplicas, status.updatedReplicas, status.availableReplicas])
+  }, [
+    describe?.replicas_status,
+    describe?.replicas,
+    isDaemonSet,
+    spec.replicas,
+    status.replicas,
+    status.readyReplicas,
+    status.updatedReplicas,
+    status.availableReplicas,
+    status.desiredNumberScheduled,
+    status.currentNumberScheduled,
+    status.numberReady,
+    status.updatedNumberScheduled,
+    status.numberAvailable,
+  ])
+
+  const daemonSetStatus = useMemo(() => {
+    if (describe?.daemonset_status && typeof describe.daemonset_status === 'object') {
+      return {
+        misscheduled: describe.daemonset_status.misscheduled ?? 0,
+        unavailable: describe.daemonset_status.unavailable ?? 0,
+      }
+    }
+    return {
+      misscheduled: (status.numberMisscheduled as number | undefined) ?? 0,
+      unavailable: (status.numberUnavailable as number | undefined) ?? Math.max(Number(replicaView.desired) - Number(replicaView.ready), 0),
+    }
+  }, [describe?.daemonset_status, status.numberMisscheduled, status.numberUnavailable, replicaView.desired, replicaView.ready])
 
   const strategyType = useMemo(() => {
+    if (isDaemonSet) {
+      return (describe?.update_strategy?.type as string | undefined)
+        ?? ((spec.updateStrategy as Record<string, any> | undefined)?.type as string | undefined)
+        ?? '-'
+    }
+
     if (isStatefulSet) {
       return (describe?.update_strategy?.type as string | undefined)
         ?? ((spec.updateStrategy as Record<string, any> | undefined)?.type as string | undefined)
@@ -168,9 +203,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     return ((spec.strategy as Record<string, any> | undefined)?.type as string | undefined)
       ?? ((spec.updateStrategy as Record<string, any> | undefined)?.type as string | undefined)
       ?? '-'
-  }, [describe?.update_strategy?.type, describe?.strategy?.type, isStatefulSet, isDeployment, spec.strategy, spec.updateStrategy])
+  }, [describe?.update_strategy?.type, describe?.strategy?.type, isDaemonSet, isStatefulSet, isDeployment, spec.strategy, spec.updateStrategy])
 
   const strategyRolling = useMemo(() => {
+    if (isDaemonSet) {
+      return (describe?.update_strategy?.rolling_update as Record<string, any> | undefined)
+        ?? ((spec.updateStrategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
+    }
+
     if (isStatefulSet) {
       return (describe?.update_strategy?.rolling_update as Record<string, any> | undefined)
         ?? ((spec.updateStrategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
@@ -183,7 +223,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
 
     return ((spec.strategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
       ?? ((spec.updateStrategy as Record<string, any> | undefined)?.rollingUpdate as Record<string, any> | undefined)
-  }, [describe?.update_strategy?.rolling_update, describe?.strategy?.rolling_update, isStatefulSet, isDeployment, spec.strategy, spec.updateStrategy])
+  }, [describe?.update_strategy?.rolling_update, describe?.strategy?.rolling_update, isDaemonSet, isStatefulSet, isDeployment, spec.strategy, spec.updateStrategy])
 
   const conditions = Array.isArray(describe?.conditions)
     ? describe.conditions
@@ -227,7 +267,16 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       describe?.collision_count != null
     )
 
-  const showWorkloadSettings = showDeploymentSettings || showStatefulSetSettings
+  const showDaemonSetSettings =
+    isDaemonSet && (
+      describe?.min_ready_seconds != null ||
+      describe?.revision_history_limit != null ||
+      describe?.collision_count != null ||
+      daemonSetStatus.misscheduled > 0 ||
+      daemonSetStatus.unavailable > 0
+    )
+
+  const showWorkloadSettings = showDeploymentSettings || showStatefulSetSettings || showDaemonSetSettings
 
   return (
     <div className="space-y-4">
@@ -237,6 +286,8 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
           <SummaryBadge label="Ready" value={replicaView.ready as string | number} color={Number(replicaView.ready) === Number(replicaView.desired) ? 'green' : 'amber'} />
           <SummaryBadge label="Updated" value={replicaView.updated as string | number} />
           <SummaryBadge label="Available" value={replicaView.available as string | number} />
+          {isDaemonSet && <SummaryBadge label="Misscheduled" value={daemonSetStatus.misscheduled} color={daemonSetStatus.misscheduled > 0 ? 'amber' : 'default'} />}
+          {isDaemonSet && <SummaryBadge label="Unavailable" value={daemonSetStatus.unavailable} color={daemonSetStatus.unavailable > 0 ? 'red' : 'default'} />}
         </div>
       )}
 
@@ -299,6 +350,15 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
                 {describe?.current_revision && <InfoRow label="Current Revision" value={String(describe.current_revision)} />}
                 {describe?.update_revision && <InfoRow label="Update Revision" value={String(describe.update_revision)} />}
                 {describe?.collision_count != null && <InfoRow label="Collision Count" value={String(describe.collision_count)} />}
+              </>
+            )}
+            {showDaemonSetSettings && (
+              <>
+                {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
+                {describe?.revision_history_limit != null && <InfoRow label="Revision History Limit" value={String(describe.revision_history_limit)} />}
+                {describe?.collision_count != null && <InfoRow label="Collision Count" value={String(describe.collision_count)} />}
+                <InfoRow label="Misscheduled Pods" value={String(daemonSetStatus.misscheduled)} />
+                <InfoRow label="Unavailable Pods" value={String(daemonSetStatus.unavailable)} />
               </>
             )}
           </div>
