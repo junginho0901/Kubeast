@@ -7,7 +7,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import NodeShellTerminal from '@/components/NodeShellTerminal'
-import { InfoSection, KeyValueTags, UsageCard, EventsTable, fmtRel, fmtTs, fmtPodAge, SummaryBadge } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, fmtRel, fmtTs, fmtPodAge, SummaryBadge } from './DetailCommon'
 
 interface Props { name: string }
 
@@ -122,6 +122,28 @@ export default function NodeInfo({ name }: Props) {
   const cpuP = metricForNode ? parseFloat(metricForNode.cpu_percent) : 0
   const memP = metricForNode ? parseFloat(metricForNode.memory_percent) : 0
 
+  const nodeRoles = useMemo(() => {
+    const labels = nodeDescribe?.labels || {}
+    return Object.keys(labels)
+      .filter((key) => key.startsWith('node-role.kubernetes.io/'))
+      .map((key) => key.split('/')[1])
+      .filter(Boolean)
+  }, [nodeDescribe?.labels])
+
+  const capacityRows = useMemo(() => {
+    const capacity = nodeDescribe?.capacity || {}
+    const allocatable = nodeDescribe?.allocatable || {}
+    const keys = new Set<string>([
+      ...Object.keys(capacity),
+      ...Object.keys(allocatable),
+    ])
+    return [...keys].sort().map((key) => ({
+      key,
+      capacity: capacity[key] ?? '-',
+      allocatable: allocatable[key] ?? '-',
+    }))
+  }, [nodeDescribe?.capacity, nodeDescribe?.allocatable])
+
   const sortedEvents = useMemo(() => {
     if (!Array.isArray(nodeEvents)) return []
     return [...nodeEvents].sort((a: any, b: any) => {
@@ -209,6 +231,7 @@ export default function NodeInfo({ name }: Props) {
               <SummaryBadge label="Ready" value={isReady ? 'Yes' : 'No'} color={isReady ? 'green' : 'red'} />
               <SummaryBadge label="Taints" value={nodeDescribe.taints?.length || 0} color={nodeDescribe.taints?.length > 0 ? 'amber' : 'default'} />
               <SummaryBadge label="Conditions" value={nodeDescribe.conditions?.length || 0} />
+              <SummaryBadge label="Roles" value={nodeRoles.length > 0 ? nodeRoles.join(', ') : 'worker'} />
             </>
           )
         })()}
@@ -248,10 +271,37 @@ export default function NodeInfo({ name }: Props) {
             ['Boot ID', nodeDescribe.system_info?.boot_id],
             ['Machine ID', nodeDescribe.system_info?.machine_id],
             ['System UUID', nodeDescribe.system_info?.system_uuid],
+            ['Roles', nodeRoles.length > 0 ? nodeRoles.join(', ') : 'worker'],
           ] as [string, string | null | undefined][]).map(([label, val]) => (
             <div key={label}>{label}: {val || '-'}</div>
           ))}
         </div>
+      </InfoSection>
+
+      {/* Capacity */}
+      <InfoSection title="Capacity / Allocatable">
+        {capacityRows.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[540px] table-fixed">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-2 w-[38%]">Resource</th>
+                  <th className="text-left py-2 w-[31%]">Allocatable</th>
+                  <th className="text-left py-2 w-[31%]">Capacity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {capacityRows.map((row) => (
+                  <tr key={row.key} className="text-slate-200">
+                    <td className="py-2 pr-2 font-mono">{row.key}</td>
+                    <td className="py-2 pr-2">{row.allocatable}</td>
+                    <td className="py-2 pr-2">{row.capacity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <span className="text-slate-400 text-xs">(none)</span>}
       </InfoSection>
 
       {/* Conditions */}
@@ -290,10 +340,13 @@ export default function NodeInfo({ name }: Props) {
 
       {/* Misc */}
       <InfoSection title={tr('nodes.detail.version', 'Versions')}>
-        <div className="text-xs text-slate-200 space-y-1">
-          <div>Created: {fmtTs(nodeDescribe.created_at)}</div>
-          <div>Pod CIDR: {nodeDescribe.pod_cidr || '-'}</div>
-          <div>Scheduling: {nodeDescribe.unschedulable ? 'Disabled' : 'Enabled'}</div>
+        <div className="space-y-2">
+          <InfoRow label="Created" value={fmtTs(nodeDescribe.created_at)} />
+          <InfoRow label="Pod CIDR" value={nodeDescribe.pod_cidr || '-'} />
+          {Array.isArray(nodeDescribe.pod_cidrs) && nodeDescribe.pod_cidrs.length > 0 && (
+            <InfoRow label="Pod CIDRs" value={nodeDescribe.pod_cidrs.join(', ')} />
+          )}
+          <InfoRow label="Scheduling" value={nodeDescribe.unschedulable ? 'Disabled' : 'Enabled'} />
         </div>
       </InfoSection>
 
