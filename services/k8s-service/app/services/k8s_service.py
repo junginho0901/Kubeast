@@ -2321,21 +2321,61 @@ class K8sService:
                 }
             raise Exception(f"Failed to delete statefulset: {e}")
     
+    def _daemonset_to_info(self, ds: Any) -> Dict[str, Any]:
+        desired = getattr(getattr(ds, "status", None), "desired_number_scheduled", None) or 0
+        current = getattr(getattr(ds, "status", None), "current_number_scheduled", None) or 0
+        ready = getattr(getattr(ds, "status", None), "number_ready", None) or 0
+        updated = getattr(getattr(ds, "status", None), "updated_number_scheduled", None) or 0
+        available = getattr(getattr(ds, "status", None), "number_available", None) or 0
+        misscheduled = getattr(getattr(ds, "status", None), "number_misscheduled", None) or 0
+        unavailable = getattr(getattr(ds, "status", None), "number_unavailable", None)
+        if unavailable is None:
+            unavailable = max(desired - ready, 0)
+
+        template_spec = getattr(getattr(getattr(ds, "spec", None), "template", None), "spec", None)
+        containers = list(getattr(template_spec, "containers", None) or [])
+        images = [container.image for container in containers if getattr(container, "image", None)]
+        node_selector = dict(getattr(template_spec, "node_selector", None) or {})
+
+        status = "Healthy"
+        if desired == 0 and current == 0:
+            status = "Idle"
+        elif ready != desired or misscheduled > 0 or unavailable > 0:
+            status = "Degraded"
+        if desired > 0 and ready == 0:
+            status = "Unavailable"
+
+        return {
+            "name": getattr(getattr(ds, "metadata", None), "name", None),
+            "namespace": getattr(getattr(ds, "metadata", None), "namespace", None),
+            "desired": desired,
+            "current": current,
+            "ready": ready,
+            "updated": updated,
+            "available": available,
+            "misscheduled": misscheduled,
+            "unavailable": unavailable,
+            "node_selector": node_selector,
+            "images": images,
+            "status": status,
+            "created_at": self._to_iso(getattr(getattr(ds, "metadata", None), "creation_timestamp", None)),
+        }
+
     async def get_daemonsets(self, namespace: str) -> List[Dict]:
         """DaemonSet 목록 조회"""
         try:
             daemonsets = self.apps_v1.list_namespaced_daemon_set(namespace)
-            result = []
-            for ds in daemonsets.items:
-                result.append({
-                    "name": ds.metadata.name,
-                    "desired": ds.status.desired_number_scheduled or 0,
-                    "current": ds.status.current_number_scheduled or 0,
-                    "ready": ds.status.number_ready or 0
-                })
-            return result
+            return [self._daemonset_to_info(ds) for ds in daemonsets.items]
         except ApiException as e:
             raise Exception(f"Failed to get daemonsets: {e}")
+
+    async def get_all_daemonsets(self) -> List[Dict]:
+        """전체 네임스페이스 DaemonSet 목록 조회"""
+        try:
+            daemonsets = self.apps_v1.list_daemon_set_for_all_namespaces()
+            return [self._daemonset_to_info(ds) for ds in daemonsets.items]
+        except ApiException as e:
+            raise Exception(f"Failed to get all daemonsets: {e}")
     
     async def get_daemonset_yaml(self, namespace: str, name: str) -> str:
         """DaemonSet YAML 조회"""
@@ -2348,6 +2388,170 @@ class K8sService:
             return yaml.dump(ds_dict, default_flow_style=False, allow_unicode=True)
         except ApiException as e:
             raise Exception(f"Failed to get daemonset YAML: {e}")
+
+    async def describe_daemonset(self, namespace: str, name: str) -> Dict[str, Any]:
+        """DaemonSet 상세 조회"""
+        try:
+            ds = self.apps_v1.read_namespaced_daemon_set(name, namespace)
+            events = self.v1.list_namespaced_event(
+                namespace=namespace,
+                field_selector=f"involvedObject.name={name},involvedObject.kind=DaemonSet",
+            )
+
+            info = self._daemonset_to_info(ds)
+            info["uid"] = getattr(ds.metadata, "uid", None)
+            info["resource_version"] = getattr(ds.metadata, "resource_version", None)
+            info["generation"] = getattr(ds.metadata, "generation", None)
+            info["observed_generation"] = getattr(getattr(ds, "status", None), "observed_generation", None)
+            info["labels"] = getattr(ds.metadata, "labels", None) or {}
+            info["annotations"] = getattr(ds.metadata, "annotations", None) or {}
+            info["selector"] = getattr(getattr(ds.spec, "selector", None), "match_labels", None) or {}
+            info["selector_expressions"] = [
+                {
+                    "key": getattr(expr, "key", None),
+                    "operator": getattr(expr, "operator", None),
+                    "values": list(getattr(expr, "values", None) or []),
+                }
+                for expr in (getattr(getattr(ds.spec, "selector", None), "match_expressions", None) or [])
+            ]
+
+            update_strategy = getattr(ds.spec, "update_strategy", None)
+            rolling_update = getattr(update_strategy, "rolling_update", None) if update_strategy else None
+            info["update_strategy"] = {
+                "type": getattr(update_strategy, "type", None) if update_strategy else None,
+                "rolling_update": {
+                    "max_unavailable": str(getattr(rolling_update, "max_unavailable", None))
+                    if getattr(rolling_update, "max_unavailable", None) is not None else None,
+                    "max_surge": str(getattr(rolling_update, "max_surge", None))
+                    if getattr(rolling_update, "max_surge", None) is not None else None,
+                } if rolling_update else None,
+            }
+            info["min_ready_seconds"] = getattr(ds.spec, "min_ready_seconds", None)
+            info["revision_history_limit"] = getattr(ds.spec, "revision_history_limit", None)
+            info["collision_count"] = getattr(getattr(ds, "status", None), "collision_count", None)
+            info["daemonset_status"] = {
+                "desired": getattr(getattr(ds, "status", None), "desired_number_scheduled", None) or 0,
+                "current": getattr(getattr(ds, "status", None), "current_number_scheduled", None) or 0,
+                "ready": getattr(getattr(ds, "status", None), "number_ready", None) or 0,
+                "updated": getattr(getattr(ds, "status", None), "updated_number_scheduled", None) or 0,
+                "available": getattr(getattr(ds, "status", None), "number_available", None) or 0,
+                "misscheduled": getattr(getattr(ds, "status", None), "number_misscheduled", None) or 0,
+                "unavailable": getattr(getattr(ds, "status", None), "number_unavailable", None)
+                or max((getattr(getattr(ds, "status", None), "desired_number_scheduled", None) or 0)
+                       - (getattr(getattr(ds, "status", None), "number_ready", None) or 0), 0),
+            }
+            info["replicas_status"] = {
+                "desired": info["daemonset_status"]["desired"],
+                "current": info["daemonset_status"]["current"],
+                "ready": info["daemonset_status"]["ready"],
+                "updated": info["daemonset_status"]["updated"],
+                "available": info["daemonset_status"]["available"],
+            }
+
+            template_spec = getattr(getattr(ds.spec, "template", None), "spec", None)
+            info["pod_template"] = {
+                "service_account_name": getattr(template_spec, "service_account_name", None),
+                "node_selector": dict(getattr(template_spec, "node_selector", None) or {}),
+                "priority_class_name": getattr(template_spec, "priority_class_name", None),
+                "containers": [
+                    {
+                        "name": getattr(container, "name", None),
+                        "image": getattr(container, "image", None),
+                        "command": list(getattr(container, "command", None) or []),
+                        "args": list(getattr(container, "args", None) or []),
+                        "ports": [
+                            {
+                                "name": getattr(port, "name", None),
+                                "container_port": getattr(port, "container_port", None),
+                                "protocol": getattr(port, "protocol", None),
+                            }
+                            for port in (getattr(container, "ports", None) or [])
+                        ],
+                        "limits": dict(getattr(getattr(container, "resources", None), "limits", None) or {}),
+                        "requests": dict(getattr(getattr(container, "resources", None), "requests", None) or {}),
+                        "env_count": len(list(getattr(container, "env", None) or [])),
+                        "volume_mounts": [
+                            {
+                                "name": getattr(mount, "name", None),
+                                "mount_path": getattr(mount, "mount_path", None),
+                                "read_only": getattr(mount, "read_only", None),
+                            }
+                            for mount in (getattr(container, "volume_mounts", None) or [])
+                        ],
+                    }
+                    for container in (getattr(template_spec, "containers", None) or [])
+                ],
+                "tolerations": [
+                    {
+                        "key": getattr(tol, "key", None),
+                        "operator": getattr(tol, "operator", None),
+                        "value": getattr(tol, "value", None),
+                        "effect": getattr(tol, "effect", None),
+                        "toleration_seconds": getattr(tol, "toleration_seconds", None),
+                    }
+                    for tol in (getattr(template_spec, "tolerations", None) or [])
+                ],
+            }
+
+            info["owner_references"] = [
+                {
+                    "kind": getattr(ref, "kind", None),
+                    "name": getattr(ref, "name", None),
+                    "uid": getattr(ref, "uid", None),
+                    "controller": getattr(ref, "controller", None),
+                }
+                for ref in (getattr(ds.metadata, "owner_references", None) or [])
+            ]
+
+            info["conditions"] = []
+            for condition in list(getattr(getattr(ds, "status", None), "conditions", None) or []):
+                info["conditions"].append({
+                    "type": getattr(condition, "type", None),
+                    "status": getattr(condition, "status", None),
+                    "reason": getattr(condition, "reason", None),
+                    "message": getattr(condition, "message", None),
+                    "last_transition_time": self._to_iso(getattr(condition, "last_transition_time", None)),
+                })
+
+            info["events"] = []
+            for event in events.items:
+                info["events"].append({
+                    "type": event.type,
+                    "reason": event.reason,
+                    "message": event.message,
+                    "count": event.count,
+                    "first_timestamp": self._to_iso(getattr(event, "first_timestamp", None)),
+                    "last_timestamp": self._to_iso(getattr(event, "last_timestamp", None)),
+                })
+
+            return info
+        except ApiException as e:
+            raise Exception(f"Failed to describe daemonset: {e}")
+
+    async def delete_daemonset(self, namespace: str, name: str) -> Dict[str, Any]:
+        """DaemonSet 삭제"""
+        try:
+            response = self.apps_v1.delete_namespaced_daemon_set(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("daemonset", name, namespace=namespace)
+            self._invalidate_yaml_cache("daemonsets", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete daemonset: {e}")
     
     async def get_ingresses(self, namespace: str) -> List[Dict]:
         """Ingress 목록 조회"""
