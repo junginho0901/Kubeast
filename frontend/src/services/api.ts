@@ -390,6 +390,22 @@ export interface StatefulSetInfo {
   created_at?: string | null
 }
 
+export interface DaemonSetInfo {
+  name: string
+  namespace: string
+  desired: number
+  current: number
+  ready: number
+  updated: number
+  available: number
+  misscheduled: number
+  unavailable: number
+  node_selector?: Record<string, string>
+  images?: string[]
+  status: string
+  created_at?: string | null
+}
+
 export interface HPAInfo {
   name: string
   namespace: string
@@ -840,6 +856,20 @@ export const api = {
     return data
   },
 
+  getDaemonSets: async (namespace: string, forceRefresh = false): Promise<DaemonSetInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/daemonsets`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllDaemonSets: async (forceRefresh = false): Promise<DaemonSetInfo[]> => {
+    const { data } = await client.get('/cluster/daemonsets/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
   deleteDeployment: async (namespace: string, deploymentName: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/deployments/${deploymentName}`)
   },
@@ -900,6 +930,15 @@ export const api = {
 
   deleteStatefulSet: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/statefulsets/${name}`)
+  },
+
+  describeDaemonSet: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/daemonsets/${name}/describe`)
+    return data
+  },
+
+  deleteDaemonSet: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/daemonsets/${name}`)
   },
 
   getPodRbac: async (
