@@ -60,7 +60,7 @@ export function KeyValueTags({ data, emptyText = '(none)' }: { data?: Record<str
           <span className="font-mono text-slate-300 max-w-[160px] truncate">{key}</span>
           <span className="mx-1 text-slate-500">:</span>
           <span className="max-w-[260px] truncate">{value}</span>
-          <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 w-max max-w-[520px] rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden w-max max-w-[520px] rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 shadow-lg group-hover:block">
             <span className="break-words">{`${key}: ${value}`}</span>
           </span>
         </span>
