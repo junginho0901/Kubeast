@@ -104,6 +104,16 @@ export interface NamespaceDescribe {
   name: string
   status?: string
   created_at?: string
+  uid?: string
+  resource_version?: string
+  deletion_timestamp?: string | null
+  finalizers?: string[]
+  owner_references?: Array<{
+    kind?: string | null
+    name?: string | null
+    uid?: string | null
+    controller?: boolean | null
+  }>
   labels: Record<string, string>
   annotations: Record<string, string>
   conditions: NamespaceCondition[]
@@ -364,6 +374,20 @@ export interface ReplicaSetInfo {
   selector: Record<string, string>
   created_at: string
   status: string
+}
+
+export interface StatefulSetInfo {
+  name: string
+  namespace: string
+  replicas: number
+  ready_replicas: number
+  current_replicas: number
+  updated_replicas: number
+  available_replicas: number
+  service_name?: string | null
+  images?: string[]
+  status: string
+  created_at?: string | null
 }
 
 export interface HPAInfo {
@@ -797,6 +821,25 @@ export const api = {
     return data
   },
 
+  describeDeployment: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/deployments/${name}/describe`)
+    return data
+  },
+
+  getStatefulSets: async (namespace: string, forceRefresh = false): Promise<StatefulSetInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/statefulsets`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllStatefulSets: async (forceRefresh = false): Promise<StatefulSetInfo[]> => {
+    const { data } = await client.get('/cluster/statefulsets/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
   deleteDeployment: async (namespace: string, deploymentName: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/deployments/${deploymentName}`)
   },
@@ -848,6 +891,15 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/pods/${podName}`, {
       params: { force },
     })
+  },
+
+  describeStatefulSet: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/statefulsets/${name}/describe`)
+    return data
+  },
+
+  deleteStatefulSet: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/statefulsets/${name}`)
   },
 
   getPodRbac: async (
