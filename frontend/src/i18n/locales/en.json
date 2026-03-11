@@ -157,6 +157,42 @@
       "confirm": "Are you sure you want to delete StatefulSet \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "daemonsets": {
+    "title": "Daemon Sets",
+    "subtitle": "Inspect scheduling health for DaemonSets across namespaces.",
+    "create": "Create DaemonSet",
+    "createTitle": "Create DaemonSet from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search daemonsets by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} daemonset{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "ready": "Ready",
+      "current": "Current",
+      "desired": "Desired",
+      "updated": "Updated",
+      "available": "Available",
+      "status": "Status",
+      "nodeSelector": "Node Selector",
+      "images": "Images",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unavailable": "Unavailable"
+    },
+    "noResults": "No daemonsets found.",
+    "delete": {
+      "button": "Delete DaemonSet",
+      "title": "Delete DaemonSet",
+      "confirm": "Are you sure you want to delete DaemonSet \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "nodes": {
     "title": "Nodes",
     "subtitle": "Inspect cluster node status and capacity.",
