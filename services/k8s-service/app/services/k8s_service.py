@@ -1420,53 +1420,215 @@ class K8sService:
             status=status,
         )
 
+    def _replicaset_to_info(self, rs: Any) -> ReplicaSetInfo:
+        desired = getattr(getattr(rs, "spec", None), "replicas", None) or 0
+        current = getattr(getattr(rs, "status", None), "replicas", None) or 0
+        ready = getattr(getattr(rs, "status", None), "ready_replicas", None) or 0
+        available = getattr(getattr(rs, "status", None), "available_replicas", None) or 0
+
+        template_spec = getattr(getattr(getattr(rs, "spec", None), "template", None), "spec", None)
+        containers = list(getattr(template_spec, "containers", None) or [])
+        images = [container.image for container in containers if getattr(container, "image", None)]
+        container_names = [container.name for container in containers if getattr(container, "name", None)]
+        image = images[0] if images else ""
+
+        owner = None
+        owners = list(getattr(getattr(rs, "metadata", None), "owner_references", None) or [])
+        if owners:
+            owner_ref = owners[0]
+            owner_kind = getattr(owner_ref, "kind", None)
+            owner_name = getattr(owner_ref, "name", None)
+            if owner_kind and owner_name:
+                owner = f"{owner_kind}/{owner_name}"
+
+        status = "Healthy"
+        if desired == 0 and ready == 0:
+            status = "Idle"
+        elif ready != desired:
+            status = "Degraded"
+        if desired > 0 and ready == 0:
+            status = "Unavailable"
+
+        selector = {}
+        try:
+            selector = getattr(getattr(getattr(rs, "spec", None), "selector", None), "match_labels", None) or {}
+        except Exception:
+            selector = {}
+
+        return ReplicaSetInfo(
+            name=rs.metadata.name,
+            namespace=rs.metadata.namespace,
+            current_replicas=current,
+            replicas=desired,
+            ready_replicas=ready,
+            available_replicas=available,
+            image=image,
+            images=images,
+            container_names=container_names,
+            owner=owner,
+            labels=rs.metadata.labels or {},
+            selector=selector,
+            created_at=rs.metadata.creation_timestamp,
+            status=status,
+        )
+
     async def get_replicasets(self, namespace: str, force_refresh: bool = False) -> List[ReplicaSetInfo]:
         """ReplicaSet 목록"""
         try:
             replicasets = self.apps_v1.list_namespaced_replica_set(namespace)
-            result: List[ReplicaSetInfo] = []
-
-            for rs in replicasets.items:
-                image = rs.spec.template.spec.containers[0].image if rs.spec.template.spec.containers else ""
-
-                owner = None
-                owners = list(getattr(rs.metadata, "owner_references", None) or [])
-                if owners:
-                    o = owners[0]
-                    kind = getattr(o, "kind", None)
-                    name = getattr(o, "name", None)
-                    if kind and name:
-                        owner = f"{kind}/{name}"
-
-                desired = rs.spec.replicas or 0
-                ready = rs.status.ready_replicas or 0
-                available = rs.status.available_replicas or 0
-
-                status = "Healthy"
-                if desired == 0 and ready == 0:
-                    status = "Idle"
-                elif ready != desired:
-                    status = "Degraded"
-                if desired > 0 and ready == 0:
-                    status = "Unavailable"
-
-                result.append(ReplicaSetInfo(
-                    name=rs.metadata.name,
-                    namespace=rs.metadata.namespace,
-                    replicas=desired,
-                    ready_replicas=ready,
-                    available_replicas=available,
-                    image=image,
-                    owner=owner,
-                    labels=rs.metadata.labels or {},
-                    selector=getattr(rs.spec.selector, "match_labels", None) or {},
-                    created_at=rs.metadata.creation_timestamp,
-                    status=status,
-                ))
-
-            return result
+            return [self._replicaset_to_info(rs) for rs in replicasets.items]
         except ApiException as e:
             raise Exception(f"Failed to get replicasets: {e}")
+
+    async def get_all_replicasets(self) -> List[ReplicaSetInfo]:
+        """전체 네임스페이스 ReplicaSet 목록"""
+        try:
+            replicasets = self.apps_v1.list_replica_set_for_all_namespaces()
+            return [self._replicaset_to_info(rs) for rs in replicasets.items]
+        except ApiException as e:
+            raise Exception(f"Failed to get all replicasets: {e}")
+
+    async def describe_replicaset(self, namespace: str, name: str) -> Dict[str, Any]:
+        """ReplicaSet 상세 조회"""
+        try:
+            rs = self.apps_v1.read_namespaced_replica_set(name, namespace)
+            events = self.v1.list_namespaced_event(
+                namespace=namespace,
+                field_selector=f"involvedObject.name={name},involvedObject.kind=ReplicaSet",
+            )
+
+            info = self._replicaset_to_info(rs).model_dump()
+            info["created_at"] = self._to_iso(getattr(rs.metadata, "creation_timestamp", None))
+            info["uid"] = getattr(rs.metadata, "uid", None)
+            info["resource_version"] = getattr(rs.metadata, "resource_version", None)
+            info["generation"] = getattr(rs.metadata, "generation", None)
+            info["observed_generation"] = getattr(getattr(rs, "status", None), "observed_generation", None)
+            info["revision"] = (getattr(rs.metadata, "annotations", None) or {}).get("deployment.kubernetes.io/revision")
+            info["labels"] = getattr(rs.metadata, "labels", None) or {}
+            info["annotations"] = getattr(rs.metadata, "annotations", None) or {}
+            info["selector"] = getattr(getattr(rs.spec, "selector", None), "match_labels", None) or {}
+            info["selector_expressions"] = [
+                {
+                    "key": getattr(expr, "key", None),
+                    "operator": getattr(expr, "operator", None),
+                    "values": list(getattr(expr, "values", None) or []),
+                }
+                for expr in (getattr(getattr(rs.spec, "selector", None), "match_expressions", None) or [])
+            ]
+            info["min_ready_seconds"] = getattr(rs.spec, "min_ready_seconds", None)
+            info["fully_labeled_replicas"] = getattr(getattr(rs, "status", None), "fully_labeled_replicas", None)
+
+            info["replicas_status"] = {
+                "desired": getattr(getattr(rs, "spec", None), "replicas", None) or 0,
+                "current": getattr(getattr(rs, "status", None), "replicas", None) or 0,
+                "ready": getattr(getattr(rs, "status", None), "ready_replicas", None) or 0,
+                "available": getattr(getattr(rs, "status", None), "available_replicas", None) or 0,
+                "updated": getattr(getattr(rs, "status", None), "replicas", None) or 0,
+            }
+
+            template_spec = getattr(getattr(rs.spec, "template", None), "spec", None)
+            info["pod_template"] = {
+                "service_account_name": getattr(template_spec, "service_account_name", None),
+                "node_selector": dict(getattr(template_spec, "node_selector", None) or {}),
+                "priority_class_name": getattr(template_spec, "priority_class_name", None),
+                "containers": [
+                    {
+                        "name": getattr(container, "name", None),
+                        "image": getattr(container, "image", None),
+                        "command": list(getattr(container, "command", None) or []),
+                        "args": list(getattr(container, "args", None) or []),
+                        "ports": [
+                            {
+                                "name": getattr(port, "name", None),
+                                "container_port": getattr(port, "container_port", None),
+                                "protocol": getattr(port, "protocol", None),
+                            }
+                            for port in (getattr(container, "ports", None) or [])
+                        ],
+                        "limits": dict(getattr(getattr(container, "resources", None), "limits", None) or {}),
+                        "requests": dict(getattr(getattr(container, "resources", None), "requests", None) or {}),
+                        "env_count": len(list(getattr(container, "env", None) or [])),
+                        "volume_mounts": [
+                            {
+                                "name": getattr(mount, "name", None),
+                                "mount_path": getattr(mount, "mount_path", None),
+                                "read_only": getattr(mount, "read_only", None),
+                            }
+                            for mount in (getattr(container, "volume_mounts", None) or [])
+                        ],
+                    }
+                    for container in (getattr(template_spec, "containers", None) or [])
+                ],
+                "tolerations": [
+                    {
+                        "key": getattr(tol, "key", None),
+                        "operator": getattr(tol, "operator", None),
+                        "value": getattr(tol, "value", None),
+                        "effect": getattr(tol, "effect", None),
+                        "toleration_seconds": getattr(tol, "toleration_seconds", None),
+                    }
+                    for tol in (getattr(template_spec, "tolerations", None) or [])
+                ],
+            }
+            info["owner_references"] = [
+                {
+                    "kind": getattr(ref, "kind", None),
+                    "name": getattr(ref, "name", None),
+                    "uid": getattr(ref, "uid", None),
+                    "controller": getattr(ref, "controller", None),
+                }
+                for ref in (getattr(rs.metadata, "owner_references", None) or [])
+            ]
+
+            info["conditions"] = []
+            for condition in list(getattr(getattr(rs, "status", None), "conditions", None) or []):
+                info["conditions"].append({
+                    "type": getattr(condition, "type", None),
+                    "status": getattr(condition, "status", None),
+                    "reason": getattr(condition, "reason", None),
+                    "message": getattr(condition, "message", None),
+                    "last_transition_time": self._to_iso(getattr(condition, "last_transition_time", None)),
+                })
+
+            info["events"] = []
+            for event in events.items:
+                info["events"].append({
+                    "type": event.type,
+                    "reason": event.reason,
+                    "message": event.message,
+                    "count": event.count,
+                    "first_timestamp": self._to_iso(getattr(event, "first_timestamp", None)),
+                    "last_timestamp": self._to_iso(getattr(event, "last_timestamp", None)),
+                })
+
+            return info
+        except ApiException as e:
+            raise Exception(f"Failed to describe replicaset: {e}")
+
+    async def delete_replicaset(self, namespace: str, name: str) -> Dict[str, Any]:
+        """ReplicaSet 삭제"""
+        try:
+            response = self.apps_v1.delete_namespaced_replica_set(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("replicaset", name, namespace=namespace)
+            self._invalidate_yaml_cache("replicasets", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete replicaset: {e}")
 
     def _serialize_hpa_metrics(self, metrics: Any) -> List[Dict[str, Any]]:
         result: List[Dict[str, Any]] = []

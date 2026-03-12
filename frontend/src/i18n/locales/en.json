@@ -193,6 +193,43 @@
       "confirm": "Are you sure you want to delete DaemonSet \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "replicasets": {
+    "title": "Replica Sets",
+    "subtitle": "Inspect and manage ReplicaSets across namespaces.",
+    "create": "Create ReplicaSet",
+    "createTitle": "Create ReplicaSet from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search replicasets by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} replicaset{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "current": "Current",
+      "desired": "Desired",
+      "ready": "Ready",
+      "available": "Available",
+      "status": "Status",
+      "containers": "Containers",
+      "images": "Images",
+      "selector": "Selector",
+      "owner": "Owner",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unavailable": "Unavailable"
+    },
+    "noResults": "No replicasets found.",
+    "delete": {
+      "button": "Delete ReplicaSet",
+      "title": "Delete ReplicaSet",
+      "confirm": "Are you sure you want to delete ReplicaSet \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "nodes": {
     "title": "Nodes",
     "subtitle": "Inspect cluster node status and capacity.",

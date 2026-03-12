@@ -216,6 +216,53 @@ class WebSocketMultiplexer:
             "created_at": self._to_iso(getattr(ds.metadata, "creation_timestamp", None)),
         }
 
+    def _replicaset_to_info(self, rs: Any) -> Dict[str, Any]:
+        desired = getattr(rs.spec, "replicas", 0) or 0
+        current = getattr(rs.status, "replicas", 0) or 0
+        ready = getattr(rs.status, "ready_replicas", 0) or 0
+        available = getattr(rs.status, "available_replicas", 0) or 0
+
+        template_spec = getattr(getattr(rs.spec, "template", None), "spec", None)
+        containers = list(getattr(template_spec, "containers", None) or [])
+        images = [container.image for container in containers if getattr(container, "image", None)]
+        container_names = [container.name for container in containers if getattr(container, "name", None)]
+
+        owner = None
+        owner_references = list(getattr(rs.metadata, "owner_references", None) or [])
+        if owner_references:
+            owner_ref = owner_references[0]
+            owner_kind = getattr(owner_ref, "kind", None)
+            owner_name = getattr(owner_ref, "name", None)
+            if owner_kind and owner_name:
+                owner = f"{owner_kind}/{owner_name}"
+
+        status = "Healthy"
+        if desired == 0 and ready == 0:
+            status = "Idle"
+        elif ready != desired:
+            status = "Degraded"
+        if desired > 0 and ready == 0:
+            status = "Unavailable"
+
+        selector = getattr(getattr(rs.spec, "selector", None), "match_labels", None) or {}
+
+        return {
+            "name": rs.metadata.name,
+            "namespace": rs.metadata.namespace,
+            "current_replicas": current,
+            "replicas": desired,
+            "ready_replicas": ready,
+            "available_replicas": available,
+            "image": images[0] if images else "",
+            "images": images,
+            "container_names": container_names,
+            "owner": owner,
+            "labels": dict(rs.metadata.labels) if rs.metadata.labels else {},
+            "selector": selector,
+            "status": status,
+            "created_at": self._to_iso(getattr(rs.metadata, "creation_timestamp", None)),
+        }
+
     async def handle_message(self, websocket, msg: Dict[str, Any]) -> None:
         msg_type = (msg.get("type") or "").upper()
         if msg_type == "REQUEST":
@@ -334,6 +381,11 @@ class WebSocketMultiplexer:
                             stream = w.stream(apps.list_namespaced_daemon_set, namespace, **stream_params)
                         else:
                             stream = w.stream(apps.list_daemon_set_for_all_namespaces, **stream_params)
+                    elif resource == "replicasets":
+                        if namespace:
+                            stream = w.stream(apps.list_namespaced_replica_set, namespace, **stream_params)
+                        else:
+                            stream = w.stream(apps.list_replica_set_for_all_namespaces, **stream_params)
                     else:
                         raise ValueError(f"unsupported watch resource: {resource}")
 
@@ -357,6 +409,8 @@ class WebSocketMultiplexer:
                             obj = self._statefulset_to_info(obj)
                         elif resource == "daemonsets" and obj is not None:
                             obj = self._daemonset_to_info(obj)
+                        elif resource == "replicasets" and obj is not None:
+                            obj = self._replicaset_to_info(obj)
 
                         loop.call_soon_threadsafe(
                             queue.put_nowait, {"type": event.get("type"), "object": obj}

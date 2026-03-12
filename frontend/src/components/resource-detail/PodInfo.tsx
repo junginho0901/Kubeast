@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -10,6 +10,41 @@ interface Props {
   namespace: string
   rawJson?: Record<string, unknown>
   extraTabs?: { id: string; label: string; render: () => React.ReactNode }[]
+}
+
+function formatContainerCommand(command: unknown, args: unknown): string {
+  const cmd = Array.isArray(command) ? command : []
+  const argv = Array.isArray(args) ? args : []
+  const merged = [...cmd, ...argv].filter(Boolean)
+  return merged.length > 0 ? merged.join(' ') : '-'
+}
+
+function toEntryPairs(value: unknown): Array<[string, string]> {
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, String(v)])
+}
+
+function toPorts(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((p: any) => `${p?.containerPort ?? p?.container_port ?? '-'} / ${p?.protocol || 'TCP'}`)
+    .filter((v: string) => v.trim() !== '- / TCP')
+}
+
+function toMounts(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((m: any) => `${m?.name || '-'} -> ${m?.mountPath ?? m?.mount_path ?? '-'}`)
+    .filter((v: string) => v.trim() !== '- -> -')
+}
+
+function ContainerKvRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[110px_1fr] gap-3 items-start py-1.5">
+      <span className="text-[11px] uppercase tracking-wide text-slate-500">{label}</span>
+      <div className="text-xs text-slate-100">{children}</div>
+    </div>
+  )
 }
 
 export default function PodInfo({ name, namespace, rawJson }: Props) {
@@ -182,17 +217,23 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {/* Container States */}
       <InfoSection title="Containers">
         {containers.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {containers.map((c: any, i: number) => {
               const state = c.state || {}
               const stateKey = Object.keys(state).find(k => state[k]) || 'unknown'
               const stateDetail = state[stateKey] || {}
               const ready = c.ready !== undefined ? c.ready : undefined
+              const requests = c.requests ?? c?.resources?.requests
+              const limits = c.limits ?? c?.resources?.limits
+              const mounts = c.volume_mounts ?? c.volumeMounts
+              const envCount = typeof c.env_count === 'number'
+                ? c.env_count
+                : (Array.isArray(c.env) ? c.env.length : undefined)
 
               return (
-                <div key={i} className="rounded border border-slate-800 p-3 space-y-1">
+                <div key={i} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-white">{c.name}</span>
+                    <span className="text-sm font-semibold text-white break-words">{c.name || `container-${i + 1}`}</span>
                     <div className="flex items-center gap-2">
                       {ready !== undefined && (
                         <span className={`w-2 h-2 rounded-full ${ready ? 'bg-emerald-400' : 'bg-red-400'}`} />
@@ -200,14 +241,79 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                       <span className="text-[11px] text-slate-400">{stateKey}</span>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-400">
-                    <div>Image: <span className="text-slate-300 font-mono">{c.image}</span></div>
-                    {c.restart_count !== undefined && <div>Restarts: {c.restart_count}</div>}
-                    {stateDetail.reason && <div>Reason: <span className="text-amber-300">{stateDetail.reason}</span></div>}
-                    {stateDetail.message && <div className="text-red-300 break-all">{stateDetail.message}</div>}
-                    {stateDetail.started_at && <div>Started: {fmtTs(stateDetail.started_at)}</div>}
-                    {c.ports && Array.isArray(c.ports) && c.ports.length > 0 && (
-                      <div>Ports: {c.ports.map((p: any) => `${p.containerPort ?? p.container_port}/${p.protocol || 'TCP'}`).join(', ')}</div>
+                  <div className="divide-y divide-slate-800/70">
+                    <ContainerKvRow label="Image">
+                      <span className="font-mono break-all">{c.image || '-'}</span>
+                    </ContainerKvRow>
+                    <ContainerKvRow label="Command">
+                      <span className="font-mono break-words whitespace-pre-wrap">{formatContainerCommand(c.command, c.args)}</span>
+                    </ContainerKvRow>
+                    <ContainerKvRow label="Restarts">
+                      <span className="font-mono">{String(c.restart_count ?? c.restartCount ?? 0)}</span>
+                    </ContainerKvRow>
+                    {stateDetail.reason && (
+                      <ContainerKvRow label="Reason">
+                        <span className="text-amber-300 break-words">{stateDetail.reason}</span>
+                      </ContainerKvRow>
+                    )}
+                    {stateDetail.message && (
+                      <ContainerKvRow label="Message">
+                        <span className="text-red-300 break-words whitespace-pre-wrap">{stateDetail.message}</span>
+                      </ContainerKvRow>
+                    )}
+                    {stateDetail.started_at && (
+                      <ContainerKvRow label="Started">
+                        <span className="text-slate-200">{fmtTs(stateDetail.started_at)}</span>
+                      </ContainerKvRow>
+                    )}
+                    {toPorts(c.ports).length > 0 && (
+                      <ContainerKvRow label="Ports">
+                        <div className="flex flex-wrap gap-1">
+                          {toPorts(c.ports).map((port, idx) => (
+                            <span key={`${port}-${idx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {port}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
+                    {toEntryPairs(requests).length > 0 && (
+                      <ContainerKvRow label="Requests">
+                        <div className="flex flex-wrap gap-1">
+                          {toEntryPairs(requests).map(([k, v]) => (
+                            <span key={`req-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {k}={v}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
+                    {toEntryPairs(limits).length > 0 && (
+                      <ContainerKvRow label="Limits">
+                        <div className="flex flex-wrap gap-1">
+                          {toEntryPairs(limits).map(([k, v]) => (
+                            <span key={`lim-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {k}={v}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
+                    {typeof envCount === 'number' && (
+                      <ContainerKvRow label="Env">
+                        <span className="text-slate-200 font-mono">{envCount}</span>
+                      </ContainerKvRow>
+                    )}
+                    {toMounts(mounts).length > 0 && (
+                      <ContainerKvRow label="Mounts">
+                        <div className="flex flex-wrap gap-1">
+                          {toMounts(mounts).map((mount, idx) => (
+                            <span key={`${mount}-${idx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {mount}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
                     )}
                   </div>
                 </div>
@@ -243,22 +349,92 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {/* Init Containers */}
       {initContainers.length > 0 && (
         <InfoSection title="Init Containers">
-          <div className="space-y-3">
+          <div className="space-y-2">
             {initContainers.map((c: any, i: number) => {
               const state = c.state || {}
               const stateKey = Object.keys(state).find(k => state[k]) || 'unknown'
               const stateDetail = state[stateKey] || {}
+              const requests = c.requests ?? c?.resources?.requests
+              const limits = c.limits ?? c?.resources?.limits
+              const mounts = c.volume_mounts ?? c.volumeMounts
+              const envCount = typeof c.env_count === 'number'
+                ? c.env_count
+                : (Array.isArray(c.env) ? c.env.length : undefined)
               return (
-                <div key={`${c.name || 'init'}-${i}`} className="rounded border border-slate-800 p-3 space-y-1">
+                <div key={`${c.name || 'init'}-${i}`} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-white">{c.name}</span>
+                    <span className="text-sm font-semibold text-white break-words">{c.name || `init-${i + 1}`}</span>
                     <span className="text-[11px] text-slate-400">{stateKey}</span>
                   </div>
-                  <div className="text-xs text-slate-400 space-y-0.5">
-                    <div>Image: <span className="text-slate-300 font-mono">{c.image || '-'}</span></div>
-                    {c.restart_count !== undefined && <div>Restarts: {c.restart_count}</div>}
-                    {stateDetail.reason && <div>Reason: <span className="text-amber-300">{stateDetail.reason}</span></div>}
-                    {stateDetail.message && <div className="text-red-300 break-all">{stateDetail.message}</div>}
+                  <div className="divide-y divide-slate-800/70">
+                    <ContainerKvRow label="Image">
+                      <span className="font-mono break-all">{c.image || '-'}</span>
+                    </ContainerKvRow>
+                    <ContainerKvRow label="Command">
+                      <span className="font-mono break-words whitespace-pre-wrap">{formatContainerCommand(c.command, c.args)}</span>
+                    </ContainerKvRow>
+                    <ContainerKvRow label="Restarts">
+                      <span className="font-mono">{String(c.restart_count ?? c.restartCount ?? 0)}</span>
+                    </ContainerKvRow>
+                    {stateDetail.reason && (
+                      <ContainerKvRow label="Reason">
+                        <span className="text-amber-300 break-words">{stateDetail.reason}</span>
+                      </ContainerKvRow>
+                    )}
+                    {stateDetail.message && (
+                      <ContainerKvRow label="Message">
+                        <span className="text-red-300 break-words whitespace-pre-wrap">{stateDetail.message}</span>
+                      </ContainerKvRow>
+                    )}
+                    {toPorts(c.ports).length > 0 && (
+                      <ContainerKvRow label="Ports">
+                        <div className="flex flex-wrap gap-1">
+                          {toPorts(c.ports).map((port, idx) => (
+                            <span key={`${port}-${idx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {port}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
+                    {toEntryPairs(requests).length > 0 && (
+                      <ContainerKvRow label="Requests">
+                        <div className="flex flex-wrap gap-1">
+                          {toEntryPairs(requests).map(([k, v]) => (
+                            <span key={`req-init-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {k}={v}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
+                    {toEntryPairs(limits).length > 0 && (
+                      <ContainerKvRow label="Limits">
+                        <div className="flex flex-wrap gap-1">
+                          {toEntryPairs(limits).map(([k, v]) => (
+                            <span key={`lim-init-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {k}={v}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
+                    {typeof envCount === 'number' && (
+                      <ContainerKvRow label="Env">
+                        <span className="text-slate-200 font-mono">{envCount}</span>
+                      </ContainerKvRow>
+                    )}
+                    {toMounts(mounts).length > 0 && (
+                      <ContainerKvRow label="Mounts">
+                        <div className="flex flex-wrap gap-1">
+                          {toMounts(mounts).map((mount, idx) => (
+                            <span key={`${mount}-${idx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                              {mount}
+                            </span>
+                          ))}
+                        </div>
+                      </ContainerKvRow>
+                    )}
                   </div>
                 </div>
               )
