@@ -72,7 +72,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteDeployment = kind === 'Deployment' && !!ns && isWriteRole
   const canDeleteStatefulSet = kind === 'StatefulSet' && !!ns && isWriteRole
   const canDeleteDaemonSet = kind === 'DaemonSet' && !!ns && isWriteRole
-  const canDelete = canDeleteNode || canDeletePod || canDeleteNamespace || canDeleteDeployment || canDeleteStatefulSet || canDeleteDaemonSet
+  const canDeleteJob = kind === 'Job' && !!ns && isWriteRole
+  const canDelete = canDeleteNode || canDeletePod || canDeleteNamespace || canDeleteDeployment || canDeleteStatefulSet || canDeleteDaemonSet || canDeleteJob
 
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
     queryKey: ['resource-yaml', kind, ns, name, yamlRefreshNonce],
@@ -173,6 +174,10 @@ export default function ResourceDetailDrawer() {
         await api.deleteDaemonSet(ns, name)
         return
       }
+      if (kind === 'Job' && ns) {
+        await api.deleteJob(ns, name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
@@ -215,6 +220,12 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['workloads', 'daemonsets', ns] }),
           queryClient.invalidateQueries({ queryKey: ['daemonset-describe', ns, name] }),
           queryClient.invalidateQueries({ queryKey: ['workload-describe', 'DaemonSet', ns, name] }),
+        ])
+      } else if (kind === 'Job' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'jobs'] }),
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'jobs', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['workload-describe', 'Job', ns, name] }),
         ])
       }
 
@@ -299,6 +310,8 @@ export default function ResourceDetailDrawer() {
                     ? t('statefulsets.delete.button', { defaultValue: 'Delete StatefulSet' })
                     : kind === 'DaemonSet'
                       ? t('daemonsets.delete.button', { defaultValue: 'Delete DaemonSet' })
+                      : kind === 'Job'
+                        ? t('jobs.delete.button', { defaultValue: 'Delete Job' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -366,6 +379,8 @@ export default function ResourceDetailDrawer() {
                     ? t('statefulsets.delete.title', { defaultValue: 'Delete StatefulSet' })
                     : kind === 'DaemonSet'
                       ? t('daemonsets.delete.title', { defaultValue: 'Delete DaemonSet' })
+                      : kind === 'Job'
+                        ? t('jobs.delete.title', { defaultValue: 'Delete Job' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -395,6 +410,12 @@ export default function ResourceDetailDrawer() {
                   : kind === 'DaemonSet'
                     ? t('daemonsets.delete.confirm', {
                         defaultValue: 'Are you sure you want to delete DaemonSet "{{name}}" in "{{namespace}}"?',
+                        name,
+                        namespace: ns,
+                      })
+                  : kind === 'Job'
+                    ? t('jobs.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete Job "{{name}}" in "{{namespace}}"?',
                         name,
                         namespace: ns,
                       })
