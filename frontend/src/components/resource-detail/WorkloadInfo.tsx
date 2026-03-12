@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { type ReactNode, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -32,6 +32,34 @@ function formatContainerCommand(command: unknown, args: unknown): string {
   return merged.length > 0 ? merged.join(' ') : '-'
 }
 
+function toEntryPairs(value: unknown): Array<[string, string]> {
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, String(v)])
+}
+
+function toPorts(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((p: any) => `${p?.container_port ?? p?.containerPort ?? '-'} / ${p?.protocol || 'TCP'}`)
+    .filter((v: string) => v.trim() !== '- / TCP')
+}
+
+function toMounts(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((m: any) => `${m?.name || '-'} -> ${m?.mount_path ?? m?.mountPath ?? '-'}`)
+    .filter((v: string) => v.trim() !== '- -> -')
+}
+
+function ContainerKvRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[110px_1fr] gap-3 items-start py-1.5">
+      <span className="text-[11px] uppercase tracking-wide text-slate-500">{label}</span>
+      <div className="text-xs text-slate-100">{children}</div>
+    </div>
+  )
+}
+
 function formatToleration(tol: any): string {
   const key = tol?.key || '*'
   const operator = tol?.operator || 'Equal'
@@ -45,13 +73,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet') && !!namespace && !!name
+  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'ReplicaSet') && !!namespace && !!name
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['workload-describe', kind, namespace, name],
     queryFn: () => {
       if (kind === 'Deployment') return api.describeDeployment(namespace as string, name)
       if (kind === 'StatefulSet') return api.describeStatefulSet(namespace as string, name)
-      return api.describeDaemonSet(namespace as string, name)
+      if (kind === 'DaemonSet') return api.describeDaemonSet(namespace as string, name)
+      return api.describeReplicaSet(namespace as string, name)
     },
     enabled: needsDescribe,
     retry: false,
@@ -66,6 +95,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const isDeployment = kind === 'Deployment'
   const isStatefulSet = kind === 'StatefulSet'
   const isDaemonSet = kind === 'DaemonSet'
+  const isReplicaSet = kind === 'ReplicaSet'
 
   const labels = ((describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {})
   const annotations = ((describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {})
@@ -276,7 +306,15 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       daemonSetStatus.unavailable > 0
     )
 
-  const showWorkloadSettings = showDeploymentSettings || showStatefulSetSettings || showDaemonSetSettings
+  const showReplicaSetSettings =
+    isReplicaSet && (
+      describe?.owner != null ||
+      describe?.revision != null ||
+      describe?.min_ready_seconds != null ||
+      describe?.fully_labeled_replicas != null
+    )
+
+  const showWorkloadSettings = showDeploymentSettings || showStatefulSetSettings || showDaemonSetSettings || showReplicaSetSettings
 
   return (
     <div className="space-y-4">
@@ -361,6 +399,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
                 <InfoRow label="Unavailable Pods" value={String(daemonSetStatus.unavailable)} />
               </>
             )}
+            {showReplicaSetSettings && (
+              <>
+                {describe?.owner && <InfoRow label="Owner" value={String(describe.owner)} />}
+                {describe?.revision && <InfoRow label="Revision" value={String(describe.revision)} />}
+                {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
+                {describe?.fully_labeled_replicas != null && <InfoRow label="Fully Labeled Replicas" value={String(describe.fully_labeled_replicas)} />}
+              </>
+            )}
           </div>
         </InfoSection>
       )}
@@ -431,25 +477,67 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
 
       {containers.length > 0 && (
         <InfoSection title="Containers">
-          <div className="space-y-3">
+          <div className="space-y-2">
             {containers.map((container: any, idx: number) => (
-              <div key={`${container.name || 'container'}-${idx}`} className="rounded border border-slate-800 p-3 space-y-1">
-                <div className="text-xs font-medium text-white">{container.name}</div>
-                <div className="text-xs text-slate-400 space-y-0.5">
-                  <div>Image: <span className="text-slate-300 font-mono break-all">{container.image || '-'}</span></div>
-                  <div>Command: <span className="text-slate-300 font-mono break-all">{formatContainerCommand(container.command, container.args)}</span></div>
-                  {Array.isArray(container.ports) && container.ports.length > 0 && (
-                    <div>Ports: {container.ports.map((p: any) => `${p.container_port ?? p.containerPort}/${p.protocol || 'TCP'}`).join(', ')}</div>
+              <div key={`${container.name || 'container'}-${idx}`} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                <div className="pb-2 border-b border-slate-800">
+                  <div className="text-sm font-semibold text-white break-words">{container.name || `container-${idx + 1}`}</div>
+                </div>
+                <div className="divide-y divide-slate-800/70">
+                  <ContainerKvRow label="Image">
+                    <span className="font-mono break-all">{container.image || '-'}</span>
+                  </ContainerKvRow>
+                  <ContainerKvRow label="Command">
+                    <span className="font-mono break-words whitespace-pre-wrap">{formatContainerCommand(container.command, container.args)}</span>
+                  </ContainerKvRow>
+                  {toPorts(container.ports).length > 0 && (
+                    <ContainerKvRow label="Ports">
+                      <div className="flex flex-wrap gap-1.5">
+                        {toPorts(container.ports).map((port, portIdx) => (
+                          <span key={`${port}-${portIdx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                            {port}
+                          </span>
+                        ))}
+                      </div>
+                    </ContainerKvRow>
                   )}
-                  {container.requests && Object.keys(container.requests).length > 0 && (
-                    <div>Requests: {Object.entries(container.requests).map(([k, v]) => `${k}=${v}`).join(', ')}</div>
+                  {toEntryPairs(container.requests).length > 0 && (
+                    <ContainerKvRow label="Requests">
+                      <div className="flex flex-wrap gap-1.5">
+                        {toEntryPairs(container.requests).map(([k, v]) => (
+                          <span key={`req-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                            {k}={v}
+                          </span>
+                        ))}
+                      </div>
+                    </ContainerKvRow>
                   )}
-                  {container.limits && Object.keys(container.limits).length > 0 && (
-                    <div>Limits: {Object.entries(container.limits).map(([k, v]) => `${k}=${v}`).join(', ')}</div>
+                  {toEntryPairs(container.limits).length > 0 && (
+                    <ContainerKvRow label="Limits">
+                      <div className="flex flex-wrap gap-1.5">
+                        {toEntryPairs(container.limits).map(([k, v]) => (
+                          <span key={`lim-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                            {k}={v}
+                          </span>
+                        ))}
+                      </div>
+                    </ContainerKvRow>
                   )}
-                  {typeof container.env_count === 'number' && <div>Env: {container.env_count}</div>}
-                  {Array.isArray(container.volume_mounts) && container.volume_mounts.length > 0 && (
-                    <div>Mounts: {container.volume_mounts.map((m: any) => `${m.name}→${m.mount_path ?? m.mountPath}`).join(', ')}</div>
+                  {typeof container.env_count === 'number' && (
+                    <ContainerKvRow label="Env">
+                      <span className="font-mono">{container.env_count}</span>
+                    </ContainerKvRow>
+                  )}
+                  {toMounts(container.volume_mounts).length > 0 && (
+                    <ContainerKvRow label="Mounts">
+                      <div className="flex flex-wrap gap-1.5">
+                        {toMounts(container.volume_mounts).map((mount, mountIdx) => (
+                          <span key={`${mount}-${mountIdx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                            {mount}
+                          </span>
+                        ))}
+                      </div>
+                    </ContainerKvRow>
                   )}
                 </div>
               </div>
