@@ -216,6 +216,55 @@ class WebSocketMultiplexer:
             "created_at": self._to_iso(getattr(ds.metadata, "creation_timestamp", None)),
         }
 
+    def _job_status(self, job: Any) -> str:
+        conditions = list(getattr(getattr(job, "status", None), "conditions", None) or [])
+        for condition in conditions:
+            if getattr(condition, "status", None) != "True":
+                continue
+            condition_type = str(getattr(condition, "type", "") or "")
+            if condition_type in ("Failed", "Complete", "Suspended"):
+                return condition_type
+
+        active = getattr(getattr(job, "status", None), "active", None) or 0
+        if active > 0:
+            return "Running"
+        return "Pending"
+
+    def _job_to_info(self, job: Any) -> Dict[str, Any]:
+        spec = getattr(job, "spec", None)
+        status = getattr(job, "status", None)
+        template_spec = getattr(getattr(spec, "template", None), "spec", None)
+        containers = list(getattr(template_spec, "containers", None) or [])
+        images = [container.image for container in containers if getattr(container, "image", None)]
+        container_names = [container.name for container in containers if getattr(container, "name", None)]
+
+        start_time = self._to_iso(getattr(status, "start_time", None))
+        completion_time = self._to_iso(getattr(status, "completion_time", None))
+        duration_seconds = None
+        if getattr(status, "start_time", None) and getattr(status, "completion_time", None):
+            try:
+                duration = status.completion_time - status.start_time
+                duration_seconds = int(duration.total_seconds())
+            except Exception:
+                duration_seconds = None
+
+        return {
+            "name": job.metadata.name,
+            "namespace": job.metadata.namespace,
+            "completions": getattr(spec, "completions", None),
+            "parallelism": getattr(spec, "parallelism", None),
+            "active": getattr(status, "active", None) or 0,
+            "succeeded": getattr(status, "succeeded", None) or 0,
+            "failed": getattr(status, "failed", None) or 0,
+            "status": self._job_status(job),
+            "containers": container_names,
+            "images": images,
+            "start_time": start_time,
+            "completion_time": completion_time,
+            "duration_seconds": duration_seconds,
+            "created_at": self._to_iso(getattr(job.metadata, "creation_timestamp", None)),
+        }
+
     async def handle_message(self, websocket, msg: Dict[str, Any]) -> None:
         msg_type = (msg.get("type") or "").upper()
         if msg_type == "REQUEST":
@@ -291,6 +340,7 @@ class WebSocketMultiplexer:
         params = self._parse_query(query)
         core = self._k8s.v1
         apps = self._k8s.apps_v1
+        batch = client.BatchV1Api(api_client=getattr(self._k8s, "api_client", None))
         w = watch.Watch()
 
         last_resource_version = params.get("resource_version")
@@ -334,6 +384,11 @@ class WebSocketMultiplexer:
                             stream = w.stream(apps.list_namespaced_daemon_set, namespace, **stream_params)
                         else:
                             stream = w.stream(apps.list_daemon_set_for_all_namespaces, **stream_params)
+                    elif resource == "jobs":
+                        if namespace:
+                            stream = w.stream(batch.list_namespaced_job, namespace, **stream_params)
+                        else:
+                            stream = w.stream(batch.list_job_for_all_namespaces, **stream_params)
                     else:
                         raise ValueError(f"unsupported watch resource: {resource}")
 
@@ -357,6 +412,8 @@ class WebSocketMultiplexer:
                             obj = self._statefulset_to_info(obj)
                         elif resource == "daemonsets" and obj is not None:
                             obj = self._daemonset_to_info(obj)
+                        elif resource == "jobs" and obj is not None:
+                            obj = self._job_to_info(obj)
 
                         loop.call_soon_threadsafe(
                             queue.put_nowait, {"type": event.get("type"), "object": obj}
