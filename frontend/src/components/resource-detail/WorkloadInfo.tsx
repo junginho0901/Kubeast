@@ -45,13 +45,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet') && !!namespace && !!name
+  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'Job') && !!namespace && !!name
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['workload-describe', kind, namespace, name],
     queryFn: () => {
       if (kind === 'Deployment') return api.describeDeployment(namespace as string, name)
       if (kind === 'StatefulSet') return api.describeStatefulSet(namespace as string, name)
-      return api.describeDaemonSet(namespace as string, name)
+      if (kind === 'DaemonSet') return api.describeDaemonSet(namespace as string, name)
+      return api.describeJob(namespace as string, name)
     },
     enabled: needsDescribe,
     retry: false,
@@ -374,11 +375,21 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       {isJob && (
         <InfoSection title="Job Info">
           <div className="space-y-2">
-            <InfoRow label="Completions" value={String(spec.completions ?? '-')} />
-            <InfoRow label="Parallelism" value={String(spec.parallelism ?? '-')} />
-            <InfoRow label="Active" value={String((status.active as number) ?? 0)} />
-            <InfoRow label="Succeeded" value={String((status.succeeded as number) ?? 0)} />
-            <InfoRow label="Failed" value={String((status.failed as number) ?? 0)} />
+            <InfoRow label="Completions" value={String(describe?.completions ?? spec.completions ?? '-')} />
+            <InfoRow label="Parallelism" value={String(describe?.parallelism ?? spec.parallelism ?? '-')} />
+            <InfoRow label="Active" value={String(describe?.active ?? status.active ?? 0)} />
+            <InfoRow label="Succeeded" value={String(describe?.succeeded ?? status.succeeded ?? 0)} />
+            <InfoRow label="Failed" value={String(describe?.failed ?? status.failed ?? 0)} />
+            {describe?.status && <InfoRow label="Status" value={String(describe.status)} />}
+            {describe?.start_time && <InfoRow label="Start Time" value={`${fmtTs(String(describe.start_time))} (${fmtRel(String(describe.start_time))})`} />}
+            {describe?.completion_time && <InfoRow label="Completion Time" value={`${fmtTs(String(describe.completion_time))} (${fmtRel(String(describe.completion_time))})`} />}
+            {describe?.duration_seconds != null && <InfoRow label="Duration" value={`${String(describe.duration_seconds)}s`} />}
+            {describe?.backoff_limit != null && <InfoRow label="Backoff Limit" value={String(describe.backoff_limit)} />}
+            {describe?.active_deadline_seconds != null && <InfoRow label="Active Deadline" value={`${String(describe.active_deadline_seconds)}s`} />}
+            {describe?.ttl_seconds_after_finished != null && <InfoRow label="TTL After Finished" value={`${String(describe.ttl_seconds_after_finished)}s`} />}
+            {describe?.completion_mode && <InfoRow label="Completion Mode" value={String(describe.completion_mode)} />}
+            {describe?.suspend != null && <InfoRow label="Suspend" value={describe.suspend ? 'Yes' : 'No'} />}
+            {describe?.manual_selector != null && <InfoRow label="Manual Selector" value={describe.manual_selector ? 'Yes' : 'No'} />}
           </div>
         </InfoSection>
       )}
