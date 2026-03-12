@@ -29,6 +29,7 @@
 
 ### 6. 상세 Info 컴포넌트
 - 기존 Info 컴포넌트 재사용 우선
+- `Pod`는 런타임 정보(컨테이너 상태/로그/재시작/Init Container)가 많아 `WorkloadInfo`와 분리된 `PodInfo` 커스텀 유지 권장
 - 새 Kind가 필요하면 `resource-detail/[Kind]Info.tsx` 생성
 - `ResourceDetailDrawer.tsx`의 `renderInfoContent`에 등록
 
@@ -112,6 +113,22 @@
   - 모바일/좁은 폭에서도 레이아웃 깨짐 없음
 - 보고 항목:
   - Headlamp 대비 추가/차이점을 리소스별 1~2줄로 요약해서 제출
+
+### 15. 상세 Key/Value UI 정리 (필수 검토)
+- YAML 성격의 key/value 데이터를 그대로 길게 한 줄로 나열하지 말고, 읽기 쉬운 형태로 정리
+- 특히 `Containers` 섹션은 기존 구현(`PodInfo`, `WorkloadInfo`의 Deployment/StatefulSet/DaemonSet)을 참고해서 동일 톤으로 표시
+- UI 가이드:
+  - 라벨/값 2열 구조(`Label | Value`) 우선
+  - 긴 문자열(`command`, `args`, `message`, `image`)은 줄바꿈(`break-words`, `whitespace-pre-wrap`) 처리
+  - 리스트/맵(`ports`, `requests`, `limits`, `mounts`, `env`)은 칩(tag) 또는 행 분리로 표현
+  - 값이 없으면 `-`로 명확히 표기
+  - 모바일/좁은 폭에서도 겹침 없이 유지
+- 구현 원칙:
+  - 동일한 표현이 2개 이상 리소스에서 반복되면 `DetailCommon`에 공통 렌더 유틸/컴포넌트로 승격 검토
+  - 리소스별 의미가 크게 다르면 각 `*Info.tsx`에서 커스텀 유지
+  - 변경 시 `Pod`, `Deployment`, `StatefulSet`, `DaemonSet`은 최소 한 번씩 확인
+- 보고 항목:
+  - 어떤 섹션을 공통화했고, 어떤 섹션을 커스텀으로 남겼는지 2~3줄 요약 제출
 
 ## 참고할 기존 코드 / 공통 코드
 - 페이지 패턴:
