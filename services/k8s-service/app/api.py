@@ -424,6 +424,47 @@ async def get_replicasets(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/replicasets/all")
+async def get_all_replicasets(force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
+    """전체 네임스페이스 ReplicaSet 목록"""
+    try:
+        return await k8s_service.get_all_replicasets()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/namespaces/{namespace}/replicasets/{name}/describe")
+async def describe_replicaset(namespace: str, name: str):
+    """ReplicaSet 상세 정보 조회"""
+    try:
+        return await k8s_service.describe_replicaset(namespace, name)
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"ReplicaSet '{namespace}/{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+
+@router.delete("/namespaces/{namespace}/replicasets/{name}")
+async def delete_replicaset(namespace: str, name: str, request: Request):
+    """ReplicaSet 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = await k8s_service.delete_replicaset(namespace, name)
+        if isinstance(result, dict) and result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail=f"ReplicaSet '{namespace}/{name}' not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"ReplicaSet '{namespace}/{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+
 @router.get("/namespaces/{namespace}/hpas", response_model=List[HPAInfo])
 async def get_hpas(
     namespace: str,
