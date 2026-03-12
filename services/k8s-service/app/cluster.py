@@ -46,10 +46,13 @@ class ReplicaSetInfo(BaseModel):
     """레플리카셋 정보"""
     name: str
     namespace: str
+    current_replicas: int = 0
     replicas: int
     ready_replicas: int
     available_replicas: int
     image: str
+    images: List[str] = []
+    container_names: List[str] = []
     owner: Optional[str] = None
     labels: Dict[str, str] = {}
     selector: Dict[str, str] = {}
