@@ -365,10 +365,13 @@ export interface DeploymentInfo {
 export interface ReplicaSetInfo {
   name: string
   namespace: string
+  current_replicas: number
   replicas: number
   ready_replicas: number
   available_replicas: number
   image: string
+  images?: string[]
+  container_names?: string[]
   owner?: string | null
   labels: Record<string, string>
   selector: Record<string, string>
@@ -881,6 +884,13 @@ export const api = {
     return data
   },
 
+  getAllReplicaSets: async (forceRefresh = false): Promise<ReplicaSetInfo[]> => {
+    const { data } = await client.get('/cluster/replicasets/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
   getHPAs: async (namespace: string, forceRefresh = false): Promise<HPAInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/hpas`, {
       params: { force_refresh: forceRefresh },
@@ -930,6 +940,15 @@ export const api = {
 
   deleteStatefulSet: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/statefulsets/${name}`)
+  },
+
+  describeReplicaSet: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/replicasets/${name}/describe`)
+    return data
+  },
+
+  deleteReplicaSet: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/replicasets/${name}`)
   },
 
   describeDaemonSet: async (namespace: string, name: string): Promise<any> => {
