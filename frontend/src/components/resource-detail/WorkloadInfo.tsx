@@ -441,12 +441,29 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       {isCronJob && (
         <InfoSection title="CronJob Info">
           <div className="space-y-2">
-            <InfoRow label="Schedule" value={String(spec.schedule ?? '-')} />
-            <InfoRow label="Suspend" value={spec.suspend ? 'Yes' : 'No'} />
-            <InfoRow label="Concurrency Policy" value={String(spec.concurrencyPolicy ?? '-')} />
-            {spec.startingDeadlineSeconds != null && <InfoRow label="Starting Deadline" value={`${String(spec.startingDeadlineSeconds)}s`} />}
-            {status.lastScheduleTime != null && <InfoRow label="Last Schedule" value={fmtTs(String(status.lastScheduleTime))} />}
-            {status.lastSuccessfulTime != null && <InfoRow label="Last Successful" value={fmtTs(String(status.lastSuccessfulTime))} />}
+            <InfoRow label="Schedule" value={String(describe?.schedule ?? spec.schedule ?? '-')} />
+            <InfoRow label="Suspend" value={(describe?.suspend ?? spec.suspend) ? 'Yes' : 'No'} />
+            <InfoRow label="Concurrency Policy" value={String(describe?.concurrency_policy ?? spec.concurrencyPolicy ?? '-')} />
+            {(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds) != null && (
+              <InfoRow
+                label="Starting Deadline"
+                value={`${String(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds)}s`}
+              />
+            )}
+            {describe?.successful_jobs_history_limit != null && (
+              <InfoRow label="Successful Jobs History" value={String(describe.successful_jobs_history_limit)} />
+            )}
+            {describe?.failed_jobs_history_limit != null && (
+              <InfoRow label="Failed Jobs History" value={String(describe.failed_jobs_history_limit)} />
+            )}
+            {describe?.time_zone && <InfoRow label="Time Zone" value={String(describe.time_zone)} />}
+            <InfoRow label="Active Jobs" value={String(describe?.active ?? (Array.isArray(status.active) ? status.active.length : 0))} />
+            {(describe?.last_schedule_time ?? status.lastScheduleTime) != null && (
+              <InfoRow label="Last Schedule" value={fmtTs(String(describe?.last_schedule_time ?? status.lastScheduleTime))} />
+            )}
+            {(describe?.last_successful_time ?? status.lastSuccessfulTime) != null && (
+              <InfoRow label="Last Successful" value={fmtTs(String(describe?.last_successful_time ?? status.lastSuccessfulTime))} />
+            )}
           </div>
         </InfoSection>
       )}
