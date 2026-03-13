@@ -1954,6 +1954,206 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get PVCs: {e}")
+
+    async def describe_pvc(self, namespace: str, name: str) -> Dict[str, Any]:
+        """PVC 상세 조회"""
+        try:
+            pvc = self.v1.read_namespaced_persistent_volume_claim(name, namespace)
+            events = self.v1.list_namespaced_event(
+                namespace=namespace,
+                field_selector=f"involvedObject.name={name},involvedObject.kind=PersistentVolumeClaim",
+            )
+            annotations = dict(getattr(pvc.metadata, "annotations", None) or {})
+            data_source = getattr(getattr(pvc, "spec", None), "data_source", None)
+            data_source_ref = getattr(getattr(pvc, "spec", None), "data_source_ref", None)
+
+            capacity = None
+            try:
+                if pvc.status and pvc.status.capacity:
+                    cap_val = pvc.status.capacity.get("storage")
+                    capacity = str(cap_val) if cap_val is not None else None
+            except Exception:
+                capacity = None
+
+            requested = None
+            try:
+                if pvc.spec and pvc.spec.resources and pvc.spec.resources.requests:
+                    req_val = pvc.spec.resources.requests.get("storage")
+                    requested = str(req_val) if req_val is not None else None
+            except Exception:
+                requested = None
+
+            info: Dict[str, Any] = {
+                "name": pvc.metadata.name,
+                "namespace": pvc.metadata.namespace,
+                "uid": getattr(pvc.metadata, "uid", None),
+                "resource_version": getattr(pvc.metadata, "resource_version", None),
+                "status": getattr(pvc.status, "phase", None),
+                "volume_name": getattr(pvc.spec, "volume_name", None),
+                "storage_class": getattr(pvc.spec, "storage_class_name", None),
+                "capacity": capacity,
+                "requested": requested,
+                "access_modes": list(getattr(pvc.spec, "access_modes", None) or []),
+                "volume_mode": getattr(pvc.spec, "volume_mode", None) or "Filesystem",
+                "labels": dict(getattr(pvc.metadata, "labels", None) or {}),
+                "annotations": annotations,
+                "finalizers": list(getattr(pvc.metadata, "finalizers", None) or []),
+                "created_at": self._to_iso(getattr(pvc.metadata, "creation_timestamp", None)),
+                "conditions": [],
+                "resize_conditions": [],
+                "filesystem_resize_pending": False,
+                "selected_node": annotations.get("volume.kubernetes.io/selected-node"),
+                "data_source": {
+                    "kind": getattr(data_source, "kind", None),
+                    "name": getattr(data_source, "name", None),
+                    "api_group": getattr(data_source, "api_group", None),
+                } if data_source else None,
+                "data_source_ref": {
+                    "kind": getattr(data_source_ref, "kind", None),
+                    "name": getattr(data_source_ref, "name", None),
+                    "api_group": getattr(data_source_ref, "api_group", None),
+                    "namespace": getattr(data_source_ref, "namespace", None),
+                } if data_source_ref else None,
+                "bound_pv": None,
+                "used_by_pods": [],
+                "events": [],
+            }
+
+            # 바인딩된 PV의 핵심 요약 정보
+            volume_name = getattr(pvc.spec, "volume_name", None)
+            if volume_name:
+                try:
+                    pv = self.v1.read_persistent_volume(volume_name)
+                    pv_capacity = None
+                    try:
+                        if pv.spec and pv.spec.capacity:
+                            pv_cap_val = pv.spec.capacity.get("storage")
+                            pv_capacity = str(pv_cap_val) if pv_cap_val is not None else None
+                    except Exception:
+                        pv_capacity = None
+
+                    pv_claim_ref = None
+                    if getattr(getattr(pv, "spec", None), "claim_ref", None):
+                        pv_claim_ref = {
+                            "namespace": getattr(pv.spec.claim_ref, "namespace", None),
+                            "name": getattr(pv.spec.claim_ref, "name", None),
+                        }
+
+                    info["bound_pv"] = {
+                        "name": getattr(pv.metadata, "name", volume_name),
+                        "status": getattr(getattr(pv, "status", None), "phase", None),
+                        "capacity": pv_capacity,
+                        "access_modes": list(getattr(getattr(pv, "spec", None), "access_modes", None) or []),
+                        "storage_class": getattr(getattr(pv, "spec", None), "storage_class_name", None),
+                        "reclaim_policy": getattr(getattr(pv, "spec", None), "persistent_volume_reclaim_policy", None),
+                        "volume_mode": getattr(getattr(pv, "spec", None), "volume_mode", None) or "Filesystem",
+                        "claim_ref": pv_claim_ref,
+                    }
+                except ApiException as pv_exc:
+                    info["bound_pv"] = {
+                        "name": volume_name,
+                        "status": "NotFound" if getattr(pv_exc, "status", None) == 404 else "Error",
+                    }
+                except Exception:
+                    info["bound_pv"] = {
+                        "name": volume_name,
+                        "status": "Error",
+                    }
+
+            # 이 PVC를 마운트한 Pod 목록
+            try:
+                pods = self.v1.list_namespaced_pod(namespace=namespace)
+                for pod in pods.items:
+                    claim_volume_names: List[str] = []
+                    for volume in list(getattr(getattr(pod, "spec", None), "volumes", None) or []):
+                        pvc_ref = getattr(volume, "persistent_volume_claim", None)
+                        if pvc_ref and getattr(pvc_ref, "claim_name", None) == name:
+                            claim_volume_names.append(getattr(volume, "name", None) or "-")
+
+                    if not claim_volume_names:
+                        continue
+
+                    container_statuses = list(getattr(getattr(pod, "status", None), "container_statuses", None) or [])
+                    ready_count = sum(1 for cs in container_statuses if getattr(cs, "ready", False))
+                    total_containers = len(container_statuses)
+                    restart_count = sum(int(getattr(cs, "restart_count", 0) or 0) for cs in container_statuses)
+                    ready = f"{ready_count}/{total_containers}" if total_containers > 0 else "-"
+
+                    info["used_by_pods"].append({
+                        "name": getattr(pod.metadata, "name", None),
+                        "namespace": getattr(pod.metadata, "namespace", namespace),
+                        "phase": getattr(getattr(pod, "status", None), "phase", None),
+                        "node_name": getattr(getattr(pod, "spec", None), "node_name", None),
+                        "ready": ready,
+                        "restart_count": restart_count,
+                        "volume_names": claim_volume_names,
+                        "created_at": self._to_iso(getattr(getattr(pod, "metadata", None), "creation_timestamp", None)),
+                    })
+            except Exception:
+                pass
+
+            info["used_by_pods"] = sorted(
+                info["used_by_pods"],
+                key=lambda p: (str(p.get("namespace") or ""), str(p.get("name") or "")),
+            )
+
+            for condition in list(getattr(getattr(pvc, "status", None), "conditions", None) or []):
+                info["conditions"].append({
+                    "type": getattr(condition, "type", None),
+                    "status": getattr(condition, "status", None),
+                    "reason": getattr(condition, "reason", None),
+                    "message": getattr(condition, "message", None),
+                    "last_transition_time": self._to_iso(getattr(condition, "last_transition_time", None)),
+                })
+
+            info["resize_conditions"] = [
+                cond for cond in info["conditions"] if "resize" in str(cond.get("type", "")).lower()
+            ]
+            info["filesystem_resize_pending"] = any(
+                str(cond.get("type", "")) == "FileSystemResizePending"
+                and str(cond.get("status", "")).lower() == "true"
+                for cond in info["conditions"]
+            )
+
+            for event in events.items:
+                info["events"].append({
+                    "type": event.type,
+                    "reason": event.reason,
+                    "message": event.message,
+                    "count": event.count,
+                    "first_timestamp": self._to_iso(getattr(event, "first_timestamp", None)),
+                    "last_timestamp": self._to_iso(getattr(event, "last_timestamp", None)),
+                })
+
+            return info
+        except ApiException as e:
+            raise Exception(f"Failed to describe pvc: {e}")
+
+    async def delete_pvc(self, namespace: str, name: str) -> Dict[str, Any]:
+        """PVC 삭제"""
+        try:
+            response = self.v1.delete_namespaced_persistent_volume_claim(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("persistentvolumeclaim", name, namespace=namespace)
+            self._invalidate_yaml_cache("pvc", name, namespace=namespace)
+            self._invalidate_yaml_cache("pvcs", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete pvc: {e}")
     
     async def get_pvs(self) -> List[PVInfo]:
         """PV 목록"""
@@ -3247,6 +3447,33 @@ class K8sService:
             "completion_time": completion_time,
             "duration_seconds": duration_seconds,
             "created_at": self._to_iso(getattr(getattr(job, "metadata", None), "creation_timestamp", None)),
+        }
+
+    def _cronjob_to_info(self, cronjob: Any) -> Dict[str, Any]:
+        metadata = getattr(cronjob, "metadata", None)
+        spec = getattr(cronjob, "spec", None)
+        status = getattr(cronjob, "status", None)
+
+        job_template_spec = getattr(getattr(spec, "job_template", None), "spec", None)
+        pod_template_spec = getattr(getattr(job_template_spec, "template", None), "spec", None)
+        containers = list(getattr(pod_template_spec, "containers", None) or [])
+
+        images = [container.image for container in containers if getattr(container, "image", None)]
+        container_names = [container.name for container in containers if getattr(container, "name", None)]
+        active_jobs = list(getattr(status, "active", None) or [])
+
+        return {
+            "name": getattr(metadata, "name", None),
+            "namespace": getattr(metadata, "namespace", None),
+            "schedule": getattr(spec, "schedule", None),
+            "suspend": bool(getattr(spec, "suspend", None) or False),
+            "concurrency_policy": getattr(spec, "concurrency_policy", None),
+            "active": len(active_jobs),
+            "last_schedule_time": self._to_iso(getattr(status, "last_schedule_time", None)),
+            "last_successful_time": self._to_iso(getattr(status, "last_successful_time", None)),
+            "containers": container_names,
+            "images": images,
+            "created_at": self._to_iso(getattr(metadata, "creation_timestamp", None)),
         }
 
     async def get_jobs(self, namespace: str) -> List[Dict]:
