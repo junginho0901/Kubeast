@@ -263,6 +263,74 @@
       "confirm": "Are you sure you want to delete Job \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "cronjobs": {
+    "title": "CronJobs",
+    "subtitle": "Inspect and manage CronJobs across namespaces.",
+    "create": "Create CronJob",
+    "createTitle": "Create CronJob from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search cronjobs by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} cronjob{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "schedule": "Schedule",
+      "suspend": "Suspend",
+      "active": "Active",
+      "lastSchedule": "Last Schedule",
+      "containers": "Containers",
+      "images": "Images",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "active": "Active",
+      "suspended": "Suspended",
+      "scheduled": "Scheduled"
+    },
+    "noResults": "No cronjobs found.",
+    "delete": {
+      "button": "Delete CronJob",
+      "title": "Delete CronJob",
+      "confirm": "Are you sure you want to delete CronJob \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "pvcs": {
+    "title": "Persistent Volume Claims",
+    "subtitle": "Inspect and manage PVCs across namespaces.",
+    "create": "Create PVC",
+    "createTitle": "Create PersistentVolumeClaim from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search PVCs by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} pvc{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "status": "Status",
+      "storageClass": "StorageClass",
+      "volume": "Volume",
+      "requested": "Requested",
+      "capacity": "Capacity",
+      "accessModes": "Access Modes",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "bound": "Bound",
+      "pending": "Pending",
+      "lost": "Lost"
+    },
+    "noResults": "No PVCs found.",
+    "delete": {
+      "button": "Delete PVC",
+      "title": "Delete PVC",
+      "confirm": "Are you sure you want to delete PVC \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "nodes": {
     "title": "Nodes",
     "subtitle": "Inspect cluster node status and capacity.",

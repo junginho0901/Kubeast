@@ -268,6 +268,74 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 잡 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "cronjobs": {
+    "title": "크론잡",
+    "subtitle": "네임스페이스 전반의 CronJob 상태를 확인하고 관리합니다.",
+    "create": "크론잡 생성",
+    "createTitle": "YAML로 크론잡 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "크론잡 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 크론잡이 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "schedule": "스케줄",
+      "suspend": "중지",
+      "active": "활성",
+      "lastSchedule": "마지막 실행",
+      "containers": "컨테이너",
+      "images": "이미지",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "active": "활성",
+      "suspended": "중지됨",
+      "scheduled": "실행 이력"
+    },
+    "noResults": "크론잡을 찾을 수 없습니다.",
+    "delete": {
+      "button": "크론잡 삭제",
+      "title": "크론잡 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 크론잡 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "pvcs": {
+    "title": "퍼시스턴트 볼륨 클레임",
+    "subtitle": "네임스페이스 전반의 PVC 상태를 확인하고 관리합니다.",
+    "create": "PVC 생성",
+    "createTitle": "YAML로 PersistentVolumeClaim 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "PVC 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 PVC가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "status": "상태",
+      "storageClass": "스토리지 클래스",
+      "volume": "볼륨",
+      "requested": "요청량",
+      "capacity": "용량",
+      "accessModes": "접근 모드",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "bound": "바인드됨",
+      "pending": "대기",
+      "lost": "유실"
+    },
+    "noResults": "PVC를 찾을 수 없습니다.",
+    "delete": {
+      "button": "PVC 삭제",
+      "title": "PVC 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 PVC \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "nodes": {
     "title": "노드",
     "subtitle": "클러스터 노드 상태와 용량을 확인합니다.",
