@@ -10,6 +10,59 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
+interface PVCDataSourceRef {
+  kind?: string | null
+  name?: string | null
+  api_group?: string | null
+  namespace?: string | null
+}
+
+interface PVCBoundPVSummary {
+  name?: string | null
+  status?: string | null
+  capacity?: string | null
+  access_modes?: string[] | null
+  storage_class?: string | null
+  reclaim_policy?: string | null
+  volume_mode?: string | null
+}
+
+interface PVCUsedByPod {
+  name?: string | null
+  namespace?: string | null
+  phase?: string | null
+  node_name?: string | null
+  ready?: string | null
+  restart_count?: number | null
+  volume_names?: string[] | null
+  created_at?: string | null
+}
+
+interface PVCDescribeResponse {
+  uid?: string
+  resource_version?: string
+  status?: string
+  capacity?: string
+  requested?: string
+  storage_class?: string
+  volume_mode?: string
+  volume_name?: string
+  access_modes?: string[]
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string
+  selected_node?: string | null
+  data_source?: PVCDataSourceRef | null
+  data_source_ref?: PVCDataSourceRef | null
+  bound_pv?: PVCBoundPVSummary | null
+  used_by_pods?: PVCUsedByPod[]
+  conditions?: Array<Record<string, unknown>>
+  resize_conditions?: Array<Record<string, unknown>>
+  filesystem_resize_pending?: boolean
+  events?: Array<Record<string, unknown>>
+}
+
 export default function ConfigStorageInfo({ name, namespace, kind, rawJson }: Props) {
   if (kind === 'ConfigMap') return <ConfigMapDetail name={name} namespace={namespace} rawJson={rawJson} />
   if (kind === 'Secret') return <SecretDetail name={name} namespace={namespace} rawJson={rawJson} />
@@ -121,14 +174,58 @@ function PVDetail({ name, rawJson }: { name: string; rawJson?: Record<string, un
   )
 }
 
+function formatDataSourceRef(ref?: PVCDataSourceRef | null): string {
+  if (!ref) return '-'
+  const kind = ref.kind || 'UnknownKind'
+  const name = ref.name || '-'
+  const apiGroup = ref.api_group ? ` (${ref.api_group})` : ''
+  const namespace = ref.namespace ? ` [ns:${ref.namespace}]` : ''
+  return `${kind}/${name}${apiGroup}${namespace}`
+}
+
 function PVCDetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
+  const { open: openDetail } = useResourceDetail()
+  const { data: describe, isLoading, isError } = useQuery({
+    queryKey: ['pvc-describe', namespace, name],
+    queryFn: () => api.describePVC(namespace as string, name) as Promise<PVCDescribeResponse>,
+    enabled: !!namespace && !!name,
+    retry: false,
+  })
+
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
-  const labels = (meta.labels ?? {}) as Record<string, string>
-  const accessModes = (spec.accessModes ?? []) as string[]
+  const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
+  const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
+  const accessModes = (describe?.access_modes ?? (spec.accessModes as string[] | undefined) ?? [])
   const capacity = (status.capacity as Record<string, string>) ?? {}
-  const requested = ((spec.resources as any)?.requests as Record<string, string>) ?? {}
+  const requested =
+    (((spec.resources as Record<string, unknown> | undefined)?.requests as Record<string, string> | undefined) ?? {})
+  const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
+  const statusPhase = String(describe?.status ?? status.phase ?? '-')
+  const capacityStorage = String(describe?.capacity ?? capacity.storage ?? '-')
+  const requestedStorage = String(describe?.requested ?? requested.storage ?? '-')
+  const storageClass = String(describe?.storage_class ?? spec.storageClassName ?? '-')
+  const volumeMode = String(describe?.volume_mode ?? spec.volumeMode ?? 'Filesystem')
+  const volumeName = String(describe?.volume_name ?? spec.volumeName ?? '-')
+  const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
+  const conditions = Array.isArray(describe?.conditions) ? describe.conditions : (Array.isArray(status.conditions) ? status.conditions : [])
+  const resizeConditions = Array.isArray(describe?.resize_conditions) ? describe.resize_conditions : []
+  const events = Array.isArray(describe?.events) ? describe.events : []
+  const selectedNode = describe?.selected_node || annotations['volume.kubernetes.io/selected-node'] || '-'
+  const dataSource = formatDataSourceRef(describe?.data_source)
+  const dataSourceRef = formatDataSourceRef(describe?.data_source_ref)
+  const boundPv = describe?.bound_pv ?? null
+  const usedByPods = Array.isArray(describe?.used_by_pods) ? describe.used_by_pods : []
+  const displayedUsedByPods = usedByPods.slice(0, 50)
+  const hasResizePending = !!describe?.filesystem_resize_pending
+  const resizeState = hasResizePending
+    ? 'Pending (FileSystemResizePending)'
+    : resizeConditions.length > 0
+      ? resizeConditions
+        .map((c) => `${String(c['type'] ?? '-')}:${String(c['status'] ?? '-')}`)
+        .join(', ')
+      : '-'
 
   return (
     <>
