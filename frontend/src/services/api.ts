@@ -1028,6 +1028,15 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/jobs/${name}`)
   },
 
+  describeCronJob: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/cronjobs/${name}/describe`)
+    return data
+  },
+
+  deleteCronJob: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/cronjobs/${name}`)
+  },
+
   getPodRbac: async (
     namespace: string,
     podName: string,
@@ -1042,6 +1051,15 @@ export const api = {
       params: { namespace, force_refresh: forceRefresh },
     })
     return data
+  },
+
+  describePVC: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pvcs/${name}/describe`)
+    return data
+  },
+
+  deletePVC: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/pvcs/${name}`)
   },
 
   getPVs: async (): Promise<PVInfo[]> => {
