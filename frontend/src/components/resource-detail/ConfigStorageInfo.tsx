@@ -1,4 +1,7 @@
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/services/api'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
 
 interface Props {
   name: string
