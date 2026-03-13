@@ -3756,6 +3756,32 @@ class K8sService:
             return yaml.dump(cj_dict, default_flow_style=False, allow_unicode=True)
         except ApiException as e:
             raise Exception(f"Failed to get cronjob YAML: {e}")
+
+    async def delete_cronjob(self, namespace: str, name: str) -> Dict[str, Any]:
+        """CronJob 삭제"""
+        try:
+            batch_v1 = client.BatchV1Api()
+            response = batch_v1.delete_namespaced_cron_job(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("cronjob", name, namespace=namespace)
+            self._invalidate_yaml_cache("cronjobs", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete cronjob: {e}")
     
     async def get_pod_yaml(self, namespace: str, name: str) -> str:
         """Pod YAML 조회"""
