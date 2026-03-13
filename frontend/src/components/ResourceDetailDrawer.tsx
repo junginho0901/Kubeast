@@ -428,6 +428,10 @@ export default function ResourceDetailDrawer() {
                         ? t('jobs.delete.title', { defaultValue: 'Delete Job' })
                       : kind === 'ReplicaSet'
                         ? t('replicasets.delete.title', { defaultValue: 'Delete ReplicaSet' })
+                      : kind === 'CronJob'
+                        ? t('cronjobs.delete.title', { defaultValue: 'Delete CronJob' })
+                      : kind === 'PersistentVolumeClaim'
+                        ? t('pvcs.delete.title', { defaultValue: 'Delete PVC' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -469,6 +473,18 @@ export default function ResourceDetailDrawer() {
                   : kind === 'ReplicaSet'
                     ? t('replicasets.delete.confirm', {
                         defaultValue: 'Are you sure you want to delete ReplicaSet "{{name}}" in "{{namespace}}"?',
+                        name,
+                        namespace: ns,
+                      })
+                  : kind === 'CronJob'
+                    ? t('cronjobs.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete CronJob "{{name}}" in "{{namespace}}"?',
+                        name,
+                        namespace: ns,
+                      })
+                  : kind === 'PersistentVolumeClaim'
+                    ? t('pvcs.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete PVC "{{name}}" in "{{namespace}}"?',
                         name,
                         namespace: ns,
                       })
