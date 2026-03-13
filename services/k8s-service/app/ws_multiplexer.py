@@ -470,6 +470,11 @@ class WebSocketMultiplexer:
                             stream = w.stream(core.list_namespaced_event, namespace, **stream_params)
                         else:
                             stream = w.stream(core.list_event_for_all_namespaces, **stream_params)
+                    elif resource == "pvcs":
+                        if namespace:
+                            stream = w.stream(core.list_namespaced_persistent_volume_claim, namespace, **stream_params)
+                        else:
+                            stream = w.stream(core.list_persistent_volume_claim_for_all_namespaces, **stream_params)
                     elif resource == "statefulsets":
                         if namespace:
                             stream = w.stream(apps.list_namespaced_stateful_set, namespace, **stream_params)
@@ -490,6 +495,11 @@ class WebSocketMultiplexer:
                             stream = w.stream(batch.list_namespaced_job, namespace, **stream_params)
                         else:
                             stream = w.stream(batch.list_job_for_all_namespaces, **stream_params)
+                    elif resource == "cronjobs":
+                        if namespace:
+                            stream = w.stream(batch.list_namespaced_cron_job, namespace, **stream_params)
+                        else:
+                            stream = w.stream(batch.list_cron_job_for_all_namespaces, **stream_params)
                     else:
                         raise ValueError(f"unsupported watch resource: {resource}")
 
