@@ -112,6 +112,10 @@ export default function ResourceDetailDrawer() {
     } else if (kind === 'Pod') {
       queryClient.invalidateQueries({ queryKey: ['pod-describe', ns, name] })
       queryClient.invalidateQueries({ queryKey: ['cluster', 'pods'] })
+    } else if (kind === 'PersistentVolumeClaim' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['storage', 'pvcs'] })
+      queryClient.invalidateQueries({ queryKey: ['storage', 'pvcs', ns] })
+      queryClient.invalidateQueries({ queryKey: ['pvc-describe', ns, name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -183,6 +187,14 @@ export default function ResourceDetailDrawer() {
       }
       if (kind === 'ReplicaSet' && ns) {
         await api.deleteReplicaSet(ns, name)
+        return
+      }
+      if (kind === 'CronJob' && ns) {
+        await api.deleteCronJob(ns, name)
+        return
+      }
+      if (kind === 'PersistentVolumeClaim' && ns) {
+        await api.deletePVC(ns, name)
         return
       }
       throw new Error('Delete is not supported for this resource.')
