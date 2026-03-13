@@ -143,6 +143,32 @@ class WebSocketMultiplexer:
             "count": event.count,
         }
 
+    def _pvc_to_info(self, pvc: Any) -> Dict[str, Any]:
+        capacity = None
+        if getattr(getattr(pvc, "status", None), "capacity", None):
+            cap_val = pvc.status.capacity.get("storage")
+            capacity = str(cap_val) if cap_val is not None else None
+
+        requested = None
+        try:
+            if getattr(getattr(pvc, "spec", None), "resources", None) and pvc.spec.resources.requests:
+                req_val = pvc.spec.resources.requests.get("storage")
+                requested = str(req_val) if req_val is not None else None
+        except Exception:
+            requested = None
+
+        return {
+            "name": pvc.metadata.name,
+            "namespace": pvc.metadata.namespace,
+            "status": getattr(getattr(pvc, "status", None), "phase", None) or "Unknown",
+            "volume_name": getattr(getattr(pvc, "spec", None), "volume_name", None),
+            "storage_class": getattr(getattr(pvc, "spec", None), "storage_class_name", None),
+            "capacity": capacity,
+            "requested": requested,
+            "access_modes": list(getattr(getattr(pvc, "spec", None), "access_modes", None) or []),
+            "created_at": self._to_iso(getattr(pvc.metadata, "creation_timestamp", None)),
+        }
+
     def _statefulset_to_info(self, sts: Any) -> Dict[str, Any]:
         desired = getattr(sts.spec, "replicas", 0) or 0
         ready = getattr(sts.status, "ready_replicas", 0) or 0
@@ -310,6 +336,29 @@ class WebSocketMultiplexer:
             "completion_time": completion_time,
             "duration_seconds": duration_seconds,
             "created_at": self._to_iso(getattr(job.metadata, "creation_timestamp", None)),
+        }
+
+    def _cronjob_to_info(self, cronjob: Any) -> Dict[str, Any]:
+        spec = getattr(cronjob, "spec", None)
+        status = getattr(cronjob, "status", None)
+        metadata = getattr(cronjob, "metadata", None)
+
+        job_template_spec = getattr(getattr(spec, "job_template", None), "spec", None)
+        pod_template_spec = getattr(getattr(job_template_spec, "template", None), "spec", None)
+        containers = list(getattr(pod_template_spec, "containers", None) or [])
+
+        return {
+            "name": getattr(metadata, "name", None),
+            "namespace": getattr(metadata, "namespace", None),
+            "schedule": getattr(spec, "schedule", None),
+            "suspend": bool(getattr(spec, "suspend", None) or False),
+            "concurrency_policy": getattr(spec, "concurrency_policy", None),
+            "active": len(list(getattr(status, "active", None) or [])),
+            "last_schedule_time": self._to_iso(getattr(status, "last_schedule_time", None)),
+            "last_successful_time": self._to_iso(getattr(status, "last_successful_time", None)),
+            "containers": [container.name for container in containers if getattr(container, "name", None)],
+            "images": [container.image for container in containers if getattr(container, "image", None)],
+            "created_at": self._to_iso(getattr(metadata, "creation_timestamp", None)),
         }
 
     async def handle_message(self, websocket, msg: Dict[str, Any]) -> None:
