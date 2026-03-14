@@ -73,7 +73,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
-  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'Job') && !!namespace && !!name
+  const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'Job' || kind === 'CronJob') && !!namespace && !!name
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['workload-describe', kind, namespace, name],
     queryFn: () => {
@@ -81,6 +81,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       if (kind === 'StatefulSet') return api.describeStatefulSet(namespace as string, name)
       if (kind === 'DaemonSet') return api.describeDaemonSet(namespace as string, name)
       if (kind === 'ReplicaSet') return api.describeReplicaSet(namespace as string, name)
+      if (kind === 'CronJob') return api.describeCronJob(namespace as string, name)
       return api.describeJob(namespace as string, name)
     },
     enabled: needsDescribe,
@@ -120,8 +121,10 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
   const podTemplate = useMemo(() => {
     const fromDescribe = describe?.pod_template
     if (fromDescribe && typeof fromDescribe === 'object') return fromDescribe as Record<string, any>
-
-    const fromRaw = (spec.template as Record<string, any> | undefined)?.spec
+    const rawTemplateSpec = isCronJob
+      ? (spec.jobTemplate as Record<string, any> | undefined)?.spec?.template?.spec
+      : (spec.template as Record<string, any> | undefined)?.spec
+    const fromRaw = rawTemplateSpec
     if (fromRaw && typeof fromRaw === 'object') {
       return {
         service_account_name: fromRaw.serviceAccountName,
@@ -136,19 +139,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       service_account_name: undefined,
       node_selector: {},
       priority_class_name: undefined,
-      containers: [],
-      tolerations: [],
+        containers: [],
+        tolerations: [],
     }
-  }, [describe?.pod_template, spec.template])
+  }, [describe?.pod_template, isCronJob, spec.jobTemplate, spec.template])
 
   const containers = useMemo(() => {
-    if (isCronJob) {
-      const cronSpec = (spec.jobTemplate as Record<string, any> | undefined)?.spec
-      const cronContainers = (cronSpec?.template as Record<string, any> | undefined)?.spec?.containers
-      return Array.isArray(cronContainers) ? cronContainers : []
-    }
     return Array.isArray(podTemplate.containers) ? podTemplate.containers : []
-  }, [isCronJob, spec.jobTemplate, podTemplate.containers])
+  }, [podTemplate.containers])
 
   const tolerations = Array.isArray(podTemplate.tolerations) ? podTemplate.tolerations : []
   const nodeSelector = (podTemplate.node_selector as Record<string, string> | undefined) ?? {}
@@ -443,12 +441,29 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       {isCronJob && (
         <InfoSection title="CronJob Info">
           <div className="space-y-2">
-            <InfoRow label="Schedule" value={String(spec.schedule ?? '-')} />
-            <InfoRow label="Suspend" value={spec.suspend ? 'Yes' : 'No'} />
-            <InfoRow label="Concurrency Policy" value={String(spec.concurrencyPolicy ?? '-')} />
-            {spec.startingDeadlineSeconds != null && <InfoRow label="Starting Deadline" value={`${String(spec.startingDeadlineSeconds)}s`} />}
-            {status.lastScheduleTime != null && <InfoRow label="Last Schedule" value={fmtTs(String(status.lastScheduleTime))} />}
-            {status.lastSuccessfulTime != null && <InfoRow label="Last Successful" value={fmtTs(String(status.lastSuccessfulTime))} />}
+            <InfoRow label="Schedule" value={String(describe?.schedule ?? spec.schedule ?? '-')} />
+            <InfoRow label="Suspend" value={(describe?.suspend ?? spec.suspend) ? 'Yes' : 'No'} />
+            <InfoRow label="Concurrency Policy" value={String(describe?.concurrency_policy ?? spec.concurrencyPolicy ?? '-')} />
+            {(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds) != null && (
+              <InfoRow
+                label="Starting Deadline"
+                value={`${String(describe?.starting_deadline_seconds ?? spec.startingDeadlineSeconds)}s`}
+              />
+            )}
+            {describe?.successful_jobs_history_limit != null && (
+              <InfoRow label="Successful Jobs History" value={String(describe.successful_jobs_history_limit)} />
+            )}
+            {describe?.failed_jobs_history_limit != null && (
+              <InfoRow label="Failed Jobs History" value={String(describe.failed_jobs_history_limit)} />
+            )}
+            {describe?.time_zone && <InfoRow label="Time Zone" value={String(describe.time_zone)} />}
+            <InfoRow label="Active Jobs" value={String(describe?.active ?? (Array.isArray(status.active) ? status.active.length : 0))} />
+            {(describe?.last_schedule_time ?? status.lastScheduleTime) != null && (
+              <InfoRow label="Last Schedule" value={fmtTs(String(describe?.last_schedule_time ?? status.lastScheduleTime))} />
+            )}
+            {(describe?.last_successful_time ?? status.lastSuccessfulTime) != null && (
+              <InfoRow label="Last Successful" value={fmtTs(String(describe?.last_successful_time ?? status.lastSuccessfulTime))} />
+            )}
           </div>
         </InfoSection>
       )}

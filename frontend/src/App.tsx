@@ -25,6 +25,7 @@ import StatefulSets from './pages/workloads/StatefulSets'
 import DaemonSets from './pages/workloads/DaemonSets'
 import Jobs from './pages/workloads/Jobs'
 import ReplicaSets from './pages/workloads/ReplicaSets'
+import CronJobs from './pages/workloads/CronJobs'
 import ClusterNodes from './pages/ClusterNodes'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
@@ -47,7 +48,7 @@ function App() {
             <Route path="workloads/daemonsets" element={<DaemonSets />} />
             <Route path="workloads/replicasets" element={<ReplicaSets />} />
             <Route path="workloads/jobs" element={<Jobs />} />
-            <Route path="workloads/cronjobs" element={<ComingSoon title="CronJobs" />} />
+            <Route path="workloads/cronjobs" element={<CronJobs />} />
             <Route path="storage" element={<Storage />} />
             <Route path="network/services" element={<ComingSoon title="Services" />} />
             <Route path="network/endpoints" element={<ComingSoon title="Endpoints" />} />

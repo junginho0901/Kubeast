@@ -426,6 +426,20 @@ export interface JobInfo {
   created_at?: string | null
 }
 
+export interface CronJobInfo {
+  name: string
+  namespace: string
+  schedule: string
+  suspend: boolean
+  concurrency_policy?: string | null
+  active: number
+  last_schedule_time?: string | null
+  last_successful_time?: string | null
+  containers?: string[]
+  images?: string[]
+  created_at?: string | null
+}
+
 export interface HPAInfo {
   name: string
   namespace: string
@@ -904,6 +918,20 @@ export const api = {
     return data
   },
 
+  getCronJobs: async (namespace: string, forceRefresh = false): Promise<CronJobInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/cronjobs`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllCronJobs: async (forceRefresh = false): Promise<CronJobInfo[]> => {
+    const { data } = await client.get('/cluster/cronjobs/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
   deleteDeployment: async (namespace: string, deploymentName: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/deployments/${deploymentName}`)
   },
@@ -1000,6 +1028,15 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/jobs/${name}`)
   },
 
+  describeCronJob: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/cronjobs/${name}/describe`)
+    return data
+  },
+
+  deleteCronJob: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/cronjobs/${name}`)
+  },
+
   getPodRbac: async (
     namespace: string,
     podName: string,
@@ -1014,6 +1051,15 @@ export const api = {
       params: { namespace, force_refresh: forceRefresh },
     })
     return data
+  },
+
+  describePVC: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pvcs/${name}/describe`)
+    return data
+  },
+
+  deletePVC: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/pvcs/${name}`)
   },
 
   getPVs: async (): Promise<PVInfo[]> => {

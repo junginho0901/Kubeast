@@ -5,6 +5,12 @@
 현재 상태: `frontend/src/App.tsx`에서 Route는 있지만 `ComingSoon` 컴포넌트임.
 
 ## 해야 할 것
+### 0. 기존 구현 처리 정책 (필수)
+- 이 작업은 **기존 [분류]/[리소스] 구현을 ComingSoon 상태로 간주**하고 새로 구현한다.
+- 기존에 해당 리소스 전용 구현이 있으면 삭제/교체해도 된다.
+- 단, 다른 메뉴가 재사용하는 공통 코드는 삭제하지 않는다.
+  - 예: `ResourceDetailDrawer`, `DetailCommon`, `useKubeWatchList`, 공통 API 유틸, 공통 모달/에디터
+- 삭제/교체한 파일 목록과 이유를 최종 보고에 포함한다.
 
 ### 1. 리스트 페이지 생성
 - 파일: `frontend/src/pages/[분류]/[Kind]s.tsx`
