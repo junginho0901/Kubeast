@@ -625,8 +625,26 @@ function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<
   })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
-  const labels = (meta.labels ?? {}) as Record<string, string>
-  const parameters = (rawJson?.parameters ?? {}) as Record<string, string>
+  const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
+  const annotations = (describe?.annotations ?? (meta.annotations as Record<string, string> | undefined) ?? {})
+  const parameters = (describe?.parameters ?? (rawJson?.parameters as Record<string, string> | undefined) ?? {})
+  const mountOptions = Array.isArray(describe?.mount_options)
+    ? describe.mount_options
+    : (Array.isArray(rawJson?.mountOptions) ? rawJson?.mountOptions : [])
+  const allowedTopologies = Array.isArray(describe?.allowed_topologies) ? describe.allowed_topologies : []
+  const finalizers = Array.isArray(describe?.finalizers) ? describe.finalizers : []
+  const relatedPVs = Array.isArray(describe?.related_pvs) ? describe.related_pvs : []
+  const relatedPVCs = Array.isArray(describe?.related_pvcs) ? describe.related_pvcs : []
+  const events = Array.isArray(describe?.events) ? describe.events : []
+  const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
+
+  const usage = describe?.usage ?? {}
+  const pvCount = Number(usage.pv_count || 0)
+  const pvBoundCount = Number(usage.pv_bound_count || 0)
+  const pvcCount = Number(usage.pvc_count || 0)
+  const pvcBoundCount = Number(usage.pvc_bound_count || 0)
+  const pvRatio = pvCount > 0 ? `${pvBoundCount}/${pvCount}` : '-'
+  const pvcRatio = pvcCount > 0 ? `${pvcBoundCount}/${pvcCount}` : '-'
 
   return (
     <>
