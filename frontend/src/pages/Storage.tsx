@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ComingSoon from './ComingSoon'
 import PersistentVolumeClaims from './storage/PersistentVolumeClaims'
+import PersistentVolumes from './storage/PersistentVolumes'
+import StorageClasses from './storage/StorageClasses'
 
 type StorageTab = 'pvcs' | 'pvs' | 'storageclasses' | 'volumeattachments'
 
@@ -18,7 +20,7 @@ export default function Storage() {
   const tab = useMemo(() => normalizeTab(searchParams.get('tab')), [searchParams])
 
   if (tab === 'pvcs') return <PersistentVolumeClaims />
-  if (tab === 'pvs') return <ComingSoon title="Persistent Volumes" />
-  if (tab === 'storageclasses') return <ComingSoon title="Storage Classes" />
+  if (tab === 'pvs') return <PersistentVolumes />
+  if (tab === 'storageclasses') return <StorageClasses />
   return <ComingSoon title="Volume Attachments" />
 }
