@@ -663,6 +663,8 @@ function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
+      {isLoading && <p className="text-xs text-slate-400">Loading details...</p>}
+      {isError && <p className="text-xs text-amber-300">Some detailed StorageClass fields are unavailable right now.</p>}
 
       {Object.keys(parameters).length > 0 && (
         <InfoSection title="Parameters">
