@@ -112,6 +112,12 @@
       "image": "Image",
       "age": "Age"
     },
+    "stats": {
+      "total": "Total",
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unavailable": "Unavailable"
+    },
     "noResults": "No deployments found.",
     "delete": {
       "button": "Delete Deployment",
@@ -329,6 +335,73 @@
       "button": "Delete PVC",
       "title": "Delete PVC",
       "confirm": "Are you sure you want to delete PVC \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "pvs": {
+    "title": "Persistent Volumes",
+    "subtitle": "Inspect and manage persistent volumes across the cluster.",
+    "create": "Create PV",
+    "createTitle": "Create PersistentVolume from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search PVs by name...",
+    "matchCount": "{{count}} pv{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "status": "Status",
+      "storageClass": "StorageClass",
+      "capacity": "Capacity",
+      "accessModes": "Access Modes",
+      "reclaimPolicy": "Reclaim Policy",
+      "claim": "Claim",
+      "volumeMode": "Volume Mode",
+      "source": "Source",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "bound": "Bound",
+      "available": "Available",
+      "released": "Released",
+      "failed": "Failed"
+    },
+    "noResults": "No PVs found.",
+    "delete": {
+      "button": "Delete PV",
+      "title": "Delete PV",
+      "confirm": "Are you sure you want to delete PV \"{{name}}\"?"
+    }
+  },
+  "storageclasses": {
+    "title": "Storage Classes",
+    "subtitle": "Inspect and manage StorageClasses across the cluster.",
+    "create": "Create StorageClass",
+    "createTitle": "Create StorageClass from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search StorageClasses by name...",
+    "matchCount": "{{count}} storage class{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "provisioner": "Provisioner",
+      "default": "Default",
+      "reclaimPolicy": "Reclaim Policy",
+      "volumeBindingMode": "Volume Binding Mode",
+      "allowVolumeExpansion": "Allow Volume Expansion",
+      "parameters": "Parameters",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "default": "Default",
+      "expandable": "Expandable",
+      "waitForFirstConsumer": "WaitForFirstConsumer"
+    },
+    "noResults": "No StorageClasses found.",
+    "delete": {
+      "button": "Delete StorageClass",
+      "title": "Delete StorageClass",
+      "confirm": "Are you sure you want to delete StorageClass \"{{name}}\"?"
     }
   },
   "nodes": {

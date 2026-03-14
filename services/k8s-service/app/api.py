@@ -737,6 +737,18 @@ async def get_pv(name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/pvs/{name}/describe")
+async def describe_pv(name: str):
+    """PV 상세 조회"""
+    try:
+        return await k8s_service.describe_pv(name)
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"PV '{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+
 @router.get("/storageclasses")
 async def get_storageclasses(force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
     """StorageClass 목록 조회"""
@@ -753,6 +765,38 @@ async def get_storageclass(name: str):
         return await k8s_service.get_storageclass(name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/storageclasses/{name}/describe")
+async def describe_storageclass(name: str):
+    """StorageClass 상세 조회"""
+    try:
+        return await k8s_service.describe_storageclass(name)
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"StorageClass '{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+
+@router.delete("/storageclasses/{name}")
+async def delete_storageclass(name: str, request: Request):
+    """StorageClass 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = await k8s_service.delete_storageclass(name)
+        if isinstance(result, dict) and result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail=f"StorageClass '{name}' not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"StorageClass '{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/volumeattachments")
@@ -1240,6 +1284,26 @@ async def get_pv_yaml(name: str):
         return {"yaml": yaml_content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/pvs/{name}")
+async def delete_pv(name: str, request: Request):
+    """PV 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = await k8s_service.delete_pv(name)
+        if isinstance(result, dict) and result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail=f"PV '{name}' not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"PV '{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 # 클러스터 뷰용 API

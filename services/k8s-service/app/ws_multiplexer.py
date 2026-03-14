@@ -169,6 +169,66 @@ class WebSocketMultiplexer:
             "created_at": self._to_iso(getattr(pvc.metadata, "creation_timestamp", None)),
         }
 
+    def _pv_to_info(self, pv: Any) -> Dict[str, Any]:
+        source_info = self._k8s._summarize_pv_source(pv)
+        node_affinity = self._k8s._summarize_pv_node_affinity(pv)
+
+        claim_ref = None
+        if getattr(getattr(pv, "spec", None), "claim_ref", None):
+            claim_ref = {
+                "namespace": getattr(pv.spec.claim_ref, "namespace", None),
+                "name": getattr(pv.spec.claim_ref, "name", None),
+            }
+
+        cap_val = None
+        try:
+            if getattr(getattr(pv, "spec", None), "capacity", None):
+                cap_val = pv.spec.capacity.get("storage")
+        except Exception:
+            cap_val = None
+
+        return {
+            "name": getattr(getattr(pv, "metadata", None), "name", None),
+            "status": getattr(getattr(pv, "status", None), "phase", None) or "Unknown",
+            "capacity": str(cap_val) if cap_val is not None else "",
+            "access_modes": list(getattr(getattr(pv, "spec", None), "access_modes", None) or []),
+            "storage_class": getattr(getattr(pv, "spec", None), "storage_class_name", None),
+            "reclaim_policy": getattr(getattr(pv, "spec", None), "persistent_volume_reclaim_policy", None),
+            "claim_ref": claim_ref,
+            "volume_mode": getattr(getattr(pv, "spec", None), "volume_mode", None),
+            "source": source_info.get("source"),
+            "driver": source_info.get("driver"),
+            "volume_handle": source_info.get("volume_handle"),
+            "node_affinity": node_affinity,
+            "created_at": self._to_iso(getattr(getattr(pv, "metadata", None), "creation_timestamp", None)),
+        }
+
+    def _storageclass_to_info(self, sc: Any) -> Dict[str, Any]:
+        annotations = dict(getattr(getattr(sc, "metadata", None), "annotations", None) or {})
+        labels = dict(getattr(getattr(sc, "metadata", None), "labels", None) or {})
+        is_default = annotations.get("storageclass.kubernetes.io/is-default-class") == "true" or annotations.get(
+            "storageclass.beta.kubernetes.io/is-default-class"
+        ) == "true"
+
+        mount_options = list(getattr(sc, "mount_options", None) or [])
+        allowed_topologies = self._k8s._summarize_allowed_topologies(getattr(sc, "allowed_topologies", None))
+
+        return {
+            "name": getattr(getattr(sc, "metadata", None), "name", None),
+            "provisioner": getattr(sc, "provisioner", None),
+            "reclaim_policy": getattr(sc, "reclaim_policy", None),
+            "volume_binding_mode": getattr(sc, "volume_binding_mode", None),
+            "allow_volume_expansion": getattr(sc, "allow_volume_expansion", None),
+            "is_default": is_default,
+            "parameters": getattr(sc, "parameters", None) or {},
+            "mount_options": mount_options,
+            "allowed_topologies": allowed_topologies,
+            "labels": labels,
+            "annotations": annotations,
+            "finalizers": list(getattr(getattr(sc, "metadata", None), "finalizers", None) or []),
+            "created_at": self._to_iso(getattr(getattr(sc, "metadata", None), "creation_timestamp", None)),
+        }
+
     def _statefulset_to_info(self, sts: Any) -> Dict[str, Any]:
         desired = getattr(sts.spec, "replicas", 0) or 0
         ready = getattr(sts.status, "ready_replicas", 0) or 0
@@ -437,6 +497,7 @@ class WebSocketMultiplexer:
         core = self._k8s.v1
         apps = self._k8s.apps_v1
         batch = client.BatchV1Api(api_client=getattr(self._k8s, "api_client", None))
+        storage_v1 = client.StorageV1Api(api_client=getattr(self._k8s, "api_client", None))
         w = watch.Watch()
 
         last_resource_version = params.get("resource_version")
@@ -475,6 +536,10 @@ class WebSocketMultiplexer:
                             stream = w.stream(core.list_namespaced_persistent_volume_claim, namespace, **stream_params)
                         else:
                             stream = w.stream(core.list_persistent_volume_claim_for_all_namespaces, **stream_params)
+                    elif resource == "pvs":
+                        stream = w.stream(core.list_persistent_volume, **stream_params)
+                    elif resource == "storageclasses":
+                        stream = w.stream(storage_v1.list_storage_class, **stream_params)
                     elif resource == "statefulsets":
                         if namespace:
                             stream = w.stream(apps.list_namespaced_stateful_set, namespace, **stream_params)
@@ -521,6 +586,10 @@ class WebSocketMultiplexer:
                             obj = self._event_to_info(obj)
                         elif resource == "pvcs" and obj is not None:
                             obj = self._pvc_to_info(obj)
+                        elif resource == "pvs" and obj is not None:
+                            obj = self._pv_to_info(obj)
+                        elif resource == "storageclasses" and obj is not None:
+                            obj = self._storageclass_to_info(obj)
                         elif resource == "statefulsets" and obj is not None:
                             obj = self._statefulset_to_info(obj)
                         elif resource == "daemonsets" and obj is not None:

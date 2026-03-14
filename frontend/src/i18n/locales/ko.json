@@ -117,6 +117,12 @@
       "image": "이미지",
       "age": "생성 시각"
     },
+    "stats": {
+      "total": "전체",
+      "healthy": "정상",
+      "degraded": "저하",
+      "unavailable": "비가용"
+    },
     "noResults": "디플로이먼트를 찾을 수 없습니다.",
     "delete": {
       "button": "디플로이먼트 삭제",
@@ -334,6 +340,73 @@
       "button": "PVC 삭제",
       "title": "PVC 삭제",
       "confirm": "\"{{namespace}}\" 네임스페이스의 PVC \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "pvs": {
+    "title": "퍼시스턴트 볼륨",
+    "subtitle": "클러스터 전반의 PV 상태를 확인하고 관리합니다.",
+    "create": "PV 생성",
+    "createTitle": "YAML로 PersistentVolume 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "PV 이름 검색...",
+    "matchCount": "{{count}}개의 PV가 검색되었습니다.",
+    "table": {
+      "name": "이름",
+      "status": "상태",
+      "storageClass": "스토리지 클래스",
+      "capacity": "용량",
+      "accessModes": "접근 모드",
+      "reclaimPolicy": "반환 정책",
+      "claim": "클레임",
+      "volumeMode": "볼륨 모드",
+      "source": "소스",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "bound": "바인드됨",
+      "available": "가용",
+      "released": "해제됨",
+      "failed": "실패"
+    },
+    "noResults": "PV를 찾을 수 없습니다.",
+    "delete": {
+      "button": "PV 삭제",
+      "title": "PV 삭제",
+      "confirm": "PV \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "storageclasses": {
+    "title": "스토리지 클래스",
+    "subtitle": "클러스터 전반의 StorageClass 상태를 확인하고 관리합니다.",
+    "create": "스토리지 클래스 생성",
+    "createTitle": "YAML로 StorageClass 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "스토리지 클래스 이름 검색...",
+    "matchCount": "{{count}}개의 스토리지 클래스가 검색되었습니다.",
+    "table": {
+      "name": "이름",
+      "provisioner": "프로비저너",
+      "default": "기본값",
+      "reclaimPolicy": "반환 정책",
+      "volumeBindingMode": "볼륨 바인딩 모드",
+      "allowVolumeExpansion": "볼륨 확장 허용",
+      "parameters": "파라미터",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "default": "기본값",
+      "expandable": "확장 가능",
+      "waitForFirstConsumer": "WaitForFirstConsumer"
+    },
+    "noResults": "스토리지 클래스를 찾을 수 없습니다.",
+    "delete": {
+      "button": "스토리지 클래스 삭제",
+      "title": "스토리지 클래스 삭제",
+      "confirm": "StorageClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "nodes": {

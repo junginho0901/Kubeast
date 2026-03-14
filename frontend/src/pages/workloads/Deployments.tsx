@@ -205,6 +205,25 @@ export default function Deployments() {
     )
   }, [deployments, searchQuery])
 
+  const summary = useMemo(() => {
+    const total = filteredDeployments.length
+    let healthy = 0
+    let degraded = 0
+    let unavailable = 0
+
+    for (const dep of filteredDeployments) {
+      const status = String(
+        dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0),
+      ).toLowerCase()
+
+      if (status.includes('healthy')) healthy += 1
+      else if (status.includes('unavailable')) unavailable += 1
+      else degraded += 1
+    }
+
+    return { total, healthy, degraded, unavailable }
+  }, [filteredDeployments])
+
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
       setSortKey(key)
@@ -421,6 +440,25 @@ spec:
         </div>
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('deployments.stats.total', 'Total')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
+        </div>
+        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('deployments.stats.healthy', 'Healthy')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.healthy}</p>
+        </div>
+        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('deployments.stats.degraded', 'Degraded')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.degraded}</p>
+        </div>
+        <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('deployments.stats.unavailable', 'Unavailable')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.unavailable}</p>
+        </div>
+      </div>
+
       {searchQuery && (
         <p className="text-sm text-slate-400">
           {tr('deployments.matchCount', '{{count}} deployment{{suffix}} match.', {
@@ -493,7 +531,9 @@ spec:
                   <td className="py-3 px-4 text-xs font-mono">{dep.updated_replicas ?? 0}</td>
                   <td className="py-3 px-4 text-xs font-mono">{dep.available_replicas ?? 0}</td>
                   <td className="py-3 px-4">
-                    <span className={`badge ${getDeploymentStatusColor(dep.status)}`}>{dep.status}</span>
+                    <span className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}`}>
+                      {dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0)}
+                    </span>
                   </td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{formatAge(dep.created_at)}</td>
@@ -557,4 +597,3 @@ spec:
     </div>
   )
 }
-
