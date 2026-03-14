@@ -616,6 +616,14 @@ function PVCDetail({ name, namespace, rawJson }: { name: string; namespace?: str
 }
 
 function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
+  const { open: openDetail } = useResourceDetail()
+  const { data: describe, isLoading, isError } = useQuery({
+    queryKey: ['storageclass-describe', name],
+    queryFn: () => api.describeStorageClass(name) as Promise<StorageClassDescribeResponse>,
+    enabled: !!name,
+    retry: false,
+  })
+
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? {}) as Record<string, string>
   const parameters = (rawJson?.parameters ?? {}) as Record<string, string>
