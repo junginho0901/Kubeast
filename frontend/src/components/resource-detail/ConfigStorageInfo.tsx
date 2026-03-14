@@ -782,6 +782,12 @@ function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<
         </InfoSection>
       )}
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
+      {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
+      {events.length > 0 && (
+        <InfoSection title="Events">
+          <EventsTable events={events} />
+        </InfoSection>
+      )}
     </>
   )
 }
