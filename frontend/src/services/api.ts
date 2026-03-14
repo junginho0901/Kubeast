@@ -577,6 +577,9 @@ export interface StorageClassInfo {
   parameters: Record<string, any>
   mount_options?: string[] | null
   allowed_topologies?: string[] | null
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
   created_at?: string | null
 }
 
@@ -1072,6 +1075,15 @@ export const api = {
     return data
   },
 
+  describePV: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/pvs/${name}/describe`)
+    return data
+  },
+
+  deletePV: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/pvs/${name}`)
+  },
+
   getStorageClasses: async (forceRefresh = false): Promise<StorageClassInfo[]> => {
     const { data } = await client.get('/cluster/storageclasses', {
       params: { force_refresh: forceRefresh },
@@ -1082,6 +1094,15 @@ export const api = {
   getStorageClass: async (name: string): Promise<StorageClassInfo> => {
     const { data } = await client.get(`/cluster/storageclasses/${name}`)
     return data
+  },
+
+  describeStorageClass: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/storageclasses/${name}/describe`)
+    return data
+  },
+
+  deleteStorageClass: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/storageclasses/${name}`)
   },
 
   getVolumeAttachments: async (forceRefresh = false): Promise<VolumeAttachmentInfo[]> => {
