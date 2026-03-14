@@ -63,6 +63,50 @@ interface PVCDescribeResponse {
   events?: Array<Record<string, unknown>>
 }
 
+interface StorageClassRelatedPV {
+  name?: string | null
+  status?: string | null
+  capacity?: string | null
+  claim_ref?: { namespace?: string | null; name?: string | null } | null
+  created_at?: string | null
+}
+
+interface StorageClassRelatedPVC {
+  name?: string | null
+  namespace?: string | null
+  status?: string | null
+  requested?: string | null
+  capacity?: string | null
+  volume_name?: string | null
+  created_at?: string | null
+}
+
+interface StorageClassDescribeResponse {
+  uid?: string
+  resource_version?: string
+  provisioner?: string | null
+  reclaim_policy?: string | null
+  volume_binding_mode?: string | null
+  allow_volume_expansion?: boolean | null
+  is_default?: boolean
+  parameters?: Record<string, string>
+  mount_options?: string[]
+  allowed_topologies?: string[]
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string | null
+  usage?: {
+    pv_count?: number
+    pv_bound_count?: number
+    pvc_count?: number
+    pvc_bound_count?: number
+  }
+  related_pvs?: StorageClassRelatedPV[]
+  related_pvcs?: StorageClassRelatedPVC[]
+  events?: Array<Record<string, unknown>>
+}
+
 export default function ConfigStorageInfo({ name, namespace, kind, rawJson }: Props) {
   if (kind === 'ConfigMap') return <ConfigMapDetail name={name} namespace={namespace} rawJson={rawJson} />
   if (kind === 'Secret') return <SecretDetail name={name} namespace={namespace} rawJson={rawJson} />
@@ -144,6 +188,59 @@ function SecretDetail({ name, namespace, rawJson }: { name: string; namespace?: 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
     </>
   )
+}
+
+interface PVClaimRef {
+  namespace?: string | null
+  name?: string | null
+  uid?: string | null
+}
+
+interface PVBoundClaimSummary {
+  namespace?: string | null
+  name?: string | null
+  status?: string | null
+  requested?: string | null
+  capacity?: string | null
+  storage_class?: string | null
+  volume_mode?: string | null
+  access_modes?: string[] | null
+}
+
+interface PVUsedByPod {
+  name?: string | null
+  namespace?: string | null
+  phase?: string | null
+  node_name?: string | null
+  ready?: string | null
+  restart_count?: number | null
+  volume_names?: string[] | null
+  created_at?: string | null
+}
+
+interface PVDescribeResponse {
+  uid?: string
+  resource_version?: string
+  status?: string
+  capacity?: string
+  access_modes?: string[]
+  storage_class?: string
+  reclaim_policy?: string
+  volume_mode?: string
+  claim_ref?: PVClaimRef | null
+  source?: string | null
+  driver?: string | null
+  volume_handle?: string | null
+  node_affinity?: string | null
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string
+  last_phase_transition_time?: string | null
+  bound_claim?: PVBoundClaimSummary | null
+  used_by_pods?: PVUsedByPod[]
+  conditions?: Array<Record<string, unknown>>
+  events?: Array<Record<string, unknown>>
 }
 
 function PVDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
