@@ -76,7 +76,9 @@ export default function ResourceDetailDrawer() {
   const canDeleteReplicaSet = kind === 'ReplicaSet' && !!ns && isWriteRole
   const canDeleteCronJob = kind === 'CronJob' && !!ns && isWriteRole
   const canDeletePVC = kind === 'PersistentVolumeClaim' && !!ns && isWriteRole
-  const canDelete = canDeleteNode || canDeletePod || canDeleteNamespace || canDeleteDeployment || canDeleteStatefulSet || canDeleteDaemonSet || canDeleteJob || canDeleteReplicaSet || canDeleteCronJob || canDeletePVC
+  const canDeletePV = kind === 'PersistentVolume' && isWriteRole
+  const canDeleteStorageClass = kind === 'StorageClass' && isWriteRole
+  const canDelete = canDeleteNode || canDeletePod || canDeleteNamespace || canDeleteDeployment || canDeleteStatefulSet || canDeleteDaemonSet || canDeleteJob || canDeleteReplicaSet || canDeleteCronJob || canDeletePVC || canDeletePV || canDeleteStorageClass
 
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
     queryKey: ['resource-yaml', kind, ns, name, yamlRefreshNonce],
@@ -116,6 +118,12 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['storage', 'pvcs'] })
       queryClient.invalidateQueries({ queryKey: ['storage', 'pvcs', ns] })
       queryClient.invalidateQueries({ queryKey: ['pvc-describe', ns, name] })
+    } else if (kind === 'PersistentVolume') {
+      queryClient.invalidateQueries({ queryKey: ['storage', 'pvs'] })
+      queryClient.invalidateQueries({ queryKey: ['pv-describe', name] })
+    } else if (kind === 'StorageClass') {
+      queryClient.invalidateQueries({ queryKey: ['storage', 'storageclasses'] })
+      queryClient.invalidateQueries({ queryKey: ['storageclass-describe', name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -197,6 +205,14 @@ export default function ResourceDetailDrawer() {
         await api.deletePVC(ns, name)
         return
       }
+      if (kind === 'PersistentVolume') {
+        await api.deletePV(name)
+        return
+      }
+      if (kind === 'StorageClass') {
+        await api.deleteStorageClass(name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
@@ -265,6 +281,16 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['storage', 'pvcs', 'all'] }),
           queryClient.invalidateQueries({ queryKey: ['storage', 'pvcs', ns] }),
           queryClient.invalidateQueries({ queryKey: ['pvc-describe', ns, name] }),
+        ])
+      } else if (kind === 'PersistentVolume') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['storage', 'pvs'] }),
+          queryClient.invalidateQueries({ queryKey: ['pv-describe', name] }),
+        ])
+      } else if (kind === 'StorageClass') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['storage', 'storageclasses'] }),
+          queryClient.invalidateQueries({ queryKey: ['storageclass-describe', name] }),
         ])
       }
 
@@ -357,6 +383,10 @@ export default function ResourceDetailDrawer() {
                         ? t('cronjobs.delete.button', { defaultValue: 'Delete CronJob' })
                       : kind === 'PersistentVolumeClaim'
                         ? t('pvcs.delete.button', { defaultValue: 'Delete PVC' })
+                      : kind === 'PersistentVolume'
+                        ? t('pvs.delete.button', { defaultValue: 'Delete PV' })
+                      : kind === 'StorageClass'
+                        ? t('storageclasses.delete.button', { defaultValue: 'Delete StorageClass' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -432,6 +462,10 @@ export default function ResourceDetailDrawer() {
                         ? t('cronjobs.delete.title', { defaultValue: 'Delete CronJob' })
                       : kind === 'PersistentVolumeClaim'
                         ? t('pvcs.delete.title', { defaultValue: 'Delete PVC' })
+                      : kind === 'PersistentVolume'
+                        ? t('pvs.delete.title', { defaultValue: 'Delete PV' })
+                      : kind === 'StorageClass'
+                        ? t('storageclasses.delete.title', { defaultValue: 'Delete StorageClass' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -487,6 +521,16 @@ export default function ResourceDetailDrawer() {
                         defaultValue: 'Are you sure you want to delete PVC "{{name}}" in "{{namespace}}"?',
                         name,
                         namespace: ns,
+                      })
+                  : kind === 'PersistentVolume'
+                    ? t('pvs.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete PV "{{name}}"?',
+                        name,
+                      })
+                  : kind === 'StorageClass'
+                    ? t('storageclasses.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete StorageClass "{{name}}"?',
+                        name,
                       })
                   : t('namespaces.delete.confirm', {
                       defaultValue: 'Are you sure you want to delete namespace "{{name}}"?',
