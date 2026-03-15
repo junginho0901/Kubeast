@@ -19,7 +19,7 @@ type TabId = 'info' | 'yaml'
 
 const WORKLOAD_KINDS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob'])
 const NETWORK_KINDS = new Set(['Service', 'Ingress', 'NetworkPolicy', 'Endpoints', 'EndpointSlice'])
-const CONFIG_STORAGE_KINDS = new Set(['ConfigMap', 'Secret', 'PersistentVolume', 'PersistentVolumeClaim', 'StorageClass', 'HorizontalPodAutoscaler'])
+const CONFIG_STORAGE_KINDS = new Set(['ConfigMap', 'Secret', 'PersistentVolume', 'PersistentVolumeClaim', 'StorageClass', 'VolumeAttachment', 'HorizontalPodAutoscaler'])
 
 function kindToPlural(kind: string): string {
   const map: Record<string, string> = {
@@ -31,6 +31,7 @@ function kindToPlural(kind: string): string {
     PersistentVolume: 'persistentvolume', HorizontalPodAutoscaler: 'horizontalpodautoscaler',
     Endpoints: 'endpoints', EndpointSlice: 'endpointslice',
     StorageClass: 'storageclass',
+    VolumeAttachment: 'volumeattachment',
   }
   return map[kind] ?? kind.toLowerCase()
 }
@@ -41,7 +42,7 @@ function kindIcon(kind: string): string {
     DaemonSet: '👾', ReplicaSet: '📋', Job: '⚡', CronJob: '⏰',
     Service: '🌐', Ingress: '🔀', NetworkPolicy: '🛡️',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
-    StorageClass: '🗄️', HorizontalPodAutoscaler: '📈',
+    StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
   }
   return map[kind] ?? '📄'
 }
@@ -78,7 +79,8 @@ export default function ResourceDetailDrawer() {
   const canDeletePVC = kind === 'PersistentVolumeClaim' && !!ns && isWriteRole
   const canDeletePV = kind === 'PersistentVolume' && isWriteRole
   const canDeleteStorageClass = kind === 'StorageClass' && isWriteRole
-  const canDelete = canDeleteNode || canDeletePod || canDeleteNamespace || canDeleteDeployment || canDeleteStatefulSet || canDeleteDaemonSet || canDeleteJob || canDeleteReplicaSet || canDeleteCronJob || canDeletePVC || canDeletePV || canDeleteStorageClass
+  const canDeleteVolumeAttachment = kind === 'VolumeAttachment' && isWriteRole
+  const canDelete = canDeleteNode || canDeletePod || canDeleteNamespace || canDeleteDeployment || canDeleteStatefulSet || canDeleteDaemonSet || canDeleteJob || canDeleteReplicaSet || canDeleteCronJob || canDeletePVC || canDeletePV || canDeleteStorageClass || canDeleteVolumeAttachment
 
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
     queryKey: ['resource-yaml', kind, ns, name, yamlRefreshNonce],
@@ -124,6 +126,9 @@ export default function ResourceDetailDrawer() {
     } else if (kind === 'StorageClass') {
       queryClient.invalidateQueries({ queryKey: ['storage', 'storageclasses'] })
       queryClient.invalidateQueries({ queryKey: ['storageclass-describe', name] })
+    } else if (kind === 'VolumeAttachment') {
+      queryClient.invalidateQueries({ queryKey: ['storage', 'volumeattachments'] })
+      queryClient.invalidateQueries({ queryKey: ['volumeattachment-describe', name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -213,6 +218,10 @@ export default function ResourceDetailDrawer() {
         await api.deleteStorageClass(name)
         return
       }
+      if (kind === 'VolumeAttachment') {
+        await api.deleteVolumeAttachment(name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
@@ -291,6 +300,11 @@ export default function ResourceDetailDrawer() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['storage', 'storageclasses'] }),
           queryClient.invalidateQueries({ queryKey: ['storageclass-describe', name] }),
+        ])
+      } else if (kind === 'VolumeAttachment') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['storage', 'volumeattachments'] }),
+          queryClient.invalidateQueries({ queryKey: ['volumeattachment-describe', name] }),
         ])
       }
 
@@ -387,6 +401,8 @@ export default function ResourceDetailDrawer() {
                         ? t('pvs.delete.button', { defaultValue: 'Delete PV' })
                       : kind === 'StorageClass'
                         ? t('storageclasses.delete.button', { defaultValue: 'Delete StorageClass' })
+                      : kind === 'VolumeAttachment'
+                        ? t('volumeattachments.delete.button', { defaultValue: 'Delete VolumeAttachment' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -466,6 +482,8 @@ export default function ResourceDetailDrawer() {
                         ? t('pvs.delete.title', { defaultValue: 'Delete PV' })
                       : kind === 'StorageClass'
                         ? t('storageclasses.delete.title', { defaultValue: 'Delete StorageClass' })
+                      : kind === 'VolumeAttachment'
+                        ? t('volumeattachments.delete.title', { defaultValue: 'Delete VolumeAttachment' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -530,6 +548,11 @@ export default function ResourceDetailDrawer() {
                   : kind === 'StorageClass'
                     ? t('storageclasses.delete.confirm', {
                         defaultValue: 'Are you sure you want to delete StorageClass "{{name}}"?',
+                        name,
+                      })
+                  : kind === 'VolumeAttachment'
+                    ? t('volumeattachments.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete VolumeAttachment "{{name}}"?',
                         name,
                       })
                   : t('namespaces.delete.confirm', {
