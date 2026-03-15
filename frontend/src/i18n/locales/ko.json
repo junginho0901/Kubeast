@@ -130,6 +130,39 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 디플로이먼트 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "servicesPage": {
+    "title": "서비스",
+    "subtitle": "네임스페이스 전반의 서비스를 조회하고 관리합니다.",
+    "create": "생성",
+    "createTitle": "YAML로 서비스 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "서비스 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 서비스가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "type": "타입",
+      "clusterIp": "클러스터 IP",
+      "externalIp": "외부 IP",
+      "ports": "포트",
+      "selector": "셀렉터",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "clusterIp": "ClusterIP",
+      "exposed": "외부 노출",
+      "headless": "Headless"
+    },
+    "noResults": "서비스를 찾을 수 없습니다.",
+    "delete": {
+      "button": "서비스 삭제",
+      "title": "서비스 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 서비스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "statefulsets": {
     "title": "스테이트풀셋",
     "subtitle": "네임스페이스 전반의 StatefulSet 상태를 확인하고 관리합니다.",

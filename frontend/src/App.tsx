@@ -27,6 +27,7 @@ import Jobs from './pages/workloads/Jobs'
 import ReplicaSets from './pages/workloads/ReplicaSets'
 import CronJobs from './pages/workloads/CronJobs'
 import ClusterNodes from './pages/ClusterNodes'
+import Services from './pages/network/Services'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
@@ -50,7 +51,7 @@ function App() {
             <Route path="workloads/jobs" element={<Jobs />} />
             <Route path="workloads/cronjobs" element={<CronJobs />} />
             <Route path="storage" element={<Storage />} />
-            <Route path="network/services" element={<ComingSoon title="Services" />} />
+            <Route path="network/services" element={<Services />} />
             <Route path="network/endpoints" element={<ComingSoon title="Endpoints" />} />
             <Route path="network/endpointslices" element={<ComingSoon title="Endpoint Slices" />} />
             <Route path="network/ingresses" element={<ComingSoon title="Ingresses" />} />

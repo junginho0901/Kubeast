@@ -127,6 +127,38 @@ class WebSocketMultiplexer:
             "resource_count": {},
         }
 
+    def _service_to_info(self, svc: Any) -> Dict[str, Any]:
+        ports = []
+        for port in list(getattr(getattr(svc, "spec", None), "ports", None) or []):
+            ports.append({
+                "name": getattr(port, "name", None),
+                "port": getattr(port, "port", None),
+                "target_port": str(getattr(port, "target_port", None)),
+                "protocol": getattr(port, "protocol", None),
+                "node_port": getattr(port, "node_port", None),
+            })
+
+        external_ip = None
+        lb = getattr(getattr(svc, "status", None), "load_balancer", None)
+        lb_ing = list(getattr(lb, "ingress", None) or [])
+        if lb_ing:
+            external_ip = getattr(lb_ing[0], "ip", None) or getattr(lb_ing[0], "hostname", None)
+        if not external_ip:
+            ext_spec = list(getattr(getattr(svc, "spec", None), "external_i_ps", None) or [])
+            if ext_spec:
+                external_ip = ext_spec[0]
+
+        return {
+            "name": getattr(getattr(svc, "metadata", None), "name", None),
+            "namespace": getattr(getattr(svc, "metadata", None), "namespace", None),
+            "type": getattr(getattr(svc, "spec", None), "type", None),
+            "cluster_ip": getattr(getattr(svc, "spec", None), "cluster_ip", None),
+            "external_ip": external_ip,
+            "ports": ports,
+            "selector": getattr(getattr(svc, "spec", None), "selector", None) or {},
+            "created_at": self._to_iso(getattr(getattr(svc, "metadata", None), "creation_timestamp", None)),
+        }
+
     def _event_to_info(self, event: Any) -> Dict[str, Any]:
         return {
             "type": event.type,
@@ -551,6 +583,11 @@ class WebSocketMultiplexer:
                         stream = w.stream(core.list_node, **stream_params)
                     elif resource == "namespaces":
                         stream = w.stream(core.list_namespace, **stream_params)
+                    elif resource == "services":
+                        if namespace:
+                            stream = w.stream(core.list_namespaced_service, namespace, **stream_params)
+                        else:
+                            stream = w.stream(core.list_service_for_all_namespaces, **stream_params)
                     elif resource == "events":
                         if namespace:
                             stream = w.stream(core.list_namespaced_event, namespace, **stream_params)
@@ -609,6 +646,8 @@ class WebSocketMultiplexer:
                             obj = self._node_to_info(obj)
                         elif resource == "namespaces" and obj is not None:
                             obj = self._namespace_to_info(obj)
+                        elif resource == "services" and obj is not None:
+                            obj = self._service_to_info(obj)
                         elif resource == "events" and obj is not None:
                             obj = self._event_to_info(obj)
                         elif resource == "pvcs" and obj is not None:

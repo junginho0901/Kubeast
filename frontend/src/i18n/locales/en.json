@@ -125,6 +125,39 @@
       "confirm": "Are you sure you want to delete deployment \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "servicesPage": {
+    "title": "Services",
+    "subtitle": "Inspect and manage Services across namespaces.",
+    "create": "Create",
+    "createTitle": "Create Service from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search services by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} service{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "type": "Type",
+      "clusterIp": "Cluster IP",
+      "externalIp": "External IP",
+      "ports": "Ports",
+      "selector": "Selector",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "clusterIp": "ClusterIP",
+      "exposed": "Exposed",
+      "headless": "Headless"
+    },
+    "noResults": "No services found.",
+    "delete": {
+      "button": "Delete Service",
+      "title": "Delete Service",
+      "confirm": "Are you sure you want to delete service \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "statefulsets": {
     "title": "Stateful Sets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",
