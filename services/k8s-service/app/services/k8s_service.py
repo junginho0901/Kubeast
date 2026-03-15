@@ -1186,42 +1186,79 @@ class K8sService:
         except Exception as e:
             raise Exception(f"Failed to apply namespace yaml: {e}")
 
-    async def get_services(self, namespace: str) -> List[ServiceInfo]:
-        """서비스 목록"""
+    def _service_to_info(self, svc: Any) -> ServiceInfo:
+        ports: List[Dict[str, Any]] = []
+        for port in list(getattr(getattr(svc, "spec", None), "ports", None) or []):
+            ports.append({
+                "name": getattr(port, "name", None),
+                "port": getattr(port, "port", None),
+                "target_port": str(getattr(port, "target_port", None)),
+                "protocol": getattr(port, "protocol", None),
+                "node_port": getattr(port, "node_port", None),
+            })
+
+        external_ip = None
+        lb = getattr(getattr(svc, "status", None), "load_balancer", None)
+        lb_ing = list(getattr(lb, "ingress", None) or [])
+        if lb_ing:
+            external_ip = getattr(lb_ing[0], "ip", None) or getattr(lb_ing[0], "hostname", None)
+        if not external_ip:
+            ext_spec = list(getattr(getattr(svc, "spec", None), "external_i_ps", None) or [])
+            if ext_spec:
+                external_ip = ext_spec[0]
+
+        return ServiceInfo(
+            name=getattr(getattr(svc, "metadata", None), "name", None),
+            namespace=getattr(getattr(svc, "metadata", None), "namespace", None),
+            type=getattr(getattr(svc, "spec", None), "type", None),
+            cluster_ip=getattr(getattr(svc, "spec", None), "cluster_ip", None),
+            external_ip=external_ip,
+            ports=ports,
+            selector=getattr(getattr(svc, "spec", None), "selector", None) or {},
+            created_at=getattr(getattr(svc, "metadata", None), "creation_timestamp", None),
+        )
+
+    async def get_services(self, namespace: str, force_refresh: bool = False) -> List[ServiceInfo]:
+        """네임스페이스 Service 목록"""
         try:
             services = self.v1.list_namespaced_service(namespace)
-            result = []
-            
-            for svc in services.items:
-                ports = []
-                if svc.spec.ports:
-                    for port in svc.spec.ports:
-                        ports.append({
-                            "name": port.name,
-                            "port": port.port,
-                            "target_port": str(port.target_port),
-                            "protocol": port.protocol,
-                            "node_port": getattr(port, "node_port", None),
-                        })
-                
-                external_ip = None
-                if svc.status.load_balancer and svc.status.load_balancer.ingress:
-                    external_ip = svc.status.load_balancer.ingress[0].ip
-                
-                result.append(ServiceInfo(
-                    name=svc.metadata.name,
-                    namespace=svc.metadata.namespace,
-                    type=svc.spec.type,
-                    cluster_ip=svc.spec.cluster_ip,
-                    external_ip=external_ip,
-                    ports=ports,
-                    selector=svc.spec.selector or {},
-                    created_at=svc.metadata.creation_timestamp
-                ))
-            
-            return result
+            return [self._service_to_info(svc) for svc in services.items]
         except ApiException as e:
             raise Exception(f"Failed to get services: {e}")
+
+    async def get_all_services(self, force_refresh: bool = False) -> List[ServiceInfo]:
+        """전체 네임스페이스 Service 목록"""
+        try:
+            services = self.v1.list_service_for_all_namespaces()
+            return [self._service_to_info(svc) for svc in services.items]
+        except ApiException as e:
+            raise Exception(f"Failed to get all services: {e}")
+
+    async def delete_service(self, namespace: str, name: str) -> Dict[str, Any]:
+        """Service 삭제"""
+        try:
+            delete_options = client.V1DeleteOptions()
+            response = self.v1.delete_namespaced_service(
+                name=name,
+                namespace=namespace,
+                body=delete_options,
+            )
+            self._invalidate_yaml_cache("service", name, namespace=namespace)
+            self._invalidate_yaml_cache("services", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete service: {e}")
 
     async def check_service_connectivity(
         self,
@@ -4757,37 +4794,107 @@ class K8sService:
         """Service 상세 정보 조회"""
         try:
             service = self.v1.read_namespaced_service(name, namespace)
-            
+
+            events = await self.get_events(namespace, name)
+            endpoints = await self.get_endpoints(namespace)
+            endpoint_slices = await self.get_endpointslices(namespace)
+
+            external_ips = list(getattr(getattr(service, "spec", None), "external_i_ps", None) or [])
+            lb_ingress = []
+            lb = getattr(getattr(service, "status", None), "load_balancer", None)
+            for ing in list(getattr(lb, "ingress", None) or []):
+                lb_ingress.append({
+                    "ip": getattr(ing, "ip", None),
+                    "hostname": getattr(ing, "hostname", None),
+                })
+
+            ports = []
+            for port in list(getattr(getattr(service, "spec", None), "ports", None) or []):
+                ports.append({
+                    "name": getattr(port, "name", None),
+                    "protocol": getattr(port, "protocol", None),
+                    "port": getattr(port, "port", None),
+                    "target_port": str(getattr(port, "target_port", None)),
+                    "node_port": getattr(port, "node_port", None),
+                    "app_protocol": getattr(port, "app_protocol", None),
+                })
+
+            endpoint_summary = None
+            for ep in endpoints:
+                if ep.get("name") == name:
+                    endpoint_summary = ep
+                    break
+
+            owned_slices = [
+                es
+                for es in endpoint_slices
+                if es.get("service_name") == name
+            ]
+
+            session_affinity_cfg = getattr(getattr(service, "spec", None), "session_affinity_config", None)
+            client_ip_cfg = getattr(session_affinity_cfg, "client_ip", None)
+
+            conditions = []
+            for cond in list(getattr(getattr(service, "status", None), "conditions", None) or []):
+                conditions.append({
+                    "type": getattr(cond, "type", None),
+                    "status": getattr(cond, "status", None),
+                    "reason": getattr(cond, "reason", None),
+                    "message": getattr(cond, "message", None),
+                    "last_transition_time": self._to_iso(getattr(cond, "last_transition_time", None)),
+                })
+
             describe_info = {
                 "name": service.metadata.name,
                 "namespace": service.metadata.namespace,
+                "uid": getattr(service.metadata, "uid", None),
+                "resource_version": getattr(service.metadata, "resource_version", None),
                 "type": service.spec.type,
-                "cluster_ip": service.spec.cluster_ip,
-                "external_ips": service.spec.external_i_ps or [],
-                "ports": [],
+                "cluster_ip": getattr(service.spec, "cluster_ip", None),
+                "cluster_ips": list(getattr(service.spec, "cluster_i_ps", None) or []),
+                "ip_families": list(getattr(service.spec, "ip_families", None) or []),
+                "ip_family_policy": getattr(service.spec, "ip_family_policy", None),
+                "session_affinity": getattr(service.spec, "session_affinity", None),
+                "session_affinity_timeout_seconds": getattr(client_ip_cfg, "timeout_seconds", None),
+                "internal_traffic_policy": getattr(service.spec, "internal_traffic_policy", None),
+                "external_traffic_policy": getattr(service.spec, "external_traffic_policy", None),
+                "allocate_load_balancer_node_ports": getattr(service.spec, "allocate_load_balancer_node_ports", None),
+                "publish_not_ready_addresses": getattr(service.spec, "publish_not_ready_addresses", None),
+                "health_check_node_port": getattr(service.spec, "health_check_node_port", None),
+                "external_name": getattr(service.spec, "external_name", None),
+                "external_ips": external_ips,
+                "load_balancer_ingress": lb_ingress,
+                "ports": ports,
                 "selector": service.spec.selector or {},
-                "labels": service.metadata.labels or {}
+                "labels": service.metadata.labels or {},
+                "annotations": service.metadata.annotations or {},
+                "finalizers": list(getattr(service.metadata, "finalizers", None) or []),
+                "owner_references": [
+                    {
+                        "kind": getattr(ref, "kind", None),
+                        "name": getattr(ref, "name", None),
+                        "uid": getattr(ref, "uid", None),
+                        "controller": getattr(ref, "controller", None),
+                    }
+                    for ref in (getattr(service.metadata, "owner_references", None) or [])
+                ],
+                "created_at": self._to_iso(getattr(service.metadata, "creation_timestamp", None)),
+                "conditions": conditions,
+                "endpoint_summary": endpoint_summary,
+                "endpoint_slices": owned_slices,
+                "events": [
+                    {
+                        "type": e.get("type"),
+                        "reason": e.get("reason"),
+                        "message": e.get("message"),
+                        "count": e.get("count"),
+                        "first_timestamp": self._to_iso(e.get("first_timestamp")),
+                        "last_timestamp": self._to_iso(e.get("last_timestamp")),
+                    }
+                    for e in events
+                ],
             }
-            
-            # Ports
-            if service.spec.ports:
-                for port in service.spec.ports:
-                    describe_info["ports"].append({
-                        "name": port.name,
-                        "protocol": port.protocol,
-                        "port": port.port,
-                        "target_port": str(port.target_port),
-                        "node_port": port.node_port
-                    })
-            
-            # LoadBalancer 정보
-            if service.spec.type == "LoadBalancer" and service.status.load_balancer:
-                if service.status.load_balancer.ingress:
-                    describe_info["load_balancer_ingress"] = [
-                        {"ip": ing.ip, "hostname": ing.hostname}
-                        for ing in service.status.load_balancer.ingress
-                    ]
-            
+
             return describe_info
         except ApiException as e:
             raise Exception(f"Failed to describe service: {e}")
