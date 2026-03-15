@@ -1112,6 +1112,15 @@ export const api = {
     return data
   },
 
+  describeVolumeAttachment: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/volumeattachments/${name}/describe`)
+    return data
+  },
+
+  deleteVolumeAttachment: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/volumeattachments/${name}`)
+  },
+
   // Topology
   getNamespaceTopology: async (namespace: string): Promise<TopologyGraph> => {
     const { data } = await client.get(`/topology/namespace/${namespace}`)
