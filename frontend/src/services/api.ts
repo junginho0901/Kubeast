@@ -820,6 +820,22 @@ export const api = {
     return data
   },
 
+  getAllServices: async (forceRefresh = false): Promise<ServiceInfo[]> => {
+    const { data } = await client.get('/cluster/services/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeService: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/services/${name}/describe`)
+    return data
+  },
+
+  deleteService: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/services/${name}`)
+  },
+
   getIngresses: async (namespace: string, forceRefresh = false): Promise<IngressInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/ingresses`, {
       params: { force_refresh: forceRefresh },
