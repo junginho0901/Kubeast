@@ -2715,6 +2715,130 @@ class K8sService:
             return result
         except ApiException as e:
             raise Exception(f"Failed to get VolumeAttachments: {e}")
+
+    async def describe_volumeattachment(self, name: str) -> Dict[str, Any]:
+        """VolumeAttachment 상세 조회"""
+        try:
+            storage_v1 = client.StorageV1Api()
+            va = storage_v1.read_volume_attachment(name)
+
+            source = getattr(va.spec, "source", None)
+            persistent_volume_name = getattr(source, "persistent_volume_name", None) if source else None
+            inline_volume_spec = getattr(source, "inline_volume_spec", None) if source else None
+
+            status = getattr(va, "status", None)
+            attach_error = getattr(status, "attach_error", None) if status else None
+            detach_error = getattr(status, "detach_error", None) if status else None
+            attachment_metadata = dict(getattr(status, "attachment_metadata", None) or {}) if status else {}
+
+            labels = dict(getattr(va.metadata, "labels", None) or {})
+            annotations = dict(getattr(va.metadata, "annotations", None) or {})
+            finalizers = list(getattr(va.metadata, "finalizers", None) or [])
+
+            source_inline_volume_spec = None
+            if inline_volume_spec is not None:
+                try:
+                    source_inline_volume_spec = client.ApiClient().sanitize_for_serialization(inline_volume_spec)
+                except Exception:
+                    source_inline_volume_spec = str(inline_volume_spec)
+
+            pv_summary = None
+            if persistent_volume_name:
+                try:
+                    pv = self.v1.read_persistent_volume(persistent_volume_name)
+                    source_info = self._summarize_pv_source(pv)
+                    cap_val = None
+                    try:
+                        if getattr(getattr(pv, "spec", None), "capacity", None):
+                            cap_val = pv.spec.capacity.get("storage")
+                    except Exception:
+                        cap_val = None
+
+                    pv_summary = {
+                        "name": persistent_volume_name,
+                        "status": getattr(getattr(pv, "status", None), "phase", None),
+                        "capacity": str(cap_val) if cap_val is not None else None,
+                        "access_modes": list(getattr(getattr(pv, "spec", None), "access_modes", None) or []),
+                        "storage_class": getattr(getattr(pv, "spec", None), "storage_class_name", None),
+                        "reclaim_policy": getattr(getattr(pv, "spec", None), "persistent_volume_reclaim_policy", None),
+                        "volume_mode": getattr(getattr(pv, "spec", None), "volume_mode", None),
+                        "source": source_info.get("source"),
+                        "driver": source_info.get("driver"),
+                        "volume_handle": source_info.get("volume_handle"),
+                    }
+                except Exception:
+                    pv_summary = {
+                        "name": persistent_volume_name,
+                    }
+
+            events: List[Dict[str, Any]] = []
+            try:
+                event_list = self.v1.list_event_for_all_namespaces(
+                    field_selector=f"involvedObject.kind=VolumeAttachment,involvedObject.name={name}"
+                )
+                for event in event_list.items:
+                    events.append({
+                        "type": event.type,
+                        "reason": event.reason,
+                        "message": event.message,
+                        "namespace": getattr(event.metadata, "namespace", None),
+                        "count": event.count,
+                        "first_timestamp": self._to_iso(getattr(event, "first_timestamp", None)),
+                        "last_timestamp": self._to_iso(getattr(event, "last_timestamp", None)),
+                    })
+            except Exception:
+                events = []
+
+            return {
+                "name": va.metadata.name,
+                "uid": getattr(va.metadata, "uid", None),
+                "resource_version": getattr(va.metadata, "resource_version", None),
+                "attacher": getattr(va.spec, "attacher", None),
+                "node_name": getattr(va.spec, "node_name", None),
+                "persistent_volume_name": persistent_volume_name,
+                "source_inline_volume_spec": source_inline_volume_spec,
+                "attached": getattr(status, "attached", None) if status else None,
+                "attachment_metadata": attachment_metadata,
+                "attach_error": {
+                    "time": self._to_iso(getattr(attach_error, "time", None)),
+                    "message": getattr(attach_error, "message", None),
+                } if attach_error else None,
+                "detach_error": {
+                    "time": self._to_iso(getattr(detach_error, "time", None)),
+                    "message": getattr(detach_error, "message", None),
+                } if detach_error else None,
+                "labels": labels,
+                "annotations": annotations,
+                "finalizers": finalizers,
+                "created_at": self._to_iso(getattr(va.metadata, "creation_timestamp", None)),
+                "pv_summary": pv_summary,
+                "events": events,
+            }
+        except ApiException as e:
+            raise Exception(f"Failed to describe VolumeAttachment: {e}")
+
+    async def delete_volumeattachment(self, name: str) -> Dict[str, Any]:
+        """VolumeAttachment 삭제"""
+        try:
+            storage_v1 = client.StorageV1Api()
+            response = storage_v1.delete_volume_attachment(
+                name=name,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("volumeattachment", name)
+            self._invalidate_yaml_cache("volumeattachments", name)
+            return {
+                "status": "deleted",
+                "name": name,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                }
+            raise Exception(f"Failed to delete VolumeAttachment: {e}")
     
     async def get_events(self, namespace: Optional[str], resource_name: Optional[str] = None) -> List[Dict]:
         """이벤트 조회"""

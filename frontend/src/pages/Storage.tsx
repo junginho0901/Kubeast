@@ -4,6 +4,7 @@ import ComingSoon from './ComingSoon'
 import PersistentVolumeClaims from './storage/PersistentVolumeClaims'
 import PersistentVolumes from './storage/PersistentVolumes'
 import StorageClasses from './storage/StorageClasses'
+import VolumeAttachments from './storage/VolumeAttachments'
 
 type StorageTab = 'pvcs' | 'pvs' | 'storageclasses' | 'volumeattachments'
 
@@ -22,5 +23,6 @@ export default function Storage() {
   if (tab === 'pvcs') return <PersistentVolumeClaims />
   if (tab === 'pvs') return <PersistentVolumes />
   if (tab === 'storageclasses') return <StorageClasses />
-  return <ComingSoon title="Volume Attachments" />
+  if (tab === 'volumeattachments') return <VolumeAttachments />
+  return <ComingSoon title="Storage" />
 }

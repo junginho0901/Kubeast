@@ -437,6 +437,37 @@
       "confirm": "Are you sure you want to delete StorageClass \"{{name}}\"?"
     }
   },
+  "volumeattachments": {
+    "title": "Volume Attachments",
+    "subtitle": "Inspect cluster-wide volume attachment state and troubleshooting signals.",
+    "create": "Create",
+    "createTitle": "Create VolumeAttachment from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search VolumeAttachments by name, PV, node, or attacher...",
+    "matchCount": "{{count}} volume attachment{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "attacher": "Attacher",
+      "persistentVolume": "Persistent Volume",
+      "node": "Node",
+      "attached": "Attached",
+      "error": "Error",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "attached": "Attached",
+      "detached": "Detached",
+      "errors": "Errors"
+    },
+    "noResults": "No VolumeAttachments found.",
+    "delete": {
+      "button": "Delete VolumeAttachment",
+      "title": "Delete VolumeAttachment",
+      "confirm": "Are you sure you want to delete VolumeAttachment \"{{name}}\"?"
+    }
+  },
   "nodes": {
     "title": "Nodes",
     "subtitle": "Inspect cluster node status and capacity.",

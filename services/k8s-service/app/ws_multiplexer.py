@@ -261,6 +261,31 @@ class WebSocketMultiplexer:
             "created_at": self._to_iso(getattr(getattr(sc, "metadata", None), "creation_timestamp", None)),
         }
 
+    def _volumeattachment_to_info(self, va: Any) -> Dict[str, Any]:
+        source = getattr(getattr(va, "spec", None), "source", None)
+        persistent_volume_name = getattr(source, "persistent_volume_name", None) if source else None
+
+        status = getattr(va, "status", None)
+        attach_error = getattr(status, "attach_error", None) if status else None
+        detach_error = getattr(status, "detach_error", None) if status else None
+
+        return {
+            "name": getattr(getattr(va, "metadata", None), "name", None),
+            "attacher": getattr(getattr(va, "spec", None), "attacher", None),
+            "node_name": getattr(getattr(va, "spec", None), "node_name", None),
+            "persistent_volume_name": persistent_volume_name,
+            "attached": getattr(status, "attached", None) if status else None,
+            "attach_error": {
+                "time": self._to_iso(getattr(attach_error, "time", None)),
+                "message": getattr(attach_error, "message", None),
+            } if attach_error else None,
+            "detach_error": {
+                "time": self._to_iso(getattr(detach_error, "time", None)),
+                "message": getattr(detach_error, "message", None),
+            } if detach_error else None,
+            "created_at": self._to_iso(getattr(getattr(va, "metadata", None), "creation_timestamp", None)),
+        }
+
     def _statefulset_to_info(self, sts: Any) -> Dict[str, Any]:
         desired = getattr(sts.spec, "replicas", 0) or 0
         ready = getattr(sts.status, "ready_replicas", 0) or 0
@@ -577,6 +602,8 @@ class WebSocketMultiplexer:
                         stream = w.stream(core.list_persistent_volume, **stream_params)
                     elif resource == "storageclasses":
                         stream = w.stream(storage_v1.list_storage_class, **stream_params)
+                    elif resource == "volumeattachments":
+                        stream = w.stream(storage_v1.list_volume_attachment, **stream_params)
                     elif resource == "statefulsets":
                         if namespace:
                             stream = w.stream(apps.list_namespaced_stateful_set, namespace, **stream_params)
@@ -629,6 +656,8 @@ class WebSocketMultiplexer:
                             obj = self._pv_to_info(obj)
                         elif resource == "storageclasses" and obj is not None:
                             obj = self._storageclass_to_info(obj)
+                        elif resource == "volumeattachments" and obj is not None:
+                            obj = self._volumeattachment_to_info(obj)
                         elif resource == "statefulsets" and obj is not None:
                             obj = self._statefulset_to_info(obj)
                         elif resource == "daemonsets" and obj is not None:

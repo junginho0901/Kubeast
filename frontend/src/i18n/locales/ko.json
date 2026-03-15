@@ -442,6 +442,37 @@
       "confirm": "StorageClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "volumeattachments": {
+    "title": "볼륨 어태치먼트",
+    "subtitle": "클러스터 전반의 볼륨 attach 상태와 문제 신호를 확인합니다.",
+    "create": "생성",
+    "createTitle": "YAML로 VolumeAttachment 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "이름, PV, 노드, Attacher로 VolumeAttachment 검색...",
+    "matchCount": "{{count}}개의 VolumeAttachment가 검색되었습니다.",
+    "table": {
+      "name": "이름",
+      "attacher": "Attacher",
+      "persistentVolume": "퍼시스턴트 볼륨",
+      "node": "노드",
+      "attached": "Attach 상태",
+      "error": "오류",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "attached": "Attached",
+      "detached": "Detached",
+      "errors": "오류"
+    },
+    "noResults": "VolumeAttachment를 찾을 수 없습니다.",
+    "delete": {
+      "button": "VolumeAttachment 삭제",
+      "title": "VolumeAttachment 삭제",
+      "confirm": "VolumeAttachment \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "nodes": {
     "title": "노드",
     "subtitle": "클러스터 노드 상태와 용량을 확인합니다.",
