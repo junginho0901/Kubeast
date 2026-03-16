@@ -1218,6 +1218,268 @@ class K8sService:
             created_at=getattr(getattr(svc, "metadata", None), "creation_timestamp", None),
         )
 
+    def _endpoint_address_to_dict(self, addr: Any) -> Dict[str, Any]:
+        target_ref = getattr(addr, "target_ref", None)
+        return {
+            "ip": getattr(addr, "ip", None),
+            "hostname": getattr(addr, "hostname", None),
+            "node_name": getattr(addr, "node_name", None),
+            "target_ref": {
+                "kind": getattr(target_ref, "kind", None) if target_ref else None,
+                "name": getattr(target_ref, "name", None) if target_ref else None,
+                "namespace": getattr(target_ref, "namespace", None) if target_ref else None,
+                "uid": getattr(target_ref, "uid", None) if target_ref else None,
+            } if target_ref else None,
+        }
+
+    def _endpoint_to_info(self, ep: Any, include_subsets: bool = False) -> Dict[str, Any]:
+        ready_addresses: List[str] = []
+        not_ready_addresses: List[str] = []
+        ready_targets: List[Dict[str, Any]] = []
+        not_ready_targets: List[Dict[str, Any]] = []
+        ports: List[Dict[str, Any]] = []
+        subsets_out: List[Dict[str, Any]] = []
+
+        for subset in (getattr(ep, "subsets", None) or []):
+            subset_addresses: List[Dict[str, Any]] = []
+            subset_not_ready_addresses: List[Dict[str, Any]] = []
+            subset_ports: List[Dict[str, Any]] = []
+
+            for addr in (getattr(subset, "addresses", None) or []):
+                item = self._endpoint_address_to_dict(addr)
+                if item.get("ip"):
+                    ready_addresses.append(item["ip"])
+                ready_targets.append(
+                    {
+                        "ip": item.get("ip"),
+                        "node_name": item.get("node_name"),
+                        "target_ref": item.get("target_ref"),
+                    }
+                )
+                subset_addresses.append(item)
+
+            for addr in (getattr(subset, "not_ready_addresses", None) or []):
+                item = self._endpoint_address_to_dict(addr)
+                if item.get("ip"):
+                    not_ready_addresses.append(item["ip"])
+                not_ready_targets.append(
+                    {
+                        "ip": item.get("ip"),
+                        "node_name": item.get("node_name"),
+                        "target_ref": item.get("target_ref"),
+                    }
+                )
+                subset_not_ready_addresses.append(item)
+
+            for p in (getattr(subset, "ports", None) or []):
+                port_item = {
+                    "name": getattr(p, "name", None),
+                    "port": getattr(p, "port", None),
+                    "protocol": getattr(p, "protocol", None),
+                }
+                ports.append(port_item)
+                subset_ports.append(port_item)
+
+            if include_subsets:
+                subsets_out.append(
+                    {
+                        "addresses": subset_addresses,
+                        "not_ready_addresses": subset_not_ready_addresses,
+                        "ports": subset_ports,
+                    }
+                )
+
+        # de-dup ports
+        seen = set()
+        dedup_ports: List[Dict[str, Any]] = []
+        for p in ports:
+            key = (p.get("name"), p.get("port"), p.get("protocol"))
+            if key in seen:
+                continue
+            seen.add(key)
+            dedup_ports.append(p)
+
+        info: Dict[str, Any] = {
+            "name": getattr(getattr(ep, "metadata", None), "name", None),
+            "namespace": getattr(getattr(ep, "metadata", None), "namespace", None),
+            "ready_count": len(ready_addresses),
+            "not_ready_count": len(not_ready_addresses),
+            "ready_addresses": ready_addresses[:50],
+            "not_ready_addresses": not_ready_addresses[:50],
+            "ready_targets": ready_targets[:50],
+            "not_ready_targets": not_ready_targets[:50],
+            "ports": dedup_ports,
+            "created_at": str(getattr(getattr(ep, "metadata", None), "creation_timestamp", None))
+            if getattr(getattr(ep, "metadata", None), "creation_timestamp", None)
+            else None,
+        }
+
+        if include_subsets:
+            info.update(
+                {
+                    "apiVersion": "v1",
+                    "kind": "Endpoints",
+                    "labels": dict(getattr(getattr(ep, "metadata", None), "labels", None) or {}),
+                    "annotations": dict(getattr(getattr(ep, "metadata", None), "annotations", None) or {}),
+                    "subsets": subsets_out,
+                }
+            )
+
+        return info
+
+    def _endpointslice_to_info(self, es: Any, include_endpoints: bool = True) -> Dict[str, Any]:
+        """EndpointSlice 오브젝트(typed 또는 dict)를 API 응답 스키마로 변환"""
+        if isinstance(es, dict):
+            metadata = es.get("metadata", {}) or {}
+            labels = metadata.get("labels", {}) or {}
+            annotations = metadata.get("annotations", {}) or {}
+            address_type = es.get("addressType") or es.get("address_type")
+            raw_endpoints = es.get("endpoints", []) or []
+            raw_ports = es.get("ports", []) or []
+            name = metadata.get("name") or es.get("name")
+            namespace = metadata.get("namespace") or es.get("namespace")
+            created_at = metadata.get("creationTimestamp") or es.get("created_at")
+        else:
+            metadata_obj = getattr(es, "metadata", None)
+            labels = dict(getattr(metadata_obj, "labels", None) or {})
+            annotations = dict(getattr(metadata_obj, "annotations", None) or {})
+            address_type = getattr(es, "address_type", None) or getattr(es, "addressType", None)
+            raw_endpoints = list(getattr(es, "endpoints", None) or [])
+            raw_ports = list(getattr(es, "ports", None) or [])
+            name = getattr(metadata_obj, "name", None) or getattr(es, "name", None)
+            namespace = getattr(metadata_obj, "namespace", None) or getattr(es, "namespace", None)
+            created_at = (
+                str(getattr(metadata_obj, "creation_timestamp", None))
+                if getattr(metadata_obj, "creation_timestamp", None)
+                else getattr(es, "created_at", None)
+            )
+
+        service_name = labels.get("kubernetes.io/service-name")
+        managed_by = labels.get("endpointslice.kubernetes.io/managed-by")
+
+        ports: List[Dict[str, Any]] = []
+        for p in raw_ports:
+            if isinstance(p, dict):
+                ports.append(
+                    {
+                        "name": p.get("name"),
+                        "port": p.get("port"),
+                        "protocol": p.get("protocol"),
+                        "app_protocol": p.get("appProtocol") or p.get("app_protocol"),
+                    }
+                )
+            else:
+                ports.append(
+                    {
+                        "name": getattr(p, "name", None),
+                        "port": getattr(p, "port", None),
+                        "protocol": getattr(p, "protocol", None),
+                        "app_protocol": getattr(p, "app_protocol", None),
+                    }
+                )
+
+        # de-dup ports
+        seen_port = set()
+        dedup_ports: List[Dict[str, Any]] = []
+        for p in ports:
+            key = (p.get("name"), p.get("port"), p.get("protocol"), p.get("app_protocol"))
+            if key in seen_port:
+                continue
+            seen_port.add(key)
+            dedup_ports.append(p)
+
+        endpoints: List[Dict[str, Any]] = []
+        endpoints_ready = 0
+        for e in raw_endpoints:
+            if isinstance(e, dict):
+                cond = e.get("conditions", {}) or {}
+                target_ref = e.get("targetRef") or e.get("target_ref")
+                if target_ref:
+                    target_ref = {
+                        "kind": target_ref.get("kind"),
+                        "name": target_ref.get("name"),
+                        "namespace": target_ref.get("namespace"),
+                        "uid": target_ref.get("uid"),
+                    }
+                topology = e.get("topology", {}) or {}
+                zone = (
+                    e.get("zone")
+                    or topology.get("topology.kubernetes.io/zone")
+                    or topology.get("failure-domain.beta.kubernetes.io/zone")
+                )
+                item = {
+                    "addresses": list(e.get("addresses", []) or []),
+                    "hostname": e.get("hostname"),
+                    "node_name": e.get("nodeName") or e.get("node_name"),
+                    "zone": zone,
+                    "conditions": {
+                        "ready": cond.get("ready"),
+                        "serving": cond.get("serving"),
+                        "terminating": cond.get("terminating"),
+                    },
+                    "target_ref": target_ref,
+                }
+            else:
+                cond_obj = getattr(e, "conditions", None)
+                target_ref_obj = getattr(e, "target_ref", None)
+                target_ref = None
+                if target_ref_obj:
+                    target_ref = {
+                        "kind": getattr(target_ref_obj, "kind", None),
+                        "name": getattr(target_ref_obj, "name", None),
+                        "namespace": getattr(target_ref_obj, "namespace", None),
+                        "uid": getattr(target_ref_obj, "uid", None),
+                    }
+                topology = getattr(e, "topology", None) or {}
+                item = {
+                    "addresses": list(getattr(e, "addresses", None) or []),
+                    "hostname": getattr(e, "hostname", None),
+                    "node_name": getattr(e, "node_name", None) or getattr(e, "nodeName", None),
+                    "zone": getattr(e, "zone", None)
+                    or topology.get("topology.kubernetes.io/zone")
+                    or topology.get("failure-domain.beta.kubernetes.io/zone"),
+                    "conditions": {
+                        "ready": getattr(cond_obj, "ready", None) if cond_obj else None,
+                        "serving": getattr(cond_obj, "serving", None) if cond_obj else None,
+                        "terminating": getattr(cond_obj, "terminating", None) if cond_obj else None,
+                    },
+                    "target_ref": target_ref,
+                }
+
+            ready = item.get("conditions", {}).get("ready")
+            if ready is True or ready is None:
+                endpoints_ready += 1
+            endpoints.append(item)
+
+        endpoints_total = len(endpoints)
+        endpoints_not_ready = max(endpoints_total - endpoints_ready, 0)
+
+        info: Dict[str, Any] = {
+            "name": name,
+            "namespace": namespace,
+            "service_name": service_name,
+            "managed_by": managed_by,
+            "address_type": address_type,
+            "endpoints_total": endpoints_total,
+            "endpoints_ready": endpoints_ready,
+            "endpoints_not_ready": endpoints_not_ready,
+            "ports": dedup_ports,
+            "created_at": str(created_at) if created_at else None,
+        }
+
+        if include_endpoints:
+            info.update(
+                {
+                    "apiVersion": "discovery.k8s.io/v1",
+                    "kind": "EndpointSlice",
+                    "labels": labels,
+                    "annotations": annotations,
+                    "endpoints": endpoints[:200],
+                }
+            )
+
+        return info
+
     async def get_services(self, namespace: str, force_refresh: bool = False) -> List[ServiceInfo]:
         """네임스페이스 Service 목록"""
         try:
@@ -1233,6 +1495,27 @@ class K8sService:
             return [self._service_to_info(svc) for svc in services.items]
         except ApiException as e:
             raise Exception(f"Failed to get all services: {e}")
+
+    async def get_all_endpoints(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """전체 네임스페이스 Endpoints 목록"""
+        try:
+            eps = self.v1.list_endpoints_for_all_namespaces()
+            return [self._endpoint_to_info(ep) for ep in eps.items]
+        except ApiException as e:
+            raise Exception(f"Failed to get all endpoints: {e}")
+
+    async def get_all_endpointslices(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """전체 네임스페이스 EndpointSlice 목록 (discovery.k8s.io/v1)"""
+        try:
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            slices = custom_api.list_cluster_custom_object(
+                group="discovery.k8s.io",
+                version="v1",
+                plural="endpointslices",
+            )
+            return [self._endpointslice_to_info(es, include_endpoints=True) for es in (slices.get("items", []) or [])]
+        except ApiException as e:
+            raise Exception(f"Failed to get all endpointslices: {e}")
 
     async def delete_service(self, namespace: str, name: str) -> Dict[str, Any]:
         """Service 삭제"""
@@ -1259,6 +1542,84 @@ class K8sService:
                     "namespace": namespace,
                 }
             raise Exception(f"Failed to delete service: {e}")
+
+    async def describe_endpoint(self, namespace: str, name: str) -> Dict[str, Any]:
+        """Endpoints 상세 조회"""
+        try:
+            ep = self.v1.read_namespaced_endpoints(name=name, namespace=namespace)
+            return self._endpoint_to_info(ep, include_subsets=True)
+        except ApiException as e:
+            raise Exception(f"Failed to describe endpoint: {e}")
+
+    async def delete_endpoint(self, namespace: str, name: str) -> Dict[str, Any]:
+        """Endpoints 삭제"""
+        try:
+            delete_options = client.V1DeleteOptions()
+            response = self.v1.delete_namespaced_endpoints(
+                name=name,
+                namespace=namespace,
+                body=delete_options,
+            )
+            self._invalidate_yaml_cache("endpoints", name, namespace=namespace)
+            self._invalidate_yaml_cache("endpoint", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete endpoint: {e}")
+
+    async def describe_endpointslice(self, namespace: str, name: str) -> Dict[str, Any]:
+        """EndpointSlice 상세 조회"""
+        try:
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            es = custom_api.get_namespaced_custom_object(
+                group="discovery.k8s.io",
+                version="v1",
+                namespace=namespace,
+                plural="endpointslices",
+                name=name,
+            )
+            return self._endpointslice_to_info(es, include_endpoints=True)
+        except ApiException as e:
+            raise Exception(f"Failed to describe endpointslice: {e}")
+
+    async def delete_endpointslice(self, namespace: str, name: str) -> Dict[str, Any]:
+        """EndpointSlice 삭제"""
+        try:
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            response = custom_api.delete_namespaced_custom_object(
+                group="discovery.k8s.io",
+                version="v1",
+                namespace=namespace,
+                plural="endpointslices",
+                name=name,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("endpointslice", name, namespace=namespace)
+            self._invalidate_yaml_cache("endpointslices", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete endpointslice: {e}")
 
     async def check_service_connectivity(
         self,
@@ -3491,123 +3852,21 @@ class K8sService:
         """Endpoints 목록 조회"""
         try:
             eps = self.v1.list_namespaced_endpoints(namespace)
-            result: List[Dict] = []
-            for ep in eps.items:
-                ready_addresses: List[str] = []
-                not_ready_addresses: List[str] = []
-                ready_targets: List[Dict[str, Any]] = []
-                not_ready_targets: List[Dict[str, Any]] = []
-                ports: List[Dict] = []
-
-                for subset in (ep.subsets or []):
-                    for addr in (subset.addresses or []):
-                        ip = getattr(addr, "ip", None)
-                        if ip:
-                            ready_addresses.append(ip)
-                        target_ref = getattr(addr, "target_ref", None)
-                        ready_targets.append({
-                            "ip": ip,
-                            "node_name": getattr(addr, "node_name", None),
-                            "target_ref": {
-                                "kind": getattr(target_ref, "kind", None) if target_ref else None,
-                                "name": getattr(target_ref, "name", None) if target_ref else None,
-                                "namespace": getattr(target_ref, "namespace", None) if target_ref else None,
-                                "uid": getattr(target_ref, "uid", None) if target_ref else None,
-                            } if target_ref else None,
-                        })
-                    for addr in (subset.not_ready_addresses or []):
-                        ip = getattr(addr, "ip", None)
-                        if ip:
-                            not_ready_addresses.append(ip)
-                        target_ref = getattr(addr, "target_ref", None)
-                        not_ready_targets.append({
-                            "ip": ip,
-                            "node_name": getattr(addr, "node_name", None),
-                            "target_ref": {
-                                "kind": getattr(target_ref, "kind", None) if target_ref else None,
-                                "name": getattr(target_ref, "name", None) if target_ref else None,
-                                "namespace": getattr(target_ref, "namespace", None) if target_ref else None,
-                                "uid": getattr(target_ref, "uid", None) if target_ref else None,
-                            } if target_ref else None,
-                        })
-                    for p in (subset.ports or []):
-                        ports.append({
-                            "name": getattr(p, "name", None),
-                            "port": getattr(p, "port", None),
-                            "protocol": getattr(p, "protocol", None),
-                        })
-
-                # de-dup ports
-                seen = set()
-                dedup_ports = []
-                for p in ports:
-                    key = (p.get("name"), p.get("port"), p.get("protocol"))
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    dedup_ports.append(p)
-
-                result.append({
-                    "name": ep.metadata.name,
-                    "namespace": ep.metadata.namespace,
-                    "ready_count": len(ready_addresses),
-                    "not_ready_count": len(not_ready_addresses),
-                    "ready_addresses": ready_addresses[:50],
-                    "not_ready_addresses": not_ready_addresses[:50],
-                    "ready_targets": ready_targets[:50],
-                    "not_ready_targets": not_ready_targets[:50],
-                    "ports": dedup_ports,
-                    "created_at": str(ep.metadata.creation_timestamp) if ep.metadata.creation_timestamp else None,
-                })
-            return result
+            return [self._endpoint_to_info(ep) for ep in eps.items]
         except ApiException as e:
             raise Exception(f"Failed to get endpoints: {e}")
 
     async def get_endpointslices(self, namespace: str) -> List[Dict]:
         """EndpointSlice 목록 조회 (discovery.k8s.io/v1)"""
         try:
-            # NOTE: Some clusters may return EndpointSlice objects with `endpoints: null`,
-            # which can break the typed DiscoveryV1Api deserialization (ValueError).
-            # Use CustomObjectsApi (unstructured) to be resilient.
-            custom_api = client.CustomObjectsApi()
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
             slices = custom_api.list_namespaced_custom_object(
                 group="discovery.k8s.io",
                 version="v1",
                 namespace=namespace,
                 plural="endpointslices",
             )
-            result: List[Dict] = []
-            for es in (slices.get("items", []) or []):
-                metadata = es.get("metadata", {}) or {}
-                labels = metadata.get("labels", {}) or {}
-                service_name = labels.get("kubernetes.io/service-name")
-                total = 0
-                ready = 0
-                for e in (es.get("endpoints", []) or []):
-                    total += 1
-                    cond = e.get("conditions", {}) or {}
-                    is_ready = cond.get("ready", None)
-                    if is_ready is True or is_ready is None:
-                        # ready==None can appear; treat as ready-ish for high-level summary
-                        ready += 1
-                ports: List[Dict] = []
-                for p in (es.get("ports", []) or []):
-                    ports.append({
-                        "name": p.get("name"),
-                        "port": p.get("port"),
-                        "protocol": p.get("protocol"),
-                    })
-                result.append({
-                    "name": metadata.get("name"),
-                    "namespace": metadata.get("namespace"),
-                    "service_name": service_name,
-                    "address_type": es.get("addressType"),
-                    "endpoints_total": total,
-                    "endpoints_ready": ready,
-                    "ports": ports,
-                    "created_at": metadata.get("creationTimestamp"),
-                })
-            return result
+            return [self._endpointslice_to_info(es, include_endpoints=True) for es in (slices.get("items", []) or [])]
         except ApiException as e:
             raise Exception(f"Failed to get endpointslices: {e}")
 
