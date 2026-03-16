@@ -90,6 +90,14 @@
       "node": "Node",
       "podIp": "Pod IP"
     },
+    "stats": {
+      "total": "Total",
+      "ready": "Ready",
+      "notReady": "Not Ready",
+      "pending": "Pending",
+      "error": "Error",
+      "restarting": "Restarting"
+    },
     "noResults": "No pods found."
   },
   "deployments": {
@@ -156,6 +164,73 @@
       "button": "Delete Service",
       "title": "Delete Service",
       "confirm": "Are you sure you want to delete service \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "endpointsPage": {
+    "title": "Endpoints",
+    "subtitle": "Inspect and manage Endpoints across namespaces.",
+    "create": "Create",
+    "createTitle": "Create Endpoints from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search endpoints by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} endpoint{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "addresses": "Addresses",
+      "ports": "Ports",
+      "ready": "Ready",
+      "notReady": "Not Ready",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "withReady": "With Ready",
+      "withNotReady": "With NotReady",
+      "totalAddresses": "Total Addresses"
+    },
+    "noResults": "No endpoints found.",
+    "delete": {
+      "button": "Delete Endpoints",
+      "title": "Delete Endpoints",
+      "confirm": "Are you sure you want to delete endpoints \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "endpointSlicesPage": {
+    "title": "Endpoint Slices",
+    "subtitle": "Inspect and manage EndpointSlices across namespaces.",
+    "create": "Create",
+    "createTitle": "Create EndpointSlice from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search endpoint slices by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} endpoint slice{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "service": "Service",
+      "addressType": "Address Type",
+      "ports": "Ports",
+      "endpoints": "Endpoints",
+      "total": "Total",
+      "ready": "Ready",
+      "notReady": "Not Ready",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "withReady": "With Ready",
+      "withNotReady": "With Not Ready",
+      "totalEndpoints": "Total Endpoints"
+    },
+    "noResults": "No endpoint slices found.",
+    "delete": {
+      "button": "Delete EndpointSlice",
+      "title": "Delete EndpointSlice",
+      "confirm": "Are you sure you want to delete endpoint slice \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
   "statefulsets": {
@@ -1085,6 +1160,12 @@
       "status": "Status",
       "labels": "Labels",
       "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "active": "Active",
+      "terminating": "Terminating",
+      "withLabels": "With Labels"
     },
     "detail": {
       "title": "Namespace details",
