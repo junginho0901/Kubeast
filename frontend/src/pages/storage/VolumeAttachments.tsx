@@ -9,6 +9,7 @@ import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
 import { ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'attacher' | 'pv' | 'node' | 'attached' | 'error' | 'age'
+type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
 function parseAgeSeconds(createdAt?: string | null): number {
   if (!createdAt) return 0
@@ -228,6 +229,16 @@ export default function VolumeAttachments() {
     return { total, attached, detached, errors }
   }, [filteredVolumeAttachments])
 
+  const summaryCards = useMemo<SummaryCard[]>(
+    () => [
+      [tr('volumeattachments.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('volumeattachments.stats.attached', 'Attached'), summary.attached, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('volumeattachments.stats.detached', 'Detached'), summary.detached, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('volumeattachments.stats.errors', 'Errors'), summary.errors, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+    ],
+    [summary.attached, summary.detached, summary.errors, summary.total, tr],
+  )
+
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
       setSortKey(key)
@@ -392,22 +403,12 @@ spec:
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('volumeattachments.stats.total', 'Total')}</p>
-          <p className="mt-1 text-lg font-semibold text-white">{summary.total}</p>
-        </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('volumeattachments.stats.attached', 'Attached')}</p>
-          <p className="mt-1 text-lg font-semibold text-white">{summary.attached}</p>
-        </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('volumeattachments.stats.detached', 'Detached')}</p>
-          <p className="mt-1 text-lg font-semibold text-white">{summary.detached}</p>
-        </div>
-        <div className="rounded-lg border border-rose-700/40 bg-rose-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-rose-300">{tr('volumeattachments.stats.errors', 'Errors')}</p>
-          <p className="mt-1 text-lg font-semibold text-white">{summary.errors}</p>
-        </div>
+        {summaryCards.map(([label, value, boxClass, labelClass]) => (
+          <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
+            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+          </div>
+        ))}
       </div>
 
       <div className="card" ref={tableContainerRef}>
