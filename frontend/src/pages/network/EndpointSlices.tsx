@@ -19,6 +19,7 @@ type SortKey =
   | 'notReady'
   | 'ports'
   | 'age'
+type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
 function parseAgeSeconds(createdAt?: string | null): number {
   if (!createdAt) return 0
@@ -303,6 +304,16 @@ export default function EndpointSlices() {
     return { total, withReady, withNotReady, totalEndpoints }
   }, [filteredEndpointSlices])
 
+  const summaryCards = useMemo<SummaryCard[]>(
+    () => [
+      [tr('endpointSlicesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('endpointSlicesPage.stats.withReady', 'With Ready'), summary.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('endpointSlicesPage.stats.withNotReady', 'With Not Ready'), summary.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('endpointSlicesPage.stats.totalEndpoints', 'Total Endpoints'), summary.totalEndpoints, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+    ],
+    [summary.total, summary.totalEndpoints, summary.withNotReady, summary.withReady, tr],
+  )
+
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
       setSortKey(key)
@@ -512,22 +523,12 @@ endpoints:
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('endpointSlicesPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
-        </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('endpointSlicesPage.stats.withReady', 'With Ready')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.withReady}</p>
-        </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('endpointSlicesPage.stats.withNotReady', 'With Not Ready')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.withNotReady}</p>
-        </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('endpointSlicesPage.stats.totalEndpoints', 'Total Endpoints')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.totalEndpoints}</p>
-        </div>
+        {summaryCards.map(([label, value, boxClass, labelClass]) => (
+          <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
+            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+          </div>
+        ))}
       </div>
 
       {searchQuery && (
