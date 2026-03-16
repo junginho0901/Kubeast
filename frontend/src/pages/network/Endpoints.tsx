@@ -9,6 +9,7 @@ import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
 import { CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'ready' | 'notReady' | 'addresses' | 'ports' | 'age'
+type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
 function parseAgeSeconds(createdAt?: string | null): number {
   if (!createdAt) return 0
@@ -283,6 +284,16 @@ export default function Endpoints() {
     return { total, withReady, withNotReady, totalAddresses }
   }, [filteredEndpoints])
 
+  const summaryCards = useMemo<SummaryCard[]>(
+    () => [
+      [tr('endpointsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('endpointsPage.stats.withReady', 'With Ready'), summary.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('endpointsPage.stats.withNotReady', 'With NotReady'), summary.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('endpointsPage.stats.totalAddresses', 'Total Addresses'), summary.totalAddresses, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+    ],
+    [summary.total, summary.totalAddresses, summary.withNotReady, summary.withReady, tr],
+  )
+
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
       setSortKey(key)
@@ -483,22 +494,12 @@ subsets:
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('endpointsPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
-        </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('endpointsPage.stats.withReady', 'With Ready')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.withReady}</p>
-        </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('endpointsPage.stats.withNotReady', 'With NotReady')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.withNotReady}</p>
-        </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('endpointsPage.stats.totalAddresses', 'Total Addresses')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.totalAddresses}</p>
-        </div>
+        {summaryCards.map(([label, value, boxClass, labelClass]) => (
+          <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
+            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className="text-lg text-white font-semibold mt-1">{value}</p>
+          </div>
+        ))}
       </div>
 
       {searchQuery && (
