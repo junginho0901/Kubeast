@@ -22,6 +22,7 @@ function renderConditionBadge(label: string, value: unknown) {
 export default function NetworkInfo({ name, namespace, kind, rawJson }: Props) {
   if (kind === 'Service') return <ServiceDetail name={name} namespace={namespace} rawJson={rawJson} />
   if (kind === 'Ingress') return <IngressDetail name={name} namespace={namespace} rawJson={rawJson} />
+  if (kind === 'IngressClass') return <IngressClassDetail name={name} rawJson={rawJson} />
   if (kind === 'NetworkPolicy') return <NetworkPolicyDetail name={name} namespace={namespace} rawJson={rawJson} />
   if (kind === 'EndpointSlice') return <EndpointSliceDetail name={name} namespace={namespace} rawJson={rawJson} />
   return <EndpointDetail name={name} namespace={namespace} kind={kind} rawJson={rawJson} />
@@ -87,10 +88,18 @@ function ServiceDetail({ name, namespace, rawJson }: { name: string; namespace?:
 function IngressDetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
+  const status = (rawJson?.status ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? {}) as Record<string, string>
   const rules = (spec.rules ?? []) as any[]
   const tls = (spec.tls ?? []) as any[]
   const defaultBackend = spec.defaultBackend as any
+  const classSource = String(rawJson?.class_source ?? '-')
+  const classController = String(rawJson?.class_controller ?? '-')
+  const classDefaultRaw = rawJson?.class_is_default
+  const classIsDefault = classDefaultRaw == null ? '-' : Boolean(classDefaultRaw) ? 'Yes' : 'No'
+  const lbAddresses = (((status.loadBalancer as any)?.ingress ?? []) as any[])
+    .map((a: any) => a?.ip || a?.hostname)
+    .filter(Boolean)
 
   return (
     <>
@@ -104,6 +113,10 @@ function IngressDetail({ name, namespace, rawJson }: { name: string; namespace?:
               defaultBackend.service ? `${defaultBackend.service.name}:${defaultBackend.service.port?.number || defaultBackend.service.port?.name || ''}` : '-'
             } />
           )}
+          {lbAddresses.length > 0 && <InfoRow label="Addresses" value={lbAddresses.join(', ')} />}
+          <InfoRow label="Class Source" value={classSource} />
+          <InfoRow label="Class Controller" value={classController} />
+          <InfoRow label="Class Default" value={classIsDefault} />
           <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
         </div>
       </InfoSection>
@@ -147,6 +160,54 @@ function IngressDetail({ name, namespace, rawJson }: { name: string; namespace?:
       )}
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
+    </>
+  )
+}
+
+function IngressClassDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
+  const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
+  const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
+  const labels = (meta.labels ?? {}) as Record<string, string>
+  const annotations = (meta.annotations ?? {}) as Record<string, string>
+  const finalizers = (meta.finalizers ?? rawJson?.finalizers ?? []) as string[]
+  const isDefault = rawJson?.is_default != null
+    ? Boolean(rawJson?.is_default)
+    : annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true'
+  const params = (spec.parameters ?? rawJson?.parameters ?? null) as Record<string, unknown> | null
+  const paramsText = params
+    ? [
+        params.kind ? String(params.kind) : null,
+        (params.apiGroup ?? params.api_group) ? `.${String(params.apiGroup ?? params.api_group)}` : null,
+        params.name ? `/${String(params.name)}` : null,
+        params.scope ? ` (${String(params.scope)})` : null,
+        params.namespace ? ` ns=${String(params.namespace)}` : null,
+      ].filter(Boolean).join('')
+    : '-'
+
+  return (
+    <>
+      <InfoSection title="IngressClass Info">
+        <div className="space-y-2">
+          <InfoRow label="Name" value={name} />
+          <InfoRow label="Controller" value={String(spec.controller ?? rawJson?.controller ?? '-')} />
+          <InfoRow label="Default" value={isDefault ? 'Yes' : 'No'} />
+          <InfoRow label="Parameters" value={paramsText || '-'} />
+          <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
+        </div>
+      </InfoSection>
+
+      {finalizers.length > 0 && (
+        <InfoSection title="Finalizers">
+          <div className="flex flex-wrap gap-1.5">
+            {finalizers.map((f, i) => (
+              <span key={`${f}-${i}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
+            ))}
+          </div>
+        </InfoSection>
+      )}
+
+      {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
+      {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
     </>
   )
 }

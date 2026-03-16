@@ -178,9 +178,27 @@ export interface ServiceInfo {
 
 export interface IngressInfo {
   name: string
+  namespace: string
   hosts: string[]
   class?: string | null
+  class_source?: 'spec' | 'annotation' | 'default' | null
+  class_controller?: string | null
+  class_is_default?: boolean | null
+  addresses?: Array<{ ip?: string | null; hostname?: string | null }>
+  tls?: Array<{ secret_name?: string | null; hosts: string[] }>
+  default_backend?: any
+  rules?: Array<{
+    host?: string | null
+    paths: Array<{
+      path?: string | null
+      path_type?: string | null
+      backend?: any
+    }>
+  }>
   backends: string[]
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  created_at?: string | null
 }
 
 export interface IngressDetail {
@@ -223,6 +241,9 @@ export interface IngressClassInfo {
     scope?: string | null
     namespace?: string | null
   } | null
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
   created_at?: string | null
 }
 
@@ -865,6 +886,13 @@ export const api = {
     return data
   },
 
+  getAllIngresses: async (forceRefresh = false): Promise<IngressInfo[]> => {
+    const { data } = await client.get('/cluster/ingresses/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
   getIngressClasses: async (forceRefresh = false): Promise<IngressClassInfo[]> => {
     const { data } = await client.get('/cluster/ingressclasses', {
       params: { force_refresh: forceRefresh },
@@ -875,6 +903,19 @@ export const api = {
   getIngressDetail: async (namespace: string, name: string): Promise<IngressDetail> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/ingresses/${name}/detail`)
     return data
+  },
+
+  describeIngressClass: async (name: string): Promise<IngressClassInfo> => {
+    const { data } = await client.get(`/cluster/ingressclasses/${name}/describe`)
+    return data
+  },
+
+  deleteIngress: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/ingresses/${name}`)
+  },
+
+  deleteIngressClass: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/ingressclasses/${name}`)
   },
 
   getEndpoints: async (namespace: string, forceRefresh = false): Promise<EndpointInfo[]> => {
