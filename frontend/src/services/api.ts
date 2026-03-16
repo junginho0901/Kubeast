@@ -265,14 +265,36 @@ export interface EndpointSliceInfo {
   name: string
   namespace: string
   service_name?: string | null
+  managed_by?: string | null
   address_type?: string | null
   endpoints_total: number
   endpoints_ready: number
+  endpoints_not_ready?: number
   ports: Array<{
     name?: string | null
     port?: number | null
     protocol?: string | null
+    app_protocol?: string | null
   }>
+  endpoints?: Array<{
+    addresses: string[]
+    hostname?: string | null
+    node_name?: string | null
+    zone?: string | null
+    conditions?: {
+      ready?: boolean | null
+      serving?: boolean | null
+      terminating?: boolean | null
+    }
+    target_ref?: {
+      kind?: string | null
+      name?: string | null
+      namespace?: string | null
+      uid?: string | null
+    } | null
+  }>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
   created_at?: string | null
 }
 
@@ -862,11 +884,43 @@ export const api = {
     return data
   },
 
+  getAllEndpoints: async (forceRefresh = false): Promise<EndpointInfo[]> => {
+    const { data } = await client.get('/cluster/endpoints/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeEndpoint: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/endpoints/${name}/describe`)
+    return data
+  },
+
+  deleteEndpoint: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/endpoints/${name}`)
+  },
+
   getEndpointSlices: async (namespace: string, forceRefresh = false): Promise<EndpointSliceInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/endpointslices`, {
       params: { force_refresh: forceRefresh },
     })
     return data
+  },
+
+  getAllEndpointSlices: async (forceRefresh = false): Promise<EndpointSliceInfo[]> => {
+    const { data } = await client.get('/cluster/endpointslices/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeEndpointSlice: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/endpointslices/${name}/describe`)
+    return data
+  },
+
+  deleteEndpointSlice: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/endpointslices/${name}`)
   },
 
   getNetworkPolicies: async (namespace: string, forceRefresh = false): Promise<NetworkPolicyInfo[]> => {
