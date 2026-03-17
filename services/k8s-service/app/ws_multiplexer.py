@@ -620,6 +620,11 @@ class WebSocketMultiplexer:
                                 plural="endpointslices",
                                 **stream_params,
                             )
+                    elif resource == "networkpolicies":
+                        if namespace:
+                            stream = w.stream(networking_v1.list_namespaced_network_policy, namespace, **stream_params)
+                        else:
+                            stream = w.stream(networking_v1.list_network_policy_for_all_namespaces, **stream_params)
                     elif resource == "events":
                         if namespace:
                             stream = w.stream(core.list_namespaced_event, namespace, **stream_params)
@@ -693,6 +698,8 @@ class WebSocketMultiplexer:
                             obj = self._k8s._endpoint_to_info(obj)
                         elif resource == "endpointslices" and obj is not None:
                             obj = self._k8s._endpointslice_to_info(obj, include_endpoints=True)
+                        elif resource == "networkpolicies" and obj is not None:
+                            obj = self._k8s._networkpolicy_to_info(obj)
                         elif resource == "events" and obj is not None:
                             obj = self._event_to_info(obj)
                         elif resource == "pvcs" and obj is not None:

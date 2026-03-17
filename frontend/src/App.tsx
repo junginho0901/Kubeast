@@ -32,6 +32,7 @@ import Endpoints from './pages/network/Endpoints'
 import EndpointSlices from './pages/network/EndpointSlices'
 import Ingresses from './pages/network/Ingresses'
 import IngressClasses from './pages/network/IngressClasses'
+import NetworkPolicies from './pages/network/NetworkPolicies'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
@@ -60,7 +61,7 @@ function App() {
             <Route path="network/endpointslices" element={<EndpointSlices />} />
             <Route path="network/ingresses" element={<Ingresses />} />
             <Route path="network/ingressclasses" element={<IngressClasses />} />
-            <Route path="network/networkpolicies" element={<ComingSoon title="Network Policies" />} />
+            <Route path="network/networkpolicies" element={<NetworkPolicies />} />
             <Route path="gateway/gateways" element={<ComingSoon title="Gateways" />} />
             <Route path="gateway/gatewayclasses" element={<ComingSoon title="Gateway Classes" />} />
             <Route path="gateway/httproutes" element={<ComingSoon title="HTTP Routes" />} />

@@ -388,6 +388,9 @@ export interface NetworkPolicyInfo {
       end_port?: number | null
     }>
   }>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
   created_at?: string | null
 }
 
@@ -969,6 +972,22 @@ export const api = {
       params: { force_refresh: forceRefresh },
     })
     return data
+  },
+
+  getAllNetworkPolicies: async (forceRefresh = false): Promise<NetworkPolicyInfo[]> => {
+    const { data } = await client.get('/cluster/networkpolicies/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeNetworkPolicy: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/networkpolicies/${name}/describe`)
+    return data
+  },
+
+  deleteNetworkPolicy: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/networkpolicies/${name}`)
   },
 
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {

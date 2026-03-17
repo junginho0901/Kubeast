@@ -299,6 +299,39 @@
       "confirm": "인그레스 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "networkPoliciesPage": {
+    "title": "네트워크 정책",
+    "subtitle": "네임스페이스 전반의 NetworkPolicy 리소스를 조회하고 관리합니다.",
+    "create": "네트워크 정책 생성",
+    "createTitle": "YAML로 네트워크 정책 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "네트워크 정책 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 네트워크 정책이 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "podSelector": "Pod 셀렉터",
+      "types": "타입",
+      "ingressRules": "Ingress 규칙",
+      "egressRules": "Egress 규칙",
+      "defaultDeny": "기본 차단",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "defaultDenyIngress": "기본 Ingress 차단",
+      "defaultDenyEgress": "기본 Egress 차단",
+      "selectsAllPods": "모든 Pod 선택"
+    },
+    "noResults": "네트워크 정책을 찾을 수 없습니다.",
+    "delete": {
+      "button": "네트워크 정책 삭제",
+      "title": "네트워크 정책 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 네트워크 정책 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "statefulsets": {
     "title": "스테이트풀셋",
     "subtitle": "네임스페이스 전반의 StatefulSet 상태를 확인하고 관리합니다.",

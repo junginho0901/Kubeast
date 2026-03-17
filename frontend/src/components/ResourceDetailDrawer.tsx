@@ -87,6 +87,7 @@ export default function ResourceDetailDrawer() {
   const canDeleteService = kind === 'Service' && !!ns && isWriteRole
   const canDeleteIngress = kind === 'Ingress' && !!ns && isWriteRole
   const canDeleteIngressClass = kind === 'IngressClass' && isWriteRole
+  const canDeleteNetworkPolicy = kind === 'NetworkPolicy' && !!ns && isWriteRole
   const canDeleteEndpoints = kind === 'Endpoints' && !!ns && isWriteRole
   const canDeleteEndpointSlice = kind === 'EndpointSlice' && !!ns && isWriteRole
   const canDelete = [
@@ -106,6 +107,7 @@ export default function ResourceDetailDrawer() {
     canDeleteService,
     canDeleteIngress,
     canDeleteIngressClass,
+    canDeleteNetworkPolicy,
     canDeleteEndpoints,
     canDeleteEndpointSlice,
   ].some(Boolean)
@@ -172,6 +174,10 @@ export default function ResourceDetailDrawer() {
     } else if (kind === 'IngressClass') {
       queryClient.invalidateQueries({ queryKey: ['network', 'ingressclasses'] })
       queryClient.invalidateQueries({ queryKey: ['ingressclass-describe', name] })
+    } else if (kind === 'NetworkPolicy' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['network', 'networkpolicies'] })
+      queryClient.invalidateQueries({ queryKey: ['network', 'networkpolicies', ns] })
+      queryClient.invalidateQueries({ queryKey: ['networkpolicy-describe', ns, name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -283,6 +289,10 @@ export default function ResourceDetailDrawer() {
       }
       if (kind === 'IngressClass') {
         await api.deleteIngressClass(name)
+        return
+      }
+      if (kind === 'NetworkPolicy' && ns) {
+        await api.deleteNetworkPolicy(ns, name)
         return
       }
       throw new Error('Delete is not supported for this resource.')
@@ -398,6 +408,12 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['network', 'ingressclasses'] }),
           queryClient.invalidateQueries({ queryKey: ['ingressclass-describe', name] }),
         ])
+      } else if (kind === 'NetworkPolicy' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['network', 'networkpolicies'] }),
+          queryClient.invalidateQueries({ queryKey: ['network', 'networkpolicies', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['networkpolicy-describe', ns, name] }),
+        ])
       }
 
       close()
@@ -506,6 +522,8 @@ export default function ResourceDetailDrawer() {
                         ? t('ingressesPage.delete.button', { defaultValue: 'Delete Ingress' })
                       : kind === 'IngressClass'
                         ? t('ingressClassesPage.delete.button', { defaultValue: 'Delete IngressClass' })
+                      : kind === 'NetworkPolicy'
+                        ? t('networkPoliciesPage.delete.button', { defaultValue: 'Delete NetworkPolicy' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -597,6 +615,8 @@ export default function ResourceDetailDrawer() {
                         ? t('ingressesPage.delete.title', { defaultValue: 'Delete Ingress' })
                       : kind === 'IngressClass'
                         ? t('ingressClassesPage.delete.title', { defaultValue: 'Delete IngressClass' })
+                      : kind === 'NetworkPolicy'
+                        ? t('networkPoliciesPage.delete.title', { defaultValue: 'Delete NetworkPolicy' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -692,11 +712,17 @@ export default function ResourceDetailDrawer() {
                         name,
                         namespace: ns,
                       })
-                  : kind === 'IngressClass'
-                    ? t('ingressClassesPage.delete.confirm', {
-                        defaultValue: 'Are you sure you want to delete ingress class "{{name}}"?',
-                        name,
-                      })
+                      : kind === 'IngressClass'
+                        ? t('ingressClassesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete ingress class "{{name}}"?',
+                            name,
+                          })
+                      : kind === 'NetworkPolicy'
+                        ? t('networkPoliciesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete network policy "{{name}}" in "{{namespace}}"?',
+                            name,
+                            namespace: ns,
+                          })
                   : t('namespaces.delete.confirm', {
                       defaultValue: 'Are you sure you want to delete namespace "{{name}}"?',
                       name,
