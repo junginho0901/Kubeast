@@ -555,6 +555,7 @@ class WebSocketMultiplexer:
         apps = self._k8s.apps_v1
         batch = client.BatchV1Api(api_client=getattr(self._k8s, "api_client", None))
         storage_v1 = client.StorageV1Api(api_client=getattr(self._k8s, "api_client", None))
+        networking_v1 = client.NetworkingV1Api(api_client=getattr(self._k8s, "api_client", None))
         custom_api = client.CustomObjectsApi(api_client=getattr(self._k8s, "api_client", None))
         w = watch.Watch()
 
@@ -589,6 +590,13 @@ class WebSocketMultiplexer:
                             stream = w.stream(core.list_namespaced_service, namespace, **stream_params)
                         else:
                             stream = w.stream(core.list_service_for_all_namespaces, **stream_params)
+                    elif resource == "ingresses":
+                        if namespace:
+                            stream = w.stream(networking_v1.list_namespaced_ingress, namespace, **stream_params)
+                        else:
+                            stream = w.stream(networking_v1.list_ingress_for_all_namespaces, **stream_params)
+                    elif resource == "ingressclasses":
+                        stream = w.stream(networking_v1.list_ingress_class, **stream_params)
                     elif resource == "endpoints":
                         if namespace:
                             stream = w.stream(core.list_namespaced_endpoints, namespace, **stream_params)
@@ -677,6 +685,10 @@ class WebSocketMultiplexer:
                             obj = self._namespace_to_info(obj)
                         elif resource == "services" and obj is not None:
                             obj = self._service_to_info(obj)
+                        elif resource == "ingresses" and obj is not None:
+                            obj = self._k8s._ingress_to_info(obj)
+                        elif resource == "ingressclasses" and obj is not None:
+                            obj = self._k8s._ingressclass_to_info(obj)
                         elif resource == "endpoints" and obj is not None:
                             obj = self._k8s._endpoint_to_info(obj)
                         elif resource == "endpointslices" and obj is not None:

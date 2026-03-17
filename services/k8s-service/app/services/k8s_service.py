@@ -3781,72 +3781,243 @@ class K8sService:
                 }
             raise Exception(f"Failed to delete daemonset: {e}")
     
+    def _ingress_backend_to_dict(self, backend: Any) -> Dict[str, Any]:
+        if backend is None:
+            return {}
+
+        svc = getattr(backend, "service", None)
+        if svc is not None:
+            port_obj = getattr(svc, "port", None)
+            port = None
+            if port_obj is not None:
+                port = getattr(port_obj, "number", None) or getattr(port_obj, "name", None)
+            return {
+                "type": "service",
+                "service": {
+                    "name": getattr(svc, "name", None),
+                    "port": port,
+                },
+            }
+
+        res = getattr(backend, "resource", None)
+        if res is not None:
+            return {
+                "type": "resource",
+                "resource": client.ApiClient().sanitize_for_serialization(res),
+            }
+
+        return {}
+
+    def _ingress_to_info(self, ing: Any) -> Dict[str, Any]:
+        metadata = getattr(ing, "metadata", None)
+        spec = getattr(ing, "spec", None)
+        status = getattr(ing, "status", None)
+
+        annotations = dict(getattr(metadata, "annotations", None) or {})
+        labels = dict(getattr(metadata, "labels", None) or {})
+        spec_class_name = getattr(spec, "ingress_class_name", None) if spec else None
+        anno_class_name = annotations.get("kubernetes.io/ingress.class")
+
+        ingress_class_name = None
+        ingress_class_source = None
+        if spec_class_name:
+            ingress_class_name = spec_class_name
+            ingress_class_source = "spec"
+        elif anno_class_name:
+            ingress_class_name = anno_class_name
+            ingress_class_source = "annotation"
+
+        addresses: List[Dict[str, Optional[str]]] = []
+        lb = getattr(status, "load_balancer", None) if status else None
+        for item in (getattr(lb, "ingress", None) or []):
+            addresses.append({
+                "ip": getattr(item, "ip", None),
+                "hostname": getattr(item, "hostname", None),
+            })
+
+        tls: List[Dict[str, Any]] = []
+        for t in (getattr(spec, "tls", None) or []):
+            tls.append({
+                "secret_name": getattr(t, "secret_name", None),
+                "hosts": list(getattr(t, "hosts", None) or []),
+            })
+
+        default_backend = self._ingress_backend_to_dict(getattr(spec, "default_backend", None) if spec else None)
+
+        rules: List[Dict[str, Any]] = []
+        hosts: List[str] = []
+        backends: set[str] = set()
+
+        if default_backend.get("type") == "service":
+            svc_name = (default_backend.get("service") or {}).get("name")
+            if svc_name:
+                backends.add(svc_name)
+        elif default_backend.get("type") == "resource":
+            res = default_backend.get("resource") or {}
+            kind = res.get("kind")
+            rname = res.get("name")
+            if kind and rname:
+                backends.add(f"{kind}:{rname}")
+
+        for rule in (getattr(spec, "rules", None) or []):
+            host = getattr(rule, "host", None)
+            if host:
+                hosts.append(host)
+            http = getattr(rule, "http", None)
+            paths: List[Dict[str, Any]] = []
+            for p in (getattr(http, "paths", None) or []):
+                backend = self._ingress_backend_to_dict(getattr(p, "backend", None))
+                if backend.get("type") == "service":
+                    svc_name = (backend.get("service") or {}).get("name")
+                    if svc_name:
+                        backends.add(svc_name)
+                elif backend.get("type") == "resource":
+                    res = backend.get("resource") or {}
+                    kind = res.get("kind")
+                    rname = res.get("name")
+                    if kind and rname:
+                        backends.add(f"{kind}:{rname}")
+                paths.append({
+                    "path": getattr(p, "path", None),
+                    "path_type": getattr(p, "path_type", None),
+                    "backend": backend,
+                })
+            rules.append({
+                "host": host,
+                "paths": paths,
+            })
+
+        return {
+            "name": getattr(metadata, "name", None),
+            "namespace": getattr(metadata, "namespace", None),
+            "class": ingress_class_name,
+            "class_source": ingress_class_source,
+            "addresses": addresses,
+            "tls": tls,
+            "default_backend": default_backend,
+            "rules": rules,
+            "hosts": hosts,
+            "backends": sorted(list(backends)),
+            "labels": labels,
+            "annotations": annotations,
+            "created_at": self._to_iso(getattr(metadata, "creation_timestamp", None)),
+        }
+
+    def _ingressclass_to_info(self, ic: Any) -> Dict[str, Any]:
+        metadata = getattr(ic, "metadata", None)
+        spec = getattr(ic, "spec", None)
+        annotations = dict(getattr(metadata, "annotations", None) or {})
+        labels = dict(getattr(metadata, "labels", None) or {})
+        is_default = annotations.get("ingressclass.kubernetes.io/is-default-class") == "true"
+
+        params = None
+        if getattr(spec, "parameters", None):
+            p = spec.parameters
+            params = {
+                "api_group": getattr(p, "api_group", None),
+                "kind": getattr(p, "kind", None),
+                "name": getattr(p, "name", None),
+                "scope": getattr(p, "scope", None),
+                "namespace": getattr(p, "namespace", None),
+            }
+
+        return {
+            "name": getattr(metadata, "name", None),
+            "controller": getattr(spec, "controller", None),
+            "is_default": is_default,
+            "parameters": params,
+            "labels": labels,
+            "annotations": annotations,
+            "finalizers": list(getattr(metadata, "finalizers", None) or []),
+            "created_at": self._to_iso(getattr(metadata, "creation_timestamp", None)),
+        }
+
     async def get_ingresses(self, namespace: str) -> List[Dict]:
         """Ingress 목록 조회"""
         try:
             networking_v1 = client.NetworkingV1Api()
             ingresses = networking_v1.list_namespaced_ingress(namespace)
-            result = []
-            for ing in ingresses.items:
-                hosts = []
-                if ing.spec.rules:
-                    hosts = [rule.host for rule in ing.spec.rules if rule.host]
-                backends = set()
-                # default backend
-                default_backend = getattr(ing.spec, "default_backend", None)
-                if default_backend and getattr(default_backend, "service", None):
-                    svc = default_backend.service
-                    if getattr(svc, "name", None):
-                        backends.add(svc.name)
-                # rules backends
-                for rule in (ing.spec.rules or []):
-                    http = getattr(rule, "http", None)
-                    if not http or not getattr(http, "paths", None):
-                        continue
-                    for path in (http.paths or []):
-                        backend = getattr(path, "backend", None)
-                        service = getattr(backend, "service", None) if backend else None
-                        if service and getattr(service, "name", None):
-                            backends.add(service.name)
-                result.append({
-                    "name": ing.metadata.name,
-                    "hosts": hosts,
-                    "class": ing.spec.ingress_class_name,
-                    "backends": sorted(list(backends))
-                })
-            return result
+            return [self._ingress_to_info(ing) for ing in ingresses.items]
         except ApiException as e:
             raise Exception(f"Failed to get ingresses: {e}")
+
+    async def get_all_ingresses(self, force_refresh: bool = False) -> List[Dict]:
+        """전체 네임스페이스 Ingress 목록 조회"""
+        try:
+            networking_v1 = client.NetworkingV1Api()
+            ingresses = networking_v1.list_ingress_for_all_namespaces()
+            return [self._ingress_to_info(ing) for ing in ingresses.items]
+        except ApiException as e:
+            raise Exception(f"Failed to get all ingresses: {e}")
+
+    async def delete_ingress(self, namespace: str, name: str) -> Dict[str, Any]:
+        """Ingress 삭제"""
+        try:
+            networking_v1 = client.NetworkingV1Api()
+            response = networking_v1.delete_namespaced_ingress(
+                name=name,
+                namespace=namespace,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("ingress", name, namespace=namespace)
+            self._invalidate_yaml_cache("ingresses", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete ingress: {e}")
 
     async def get_ingressclasses(self) -> List[Dict]:
         """IngressClass 목록 조회 (cluster-scoped)"""
         try:
             networking_v1 = client.NetworkingV1Api()
             classes = networking_v1.list_ingress_class()
-            result: List[Dict] = []
-            for ic in classes.items:
-                annotations = ic.metadata.annotations or {}
-                is_default = annotations.get("ingressclass.kubernetes.io/is-default-class") == "true"
-                params = None
-                if getattr(ic.spec, "parameters", None):
-                    p = ic.spec.parameters
-                    params = {
-                        "api_group": getattr(p, "api_group", None),
-                        "kind": getattr(p, "kind", None),
-                        "name": getattr(p, "name", None),
-                        "scope": getattr(p, "scope", None),
-                        "namespace": getattr(p, "namespace", None),
-                    }
-                result.append({
-                    "name": ic.metadata.name,
-                    "controller": getattr(ic.spec, "controller", None),
-                    "is_default": is_default,
-                    "parameters": params,
-                    "created_at": str(ic.metadata.creation_timestamp) if ic.metadata.creation_timestamp else None,
-                })
-            return result
+            return [self._ingressclass_to_info(ic) for ic in classes.items]
         except ApiException as e:
             raise Exception(f"Failed to get ingressclasses: {e}")
+
+    async def describe_ingressclass(self, name: str) -> Dict[str, Any]:
+        """IngressClass 상세 조회"""
+        try:
+            networking_v1 = client.NetworkingV1Api()
+            ic = networking_v1.read_ingress_class(name)
+            return self._ingressclass_to_info(ic)
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                raise Exception(f"IngressClass '{name}' not found")
+            raise Exception(f"Failed to describe ingressclass: {e}")
+
+    async def delete_ingressclass(self, name: str) -> Dict[str, Any]:
+        """IngressClass 삭제"""
+        try:
+            networking_v1 = client.NetworkingV1Api()
+            response = networking_v1.delete_ingress_class(
+                name=name,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("ingressclass", name)
+            self._invalidate_yaml_cache("ingressclasses", name)
+            return {
+                "status": "deleted",
+                "name": name,
+                "details": response.to_dict() if hasattr(response, "to_dict") else response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                }
+            raise Exception(f"Failed to delete ingressclass: {e}")
 
     async def get_endpoints(self, namespace: str) -> List[Dict]:
         """Endpoints 목록 조회"""

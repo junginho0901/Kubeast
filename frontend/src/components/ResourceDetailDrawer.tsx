@@ -19,7 +19,7 @@ import GenericInfo from './resource-detail/GenericInfo'
 type TabId = 'info' | 'yaml'
 
 const WORKLOAD_KINDS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob'])
-const NETWORK_KINDS = new Set(['Ingress', 'NetworkPolicy', 'Endpoints', 'EndpointSlice'])
+const NETWORK_KINDS = new Set(['Ingress', 'IngressClass', 'NetworkPolicy', 'Endpoints', 'EndpointSlice'])
 const CONFIG_STORAGE_KINDS = new Set(['ConfigMap', 'Secret', 'PersistentVolume', 'PersistentVolumeClaim', 'StorageClass', 'VolumeAttachment', 'HorizontalPodAutoscaler'])
 
 function kindToPlural(kind: string): string {
@@ -31,6 +31,7 @@ function kindToPlural(kind: string): string {
     NetworkPolicy: 'networkpolicy', PersistentVolumeClaim: 'persistentvolumeclaim',
     PersistentVolume: 'persistentvolume', HorizontalPodAutoscaler: 'horizontalpodautoscaler',
     Endpoints: 'endpoints', EndpointSlice: 'endpointslice',
+    IngressClass: 'ingressclass',
     StorageClass: 'storageclass',
     VolumeAttachment: 'volumeattachment',
   }
@@ -42,6 +43,7 @@ function kindIcon(kind: string): string {
     Node: '🖥️', Namespace: '📦', Pod: '🔵', Deployment: '🚀', StatefulSet: '📊',
     DaemonSet: '👾', ReplicaSet: '📋', Job: '⚡', CronJob: '⏰',
     Service: '🌐', Ingress: '🔀', NetworkPolicy: '🛡️',
+    IngressClass: '🧩',
     EndpointSlice: '🧩',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
@@ -83,6 +85,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteStorageClass = kind === 'StorageClass' && isWriteRole
   const canDeleteVolumeAttachment = kind === 'VolumeAttachment' && isWriteRole
   const canDeleteService = kind === 'Service' && !!ns && isWriteRole
+  const canDeleteIngress = kind === 'Ingress' && !!ns && isWriteRole
+  const canDeleteIngressClass = kind === 'IngressClass' && isWriteRole
   const canDeleteEndpoints = kind === 'Endpoints' && !!ns && isWriteRole
   const canDeleteEndpointSlice = kind === 'EndpointSlice' && !!ns && isWriteRole
   const canDelete = [
@@ -100,6 +104,8 @@ export default function ResourceDetailDrawer() {
     canDeleteStorageClass,
     canDeleteVolumeAttachment,
     canDeleteService,
+    canDeleteIngress,
+    canDeleteIngressClass,
     canDeleteEndpoints,
     canDeleteEndpointSlice,
   ].some(Boolean)
@@ -159,6 +165,13 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['network', 'endpointslices'] })
       queryClient.invalidateQueries({ queryKey: ['network', 'endpointslices', ns] })
       queryClient.invalidateQueries({ queryKey: ['endpointslice-describe', ns, name] })
+    } else if (kind === 'Ingress' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['network', 'ingresses'] })
+      queryClient.invalidateQueries({ queryKey: ['network', 'ingresses', ns] })
+      queryClient.invalidateQueries({ queryKey: ['ingress-detail', ns, name] })
+    } else if (kind === 'IngressClass') {
+      queryClient.invalidateQueries({ queryKey: ['network', 'ingressclasses'] })
+      queryClient.invalidateQueries({ queryKey: ['ingressclass-describe', name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -264,6 +277,14 @@ export default function ResourceDetailDrawer() {
         await api.deleteEndpointSlice(ns, name)
         return
       }
+      if (kind === 'Ingress' && ns) {
+        await api.deleteIngress(ns, name)
+        return
+      }
+      if (kind === 'IngressClass') {
+        await api.deleteIngressClass(name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
@@ -365,6 +386,17 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['network', 'endpointslices'] }),
           queryClient.invalidateQueries({ queryKey: ['network', 'endpointslices', ns] }),
           queryClient.invalidateQueries({ queryKey: ['endpointslice-describe', ns, name] }),
+        ])
+      } else if (kind === 'Ingress' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['network', 'ingresses'] }),
+          queryClient.invalidateQueries({ queryKey: ['network', 'ingresses', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['ingress-detail', ns, name] }),
+        ])
+      } else if (kind === 'IngressClass') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['network', 'ingressclasses'] }),
+          queryClient.invalidateQueries({ queryKey: ['ingressclass-describe', name] }),
         ])
       }
 
@@ -470,6 +502,10 @@ export default function ResourceDetailDrawer() {
                         ? t('endpointsPage.delete.button', { defaultValue: 'Delete Endpoints' })
                       : kind === 'EndpointSlice'
                         ? t('endpointSlicesPage.delete.button', { defaultValue: 'Delete EndpointSlice' })
+                      : kind === 'Ingress'
+                        ? t('ingressesPage.delete.button', { defaultValue: 'Delete Ingress' })
+                      : kind === 'IngressClass'
+                        ? t('ingressClassesPage.delete.button', { defaultValue: 'Delete IngressClass' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -557,6 +593,10 @@ export default function ResourceDetailDrawer() {
                         ? t('endpointsPage.delete.title', { defaultValue: 'Delete Endpoints' })
                       : kind === 'EndpointSlice'
                         ? t('endpointSlicesPage.delete.title', { defaultValue: 'Delete EndpointSlice' })
+                      : kind === 'Ingress'
+                        ? t('ingressesPage.delete.title', { defaultValue: 'Delete Ingress' })
+                      : kind === 'IngressClass'
+                        ? t('ingressClassesPage.delete.title', { defaultValue: 'Delete IngressClass' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -646,9 +686,20 @@ export default function ResourceDetailDrawer() {
                         name,
                         namespace: ns,
                       })
+                  : kind === 'Ingress'
+                    ? t('ingressesPage.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete ingress "{{name}}" in "{{namespace}}"?',
+                        name,
+                        namespace: ns,
+                      })
+                  : kind === 'IngressClass'
+                    ? t('ingressClassesPage.delete.confirm', {
+                        defaultValue: 'Are you sure you want to delete ingress class "{{name}}"?',
+                        name,
+                      })
                   : t('namespaces.delete.confirm', {
                       defaultValue: 'Are you sure you want to delete namespace "{{name}}"?',
-                    name,
+                      name,
                   })}
             </p>
             {kind === 'Node' && (

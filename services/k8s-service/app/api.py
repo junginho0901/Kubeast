@@ -1092,10 +1092,19 @@ async def delete_daemonset(namespace: str, name: str, request: Request):
 
 # Ingress
 @router.get("/namespaces/{namespace}/ingresses")
-async def get_ingresses(namespace: str):
+async def get_ingresses(namespace: str, force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
     """Ingress 목록 조회"""
     try:
         ingresses = await k8s_service.get_ingresses(namespace)
+        return ingresses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/ingresses/all")
+async def get_all_ingresses(force_refresh: bool = Query(False, description="캐시 무시하고 강제 갱신")):
+    """전체 네임스페이스 Ingress 목록 조회"""
+    try:
+        ingresses = await k8s_service.get_all_ingresses(force_refresh=force_refresh)
         return ingresses
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1116,7 +1125,29 @@ async def get_ingress_detail(namespace: str, name: str):
     try:
         return await k8s_service.get_ingress_detail(namespace, name)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"Ingress '{namespace}/{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+@router.delete("/namespaces/{namespace}/ingresses/{name}")
+async def delete_ingress(namespace: str, name: str, request: Request):
+    """Ingress 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = await k8s_service.delete_ingress(namespace, name)
+        if isinstance(result, dict) and result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail=f"Ingress '{namespace}/{name}' not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"Ingress '{namespace}/{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 # Network
@@ -1127,6 +1158,36 @@ async def get_ingressclasses(force_refresh: bool = Query(False, description="캐
         return await k8s_service.get_ingressclasses()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/ingressclasses/{name}/describe")
+async def describe_ingressclass(name: str):
+    """IngressClass 상세 조회"""
+    try:
+        return await k8s_service.describe_ingressclass(name)
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"IngressClass '{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
+
+@router.delete("/ingressclasses/{name}")
+async def delete_ingressclass(name: str, request: Request):
+    """IngressClass 삭제"""
+    role = getattr(request.state, "role", "read")
+    if role not in ("admin", "write"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = await k8s_service.delete_ingressclass(name)
+        if isinstance(result, dict) and result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail=f"IngressClass '{name}' not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        detail = str(e)
+        if "404" in detail or "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=f"IngressClass '{name}' not found")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/namespaces/{namespace}/endpoints")

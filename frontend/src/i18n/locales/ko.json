@@ -238,6 +238,67 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 엔드포인트 슬라이스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "ingressesPage": {
+    "title": "인그레스",
+    "subtitle": "네임스페이스 전반의 인그레스를 조회하고 관리합니다.",
+    "create": "인그레스 생성",
+    "createTitle": "YAML로 인그레스 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "인그레스 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 인그레스가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "class": "클래스",
+      "hosts": "호스트",
+      "routes": "라우트",
+      "addresses": "주소",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "withClass": "클래스 지정",
+      "withTls": "TLS 사용",
+      "withAddress": "주소 할당"
+    },
+    "noResults": "인그레스를 찾을 수 없습니다.",
+    "delete": {
+      "button": "인그레스 삭제",
+      "title": "인그레스 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 인그레스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "ingressClassesPage": {
+    "title": "인그레스 클래스",
+    "subtitle": "클러스터 범위 IngressClass 리소스를 조회하고 관리합니다.",
+    "create": "인그레스 클래스 생성",
+    "createTitle": "YAML로 인그레스 클래스 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "인그레스 클래스 이름 검색...",
+    "matchCount": "{{count}}개의 인그레스 클래스가 검색되었습니다.",
+    "table": {
+      "name": "이름",
+      "controller": "컨트롤러",
+      "default": "기본값",
+      "parameters": "파라미터",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "default": "기본 클래스",
+      "withParameters": "파라미터 있음",
+      "withAnnotations": "어노테이션 있음"
+    },
+    "noResults": "인그레스 클래스를 찾을 수 없습니다.",
+    "delete": {
+      "button": "인그레스 클래스 삭제",
+      "title": "인그레스 클래스 삭제",
+      "confirm": "인그레스 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "statefulsets": {
     "title": "스테이트풀셋",
     "subtitle": "네임스페이스 전반의 StatefulSet 상태를 확인하고 관리합니다.",

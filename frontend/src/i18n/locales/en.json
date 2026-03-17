@@ -233,6 +233,67 @@
       "confirm": "Are you sure you want to delete endpoint slice \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "ingressesPage": {
+    "title": "Ingresses",
+    "subtitle": "Inspect and manage Ingresses across namespaces.",
+    "create": "Create Ingress",
+    "createTitle": "Create Ingress from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search ingresses by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} ingress{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "class": "Class",
+      "hosts": "Hosts",
+      "routes": "Routes",
+      "addresses": "Address",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "withClass": "With Class",
+      "withTls": "With TLS",
+      "withAddress": "With Address"
+    },
+    "noResults": "No ingresses found.",
+    "delete": {
+      "button": "Delete Ingress",
+      "title": "Delete Ingress",
+      "confirm": "Are you sure you want to delete ingress \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "ingressClassesPage": {
+    "title": "Ingress Classes",
+    "subtitle": "Inspect and manage cluster-scoped IngressClass resources.",
+    "create": "Create IngressClass",
+    "createTitle": "Create IngressClass from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search ingress classes by name...",
+    "matchCount": "{{count}} ingress class{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "controller": "Controller",
+      "default": "Default",
+      "parameters": "Parameters",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "default": "Default",
+      "withParameters": "With Parameters",
+      "withAnnotations": "With Annotations"
+    },
+    "noResults": "No ingress classes found.",
+    "delete": {
+      "button": "Delete IngressClass",
+      "title": "Delete IngressClass",
+      "confirm": "Are you sure you want to delete ingress class \"{{name}}\"?"
+    }
+  },
   "statefulsets": {
     "title": "Stateful Sets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",
