@@ -221,7 +221,7 @@ spec:
               placeholder={tr('statefulsets.searchPlaceholder', 'Search StatefulSets by name...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -230,7 +230,7 @@ spec:
           <button
             type="button"
             onClick={() => setIsNamespaceDropdownOpen((v) => !v)}
-            className="w-full py-3 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
+            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
           >
             <span className="text-sm font-medium">
               {selectedNamespace === 'all' ? tr('statefulsets.allNamespaces', 'All namespaces') : selectedNamespace}

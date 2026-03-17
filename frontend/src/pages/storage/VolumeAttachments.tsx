@@ -388,7 +388,7 @@ spec:
             type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="btn btn-secondary inline-flex items-center gap-2"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title={tr('volumeattachments.refreshTitle', 'Force refresh')}
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -405,7 +405,7 @@ spec:
             placeholder={tr('volumeattachments.searchPlaceholder', 'Search VolumeAttachments by name, PV, node, or attacher...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
