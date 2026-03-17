@@ -460,7 +460,12 @@ class K8sService:
         self._invalidate_yaml_cache(resource_type, resource_name, namespace)
         return {"status": "ok"}
 
-    async def _resolve_api_resource_for_object(self, api_version: str, kind: str) -> Dict[str, Any]:
+    async def _resolve_api_resource_for_object(
+        self,
+        api_version: str,
+        kind: str,
+        allow_kind_fallback: bool = True,
+    ) -> Dict[str, Any]:
         resources = await self.get_available_api_resources()
         target_kind = self._normalize_resource_key(kind)
         target_api_version = self._normalize_resource_key(api_version)
@@ -471,7 +476,13 @@ class K8sService:
             if r_kind == target_kind and r_group_version == target_api_version:
                 return r
 
-        # fallback: resolve by kind only
+        if not allow_kind_fallback:
+            raise Exception(
+                f"API resource not found for {api_version}/{kind}. "
+                "Check whether the CRD/API version is installed in the cluster."
+            )
+
+        # fallback: resolve by kind only (only when apiVersion was not explicitly provided)
         return await self._resolve_api_resource(kind)
 
     async def create_resources_from_yaml(
@@ -508,7 +519,9 @@ class K8sService:
 
         created: List[Dict[str, Any]] = []
         for obj in to_create:
-            api_version = str(obj.get("apiVersion") or "v1")
+            api_version_raw = obj.get("apiVersion")
+            api_version_explicit = api_version_raw is not None and str(api_version_raw).strip() != ""
+            api_version = str(api_version_raw or "v1")
             kind = str(obj.get("kind") or "").strip()
             metadata = obj.get("metadata") or {}
             if not isinstance(metadata, dict):
@@ -523,7 +536,11 @@ class K8sService:
             if not name:
                 raise Exception("metadata.name is required in YAML")
 
-            resource = await self._resolve_api_resource_for_object(api_version, kind)
+            resource = await self._resolve_api_resource_for_object(
+                api_version,
+                kind,
+                allow_kind_fallback=not api_version_explicit,
+            )
             namespaced = bool(resource.get("namespaced", False))
 
             body = dict(obj)
@@ -4141,6 +4158,12 @@ class K8sService:
             )
             return [self._gateway_to_info(item) for item in (data.get("items", []) or [])]
         except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return []
+            raise Exception(f"Failed to get gateways: {e}")
+        except Exception as e:
+            if "Gateway API not available" in str(e):
+                return []
             raise Exception(f"Failed to get gateways: {e}")
 
     async def get_all_gateways(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
@@ -4155,6 +4178,12 @@ class K8sService:
             )
             return [self._gateway_to_info(item) for item in (data.get("items", []) or [])]
         except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return []
+            raise Exception(f"Failed to get all gateways: {e}")
+        except Exception as e:
+            if "Gateway API not available" in str(e):
+                return []
             raise Exception(f"Failed to get all gateways: {e}")
 
     async def describe_gateway(self, namespace: str, name: str) -> Dict[str, Any]:
