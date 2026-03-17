@@ -327,6 +327,39 @@
       "confirm": "Are you sure you want to delete network policy \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "gatewaysPage": {
+    "title": "Gateways",
+    "subtitle": "Inspect and manage Gateway API Gateways across namespaces.",
+    "create": "Create Gateway",
+    "createTitle": "Create Gateway from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search gateways by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} gateway{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "class": "Class Name",
+      "status": "Conditions",
+      "listeners": "Listeners",
+      "attachedRoutes": "Attached Routes",
+      "addresses": "Addresses",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "programmed": "Programmed",
+      "accepted": "Accepted",
+      "withAddress": "With Address"
+    },
+    "noResults": "No gateways found.",
+    "delete": {
+      "button": "Delete Gateway",
+      "title": "Delete Gateway",
+      "confirm": "Are you sure you want to delete gateway \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "statefulsets": {
     "title": "Stateful Sets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",
