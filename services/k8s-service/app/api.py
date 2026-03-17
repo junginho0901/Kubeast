@@ -253,8 +253,22 @@ async def create_resources_from_yaml(body: dict, request: Request):
         )
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        detail = str(e)
+        lowered = detail.lower()
+        if (
+            "invalid yaml" in lowered
+            or "yaml document must be an object" in lowered
+            or "items in list must be objects" in lowered
+            or "no resources found in yaml" in lowered
+            or "kind is required" in lowered
+            or "metadata.name is required" in lowered
+            or "api resource not found for" in lowered
+        ):
+            raise HTTPException(status_code=400, detail=detail)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/resources/describe")
