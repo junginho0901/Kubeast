@@ -394,6 +394,27 @@ export interface NetworkPolicyInfo {
   created_at?: string | null
 }
 
+export interface GatewayInfo {
+  name: string
+  namespace: string
+  gateway_class_name?: string | null
+  listeners_count: number
+  attached_routes: number
+  addresses_count: number
+  status?: string | null
+  programmed?: boolean
+  accepted?: boolean
+  listeners?: Array<Record<string, any>>
+  status_listeners?: Array<Record<string, any>>
+  addresses?: Array<Record<string, any>>
+  conditions?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string | null
+  api_version?: string | null
+}
+
 export interface DeploymentInfo {
   name: string
   namespace: string
@@ -988,6 +1009,29 @@ export const api = {
 
   deleteNetworkPolicy: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/networkpolicies/${name}`)
+  },
+
+  getGateways: async (namespace: string, forceRefresh = false): Promise<GatewayInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/gateways`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllGateways: async (forceRefresh = false): Promise<GatewayInfo[]> => {
+    const { data } = await client.get('/cluster/gateways/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeGateway: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/gateways/${name}/describe`)
+    return data
+  },
+
+  deleteGateway: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/gateways/${name}`)
   },
 
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {
