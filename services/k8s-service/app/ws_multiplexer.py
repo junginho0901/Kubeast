@@ -625,6 +625,25 @@ class WebSocketMultiplexer:
                             stream = w.stream(networking_v1.list_namespaced_network_policy, namespace, **stream_params)
                         else:
                             stream = w.stream(networking_v1.list_network_policy_for_all_namespaces, **stream_params)
+                    elif resource == "gateways":
+                        gateway_version = self._k8s._resolve_gateway_api_version()
+                        if namespace:
+                            stream = w.stream(
+                                custom_api.list_namespaced_custom_object,
+                                group="gateway.networking.k8s.io",
+                                version=gateway_version,
+                                namespace=namespace,
+                                plural="gateways",
+                                **stream_params,
+                            )
+                        else:
+                            stream = w.stream(
+                                custom_api.list_cluster_custom_object,
+                                group="gateway.networking.k8s.io",
+                                version=gateway_version,
+                                plural="gateways",
+                                **stream_params,
+                            )
                     elif resource == "events":
                         if namespace:
                             stream = w.stream(core.list_namespaced_event, namespace, **stream_params)
@@ -700,6 +719,8 @@ class WebSocketMultiplexer:
                             obj = self._k8s._endpointslice_to_info(obj, include_endpoints=True)
                         elif resource == "networkpolicies" and obj is not None:
                             obj = self._k8s._networkpolicy_to_info(obj)
+                        elif resource == "gateways" and obj is not None:
+                            obj = self._k8s._gateway_to_info(obj)
                         elif resource == "events" and obj is not None:
                             obj = self._event_to_info(obj)
                         elif resource == "pvcs" and obj is not None:
