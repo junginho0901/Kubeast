@@ -294,6 +294,39 @@
       "confirm": "Are you sure you want to delete ingress class \"{{name}}\"?"
     }
   },
+  "networkPoliciesPage": {
+    "title": "Network Policies",
+    "subtitle": "Inspect and manage NetworkPolicy resources across namespaces.",
+    "create": "Create NetworkPolicy",
+    "createTitle": "Create NetworkPolicy from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search network policies by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} network polic{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "podSelector": "Pod Selector",
+      "types": "Types",
+      "ingressRules": "Ingress Rules",
+      "egressRules": "Egress Rules",
+      "defaultDeny": "Default Deny",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "defaultDenyIngress": "Default Deny Ingress",
+      "defaultDenyEgress": "Default Deny Egress",
+      "selectsAllPods": "Selects All Pods"
+    },
+    "noResults": "No network policies found.",
+    "delete": {
+      "button": "Delete NetworkPolicy",
+      "title": "Delete NetworkPolicy",
+      "confirm": "Are you sure you want to delete network policy \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "statefulsets": {
     "title": "Stateful Sets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",
