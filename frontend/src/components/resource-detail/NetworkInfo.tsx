@@ -216,6 +216,8 @@ function NetworkPolicyDetail({ name, namespace, rawJson }: { name: string; names
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const labels = (meta.labels ?? {}) as Record<string, string>
+  const annotations = (meta.annotations ?? {}) as Record<string, string>
+  const finalizers = (meta.finalizers ?? rawJson?.finalizers ?? []) as string[]
   const podSelector = (spec.podSelector as any)?.matchLabels as Record<string, string> | undefined
   const ingress = (spec.ingress ?? []) as any[]
   const egress = (spec.egress ?? []) as any[]
@@ -273,6 +275,16 @@ function NetworkPolicyDetail({ name, namespace, rawJson }: { name: string; names
       )}
 
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
+      {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
+      {finalizers.length > 0 && (
+        <InfoSection title="Finalizers">
+          <div className="flex flex-wrap gap-1.5">
+            {finalizers.map((f, i) => (
+              <span key={`${f}-${i}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
+            ))}
+          </div>
+        </InfoSection>
+      )}
     </>
   )
 }
