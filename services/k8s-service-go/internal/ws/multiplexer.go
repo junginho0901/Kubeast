@@ -439,11 +439,15 @@ func nodeToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range labels {
 			if strings.HasPrefix(k, "node-role.kubernetes.io/") {
 				role := strings.TrimPrefix(k, "node-role.kubernetes.io/")
-				if role != "" {
-					roles = append(roles, role)
+				if role == "" {
+					role = "worker"
 				}
+				roles = append(roles, role)
 			}
 		}
+	}
+	if len(roles) == 0 {
+		roles = append(roles, "<none>")
 	}
 
 	var internalIP, externalIP string
@@ -508,17 +512,35 @@ func nodeToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		}
 	}
 
+	// Compute age from creationTimestamp
+	ageStr := ""
+	if ts, ok := metadata["creationTimestamp"].(string); ok && ts != "" {
+		if t, err := time.Parse(time.RFC3339, ts); err == nil {
+			d := time.Since(t)
+			switch {
+			case d.Hours() >= 24:
+				ageStr = fmt.Sprintf("%dd", int(d.Hours()/24))
+			case d.Hours() >= 1:
+				ageStr = fmt.Sprintf("%dh", int(d.Hours()))
+			default:
+				ageStr = fmt.Sprintf("%dm", int(d.Minutes()))
+			}
+		}
+	}
+
 	return map[string]interface{}{
 		"name":              metadata["name"],
 		"status":            nodeStatus,
 		"unschedulable":     unschedulable,
 		"roles":             roles,
+		"version":           kubeletVersion,
 		"internal_ip":       internalIP,
 		"external_ip":       externalIP,
 		"os_image":          osImage,
 		"kernel_version":    kernelVersion,
 		"container_runtime": containerRuntime,
 		"kubelet_version":   kubeletVersion,
+		"age":               ageStr,
 		"labels":            metadata["labels"],
 		"taints":            taints,
 		"conditions":        conditions,

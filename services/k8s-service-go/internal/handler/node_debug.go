@@ -3,11 +3,13 @@ package handler
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -174,12 +176,31 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	}
 	k8sURL := fmt.Sprintf("%s%s?%s", wsBase, attachPath, params.Encode())
 
-	// Build TLS config from REST config
+	// Build TLS config from REST config (load CA cert to verify K8s API server)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: restConfig.TLSClientConfig.Insecure, //nolint:gosec
 	}
+	// Load CA certificate
+	if len(restConfig.TLSClientConfig.CAData) > 0 {
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(restConfig.TLSClientConfig.CAData)
+		tlsConfig.RootCAs = caCertPool
+	} else if restConfig.TLSClientConfig.CAFile != "" {
+		caCert, err := os.ReadFile(restConfig.TLSClientConfig.CAFile)
+		if err == nil {
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCert)
+			tlsConfig.RootCAs = caCertPool
+		}
+	}
+	// Load client certificate
 	if restConfig.TLSClientConfig.CertData != nil && restConfig.TLSClientConfig.KeyData != nil {
 		cert, err := tls.X509KeyPair(restConfig.TLSClientConfig.CertData, restConfig.TLSClientConfig.KeyData)
+		if err == nil {
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+	} else if restConfig.TLSClientConfig.CertFile != "" && restConfig.TLSClientConfig.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(restConfig.TLSClientConfig.CertFile, restConfig.TLSClientConfig.KeyFile)
 		if err == nil {
 			tlsConfig.Certificates = []tls.Certificate{cert}
 		}
@@ -189,6 +210,10 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	k8sHeaders := http.Header{}
 	if restConfig.BearerToken != "" {
 		k8sHeaders.Set("Authorization", "Bearer "+restConfig.BearerToken)
+	} else if restConfig.BearerTokenFile != "" {
+		if tokenBytes, err := os.ReadFile(restConfig.BearerTokenFile); err == nil {
+			k8sHeaders.Set("Authorization", "Bearer "+strings.TrimSpace(string(tokenBytes)))
+		}
 	}
 
 	dialer := websocket.Dialer{
