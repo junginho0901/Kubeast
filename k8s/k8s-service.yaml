@@ -19,6 +19,18 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8002
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 30
           envFrom:
             - configMapRef:
                 name: kube-assistant-config

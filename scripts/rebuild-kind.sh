@@ -88,7 +88,7 @@ get_context() {
   case "$1" in
     auth-service) echo "services" ;;
     ai-service) echo "services/ai-service" ;;
-    k8s-service) echo "services/k8s-service" ;;
+    k8s-service) echo "services" ;;
     session-service) echo "services" ;;
     frontend) echo "frontend" ;;
     tool-server) echo "services/tool-server" ;;
@@ -102,6 +102,7 @@ get_dockerfile() {
   case "$1" in
     auth-service) echo "auth-service-go/Dockerfile" ;;
     session-service) echo "session-service-go/Dockerfile" ;;
+    k8s-service) echo "k8s-service-go/Dockerfile" ;;
     *) echo "" ;;
   esac
 }

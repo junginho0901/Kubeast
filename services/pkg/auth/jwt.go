@@ -196,23 +196,43 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 }
 
 // Middleware returns an HTTP middleware that validates JWT tokens.
+// It checks the Authorization header first, then falls back to a cookie
+// (needed for browser WebSocket connections which can't set custom headers).
 func (v *JWTValidator) Middleware(next http.Handler) http.Handler {
+	return v.MiddlewareWithCookie("kube-assistant.token", next)
+}
+
+// MiddlewareWithCookie returns middleware that checks Authorization header first,
+// then falls back to the named cookie for token extraction.
+func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var tokenStr string
+
+		// 1. Try Authorization header
 		auth := r.Header.Get("Authorization")
-		if auth == "" {
-			http.Error(w, `{"detail":"Missing Authorization header"}`, http.StatusUnauthorized)
-			return
+		if auth != "" {
+			parts := strings.SplitN(auth, " ", 2)
+			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+				tokenStr = strings.TrimSpace(parts[1])
+			}
 		}
 
-		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-			http.Error(w, `{"detail":"Invalid Authorization header"}`, http.StatusUnauthorized)
-			return
+		// 2. Fallback to cookie (for WebSocket connections)
+		if tokenStr == "" && cookieName != "" {
+			if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
+				tokenStr = c.Value
+			}
 		}
 
-		tokenStr := strings.TrimSpace(parts[1])
+		// 3. Fallback to query parameter (for WebSocket connections that can't set headers)
 		if tokenStr == "" {
-			http.Error(w, `{"detail":"Invalid Authorization header"}`, http.StatusUnauthorized)
+			if q := r.URL.Query().Get("token"); q != "" {
+				tokenStr = q
+			}
+		}
+
+		if tokenStr == "" {
+			http.Error(w, `{"detail":"Missing Authorization header"}`, http.StatusUnauthorized)
 			return
 		}
 
