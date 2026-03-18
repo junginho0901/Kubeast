@@ -92,11 +92,11 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # K8s Service
+  # K8s Service (Go)
   k8s-service:
     build:
-      context: ./services/k8s-service
-      dockerfile: Dockerfile
+      context: ./services
+      dockerfile: k8s-service-go/Dockerfile
     ports:
       - "8002:8002"
     env_file:
