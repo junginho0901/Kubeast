@@ -415,6 +415,42 @@ export interface GatewayInfo {
   api_version?: string | null
 }
 
+export interface GatewayClassInfo {
+  name: string
+  controller_name?: string | null
+  description?: string | null
+  accepted?: boolean
+  status?: string | null
+  parameters_ref?: Record<string, any> | null
+  conditions?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string | null
+  api_version?: string | null
+}
+
+export interface HTTPRouteInfo {
+  name: string
+  namespace: string
+  hostnames?: string[]
+  parent_refs?: Array<Record<string, any>>
+  rules?: Array<Record<string, any>>
+  parents?: Array<Record<string, any>>
+  rule_count?: number
+  parent_refs_count?: number
+  backend_refs_count?: number
+  status?: string | null
+  accepted?: boolean
+  resolved_refs?: boolean
+  conditions?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string | null
+  api_version?: string | null
+}
+
 export interface DeploymentInfo {
   name: string
   namespace: string
@@ -1032,6 +1068,45 @@ export const api = {
 
   deleteGateway: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/gateways/${name}`)
+  },
+
+  getGatewayClasses: async (forceRefresh = false): Promise<GatewayClassInfo[]> => {
+    const { data } = await client.get('/cluster/gatewayclasses', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeGatewayClass: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/gatewayclasses/${name}/describe`)
+    return data
+  },
+
+  deleteGatewayClass: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/gatewayclasses/${name}`)
+  },
+
+  getHTTPRoutes: async (namespace: string, forceRefresh = false): Promise<HTTPRouteInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/httproutes`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllHTTPRoutes: async (forceRefresh = false): Promise<HTTPRouteInfo[]> => {
+    const { data } = await client.get('/cluster/httproutes/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeHTTPRoute: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/httproutes/${name}/describe`)
+    return data
+  },
+
+  deleteHTTPRoute: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/httproutes/${name}`)
   },
 
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {

@@ -360,6 +360,68 @@
       "confirm": "Are you sure you want to delete gateway \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "gatewayClassesPage": {
+    "title": "Gateway Classes",
+    "subtitle": "Inspect and manage cluster-scoped GatewayClass resources.",
+    "create": "Create GatewayClass",
+    "createTitle": "Create GatewayClass from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search gateway classes by name...",
+    "matchCount": "{{count}} gateway class{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "controller": "Controller",
+      "conditions": "Conditions",
+      "parametersRef": "Parameters Ref",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "accepted": "Accepted",
+      "withParameters": "With Parameters",
+      "withAnnotations": "With Annotations"
+    },
+    "noResults": "No gateway classes found.",
+    "delete": {
+      "button": "Delete GatewayClass",
+      "title": "Delete GatewayClass",
+      "confirm": "Are you sure you want to delete gateway class \"{{name}}\"?"
+    }
+  },
+  "httpRoutesPage": {
+    "title": "HTTP Routes",
+    "subtitle": "Inspect and manage Gateway API HTTPRoute resources across namespaces.",
+    "create": "Create HTTPRoute",
+    "createTitle": "Create HTTPRoute from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search HTTPRoutes by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} HTTPRoute{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "hostnames": "Hostnames",
+      "parentRefs": "Parent Refs",
+      "rules": "Rules",
+      "backendRefs": "Backend Refs",
+      "status": "Status",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "accepted": "Accepted",
+      "resolvedRefs": "ResolvedRefs",
+      "withHostnames": "With Hostnames"
+    },
+    "noResults": "No HTTPRoutes found.",
+    "delete": {
+      "button": "Delete HTTPRoute",
+      "title": "Delete HTTPRoute",
+      "confirm": "Are you sure you want to delete HTTPRoute \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "statefulsets": {
     "title": "Stateful Sets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",

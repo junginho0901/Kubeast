@@ -644,6 +644,34 @@ class WebSocketMultiplexer:
                                 plural="gateways",
                                 **stream_params,
                             )
+                    elif resource == "gatewayclasses":
+                        gateway_version = self._k8s._resolve_gateway_api_version()
+                        stream = w.stream(
+                            custom_api.list_cluster_custom_object,
+                            group="gateway.networking.k8s.io",
+                            version=gateway_version,
+                            plural="gatewayclasses",
+                            **stream_params,
+                        )
+                    elif resource == "httproutes":
+                        gateway_version = self._k8s._resolve_gateway_api_version()
+                        if namespace:
+                            stream = w.stream(
+                                custom_api.list_namespaced_custom_object,
+                                group="gateway.networking.k8s.io",
+                                version=gateway_version,
+                                namespace=namespace,
+                                plural="httproutes",
+                                **stream_params,
+                            )
+                        else:
+                            stream = w.stream(
+                                custom_api.list_cluster_custom_object,
+                                group="gateway.networking.k8s.io",
+                                version=gateway_version,
+                                plural="httproutes",
+                                **stream_params,
+                            )
                     elif resource == "events":
                         if namespace:
                             stream = w.stream(core.list_namespaced_event, namespace, **stream_params)
@@ -721,6 +749,10 @@ class WebSocketMultiplexer:
                             obj = self._k8s._networkpolicy_to_info(obj)
                         elif resource == "gateways" and obj is not None:
                             obj = self._k8s._gateway_to_info(obj)
+                        elif resource == "gatewayclasses" and obj is not None:
+                            obj = self._k8s._gatewayclass_to_info(obj)
+                        elif resource == "httproutes" and obj is not None:
+                            obj = self._k8s._httproute_to_info(obj)
                         elif resource == "events" and obj is not None:
                             obj = self._event_to_info(obj)
                         elif resource == "pvcs" and obj is not None:

@@ -14,6 +14,8 @@ import WorkloadInfo from './resource-detail/WorkloadInfo'
 import NetworkInfo from './resource-detail/NetworkInfo'
 import ServiceInfo from './resource-detail/ServiceInfo'
 import GatewayInfo from './resource-detail/GatewayInfo'
+import GatewayClassInfo from './resource-detail/GatewayClassInfo'
+import HTTPRouteInfo from './resource-detail/HTTPRouteInfo'
 import ConfigStorageInfo from './resource-detail/ConfigStorageInfo'
 import GenericInfo from './resource-detail/GenericInfo'
 
@@ -34,6 +36,8 @@ function kindToPlural(kind: string): string {
     Endpoints: 'endpoints', EndpointSlice: 'endpointslice',
     IngressClass: 'ingressclass',
     Gateway: 'gateway',
+    GatewayClass: 'gatewayclass',
+    HTTPRoute: 'httproute',
     StorageClass: 'storageclass',
     VolumeAttachment: 'volumeattachment',
   }
@@ -48,6 +52,8 @@ function kindIcon(kind: string): string {
     IngressClass: '🧩',
     EndpointSlice: '🧩',
     Gateway: '🚪',
+    GatewayClass: '🚏',
+    HTTPRoute: '🧭',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
   }
@@ -92,6 +98,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteIngressClass = kind === 'IngressClass' && isWriteRole
   const canDeleteNetworkPolicy = kind === 'NetworkPolicy' && !!ns && isWriteRole
   const canDeleteGateway = kind === 'Gateway' && !!ns && isWriteRole
+  const canDeleteGatewayClass = kind === 'GatewayClass' && isWriteRole
+  const canDeleteHTTPRoute = kind === 'HTTPRoute' && !!ns && isWriteRole
   const canDeleteEndpoints = kind === 'Endpoints' && !!ns && isWriteRole
   const canDeleteEndpointSlice = kind === 'EndpointSlice' && !!ns && isWriteRole
   const canDelete = [
@@ -113,6 +121,8 @@ export default function ResourceDetailDrawer() {
     canDeleteIngressClass,
     canDeleteNetworkPolicy,
     canDeleteGateway,
+    canDeleteGatewayClass,
+    canDeleteHTTPRoute,
     canDeleteEndpoints,
     canDeleteEndpointSlice,
   ].some(Boolean)
@@ -187,6 +197,13 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['gateway', 'gateways'] })
       queryClient.invalidateQueries({ queryKey: ['gateway', 'gateways', ns] })
       queryClient.invalidateQueries({ queryKey: ['gateway-describe', ns, name] })
+    } else if (kind === 'GatewayClass') {
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'gatewayclasses'] })
+      queryClient.invalidateQueries({ queryKey: ['gatewayclass-describe', name] })
+    } else if (kind === 'HTTPRoute' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes'] })
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes', ns] })
+      queryClient.invalidateQueries({ queryKey: ['httproute-describe', ns, name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -306,6 +323,14 @@ export default function ResourceDetailDrawer() {
       }
       if (kind === 'Gateway' && ns) {
         await api.deleteGateway(ns, name)
+        return
+      }
+      if (kind === 'GatewayClass') {
+        await api.deleteGatewayClass(name)
+        return
+      }
+      if (kind === 'HTTPRoute' && ns) {
+        await api.deleteHTTPRoute(ns, name)
         return
       }
       throw new Error('Delete is not supported for this resource.')
@@ -433,6 +458,17 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['gateway', 'gateways', ns] }),
           queryClient.invalidateQueries({ queryKey: ['gateway-describe', ns, name] }),
         ])
+      } else if (kind === 'GatewayClass') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'gatewayclasses'] }),
+          queryClient.invalidateQueries({ queryKey: ['gatewayclass-describe', name] }),
+        ])
+      } else if (kind === 'HTTPRoute' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes'] }),
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['httproute-describe', ns, name] }),
+        ])
       }
 
       close()
@@ -452,6 +488,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'Pod' && ns) return <PodInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'Service' && ns) return <ServiceInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'Gateway' && ns) return <GatewayInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'GatewayClass') return <GatewayClassInfo name={name} rawJson={target.rawJson} />
+    if (kind === 'HTTPRoute' && ns) return <HTTPRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
@@ -546,6 +584,10 @@ export default function ResourceDetailDrawer() {
                         ? t('networkPoliciesPage.delete.button', { defaultValue: 'Delete NetworkPolicy' })
                       : kind === 'Gateway'
                         ? t('gatewaysPage.delete.button', { defaultValue: 'Delete Gateway' })
+                      : kind === 'GatewayClass'
+                        ? t('gatewayClassesPage.delete.button', { defaultValue: 'Delete GatewayClass' })
+                      : kind === 'HTTPRoute'
+                        ? t('httpRoutesPage.delete.button', { defaultValue: 'Delete HTTPRoute' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -641,6 +683,10 @@ export default function ResourceDetailDrawer() {
                         ? t('networkPoliciesPage.delete.title', { defaultValue: 'Delete NetworkPolicy' })
                       : kind === 'Gateway'
                         ? t('gatewaysPage.delete.title', { defaultValue: 'Delete Gateway' })
+                      : kind === 'GatewayClass'
+                        ? t('gatewayClassesPage.delete.title', { defaultValue: 'Delete GatewayClass' })
+                      : kind === 'HTTPRoute'
+                        ? t('httpRoutesPage.delete.title', { defaultValue: 'Delete HTTPRoute' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -750,6 +796,17 @@ export default function ResourceDetailDrawer() {
                       : kind === 'Gateway'
                         ? t('gatewaysPage.delete.confirm', {
                             defaultValue: 'Are you sure you want to delete gateway "{{name}}" in "{{namespace}}"?',
+                            name,
+                            namespace: ns,
+                          })
+                      : kind === 'GatewayClass'
+                        ? t('gatewayClassesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete gateway class "{{name}}"?',
+                            name,
+                          })
+                      : kind === 'HTTPRoute'
+                        ? t('httpRoutesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete HTTPRoute "{{name}}" in "{{namespace}}"?',
                             name,
                             namespace: ns,
                           })

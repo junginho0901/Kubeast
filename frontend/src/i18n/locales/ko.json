@@ -365,6 +365,68 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 게이트웨이 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "gatewayClassesPage": {
+    "title": "게이트웨이 클래스",
+    "subtitle": "클러스터 범위 GatewayClass 리소스를 조회하고 관리합니다.",
+    "create": "게이트웨이 클래스 생성",
+    "createTitle": "YAML로 게이트웨이 클래스 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "게이트웨이 클래스 이름 검색...",
+    "matchCount": "{{count}}개의 게이트웨이 클래스가 검색되었습니다.",
+    "table": {
+      "name": "이름",
+      "controller": "컨트롤러",
+      "conditions": "조건",
+      "parametersRef": "파라미터 참조",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "accepted": "Accepted",
+      "withParameters": "파라미터 있음",
+      "withAnnotations": "어노테이션 있음"
+    },
+    "noResults": "게이트웨이 클래스를 찾을 수 없습니다.",
+    "delete": {
+      "button": "게이트웨이 클래스 삭제",
+      "title": "게이트웨이 클래스 삭제",
+      "confirm": "게이트웨이 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "httpRoutesPage": {
+    "title": "HTTP 라우트",
+    "subtitle": "네임스페이스 전반의 Gateway API HTTPRoute 리소스를 조회하고 관리합니다.",
+    "create": "HTTP 라우트 생성",
+    "createTitle": "YAML로 HTTP 라우트 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "HTTPRoute 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 HTTPRoute가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "hostnames": "호스트명",
+      "parentRefs": "부모 참조",
+      "rules": "규칙",
+      "backendRefs": "백엔드 참조",
+      "status": "상태",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "accepted": "Accepted",
+      "resolvedRefs": "ResolvedRefs",
+      "withHostnames": "호스트명 있음"
+    },
+    "noResults": "HTTPRoute를 찾을 수 없습니다.",
+    "delete": {
+      "button": "HTTP 라우트 삭제",
+      "title": "HTTP 라우트 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 HTTPRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "statefulsets": {
     "title": "스테이트풀셋",
     "subtitle": "네임스페이스 전반의 StatefulSet 상태를 확인하고 관리합니다.",

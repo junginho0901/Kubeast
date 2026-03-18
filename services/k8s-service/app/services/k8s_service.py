@@ -4145,6 +4145,111 @@ class K8sService:
             "api_version": obj.get("apiVersion"),
         }
 
+    def _gatewayclass_to_info(self, item: Any) -> Dict[str, Any]:
+        obj = item if isinstance(item, dict) else self.api_client.sanitize_for_serialization(item)
+        metadata = obj.get("metadata", {}) if isinstance(obj, dict) else {}
+        spec = obj.get("spec", {}) if isinstance(obj, dict) else {}
+        status = obj.get("status", {}) if isinstance(obj, dict) else {}
+
+        conditions = list(status.get("conditions", []) or [])
+
+        def condition_true(cond_type: str) -> bool:
+            for condition in conditions:
+                if str(condition.get("type", "")) == cond_type and str(condition.get("status", "")).lower() == "true":
+                    return True
+            return False
+
+        status_text = "Unknown"
+        true_condition = next((c.get("type") for c in conditions if str(c.get("status", "")).lower() == "true"), None)
+        false_condition = next((c.get("type") for c in conditions if str(c.get("status", "")).lower() == "false"), None)
+        if condition_true("Accepted"):
+            status_text = "Accepted"
+        elif true_condition:
+            status_text = str(true_condition)
+        elif false_condition:
+            status_text = f"{false_condition}(False)"
+
+        parameters_ref = spec.get("parametersRef") or {}
+        if parameters_ref and not isinstance(parameters_ref, dict):
+            parameters_ref = {}
+
+        return {
+            "name": metadata.get("name"),
+            "controller_name": spec.get("controllerName"),
+            "description": metadata.get("annotations", {}).get("gateway.networking.k8s.io/description"),
+            "accepted": condition_true("Accepted"),
+            "status": status_text,
+            "parameters_ref": parameters_ref or None,
+            "conditions": conditions,
+            "labels": dict(metadata.get("labels") or {}),
+            "annotations": dict(metadata.get("annotations") or {}),
+            "finalizers": list(metadata.get("finalizers") or []),
+            "created_at": metadata.get("creationTimestamp"),
+            "api_version": obj.get("apiVersion"),
+        }
+
+    def _httproute_to_info(self, item: Any) -> Dict[str, Any]:
+        obj = item if isinstance(item, dict) else self.api_client.sanitize_for_serialization(item)
+        metadata = obj.get("metadata", {}) if isinstance(obj, dict) else {}
+        spec = obj.get("spec", {}) if isinstance(obj, dict) else {}
+        status = obj.get("status", {}) if isinstance(obj, dict) else {}
+
+        hostnames = list(spec.get("hostnames", []) or [])
+        parent_refs = list(spec.get("parentRefs", []) or [])
+        rules = list(spec.get("rules", []) or [])
+        parents = list(status.get("parents", []) or [])
+
+        backend_refs_count = 0
+        for rule in rules:
+            refs = rule.get("backendRefs", []) if isinstance(rule, dict) else []
+            backend_refs_count += len(refs or [])
+
+        conditions: List[Dict[str, Any]] = []
+        for parent in parents:
+            parent_conditions = parent.get("conditions", []) if isinstance(parent, dict) else []
+            for condition in parent_conditions:
+                if isinstance(condition, dict):
+                    conditions.append(condition)
+
+        def condition_true(cond_type: str) -> bool:
+            for condition in conditions:
+                if str(condition.get("type", "")) == cond_type and str(condition.get("status", "")).lower() == "true":
+                    return True
+            return False
+
+        status_text = "Unknown"
+        true_condition = next((c.get("type") for c in conditions if str(c.get("status", "")).lower() == "true"), None)
+        false_condition = next((c.get("type") for c in conditions if str(c.get("status", "")).lower() == "false"), None)
+        if condition_true("Accepted"):
+            status_text = "Accepted"
+        elif condition_true("ResolvedRefs"):
+            status_text = "ResolvedRefs"
+        elif true_condition:
+            status_text = str(true_condition)
+        elif false_condition:
+            status_text = f"{false_condition}(False)"
+
+        return {
+            "name": metadata.get("name"),
+            "namespace": metadata.get("namespace"),
+            "hostnames": hostnames,
+            "parent_refs": parent_refs,
+            "rules": rules,
+            "parents": parents,
+            "rule_count": len(rules),
+            "parent_refs_count": len(parent_refs),
+            "backend_refs_count": backend_refs_count,
+            "status": status_text,
+            "accepted": condition_true("Accepted"),
+            "resolved_refs": condition_true("ResolvedRefs"),
+            "conditions": conditions,
+            "labels": dict(metadata.get("labels") or {}),
+            "annotations": dict(metadata.get("annotations") or {}),
+            "finalizers": list(metadata.get("finalizers") or []),
+            "created_at": metadata.get("creationTimestamp"),
+            "api_version": obj.get("apiVersion"),
+        }
+
     async def get_gateways(self, namespace: str) -> List[Dict[str, Any]]:
         """Gateway 목록 조회"""
         try:
@@ -4239,6 +4344,171 @@ class K8sService:
                     "namespace": namespace,
                 }
             raise Exception(f"Failed to delete gateway: {e}")
+
+    async def get_gatewayclasses(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """GatewayClass 목록 조회 (cluster-scoped)"""
+        try:
+            version = self._resolve_gateway_api_version(force_refresh=force_refresh)
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            data = custom_api.list_cluster_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                plural="gatewayclasses",
+            )
+            return [self._gatewayclass_to_info(item) for item in (data.get("items", []) or [])]
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return []
+            raise Exception(f"Failed to get gatewayclasses: {e}")
+        except Exception as e:
+            if "Gateway API not available" in str(e):
+                return []
+            raise Exception(f"Failed to get gatewayclasses: {e}")
+
+    async def describe_gatewayclass(self, name: str) -> Dict[str, Any]:
+        """GatewayClass 상세 조회"""
+        try:
+            version = self._resolve_gateway_api_version()
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            data = custom_api.get_cluster_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                plural="gatewayclasses",
+                name=name,
+            )
+            info = self._gatewayclass_to_info(data)
+            return {
+                **info,
+                "apiVersion": data.get("apiVersion", f"gateway.networking.k8s.io/{version}"),
+                "kind": data.get("kind", "GatewayClass"),
+                "metadata": data.get("metadata", {}),
+                "spec": data.get("spec", {}),
+                "status_detail": data.get("status", {}),
+            }
+        except ApiException as e:
+            raise Exception(f"Failed to describe gatewayclass: {e}")
+
+    async def delete_gatewayclass(self, name: str) -> Dict[str, Any]:
+        """GatewayClass 삭제"""
+        try:
+            version = self._resolve_gateway_api_version()
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            response = custom_api.delete_cluster_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                plural="gatewayclasses",
+                name=name,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("gatewayclass", name)
+            self._invalidate_yaml_cache("gatewayclasses", name)
+            return {
+                "status": "deleted",
+                "name": name,
+                "details": response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                }
+            raise Exception(f"Failed to delete gatewayclass: {e}")
+
+    async def get_httproutes(self, namespace: str) -> List[Dict[str, Any]]:
+        """HTTPRoute 목록 조회"""
+        try:
+            version = self._resolve_gateway_api_version()
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            data = custom_api.list_namespaced_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                namespace=namespace,
+                plural="httproutes",
+            )
+            return [self._httproute_to_info(item) for item in (data.get("items", []) or [])]
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return []
+            raise Exception(f"Failed to get httproutes: {e}")
+        except Exception as e:
+            if "Gateway API not available" in str(e):
+                return []
+            raise Exception(f"Failed to get httproutes: {e}")
+
+    async def get_all_httproutes(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """전체 네임스페이스 HTTPRoute 목록 조회"""
+        try:
+            version = self._resolve_gateway_api_version(force_refresh=force_refresh)
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            data = custom_api.list_cluster_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                plural="httproutes",
+            )
+            return [self._httproute_to_info(item) for item in (data.get("items", []) or [])]
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return []
+            raise Exception(f"Failed to get all httproutes: {e}")
+        except Exception as e:
+            if "Gateway API not available" in str(e):
+                return []
+            raise Exception(f"Failed to get all httproutes: {e}")
+
+    async def describe_httproute(self, namespace: str, name: str) -> Dict[str, Any]:
+        """HTTPRoute 상세 조회"""
+        try:
+            version = self._resolve_gateway_api_version()
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            data = custom_api.get_namespaced_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                namespace=namespace,
+                plural="httproutes",
+                name=name,
+            )
+            info = self._httproute_to_info(data)
+            return {
+                **info,
+                "apiVersion": data.get("apiVersion", f"gateway.networking.k8s.io/{version}"),
+                "kind": data.get("kind", "HTTPRoute"),
+                "metadata": data.get("metadata", {}),
+                "spec": data.get("spec", {}),
+                "status_detail": data.get("status", {}),
+            }
+        except ApiException as e:
+            raise Exception(f"Failed to describe httproute: {e}")
+
+    async def delete_httproute(self, namespace: str, name: str) -> Dict[str, Any]:
+        """HTTPRoute 삭제"""
+        try:
+            version = self._resolve_gateway_api_version()
+            custom_api = client.CustomObjectsApi(api_client=self.api_client)
+            response = custom_api.delete_namespaced_custom_object(
+                group="gateway.networking.k8s.io",
+                version=version,
+                namespace=namespace,
+                plural="httproutes",
+                name=name,
+                body=client.V1DeleteOptions(),
+            )
+            self._invalidate_yaml_cache("httproute", name, namespace=namespace)
+            self._invalidate_yaml_cache("httproutes", name, namespace=namespace)
+            return {
+                "status": "deleted",
+                "name": name,
+                "namespace": namespace,
+                "details": response,
+            }
+        except ApiException as e:
+            if getattr(e, "status", None) == 404:
+                return {
+                    "status": "not_found",
+                    "name": name,
+                    "namespace": namespace,
+                }
+            raise Exception(f"Failed to delete httproute: {e}")
 
     async def get_endpoints(self, namespace: str) -> List[Dict]:
         """Endpoints 목록 조회"""
