@@ -98,12 +98,14 @@ export default function ClusterNodes() {
     if (match) return Number(match[1]) || 0
     const compactMatch = age.match(/^(\d+)d$/i)
     if (compactMatch) return Number(compactMatch[1]) || 0
+    const hourMatch = age.match(/^(\d+)h$/i)
+    if (hourMatch) return Number(hourMatch[1]) / 24
     return 0
   }
 
-  const formatAgeDays = (age?: string | null) => {
-    const days = parseAgeDays(age)
-    return `${days}d`
+  const formatAge = (age?: string | null) => {
+    if (!age) return '-'
+    return age
   }
 
   const handleSort = (key: typeof sortKey) => {
@@ -213,9 +215,11 @@ export default function ClusterNodes() {
   }, [metrics])
 
   const getStatusColor = (status: string) => {
-    const lower = (status || '').toLowerCase()
+    const lower = (status || '').toLowerCase().trim()
+    if (lower === 'ready') return 'badge-success'
+    if (lower === 'schedulingdisabled') return 'badge-warning'
+    if (lower.includes('notready') || lower.includes('unknown')) return 'badge-error'
     if (lower.includes('ready')) return 'badge-success'
-    if (lower.includes('notready') || lower.includes('unknown')) return 'badge-warning'
     return 'badge-info'
   }
 
@@ -387,7 +391,11 @@ metadata:
                   >
                     <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{node.name}</span></td>
                     <td className="py-3 px-4">
-                      <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {node.status.split(',').map((s: string, i: number) => (
+                          <span key={i} className={`badge ${getStatusColor(s.trim())}`}>{s.trim()}</span>
+                        ))}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.roles && node.roles.length > 0 ? node.roles.join(', ') : '-'}</span></td>
                     <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{metric ? `${metric.cpu} (${metric.cpu_percent})` : '-'}</span></td>
@@ -395,7 +403,7 @@ metadata:
                     <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.version || '-'}</span></td>
                     <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.internal_ip || '-'}</span></td>
                     <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.external_ip || '-'}</span></td>
-                    <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAgeDays(node.age)}</span></td>
+                    <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.age)}</span></td>
                   </tr>
                 )
               })}
