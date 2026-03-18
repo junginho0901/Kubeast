@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -32,9 +33,26 @@ func (s *Service) GetAllStatefulSets(ctx context.Context) ([]map[string]interfac
 
 // DescribeStatefulSet returns detailed info about a statefulset.
 func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	sts, err := s.clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get statefulset %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var sts *appsv1.StatefulSet
+	var events *corev1.EventList
+	var stsErr, eventsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		sts, stsErr = s.clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StatefulSet", name),
+		})
+	}()
+	wg.Wait()
+
+	if stsErr != nil {
+		return nil, fmt.Errorf("get statefulset %s/%s: %w", namespace, name, stsErr)
 	}
 
 	result := formatStatefulSetDetail(sts)
@@ -128,10 +146,7 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	result["volume_claim_templates"] = vcts
 
 	// Events
-	events, err := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StatefulSet", name),
-	})
-	if err == nil {
+	if eventsErr == nil {
 		sortEventsByTime(events.Items)
 		result["events"] = formatEventList(events.Items)
 	}
@@ -179,9 +194,26 @@ func (s *Service) GetAllDaemonSets(ctx context.Context) ([]map[string]interface{
 
 // DescribeDaemonSet returns detailed info about a daemonset.
 func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	ds, err := s.clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get daemonset %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var ds *appsv1.DaemonSet
+	var events *corev1.EventList
+	var dsErr, eventsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		ds, dsErr = s.clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=DaemonSet", name),
+		})
+	}()
+	wg.Wait()
+
+	if dsErr != nil {
+		return nil, fmt.Errorf("get daemonset %s/%s: %w", namespace, name, dsErr)
 	}
 
 	result := formatDaemonSetDetail(ds)
@@ -236,10 +268,7 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 	result["pod_template"] = formatPodTemplate(ds.Spec.Template)
 
 	// Events
-	events, err := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=DaemonSet", name),
-	})
-	if err == nil {
+	if eventsErr == nil {
 		sortEventsByTime(events.Items)
 		result["events"] = formatEventList(events.Items)
 	}
@@ -287,9 +316,26 @@ func (s *Service) GetAllReplicaSets(ctx context.Context) ([]map[string]interface
 
 // DescribeReplicaSet returns detailed info about a replicaset.
 func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	rs, err := s.clientset.AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get replicaset %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var rs *appsv1.ReplicaSet
+	var events *corev1.EventList
+	var rsErr, eventsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		rs, rsErr = s.clientset.AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ReplicaSet", name),
+		})
+	}()
+	wg.Wait()
+
+	if rsErr != nil {
+		return nil, fmt.Errorf("get replicaset %s/%s: %w", namespace, name, rsErr)
 	}
 
 	result := formatReplicaSetDetail(rs)
@@ -329,10 +375,7 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 	result["pod_template"] = formatPodTemplate(rs.Spec.Template)
 
 	// Events
-	events, err := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ReplicaSet", name),
-	})
-	if err == nil {
+	if eventsErr == nil {
 		sortEventsByTime(events.Items)
 		result["events"] = formatEventList(events.Items)
 	}
@@ -391,9 +434,26 @@ func (s *Service) GetAllJobs(ctx context.Context) ([]map[string]interface{}, err
 
 // DescribeJob returns detailed info about a job.
 func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	job, err := s.clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get job %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var job *batchv1.Job
+	var events *corev1.EventList
+	var jobErr, eventsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		job, jobErr = s.clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Job", name),
+		})
+	}()
+	wg.Wait()
+
+	if jobErr != nil {
+		return nil, fmt.Errorf("get job %s/%s: %w", namespace, name, jobErr)
 	}
 
 	result := formatJobDetail(job)
@@ -459,10 +519,7 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	result["pod_template"] = formatPodTemplate(job.Spec.Template)
 
 	// Events
-	events, err := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Job", name),
-	})
-	if err == nil {
+	if eventsErr == nil {
 		sortEventsByTime(events.Items)
 		result["events"] = formatEventList(events.Items)
 	}
@@ -513,9 +570,26 @@ func (s *Service) GetAllCronJobs(ctx context.Context) ([]map[string]interface{},
 
 // DescribeCronJob returns detailed info about a cronjob.
 func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	cj, err := s.clientset.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get cronjob %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var cj *batchv1.CronJob
+	var events *corev1.EventList
+	var cjErr, eventsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		cj, cjErr = s.clientset.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=CronJob", name),
+		})
+	}()
+	wg.Wait()
+
+	if cjErr != nil {
+		return nil, fmt.Errorf("get cronjob %s/%s: %w", namespace, name, cjErr)
 	}
 
 	result := formatCronJobDetail(cj)
@@ -553,10 +627,7 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 	result["pod_template"] = formatPodTemplate(cj.Spec.JobTemplate.Spec.Template)
 
 	// Events
-	events, err := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=CronJob", name),
-	})
-	if err == nil {
+	if eventsErr == nil {
 		sortEventsByTime(events.Items)
 		result["events"] = formatEventList(events.Items)
 	}
