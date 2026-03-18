@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { handleUnauthorized } from '@/services/auth'
+import { handleUnauthorized, getAccessToken } from '@/services/auth'
 
 interface NodeShellTerminalProps {
   nodeName: string
@@ -56,9 +56,11 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
 
     term.writeln(t('nodes.shell.connectingTo', 'Connecting to {{node}}...', { node: nodeName }))
 
+    const token = getAccessToken()
     const wsUrl = buildWsUrl(`/api/v1/cluster/nodes/${nodeName}/debug-shell/ws`, {
       ...(namespace ? { namespace } : {}),
       ...(image ? { image } : {}),
+      ...(token ? { token } : {}),
     })
     const ws = new WebSocket(wsUrl)
     ws.binaryType = 'arraybuffer'
