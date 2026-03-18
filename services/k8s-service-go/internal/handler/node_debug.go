@@ -242,6 +242,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
+			_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if msgType == websocket.BinaryMessage {
 				if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 					return
@@ -278,6 +279,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 				msg := make([]byte, len(payload)+1)
 				msg[0] = 0 // stdin channel
 				copy(msg[1:], payload)
+				_ = k8sWS.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				if err := k8sWS.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 					return
 				}
