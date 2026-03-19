@@ -3593,7 +3593,10 @@ Draft (rules-based, keep numbers unchanged):
                 context_data = await db.get_context(session_id)
                 if context_data:
                     self.tool_contexts[session_id].state = context_data.state or {}
-                    self.tool_contexts[session_id].cache = context_data.cache or {}
+                    restored = context_data.cache or {}
+                    tc = TTLCache()
+                    tc.update(restored)
+                    self.tool_contexts[session_id].cache = tc
             
             tool_context = self.tool_contexts[session_id]
             
@@ -3639,124 +3642,129 @@ Draft (rules-based, keep numbers unchanged):
                         temperature=0.7,
                         max_tokens=4096,
                         timeout=60.0,
+                        stream=True,
                     )
                     try:
-                        response = await self.client.chat.completions.create(**_fc_kwargs, tool_choice="auto")
+                        stream = await self.client.chat.completions.create(**_fc_kwargs, tool_choice="auto", stream_options={"include_usage": True})
                     except Exception as tc_err:
-                        # 일부 모델은 tool_choice를 지원하지 않음 — fallback
-                        print(f"[WARN] tool_choice='auto' failed ({tc_err}), retrying without it", flush=True)
-                        response = await self.client.chat.completions.create(**_fc_kwargs)
-                    print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
+                        print(f"[WARN] tool_choice='auto' streaming failed ({tc_err}), retrying without it", flush=True)
+                        stream = await self.client.chat.completions.create(**_fc_kwargs)
 
-                    # OpenAI 응답 전체 로그 출력
-                    response_dict = {
-                        "id": response.id,
-                        "model": response.model,
-                        "created": response.created,
-                        "choices": [
-                            {
-                                "index": choice.index,
-                                "message": {
-                                    "role": choice.message.role,
-                                    "content": choice.message.content,
-                                    "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
-                                },
-                                "finish_reason": choice.finish_reason
-                            } for choice in response.choices
-                        ],
-                        "usage": {
-                            "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
-                            "completion_tokens": response.usage.completion_tokens if response.usage else None,
-                            "total_tokens": response.usage.total_tokens if response.usage else None
-                        } if response.usage else None
-                    }
-                    print(f"[OPENAI RESPONSE][session_chat_stream iteration {iteration}] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+                    # --- streaming delta 수집 ---
+                    collected_tool_calls = {}  # index -> {id, name, arguments}
+                    stream_content = ""
+                    stream_usage = None
+                    last_finish_reason = None
 
-                    # 토큰 사용량 로그 (Function Calling 단계)
-                    usage = getattr(response, "usage", None)
-                    if usage is not None:
+                    async for chunk in stream:
+                        if getattr(chunk, "usage", None) is not None:
+                            stream_usage = chunk.usage
+                        if not chunk.choices:
+                            continue
+                        delta = getattr(chunk.choices[0], "delta", None)
+                        if delta is None:
+                            continue
+                        fr = getattr(chunk.choices[0], "finish_reason", None)
+                        if fr:
+                            last_finish_reason = fr
+
+                        # 텍스트 content → 즉시 프론트엔드로 스트리밍
+                        if delta.content:
+                            stream_content += delta.content
+                            yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+
+                        # tool_calls delta 누적
+                        if delta.tool_calls:
+                            for tc_delta in delta.tool_calls:
+                                idx = tc_delta.index
+                                if idx not in collected_tool_calls:
+                                    collected_tool_calls[idx] = {
+                                        "id": tc_delta.id or "",
+                                        "name": getattr(tc_delta.function, "name", "") or "",
+                                        "arguments": "",
+                                    }
+                                if tc_delta.id:
+                                    collected_tool_calls[idx]["id"] = tc_delta.id
+                                if getattr(tc_delta.function, "name", None):
+                                    collected_tool_calls[idx]["name"] = tc_delta.function.name
+                                if getattr(tc_delta.function, "arguments", None):
+                                    collected_tool_calls[idx]["arguments"] += tc_delta.function.arguments
+
+                    # usage 로그
+                    if stream_usage is not None:
                         print(
-                            f"[TOKENS][session_chat iteration {iteration} fc] prompt={usage.prompt_tokens}, "
-                            f"completion={usage.completion_tokens}, total={usage.total_tokens}",
+                            f"[TOKENS][session_chat iteration {iteration}] prompt={stream_usage.prompt_tokens}, "
+                            f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
                             flush=True,
                         )
                         yield (
                             "data: "
                             + json.dumps(
                                 {
-                                    "usage_phase": f"session_chat_iteration_{iteration}_fc",
+                                    "usage_phase": f"session_chat_iteration_{iteration}",
                                     "usage": {
-                                        "prompt_tokens": usage.prompt_tokens,
-                                        "completion_tokens": usage.completion_tokens,
-                                        "total_tokens": usage.total_tokens,
+                                        "prompt_tokens": stream_usage.prompt_tokens,
+                                        "completion_tokens": stream_usage.completion_tokens,
+                                        "total_tokens": stream_usage.total_tokens,
                                     },
                                 },
                                 ensure_ascii=False,
                             )
                             + "\n\n"
                         )
+
                 except Exception as api_error:
                     print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
                     yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
                     yield "data: [DONE]\n\n"
                     return
-                
-                response_message = response.choices[0].message
-                
-                # Function calling이 있으면 실행
-                if response_message.tool_calls:
-                    print(f"[DEBUG] Tool calls detected: {len(response_message.tool_calls)}")
-                    messages.append(response_message)
-                    
-                    for tool_call in response_message.tool_calls:
-                        function_name = tool_call.function.name
-                        function_args = json.loads(tool_call.function.arguments)
-                        
+
+                # --- tool call이 있으면 실행 후 다음 iteration ---
+                if collected_tool_calls:
+                    print(f"[DEBUG] Tool calls detected: {len(collected_tool_calls)}")
+                    # assistant message를 dict로 구성 (OpenAI API 호환)
+                    tc_list = []
+                    for idx in sorted(collected_tool_calls.keys()):
+                        tc = collected_tool_calls[idx]
+                        tc_list.append({
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {"name": tc["name"], "arguments": tc["arguments"]},
+                        })
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": stream_content or None,
+                        "tool_calls": tc_list,
+                    }
+                    messages.append(assistant_msg)
+
+                    for tc_dict in tc_list:
+                        function_name = tc_dict["function"]["name"]
+                        function_args = json.loads(tc_dict["function"]["arguments"])
+
                         print(f"[DEBUG] Calling function: {function_name} with args: {function_args}")
-                        
-                        # 함수 실행 중임을 알림
+
                         yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
-                        
-                        # 함수 실행 (Tool Context 전달)
+
                         function_response = await self._execute_function_with_context(
-                            function_name,
-                            function_args,
-                            tool_context
+                            function_name, function_args, tool_context
                         )
-                        
+
                         print(f"[DEBUG] Function response length: {len(str(function_response))}")
-                        
-                        # 결과를 사용자 친화적으로 포맷 (JSON이면 pretty-print)
+
                         formatted_result, is_json, is_yaml = self._format_tool_result(
-                            function_name,
-                            function_args,
-                            function_response,
+                            function_name, function_args, function_response,
                         )
-
                         display_result = self._build_tool_display(
-                            function_name,
-                            function_args,
-                            formatted_result,
-                            is_json,
-                            is_yaml,
+                            function_name, function_args, formatted_result, is_json, is_yaml,
                         )
-                        
-                        # 결과 미리보기 (너무 길면 잘라서 전송하되, 표시를 남김)
-                        max_preview_len = 2500
-                        if len(formatted_result) > max_preview_len:
-                            result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..."
-                        else:
-                            result_preview = formatted_result
 
+                        max_preview_len = 2500
+                        result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
                         display_preview = None
                         if display_result is not None:
-                            if len(display_result) > max_preview_len:
-                                display_preview = display_result[:max_preview_len] + "\n... (truncated) ..."
-                            else:
-                                display_preview = display_result
-                        
-                        # Function 결과를 프론트엔드로 전송 (스트리밍) - 실행 후
-                        # 👉 프론트에는 미리보기만 전달 (약 2500자)
+                            display_preview = display_result[:max_preview_len] + "\n... (truncated) ..." if len(display_result) > max_preview_len else display_result
+
                         payload = {
                             "function_result": function_name,
                             "result": result_preview,
