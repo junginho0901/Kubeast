@@ -221,10 +221,8 @@ step "Patching image tags to :${TAG}"
 for name in auth-service ai-service k8s-service session-service frontend; do
   kubectl set image "deployment/${name}" "${name}=kube-assistant/${name}:${TAG}" -n "$NS" 2>/dev/null || true
 done
-# tool-server: 3개 deployment, 컨테이너 이름은 tool-server
-for ts in tool-server-read tool-server-write tool-server-admin; do
-  kubectl set image "deployment/${ts}" "tool-server=kube-assistant/tool-server:${TAG}" -n "$NS" 2>/dev/null || true
-done
+# tool-server: 단일 deployment
+kubectl set image "deployment/tool-server" "tool-server=kube-assistant/tool-server:${TAG}" -n "$NS" 2>/dev/null || true
 # model-config-controller-go (container name = controller)
 kubectl set image "deployment/model-config-controller-go" \
   "controller=kube-assistant/model-config-controller-go:${TAG}" -n "$NS" 2>/dev/null || true
