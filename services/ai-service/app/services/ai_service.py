@@ -1111,7 +1111,7 @@ JSON 형식으로 응답해주세요:
                 
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
-                    function_args = eval(tool_call.function.arguments)
+                    function_args = json.loads(tool_call.function.arguments)
                     
                     # 함수 실행
                     function_response = await self._execute_function(function_name, function_args)
