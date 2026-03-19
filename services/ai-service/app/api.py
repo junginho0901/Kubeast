@@ -79,7 +79,11 @@ async def chat_stream(request: ChatRequest, authorization: str = Header(..., ali
     try:
         return StreamingResponse(
             ai_service.chat_stream(request),
-            media_type="text/event-stream"
+            media_type="text/event-stream",
+            headers={
+                "X-Accel-Buffering": "no",
+                "Cache-Control": "no-cache, no-transform",
+            },
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -91,13 +95,17 @@ async def session_chat(session_id: str, message: str, authorization: str = Heade
     세션 기반 AI 챗봇 (스트리밍)
     """
     from app.database import get_db_service
-    
+
     ai_service = await _build_ai_service(authorization)
-    
+
     try:
         return StreamingResponse(
             ai_service.session_chat_stream(session_id, message),
-            media_type="text/event-stream"
+            media_type="text/event-stream",
+            headers={
+                "X-Accel-Buffering": "no",
+                "Cache-Control": "no-cache, no-transform",
+            },
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
