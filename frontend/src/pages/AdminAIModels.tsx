@@ -74,10 +74,15 @@ export default function AdminAIModels() {
     queryFn: () => api.listModelConfigs(),
   })
 
+  const invalidateModelQueries = () => {
+    qc.invalidateQueries({ queryKey: ['model-configs'] })
+    qc.invalidateQueries({ queryKey: ['ai-config'] })
+  }
+
   const createMutation = useMutation({
     mutationFn: (data: any) => api.createModelConfig(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['model-configs'] })
+      invalidateModelQueries()
       resetForm()
     },
   })
@@ -85,19 +90,19 @@ export default function AdminAIModels() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => api.updateModelConfig(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['model-configs'] })
+      invalidateModelQueries()
       resetForm()
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteModelConfig(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-configs'] }),
+    onSuccess: invalidateModelQueries,
   })
 
   const activateMutation = useMutation({
     mutationFn: (id: number) => api.updateModelConfig(id, { is_default: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-configs'] }),
+    onSuccess: invalidateModelQueries,
   })
 
   const currentProviderDef: ProviderDef = getProvider(formProvider) ?? PROVIDER_CATALOG[0]

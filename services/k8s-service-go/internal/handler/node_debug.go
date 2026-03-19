@@ -2,10 +2,16 @@ package handler
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -13,18 +19,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/transport"
 )
 
 var debugUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:       func(r *http.Request) bool { return true },
+	ReadBufferSize:    4096,
+	WriteBufferSize:   4096,
+	EnableCompression: false,
 }
 
 // NodeDebugShellWS handles WebSocket /api/v1/nodes/{name}/debug-shell/ws.
-// Creates a temporary debug pod on the target node and streams shell I/O.
 func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
-	// Admin only
 	if err := h.requireAdmin(r); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -46,8 +52,6 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-
-	slog.Info("debug shell ws connected", "node", nodeName, "namespace", namespace, "image", image)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -84,10 +88,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 						Privileged: boolPtr(true),
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "host-root",
-							MountPath: "/host",
-						},
+						{Name: "host-root", MountPath: "/host"},
 					},
 				},
 			},
@@ -95,16 +96,12 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 				{
 					Name: "host-root",
 					VolumeSource: corev1.VolumeSource{
-						HostPath: &corev1.HostPathVolumeSource{
-							Path: "/",
-						},
+						HostPath: &corev1.HostPathVolumeSource{Path: "/"},
 					},
 				},
 			},
 			Tolerations: []corev1.Toleration{
-				{
-					Operator: corev1.TolerationOpExists,
-				},
+				{Operator: corev1.TolerationOpExists},
 			},
 		},
 	}
@@ -117,7 +114,6 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Cleanup: always delete the debug pod when done
 	defer func() {
 		grace := int64(0)
 		bg := metav1.DeletePropagationBackground
@@ -128,7 +124,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		slog.Info("debug shell pod deleted", "pod", podName)
 	}()
 
-	// Wait for pod to be running (up to 90s)
+	// Wait for pod to be running
 	conn.WriteMessage(websocket.TextMessage, []byte("Waiting for debug pod to start...\r\n"))
 	timeout := time.After(90 * time.Second)
 	ticker := time.NewTicker(1 * time.Second)
@@ -158,85 +154,138 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 
 	conn.WriteMessage(websocket.TextMessage, []byte("Debug pod running. Attaching...\r\n"))
 
-	// Attach to the pod
-	req := clientset.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Name(podName).
-		Namespace(namespace).
-		SubResource("attach").
-		VersionedParams(&corev1.PodAttachOptions{
-			Container: "debugger",
-			Stdin:     true,
-			Stdout:    true,
-			Stderr:    true,
-			TTY:       true,
-		}, scheme.ParameterCodec)
+	// Build K8s API WebSocket URL
+	host := restConfig.Host
+	wsBase := strings.Replace(strings.Replace(host, "https://", "wss://", 1), "http://", "ws://", 1)
+	attachPath := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/attach", namespace, podName)
+	qp := url.Values{
+		"container": {"debugger"},
+		"stdin":     {"1"},
+		"stdout":    {"1"},
+		"stderr":    {"1"},
+		"tty":       {"1"},
+	}
+	k8sURL := fmt.Sprintf("%s%s?%s", wsBase, attachPath, qp.Encode())
 
-	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	// TLS config from client-go transport
+	transportConfig, err := restConfig.TransportConfig()
 	if err != nil {
-		msg := fmt.Sprintf("failed to create executor: %v", err)
+		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("transport config error: %v\r\n", err)))
+		return
+	}
+	tlsConfig, err := transport.TLSConfigFor(transportConfig)
+	if err != nil {
+		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("TLS config error: %v\r\n", err)))
+		return
+	}
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{} //nolint:gosec
+	}
+	if tlsConfig.ServerName == "" && !tlsConfig.InsecureSkipVerify {
+		if u, err := url.Parse(restConfig.Host); err == nil {
+			tlsConfig.ServerName = u.Hostname()
+		}
+	}
+
+	// Auth headers
+	k8sHeaders := http.Header{}
+	if restConfig.BearerToken != "" {
+		k8sHeaders.Set("Authorization", "Bearer "+restConfig.BearerToken)
+	} else if restConfig.BearerTokenFile != "" {
+		if tokenBytes, err := os.ReadFile(restConfig.BearerTokenFile); err == nil {
+			k8sHeaders.Set("Authorization", "Bearer "+strings.TrimSpace(string(tokenBytes)))
+		}
+	}
+
+	// Dial K8s API with TCP_NODELAY
+	dialer := websocket.Dialer{
+		TLSClientConfig:  tlsConfig,
+		HandshakeTimeout: 15 * time.Second,
+		Subprotocols:     []string{"v4.channel.k8s.io", "v3.channel.k8s.io", "v2.channel.k8s.io", "channel.k8s.io"},
+		ReadBufferSize:   4096,
+		WriteBufferSize:  4096,
+		NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			d := net.Dialer{}
+			c, err := d.DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			if tc, ok := c.(*net.TCPConn); ok {
+				_ = tc.SetNoDelay(true)
+			}
+			return c, nil
+		},
+	}
+
+	k8sWS, _, err := dialer.DialContext(ctx, k8sURL, k8sHeaders)
+	if err != nil {
+		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
 		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
 		return
 	}
+	defer k8sWS.Close()
 
-	// Bridge WebSocket <-> K8s SPDY stream
-	wsStream := &wsStreamAdapter{conn: conn, ctx: ctx, cancel: cancel}
+	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
 
-	slog.Info("debug shell attaching to pod", "pod", podName, "node", nodeName)
-	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdin:  wsStream,
-		Stdout: wsStream,
-		Stderr: wsStream,
-		Tty:    true,
-	})
-	if err != nil {
-		errMsg := err.Error()
-		slog.Error("debug shell stream ended", "err", err, "pod", podName, "node", nodeName)
-		if !strings.Contains(errMsg, "closed") && !strings.Contains(errMsg, "websocket") {
-			conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\nStream error: %v\r\n", err)))
+	// Trigger initial prompt
+	_ = k8sWS.WriteMessage(websocket.BinaryMessage, []byte{0, '\r'})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// K8s -> Browser
+	go func() {
+		defer wg.Done()
+		defer cancel()
+		for {
+			msgType, data, err := k8sWS.ReadMessage()
+			if err != nil {
+				if !isExpectedClose(err) {
+					slog.Debug("k8s ws read error", "err", err)
+				}
+				return
+			}
+			if err := conn.WriteMessage(msgType, data); err != nil {
+				return
+			}
 		}
-	} else {
-		slog.Info("debug shell stream ended normally", "pod", podName, "node", nodeName)
-	}
+	}()
+
+	// Browser -> K8s
+	go func() {
+		defer wg.Done()
+		defer cancel()
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				_ = k8sWS.WriteMessage(websocket.BinaryMessage, []byte{0, 'e', 'x', 'i', 't', '\r'})
+				return
+			}
+			if len(data) > 0 {
+				msg := make([]byte, len(data)+1)
+				msg[0] = 0
+				copy(msg[1:], data)
+				if err := k8sWS.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
+	slog.Info("debug shell ended", "pod", podName, "node", nodeName)
 }
 
-// wsStreamAdapter bridges gorilla/websocket <-> io.Reader/io.Writer for remotecommand.
-type wsStreamAdapter struct {
-	conn   *websocket.Conn
-	ctx    context.Context
-	cancel context.CancelFunc
-	buf    []byte
-}
-
-// Read implements io.Reader - reads from WebSocket (client stdin).
-func (a *wsStreamAdapter) Read(p []byte) (int, error) {
-	for {
-		if len(a.buf) > 0 {
-			n := copy(p, a.buf)
-			a.buf = a.buf[n:]
-			return n, nil
-		}
-
-		_, msg, err := a.conn.ReadMessage()
-		if err != nil {
-			return 0, err
-		}
-		a.buf = msg
+func isExpectedClose(err error) bool {
+	if err == nil {
+		return false
 	}
-}
-
-// Write implements io.Writer - writes to WebSocket (server stdout/stderr).
-// Prepends channel byte (1=stdout) so the frontend can parse correctly.
-func (a *wsStreamAdapter) Write(p []byte) (int, error) {
-	msg := make([]byte, len(p)+1)
-	msg[0] = 1 // stdout channel
-	copy(msg[1:], p)
-	err := a.conn.WriteMessage(websocket.BinaryMessage, msg)
-	if err != nil {
-		return 0, err
+	if err == io.EOF {
+		return true
 	}
-	return len(p), nil
+	s := err.Error()
+	return strings.Contains(s, "closed") || strings.Contains(s, "websocket") || strings.Contains(s, "EOF") || strings.Contains(s, "going away")
 }
 
 func boolPtr(b bool) *bool {

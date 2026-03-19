@@ -75,20 +75,103 @@ class ChatStreamManager {
   private listeners = new Set<Listener>()
   private abortController: AbortController | null = null
 
+  // 타자기 효과: 도착한 텍스트를 큐에 넣고 RAF로 적응형 배치 드레인
+  private _charQueue: string[] = []
+  private _typewriterTimer: number | null = null
+  private _streamDone = false          // SSE [DONE] 수신 여부
+  private _pendingDonePatch: Partial<ChatStreamState> | null = null
+  private static readonly TICK_MS = 30 // 드레인 간격 (ms)
+
   getState = () => this.state
 
   subscribe = (listener: Listener) => {
     this.listeners.add(listener)
-    // 즉시 현재 상태 전달
     listener(this.state)
     return () => {
       this.listeners.delete(listener)
     }
   }
 
-  private setState = (patch: Partial<ChatStreamState>) => {
-    this.state = { ...this.state, ...patch, updatedAt: Date.now() }
+  private notify = () => {
     for (const listener of this.listeners) listener(this.state)
+  }
+
+  /** 적응형 드레인: 큐가 쌓이면 한번에 더 많이 꺼냄 (밀림 방지) */
+  private _drainQueue = () => {
+    if (this._charQueue.length === 0) {
+      this._stopTypewriter()
+      // 스트림 종료 후 큐 소진 완료 → completed 상태 전환
+      if (this._streamDone && this._pendingDonePatch) {
+        const patch = this._pendingDonePatch
+        this._pendingDonePatch = null
+        this._streamDone = false
+        this.state = { ...this.state, ...patch, updatedAt: Date.now() }
+        this.notify()
+      }
+      return
+    }
+    // 적응형 배치: 큐 길이에 비례해서 한번에 꺼냄
+    // 짧으면 1글자씩 (부드러움), 길면 많이 (따라잡기)
+    const batch = Math.max(1, Math.ceil(this._charQueue.length / 8))
+    const chars = this._charQueue.splice(0, batch).join('')
+    this.state = {
+      ...this.state,
+      assistantContent: this.state.assistantContent + chars,
+      streamingPhase: 'answer',
+      updatedAt: Date.now(),
+    }
+    this.notify()
+  }
+
+  /** 큐에 남은 글자 전부 즉시 반영 (abort 시에만 사용) */
+  private _flushQueue = () => {
+    if (this._charQueue.length === 0) return
+    const remaining = this._charQueue.join('')
+    this._charQueue.length = 0
+    this.state = {
+      ...this.state,
+      assistantContent: this.state.assistantContent + remaining,
+      updatedAt: Date.now(),
+    }
+    this._stopTypewriter()
+    this.notify()
+  }
+
+  private _startTypewriter = () => {
+    if (this._typewriterTimer !== null) return
+    this._typewriterTimer = window.setInterval(this._drainQueue, ChatStreamManager.TICK_MS)
+  }
+
+  private _stopTypewriter = () => {
+    if (this._typewriterTimer !== null) {
+      clearInterval(this._typewriterTimer)
+      this._typewriterTimer = null
+    }
+  }
+
+  /** 스트림 종료를 지연 — 큐가 다 소진된 후에 상태 전환 */
+  private _finishWhenDrained = (patch: Partial<ChatStreamState>) => {
+    this._streamDone = true
+    this._pendingDonePatch = patch
+    // 큐가 이미 비어있으면 즉시 완료
+    if (this._charQueue.length === 0) {
+      this._drainQueue()
+    }
+    // 큐가 남아있으면 타자기가 소진 후 자동 완료
+  }
+
+  private setState = (patch: Partial<ChatStreamState>, immediate = false) => {
+    this.state = { ...this.state, ...patch, updatedAt: Date.now() }
+
+    if (immediate) {
+      this._flushQueue()
+      this._streamDone = false
+      this._pendingDonePatch = null
+      this.notify()
+      return
+    }
+
+    this.notify()
   }
 
   stop = async () => {
@@ -101,7 +184,7 @@ class ChatStreamManager {
     }
 
     if (this.state.status === 'streaming') {
-      this.setState({ status: 'aborted', isStreaming: false })
+      this.setState({ status: 'aborted', isStreaming: false }, true)
     }
   }
 
@@ -111,6 +194,10 @@ class ChatStreamManager {
     }
 
     this.abortController = new AbortController()
+    this._stopTypewriter()
+    this._charQueue.length = 0
+    this._streamDone = false
+    this._pendingDonePatch = null
     this.setState({
       status: 'streaming',
       isStreaming: true,
@@ -161,7 +248,7 @@ class ChatStreamManager {
 
           const dataStr = line.slice(6)
           if (dataStr === '[DONE]') {
-            this.setState({ status: 'completed', isStreaming: false, streamingPhase: null })
+            this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
             return
           }
 
@@ -187,11 +274,12 @@ class ChatStreamManager {
             }
 
             if (data.content) {
-              const assistantContent = this.state.assistantContent + String(data.content)
-              this.setState({
-                assistantContent,
-                streamingPhase: 'answer',
-              })
+              // 타자기 큐에 글자 추가 → setInterval이 한 글자씩 꺼내서 렌더
+              const chars = String(data.content)
+              for (const ch of chars) {
+                this._charQueue.push(ch)
+              }
+              this._startTypewriter()
               continue
             }
 
@@ -265,7 +353,7 @@ class ChatStreamManager {
                 isStreaming: false,
                 error: String(data.error),
                 streamingPhase: null,
-              })
+              }, true)
               return
             }
           } catch {
@@ -274,10 +362,10 @@ class ChatStreamManager {
         }
       }
 
-      this.setState({ status: 'completed', isStreaming: false, streamingPhase: null })
+      this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null })
     } catch (error: any) {
       if (error?.name === 'AbortError') {
-        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null })
+        this.setState({ status: 'aborted', isStreaming: false, streamingPhase: null }, true)
         return
       }
 
@@ -286,7 +374,7 @@ class ChatStreamManager {
         isStreaming: false,
         error: String(error),
         streamingPhase: null,
-      })
+      }, true)
     } finally {
       this.abortController = null
     }

@@ -8,6 +8,7 @@ import re
 import json
 import os
 import sys
+import time
 from app.config import settings
 from datetime import datetime
 from app.security import decode_access_token
@@ -26,12 +27,36 @@ from app.services.tool_server_client import ToolServerClient
 from app.services.provider_adapter import ProviderAdapter
 
 
+class TTLCache(dict):
+    """dict 호환 캐시 — 5분 TTL 자동 만료"""
+    TTL = 300
+
+    def __contains__(self, key):
+        if not super().__contains__(key):
+            return False
+        ts, _ = super().__getitem__(key)
+        if time.time() - ts > self.TTL:
+            self.pop(key, None)
+            return False
+        return True
+
+    def __getitem__(self, key):
+        ts, val = super().__getitem__(key)
+        if time.time() - ts > self.TTL:
+            self.pop(key, None)
+            raise KeyError(key)
+        return val
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, (time.time(), value))
+
+
 class ToolContext:
     """Tool 실행 컨텍스트"""
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.state = {}  # 실행 상태
-        self.cache = {}  # 결과 캐시
+        self.cache = TTLCache()  # 결과 캐시 (5분 TTL)
 
 
 class AIService:
@@ -1086,7 +1111,7 @@ JSON 형식으로 응답해주세요:
                 
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
-                    function_args = eval(tool_call.function.arguments)
+                    function_args = json.loads(tool_call.function.arguments)
                     
                     # 함수 실행
                     function_response = await self._execute_function(function_name, function_args)
@@ -2326,36 +2351,25 @@ Draft (rules-based, keep numbers unchanged):
 
 **매우 중요**: 사용자가 질문을 하면, **반드시 먼저 도구를 사용하여 실제 클러스터 상태를 확인**하세요. 절대 추측하지 마세요.
 
-## 네임스페이스/리소스 식별 규칙 (중요)
+### 효율적 도구 사용 (최우선 규칙)
+- **이미 필요한 정보를 확보했으면 추가 도구 호출 없이 즉시 분석/응답하세요.**
+- 로그를 받았으면 바로 분석하세요. describe나 events를 추가로 호출하지 마세요 (로그만으로 판단이 불가능한 경우에만 추가 호출).
+- 같은 데이터를 다른 파라미터로 재요청하지 마세요.
+- **도구 호출은 최소한으로**: 보통 1~3회면 충분합니다. 정보가 충분하면 멈추고 답변하세요.
 
+### 네임스페이스/리소스 식별 규칙
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
-- 사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-  먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 **모든 네임스페이스에서 후보를 찾은 뒤**
-  해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
-- 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
+- 사용자가 리소스 이름을 "대충" 던지는 경우, 먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 후보를 찾은 뒤 후속 도구를 호출하세요.
+- 후보가 여러 개면 나열하고 사용자에게 선택을 요청하거나, Running+Ready인 리소스를 우선하세요.
 
-## 출력 포맷/툴 선택 규칙 (중요)
+### 출력 포맷/툴 선택 규칙
+- WIDE/`kubectl get` 스타일 요청 → `k8s_get_resources` 사용
+- YAML 요청 → `k8s_get_resource_yaml` 사용
 
-- 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
-- YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
-
-1. **항상 도구를 적극적으로 사용**: 
-   - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
-   - 일반적인 설명보다 실제 데이터를 우선시하세요
-
-2. **구체적인 정보 수집 예시**: 
-   - "네임스페이스가 뭐가 있어?" → `k8s_get_resources`(resource_type=namespaces) 호출
-   - "Pod 상태 확인해줘" → `k8s_get_resources`(resource_type=pods, namespace=...) 호출
-   - "Failed Pod 있어?" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 상태 분석, 발견 시 `k8s_describe_resource` 및 `k8s_get_pod_logs`, `k8s_get_events` 추가 호출
-   - "리소스 많이 쓰는 Pod는?" → `get_pod_metrics` 호출
-   - "죽어 있는 Pod들 알려줘" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 NotReady/Error/CrashLoopBackOff 필터링
-
-3. **문제 발견 시 추가 조사**:
-   - Pod 문제 발견 → `k8s_describe_resource`, `k8s_get_pod_logs`, `k8s_get_events` 순차 호출
-   - 노드 문제 발견 → `k8s_get_resources`(resource_type=nodes) 후 필요 시 `k8s_describe_resource`
-   - 재시작이 많은 Pod → `k8s_get_pod_logs`로 크래시 원인 파악
-
-4. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
+### 도구 호출 가이드
+1. 사용자가 클러스터에 대해 질문하면, 관련 도구를 호출하세요 (일반적인 설명보다 실제 데이터 우선)
+2. **문제 발견 시**: 로그나 이벤트 등 하나의 소스로 원인 파악이 되면 바로 분석하세요. 추가 도구 호출은 기존 정보로 판단이 불가능할 때만.
+3. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
 
 ## 안전 프로토콜
 
@@ -3341,6 +3355,16 @@ Draft (rules-based, keep numbers unchanged):
                     ensure_ascii=False,
                 )
             
+            elif function_name == "get_pod_metrics":
+                namespace = function_args.get("namespace")
+                return await self._call_tool_server(
+                    function_name,
+                    {"namespace": namespace} if namespace else {},
+                )
+
+            elif function_name == "get_node_metrics":
+                return await self._call_tool_server(function_name, {})
+
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()
                 return json.dumps(nodes, ensure_ascii=False)
@@ -3569,7 +3593,10 @@ Draft (rules-based, keep numbers unchanged):
                 context_data = await db.get_context(session_id)
                 if context_data:
                     self.tool_contexts[session_id].state = context_data.state or {}
-                    self.tool_contexts[session_id].cache = context_data.cache or {}
+                    restored = context_data.cache or {}
+                    tc = TTLCache()
+                    tc.update(restored)
+                    self.tool_contexts[session_id].cache = tc
             
             tool_context = self.tool_contexts[session_id]
             
@@ -3584,7 +3611,7 @@ Draft (rules-based, keep numbers unchanged):
             yield f"data: {json.dumps({'model_info': {'provider': self.provider, 'model': self.model, 'role': self.user_role}}, ensure_ascii=False)}\n\n"
 
             # ===== Multi-turn Tool Calling Loop =====
-            max_iterations = 5  # 최대 5번까지 tool call 반복 허용
+            max_iterations = 10  # 최대 10번까지 tool call 반복 허용
             iteration = 0
             assistant_content = ""
             tool_calls_log = []  # Tool call 정보 저장
@@ -3613,198 +3640,60 @@ Draft (rules-based, keep numbers unchanged):
                         messages=messages,
                         tools=tools,
                         temperature=0.7,
-                        max_tokens=1600,
+                        max_tokens=4096,
                         timeout=60.0,
+                        stream=True,
                     )
                     try:
-                        response = await self.client.chat.completions.create(**_fc_kwargs, tool_choice="auto")
+                        stream = await self.client.chat.completions.create(**_fc_kwargs, tool_choice="auto", stream_options={"include_usage": True})
                     except Exception as tc_err:
-                        # 일부 모델은 tool_choice를 지원하지 않음 — fallback
-                        print(f"[WARN] tool_choice='auto' failed ({tc_err}), retrying without it", flush=True)
-                        response = await self.client.chat.completions.create(**_fc_kwargs)
-                    print(f"[AI Service] Session Chat API 응답 (Iteration {iteration}) - 실제 사용 모델: {response.model}", flush=True)
+                        print(f"[WARN] tool_choice='auto' streaming failed ({tc_err}), retrying without it", flush=True)
+                        stream = await self.client.chat.completions.create(**_fc_kwargs)
 
-                    # OpenAI 응답 전체 로그 출력
-                    response_dict = {
-                        "id": response.id,
-                        "model": response.model,
-                        "created": response.created,
-                        "choices": [
-                            {
-                                "index": choice.index,
-                                "message": {
-                                    "role": choice.message.role,
-                                    "content": choice.message.content,
-                                    "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in (choice.message.tool_calls or [])]
-                                },
-                                "finish_reason": choice.finish_reason
-                            } for choice in response.choices
-                        ],
-                        "usage": {
-                            "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
-                            "completion_tokens": response.usage.completion_tokens if response.usage else None,
-                            "total_tokens": response.usage.total_tokens if response.usage else None
-                        } if response.usage else None
-                    }
-                    print(f"[OPENAI RESPONSE][session_chat_stream iteration {iteration}] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
-
-                    # 토큰 사용량 로그 (Function Calling 단계)
-                    usage = getattr(response, "usage", None)
-                    if usage is not None:
-                        print(
-                            f"[TOKENS][session_chat iteration {iteration} fc] prompt={usage.prompt_tokens}, "
-                            f"completion={usage.completion_tokens}, total={usage.total_tokens}",
-                            flush=True,
-                        )
-                        yield (
-                            "data: "
-                            + json.dumps(
-                                {
-                                    "usage_phase": f"session_chat_iteration_{iteration}_fc",
-                                    "usage": {
-                                        "prompt_tokens": usage.prompt_tokens,
-                                        "completion_tokens": usage.completion_tokens,
-                                        "total_tokens": usage.total_tokens,
-                                    },
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n\n"
-                        )
-                except Exception as api_error:
-                    print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
-                    yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                
-                response_message = response.choices[0].message
-                
-                # Function calling이 있으면 실행
-                if response_message.tool_calls:
-                    print(f"[DEBUG] Tool calls detected: {len(response_message.tool_calls)}")
-                    messages.append(response_message)
-                    
-                    for tool_call in response_message.tool_calls:
-                        function_name = tool_call.function.name
-                        function_args = json.loads(tool_call.function.arguments)
-                        
-                        print(f"[DEBUG] Calling function: {function_name} with args: {function_args}")
-                        
-                        # 함수 실행 중임을 알림
-                        yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
-                        
-                        # 함수 실행 (Tool Context 전달)
-                        function_response = await self._execute_function_with_context(
-                            function_name,
-                            function_args,
-                            tool_context
-                        )
-                        
-                        print(f"[DEBUG] Function response length: {len(str(function_response))}")
-                        
-                        # 결과를 사용자 친화적으로 포맷 (JSON이면 pretty-print)
-                        formatted_result, is_json, is_yaml = self._format_tool_result(
-                            function_name,
-                            function_args,
-                            function_response,
-                        )
-
-                        display_result = self._build_tool_display(
-                            function_name,
-                            function_args,
-                            formatted_result,
-                            is_json,
-                            is_yaml,
-                        )
-                        
-                        # 결과 미리보기 (너무 길면 잘라서 전송하되, 표시를 남김)
-                        max_preview_len = 2500
-                        if len(formatted_result) > max_preview_len:
-                            result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..."
-                        else:
-                            result_preview = formatted_result
-
-                        display_preview = None
-                        if display_result is not None:
-                            if len(display_result) > max_preview_len:
-                                display_preview = display_result[:max_preview_len] + "\n... (truncated) ..."
-                            else:
-                                display_preview = display_result
-                        
-                        # Function 결과를 프론트엔드로 전송 (스트리밍) - 실행 후
-                        # 👉 프론트에는 미리보기만 전달 (약 2500자)
-                        payload = {
-                            "function_result": function_name,
-                            "result": result_preview,
-                            "is_json": is_json,
-                            "is_yaml": is_yaml,
-                        }
-                        if display_preview is not None:
-                            payload["display"] = display_preview
-                            payload["display_format"] = "kubectl"
-                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                        
-                        # Tool call 정보 + 실행 결과 전체 저장 (DB에는 전체 결과 보관)
-                        tool_calls_log.append({
-                            'function': function_name, 
-                            'args': function_args,
-                            'result': formatted_result,
-                            'is_json': is_json,
-                            'is_yaml': is_yaml,
-                            'display': display_result,
-                            'display_format': "kubectl" if display_result is not None else None,
-                        })
-                        
-                        tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
-                        messages.append({
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": tool_message_content
-                        })
-                    
-                    # 다음 iteration으로 계속
-                    continue
-                
-                # Tool call이 없으면 최종 텍스트 응답 (스트리밍)
-                else:
-                    print("[DEBUG] No tool calls. Streaming final answer directly from OpenAI.")
-
-                    # 1) 최초 응답을 스트리밍으로 전송
-                    try:
-                        stream = await self.client.chat.completions.create(
-                            model=self.model,
-                            messages=messages,
-                            temperature=0.7,
-                            max_tokens=1200,
-                            stream=True,
-                            stream_options={"include_usage": True},
-                        )
-                    except Exception:
-                        stream = await self.client.chat.completions.create(
-                            model=self.model,
-                            messages=messages,
-                            temperature=0.7,
-                            max_tokens=1200,
-                            stream=True,
-                        )
-
-                    last_finish_reason = None
+                    # --- streaming delta 수집 ---
+                    collected_tool_calls = {}  # index -> {id, name, arguments}
+                    stream_content = ""
                     stream_usage = None
+                    last_finish_reason = None
+
                     async for chunk in stream:
                         if getattr(chunk, "usage", None) is not None:
                             stream_usage = chunk.usage
-                        if chunk.choices and getattr(chunk.choices[0], "delta", None):
-                            delta = chunk.choices[0].delta
-                            if delta.content:
-                                assistant_content += delta.content
-                                yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
-                        if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
-                            last_finish_reason = chunk.choices[0].finish_reason
+                        if not chunk.choices:
+                            continue
+                        delta = getattr(chunk.choices[0], "delta", None)
+                        if delta is None:
+                            continue
+                        fr = getattr(chunk.choices[0], "finish_reason", None)
+                        if fr:
+                            last_finish_reason = fr
 
+                        # 텍스트 content → 즉시 프론트엔드로 스트리밍
+                        if delta.content:
+                            stream_content += delta.content
+                            yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+
+                        # tool_calls delta 누적
+                        if delta.tool_calls:
+                            for tc_delta in delta.tool_calls:
+                                idx = tc_delta.index
+                                if idx not in collected_tool_calls:
+                                    collected_tool_calls[idx] = {
+                                        "id": tc_delta.id or "",
+                                        "name": getattr(tc_delta.function, "name", "") or "",
+                                        "arguments": "",
+                                    }
+                                if tc_delta.id:
+                                    collected_tool_calls[idx]["id"] = tc_delta.id
+                                if getattr(tc_delta.function, "name", None):
+                                    collected_tool_calls[idx]["name"] = tc_delta.function.name
+                                if getattr(tc_delta.function, "arguments", None):
+                                    collected_tool_calls[idx]["arguments"] += tc_delta.function.arguments
+
+                    # usage 로그
                     if stream_usage is not None:
                         print(
-                            f"[TOKENS][session_chat final stream] prompt={stream_usage.prompt_tokens}, "
+                            f"[TOKENS][session_chat iteration {iteration}] prompt={stream_usage.prompt_tokens}, "
                             f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
                             flush=True,
                         )
@@ -3812,7 +3701,7 @@ Draft (rules-based, keep numbers unchanged):
                             "data: "
                             + json.dumps(
                                 {
-                                    "usage_phase": "session_chat_final_stream",
+                                    "usage_phase": f"session_chat_iteration_{iteration}",
                                     "usage": {
                                         "prompt_tokens": stream_usage.prompt_tokens,
                                         "completion_tokens": stream_usage.completion_tokens,
@@ -3824,56 +3713,126 @@ Draft (rules-based, keep numbers unchanged):
                             + "\n\n"
                         )
 
-                    # 모델 컨텍스트에 누적된 전체 답변을 넣어 둠
+                except Exception as api_error:
+                    print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
+                    yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                # --- tool call이 있으면 실행 후 다음 iteration ---
+                if collected_tool_calls:
+                    print(f"[DEBUG] Tool calls detected: {len(collected_tool_calls)}")
+                    # assistant message를 dict로 구성 (OpenAI API 호환)
+                    tc_list = []
+                    for idx in sorted(collected_tool_calls.keys()):
+                        tc = collected_tool_calls[idx]
+                        tc_list.append({
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {"name": tc["name"], "arguments": tc["arguments"]},
+                        })
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": stream_content or None,
+                        "tool_calls": tc_list,
+                    }
+                    messages.append(assistant_msg)
+
+                    for tc_dict in tc_list:
+                        function_name = tc_dict["function"]["name"]
+                        function_args = json.loads(tc_dict["function"]["arguments"])
+
+                        print(f"[DEBUG] Calling function: {function_name} with args: {function_args}")
+
+                        yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
+
+                        function_response = await self._execute_function_with_context(
+                            function_name, function_args, tool_context
+                        )
+
+                        print(f"[DEBUG] Function response length: {len(str(function_response))}")
+
+                        formatted_result, is_json, is_yaml = self._format_tool_result(
+                            function_name, function_args, function_response,
+                        )
+                        display_result = self._build_tool_display(
+                            function_name, function_args, formatted_result, is_json, is_yaml,
+                        )
+
+                        max_preview_len = 2500
+                        result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
+                        display_preview = None
+                        if display_result is not None:
+                            display_preview = display_result[:max_preview_len] + "\n... (truncated) ..." if len(display_result) > max_preview_len else display_result
+
+                        payload = {
+                            "function_result": function_name,
+                            "result": result_preview,
+                            "is_json": is_json,
+                            "is_yaml": is_yaml,
+                        }
+                        if display_preview is not None:
+                            payload["display"] = display_preview
+                            payload["display_format"] = "kubectl"
+                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+                        tool_calls_log.append({
+                            'function': function_name,
+                            'args': function_args,
+                            'result': formatted_result,
+                            'is_json': is_json,
+                            'is_yaml': is_yaml,
+                            'display': display_result,
+                            'display_format': "kubectl" if display_result is not None else None,
+                        })
+
+                        tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
+                        messages.append({
+                            "tool_call_id": tc_dict["id"],
+                            "role": "tool",
+                            "name": function_name,
+                            "content": tool_message_content
+                        })
+
+                    continue
+
+                # --- tool call 없음 → 텍스트가 이미 스트리밍됨 ---
+                else:
+                    assistant_content = stream_content
                     if assistant_content:
                         messages.append({"role": "assistant", "content": assistant_content})
 
-                    print(
-                        f"[DEBUG] Primary streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}"
-                    )
+                    print(f"[DEBUG] Streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}")
 
-                    # 2) 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
+                    # 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
                     if last_finish_reason == "length":
                         max_continuations = 3
                         for continuation_index in range(1, max_continuations + 1):
-                            print(
-                                f"[DEBUG] Continuation {continuation_index}/{max_continuations} (length truncated)"
-                            )
-                            messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
-                                        "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
-                                        "이미 출력한 내용은 반복하지 마세요."
-                                    ),
-                                }
-                            )
+                            print(f"[DEBUG] Continuation {continuation_index}/{max_continuations}")
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
+                                    "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
+                                    "이미 출력한 내용은 반복하지 마세요."
+                                ),
+                            })
 
                             try:
                                 cont_stream = await self.client.chat.completions.create(
-                                    model=self.model,
-                                    messages=messages,
-                                    temperature=0.7,
-                                    max_tokens=1200,
-                                    stream=True,
-                                    stream_options={"include_usage": True},
+                                    model=self.model, messages=messages,
+                                    temperature=0.7, max_tokens=4096,
+                                    stream=True, stream_options={"include_usage": True},
                                 )
                             except Exception:
                                 cont_stream = await self.client.chat.completions.create(
-                                    model=self.model,
-                                    messages=messages,
-                                    temperature=0.7,
-                                    max_tokens=1200,
-                                    stream=True,
+                                    model=self.model, messages=messages,
+                                    temperature=0.7, max_tokens=4096, stream=True,
                                 )
-                            cont_usage = None
 
                             continuation_text = ""
                             cont_finish_reason = None
                             async for chunk in cont_stream:
-                                if getattr(chunk, "usage", None) is not None:
-                                    cont_usage = chunk.usage
                                 if chunk.choices and getattr(chunk.choices[0], "delta", None):
                                     delta = chunk.choices[0].delta
                                     if delta.content:
@@ -3883,39 +3842,11 @@ Draft (rules-based, keep numbers unchanged):
                                 if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
                                     cont_finish_reason = chunk.choices[0].finish_reason
 
-                            if cont_usage is not None:
-                                print(
-                                    f"[TOKENS][session_chat continuation {continuation_index}] prompt={cont_usage.prompt_tokens}, "
-                                    f"completion={cont_usage.completion_tokens}, total={cont_usage.total_tokens}",
-                                    flush=True,
-                                )
-                                yield (
-                                    "data: "
-                                    + json.dumps(
-                                        {
-                                            "usage_phase": f"session_chat_continuation_{continuation_index}",
-                                            "usage": {
-                                                "prompt_tokens": cont_usage.prompt_tokens,
-                                                "completion_tokens": cont_usage.completion_tokens,
-                                                "total_tokens": cont_usage.total_tokens,
-                                            },
-                                        },
-                                        ensure_ascii=False,
-                                    )
-                                    + "\n\n"
-                                )
-
                             if continuation_text:
                                 messages.append({"role": "assistant", "content": continuation_text})
-
-                            print(
-                                f"[DEBUG] Continuation done. finish_reason={cont_finish_reason}, len={len(continuation_text)}"
-                            )
-
                             if cont_finish_reason != "length":
                                 break
 
-                    # 최종 응답 완료, 루프 종료
                     break
             
             # Max iterations 도달
@@ -4048,36 +3979,25 @@ Draft (rules-based, keep numbers unchanged):
 
 **매우 중요**: 사용자가 질문을 하면, **반드시 먼저 도구를 사용하여 실제 클러스터 상태를 확인**하세요. 절대 추측하지 마세요.
 
-### 네임스페이스/리소스 식별 규칙 (중요)
+### 효율적 도구 사용 (최우선 규칙)
+- **이미 필요한 정보를 확보했으면 추가 도구 호출 없이 즉시 분석/응답하세요.**
+- 로그를 받았으면 바로 분석하세요. describe나 events를 추가로 호출하지 마세요 (로그만으로 판단이 불가능한 경우에만 추가 호출).
+- 같은 데이터를 다른 파라미터로 재요청하지 마세요.
+- **도구 호출은 최소한으로**: 보통 1~3회면 충분합니다. 정보가 충분하면 멈추고 답변하세요.
 
+### 네임스페이스/리소스 식별 규칙
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
-- 사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
-  먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 **모든 네임스페이스에서 후보를 찾은 뒤**
-  해당 후보의 `namespace`와 `name`을 사용해 후속 도구(로그/describe 등)를 호출하세요.
-- 후보가 여러 개면 (다른 네임스페이스/여러 replica 등) 후보를 나열하고 사용자에게 선택을 요청하거나, 일반적으로 Healthy/Running+Ready인 리소스를 우선하세요.
+- 사용자가 리소스 이름을 "대충" 던지는 경우, 먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 후보를 찾은 뒤 후속 도구를 호출하세요.
+- 후보가 여러 개면 나열하고 사용자에게 선택을 요청하거나, Running+Ready인 리소스를 우선하세요.
 
-### 출력 포맷/툴 선택 규칙 (중요)
+### 출력 포맷/툴 선택 규칙
+- WIDE/`kubectl get` 스타일 요청 → `k8s_get_resources` 사용
+- YAML 요청 → `k8s_get_resource_yaml` 사용
 
-- 사용자가 WIDE/`kubectl get` 스타일을 요청하면 `k8s_get_resources`를 사용하고 `output`에 형식을 지정하세요.
-- YAML 요청은 `k8s_get_resource_yaml`에서만 지원합니다. 그 외에는 JSON으로 조회하고 화면에는 kubectl 테이블로 표시하세요.
-
-1. **항상 도구를 적극적으로 사용**: 
-   - 사용자가 클러스터에 대해 질문하면, 관련 도구를 즉시 호출하세요
-   - 일반적인 설명보다 실제 데이터를 우선시하세요
-
-2. **구체적인 정보 수집 예시**: 
-   - "네임스페이스가 뭐가 있어?" → `k8s_get_resources`(resource_type=namespaces) 호출
-   - "Pod 상태 확인해줘" → `k8s_get_resources`(resource_type=pods, namespace=...) 호출
-   - "Failed Pod 있어?" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 상태 분석, 발견 시 `k8s_describe_resource` 및 `k8s_get_pod_logs`, `k8s_get_events` 추가 호출
-   - "리소스 많이 쓰는 Pod는?" → `get_pod_metrics` 호출
-   - "죽어 있는 Pod들 알려줘" → `k8s_get_resources`(resource_type=pods, all_namespaces=true) 후 NotReady/Error/CrashLoopBackOff 필터링
-
-3. **문제 발견 시 추가 조사**:
-   - Pod 문제 발견 → `k8s_describe_resource`, `k8s_get_pod_logs`, `k8s_get_events` 순차 호출
-   - 노드 문제 발견 → `k8s_get_resources`(resource_type=nodes) 후 필요 시 `k8s_describe_resource`
-   - 재시작이 많은 Pod → `k8s_get_pod_logs`로 크래시 원인 파악
-
-4. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
+### 도구 호출 가이드
+1. 사용자가 클러스터에 대해 질문하면, 관련 도구를 호출하세요 (일반적인 설명보다 실제 데이터 우선)
+2. **문제 발견 시**: 로그나 이벤트 등 하나의 소스로 원인 파악이 되면 바로 분석하세요. 추가 도구 호출은 기존 정보로 판단이 불가능할 때만.
+3. **컨텍스트 기억**: 이전 대화에서 수집한 정보를 기억하고 활용하세요
 
 ## 응답 형식
 
@@ -4288,8 +4208,8 @@ Remember: You're not just answering questions - you're **solving production prob
                                 "description": "네임스페이스 (선택)",
                             },
                             "all_namespaces": {
-                                "type": "string",
-                                "description": "모든 네임스페이스 조회 (true/false)",
+                                "type": "boolean",
+                                "description": "모든 네임스페이스 조회",
                             },
                             "output": {
                                 "type": "string",
@@ -5024,7 +4944,7 @@ Remember: You're not just answering questions - you're **solving production prob
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})
             
-            # 캐시에 저장 (5분 TTL - 실제로는 timestamp 체크 필요)
+            # 캐시에 저장 (5분 TTL)
             tool_context.cache[cache_key] = result
             
             print(f"[DEBUG] Function result cached: {cache_key}")

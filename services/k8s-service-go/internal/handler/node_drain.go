@@ -123,7 +123,8 @@ func (h *Handler) runDrain(nodeName, drainID string) {
 		return
 	}
 
-	// Step 3: Filter and evict
+	// Step 3: Filter and evict (same as Python: evict all, then mark success)
+	evicted := 0
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 		if isDaemonSetPod(pod) {
@@ -140,46 +141,12 @@ func (h *Handler) runDrain(nodeName, drainID string) {
 				GracePeriodSeconds: &grace,
 			})
 		}
+		evicted++
 	}
 
-	// Step 4: Wait for pods to be evicted (up to 2 minutes)
-	deadline := time.After(2 * time.Minute)
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-deadline:
-			ds.Status = "success"
-			ds.Message = "drain completed (some pods may still be terminating)"
-			setDrainStatus(ds)
-			return
-		case <-ticker.C:
-			remaining, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-				FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
-			})
-			if err != nil {
-				continue
-			}
-			evictable := 0
-			for i := range remaining.Items {
-				p := &remaining.Items[i]
-				if isDaemonSetPod(p) {
-					continue
-				}
-				if _, ok := p.Annotations["kubernetes.io/config.mirror"]; ok {
-					continue
-				}
-				evictable++
-			}
-			if evictable == 0 {
-				ds.Status = "success"
-				ds.Message = "drain completed successfully"
-				setDrainStatus(ds)
-				return
-			}
-		}
-	}
+	ds.Status = "success"
+	ds.Message = fmt.Sprintf("drain completed, %d pods evicted", evicted)
+	setDrainStatus(ds)
 }
 
 func isDaemonSetPod(pod *corev1.Pod) bool {

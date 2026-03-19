@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/junginho0901/kube-assistant/services/pkg/response"
 )
@@ -15,14 +17,17 @@ func (h *Handler) HealthRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 // HealthCheck handles GET /health.
+// liveness probe에서도 사용되므로 항상 200을 반환한다.
+// kubernetes 연결 상태는 별도로 짧은 타임아웃으로 확인한다.
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	k8sStatus := "connected"
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
 	if err := h.svc.HealthCheck(ctx); err != nil {
-		response.Error(w, http.StatusServiceUnavailable, "kubernetes API unreachable: "+err.Error())
-		return
+		k8sStatus = "disconnected"
 	}
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"status":     "healthy",
-		"kubernetes": "connected",
+		"kubernetes": k8sStatus,
 	})
 }

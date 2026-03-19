@@ -45,6 +45,8 @@ type subscription struct {
 	cancel context.CancelFunc
 }
 
+const maxSubscriptions = 200
+
 // Multiplexer handles multiplexed WebSocket watch connections.
 type Multiplexer struct {
 	clientset *kubernetes.Clientset
@@ -134,6 +136,18 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			m.mu.Lock()
 			if _, exists := m.subs[key]; exists {
 				m.mu.Unlock()
+				continue
+			}
+
+			// Reject if max subscriptions reached
+			if len(m.subs) >= maxSubscriptions {
+				m.mu.Unlock()
+				sendCh <- ResponseMessage{
+					Type:  "ERROR",
+					Path:  req.Path,
+					Query: req.Query,
+					Error: map[string]string{"message": fmt.Sprintf("max subscriptions reached (%d), cannot create new watch", maxSubscriptions)},
+				}
 				continue
 			}
 
@@ -326,6 +340,28 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return eventToInfo(obj)
 	case "deployments":
 		return deploymentToInfo(obj)
+	case "persistentvolumeclaims":
+		return pvcToInfo(obj)
+	case "persistentvolumes":
+		return pvToInfo(obj)
+	case "storageclasses":
+		return storageclassToInfo(obj)
+	case "statefulsets":
+		return statefulsetToInfo(obj)
+	case "daemonsets":
+		return daemonsetToInfo(obj)
+	case "replicasets":
+		return replicasetToInfo(obj)
+	case "jobs":
+		return jobToInfo(obj)
+	case "cronjobs":
+		return cronjobToInfo(obj)
+	case "ingresses":
+		return ingressToInfo(obj)
+	case "configmaps":
+		return configmapToInfo(obj)
+	case "secrets":
+		return secretToInfo(obj)
 	default:
 		// Generic: return metadata + spec summary
 		return genericToInfo(obj)
@@ -403,11 +439,15 @@ func nodeToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		for k := range labels {
 			if strings.HasPrefix(k, "node-role.kubernetes.io/") {
 				role := strings.TrimPrefix(k, "node-role.kubernetes.io/")
-				if role != "" {
-					roles = append(roles, role)
+				if role == "" {
+					role = "worker"
 				}
+				roles = append(roles, role)
 			}
 		}
+	}
+	if len(roles) == 0 {
+		roles = append(roles, "<none>")
 	}
 
 	var internalIP, externalIP string
@@ -472,17 +512,35 @@ func nodeToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		}
 	}
 
+	// Compute age from creationTimestamp
+	ageStr := ""
+	if ts, ok := metadata["creationTimestamp"].(string); ok && ts != "" {
+		if t, err := time.Parse(time.RFC3339, ts); err == nil {
+			d := time.Since(t)
+			switch {
+			case d.Hours() >= 24:
+				ageStr = fmt.Sprintf("%dd", int(d.Hours()/24))
+			case d.Hours() >= 1:
+				ageStr = fmt.Sprintf("%dh", int(d.Hours()))
+			default:
+				ageStr = fmt.Sprintf("%dm", int(d.Minutes()))
+			}
+		}
+	}
+
 	return map[string]interface{}{
 		"name":              metadata["name"],
 		"status":            nodeStatus,
 		"unschedulable":     unschedulable,
 		"roles":             roles,
+		"version":           kubeletVersion,
 		"internal_ip":       internalIP,
 		"external_ip":       externalIP,
 		"os_image":          osImage,
 		"kernel_version":    kernelVersion,
 		"container_runtime": containerRuntime,
 		"kubelet_version":   kubeletVersion,
+		"age":               ageStr,
 		"labels":            metadata["labels"],
 		"taints":            taints,
 		"conditions":        conditions,
@@ -581,6 +639,385 @@ func deploymentToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"ready":      ready,
 		"labels":     metadata["labels"],
 		"created_at": metadata["creationTimestamp"],
+	}
+}
+
+func pvcToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	phase := "Unknown"
+	if status != nil {
+		if p, ok := status["phase"].(string); ok {
+			phase = p
+		}
+	}
+
+	var capacity interface{}
+	if status != nil {
+		if cap, ok := status["capacity"].(map[string]interface{}); ok {
+			capacity = cap["storage"]
+		}
+	}
+
+	var accessModes interface{}
+	if spec != nil {
+		accessModes = spec["accessModes"]
+	}
+
+	var storageClass interface{}
+	if spec != nil {
+		storageClass = spec["storageClassName"]
+	}
+
+	var volumeName interface{}
+	if spec != nil {
+		volumeName = spec["volumeName"]
+	}
+
+	return map[string]interface{}{
+		"name":          metadata["name"],
+		"namespace":     metadata["namespace"],
+		"status":        phase,
+		"capacity":      capacity,
+		"access_modes":  accessModes,
+		"storage_class": storageClass,
+		"volume_name":   volumeName,
+		"labels":        metadata["labels"],
+		"created_at":    metadata["creationTimestamp"],
+	}
+}
+
+func pvToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	phase := "Unknown"
+	if status != nil {
+		if p, ok := status["phase"].(string); ok {
+			phase = p
+		}
+	}
+
+	var capacity interface{}
+	if spec != nil {
+		if cap, ok := spec["capacity"].(map[string]interface{}); ok {
+			capacity = cap["storage"]
+		}
+	}
+
+	var accessModes interface{}
+	if spec != nil {
+		accessModes = spec["accessModes"]
+	}
+
+	var storageClass interface{}
+	if spec != nil {
+		storageClass = spec["storageClassName"]
+	}
+
+	var reclaimPolicy interface{}
+	if spec != nil {
+		reclaimPolicy = spec["persistentVolumeReclaimPolicy"]
+	}
+
+	var claimRef interface{}
+	if spec != nil {
+		if cr, ok := spec["claimRef"].(map[string]interface{}); ok {
+			claimRef = map[string]interface{}{
+				"namespace": cr["namespace"],
+				"name":      cr["name"],
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"name":           metadata["name"],
+		"status":         phase,
+		"capacity":       capacity,
+		"access_modes":   accessModes,
+		"storage_class":  storageClass,
+		"reclaim_policy": reclaimPolicy,
+		"claim_ref":      claimRef,
+		"labels":         metadata["labels"],
+		"created_at":     metadata["creationTimestamp"],
+	}
+}
+
+func storageclassToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+
+	return map[string]interface{}{
+		"name":                metadata["name"],
+		"provisioner":        obj.Object["provisioner"],
+		"reclaim_policy":     obj.Object["reclaimPolicy"],
+		"volume_binding_mode": obj.Object["volumeBindingMode"],
+		"labels":             metadata["labels"],
+		"created_at":         metadata["creationTimestamp"],
+	}
+}
+
+func statefulsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	var replicas, readyReplicas, currentReplicas int64
+	if spec != nil {
+		replicas, _ = toInt64(spec["replicas"])
+	}
+	if status != nil {
+		readyReplicas, _ = toInt64(status["readyReplicas"])
+		currentReplicas, _ = toInt64(status["currentReplicas"])
+	}
+
+	return map[string]interface{}{
+		"name":             metadata["name"],
+		"namespace":        metadata["namespace"],
+		"replicas":         replicas,
+		"ready_replicas":   readyReplicas,
+		"current_replicas": currentReplicas,
+		"labels":           metadata["labels"],
+		"created_at":       metadata["creationTimestamp"],
+	}
+}
+
+func daemonsetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	var desired, current, ready, available, misscheduled int64
+	if status != nil {
+		desired, _ = toInt64(status["desiredNumberScheduled"])
+		current, _ = toInt64(status["currentNumberScheduled"])
+		ready, _ = toInt64(status["numberReady"])
+		available, _ = toInt64(status["numberAvailable"])
+		misscheduled, _ = toInt64(status["numberMisscheduled"])
+	}
+
+	return map[string]interface{}{
+		"name":          metadata["name"],
+		"namespace":     metadata["namespace"],
+		"desired":       desired,
+		"current":       current,
+		"ready":         ready,
+		"available":     available,
+		"misscheduled":  misscheduled,
+		"labels":        metadata["labels"],
+		"created_at":    metadata["creationTimestamp"],
+	}
+}
+
+func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	var replicas, readyReplicas, availableReplicas int64
+	if spec != nil {
+		replicas, _ = toInt64(spec["replicas"])
+	}
+	if status != nil {
+		readyReplicas, _ = toInt64(status["readyReplicas"])
+		availableReplicas, _ = toInt64(status["availableReplicas"])
+	}
+
+	return map[string]interface{}{
+		"name":               metadata["name"],
+		"namespace":          metadata["namespace"],
+		"replicas":           replicas,
+		"ready_replicas":     readyReplicas,
+		"available_replicas": availableReplicas,
+		"labels":             metadata["labels"],
+		"created_at":         metadata["creationTimestamp"],
+	}
+}
+
+func jobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	var completions interface{}
+	if spec != nil {
+		completions = spec["completions"]
+	}
+
+	var succeeded, failed, active int64
+	var startTime, completionTime interface{}
+	if status != nil {
+		succeeded, _ = toInt64(status["succeeded"])
+		failed, _ = toInt64(status["failed"])
+		active, _ = toInt64(status["active"])
+		startTime = status["startTime"]
+		completionTime = status["completionTime"]
+	}
+
+	var duration interface{}
+	if st, ok := startTime.(string); ok && st != "" {
+		if ct, ok := completionTime.(string); ok && ct != "" {
+			stTime, err1 := time.Parse(time.RFC3339, st)
+			ctTime, err2 := time.Parse(time.RFC3339, ct)
+			if err1 == nil && err2 == nil {
+				duration = int64(ctTime.Sub(stTime).Seconds())
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"name":            metadata["name"],
+		"namespace":       metadata["namespace"],
+		"completions":     completions,
+		"succeeded":       succeeded,
+		"failed":          failed,
+		"active":          active,
+		"start_time":      startTime,
+		"completion_time": completionTime,
+		"duration":        duration,
+		"labels":          metadata["labels"],
+		"created_at":      metadata["creationTimestamp"],
+	}
+}
+
+func cronjobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	var schedule interface{}
+	var suspend bool
+	if spec != nil {
+		schedule = spec["schedule"]
+		if s, ok := spec["suspend"].(bool); ok {
+			suspend = s
+		}
+	}
+
+	var activeCount int
+	var lastScheduleTime interface{}
+	if status != nil {
+		if activeList, ok := status["active"].([]interface{}); ok {
+			activeCount = len(activeList)
+		}
+		lastScheduleTime = status["lastScheduleTime"]
+	}
+
+	return map[string]interface{}{
+		"name":               metadata["name"],
+		"namespace":          metadata["namespace"],
+		"schedule":           schedule,
+		"suspend":            suspend,
+		"active":             activeCount,
+		"last_schedule_time": lastScheduleTime,
+		"labels":             metadata["labels"],
+		"created_at":         metadata["creationTimestamp"],
+	}
+}
+
+func ingressToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+
+	var ingressClass interface{}
+	if spec != nil {
+		ingressClass = spec["ingressClassName"]
+	}
+
+	var hosts []string
+	if spec != nil {
+		if rules, ok := spec["rules"].([]interface{}); ok {
+			for _, r := range rules {
+				if rm, ok := r.(map[string]interface{}); ok {
+					if host, ok := rm["host"].(string); ok {
+						hosts = append(hosts, host)
+					}
+				}
+			}
+		}
+	}
+
+	var loadBalancer interface{}
+	if status != nil {
+		if lb, ok := status["loadBalancer"].(map[string]interface{}); ok {
+			if ingress, ok := lb["ingress"].([]interface{}); ok && len(ingress) > 0 {
+				if first, ok := ingress[0].(map[string]interface{}); ok {
+					if ip, ok := first["ip"].(string); ok {
+						loadBalancer = ip
+					} else if hostname, ok := first["hostname"].(string); ok {
+						loadBalancer = hostname
+					}
+				}
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"name":          metadata["name"],
+		"namespace":     metadata["namespace"],
+		"class":         ingressClass,
+		"rules":         hosts,
+		"load_balancer": loadBalancer,
+		"labels":        metadata["labels"],
+		"created_at":    metadata["creationTimestamp"],
+	}
+}
+
+func configmapToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+
+	dataCount := 0
+	if data, ok := obj.Object["data"].(map[string]interface{}); ok {
+		dataCount = len(data)
+	}
+
+	return map[string]interface{}{
+		"name":       metadata["name"],
+		"namespace":  metadata["namespace"],
+		"data_count": dataCount,
+		"labels":     metadata["labels"],
+		"created_at": metadata["creationTimestamp"],
+	}
+}
+
+func secretToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+
+	secretType := ""
+	if t, ok := obj.Object["type"].(string); ok {
+		secretType = t
+	}
+
+	dataCount := 0
+	if data, ok := obj.Object["data"].(map[string]interface{}); ok {
+		dataCount = len(data)
+	}
+
+	return map[string]interface{}{
+		"name":       metadata["name"],
+		"namespace":  metadata["namespace"],
+		"type":       secretType,
+		"data_count": dataCount,
+		"labels":     metadata["labels"],
+		"created_at": metadata["creationTimestamp"],
+	}
+}
+
+// toInt64 converts various numeric types from unstructured JSON to int64.
+func toInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case float64:
+		return int64(n), true
+	case int:
+		return int64(n), true
+	case int32:
+		return int64(n), true
+	default:
+		return 0, false
 	}
 }
 

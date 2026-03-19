@@ -304,6 +304,9 @@ export default function Dashboard() {
   const optimizationStreamPendingRef = useRef('')
   const optimizationStreamRafRef = useRef<number | null>(null)
   const optimizationStreamDoneRef = useRef(false)
+  // 타자기 큐
+  const optimizationCharQueueRef = useRef<string[]>([])
+  const optimizationTypewriterRef = useRef<number | null>(null)
   const optimizationMetaReceivedRef = useRef(false)
   const optimizationUsageReceivedRef = useRef(false)
   const [optimizationUsage, setOptimizationUsage] = useState<{
@@ -703,20 +706,34 @@ export default function Dashboard() {
     return out
   }
 
-  const flushOptimizationStreamPending = () => {
-    const pending = optimizationStreamPendingRef.current
-    optimizationStreamRafRef.current = null
-
-    if (pending) {
-      optimizationStreamPendingRef.current = ''
-      setOptimizationAnswerContent((prev) => prev + pending)
+  const stopOptimizationTypewriter = () => {
+    if (optimizationTypewriterRef.current !== null) {
+      clearInterval(optimizationTypewriterRef.current)
+      optimizationTypewriterRef.current = null
     }
+  }
 
-    if (!optimizationStreamPendingRef.current && optimizationStreamDoneRef.current) {
-      setOptimizationAnswerContent((prev) => unwrapOuterMarkdownFence(prev))
-      setIsOptimizationStreaming(false)
-      optimizationStreamDoneRef.current = false
+  const drainOptimizationQueue = () => {
+    const queue = optimizationCharQueueRef.current
+    if (queue.length === 0) {
+      stopOptimizationTypewriter()
+      // 큐 소진 + 스트림 종료 → completed
+      if (optimizationStreamDoneRef.current) {
+        optimizationStreamDoneRef.current = false
+        setOptimizationAnswerContent((prev) => unwrapOuterMarkdownFence(prev))
+        setIsOptimizationStreaming(false)
+      }
+      return
     }
+    // 적응형 배치: 큐 짧으면 1글자, 길면 많이 (따라잡기)
+    const batch = Math.max(1, Math.ceil(queue.length / 8))
+    const chars = queue.splice(0, batch).join('')
+    setOptimizationAnswerContent((prev) => prev + chars)
+  }
+
+  const startOptimizationTypewriter = () => {
+    if (optimizationTypewriterRef.current !== null) return
+    optimizationTypewriterRef.current = window.setInterval(drainOptimizationQueue, 30)
   }
 
   const handleRunOptimizationSuggestions = () => {
@@ -737,10 +754,8 @@ export default function Dashboard() {
     optimizationUsageReceivedRef.current = false
     optimizationStreamPendingRef.current = ''
     optimizationStreamDoneRef.current = false
-    if (optimizationStreamRafRef.current) {
-      window.cancelAnimationFrame(optimizationStreamRafRef.current)
-      optimizationStreamRafRef.current = null
-    }
+    stopOptimizationTypewriter()
+    optimizationCharQueueRef.current.length = 0
 
     void api
       .suggestOptimizationStream(optimizationNamespace, {
@@ -750,10 +765,11 @@ export default function Dashboard() {
           setOptimizationObservedContent((prev) => prev + content)
         },
         onContent: (chunk) => {
-          optimizationStreamPendingRef.current += chunk
-          if (!optimizationStreamRafRef.current) {
-            optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
+          // 타자기 큐에 글자 추가
+          for (const ch of chunk) {
+            optimizationCharQueueRef.current.push(ch)
           }
+          startOptimizationTypewriter()
         },
         onUsage: (usage) => {
           optimizationUsageReceivedRef.current = true
@@ -774,8 +790,9 @@ export default function Dashboard() {
             ))
           }
           optimizationStreamDoneRef.current = true
-          if (!optimizationStreamRafRef.current) {
-            optimizationStreamRafRef.current = window.requestAnimationFrame(flushOptimizationStreamPending)
+          // 큐가 비어있으면 즉시 완료, 아니면 타자기가 소진 후 자동 완료
+          if (optimizationCharQueueRef.current.length === 0) {
+            drainOptimizationQueue()
           }
           optimizationAbortRef.current = null
         },
@@ -783,10 +800,8 @@ export default function Dashboard() {
       .catch((error) => {
         if ((error as any)?.name === 'AbortError') return
         setOptimizationStreamError(error instanceof Error ? error.message : String(error))
-        if (optimizationStreamRafRef.current) {
-          window.cancelAnimationFrame(optimizationStreamRafRef.current)
-          optimizationStreamRafRef.current = null
-        }
+        stopOptimizationTypewriter()
+        optimizationCharQueueRef.current.length = 0
         optimizationStreamPendingRef.current = ''
         optimizationStreamDoneRef.current = false
         setIsOptimizationStreaming(false)
@@ -811,9 +826,12 @@ export default function Dashboard() {
   const handleStopOptimizationSuggestions = () => {
     optimizationAbortRef.current?.abort()
     optimizationAbortRef.current = null
-    if (optimizationStreamRafRef.current) {
-      window.cancelAnimationFrame(optimizationStreamRafRef.current)
-      optimizationStreamRafRef.current = null
+    stopOptimizationTypewriter()
+    // 큐에 남은 글자 즉시 반영
+    if (optimizationCharQueueRef.current.length > 0) {
+      const remaining = optimizationCharQueueRef.current.join('')
+      optimizationCharQueueRef.current.length = 0
+      setOptimizationAnswerContent((prev) => prev + remaining)
     }
     optimizationStreamPendingRef.current = ''
     optimizationStreamDoneRef.current = false

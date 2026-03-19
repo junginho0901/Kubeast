@@ -114,7 +114,7 @@ get_deploys() {
     k8s-service) echo "k8s-service" ;;
     session-service) echo "session-service" ;;
     frontend) echo "frontend" ;;
-    tool-server) echo "tool-server-admin tool-server-read tool-server-write" ;;
+    tool-server) echo "tool-server" ;;
     model-config-controller-go) echo "model-config-controller-go" ;;
     *) echo "" ;;
   esac

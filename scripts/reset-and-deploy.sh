@@ -128,8 +128,7 @@ if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
       deployment/frontend deployment/k8s-service \
       deployment/session-service -n "$NS" 2>/dev/null || true
     # tool-server도 재시작 (kubeconfig 시크릿 삭제됨)
-    kubectl rollout restart deployment/tool-server-read deployment/tool-server-write \
-      deployment/tool-server-admin -n "$NS" 2>/dev/null || true
+    kubectl rollout restart deployment/tool-server -n "$NS" 2>/dev/null || true
     kubectl rollout status deployment/auth-service deployment/ai-service \
       deployment/frontend -n "$NS" --timeout=90s 2>/dev/null || warn "Some deployments slow"
     ok "All services restarted"
@@ -169,11 +168,12 @@ fi
 # ═══════════════════════════════════════════════════
 step "Building Docker images"
 
+# format: name:context[:dockerfile]
 IMAGES=(
-  "auth-service:services/auth-service"
+  "auth-service:services:auth-service-go/Dockerfile"
   "ai-service:services/ai-service"
-  "k8s-service:services/k8s-service"
-  "session-service:services/session-service"
+  "k8s-service:services:k8s-service-go/Dockerfile"
+  "session-service:services:session-service-go/Dockerfile"
   "frontend:frontend"
   "tool-server:services/tool-server"
   "model-config-controller-go:services/model-config-controller-go"
@@ -181,11 +181,14 @@ IMAGES=(
 
 BUILT_IMAGES=()
 for entry in "${IMAGES[@]}"; do
-  name="${entry%%:*}"
-  ctx="${entry#*:}"
+  IFS=':' read -r name ctx dockerfile <<< "$entry"
   img="kube-assistant/${name}:${TAG}"
   echo -e "  Building ${YELLOW}${img}${NC} ..."
-  docker build -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
+  if [[ -n "$dockerfile" ]]; then
+    docker build -t "$img" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx" 2>&1 | tail -1
+  else
+    docker build -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
+  fi
   BUILT_IMAGES+=("$img")
   ok "$img"
 done
@@ -218,10 +221,8 @@ step "Patching image tags to :${TAG}"
 for name in auth-service ai-service k8s-service session-service frontend; do
   kubectl set image "deployment/${name}" "${name}=kube-assistant/${name}:${TAG}" -n "$NS" 2>/dev/null || true
 done
-# tool-server: 3개 deployment, 컨테이너 이름은 tool-server
-for ts in tool-server-read tool-server-write tool-server-admin; do
-  kubectl set image "deployment/${ts}" "tool-server=kube-assistant/tool-server:${TAG}" -n "$NS" 2>/dev/null || true
-done
+# tool-server: 단일 deployment
+kubectl set image "deployment/tool-server" "tool-server=kube-assistant/tool-server:${TAG}" -n "$NS" 2>/dev/null || true
 # model-config-controller-go (container name = controller)
 kubectl set image "deployment/model-config-controller-go" \
   "controller=kube-assistant/model-config-controller-go:${TAG}" -n "$NS" 2>/dev/null || true

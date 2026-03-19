@@ -196,7 +196,7 @@ export default function AIChat() {
   const { data: aiConfig } = useQuery({
     queryKey: ['ai-config'],
     queryFn: api.getAIConfig,
-    staleTime: Infinity, // 설정은 변경되지 않으므로 캐시 무한정 유지
+    staleTime: 5 * 60 * 1000, // 5분 캐시 (모델 변경 시 invalidate로 즉시 갱신)
   })
 
   // 세션 생성 (첫 질문에서만 필요)

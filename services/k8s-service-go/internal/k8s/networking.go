@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -33,31 +34,53 @@ func (s *Service) GetAllIngresses(ctx context.Context) ([]map[string]interface{}
 
 // DescribeIngress returns detailed info about an ingress.
 func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	ing, err := s.clientset.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("get ingress %s/%s: %w", namespace, name, err)
+	var wg sync.WaitGroup
+	var ing *networkingv1.Ingress
+	var icList *networkingv1.IngressClassList
+	var events *corev1.EventList
+	var ingErr, icErr, eventsErr error
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		ing, ingErr = s.clientset.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		icList, icErr = s.clientset.NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Ingress", name),
+		})
+	}()
+	wg.Wait()
+
+	if ingErr != nil {
+		return nil, fmt.Errorf("get ingress %s/%s: %w", namespace, name, ingErr)
 	}
 
 	// formatIngressDetail now includes rules, tls, default_backend, labels, annotations
 	result := formatIngressDetail(ing)
 
 	// Try to enrich with IngressClass controller info
-	if ing.Spec.IngressClassName != nil {
-		ic, icErr := s.clientset.NetworkingV1().IngressClasses().Get(ctx, *ing.Spec.IngressClassName, metav1.GetOptions{})
-		if icErr == nil {
-			result["class_controller"] = ic.Spec.Controller
-			isDefault := false
-			if v, ok := ic.Annotations["ingressclass.kubernetes.io/is-default-class"]; ok && v == "true" {
-				isDefault = true
+	if ing.Spec.IngressClassName != nil && icErr == nil {
+		for i := range icList.Items {
+			if icList.Items[i].Name == *ing.Spec.IngressClassName {
+				ic := &icList.Items[i]
+				result["class_controller"] = ic.Spec.Controller
+				isDefault := false
+				if v, ok := ic.Annotations["ingressclass.kubernetes.io/is-default-class"]; ok && v == "true" {
+					isDefault = true
+				}
+				result["class_is_default"] = isDefault
+				break
 			}
-			result["class_is_default"] = isDefault
 		}
 	}
 
-	events, err := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Ingress", name),
-	})
-	if err == nil {
+	if eventsErr == nil {
 		sortEventsByTime(events.Items)
 		result["events"] = formatEventList(events.Items)
 	}
@@ -247,14 +270,20 @@ func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name str
 		e := map[string]interface{}{
 			"addresses": ep.Addresses,
 		}
+		// Conditions as nested object (frontend expects ep.conditions.ready)
+		conditions := map[string]interface{}{}
 		if ep.Conditions.Ready != nil {
-			e["ready"] = *ep.Conditions.Ready
+			conditions["ready"] = *ep.Conditions.Ready
 		}
 		if ep.Conditions.Serving != nil {
-			e["serving"] = *ep.Conditions.Serving
+			conditions["serving"] = *ep.Conditions.Serving
 		}
 		if ep.Conditions.Terminating != nil {
-			e["terminating"] = *ep.Conditions.Terminating
+			conditions["terminating"] = *ep.Conditions.Terminating
+		}
+		e["conditions"] = conditions
+		if ep.Hostname != nil {
+			e["hostname"] = *ep.Hostname
 		}
 		if ep.TargetRef != nil {
 			e["target_ref"] = map[string]interface{}{
