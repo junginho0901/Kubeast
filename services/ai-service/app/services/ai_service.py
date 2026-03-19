@@ -3354,7 +3354,7 @@ Draft (rules-based, keep numbers unchanged):
                     {"error": "YAML 생성은 비활성화되었습니다."},
                     ensure_ascii=False,
                 )
-
+            
             elif function_name == "get_pod_metrics":
                 namespace = function_args.get("namespace")
                 return await self._call_tool_server(
@@ -3368,7 +3368,7 @@ Draft (rules-based, keep numbers unchanged):
             elif function_name == "get_node_list":
                 nodes = await self.k8s_service.get_node_list()
                 return json.dumps(nodes, ensure_ascii=False)
-
+            
             elif function_name == "describe_node":
                 result = await self.k8s_service.describe_node(function_args["name"])
                 return json.dumps(result, ensure_ascii=False)
@@ -3775,10 +3775,9 @@ Draft (rules-based, keep numbers unchanged):
                             payload["display"] = display_preview
                             payload["display_format"] = "kubectl"
                         yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                        
-                        # Tool call 정보 + 실행 결과 전체 저장 (DB에는 전체 결과 보관)
+
                         tool_calls_log.append({
-                            'function': function_name, 
+                            'function': function_name,
                             'args': function_args,
                             'result': formatted_result,
                             'is_json': is_json,
@@ -3786,126 +3785,54 @@ Draft (rules-based, keep numbers unchanged):
                             'display': display_result,
                             'display_format': "kubectl" if display_result is not None else None,
                         })
-                        
+
                         tool_message_content = self._truncate_tool_result_for_llm(formatted_result)
                         messages.append({
-                            "tool_call_id": tool_call.id,
+                            "tool_call_id": tc_dict["id"],
                             "role": "tool",
                             "name": function_name,
                             "content": tool_message_content
                         })
-                    
-                    # 다음 iteration으로 계속
+
                     continue
-                
-                # Tool call이 없으면 최종 텍스트 응답 (스트리밍)
+
+                # --- tool call 없음 → 텍스트가 이미 스트리밍됨 ---
                 else:
-                    print("[DEBUG] No tool calls. Streaming final answer directly from OpenAI.")
-
-                    # 1) 최초 응답을 스트리밍으로 전송
-                    try:
-                        stream = await self.client.chat.completions.create(
-                            model=self.model,
-                            messages=messages,
-                            temperature=0.7,
-                            max_tokens=1200,
-                            stream=True,
-                            stream_options={"include_usage": True},
-                        )
-                    except Exception:
-                        stream = await self.client.chat.completions.create(
-                            model=self.model,
-                            messages=messages,
-                            temperature=0.7,
-                            max_tokens=1200,
-                            stream=True,
-                        )
-
-                    last_finish_reason = None
-                    stream_usage = None
-                    async for chunk in stream:
-                        if getattr(chunk, "usage", None) is not None:
-                            stream_usage = chunk.usage
-                        if chunk.choices and getattr(chunk.choices[0], "delta", None):
-                            delta = chunk.choices[0].delta
-                            if delta.content:
-                                assistant_content += delta.content
-                                yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
-                        if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
-                            last_finish_reason = chunk.choices[0].finish_reason
-
-                    if stream_usage is not None:
-                        print(
-                            f"[TOKENS][session_chat final stream] prompt={stream_usage.prompt_tokens}, "
-                            f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
-                            flush=True,
-                        )
-                        yield (
-                            "data: "
-                            + json.dumps(
-                                {
-                                    "usage_phase": "session_chat_final_stream",
-                                    "usage": {
-                                        "prompt_tokens": stream_usage.prompt_tokens,
-                                        "completion_tokens": stream_usage.completion_tokens,
-                                        "total_tokens": stream_usage.total_tokens,
-                                    },
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n\n"
-                        )
-
-                    # 모델 컨텍스트에 누적된 전체 답변을 넣어 둠
+                    assistant_content = stream_content
                     if assistant_content:
                         messages.append({"role": "assistant", "content": assistant_content})
 
-                    print(
-                        f"[DEBUG] Primary streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}"
-                    )
+                    print(f"[DEBUG] Streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}")
 
-                    # 2) 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
+                    # 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
                     if last_finish_reason == "length":
                         max_continuations = 3
                         for continuation_index in range(1, max_continuations + 1):
-                            print(
-                                f"[DEBUG] Continuation {continuation_index}/{max_continuations} (length truncated)"
-                            )
-                            messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
-                                        "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
-                                        "이미 출력한 내용은 반복하지 마세요."
-                                    ),
-                                }
-                            )
+                            print(f"[DEBUG] Continuation {continuation_index}/{max_continuations}")
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
+                                    "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
+                                    "이미 출력한 내용은 반복하지 마세요."
+                                ),
+                            })
 
                             try:
                                 cont_stream = await self.client.chat.completions.create(
-                                    model=self.model,
-                                    messages=messages,
-                                    temperature=0.7,
-                                    max_tokens=1200,
-                                    stream=True,
-                                    stream_options={"include_usage": True},
+                                    model=self.model, messages=messages,
+                                    temperature=0.7, max_tokens=4096,
+                                    stream=True, stream_options={"include_usage": True},
                                 )
                             except Exception:
                                 cont_stream = await self.client.chat.completions.create(
-                                    model=self.model,
-                                    messages=messages,
-                                    temperature=0.7,
-                                    max_tokens=1200,
-                                    stream=True,
+                                    model=self.model, messages=messages,
+                                    temperature=0.7, max_tokens=4096, stream=True,
                                 )
-                            cont_usage = None
 
                             continuation_text = ""
                             cont_finish_reason = None
                             async for chunk in cont_stream:
-                                if getattr(chunk, "usage", None) is not None:
-                                    cont_usage = chunk.usage
                                 if chunk.choices and getattr(chunk.choices[0], "delta", None):
                                     delta = chunk.choices[0].delta
                                     if delta.content:
@@ -3915,39 +3842,11 @@ Draft (rules-based, keep numbers unchanged):
                                 if chunk.choices and getattr(chunk.choices[0], "finish_reason", None):
                                     cont_finish_reason = chunk.choices[0].finish_reason
 
-                            if cont_usage is not None:
-                                print(
-                                    f"[TOKENS][session_chat continuation {continuation_index}] prompt={cont_usage.prompt_tokens}, "
-                                    f"completion={cont_usage.completion_tokens}, total={cont_usage.total_tokens}",
-                                    flush=True,
-                                )
-                                yield (
-                                    "data: "
-                                    + json.dumps(
-                                        {
-                                            "usage_phase": f"session_chat_continuation_{continuation_index}",
-                                            "usage": {
-                                                "prompt_tokens": cont_usage.prompt_tokens,
-                                                "completion_tokens": cont_usage.completion_tokens,
-                                                "total_tokens": cont_usage.total_tokens,
-                                            },
-                                        },
-                                        ensure_ascii=False,
-                                    )
-                                    + "\n\n"
-                                )
-
                             if continuation_text:
                                 messages.append({"role": "assistant", "content": continuation_text})
-
-                            print(
-                                f"[DEBUG] Continuation done. finish_reason={cont_finish_reason}, len={len(continuation_text)}"
-                            )
-
                             if cont_finish_reason != "length":
                                 break
 
-                    # 최종 응답 완료, 루프 종료
                     break
             
             # Max iterations 도달
@@ -5045,7 +4944,7 @@ Remember: You're not just answering questions - you're **solving production prob
             else:
                 return json.dumps({"error": f"Unknown function: {function_name}"})
             
-            # 캐시에 저장 (5분 TTL - 실제로는 timestamp 체크 필요)
+            # 캐시에 저장 (5분 TTL)
             tool_context.cache[cache_key] = result
             
             print(f"[DEBUG] Function result cached: {cache_key}")
