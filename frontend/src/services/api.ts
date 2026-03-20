@@ -451,6 +451,38 @@ export interface HTTPRouteInfo {
   api_version?: string | null
 }
 
+export interface GRPCRouteInfo {
+  name: string
+  namespace: string
+  hostnames?: string[]
+  parent_refs?: Array<Record<string, any>>
+  rules?: Array<Record<string, any>>
+  parents?: Array<Record<string, any>>
+  rule_count?: number
+  parent_refs_count?: number
+  backend_refs_count?: number
+  status?: string | null
+  accepted?: boolean
+  resolved_refs?: boolean
+  conditions?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  finalizers?: string[]
+  created_at?: string | null
+  api_version?: string | null
+}
+
+export interface ReferenceGrantInfo {
+  name: string
+  namespace: string
+  from?: Array<Record<string, any>>
+  to?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  created_at?: string | null
+  api_version?: string | null
+}
+
 export interface DeploymentInfo {
   name: string
   namespace: string
@@ -1107,6 +1139,52 @@ export const api = {
 
   deleteHTTPRoute: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/httproutes/${name}`)
+  },
+
+  getGRPCRoutes: async (namespace: string, forceRefresh = false): Promise<GRPCRouteInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/grpcroutes`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllGRPCRoutes: async (forceRefresh = false): Promise<GRPCRouteInfo[]> => {
+    const { data } = await client.get('/cluster/grpcroutes/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeGRPCRoute: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/grpcroutes/${name}/describe`)
+    return data
+  },
+
+  deleteGRPCRoute: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/grpcroutes/${name}`)
+  },
+
+  getReferenceGrants: async (namespace: string, forceRefresh = false): Promise<ReferenceGrantInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/referencegrants`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllReferenceGrants: async (forceRefresh = false): Promise<ReferenceGrantInfo[]> => {
+    const { data } = await client.get('/cluster/referencegrants/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeReferenceGrant: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/referencegrants/${name}/describe`)
+    return data
+  },
+
+  deleteReferenceGrant: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/referencegrants/${name}`)
   },
 
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {

@@ -16,6 +16,8 @@ import ServiceInfo from './resource-detail/ServiceInfo'
 import GatewayInfo from './resource-detail/GatewayInfo'
 import GatewayClassInfo from './resource-detail/GatewayClassInfo'
 import HTTPRouteInfo from './resource-detail/HTTPRouteInfo'
+import GRPCRouteInfo from './resource-detail/GRPCRouteInfo'
+import ReferenceGrantInfo from './resource-detail/ReferenceGrantInfo'
 import ConfigStorageInfo from './resource-detail/ConfigStorageInfo'
 import GenericInfo from './resource-detail/GenericInfo'
 
@@ -38,6 +40,8 @@ function kindToPlural(kind: string): string {
     Gateway: 'gateway',
     GatewayClass: 'gatewayclass',
     HTTPRoute: 'httproute',
+    GRPCRoute: 'grpcroute',
+    ReferenceGrant: 'referencegrant',
     StorageClass: 'storageclass',
     VolumeAttachment: 'volumeattachment',
   }
@@ -54,6 +58,8 @@ function kindIcon(kind: string): string {
     Gateway: '🚪',
     GatewayClass: '🚏',
     HTTPRoute: '🧭',
+    GRPCRoute: '📡',
+    ReferenceGrant: '🔗',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
   }
@@ -100,6 +106,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteGateway = kind === 'Gateway' && !!ns && isWriteRole
   const canDeleteGatewayClass = kind === 'GatewayClass' && isWriteRole
   const canDeleteHTTPRoute = kind === 'HTTPRoute' && !!ns && isWriteRole
+  const canDeleteGRPCRoute = kind === 'GRPCRoute' && !!ns && isWriteRole
+  const canDeleteReferenceGrant = kind === 'ReferenceGrant' && !!ns && isWriteRole
   const canDeleteEndpoints = kind === 'Endpoints' && !!ns && isWriteRole
   const canDeleteEndpointSlice = kind === 'EndpointSlice' && !!ns && isWriteRole
   const canDelete = [
@@ -123,6 +131,8 @@ export default function ResourceDetailDrawer() {
     canDeleteGateway,
     canDeleteGatewayClass,
     canDeleteHTTPRoute,
+    canDeleteGRPCRoute,
+    canDeleteReferenceGrant,
     canDeleteEndpoints,
     canDeleteEndpointSlice,
   ].some(Boolean)
@@ -204,6 +214,14 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes'] })
       queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes', ns] })
       queryClient.invalidateQueries({ queryKey: ['httproute-describe', ns, name] })
+    } else if (kind === 'GRPCRoute' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'grpcroutes'] })
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'grpcroutes', ns] })
+      queryClient.invalidateQueries({ queryKey: ['grpcroute-describe', ns, name] })
+    } else if (kind === 'ReferenceGrant' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants'] })
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants', ns] })
+      queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -331,6 +349,14 @@ export default function ResourceDetailDrawer() {
       }
       if (kind === 'HTTPRoute' && ns) {
         await api.deleteHTTPRoute(ns, name)
+        return
+      }
+      if (kind === 'GRPCRoute' && ns) {
+        await api.deleteGRPCRoute(ns, name)
+        return
+      }
+      if (kind === 'ReferenceGrant' && ns) {
+        await api.deleteReferenceGrant(ns, name)
         return
       }
       throw new Error('Delete is not supported for this resource.')
@@ -469,6 +495,18 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes', ns] }),
           queryClient.invalidateQueries({ queryKey: ['httproute-describe', ns, name] }),
         ])
+      } else if (kind === 'GRPCRoute' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'grpcroutes'] }),
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'grpcroutes', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['grpcroute-describe', ns, name] }),
+        ])
+      } else if (kind === 'ReferenceGrant' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants'] }),
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] }),
+        ])
       }
 
       close()
@@ -490,6 +528,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'Gateway' && ns) return <GatewayInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'GatewayClass') return <GatewayClassInfo name={name} rawJson={target.rawJson} />
     if (kind === 'HTTPRoute' && ns) return <HTTPRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'GRPCRoute' && ns) return <GRPCRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'ReferenceGrant' && ns) return <ReferenceGrantInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
@@ -588,6 +628,10 @@ export default function ResourceDetailDrawer() {
                         ? t('gatewayClassesPage.delete.button', { defaultValue: 'Delete GatewayClass' })
                       : kind === 'HTTPRoute'
                         ? t('httpRoutesPage.delete.button', { defaultValue: 'Delete HTTPRoute' })
+                      : kind === 'GRPCRoute'
+                        ? t('grpcRoutesPage.delete.button', { defaultValue: 'Delete GRPCRoute' })
+                      : kind === 'ReferenceGrant'
+                        ? t('referenceGrantsPage.delete.button', { defaultValue: 'Delete ReferenceGrant' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -687,6 +731,10 @@ export default function ResourceDetailDrawer() {
                         ? t('gatewayClassesPage.delete.title', { defaultValue: 'Delete GatewayClass' })
                       : kind === 'HTTPRoute'
                         ? t('httpRoutesPage.delete.title', { defaultValue: 'Delete HTTPRoute' })
+                      : kind === 'GRPCRoute'
+                        ? t('grpcRoutesPage.delete.title', { defaultValue: 'Delete GRPCRoute' })
+                      : kind === 'ReferenceGrant'
+                        ? t('referenceGrantsPage.delete.title', { defaultValue: 'Delete ReferenceGrant' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -807,6 +855,18 @@ export default function ResourceDetailDrawer() {
                       : kind === 'HTTPRoute'
                         ? t('httpRoutesPage.delete.confirm', {
                             defaultValue: 'Are you sure you want to delete HTTPRoute "{{name}}" in "{{namespace}}"?',
+                            name,
+                            namespace: ns,
+                          })
+                      : kind === 'GRPCRoute'
+                        ? t('grpcRoutesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete GRPCRoute "{{name}}" in "{{namespace}}"?',
+                            name,
+                            namespace: ns,
+                          })
+                      : kind === 'ReferenceGrant'
+                        ? t('referenceGrantsPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete ReferenceGrant "{{name}}" in "{{namespace}}"?',
                             name,
                             namespace: ns,
                           })

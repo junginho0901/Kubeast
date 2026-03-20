@@ -36,6 +36,8 @@ import NetworkPolicies from './pages/network/NetworkPolicies'
 import Gateways from './pages/gateway/Gateways'
 import GatewayClasses from './pages/gateway/GatewayClasses'
 import HTTPRoutes from './pages/gateway/HTTPRoutes'
+import GRPCRoutes from './pages/gateway/GRPCRoutes'
+import ReferenceGrants from './pages/gateway/ReferenceGrants'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
@@ -68,8 +70,8 @@ function App() {
             <Route path="gateway/gateways" element={<Gateways />} />
             <Route path="gateway/gatewayclasses" element={<GatewayClasses />} />
             <Route path="gateway/httproutes" element={<HTTPRoutes />} />
-            <Route path="gateway/grpcroutes" element={<ComingSoon title="GRPC Routes" />} />
-            <Route path="gateway/referencegrants" element={<ComingSoon title="Reference Grants" />} />
+            <Route path="gateway/grpcroutes" element={<GRPCRoutes />} />
+            <Route path="gateway/referencegrants" element={<ReferenceGrants />} />
             <Route path="gateway/backendtlspolicies" element={<ComingSoon title="Backend TLS Policies" />} />
             <Route path="gateway/backendtrafficpolicies" element={<ComingSoon title="Backend Traffic Policies" />} />
             <Route path="security/serviceaccounts" element={<ComingSoon title="Service Accounts" />} />

@@ -236,6 +236,18 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/httproutes/{name}/describe", h.DescribeHTTPRoute)
 		r.Delete("/api/v1/namespaces/{namespace}/httproutes/{name}", h.DeleteHTTPRoute)
 
+		// Gateway API - GRPCRoutes
+		r.Get("/api/v1/grpcroutes/all", h.GetAllGRPCRoutes)
+		r.Get("/api/v1/namespaces/{namespace}/grpcroutes", h.GetGRPCRoutes)
+		r.Get("/api/v1/namespaces/{namespace}/grpcroutes/{name}/describe", h.DescribeGRPCRoute)
+		r.Delete("/api/v1/namespaces/{namespace}/grpcroutes/{name}", h.DeleteGRPCRoute)
+
+		// Gateway API - ReferenceGrants
+		r.Get("/api/v1/referencegrants/all", h.GetAllReferenceGrants)
+		r.Get("/api/v1/namespaces/{namespace}/referencegrants", h.GetReferenceGrants)
+		r.Get("/api/v1/namespaces/{namespace}/referencegrants/{name}/describe", h.DescribeReferenceGrant)
+		r.Delete("/api/v1/namespaces/{namespace}/referencegrants/{name}", h.DeleteReferenceGrant)
+
 		// Nodes
 		r.Get("/api/v1/nodes", h.GetNodes)
 		r.Get("/api/v1/nodes/{name}/describe", h.DescribeNode)
