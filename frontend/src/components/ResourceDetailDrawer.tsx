@@ -38,6 +38,8 @@ function kindToPlural(kind: string): string {
     Gateway: 'gateway',
     GatewayClass: 'gatewayclass',
     HTTPRoute: 'httproute',
+    GRPCRoute: 'grpcroute',
+    ReferenceGrant: 'referencegrant',
     StorageClass: 'storageclass',
     VolumeAttachment: 'volumeattachment',
   }
@@ -54,6 +56,8 @@ function kindIcon(kind: string): string {
     Gateway: '🚪',
     GatewayClass: '🚏',
     HTTPRoute: '🧭',
+    GRPCRoute: '📡',
+    ReferenceGrant: '🔗',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
   }
