@@ -1141,6 +1141,52 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/httproutes/${name}`)
   },
 
+  getGRPCRoutes: async (namespace: string, forceRefresh = false): Promise<GRPCRouteInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/grpcroutes`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllGRPCRoutes: async (forceRefresh = false): Promise<GRPCRouteInfo[]> => {
+    const { data } = await client.get('/cluster/grpcroutes/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeGRPCRoute: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/grpcroutes/${name}/describe`)
+    return data
+  },
+
+  deleteGRPCRoute: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/grpcroutes/${name}`)
+  },
+
+  getReferenceGrants: async (namespace: string, forceRefresh = false): Promise<ReferenceGrantInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/referencegrants`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllReferenceGrants: async (forceRefresh = false): Promise<ReferenceGrantInfo[]> => {
+    const { data } = await client.get('/cluster/referencegrants/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeReferenceGrant: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/referencegrants/${name}/describe`)
+    return data
+  },
+
+  deleteReferenceGrant: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/referencegrants/${name}`)
+  },
+
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/deployments`, {
       params: { force_refresh: forceRefresh },
