@@ -422,6 +422,69 @@
       "confirm": "Are you sure you want to delete HTTPRoute \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "grpcRoutesPage": {
+    "title": "GRPC Routes",
+    "subtitle": "Inspect and manage Gateway API GRPCRoute resources across namespaces.",
+    "create": "Create GRPCRoute",
+    "createTitle": "Create GRPCRoute from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search GRPCRoutes by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} GRPCRoute{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "hostnames": "Hostnames",
+      "parentRefs": "Parent Refs",
+      "rules": "Rules",
+      "backendRefs": "Backend Refs",
+      "status": "Status",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "accepted": "Accepted",
+      "resolvedRefs": "ResolvedRefs",
+      "withHostnames": "With Hostnames"
+    },
+    "noResults": "No GRPCRoutes found.",
+    "delete": {
+      "button": "Delete GRPCRoute",
+      "title": "Delete GRPCRoute",
+      "confirm": "Are you sure you want to delete GRPCRoute \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "referenceGrantsPage": {
+    "title": "Reference Grants",
+    "subtitle": "Inspect and manage Gateway API ReferenceGrant resources across namespaces.",
+    "create": "Create ReferenceGrant",
+    "createTitle": "Create ReferenceGrant from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search ReferenceGrants by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} ReferenceGrant{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "from": "From",
+      "to": "To",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "withFrom": "With From",
+      "withTo": "With To",
+      "withLabels": "With Labels"
+    },
+    "noResults": "No ReferenceGrants found.",
+    "delete": {
+      "button": "Delete ReferenceGrant",
+      "title": "Delete ReferenceGrant",
+      "confirm": "Are you sure you want to delete ReferenceGrant \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "statefulsets": {
     "title": "Stateful Sets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",

@@ -427,6 +427,69 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 HTTPRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "grpcRoutesPage": {
+    "title": "GRPC 라우트",
+    "subtitle": "네임스페이스 전반의 Gateway API GRPCRoute 리소스를 조회하고 관리합니다.",
+    "create": "GRPC 라우트 생성",
+    "createTitle": "YAML로 GRPC 라우트 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "GRPCRoute 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 GRPCRoute가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "hostnames": "호스트명",
+      "parentRefs": "부모 참조",
+      "rules": "규칙",
+      "backendRefs": "백엔드 참조",
+      "status": "상태",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "accepted": "Accepted",
+      "resolvedRefs": "ResolvedRefs",
+      "withHostnames": "호스트명 있음"
+    },
+    "noResults": "GRPCRoute를 찾을 수 없습니다.",
+    "delete": {
+      "button": "GRPC 라우트 삭제",
+      "title": "GRPC 라우트 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 GRPCRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "referenceGrantsPage": {
+    "title": "레퍼런스 그랜트",
+    "subtitle": "네임스페이스 전반의 Gateway API ReferenceGrant 리소스를 조회하고 관리합니다.",
+    "create": "레퍼런스 그랜트 생성",
+    "createTitle": "YAML로 레퍼런스 그랜트 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "새로고침 (강제)",
+    "searchPlaceholder": "ReferenceGrant 이름 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개의 ReferenceGrant가 검색되었습니다.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "from": "From",
+      "to": "To",
+      "age": "생성 시각"
+    },
+    "stats": {
+      "total": "전체",
+      "withFrom": "From 있음",
+      "withTo": "To 있음",
+      "withLabels": "라벨 있음"
+    },
+    "noResults": "ReferenceGrant를 찾을 수 없습니다.",
+    "delete": {
+      "button": "레퍼런스 그랜트 삭제",
+      "title": "레퍼런스 그랜트 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 ReferenceGrant \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "statefulsets": {
     "title": "스테이트풀셋",
     "subtitle": "네임스페이스 전반의 StatefulSet 상태를 확인하고 관리합니다.",
