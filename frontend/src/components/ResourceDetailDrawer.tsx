@@ -349,6 +349,14 @@ export default function ResourceDetailDrawer() {
         await api.deleteHTTPRoute(ns, name)
         return
       }
+      if (kind === 'GRPCRoute' && ns) {
+        await api.deleteGRPCRoute(ns, name)
+        return
+      }
+      if (kind === 'ReferenceGrant' && ns) {
+        await api.deleteReferenceGrant(ns, name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
