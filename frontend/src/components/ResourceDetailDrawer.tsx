@@ -212,6 +212,14 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes'] })
       queryClient.invalidateQueries({ queryKey: ['gateway', 'httproutes', ns] })
       queryClient.invalidateQueries({ queryKey: ['httproute-describe', ns, name] })
+    } else if (kind === 'GRPCRoute' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'grpcroutes'] })
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'grpcroutes', ns] })
+      queryClient.invalidateQueries({ queryKey: ['grpcroute-describe', ns, name] })
+    } else if (kind === 'ReferenceGrant' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants'] })
+      queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants', ns] })
+      queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
