@@ -104,6 +104,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteGateway = kind === 'Gateway' && !!ns && isWriteRole
   const canDeleteGatewayClass = kind === 'GatewayClass' && isWriteRole
   const canDeleteHTTPRoute = kind === 'HTTPRoute' && !!ns && isWriteRole
+  const canDeleteGRPCRoute = kind === 'GRPCRoute' && !!ns && isWriteRole
+  const canDeleteReferenceGrant = kind === 'ReferenceGrant' && !!ns && isWriteRole
   const canDeleteEndpoints = kind === 'Endpoints' && !!ns && isWriteRole
   const canDeleteEndpointSlice = kind === 'EndpointSlice' && !!ns && isWriteRole
   const canDelete = [
@@ -127,6 +129,8 @@ export default function ResourceDetailDrawer() {
     canDeleteGateway,
     canDeleteGatewayClass,
     canDeleteHTTPRoute,
+    canDeleteGRPCRoute,
+    canDeleteReferenceGrant,
     canDeleteEndpoints,
     canDeleteEndpointSlice,
   ].some(Boolean)
