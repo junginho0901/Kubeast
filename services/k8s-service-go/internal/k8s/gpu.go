@@ -505,35 +505,54 @@ func formatResourceSliceList(list *unstructured.UnstructuredList) []map[string]i
 // ========== GPU helpers ==========
 
 func getGPUQuantity(resources corev1.ResourceList) int {
-	for key, qty := range resources {
-		k := string(key)
-		if k == "nvidia.com/gpu" || strings.HasPrefix(k, "nvidia.com/mig-") {
-			val, _ := qty.AsInt64()
+	// Check nvidia.com/gpu first (primary GPU resource)
+	if qty, ok := resources["nvidia.com/gpu"]; ok {
+		val, _ := qty.AsInt64()
+		if val > 0 {
 			return int(val)
 		}
 	}
-	return 0
+	// Fall back to MIG resources
+	total := 0
+	for key, qty := range resources {
+		k := string(key)
+		if strings.HasPrefix(k, "nvidia.com/mig-") {
+			val, _ := qty.AsInt64()
+			total += int(val)
+		}
+	}
+	return total
 }
 
 func getPodGPURequest(pod *corev1.Pod) int {
 	total := 0
 	for _, c := range pod.Spec.Containers {
+		containerGPU := 0
+		// Check requests first
+		if qty, ok := c.Resources.Requests["nvidia.com/gpu"]; ok {
+			val, _ := qty.AsInt64()
+			containerGPU += int(val)
+		}
 		for key, qty := range c.Resources.Requests {
-			k := string(key)
-			if k == "nvidia.com/gpu" || strings.HasPrefix(k, "nvidia.com/mig-") {
+			if strings.HasPrefix(string(key), "nvidia.com/mig-") {
 				val, _ := qty.AsInt64()
-				total += int(val)
+				containerGPU += int(val)
 			}
 		}
-		for key, qty := range c.Resources.Limits {
-			k := string(key)
-			if k == "nvidia.com/gpu" || strings.HasPrefix(k, "nvidia.com/mig-") {
+		// Fall back to limits if no requests found
+		if containerGPU == 0 {
+			if qty, ok := c.Resources.Limits["nvidia.com/gpu"]; ok {
 				val, _ := qty.AsInt64()
-				if val > 0 && total == 0 {
-					total += int(val)
+				containerGPU += int(val)
+			}
+			for key, qty := range c.Resources.Limits {
+				if strings.HasPrefix(string(key), "nvidia.com/mig-") {
+					val, _ := qty.AsInt64()
+					containerGPU += int(val)
 				}
 			}
 		}
+		total += containerGPU
 	}
 	return total
 }
