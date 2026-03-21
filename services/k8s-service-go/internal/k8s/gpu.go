@@ -648,7 +648,10 @@ func getDevicePluginStatus(ctx context.Context, s *Service) map[string]interface
 	}
 
 	for _, c := range candidates {
-		ds, err := s.clientset.AppsV1().DaemonSets(c.namespace).Get(ctx, c.name, metav1.GetOptions{})
+		// Short timeout per candidate so we don't block if the namespace doesn't exist
+		tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		ds, err := s.clientset.AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
+		cancel()
 		if err != nil {
 			continue
 		}
@@ -670,7 +673,9 @@ func getTimeSlicingConfig(ctx context.Context, s *Service) map[string]interface{
 
 	for _, ns := range namespaces {
 		for _, name := range names {
-			cm, err := s.clientset.CoreV1().ConfigMaps(ns).Get(ctx, name, metav1.GetOptions{})
+			tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			cm, err := s.clientset.CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})
+			cancel()
 			if err != nil {
 				continue
 			}
