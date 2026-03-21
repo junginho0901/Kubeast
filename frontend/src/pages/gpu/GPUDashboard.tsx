@@ -101,10 +101,12 @@ export default function GPUDashboard() {
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const { open: openDetail } = useResourceDetail()
 
-  const { data, isLoading, refetch } = useQuery<GPUDashboardData>({
+  const { data, isLoading, isError, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
     queryFn: () => api.getGPUDashboard(),
     refetchInterval: 30000,
+    retry: 2,
+    retryDelay: 1000,
   })
 
   const allocationRate = useMemo(() => {
@@ -135,6 +137,42 @@ export default function GPUDashboard() {
         </div>
         <SkeletonTable cols={7} />
         <SkeletonTable cols={6} />
+      </div>
+    )
+  }
+
+  // Error state — show retry button instead of misleading "no GPU" message
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {tr('gpuDashboardPage.title', 'GPU Dashboard')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {tr('gpuDashboardPage.subtitle', 'GPU resource overview across the cluster')}
+            </p>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-red-500/20 bg-red-500/5 py-24">
+          <XCircle className="mb-4 h-12 w-12 text-red-400" />
+          <p className="text-lg text-red-300">
+            {tr('gpuDashboardPage.error', 'Failed to load GPU data. The cluster may be temporarily unreachable.')}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 rounded-lg bg-slate-700 px-4 py-2 text-sm text-white hover:bg-slate-600"
+          >
+            {tr('gpuDashboardPage.retry', 'Retry')}
+          </button>
+        </div>
       </div>
     )
   }
