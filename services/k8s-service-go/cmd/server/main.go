@@ -248,6 +248,31 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/referencegrants/{name}/describe", h.DescribeReferenceGrant)
 		r.Delete("/api/v1/namespaces/{namespace}/referencegrants/{name}", h.DeleteReferenceGrant)
 
+		// GPU / DRA
+		r.Get("/api/v1/gpu/dashboard", h.GetGPUDashboard)
+
+		// DRA - DeviceClasses (cluster-scoped)
+		r.Get("/api/v1/deviceclasses", h.GetDeviceClasses)
+		r.Get("/api/v1/deviceclasses/{name}/describe", h.DescribeDeviceClass)
+		r.Delete("/api/v1/deviceclasses/{name}", h.DeleteDeviceClass)
+
+		// DRA - ResourceClaims (namespace-scoped)
+		r.Get("/api/v1/resourceclaims/all", h.GetAllResourceClaims)
+		r.Get("/api/v1/namespaces/{namespace}/resourceclaims", h.GetResourceClaims)
+		r.Get("/api/v1/namespaces/{namespace}/resourceclaims/{name}/describe", h.DescribeResourceClaim)
+		r.Delete("/api/v1/namespaces/{namespace}/resourceclaims/{name}", h.DeleteResourceClaim)
+
+		// DRA - ResourceClaimTemplates (namespace-scoped)
+		r.Get("/api/v1/resourceclaimtemplates/all", h.GetAllResourceClaimTemplates)
+		r.Get("/api/v1/namespaces/{namespace}/resourceclaimtemplates", h.GetResourceClaimTemplates)
+		r.Get("/api/v1/namespaces/{namespace}/resourceclaimtemplates/{name}/describe", h.DescribeResourceClaimTemplate)
+		r.Delete("/api/v1/namespaces/{namespace}/resourceclaimtemplates/{name}", h.DeleteResourceClaimTemplate)
+
+		// DRA - ResourceSlices (cluster-scoped)
+		r.Get("/api/v1/resourceslices", h.GetResourceSlices)
+		r.Get("/api/v1/resourceslices/{name}/describe", h.DescribeResourceSlice)
+		r.Delete("/api/v1/resourceslices/{name}", h.DeleteResourceSlice)
+
 		// Nodes
 		r.Get("/api/v1/nodes", h.GetNodes)
 		r.Get("/api/v1/nodes/{name}/describe", h.DescribeNode)

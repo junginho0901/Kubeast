@@ -189,6 +189,17 @@ export default function Layout() {
       ],
     },
     {
+      id: 'gpu',
+      label: t('nav.gpu'),
+      items: [
+        { name: t('nav.gpuDashboard'), href: '/gpu/dashboard', icon: LayoutDashboard },
+        { name: t('nav.deviceClasses'), href: '/gpu/deviceclasses', icon: FileCode },
+        { name: t('nav.resourceClaims'), href: '/gpu/resourceclaims', icon: FileBox },
+        { name: t('nav.resourceClaimTemplates'), href: '/gpu/resourceclaimtemplates', icon: Layers },
+        { name: t('nav.resourceSlices'), href: '/gpu/resourceslices', icon: HardDrive },
+      ],
+    },
+    {
       id: 'security',
       label: t('nav.security'),
       items: [

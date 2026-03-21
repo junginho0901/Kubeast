@@ -35,6 +35,10 @@ type Service struct {
 	gatewayAPIVersionMu    sync.RWMutex
 	gatewayAPIVersionCache string
 
+	// DRA API version cache
+	draAPIVersionMu    sync.RWMutex
+	draAPIVersionCache string
+
 	// API resources cache
 	apiResourcesMu    sync.RWMutex
 	apiResourcesCache []metav1.APIResourceList

@@ -18,6 +18,10 @@ import GatewayClassInfo from './resource-detail/GatewayClassInfo'
 import HTTPRouteInfo from './resource-detail/HTTPRouteInfo'
 import GRPCRouteInfo from './resource-detail/GRPCRouteInfo'
 import ReferenceGrantInfo from './resource-detail/ReferenceGrantInfo'
+import DeviceClassInfoComp from './resource-detail/DeviceClassInfo'
+import ResourceClaimInfoComp from './resource-detail/ResourceClaimInfo'
+import ResourceClaimTemplateInfoComp from './resource-detail/ResourceClaimTemplateInfo'
+import ResourceSliceInfoComp from './resource-detail/ResourceSliceInfo'
 import ConfigStorageInfo from './resource-detail/ConfigStorageInfo'
 import GenericInfo from './resource-detail/GenericInfo'
 
@@ -42,6 +46,10 @@ function kindToPlural(kind: string): string {
     HTTPRoute: 'httproute',
     GRPCRoute: 'grpcroute',
     ReferenceGrant: 'referencegrant',
+    DeviceClass: 'deviceclass',
+    ResourceClaim: 'resourceclaim',
+    ResourceClaimTemplate: 'resourceclaimtemplate',
+    ResourceSlice: 'resourceslice',
     StorageClass: 'storageclass',
     VolumeAttachment: 'volumeattachment',
   }
@@ -60,6 +68,10 @@ function kindIcon(kind: string): string {
     HTTPRoute: '🧭',
     GRPCRoute: '📡',
     ReferenceGrant: '🔗',
+    DeviceClass: '🎮',
+    ResourceClaim: '📋',
+    ResourceClaimTemplate: '📄',
+    ResourceSlice: '🧩',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
   }
@@ -110,6 +122,10 @@ export default function ResourceDetailDrawer() {
   const canDeleteReferenceGrant = kind === 'ReferenceGrant' && !!ns && isWriteRole
   const canDeleteEndpoints = kind === 'Endpoints' && !!ns && isWriteRole
   const canDeleteEndpointSlice = kind === 'EndpointSlice' && !!ns && isWriteRole
+  const canDeleteDeviceClass = kind === 'DeviceClass' && isWriteRole
+  const canDeleteResourceClaim = kind === 'ResourceClaim' && !!ns && isWriteRole
+  const canDeleteResourceClaimTemplate = kind === 'ResourceClaimTemplate' && !!ns && isWriteRole
+  const canDeleteResourceSlice = kind === 'ResourceSlice' && isWriteRole
   const canDelete = [
     canDeleteNode,
     canDeletePod,
@@ -135,6 +151,10 @@ export default function ResourceDetailDrawer() {
     canDeleteReferenceGrant,
     canDeleteEndpoints,
     canDeleteEndpointSlice,
+    canDeleteDeviceClass,
+    canDeleteResourceClaim,
+    canDeleteResourceClaimTemplate,
+    canDeleteResourceSlice,
   ].some(Boolean)
 
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
@@ -222,6 +242,18 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants'] })
       queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants', ns] })
       queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] })
+    } else if (kind === 'DeviceClass') {
+      queryClient.invalidateQueries({ queryKey: ['gpu', 'deviceclasses'] })
+      queryClient.invalidateQueries({ queryKey: ['deviceclass-describe', name] })
+    } else if (kind === 'ResourceClaim' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceclaims'] })
+      queryClient.invalidateQueries({ queryKey: ['resourceclaim-describe', ns, name] })
+    } else if (kind === 'ResourceClaimTemplate' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceclaimtemplates'] })
+      queryClient.invalidateQueries({ queryKey: ['resourceclaimtemplate-describe', ns, name] })
+    } else if (kind === 'ResourceSlice') {
+      queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceslices'] })
+      queryClient.invalidateQueries({ queryKey: ['resourceslice-describe', name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
@@ -357,6 +389,22 @@ export default function ResourceDetailDrawer() {
       }
       if (kind === 'ReferenceGrant' && ns) {
         await api.deleteReferenceGrant(ns, name)
+        return
+      }
+      if (kind === 'DeviceClass') {
+        await api.deleteDeviceClass(name)
+        return
+      }
+      if (kind === 'ResourceClaim' && ns) {
+        await api.deleteResourceClaim(ns, name)
+        return
+      }
+      if (kind === 'ResourceClaimTemplate' && ns) {
+        await api.deleteResourceClaimTemplate(ns, name)
+        return
+      }
+      if (kind === 'ResourceSlice') {
+        await api.deleteResourceSlice(name)
         return
       }
       throw new Error('Delete is not supported for this resource.')
@@ -507,6 +555,26 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants', ns] }),
           queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] }),
         ])
+      } else if (kind === 'DeviceClass') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gpu', 'deviceclasses'] }),
+          queryClient.invalidateQueries({ queryKey: ['deviceclass-describe', name] }),
+        ])
+      } else if (kind === 'ResourceClaim' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceclaims'] }),
+          queryClient.invalidateQueries({ queryKey: ['resourceclaim-describe', ns, name] }),
+        ])
+      } else if (kind === 'ResourceClaimTemplate' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceclaimtemplates'] }),
+          queryClient.invalidateQueries({ queryKey: ['resourceclaimtemplate-describe', ns, name] }),
+        ])
+      } else if (kind === 'ResourceSlice') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceslices'] }),
+          queryClient.invalidateQueries({ queryKey: ['resourceslice-describe', name] }),
+        ])
       }
 
       close()
@@ -530,6 +598,10 @@ export default function ResourceDetailDrawer() {
     if (kind === 'HTTPRoute' && ns) return <HTTPRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'GRPCRoute' && ns) return <GRPCRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'ReferenceGrant' && ns) return <ReferenceGrantInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'DeviceClass') return <DeviceClassInfoComp name={name} rawJson={target.rawJson} />
+    if (kind === 'ResourceClaim' && ns) return <ResourceClaimInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'ResourceClaimTemplate' && ns) return <ResourceClaimTemplateInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'ResourceSlice') return <ResourceSliceInfoComp name={name} rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
@@ -632,6 +704,14 @@ export default function ResourceDetailDrawer() {
                         ? t('grpcRoutesPage.delete.button', { defaultValue: 'Delete GRPCRoute' })
                       : kind === 'ReferenceGrant'
                         ? t('referenceGrantsPage.delete.button', { defaultValue: 'Delete ReferenceGrant' })
+                      : kind === 'DeviceClass'
+                        ? t('deviceClassesPage.delete.button', { defaultValue: 'Delete DeviceClass' })
+                      : kind === 'ResourceClaim'
+                        ? t('resourceClaimsPage.delete.button', { defaultValue: 'Delete ResourceClaim' })
+                      : kind === 'ResourceClaimTemplate'
+                        ? t('resourceClaimTemplatesPage.delete.button', { defaultValue: 'Delete ResourceClaimTemplate' })
+                      : kind === 'ResourceSlice'
+                        ? t('resourceSlicesPage.delete.button', { defaultValue: 'Delete ResourceSlice' })
                   : t('namespaces.delete.button', { defaultValue: 'Delete Namespace' })}
             </button>
           )}
@@ -735,6 +815,14 @@ export default function ResourceDetailDrawer() {
                         ? t('grpcRoutesPage.delete.title', { defaultValue: 'Delete GRPCRoute' })
                       : kind === 'ReferenceGrant'
                         ? t('referenceGrantsPage.delete.title', { defaultValue: 'Delete ReferenceGrant' })
+                      : kind === 'DeviceClass'
+                        ? t('deviceClassesPage.delete.title', { defaultValue: 'Delete DeviceClass' })
+                      : kind === 'ResourceClaim'
+                        ? t('resourceClaimsPage.delete.title', { defaultValue: 'Delete ResourceClaim' })
+                      : kind === 'ResourceClaimTemplate'
+                        ? t('resourceClaimTemplatesPage.delete.title', { defaultValue: 'Delete ResourceClaimTemplate' })
+                      : kind === 'ResourceSlice'
+                        ? t('resourceSlicesPage.delete.title', { defaultValue: 'Delete ResourceSlice' })
                   : t('namespaces.delete.title', { defaultValue: 'Delete Namespace' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
@@ -869,6 +957,28 @@ export default function ResourceDetailDrawer() {
                             defaultValue: 'Are you sure you want to delete ReferenceGrant "{{name}}" in "{{namespace}}"?',
                             name,
                             namespace: ns,
+                          })
+                      : kind === 'DeviceClass'
+                        ? t('deviceClassesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete DeviceClass "{{name}}"?',
+                            name,
+                          })
+                      : kind === 'ResourceClaim'
+                        ? t('resourceClaimsPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete ResourceClaim "{{name}}" in "{{namespace}}"?',
+                            name,
+                            namespace: ns,
+                          })
+                      : kind === 'ResourceClaimTemplate'
+                        ? t('resourceClaimTemplatesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete ResourceClaimTemplate "{{name}}" in "{{namespace}}"?',
+                            name,
+                            namespace: ns,
+                          })
+                      : kind === 'ResourceSlice'
+                        ? t('resourceSlicesPage.delete.confirm', {
+                            defaultValue: 'Are you sure you want to delete ResourceSlice "{{name}}"?',
+                            name,
                           })
                   : t('namespaces.delete.confirm', {
                       defaultValue: 'Are you sure you want to delete namespace "{{name}}"?',

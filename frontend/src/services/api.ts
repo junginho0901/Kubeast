@@ -483,6 +483,80 @@ export interface ReferenceGrantInfo {
   api_version?: string | null
 }
 
+// GPU / DRA types
+export interface GPUNodeInfo {
+  name: string
+  gpu_model?: string | null
+  gpu_memory?: string | null
+  gpu_capacity: number
+  gpu_allocatable: number
+  status: string
+  mig_strategy?: string | null
+  driver_version?: string | null
+}
+
+export interface GPUPodInfo {
+  name: string
+  namespace: string
+  node_name?: string | null
+  gpu_requested: number
+  status: string
+  created_at?: string | null
+}
+
+export interface GPUDashboardData {
+  total_gpu_capacity: number
+  total_gpu_allocatable: number
+  total_gpu_used: number
+  gpu_nodes: GPUNodeInfo[]
+  gpu_pods: GPUPodInfo[]
+  device_plugin_status: {
+    name?: string | null
+    namespace?: string | null
+    desired: number
+    ready: number
+    available: number
+  } | null
+  mig_enabled: boolean
+  time_slicing_enabled: boolean
+  time_slicing_config: Record<string, any> | null
+}
+
+export interface DeviceClassItem {
+  name: string
+  labels?: Record<string, string>
+  created_at?: string | null
+  selector_count?: number
+  conditions?: Array<Record<string, any>>
+}
+
+export interface ResourceClaimItem {
+  name: string
+  namespace: string
+  labels?: Record<string, string>
+  created_at?: string | null
+  request_count?: number
+  allocation_status?: string | null
+}
+
+export interface ResourceClaimTemplateItem {
+  name: string
+  namespace: string
+  labels?: Record<string, string>
+  created_at?: string | null
+  request_count?: number
+}
+
+export interface ResourceSliceItem {
+  name: string
+  labels?: Record<string, string>
+  created_at?: string | null
+  node_name?: string | null
+  driver_name?: string | null
+  pool_name?: string | null
+  device_count?: number
+}
+
 export interface DeploymentInfo {
   name: string
   namespace: string
@@ -1185,6 +1259,94 @@ export const api = {
 
   deleteReferenceGrant: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/referencegrants/${name}`)
+  },
+
+  // GPU Dashboard
+  getGPUDashboard: async (): Promise<GPUDashboardData> => {
+    const { data } = await client.get('/cluster/gpu/dashboard')
+    return data
+  },
+
+  // DeviceClasses
+  getDeviceClasses: async (forceRefresh = false): Promise<DeviceClassItem[]> => {
+    const { data } = await client.get('/cluster/deviceclasses', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeDeviceClass: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/deviceclasses/${name}/describe`)
+    return data
+  },
+
+  deleteDeviceClass: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/deviceclasses/${name}`)
+  },
+
+  // ResourceClaims
+  getAllResourceClaims: async (forceRefresh = false): Promise<ResourceClaimItem[]> => {
+    const { data } = await client.get('/cluster/resourceclaims/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getResourceClaims: async (namespace: string, forceRefresh = false): Promise<ResourceClaimItem[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/resourceclaims`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeResourceClaim: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/resourceclaims/${name}/describe`)
+    return data
+  },
+
+  deleteResourceClaim: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/resourceclaims/${name}`)
+  },
+
+  // ResourceClaimTemplates
+  getAllResourceClaimTemplates: async (forceRefresh = false): Promise<ResourceClaimTemplateItem[]> => {
+    const { data } = await client.get('/cluster/resourceclaimtemplates/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getResourceClaimTemplates: async (namespace: string, forceRefresh = false): Promise<ResourceClaimTemplateItem[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/resourceclaimtemplates`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeResourceClaimTemplate: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/resourceclaimtemplates/${name}/describe`)
+    return data
+  },
+
+  deleteResourceClaimTemplate: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/resourceclaimtemplates/${name}`)
+  },
+
+  // ResourceSlices
+  getResourceSlices: async (forceRefresh = false): Promise<ResourceSliceItem[]> => {
+    const { data } = await client.get('/cluster/resourceslices', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeResourceSlice: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/resourceslices/${name}/describe`)
+    return data
+  },
+
+  deleteResourceSlice: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/resourceslices/${name}`)
   },
 
   getDeployments: async (namespace: string, forceRefresh = false): Promise<DeploymentInfo[]> => {
