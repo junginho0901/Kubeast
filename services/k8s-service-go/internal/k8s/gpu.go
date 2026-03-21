@@ -84,6 +84,9 @@ func (s *Service) isDRAUnavailable(ctx context.Context) bool {
 // ========== DeviceClasses (cluster-scoped) ==========
 
 func (s *Service) GetDeviceClasses(ctx context.Context) ([]map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return []map[string]interface{}{}, nil
+	}
 	gvr := s.draGVR(ctx, "deviceclasses")
 	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
 	if err != nil {
@@ -93,6 +96,9 @@ func (s *Service) GetDeviceClasses(ctx context.Context) ([]map[string]interface{
 }
 
 func (s *Service) DescribeDeviceClass(ctx context.Context, name string) (map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return nil, fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "deviceclasses")
 	obj, err := s.GetResource(ctx, gvr, "", name)
 	if err != nil {
@@ -123,6 +129,9 @@ func (s *Service) DescribeDeviceClass(ctx context.Context, name string) (map[str
 }
 
 func (s *Service) DeleteDeviceClass(ctx context.Context, name string) error {
+	if s.isDRAUnavailable(ctx) {
+		return fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "deviceclasses")
 	return s.DeleteResource(ctx, gvr, "", name)
 }
@@ -130,6 +139,9 @@ func (s *Service) DeleteDeviceClass(ctx context.Context, name string) error {
 // ========== ResourceClaims (namespace-scoped) ==========
 
 func (s *Service) GetResourceClaims(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return []map[string]interface{}{}, nil
+	}
 	gvr := s.draGVR(ctx, "resourceclaims")
 	list, err := s.ListResources(ctx, gvr, namespace, metav1.ListOptions{})
 	if err != nil {
@@ -139,6 +151,9 @@ func (s *Service) GetResourceClaims(ctx context.Context, namespace string) ([]ma
 }
 
 func (s *Service) GetAllResourceClaims(ctx context.Context) ([]map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return []map[string]interface{}{}, nil
+	}
 	gvr := s.draGVR(ctx, "resourceclaims")
 	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
 	if err != nil {
@@ -148,6 +163,9 @@ func (s *Service) GetAllResourceClaims(ctx context.Context) ([]map[string]interf
 }
 
 func (s *Service) DescribeResourceClaim(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return nil, fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "resourceclaims")
 	obj, err := s.GetResource(ctx, gvr, namespace, name)
 	if err != nil {
@@ -186,6 +204,9 @@ func (s *Service) DescribeResourceClaim(ctx context.Context, namespace, name str
 }
 
 func (s *Service) DeleteResourceClaim(ctx context.Context, namespace, name string) error {
+	if s.isDRAUnavailable(ctx) {
+		return fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "resourceclaims")
 	return s.DeleteResource(ctx, gvr, namespace, name)
 }
@@ -193,6 +214,9 @@ func (s *Service) DeleteResourceClaim(ctx context.Context, namespace, name strin
 // ========== ResourceClaimTemplates (namespace-scoped) ==========
 
 func (s *Service) GetResourceClaimTemplates(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return []map[string]interface{}{}, nil
+	}
 	gvr := s.draGVR(ctx, "resourceclaimtemplates")
 	list, err := s.ListResources(ctx, gvr, namespace, metav1.ListOptions{})
 	if err != nil {
@@ -202,6 +226,9 @@ func (s *Service) GetResourceClaimTemplates(ctx context.Context, namespace strin
 }
 
 func (s *Service) GetAllResourceClaimTemplates(ctx context.Context) ([]map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return []map[string]interface{}{}, nil
+	}
 	gvr := s.draGVR(ctx, "resourceclaimtemplates")
 	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
 	if err != nil {
@@ -211,6 +238,9 @@ func (s *Service) GetAllResourceClaimTemplates(ctx context.Context) ([]map[strin
 }
 
 func (s *Service) DescribeResourceClaimTemplate(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return nil, fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "resourceclaimtemplates")
 	obj, err := s.GetResource(ctx, gvr, namespace, name)
 	if err != nil {
@@ -236,6 +266,9 @@ func (s *Service) DescribeResourceClaimTemplate(ctx context.Context, namespace, 
 }
 
 func (s *Service) DeleteResourceClaimTemplate(ctx context.Context, namespace, name string) error {
+	if s.isDRAUnavailable(ctx) {
+		return fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "resourceclaimtemplates")
 	return s.DeleteResource(ctx, gvr, namespace, name)
 }
@@ -243,6 +276,9 @@ func (s *Service) DeleteResourceClaimTemplate(ctx context.Context, namespace, na
 // ========== ResourceSlices (cluster-scoped) ==========
 
 func (s *Service) GetResourceSlices(ctx context.Context) ([]map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return []map[string]interface{}{}, nil
+	}
 	gvr := s.draGVR(ctx, "resourceslices")
 	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
 	if err != nil {
@@ -252,6 +288,9 @@ func (s *Service) GetResourceSlices(ctx context.Context) ([]map[string]interface
 }
 
 func (s *Service) DescribeResourceSlice(ctx context.Context, name string) (map[string]interface{}, error) {
+	if s.isDRAUnavailable(ctx) {
+		return nil, fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "resourceslices")
 	obj, err := s.GetResource(ctx, gvr, "", name)
 	if err != nil {
@@ -285,6 +324,9 @@ func (s *Service) DescribeResourceSlice(ctx context.Context, name string) (map[s
 }
 
 func (s *Service) DeleteResourceSlice(ctx context.Context, name string) error {
+	if s.isDRAUnavailable(ctx) {
+		return fmt.Errorf("DRA API not available")
+	}
 	gvr := s.draGVR(ctx, "resourceslices")
 	return s.DeleteResource(ctx, gvr, "", name)
 }
