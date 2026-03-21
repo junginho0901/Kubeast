@@ -38,6 +38,11 @@ import GatewayClasses from './pages/gateway/GatewayClasses'
 import HTTPRoutes from './pages/gateway/HTTPRoutes'
 import GRPCRoutes from './pages/gateway/GRPCRoutes'
 import ReferenceGrants from './pages/gateway/ReferenceGrants'
+import GPUDashboard from './pages/gpu/GPUDashboard'
+import DeviceClasses from './pages/gpu/DeviceClasses'
+import ResourceClaims from './pages/gpu/ResourceClaims'
+import ResourceClaimTemplates from './pages/gpu/ResourceClaimTemplates'
+import ResourceSlices from './pages/gpu/ResourceSlices'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
@@ -72,6 +77,11 @@ function App() {
             <Route path="gateway/httproutes" element={<HTTPRoutes />} />
             <Route path="gateway/grpcroutes" element={<GRPCRoutes />} />
             <Route path="gateway/referencegrants" element={<ReferenceGrants />} />
+            <Route path="gpu/dashboard" element={<GPUDashboard />} />
+            <Route path="gpu/deviceclasses" element={<DeviceClasses />} />
+            <Route path="gpu/resourceclaims" element={<ResourceClaims />} />
+            <Route path="gpu/resourceclaimtemplates" element={<ResourceClaimTemplates />} />
+            <Route path="gpu/resourceslices" element={<ResourceSlices />} />
             <Route path="gateway/backendtlspolicies" element={<ComingSoon title="Backend TLS Policies" />} />
             <Route path="gateway/backendtrafficpolicies" element={<ComingSoon title="Backend Traffic Policies" />} />
             <Route path="security/serviceaccounts" element={<ComingSoon title="Service Accounts" />} />
