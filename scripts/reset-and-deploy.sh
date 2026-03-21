@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KIND_NAME="kube-assistant"
 NS="kube-assistant"
 KUBECONFIG_PATH="/tmp/kube-assistant-kubeconfig"
-TAG="dev"
+TAG="local"
 
 # Colors
 RED='\033[0;31m'
