@@ -579,6 +579,18 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['gateway', 'referencegrants', ns] }),
           queryClient.invalidateQueries({ queryKey: ['referencegrant-describe', ns, name] }),
         ])
+      } else if (kind === 'BackendTLSPolicy' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtlspolicies'] }),
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtlspolicies', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['backendtlspolicy-describe', ns, name] }),
+        ])
+      } else if (kind === 'BackendTrafficPolicy' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies'] }),
+          queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['backendtrafficpolicy-describe', ns, name] }),
+        ])
       } else if (kind === 'DeviceClass') {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['gpu', 'deviceclasses'] }),
