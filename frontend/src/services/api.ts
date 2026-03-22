@@ -1281,6 +1281,54 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/referencegrants/${name}`)
   },
 
+  // BackendTLSPolicies
+  getBackendTLSPolicies: async (namespace: string, forceRefresh = false): Promise<BackendTLSPolicyInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/backendtlspolicies`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllBackendTLSPolicies: async (forceRefresh = false): Promise<BackendTLSPolicyInfo[]> => {
+    const { data } = await client.get('/cluster/backendtlspolicies/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeBackendTLSPolicy: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/backendtlspolicies/${name}/describe`)
+    return data
+  },
+
+  deleteBackendTLSPolicy: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/backendtlspolicies/${name}`)
+  },
+
+  // BackendTrafficPolicies
+  getBackendTrafficPolicies: async (namespace: string, forceRefresh = false): Promise<BackendTrafficPolicyInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/backendtrafficpolicies`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllBackendTrafficPolicies: async (forceRefresh = false): Promise<BackendTrafficPolicyInfo[]> => {
+    const { data } = await client.get('/cluster/backendtrafficpolicies/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeBackendTrafficPolicy: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/backendtrafficpolicies/${name}/describe`)
+    return data
+  },
+
+  deleteBackendTrafficPolicy: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/backendtrafficpolicies/${name}`)
+  },
+
   // GPU Dashboard
   getGPUDashboard: async (): Promise<GPUDashboardData> => {
     const { data } = await client.get('/cluster/gpu/dashboard')
