@@ -18,6 +18,8 @@ import GatewayClassInfo from './resource-detail/GatewayClassInfo'
 import HTTPRouteInfo from './resource-detail/HTTPRouteInfo'
 import GRPCRouteInfo from './resource-detail/GRPCRouteInfo'
 import ReferenceGrantInfo from './resource-detail/ReferenceGrantInfo'
+import BackendTLSPolicyInfoComp from './resource-detail/BackendTLSPolicyInfo'
+import BackendTrafficPolicyInfoComp from './resource-detail/BackendTrafficPolicyInfo'
 import DeviceClassInfoComp from './resource-detail/DeviceClassInfo'
 import ResourceClaimInfoComp from './resource-detail/ResourceClaimInfo'
 import ResourceClaimTemplateInfoComp from './resource-detail/ResourceClaimTemplateInfo'
@@ -634,6 +636,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'HTTPRoute' && ns) return <HTTPRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'GRPCRoute' && ns) return <GRPCRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'ReferenceGrant' && ns) return <ReferenceGrantInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'BackendTLSPolicy' && ns) return <BackendTLSPolicyInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'BackendTrafficPolicy' && ns) return <BackendTrafficPolicyInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'DeviceClass') return <DeviceClassInfoComp name={name} rawJson={target.rawJson} />
     if (kind === 'ResourceClaim' && ns) return <ResourceClaimInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'ResourceClaimTemplate' && ns) return <ResourceClaimTemplateInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
