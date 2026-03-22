@@ -464,7 +464,7 @@ export default function NodeInfo({ name }: Props) {
 
       {/* Node Shell */}
       {showNodeShell && (
-        <ModalOverlay closeOnOverlayClick={false}>
+        <ModalOverlay onClose={() => setShowNodeShell(false)}>
           <div className="w-full max-w-5xl h-[80vh] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <NodeShellTerminal
               nodeName={name}
