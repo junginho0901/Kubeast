@@ -1,9 +1,11 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { Download, RefreshCw } from 'lucide-react'
+import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ModalOverlay } from '@/components/ModalOverlay'
+import PodExecTerminal from '@/components/PodExecTerminal'
 
 interface Props {
   name: string
@@ -54,6 +56,21 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [logContainer, setLogContainer] = useState<string>('')
   const [logLines, setLogLines] = useState(100)
   const [showLogs, setShowLogs] = useState(false)
+  const [execTarget, setExecTarget] = useState<string | null>(null)
+  const [execSelectContainer, setExecSelectContainer] = useState<string>('')
+  const [execCommand, setExecCommand] = useState<string>('/bin/sh')
+  const [isExecContainerOpen, setIsExecContainerOpen] = useState(false)
+  const [isExecShellOpen, setIsExecShellOpen] = useState(false)
+  const execContainerRef = useRef<HTMLDivElement>(null)
+  const execShellRef = useRef<HTMLDivElement>(null)
+
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: api.me,
+    retry: false,
+    staleTime: 30000,
+  })
+  const isAdmin = me?.role === 'admin'
 
   const { data: podDescribe, isLoading } = useQuery({
     queryKey: ['pod-describe', namespace, name],
@@ -138,6 +155,17 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     }
   }, [logContainer, containerNames])
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (execContainerRef.current && !execContainerRef.current.contains(event.target as Node)) setIsExecContainerOpen(false)
+      if (execShellRef.current && !execShellRef.current.contains(event.target as Node)) setIsExecShellOpen(false)
+    }
+    if (isExecContainerOpen || isExecShellOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isExecContainerOpen, isExecShellOpen])
+
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
   return (
@@ -147,6 +175,65 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <SummaryBadge label="Phase" value={phase} color={phase === 'Running' ? 'green' : phase === 'Pending' ? 'amber' : phase === 'Failed' ? 'red' : 'default'} />
         <SummaryBadge label="Restarts" value={restartCount} color={restartCount > 5 ? 'amber' : 'default'} />
         <SummaryBadge label="Containers" value={containerNames.length} />
+        {isAdmin && phase === 'Running' && containerNames.length > 0 && (
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Container 커스텀 드롭다운 */}
+            <div className="relative" ref={execContainerRef}>
+              <button
+                onClick={() => { setIsExecContainerOpen(!isExecContainerOpen); setIsExecShellOpen(false) }}
+                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
+              >
+                <span className="text-[11px] font-medium truncate">{execSelectContainer || containerNames[0]}</span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecContainerOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isExecContainerOpen && (
+                <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[200px] overflow-y-auto">
+                  {containerNames.map((n: string) => (
+                    <button
+                      key={n}
+                      onClick={() => { setExecSelectContainer(n); setIsExecContainerOpen(false) }}
+                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
+                    >
+                      {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />}
+                      <span className={(execSelectContainer || containerNames[0]) === n ? 'font-medium' : ''}>{n}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Shell 커스텀 드롭다운 */}
+            <div className="relative" ref={execShellRef}>
+              <button
+                onClick={() => { setIsExecShellOpen(!isExecShellOpen); setIsExecContainerOpen(false) }}
+                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
+              >
+                <span className="text-[11px] font-medium">{execCommand}</span>
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecShellOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isExecShellOpen && (
+                <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50">
+                  {['/bin/sh', '/bin/bash', '/bin/ash', 'sh'].map((sh) => (
+                    <button
+                      key={sh}
+                      onClick={() => { setExecCommand(sh); setIsExecShellOpen(false) }}
+                      className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
+                    >
+                      {execCommand === sh && <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />}
+                      <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setExecTarget(execSelectContainer || containerNames[0])}
+              className="flex items-center gap-1 h-7 px-2.5 rounded-lg border border-emerald-700 bg-emerald-900/40 text-emerald-300 text-[11px] hover:bg-emerald-800/60 transition-colors"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              Exec
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Top Summary */}
@@ -235,6 +322,15 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-white break-words">{c.name || `container-${i + 1}`}</span>
                     <div className="flex items-center gap-2">
+                      {isAdmin && stateKey === 'running' && (
+                        <button
+                          onClick={() => setExecTarget(c.name)}
+                          className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors"
+                          title={t('pods.exec.openExec', { defaultValue: 'Open terminal' })}
+                        >
+                          <Terminal className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {ready !== undefined && (
                         <span className={`w-2 h-2 rounded-full ${ready ? 'bg-emerald-400' : 'bg-red-400'}`} />
                       )}
@@ -540,6 +636,23 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           )}
         </div>
       </InfoSection>
+
+      {execTarget && (
+        <ModalOverlay onClose={() => setExecTarget(null)}>
+          <div
+            className="bg-slate-800 rounded-lg w-full max-w-4xl h-[70vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PodExecTerminal
+              podName={name}
+              namespace={namespace}
+              container={execTarget}
+              command={execCommand}
+              onClose={() => setExecTarget(null)}
+            />
+          </div>
+        </ModalOverlay>
+      )}
     </>
   )
 }
