@@ -38,6 +38,8 @@ import GatewayClasses from './pages/gateway/GatewayClasses'
 import HTTPRoutes from './pages/gateway/HTTPRoutes'
 import GRPCRoutes from './pages/gateway/GRPCRoutes'
 import ReferenceGrants from './pages/gateway/ReferenceGrants'
+import BackendTLSPolicies from './pages/gateway/BackendTLSPolicies'
+import BackendTrafficPolicies from './pages/gateway/BackendTrafficPolicies'
 import GPUDashboard from './pages/gpu/GPUDashboard'
 import DeviceClasses from './pages/gpu/DeviceClasses'
 import ResourceClaims from './pages/gpu/ResourceClaims'
@@ -82,8 +84,8 @@ function App() {
             <Route path="gpu/resourceclaims" element={<ResourceClaims />} />
             <Route path="gpu/resourceclaimtemplates" element={<ResourceClaimTemplates />} />
             <Route path="gpu/resourceslices" element={<ResourceSlices />} />
-            <Route path="gateway/backendtlspolicies" element={<ComingSoon title="Backend TLS Policies" />} />
-            <Route path="gateway/backendtrafficpolicies" element={<ComingSoon title="Backend Traffic Policies" />} />
+            <Route path="gateway/backendtlspolicies" element={<BackendTLSPolicies />} />
+            <Route path="gateway/backendtrafficpolicies" element={<BackendTrafficPolicies />} />
             <Route path="security/serviceaccounts" element={<ComingSoon title="Service Accounts" />} />
             <Route path="security/roles" element={<ComingSoon title="Roles" />} />
             <Route path="security/rolebindings" element={<ComingSoon title="Role Bindings" />} />
