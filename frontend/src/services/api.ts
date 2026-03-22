@@ -483,6 +483,26 @@ export interface ReferenceGrantInfo {
   api_version?: string | null
 }
 
+export interface BackendTLSPolicyInfo {
+  name: string
+  namespace: string
+  target_refs?: Array<Record<string, any>>
+  conditions?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  created_at?: string | null
+}
+
+export interface BackendTrafficPolicyInfo {
+  name: string
+  namespace: string
+  target_refs?: Array<Record<string, any>>
+  conditions?: Array<Record<string, any>>
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  created_at?: string | null
+}
+
 // GPU / DRA types
 export interface GPUNodeInfo {
   name: string
