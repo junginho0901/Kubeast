@@ -320,6 +320,8 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 		"gateways":          {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
 		"gatewayclasses":    {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
 		"httproutes":        {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
+		"serviceaccounts":   {Group: "", Version: "v1", Resource: "serviceaccounts"},
+		"roles":             {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok
