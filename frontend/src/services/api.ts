@@ -823,6 +823,24 @@ export interface VolumeAttachmentInfo {
   created_at?: string | null
 }
 
+export interface ServiceAccountInfo {
+  name: string
+  namespace: string
+  secrets: number
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
+export interface RoleInfo {
+  name: string
+  namespace: string
+  rules_count: number
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
 export interface TopologyGraph {
   nodes: Array<{
     id: string
