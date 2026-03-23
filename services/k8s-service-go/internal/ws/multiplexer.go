@@ -1021,6 +1021,32 @@ func toInt64(v interface{}) (int64, bool) {
 	}
 }
 
+func serviceAccountToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	secrets, _ := obj.Object["secrets"].([]interface{})
+	return map[string]interface{}{
+		"name":       metadata["name"],
+		"namespace":  metadata["namespace"],
+		"secrets":    len(secrets),
+		"created_at": metadata["creationTimestamp"],
+		"labels":     metadata["labels"],
+		"annotations": metadata["annotations"],
+	}
+}
+
+func roleToInfo(obj *unstructured.Unstructured) map[string]interface{} {
+	metadata := obj.Object["metadata"].(map[string]interface{})
+	rules, _ := obj.Object["rules"].([]interface{})
+	return map[string]interface{}{
+		"name":        metadata["name"],
+		"namespace":   metadata["namespace"],
+		"rules_count": len(rules),
+		"created_at":  metadata["creationTimestamp"],
+		"labels":      metadata["labels"],
+		"annotations": metadata["annotations"],
+	}
+}
+
 func genericToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	metadata := obj.Object["metadata"].(map[string]interface{})
 	return map[string]interface{}{
