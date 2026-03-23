@@ -1872,5 +1872,60 @@
     "editHint": "Edit YAML",
     "applied": "Applied",
     "refreshing": "Refreshing..."
+  },
+  "serviceAccountsPage": {
+    "title": "Service Accounts",
+    "subtitle": "Manage ServiceAccounts across namespaces.",
+    "searchPlaceholder": "Search by name or namespace...",
+    "allNamespaces": "All namespaces",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create ServiceAccount",
+    "createTitle": "Create ServiceAccount from YAML",
+    "noResults": "No service accounts found.",
+    "matchCount": "{{count}} result(s) match.",
+    "stats": {
+      "total": "Total",
+      "withSecrets": "With Secrets",
+      "totalSecrets": "Total Secrets"
+    },
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "secrets": "Secrets",
+      "age": "Age"
+    },
+    "delete": {
+      "button": "Delete ServiceAccount",
+      "title": "Delete ServiceAccount",
+      "confirm": "Are you sure you want to delete ServiceAccount \"{{name}}\"?"
+    }
+  },
+  "rolesPage": {
+    "title": "Roles",
+    "subtitle": "Manage Roles across namespaces.",
+    "searchPlaceholder": "Search by name or namespace...",
+    "allNamespaces": "All namespaces",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create Role",
+    "createTitle": "Create Role from YAML",
+    "noResults": "No roles found.",
+    "matchCount": "{{count}} result(s) match.",
+    "stats": {
+      "total": "Total",
+      "totalRules": "Total Rules"
+    },
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "rules": "Rules",
+      "age": "Age"
+    },
+    "delete": {
+      "button": "Delete Role",
+      "title": "Delete Role",
+      "confirm": "Are you sure you want to delete Role \"{{name}}\"?"
+    }
   }
 }
