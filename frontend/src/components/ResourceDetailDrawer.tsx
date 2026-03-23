@@ -56,6 +56,8 @@ function kindToPlural(kind: string): string {
     ResourceSlice: 'resourceslice',
     StorageClass: 'storageclass',
     VolumeAttachment: 'volumeattachment',
+    ServiceAccount: 'serviceaccount',
+    Role: 'role',
   }
   return map[kind] ?? kind.toLowerCase()
 }
@@ -78,6 +80,7 @@ function kindIcon(kind: string): string {
     ResourceClaim: '📋',
     ResourceClaimTemplate: '📄',
     ResourceSlice: '🧩',
+    ServiceAccount: '👤', Role: '🔐',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
   }
@@ -134,6 +137,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteResourceClaim = kind === 'ResourceClaim' && !!ns && isWriteRole
   const canDeleteResourceClaimTemplate = kind === 'ResourceClaimTemplate' && !!ns && isWriteRole
   const canDeleteResourceSlice = kind === 'ResourceSlice' && isWriteRole
+  const canDeleteServiceAccount = kind === 'ServiceAccount' && !!ns && isWriteRole
+  const canDeleteRole = kind === 'Role' && !!ns && isWriteRole
   const canDelete = [
     canDeleteNode,
     canDeletePod,
@@ -165,6 +170,8 @@ export default function ResourceDetailDrawer() {
     canDeleteResourceClaim,
     canDeleteResourceClaimTemplate,
     canDeleteResourceSlice,
+    canDeleteServiceAccount,
+    canDeleteRole,
   ].some(Boolean)
 
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
