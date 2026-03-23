@@ -261,6 +261,20 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}/describe", h.DescribeBackendTrafficPolicy)
 		r.Delete("/api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}", h.DeleteBackendTrafficPolicy)
 
+		// Security - ServiceAccounts
+		r.Get("/api/v1/serviceaccounts/all", h.GetAllServiceAccounts)
+		r.Get("/api/v1/namespaces/{namespace}/serviceaccounts", h.GetServiceAccounts)
+		r.Get("/api/v1/namespaces/{namespace}/serviceaccounts/{name}/describe", h.DescribeServiceAccount)
+		r.Get("/api/v1/namespaces/{namespace}/serviceaccounts/{name}/yaml", h.GetServiceAccountYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/serviceaccounts/{name}", h.DeleteServiceAccount)
+
+		// Security - Roles
+		r.Get("/api/v1/roles/all", h.GetAllRoles)
+		r.Get("/api/v1/namespaces/{namespace}/roles", h.GetRoles)
+		r.Get("/api/v1/namespaces/{namespace}/roles/{name}/describe", h.DescribeRole)
+		r.Get("/api/v1/namespaces/{namespace}/roles/{name}/yaml", h.GetRoleYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/roles/{name}", h.DeleteRole)
+
 		// GPU / DRA
 		r.Get("/api/v1/gpu/dashboard", h.GetGPUDashboard)
 
