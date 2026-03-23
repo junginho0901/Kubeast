@@ -279,6 +279,14 @@ export default function ResourceDetailDrawer() {
     } else if (kind === 'ResourceSlice') {
       queryClient.invalidateQueries({ queryKey: ['gpu', 'resourceslices'] })
       queryClient.invalidateQueries({ queryKey: ['resourceslice-describe', name] })
+    } else if (kind === 'ServiceAccount' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['security', 'serviceaccounts'] })
+      queryClient.invalidateQueries({ queryKey: ['security', 'serviceaccounts', ns] })
+      queryClient.invalidateQueries({ queryKey: ['serviceaccount-describe', ns, name] })
+    } else if (kind === 'Role' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['security', 'roles'] })
+      queryClient.invalidateQueries({ queryKey: ['security', 'roles', ns] })
+      queryClient.invalidateQueries({ queryKey: ['role-describe', ns, name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
