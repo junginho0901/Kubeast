@@ -275,6 +275,13 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/roles/{name}/yaml", h.GetRoleYAML)
 		r.Delete("/api/v1/namespaces/{namespace}/roles/{name}", h.DeleteRole)
 
+		// Security - RoleBindings
+		r.Get("/api/v1/rolebindings/all", h.GetAllRoleBindings)
+		r.Get("/api/v1/namespaces/{namespace}/rolebindings", h.GetRoleBindings)
+		r.Get("/api/v1/namespaces/{namespace}/rolebindings/{name}/describe", h.DescribeRoleBinding)
+		r.Get("/api/v1/namespaces/{namespace}/rolebindings/{name}/yaml", h.GetRoleBindingYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/rolebindings/{name}", h.DeleteRoleBinding)
+
 		// GPU / DRA
 		r.Get("/api/v1/gpu/dashboard", h.GetGPUDashboard)
 
@@ -324,8 +331,11 @@ func main() {
 		r.Get("/api/v1/metrics/top-resources", h.GetTopResources)
 
 		// ConfigMaps & Secrets
+		r.Get("/api/v1/configmaps/all", h.GetAllConfigMaps)
 		r.Get("/api/v1/namespaces/{namespace}/configmaps", h.GetConfigMaps)
+		r.Get("/api/v1/namespaces/{namespace}/configmaps/{name}/describe", h.DescribeConfigMap)
 		r.Get("/api/v1/namespaces/{namespace}/configmaps/{name}/yaml", h.GetConfigMapYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/configmaps/{name}", h.DeleteConfigMap)
 		r.Get("/api/v1/namespaces/{namespace}/secrets", h.GetSecrets)
 		r.Get("/api/v1/namespaces/{namespace}/secrets/{name}/yaml", h.GetSecretYAML)
 

@@ -841,6 +841,27 @@ export interface RoleInfo {
   annotations?: Record<string, string> | null
 }
 
+export interface RoleBindingInfo {
+  name: string
+  namespace: string
+  role_ref_kind: string
+  role_ref_name: string
+  subjects_count: number
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
+export interface ConfigMapInfo {
+  name: string
+  namespace: string
+  data_count: number
+  data_keys?: string[] | null
+  binary_keys?: string[] | null
+  labels?: Record<string, string> | null
+  created_at?: string | null
+}
+
 export interface TopologyGraph {
   nodes: Array<{
     id: string
@@ -2204,6 +2225,54 @@ export const api = {
 
   deleteRole: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/roles/${name}`)
+  },
+
+  // ===== RoleBindings =====
+  getRoleBindings: async (namespace: string, forceRefresh = false): Promise<RoleBindingInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/rolebindings`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllRoleBindings: async (forceRefresh = false): Promise<RoleBindingInfo[]> => {
+    const { data } = await client.get('/cluster/rolebindings/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeRoleBinding: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/rolebindings/${name}/describe`)
+    return data
+  },
+
+  deleteRoleBinding: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/rolebindings/${name}`)
+  },
+
+  // ===== ConfigMaps =====
+  getConfigMaps: async (namespace: string, forceRefresh = false): Promise<ConfigMapInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/configmaps`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getAllConfigMaps: async (forceRefresh = false): Promise<ConfigMapInfo[]> => {
+    const { data } = await client.get('/cluster/configmaps/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeConfigMap: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/configmaps/${name}/describe`)
+    return data
+  },
+
+  deleteConfigMap: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/configmaps/${name}`)
   },
 }
 
