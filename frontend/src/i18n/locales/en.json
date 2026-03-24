@@ -1927,5 +1927,60 @@
       "title": "Delete Role",
       "confirm": "Are you sure you want to delete Role \"{{name}}\"?"
     }
+  },
+  "roleBindingsPage": {
+    "title": "Role Bindings",
+    "subtitle": "Manage RoleBindings across namespaces.",
+    "searchPlaceholder": "Search by name, namespace, or role ref...",
+    "allNamespaces": "All namespaces",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create RoleBinding",
+    "createTitle": "Create RoleBinding from YAML",
+    "noResults": "No role bindings found.",
+    "matchCount": "{{count}} result(s) match.",
+    "stats": {
+      "total": "Total",
+      "totalSubjects": "Total Subjects"
+    },
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "roleRef": "Role Ref",
+      "subjects": "Subjects",
+      "age": "Age"
+    },
+    "delete": {
+      "button": "Delete RoleBinding",
+      "title": "Delete RoleBinding",
+      "confirm": "Are you sure you want to delete RoleBinding \"{{name}}\"?"
+    }
+  },
+  "configMapsPage": {
+    "title": "ConfigMaps",
+    "subtitle": "Manage ConfigMaps across namespaces.",
+    "searchPlaceholder": "Search by name or namespace...",
+    "allNamespaces": "All namespaces",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create ConfigMap",
+    "createTitle": "Create ConfigMap from YAML",
+    "noResults": "No config maps found.",
+    "matchCount": "{{count}} result(s) match.",
+    "stats": {
+      "total": "Total",
+      "totalKeys": "Total Data Keys"
+    },
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "data": "Data",
+      "age": "Age"
+    },
+    "delete": {
+      "button": "Delete ConfigMap",
+      "title": "Delete ConfigMap",
+      "confirm": "Are you sure you want to delete ConfigMap \"{{name}}\"?"
+    }
   }
 }
