@@ -297,10 +297,10 @@ func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string, can
 				data[k] = "***"
 			}
 		}
-	}
-	if stringData, ok := obj.Object["stringData"].(map[string]interface{}); ok {
-		for k := range stringData {
-			stringData[k] = "***"
+		if stringData, ok := obj.Object["stringData"].(map[string]interface{}); ok {
+			for k := range stringData {
+				stringData[k] = "***"
+			}
 		}
 	}
 
