@@ -49,6 +49,7 @@ import ServiceAccounts from './pages/security/ServiceAccounts'
 import Roles from './pages/security/Roles'
 import RoleBindings from './pages/security/RoleBindings'
 import ConfigMaps from './pages/configuration/ConfigMaps'
+import Secrets from './pages/configuration/Secrets'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
