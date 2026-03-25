@@ -95,7 +95,7 @@ function App() {
             <Route path="security/roles" element={<Roles />} />
             <Route path="security/rolebindings" element={<RoleBindings />} />
             <Route path="configuration/configmaps" element={<ConfigMaps />} />
-            <Route path="configuration/secrets" element={<ComingSoon title="Secrets" />} />
+            <Route path="configuration/secrets" element={<Secrets />} />
             <Route path="configuration/hpas" element={<ComingSoon title="Horizontal Pod Autoscalers" />} />
             <Route path="configuration/vpas" element={<ComingSoon title="Vertical Pod Autoscalers" />} />
             <Route path="configuration/pdbs" element={<ComingSoon title="Pod Disruption Budgets" />} />
