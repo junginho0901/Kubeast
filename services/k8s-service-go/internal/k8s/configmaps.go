@@ -178,8 +178,110 @@ func (s *Service) GetSecrets(ctx context.Context, namespace string) ([]map[strin
 	return result, nil
 }
 
-// GetSecretYAML returns a secret as YAML with data values masked.
-func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string) (string, error) {
+// GetAllSecrets lists secrets across all namespaces (data values masked).
+func (s *Service) GetAllSecrets(ctx context.Context) ([]map[string]interface{}, error) {
+	secretList, err := s.clientset.CoreV1().Secrets("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list all secrets: %w", err)
+	}
+
+	result := make([]map[string]interface{}, 0, len(secretList.Items))
+	for _, secret := range secretList.Items {
+		dataKeys := make([]string, 0, len(secret.Data))
+		for k := range secret.Data {
+			dataKeys = append(dataKeys, k)
+		}
+
+		result = append(result, map[string]interface{}{
+			"name":       secret.Name,
+			"namespace":  secret.Namespace,
+			"type":       string(secret.Type),
+			"data_count": len(secret.Data),
+			"data_keys":  dataKeys,
+			"labels":     secret.Labels,
+			"created_at": toISO(&secret.CreationTimestamp),
+		})
+	}
+	return result, nil
+}
+
+// DescribeSecret returns detailed info about a secret.
+// When canReveal is true (write/admin), base64-encoded data values are included.
+// When false (read), only key names and sizes are returned.
+func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, canReveal bool) (map[string]interface{}, error) {
+	secret, err := s.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get secret %s/%s: %w", namespace, name, err)
+	}
+
+	dataKeys := make([]string, 0, len(secret.Data))
+	dataSizes := make(map[string]int, len(secret.Data))
+	for k, v := range secret.Data {
+		dataKeys = append(dataKeys, k)
+		dataSizes[k] = len(v)
+	}
+
+	result := map[string]interface{}{
+		"name":             secret.Name,
+		"namespace":        secret.Namespace,
+		"type":             string(secret.Type),
+		"data_count":       len(secret.Data),
+		"data_keys":        dataKeys,
+		"data_sizes":       dataSizes,
+		"can_reveal":       canReveal,
+		"labels":           secret.Labels,
+		"annotations":      secret.Annotations,
+		"created_at":       toISO(&secret.CreationTimestamp),
+		"uid":              string(secret.UID),
+		"resource_version": secret.ResourceVersion,
+	}
+
+	// Include actual base64-encoded data values for write/admin users
+	if canReveal {
+		dataValues := make(map[string]string, len(secret.Data))
+		for k, v := range secret.Data {
+			dataValues[k] = string(v)
+		}
+		result["data_values"] = dataValues
+	}
+
+	if secret.Immutable != nil {
+		result["immutable"] = *secret.Immutable
+	}
+
+	// Owner references
+	if len(secret.OwnerReferences) > 0 {
+		owners := make([]map[string]interface{}, 0, len(secret.OwnerReferences))
+		for _, ref := range secret.OwnerReferences {
+			owners = append(owners, map[string]interface{}{
+				"kind": ref.Kind,
+				"name": ref.Name,
+				"uid":  string(ref.UID),
+			})
+		}
+		result["owner_references"] = owners
+	}
+
+	// Events
+	events, eventsErr := s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Secret", name),
+	})
+	if eventsErr == nil {
+		sortEventsByTime(events.Items)
+		result["events"] = formatEventList(events.Items)
+	}
+
+	return result, nil
+}
+
+// DeleteSecret deletes a secret.
+func (s *Service) DeleteSecret(ctx context.Context, namespace, name string) error {
+	return s.clientset.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// GetSecretYAML returns a secret as YAML.
+// When canReveal is false (read), data values are masked with "***".
+func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string, canReveal bool) (string, error) {
 	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 	obj, err := s.GetResource(ctx, gvr, namespace, name)
 	if err != nil {
