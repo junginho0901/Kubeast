@@ -290,10 +290,12 @@ func (s *Service) GetSecretYAML(ctx context.Context, namespace, name string, can
 
 	obj.SetManagedFields(nil)
 
-	// Mask data values
-	if data, ok := obj.Object["data"].(map[string]interface{}); ok {
-		for k := range data {
-			data[k] = "***"
+	// Mask data values for read-only users
+	if !canReveal {
+		if data, ok := obj.Object["data"].(map[string]interface{}); ok {
+			for k := range data {
+				data[k] = "***"
+			}
 		}
 	}
 	if stringData, ok := obj.Object["stringData"].(map[string]interface{}); ok {
