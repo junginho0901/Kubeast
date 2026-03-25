@@ -34,7 +34,7 @@ export function useAdaptiveRowsPerPage(
 
       const rect = container.getBoundingClientRect()
       const availableHeight = window.innerHeight - rect.top - footerHeight
-      const availableRows = Math.floor((availableHeight - headerHeight) / rowHeight)
+      const availableRows = Math.floor((availableHeight - headerHeight) / rowHeight) - 1
       const nextRows = Math.max(minRows, Math.min(maxRows, availableRows))
       setRowsPerPage((prev) => (prev === nextRows ? prev : nextRows))
     }
