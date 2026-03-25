@@ -338,6 +338,7 @@ func main() {
 		r.Delete("/api/v1/namespaces/{namespace}/configmaps/{name}", h.DeleteConfigMap)
 		r.Get("/api/v1/secrets/all", h.GetAllSecrets)
 		r.Get("/api/v1/namespaces/{namespace}/secrets", h.GetSecrets)
+		r.Get("/api/v1/namespaces/{namespace}/secrets/{name}/describe", h.DescribeSecret)
 		r.Get("/api/v1/namespaces/{namespace}/secrets/{name}/yaml", h.GetSecretYAML)
 
 		// Generic resources
