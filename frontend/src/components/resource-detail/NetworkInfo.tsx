@@ -237,6 +237,12 @@ function NetworkPolicyDetail({ name, namespace, rawJson }: { name: string; names
   return (
     <>
       <InfoSection title="NetworkPolicy Info">
+        {(isDefaultDenyIngress || isDefaultDenyEgress) && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {isDefaultDenyIngress && <span className="badge badge-warning">Default Deny Ingress</span>}
+            {isDefaultDenyEgress && <span className="badge badge-warning">Default Deny Egress</span>}
+          </div>
+        )}
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
