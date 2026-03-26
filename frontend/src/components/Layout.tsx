@@ -118,6 +118,13 @@ export default function Layout() {
         { name: t('nav.namespaces'), href: '/cluster/namespaces', icon: Boxes },
         { name: t('nav.nodes'), href: '/cluster/nodes', icon: Server },
         { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search },
+        { name: t('nav.priorityClasses'), href: '/cluster/priorityclasses', icon: Activity },
+        { name: t('nav.runtimeClasses'), href: '/cluster/runtimeclasses', icon: Server },
+        { name: t('nav.leases'), href: '/cluster/leases', icon: Clock },
+        { name: t('nav.resourceQuotas'), href: '/cluster/resourcequotas', icon: Database },
+        { name: t('nav.limitRanges'), href: '/cluster/limitranges', icon: Layers },
+        { name: t('nav.mutatingWebhooks'), href: '/cluster/mutatingwebhookconfigurations', icon: FileCode },
+        { name: t('nav.validatingWebhooks'), href: '/cluster/validatingwebhookconfigurations', icon: FileCode },
       ],
     },
     {
