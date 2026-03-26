@@ -42,8 +42,19 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
   const allocationStatus = describe?.allocation_status
-  const allocation = describe?.allocation ?? (describe?.status as Record<string, unknown> | undefined)?.allocation
+  const allocation = describe?.allocation ?? (describe?.status as Record<string, unknown> | undefined)?.allocation as Record<string, unknown> | undefined
   const reservedFor = describe?.reserved_for ?? (describe?.status as Record<string, unknown> | undefined)?.reservedFor as Array<Record<string, unknown>> | undefined
+
+  /* ── Parse devices (spec.devices.requests) ── */
+  const devicesSpec = describe?.devices as Record<string, unknown> | undefined
+  const deviceRequests = (devicesSpec?.requests ?? []) as Array<Record<string, unknown>>
+
+  /* ── Parse allocation results (status.allocation.devices.results) ── */
+  const allocDevices = (allocation?.devices ?? {}) as Record<string, unknown>
+  const allocResults = (allocDevices?.results ?? []) as Array<Record<string, unknown>>
+
+  /* ── Parse reserved for ── */
+  const reservedForList = (reservedFor && Array.isArray(reservedFor)) ? reservedFor : []
 
   return (
     <>
@@ -60,27 +71,91 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      {describe?.devices && (
+      {deviceRequests.length > 0 && (
         <InfoSection title="Devices">
-          <pre className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-64">
-            {JSON.stringify(describe.devices, null, 2)}
-          </pre>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs table-fixed min-w-[500px]">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1 w-[20%]">Name</th>
+                  <th className="text-left py-1 w-[20%]">Device Class</th>
+                  <th className="text-left py-1 w-[30%]">Selectors</th>
+                  <th className="text-left py-1 w-[10%]">Count</th>
+                  <th className="text-left py-1 w-[20%]">Allocation Mode</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {deviceRequests.map((req, idx) => {
+                  const selectors = (req.selectors ?? []) as Array<Record<string, unknown>>
+                  const selectorStrs = selectors.map(s => {
+                    const cel = s.cel as Record<string, unknown> | undefined
+                    return cel?.expression ? String(cel.expression) : JSON.stringify(s)
+                  })
+                  return (
+                    <tr key={idx} className="text-slate-200">
+                      <td className="py-1 pr-2 break-words">{text(req.name)}</td>
+                      <td className="py-1 pr-2 break-words">{text(req.deviceClassName ?? req.device_class_name)}</td>
+                      <td className="py-1 pr-2 break-words font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
+                      <td className="py-1 pr-2">{text(req.count)}</td>
+                      <td className="py-1 pr-2 break-words">{text(req.allocationMode ?? req.allocation_mode)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </InfoSection>
       )}
 
-      {allocation && (
+      {allocResults.length > 0 && (
         <InfoSection title="Allocation">
-          <pre className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-64">
-            {JSON.stringify(allocation, null, 2)}
-          </pre>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs table-fixed min-w-[400px]">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1 w-[25%]">Request</th>
+                  <th className="text-left py-1 w-[25%]">Driver</th>
+                  <th className="text-left py-1 w-[25%]">Pool</th>
+                  <th className="text-left py-1 w-[25%]">Device</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {allocResults.map((res, idx) => (
+                  <tr key={idx} className="text-slate-200">
+                    <td className="py-1 pr-2 break-words">{text(res.request)}</td>
+                    <td className="py-1 pr-2 break-words">{text(res.driver)}</td>
+                    <td className="py-1 pr-2 break-words">{text(res.pool)}</td>
+                    <td className="py-1 pr-2 break-words">{text(res.device)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </InfoSection>
       )}
 
-      {reservedFor && Array.isArray(reservedFor) && reservedFor.length > 0 && (
+      {reservedForList.length > 0 && (
         <InfoSection title="Reserved For">
-          <pre className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-64">
-            {JSON.stringify(reservedFor, null, 2)}
-          </pre>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs table-fixed min-w-[400px]">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1 w-[35%]">Name</th>
+                  <th className="text-left py-1 w-[25%]">Resource</th>
+                  <th className="text-left py-1 w-[40%]">API Group</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {reservedForList.map((rf, idx) => (
+                  <tr key={idx} className="text-slate-200">
+                    <td className="py-1 pr-2 break-words">{text(rf.name)}</td>
+                    <td className="py-1 pr-2 break-words">{text(rf.resource)}</td>
+                    <td className="py-1 pr-2 break-words">{text(rf.apiGroup ?? rf.api_group)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </InfoSection>
       )}
 
