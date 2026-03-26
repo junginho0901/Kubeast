@@ -40,6 +40,14 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
 
   const claimSpec = describe?.claim_spec ?? describe?.spec
 
+  /* ── Parse claim spec -> devices ── */
+  const claimSpecObj = claimSpec as Record<string, unknown> | undefined
+  const specNested = claimSpecObj?.spec as Record<string, unknown> | undefined
+  const devicesObj = ((claimSpecObj?.devices ?? specNested?.devices) ?? {}) as Record<string, unknown>
+  const requests = (devicesObj?.requests ?? []) as Array<Record<string, unknown>>
+  const constraints = (devicesObj?.constraints ?? []) as Array<Record<string, unknown>>
+  const configArr = (devicesObj?.config ?? []) as Array<Record<string, unknown>>
+
   return (
     <>
       <InfoSection title="Template Info">
@@ -52,15 +60,108 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
         </div>
       </InfoSection>
 
-      <InfoSection title="Claim Spec">
-        {claimSpec ? (
-          <pre className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-64">
-            {JSON.stringify(claimSpec, null, 2)}
-          </pre>
-        ) : (
-          <p className="text-xs text-slate-400">No claim spec</p>
-        )}
-      </InfoSection>
+      {requests.length > 0 && (
+        <InfoSection title="Claim Spec - Requests">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs table-fixed min-w-[500px]">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1 w-[20%]">Name</th>
+                  <th className="text-left py-1 w-[20%]">Device Class</th>
+                  <th className="text-left py-1 w-[30%]">Selectors</th>
+                  <th className="text-left py-1 w-[10%]">Count</th>
+                  <th className="text-left py-1 w-[20%]">Allocation Mode</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {requests.map((req, idx) => {
+                  const selectors = (req.selectors ?? []) as Array<Record<string, unknown>>
+                  const selectorStrs = selectors.map(s => {
+                    const cel = s.cel as Record<string, unknown> | undefined
+                    return cel?.expression ? String(cel.expression) : JSON.stringify(s)
+                  })
+                  return (
+                    <tr key={idx} className="text-slate-200">
+                      <td className="py-1 pr-2 break-words">{text(req.name)}</td>
+                      <td className="py-1 pr-2 break-words">{text(req.deviceClassName ?? req.device_class_name)}</td>
+                      <td className="py-1 pr-2 break-words font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
+                      <td className="py-1 pr-2">{text(req.count)}</td>
+                      <td className="py-1 pr-2 break-words">{text(req.allocationMode ?? req.allocation_mode)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </InfoSection>
+      )}
+
+      {constraints.length > 0 && (
+        <InfoSection title="Claim Spec - Constraints">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs table-fixed min-w-[300px]">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1 w-[30%]">Requests</th>
+                  <th className="text-left py-1 w-[70%]">Match Attribute</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {constraints.map((c, idx) => {
+                  const reqs = Array.isArray(c.requests) ? c.requests.join(', ') : text(c.requests)
+                  const matchAttr = text(c.matchAttribute ?? c.match_attribute)
+                  return (
+                    <tr key={idx} className="text-slate-200">
+                      <td className="py-1 pr-2 break-words">{reqs}</td>
+                      <td className="py-1 pr-2 break-words font-mono">{matchAttr}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </InfoSection>
+      )}
+
+      {configArr.length > 0 && (
+        <InfoSection title="Claim Spec - Config">
+          <div className="space-y-3">
+            {configArr.map((cfg, idx) => {
+              const opaque = cfg.opaque as Record<string, unknown> | undefined
+              if (opaque) {
+                const params = (opaque.parameters ?? {}) as Record<string, unknown>
+                return (
+                  <div key={idx}>
+                    <InfoRow label="Driver" value={text(opaque.driver)} />
+                    {Object.keys(params).length > 0 && (
+                      <div className="mt-1">
+                        <KeyValueTags data={Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))} />
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <pre key={idx} className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-40">
+                  {JSON.stringify(cfg, null, 2)}
+                </pre>
+              )
+            })}
+          </div>
+        </InfoSection>
+      )}
+
+      {requests.length === 0 && constraints.length === 0 && configArr.length === 0 && (
+        <InfoSection title="Claim Spec">
+          {claimSpec ? (
+            <pre className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-64">
+              {JSON.stringify(claimSpec, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-xs text-slate-400">No claim spec</p>
+          )}
+        </InfoSection>
+      )}
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">
