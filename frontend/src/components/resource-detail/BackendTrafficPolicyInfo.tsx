@@ -14,16 +14,14 @@ function text(value: unknown): string {
   return s.length > 0 ? s : '-'
 }
 
-function renderJsonSection(title: string, data: Record<string, any> | null | undefined) {
-  if (!data || Object.keys(data).length === 0) return null
+function renderBadges(items: string[]) {
+  if (!items || items.length === 0) return '-'
   return (
-    <InfoSection title={title}>
-      <div className="space-y-2">
-        {Object.entries(data).map(([key, val]) => (
-          <InfoRow key={key} label={key} value={typeof val === 'object' ? JSON.stringify(val) : text(val)} />
-        ))}
-      </div>
-    </InfoSection>
+    <div className="flex flex-wrap gap-1">
+      {items.map((item, i) => (
+        <span key={i} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{item}</span>
+      ))}
+    </div>
   )
 }
 
