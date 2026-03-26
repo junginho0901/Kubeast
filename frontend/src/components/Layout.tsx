@@ -138,6 +138,9 @@ export default function Layout() {
         { name: t('nav.replicaSets'), href: '/workloads/replicasets', icon: Boxes },
         { name: t('nav.jobs'), href: '/workloads/jobs', icon: FileBox },
         { name: t('nav.cronJobs'), href: '/workloads/cronjobs', icon: Clock },
+        { name: t('nav.hpas'), href: '/workloads/hpas', icon: Activity },
+        { name: t('nav.vpas'), href: '/workloads/vpas', icon: Activity },
+        { name: t('nav.pdbs'), href: '/workloads/pdbs', icon: Shield },
       ],
     },
     {
@@ -221,16 +224,6 @@ export default function Layout() {
       items: [
         { name: t('nav.configMaps'), href: '/configuration/configmaps', icon: FileCode },
         { name: t('nav.secrets'), href: '/configuration/secrets', icon: Key },
-        { name: t('nav.hpas'), href: '/configuration/hpas', icon: Activity },
-        { name: t('nav.vpas'), href: '/configuration/vpas', icon: Activity },
-        { name: t('nav.pdbs'), href: '/configuration/pdbs', icon: Shield },
-        { name: t('nav.resourceQuotas'), href: '/configuration/resourcequotas', icon: Database },
-        { name: t('nav.limitRanges'), href: '/configuration/limitranges', icon: Layers },
-        { name: t('nav.priorityClasses'), href: '/configuration/priorityclasses', icon: Activity },
-        { name: t('nav.runtimeClasses'), href: '/configuration/runtimeclasses', icon: Server },
-        { name: t('nav.leases'), href: '/configuration/leases', icon: Clock },
-        { name: t('nav.mutatingWebhooks'), href: '/configuration/mutatingwebhookconfigurations', icon: FileCode },
-        { name: t('nav.validatingWebhooks'), href: '/configuration/validatingwebhookconfigurations', icon: FileCode },
       ],
     },
     {
