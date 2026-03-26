@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Eye, EyeOff, Copy, Check } from 'lucide-react'
+import { Eye, EyeOff, Copy, Check, ShieldCheck, Container } from 'lucide-react'
 import { api } from '@/services/api'
 import {
   InfoSection,
@@ -59,6 +59,42 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 
   const dataTotalPages = Math.max(1, Math.ceil(filteredDataKeys.length / DATA_PER_PAGE))
 
+  const tlsInfo = useMemo(() => {
+    if (secretType !== 'kubernetes.io/tls') return null
+    try {
+      const certB64 = dataValues['tls.crt']
+      const keyB64 = dataValues['tls.key']
+      const certSize = dataSizes['tls.crt']
+      const keySize = dataSizes['tls.key']
+      let pemText: string | null = null
+      if (certB64) {
+        try { pemText = window.atob(certB64) } catch { /* not valid base64 */ }
+      }
+      const isPem = pemText?.includes('-----BEGIN CERTIFICATE-----') ?? false
+      return { certSize, keySize, isPem, hasCert: !!certB64, hasKey: !!keyB64 }
+    } catch {
+      return null
+    }
+  }, [secretType, dataValues, dataSizes])
+
+  const dockerInfo = useMemo(() => {
+    if (secretType !== 'kubernetes.io/dockerconfigjson') return null
+    try {
+      const raw = dataValues['.dockerconfigjson']
+      if (!raw) return null
+      const decoded = window.atob(raw)
+      const parsed = JSON.parse(decoded) as { auths?: Record<string, { username?: string }> }
+      if (!parsed.auths) return null
+      const registries = Object.entries(parsed.auths).map(([url, auth]) => ({
+        url,
+        username: auth?.username,
+      }))
+      return { registries }
+    } catch {
+      return null
+    }
+  }, [secretType, dataValues])
+
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
   return (
@@ -84,6 +120,66 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label={tr('secretInfo.dataKeys', 'Data Keys')} value={String(describe?.data_count ?? dataKeys.length)} />
         </div>
       </InfoSection>
+
+      {tlsInfo && (
+        <InfoSection title={tr('secretInfo.tlsCertInfo', 'TLS Certificate Info')}>
+          <div className="space-y-2">
+            <InfoRow label={tr('secretInfo.type', 'Type')} value={
+              <span className="inline-flex items-center gap-1.5 rounded border border-emerald-700/50 bg-emerald-900/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
+                <ShieldCheck className="w-3 h-3" /> TLS
+              </span>
+            } />
+            <InfoRow label="tls.crt" value={
+              <span className="text-xs text-slate-300">
+                {tlsInfo.hasCert ? (
+                  <>
+                    {tlsInfo.certSize !== undefined && <span className="font-mono">{tlsInfo.certSize} bytes</span>}
+                    {tlsInfo.isPem && <span className="ml-2 text-[10px] text-emerald-400/80">(PEM format)</span>}
+                  </>
+                ) : <span className="text-slate-500 italic">not present</span>}
+              </span>
+            } />
+            <InfoRow label="tls.key" value={
+              <span className="text-xs text-slate-300">
+                {tlsInfo.hasKey ? (
+                  tlsInfo.keySize !== undefined ? <span className="font-mono">{tlsInfo.keySize} bytes</span> : <span>present</span>
+                ) : <span className="text-slate-500 italic">not present</span>}
+              </span>
+            } />
+            <div className="mt-1 px-1">
+              <p className="text-[10px] text-slate-500 italic">
+                {tr('secretInfo.tlsHint', 'Use `openssl x509 -in tls.crt -text -noout` for full certificate details.')}
+              </p>
+            </div>
+          </div>
+        </InfoSection>
+      )}
+
+      {dockerInfo && dockerInfo.registries.length > 0 && (
+        <InfoSection title={tr('secretInfo.dockerConfigInfo', 'Docker Registry Info')}>
+          <div className="space-y-2">
+            <InfoRow label={tr('secretInfo.type', 'Type')} value={
+              <span className="inline-flex items-center gap-1.5 rounded border border-blue-700/50 bg-blue-900/30 px-2 py-0.5 text-[11px] font-mono text-blue-300">
+                <Container className="w-3 h-3" /> Docker Config
+              </span>
+            } />
+            <InfoRow label={tr('secretInfo.registries', 'Registries')} value={
+              <div className="space-y-1">
+                {dockerInfo.registries.map((reg) => (
+                  <div key={reg.url} className="flex items-center gap-2 text-xs">
+                    <span className="font-mono text-cyan-300 break-all">{reg.url}</span>
+                    {reg.username && (
+                      <span className="text-[10px] text-slate-400">
+                        ({tr('secretInfo.user', 'user')}: <span className="font-mono text-slate-300">{reg.username}</span>)
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            } />
+          </div>
+        </InfoSection>
+      )}
 
       <InfoSection title={`${tr('secretInfo.data', 'Data')} (${filteredDataKeys.length}${dataSearch ? ` / ${dataKeys.length}` : ''})`}>
         {!canReveal && (
