@@ -718,6 +718,18 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['configuration', 'secrets', ns] }),
           queryClient.invalidateQueries({ queryKey: ['secret-describe', ns, name] }),
         ])
+      } else if (kind === 'HorizontalPodAutoscaler' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'hpas'] }),
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'hpas', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['hpa-describe', ns, name] }),
+        ])
+      } else if (kind === 'VerticalPodAutoscaler' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'vpas'] }),
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'vpas', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['vpa-describe', ns, name] }),
+        ])
       }
 
       close()
@@ -752,6 +764,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'RoleBinding' && ns) return <RoleBindingInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'ConfigMap' && ns) return <ConfigMapInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'Secret' && ns) return <SecretInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'HorizontalPodAutoscaler' && ns) return <HPAInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'VerticalPodAutoscaler' && ns) return <VPAInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
