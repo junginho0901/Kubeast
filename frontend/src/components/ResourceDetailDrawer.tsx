@@ -48,6 +48,7 @@ function kindToPlural(kind: string): string {
     ConfigMap: 'configmap', Secret: 'secret', Ingress: 'ingress',
     NetworkPolicy: 'networkpolicy', PersistentVolumeClaim: 'persistentvolumeclaim',
     PersistentVolume: 'persistentvolume', HorizontalPodAutoscaler: 'horizontalpodautoscaler',
+    VerticalPodAutoscaler: 'verticalpodautoscaler',
     Endpoints: 'endpoints', EndpointSlice: 'endpointslice',
     IngressClass: 'ingressclass',
     Gateway: 'gateway',
@@ -90,7 +91,7 @@ function kindIcon(kind: string): string {
     ResourceSlice: '🧩',
     ServiceAccount: '👤', Role: '🔐', RoleBinding: '🔗',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
-    StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈',
+    StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈', VerticalPodAutoscaler: '📊',
   }
   return map[kind] ?? '📄'
 }
