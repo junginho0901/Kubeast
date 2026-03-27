@@ -11,7 +11,7 @@ import (
 func (h *Handler) GetHPAs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
-	data, err := h.svc.GetGenericResources(ctx, "horizontalpodautoscalers", namespace, "")
+	data, err := h.svc.GetHPAs(ctx, namespace)
 	if err != nil {
 		h.handleError(w, err)
 		return
