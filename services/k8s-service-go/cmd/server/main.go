@@ -353,6 +353,18 @@ func main() {
 		// HPA
 		r.Get("/api/v1/hpas/all", h.GetAllHPAs)
 		r.Get("/api/v1/namespaces/{namespace}/hpas", h.GetHPAs)
+		r.Get("/api/v1/namespaces/{namespace}/hpas/{name}/describe", h.DescribeHPA)
+		r.Get("/api/v1/namespaces/{namespace}/hpas/{name}/yaml", h.GetHPAYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/hpas/{name}", h.DeleteHPA)
+
+		// VPA
+		r.Get("/api/v1/vpas/all", h.GetAllVPAs)
+		r.Get("/api/v1/namespaces/{namespace}/vpas", h.GetVPAs)
+		r.Get("/api/v1/namespaces/{namespace}/vpas/{name}/describe", h.DescribeVPA)
+		r.Get("/api/v1/namespaces/{namespace}/vpas/{name}/yaml", h.GetVPAYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/vpas/{name}", h.DeleteVPA)
+
+		// PDB
 		r.Get("/api/v1/namespaces/{namespace}/pdbs", h.GetPDBs)
 
 		// Topology
