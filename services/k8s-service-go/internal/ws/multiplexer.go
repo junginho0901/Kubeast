@@ -321,7 +321,9 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 		"gatewayclasses":    {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
 		"httproutes":        {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
 		"serviceaccounts":   {Group: "", Version: "v1", Resource: "serviceaccounts"},
-		"roles":             {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
+		"roles":                      {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
+		"horizontalpodautoscalers":    {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},
+		"verticalpodautoscalers":      {Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok
