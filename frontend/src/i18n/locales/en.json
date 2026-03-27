@@ -738,6 +738,69 @@
       "confirm": "Are you sure you want to delete CronJob \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
+  "hpas": {
+    "title": "Horizontal Pod Autoscalers",
+    "subtitle": "Manage horizontal pod autoscaling policies across namespaces.",
+    "create": "Create HPA",
+    "createTitle": "Create HPA from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search HPAs by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} HPA{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "reference": "Reference",
+      "min": "Min",
+      "max": "Max",
+      "replicas": "Replicas",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "noResults": "No HPAs found.",
+    "delete": {
+      "button": "Delete HPA",
+      "title": "Delete HPA",
+      "confirm": "Are you sure you want to delete HPA \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
+  "vpas": {
+    "title": "Vertical Pod Autoscalers",
+    "subtitle": "Manage vertical pod autoscaling recommendations across namespaces.",
+    "create": "Create VPA",
+    "createTitle": "Create VPA from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search VPAs by name...",
+    "allNamespaces": "All namespaces",
+    "matchCount": "{{count}} VPA{{suffix}} match.",
+    "table": {
+      "namespace": "Namespace",
+      "name": "Name",
+      "reference": "Reference",
+      "mode": "Mode",
+      "cpu": "CPU",
+      "memory": "Memory",
+      "provided": "Provided",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "provided": "Provided",
+      "notProvided": "Not Provided"
+    },
+    "noResults": "No VPAs found.",
+    "delete": {
+      "button": "Delete VPA",
+      "title": "Delete VPA",
+      "confirm": "Are you sure you want to delete VPA \"{{name}}\" in \"{{namespace}}\"?"
+    }
+  },
   "pvcs": {
     "title": "Persistent Volume Claims",
     "subtitle": "Inspect and manage PVCs across namespaces.",
