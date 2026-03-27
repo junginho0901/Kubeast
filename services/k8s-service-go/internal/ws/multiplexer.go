@@ -370,6 +370,10 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return serviceAccountToInfo(obj)
 	case "roles":
 		return roleToInfo(obj)
+	case "horizontalpodautoscalers":
+		return hpaToInfo(obj)
+	case "verticalpodautoscalers":
+		return vpaToInfo(obj)
 	default:
 		// Generic: return metadata + spec summary
 		return genericToInfo(obj)
