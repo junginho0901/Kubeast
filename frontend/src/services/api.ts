@@ -1639,6 +1639,22 @@ export const api = {
     return data
   },
 
+  getAllPDBs: async (forceRefresh = false): Promise<PDBInfo[]> => {
+    const { data } = await client.get('/cluster/pdbs/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describePDB: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pdbs/${name}/describe`)
+    return data
+  },
+
+  deletePDB: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/pdbs/${name}`)
+  },
+
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
     const { data} = await client.get(`/cluster/namespaces/${namespace}/pods`, {
       params: { label_selector: labelSelector, force_refresh: forceRefresh },
