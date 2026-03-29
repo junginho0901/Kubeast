@@ -861,6 +861,31 @@
       "confirm": "Are you sure you want to delete priority class \"{{name}}\"? This is a cluster-level resource."
     }
   },
+  "runtimeClasses": {
+    "title": "Runtime Classes",
+    "subtitle": "Manage container runtime configurations for the cluster.",
+    "create": "Create Runtime Class",
+    "createTitle": "Create Runtime Class from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search runtime classes by name or handler...",
+    "matchCount": "{{count}} runtime class{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "handler": "Handler",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "uniqueHandlers": "Unique Handlers"
+    },
+    "noResults": "No runtime classes found.",
+    "delete": {
+      "button": "Delete Runtime Class",
+      "title": "Delete Runtime Class",
+      "confirm": "Are you sure you want to delete runtime class \"{{name}}\"? This is a cluster-level resource."
+    }
+  },
   "pvcs": {
     "title": "Persistent Volume Claims",
     "subtitle": "Inspect and manage PVCs across namespaces.",
