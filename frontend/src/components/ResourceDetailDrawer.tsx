@@ -329,6 +329,13 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['configuration', 'secrets'] })
       queryClient.invalidateQueries({ queryKey: ['configuration', 'secrets', ns] })
       queryClient.invalidateQueries({ queryKey: ['secret-describe', ns, name] })
+    } else if (kind === 'PodDisruptionBudget' && ns) {
+      queryClient.invalidateQueries({ queryKey: ['workloads', 'pdbs'] })
+      queryClient.invalidateQueries({ queryKey: ['workloads', 'pdbs', ns] })
+      queryClient.invalidateQueries({ queryKey: ['pdb-describe', ns, name] })
+    } else if (kind === 'PriorityClass') {
+      queryClient.invalidateQueries({ queryKey: ['cluster', 'priorityclasses'] })
+      queryClient.invalidateQueries({ queryKey: ['priorityclass-describe', name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
