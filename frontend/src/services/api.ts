@@ -723,6 +723,15 @@ export interface PriorityClassInfo {
   created_at: string
 }
 
+export interface RuntimeClassInfo {
+  name: string
+  handler: string
+  overhead?: Record<string, string>
+  scheduling?: Record<string, unknown>
+  labels?: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
