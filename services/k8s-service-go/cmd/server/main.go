@@ -371,6 +371,12 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/pdbs/{name}/yaml", h.GetPDBYAML)
 		r.Delete("/api/v1/namespaces/{namespace}/pdbs/{name}", h.DeletePDB)
 
+		// PriorityClass (cluster-scoped)
+		r.Get("/api/v1/priorityclasses", h.GetPriorityClasses)
+		r.Get("/api/v1/priorityclasses/{name}/describe", h.DescribePriorityClass)
+		r.Get("/api/v1/priorityclasses/{name}/yaml", h.GetPriorityClassYAML)
+		r.Delete("/api/v1/priorityclasses/{name}", h.DeletePriorityClass)
+
 		// Topology
 		r.Get("/api/v1/topology/namespace/{namespace}", h.GetNamespaceTopology)
 		r.Get("/api/v1/topology/service/{namespace}/{service_name}", h.GetServiceTopology)
