@@ -377,6 +377,19 @@ func main() {
 		r.Get("/api/v1/priorityclasses/{name}/yaml", h.GetPriorityClassYAML)
 		r.Delete("/api/v1/priorityclasses/{name}", h.DeletePriorityClass)
 
+		// RuntimeClass (cluster-scoped)
+		r.Get("/api/v1/runtimeclasses", h.GetRuntimeClasses)
+		r.Get("/api/v1/runtimeclasses/{name}/describe", h.DescribeRuntimeClass)
+		r.Get("/api/v1/runtimeclasses/{name}/yaml", h.GetRuntimeClassYAML)
+		r.Delete("/api/v1/runtimeclasses/{name}", h.DeleteRuntimeClass)
+
+		// Lease (namespace-scoped)
+		r.Get("/api/v1/leases/all", h.GetAllLeases)
+		r.Get("/api/v1/namespaces/{namespace}/leases", h.GetLeases)
+		r.Get("/api/v1/namespaces/{namespace}/leases/{name}/describe", h.DescribeLease)
+		r.Get("/api/v1/namespaces/{namespace}/leases/{name}/yaml", h.GetLeaseYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/leases/{name}", h.DeleteLease)
+
 		// Topology
 		r.Get("/api/v1/topology/namespace/{namespace}", h.GetNamespaceTopology)
 		r.Get("/api/v1/topology/service/{namespace}/{service_name}", h.GetServiceTopology)
