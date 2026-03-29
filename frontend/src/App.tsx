@@ -108,8 +108,8 @@ function App() {
             <Route path="cluster/resourcequotas" element={<ComingSoon title="Resource Quotas" />} />
             <Route path="cluster/limitranges" element={<ComingSoon title="Limit Ranges" />} />
             <Route path="cluster/priorityclasses" element={<PriorityClasses />} />
-            <Route path="cluster/runtimeclasses" element={<ComingSoon title="Runtime Classes" />} />
-            <Route path="cluster/leases" element={<ComingSoon title="Leases" />} />
+            <Route path="cluster/runtimeclasses" element={<RuntimeClasses />} />
+            <Route path="cluster/leases" element={<Leases />} />
             <Route path="cluster/mutatingwebhookconfigurations" element={<ComingSoon title="Mutating Webhook Configurations" />} />
             <Route path="cluster/validatingwebhookconfigurations" element={<ComingSoon title="Validating Webhook Configurations" />} />
             <Route path="custom-resources/instances" element={<ComingSoon title="Custom Resource Instances" />} />
