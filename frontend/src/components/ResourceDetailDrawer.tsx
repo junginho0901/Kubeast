@@ -755,6 +755,17 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['workloads', 'vpas', ns] }),
           queryClient.invalidateQueries({ queryKey: ['vpa-describe', ns, name] }),
         ])
+      } else if (kind === 'PodDisruptionBudget' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'pdbs'] }),
+          queryClient.invalidateQueries({ queryKey: ['workloads', 'pdbs', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['pdb-describe', ns, name] }),
+        ])
+      } else if (kind === 'PriorityClass') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'priorityclasses'] }),
+          queryClient.invalidateQueries({ queryKey: ['priorityclass-describe', name] }),
+        ])
       }
 
       close()
@@ -791,6 +802,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'Secret' && ns) return <SecretInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'HorizontalPodAutoscaler' && ns) return <HPAInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'VerticalPodAutoscaler' && ns) return <VPAInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'PodDisruptionBudget' && ns) return <PDBInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'PriorityClass') return <PriorityClassInfo name={name} rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
