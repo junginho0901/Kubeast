@@ -102,10 +102,10 @@ function App() {
             <Route path="configuration/secrets" element={<Secrets />} />
             <Route path="workloads/hpas" element={<HPAs />} />
             <Route path="workloads/vpas" element={<VPAs />} />
-            <Route path="workloads/pdbs" element={<ComingSoon title="Pod Disruption Budgets" />} />
+            <Route path="workloads/pdbs" element={<PDBs />} />
             <Route path="cluster/resourcequotas" element={<ComingSoon title="Resource Quotas" />} />
             <Route path="cluster/limitranges" element={<ComingSoon title="Limit Ranges" />} />
-            <Route path="cluster/priorityclasses" element={<ComingSoon title="Priority Classes" />} />
+            <Route path="cluster/priorityclasses" element={<PriorityClasses />} />
             <Route path="cluster/runtimeclasses" element={<ComingSoon title="Runtime Classes" />} />
             <Route path="cluster/leases" element={<ComingSoon title="Leases" />} />
             <Route path="cluster/mutatingwebhookconfigurations" element={<ComingSoon title="Mutating Webhook Configurations" />} />
