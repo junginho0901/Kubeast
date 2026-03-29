@@ -732,6 +732,18 @@ export interface RuntimeClassInfo {
   created_at: string
 }
 
+export interface LeaseInfo {
+  name: string
+  namespace: string
+  holder_identity?: string
+  lease_duration_seconds?: number
+  lease_transitions?: number
+  renew_time?: string
+  acquire_time?: string
+  labels?: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
