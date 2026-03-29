@@ -713,6 +713,16 @@ export interface PDBInfo {
   created_at: string
 }
 
+export interface PriorityClassInfo {
+  name: string
+  value: number
+  global_default: boolean
+  preemption_policy: string
+  description: string
+  labels?: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
