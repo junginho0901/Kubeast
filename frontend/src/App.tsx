@@ -54,6 +54,8 @@ import RoleBindings from './pages/security/RoleBindings'
 import ConfigMaps from './pages/configuration/ConfigMaps'
 import Secrets from './pages/configuration/Secrets'
 import PriorityClasses from './pages/cluster/PriorityClasses'
+import RuntimeClasses from './pages/cluster/RuntimeClasses'
+import Leases from './pages/cluster/Leases'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
