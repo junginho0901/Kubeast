@@ -1708,6 +1708,29 @@ export const api = {
     await client.delete(`/cluster/runtimeclasses/${name}`)
   },
 
+  getAllLeases: async (forceRefresh = false): Promise<LeaseInfo[]> => {
+    const { data } = await client.get('/cluster/leases/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getLeases: async (namespace: string, forceRefresh = false): Promise<LeaseInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/leases`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeLease: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/leases/${name}/describe`)
+    return data
+  },
+
+  deleteLease: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/leases/${name}`)
+  },
+
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
     const { data} = await client.get(`/cluster/namespaces/${namespace}/pods`, {
       params: { label_selector: labelSelector, force_refresh: forceRefresh },
