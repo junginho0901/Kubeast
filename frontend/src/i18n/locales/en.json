@@ -886,6 +886,35 @@
       "confirm": "Are you sure you want to delete runtime class \"{{name}}\"? This is a cluster-level resource."
     }
   },
+  "leases": {
+    "title": "Leases",
+    "subtitle": "Manage coordination leases across namespaces.",
+    "create": "Create Lease",
+    "createTitle": "Create Lease from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search leases by name or holder...",
+    "allNamespaces": "All Namespaces",
+    "matchCount": "{{count}} lease{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "holder": "Holder",
+      "duration": "Duration (s)",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "withHolder": "With Holder",
+      "withoutHolder": "Without Holder"
+    },
+    "noResults": "No leases found.",
+    "delete": {
+      "button": "Delete Lease",
+      "title": "Delete Lease",
+      "confirm": "Are you sure you want to delete lease \"{{name}}\"?"
+    }
+  },
   "pvcs": {
     "title": "Persistent Volume Claims",
     "subtitle": "Inspect and manage PVCs across namespaces.",
