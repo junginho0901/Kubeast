@@ -806,6 +806,38 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 VPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "pdbs": {
+    "title": "파드 디스럽션 버짓",
+    "subtitle": "네임스페이스 전반의 PDB를 관리합니다.",
+    "create": "PDB 생성",
+    "createTitle": "YAML로 PDB 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "searchPlaceholder": "이름으로 PDB 검색...",
+    "allNamespaces": "모든 네임스페이스",
+    "matchCount": "{{count}}개 PDB 일치.",
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "minAvailable": "최소 가용",
+      "maxUnavailable": "최대 불가용",
+      "allowedDisruptions": "허용 중단",
+      "currentHealthy": "현재",
+      "desiredHealthy": "목표",
+      "age": "생성 시간"
+    },
+    "stats": {
+      "total": "전체",
+      "healthy": "정상",
+      "disrupted": "비정상"
+    },
+    "noResults": "PDB가 없습니다.",
+    "delete": {
+      "button": "PDB 삭제",
+      "title": "PDB 삭제",
+      "confirm": "\"{{namespace}}\" 네임스페이스의 PDB \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "pvcs": {
     "title": "퍼시스턴트 볼륨 클레임",
     "subtitle": "네임스페이스 전반의 PVC 상태를 확인하고 관리합니다.",
