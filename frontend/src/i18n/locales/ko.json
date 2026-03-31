@@ -922,6 +922,62 @@
       "confirm": "리스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
+  "resourceQuotas": {
+    "title": "리소스 쿼터",
+    "subtitle": "네임스페이스 전반의 리소스 쿼터를 관리합니다.",
+    "create": "리소스 쿼터 생성",
+    "createTitle": "YAML로 리소스 쿼터 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "searchPlaceholder": "이름으로 리소스 쿼터 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개 리소스 쿼터 일치.",
+    "table": {
+      "name": "이름",
+      "namespace": "네임스페이스",
+      "requests": "리소스 수",
+      "age": "생성 시간"
+    },
+    "stats": {
+      "total": "전체",
+      "withCpu": "CPU 쿼터 있음",
+      "withMemory": "메모리 쿼터 있음"
+    },
+    "noResults": "리소스 쿼터가 없습니다.",
+    "delete": {
+      "button": "리소스 쿼터 삭제",
+      "title": "리소스 쿼터 삭제",
+      "confirm": "리소스 쿼터 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
+  "limitRanges": {
+    "title": "리밋 레인지",
+    "subtitle": "네임스페이스 전반의 리밋 레인지를 관리합니다.",
+    "create": "리밋 레인지 생성",
+    "createTitle": "YAML로 리밋 레인지 생성",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "searchPlaceholder": "이름으로 리밋 레인지 검색...",
+    "allNamespaces": "전체 네임스페이스",
+    "matchCount": "{{count}}개 리밋 레인지 일치.",
+    "table": {
+      "name": "이름",
+      "namespace": "네임스페이스",
+      "types": "타입",
+      "age": "생성 시간"
+    },
+    "stats": {
+      "total": "전체",
+      "containerLimits": "컨테이너 리밋",
+      "podLimits": "파드 리밋"
+    },
+    "noResults": "리밋 레인지가 없습니다.",
+    "delete": {
+      "button": "리밋 레인지 삭제",
+      "title": "리밋 레인지 삭제",
+      "confirm": "리밋 레인지 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+    }
+  },
   "pvcs": {
     "title": "퍼시스턴트 볼륨 클레임",
     "subtitle": "네임스페이스 전반의 PVC 상태를 확인하고 관리합니다.",
