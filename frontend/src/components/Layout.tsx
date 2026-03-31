@@ -215,7 +215,9 @@ export default function Layout() {
       items: [
         { name: t('nav.serviceAccounts'), href: '/security/serviceaccounts', icon: Key },
         { name: t('nav.roles'), href: '/security/roles', icon: Shield },
+        { name: t('nav.clusterRoles'), href: '/security/clusterroles', icon: Shield },
         { name: t('nav.roleBindings'), href: '/security/rolebindings', icon: Shield },
+        { name: t('nav.clusterRoleBindings'), href: '/security/clusterrolebindings', icon: Shield },
       ],
     },
     {
