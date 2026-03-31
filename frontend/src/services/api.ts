@@ -744,6 +744,15 @@ export interface LeaseInfo {
   created_at: string
 }
 
+export interface ResourceQuotaInfo {
+  name: string
+  namespace: string
+  status_hard: Record<string, string>
+  status_used: Record<string, string>
+  labels?: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
