@@ -917,6 +917,62 @@
       "confirm": "Are you sure you want to delete lease \"{{name}}\"?"
     }
   },
+  "resourceQuotas": {
+    "title": "Resource Quotas",
+    "subtitle": "Manage resource quotas across namespaces.",
+    "create": "Create Resource Quota",
+    "createTitle": "Create ResourceQuota from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search resource quotas by name...",
+    "allNamespaces": "All Namespaces",
+    "matchCount": "{{count}} resource quota{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "requests": "Resources",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "withCpu": "With CPU Quota",
+      "withMemory": "With Memory Quota"
+    },
+    "noResults": "No resource quotas found.",
+    "delete": {
+      "button": "Delete ResourceQuota",
+      "title": "Delete ResourceQuota",
+      "confirm": "Are you sure you want to delete resource quota \"{{name}}\"?"
+    }
+  },
+  "limitRanges": {
+    "title": "Limit Ranges",
+    "subtitle": "Manage limit ranges across namespaces.",
+    "create": "Create Limit Range",
+    "createTitle": "Create LimitRange from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search limit ranges by name...",
+    "allNamespaces": "All Namespaces",
+    "matchCount": "{{count}} limit range{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "types": "Types",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total",
+      "containerLimits": "Container Limits",
+      "podLimits": "Pod Limits"
+    },
+    "noResults": "No limit ranges found.",
+    "delete": {
+      "button": "Delete LimitRange",
+      "title": "Delete LimitRange",
+      "confirm": "Are you sure you want to delete limit range \"{{name}}\"?"
+    }
+  },
   "pvcs": {
     "title": "Persistent Volume Claims",
     "subtitle": "Inspect and manage PVCs across namespaces.",
