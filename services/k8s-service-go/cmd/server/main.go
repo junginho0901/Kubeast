@@ -383,6 +383,13 @@ func main() {
 		r.Get("/api/v1/runtimeclasses/{name}/yaml", h.GetRuntimeClassYAML)
 		r.Delete("/api/v1/runtimeclasses/{name}", h.DeleteRuntimeClass)
 
+		// ResourceQuota (namespace-scoped)
+		r.Get("/api/v1/resourcequotas/all", h.GetAllResourceQuotas)
+		r.Get("/api/v1/namespaces/{namespace}/resourcequotas", h.GetResourceQuotas)
+		r.Get("/api/v1/namespaces/{namespace}/resourcequotas/{name}/describe", h.DescribeResourceQuota)
+		r.Get("/api/v1/namespaces/{namespace}/resourcequotas/{name}/yaml", h.GetResourceQuotaYAML)
+		r.Delete("/api/v1/namespaces/{namespace}/resourcequotas/{name}", h.DeleteResourceQuota)
+
 		// Lease (namespace-scoped)
 		r.Get("/api/v1/leases/all", h.GetAllLeases)
 		r.Get("/api/v1/namespaces/{namespace}/leases", h.GetLeases)
