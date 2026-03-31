@@ -576,6 +576,14 @@ export default function ResourceDetailDrawer() {
         await api.deleteLease(ns, name)
         return
       }
+      if (kind === 'ResourceQuota' && ns) {
+        await api.deleteResourceQuota(ns, name)
+        return
+      }
+      if (kind === 'LimitRange' && ns) {
+        await api.deleteLimitRange(ns, name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
@@ -820,6 +828,20 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['cluster', 'leases', ns] }),
           queryClient.invalidateQueries({ queryKey: ['lease-describe', ns, name] }),
         ])
+      } else if (kind === 'ResourceQuota' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'resourcequotas'] }),
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'resourcequotas', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['resourcequota-describe', ns, name] }),
+          queryClient.invalidateQueries({ queryKey: ['namespace-rq', ns] }),
+        ])
+      } else if (kind === 'LimitRange' && ns) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'limitranges'] }),
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'limitranges', ns] }),
+          queryClient.invalidateQueries({ queryKey: ['limitrange-describe', ns, name] }),
+          queryClient.invalidateQueries({ queryKey: ['namespace-lr', ns] }),
+        ])
       }
 
       close()
@@ -860,6 +882,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'PriorityClass') return <PriorityClassInfo name={name} rawJson={target.rawJson} />
     if (kind === 'RuntimeClass') return <RuntimeClassInfo name={name} rawJson={target.rawJson} />
     if (kind === 'Lease' && ns) return <LeaseInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'ResourceQuota' && ns) return <ResourceQuotaInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'LimitRange' && ns) return <LimitRangeInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
