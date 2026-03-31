@@ -11,7 +11,6 @@ import SearchSettings from '@/components/search/SearchSettings'
 import { searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
 
 const STORAGE_KEY_RESOURCES = 'advanced-search-resources'
-const STORAGE_KEY_QUERY = 'advanced-search-query'
 
 export default function AdvancedSearch() {
   const { t } = useTranslation()
@@ -28,9 +27,7 @@ export default function AdvancedSearch() {
     } catch { return new Set(['pods', 'deployments', 'services']) }
   })
 
-  const [rawQuery, setRawQuery] = useState(() =>
-    localStorage.getItem(STORAGE_KEY_QUERY) ?? ''
-  )
+  const [rawQuery, setRawQuery] = useState('')
 
   const [namespace, setNamespace] = useState<string>('')
   const [maxItemsPerResource, setMaxItemsPerResource] = useState(10_000)
@@ -43,10 +40,6 @@ export default function AdvancedSearch() {
     localStorage.setItem(STORAGE_KEY_RESOURCES, JSON.stringify([...selectedResources]))
     failedTypesRef.current.clear()
   }, [selectedResources])
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_QUERY, rawQuery)
-  }, [rawQuery])
 
   // Fetch namespace list
   const { data: namespaces } = useQuery({
