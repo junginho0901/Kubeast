@@ -56,6 +56,8 @@ import Secrets from './pages/configuration/Secrets'
 import PriorityClasses from './pages/cluster/PriorityClasses'
 import RuntimeClasses from './pages/cluster/RuntimeClasses'
 import Leases from './pages/cluster/Leases'
+import ResourceQuotas from './pages/cluster/ResourceQuotas'
+import LimitRanges from './pages/cluster/LimitRanges'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
