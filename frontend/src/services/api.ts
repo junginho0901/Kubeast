@@ -1778,6 +1778,30 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/resourcequotas/${name}`)
   },
 
+  // LimitRanges
+  getAllLimitRanges: async (forceRefresh = false): Promise<LimitRangeInfo[]> => {
+    const { data } = await client.get('/cluster/limitranges/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getLimitRanges: async (namespace: string, forceRefresh = false): Promise<LimitRangeInfo[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/limitranges`, {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeLimitRange: async (namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/limitranges/${name}/describe`)
+    return data
+  },
+
+  deleteLimitRange: async (namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/namespaces/${namespace}/limitranges/${name}`)
+  },
+
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
     const { data} = await client.get(`/cluster/namespaces/${namespace}/pods`, {
       params: { label_selector: labelSelector, force_refresh: forceRefresh },
