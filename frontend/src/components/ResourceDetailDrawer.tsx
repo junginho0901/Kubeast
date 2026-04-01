@@ -599,6 +599,14 @@ export default function ResourceDetailDrawer() {
         await api.deleteLimitRange(ns, name)
         return
       }
+      if (kind === 'MutatingWebhookConfiguration') {
+        await api.deleteMutatingWebhookConfiguration(name)
+        return
+      }
+      if (kind === 'ValidatingWebhookConfiguration') {
+        await api.deleteValidatingWebhookConfiguration(name)
+        return
+      }
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
