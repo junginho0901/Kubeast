@@ -116,8 +116,8 @@ function App() {
             <Route path="cluster/priorityclasses" element={<PriorityClasses />} />
             <Route path="cluster/runtimeclasses" element={<RuntimeClasses />} />
             <Route path="cluster/leases" element={<Leases />} />
-            <Route path="cluster/mutatingwebhookconfigurations" element={<ComingSoon title="Mutating Webhook Configurations" />} />
-            <Route path="cluster/validatingwebhookconfigurations" element={<ComingSoon title="Validating Webhook Configurations" />} />
+            <Route path="cluster/mutatingwebhookconfigurations" element={<MutatingWebhookConfigurations />} />
+            <Route path="cluster/validatingwebhookconfigurations" element={<ValidatingWebhookConfigurations />} />
             <Route path="custom-resources/instances" element={<ComingSoon title="Custom Resource Instances" />} />
             <Route path="custom-resources/groups" element={<ComingSoon title="Custom Resource Definitions" />} />
             <Route path="monitoring" element={<Monitoring />} />
