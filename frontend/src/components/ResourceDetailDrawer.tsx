@@ -865,6 +865,16 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['limitrange-describe', ns, name] }),
           queryClient.invalidateQueries({ queryKey: ['namespace-lr', ns] }),
         ])
+      } else if (kind === 'MutatingWebhookConfiguration') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'mutatingwebhookconfigurations'] }),
+          queryClient.invalidateQueries({ queryKey: ['mutatingwebhookconfiguration-describe', name] }),
+        ])
+      } else if (kind === 'ValidatingWebhookConfiguration') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['cluster', 'validatingwebhookconfigurations'] }),
+          queryClient.invalidateQueries({ queryKey: ['validatingwebhookconfiguration-describe', name] }),
+        ])
       }
 
       close()
@@ -907,6 +917,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'Lease' && ns) return <LeaseInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'ResourceQuota' && ns) return <ResourceQuotaInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'LimitRange' && ns) return <LimitRangeInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'MutatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="MutatingWebhookConfiguration" rawJson={target.rawJson} />
+    if (kind === 'ValidatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="ValidatingWebhookConfiguration" rawJson={target.rawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
