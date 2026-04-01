@@ -888,6 +888,26 @@
       "confirm": "Are you sure you want to delete runtime class \"{{name}}\"? This is a cluster-level resource."
     }
   },
+  "mutatingWebhooks": {
+    "title": "Mutating Webhook Configurations",
+    "subtitle": "Manage mutating admission webhook configurations in the cluster.",
+    "create": "Create",
+    "createTitle": "Create Mutating Webhook Configuration from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by name...",
+    "matchCount": "{{count}} configuration{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "webhooks": "Webhooks",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total Configurations",
+      "totalWebhooks": "Total Webhooks"
+    },
+    "noResults": "No mutating webhook configurations found."
+  },
   "leases": {
     "title": "Leases",
     "subtitle": "Manage coordination leases across namespaces.",
