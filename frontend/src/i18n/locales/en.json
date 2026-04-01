@@ -908,6 +908,26 @@
     },
     "noResults": "No mutating webhook configurations found."
   },
+  "validatingWebhooks": {
+    "title": "Validating Webhook Configurations",
+    "subtitle": "Manage validating admission webhook configurations in the cluster.",
+    "create": "Create",
+    "createTitle": "Create Validating Webhook Configuration from YAML",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by name...",
+    "matchCount": "{{count}} configuration{{suffix}} match.",
+    "table": {
+      "name": "Name",
+      "webhooks": "Webhooks",
+      "age": "Age"
+    },
+    "stats": {
+      "total": "Total Configurations",
+      "totalWebhooks": "Total Webhooks"
+    },
+    "noResults": "No validating webhook configurations found."
+  },
   "leases": {
     "title": "Leases",
     "subtitle": "Manage coordination leases across namespaces.",
