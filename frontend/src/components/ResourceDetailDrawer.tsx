@@ -380,6 +380,12 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['cluster', 'limitranges'] })
       queryClient.invalidateQueries({ queryKey: ['cluster', 'limitranges', ns] })
       queryClient.invalidateQueries({ queryKey: ['limitrange-describe', ns, name] })
+    } else if (kind === 'MutatingWebhookConfiguration') {
+      queryClient.invalidateQueries({ queryKey: ['cluster', 'mutatingwebhookconfigurations'] })
+      queryClient.invalidateQueries({ queryKey: ['mutatingwebhookconfiguration-describe', name] })
+    } else if (kind === 'ValidatingWebhookConfiguration') {
+      queryClient.invalidateQueries({ queryKey: ['cluster', 'validatingwebhookconfigurations'] })
+      queryClient.invalidateQueries({ queryKey: ['validatingwebhookconfiguration-describe', name] })
     } else {
       queryClient.invalidateQueries({ queryKey: ['search-resources'] })
     }
