@@ -1826,6 +1826,23 @@ export const api = {
     await client.delete(`/cluster/mutatingwebhookconfigurations/${name}`)
   },
 
+  // ValidatingWebhookConfigurations
+  getValidatingWebhookConfigurations: async (forceRefresh = false): Promise<WebhookConfigInfo[]> => {
+    const { data } = await client.get('/cluster/validatingwebhookconfigurations', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeValidatingWebhookConfiguration: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/validatingwebhookconfigurations/${name}/describe`)
+    return data
+  },
+
+  deleteValidatingWebhookConfiguration: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/validatingwebhookconfigurations/${name}`)
+  },
+
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
     const { data} = await client.get(`/cluster/namespaces/${namespace}/pods`, {
       params: { label_selector: labelSelector, force_refresh: forceRefresh },
