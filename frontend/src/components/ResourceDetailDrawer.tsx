@@ -38,6 +38,7 @@ import RuntimeClassInfo from './resource-detail/RuntimeClassInfo'
 import LeaseInfo from './resource-detail/LeaseInfo'
 import ResourceQuotaInfo from './resource-detail/ResourceQuotaInfo'
 import LimitRangeInfo from './resource-detail/LimitRangeInfo'
+import WebhookConfigInfo from './resource-detail/WebhookConfigInfo'
 import GenericInfo from './resource-detail/GenericInfo'
 
 type TabId = 'info' | 'yaml'
@@ -79,6 +80,8 @@ function kindToPlural(kind: string): string {
     Lease: 'lease',
     ResourceQuota: 'resourcequota',
     LimitRange: 'limitrange',
+    MutatingWebhookConfiguration: 'mutatingwebhookconfiguration',
+    ValidatingWebhookConfiguration: 'validatingwebhookconfiguration',
   }
   return map[kind] ?? kind.toLowerCase()
 }
@@ -110,6 +113,8 @@ function kindIcon(kind: string): string {
     Lease: '🤝',
     ResourceQuota: '📊',
     LimitRange: '📏',
+    MutatingWebhookConfiguration: '🔄',
+    ValidatingWebhookConfiguration: '✅',
   }
   return map[kind] ?? '📄'
 }
