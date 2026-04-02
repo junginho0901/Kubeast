@@ -2231,6 +2231,47 @@
       "confirm": "Are you sure you want to delete RoleBinding \"{{name}}\"?"
     }
   },
+  "clusterRolesPage": {
+    "title": "Cluster Roles",
+    "subtitle": "Manage ClusterRoles across the cluster.",
+    "searchPlaceholder": "Search by name...",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create ClusterRole",
+    "createTitle": "Create ClusterRole from YAML",
+    "noResults": "No cluster roles found.",
+    "matchCount": "{{count}} result(s) match.",
+    "stats": {
+      "total": "Total",
+      "totalRules": "Total Rules"
+    },
+    "table": {
+      "name": "Name",
+      "rules": "Rules",
+      "age": "Age"
+    }
+  },
+  "clusterRoleBindingsPage": {
+    "title": "Cluster Role Bindings",
+    "subtitle": "Manage ClusterRoleBindings across the cluster.",
+    "searchPlaceholder": "Search by name or role ref...",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create ClusterRoleBinding",
+    "createTitle": "Create ClusterRoleBinding from YAML",
+    "noResults": "No cluster role bindings found.",
+    "matchCount": "{{count}} result(s) match.",
+    "stats": {
+      "total": "Total",
+      "totalSubjects": "Total Subjects"
+    },
+    "table": {
+      "name": "Name",
+      "roleRef": "Role Ref",
+      "subjects": "Subjects",
+      "age": "Age"
+    }
+  },
   "configMapsPage": {
     "title": "ConfigMaps",
     "subtitle": "Manage ConfigMaps across namespaces.",

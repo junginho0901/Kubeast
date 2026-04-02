@@ -28,6 +28,8 @@ import ConfigStorageInfo from './resource-detail/ConfigStorageInfo'
 import ServiceAccountInfo from './resource-detail/ServiceAccountInfo'
 import RoleInfo from './resource-detail/RoleInfo'
 import RoleBindingInfo from './resource-detail/RoleBindingInfo'
+import ClusterRoleInfo from './resource-detail/ClusterRoleInfo'
+import ClusterRoleBindingInfo from './resource-detail/ClusterRoleBindingInfo'
 import ConfigMapInfo from './resource-detail/ConfigMapInfo'
 import SecretInfo from './resource-detail/SecretInfo'
 import HPAInfo from './resource-detail/HPAInfo'
@@ -74,6 +76,8 @@ function kindToPlural(kind: string): string {
     ServiceAccount: 'serviceaccount',
     Role: 'role',
     RoleBinding: 'rolebinding',
+    ClusterRole: 'clusterrole',
+    ClusterRoleBinding: 'clusterrolebinding',
     PodDisruptionBudget: 'poddisruptionbudget',
     PriorityClass: 'priorityclass',
     RuntimeClass: 'runtimeclass',
@@ -104,7 +108,7 @@ function kindIcon(kind: string): string {
     ResourceClaim: '📋',
     ResourceClaimTemplate: '📄',
     ResourceSlice: '🧩',
-    ServiceAccount: '👤', Role: '🔐', RoleBinding: '🔗',
+    ServiceAccount: '👤', Role: '🔐', RoleBinding: '🔗', ClusterRole: '🔐', ClusterRoleBinding: '🔗',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈', VerticalPodAutoscaler: '📊',
     PodDisruptionBudget: '🛡️',
@@ -172,6 +176,8 @@ export default function ResourceDetailDrawer() {
   const canDeleteServiceAccount = kind === 'ServiceAccount' && !!ns && isWriteRole
   const canDeleteRole = kind === 'Role' && !!ns && isWriteRole
   const canDeleteRoleBinding = kind === 'RoleBinding' && !!ns && isWriteRole
+  const canDeleteClusterRole = kind === 'ClusterRole' && isAdmin
+  const canDeleteClusterRoleBinding = kind === 'ClusterRoleBinding' && isAdmin
   const canDeleteConfigMap = kind === 'ConfigMap' && !!ns && isWriteRole
   const canDeleteSecret = kind === 'Secret' && !!ns && isWriteRole
   const canDeleteHPA = kind === 'HorizontalPodAutoscaler' && !!ns && isWriteRole
@@ -218,6 +224,8 @@ export default function ResourceDetailDrawer() {
     canDeleteServiceAccount,
     canDeleteRole,
     canDeleteRoleBinding,
+    canDeleteClusterRole,
+    canDeleteClusterRoleBinding,
     canDeleteConfigMap,
     canDeleteSecret,
     canDeleteHPA,
@@ -350,6 +358,12 @@ export default function ResourceDetailDrawer() {
       queryClient.invalidateQueries({ queryKey: ['security', 'rolebindings'] })
       queryClient.invalidateQueries({ queryKey: ['security', 'rolebindings', ns] })
       queryClient.invalidateQueries({ queryKey: ['rolebinding-describe', ns, name] })
+    } else if (kind === 'ClusterRole') {
+      queryClient.invalidateQueries({ queryKey: ['security', 'clusterroles'] })
+      queryClient.invalidateQueries({ queryKey: ['clusterrole-describe', name] })
+    } else if (kind === 'ClusterRoleBinding') {
+      queryClient.invalidateQueries({ queryKey: ['security', 'clusterrolebindings'] })
+      queryClient.invalidateQueries({ queryKey: ['clusterrolebinding-describe', name] })
     } else if (kind === 'ConfigMap' && ns) {
       queryClient.invalidateQueries({ queryKey: ['configuration', 'configmaps'] })
       queryClient.invalidateQueries({ queryKey: ['configuration', 'configmaps', ns] })
@@ -557,6 +571,14 @@ export default function ResourceDetailDrawer() {
       }
       if (kind === 'RoleBinding' && ns) {
         await api.deleteRoleBinding(ns, name)
+        return
+      }
+      if (kind === 'ClusterRole') {
+        await api.deleteClusterRole(name)
+        return
+      }
+      if (kind === 'ClusterRoleBinding') {
+        await api.deleteClusterRoleBinding(name)
         return
       }
       if (kind === 'ConfigMap' && ns) {
@@ -805,6 +827,16 @@ export default function ResourceDetailDrawer() {
           queryClient.invalidateQueries({ queryKey: ['security', 'rolebindings', ns] }),
           queryClient.invalidateQueries({ queryKey: ['rolebinding-describe', ns, name] }),
         ])
+      } else if (kind === 'ClusterRole') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['security', 'clusterroles'] }),
+          queryClient.invalidateQueries({ queryKey: ['clusterrole-describe', name] }),
+        ])
+      } else if (kind === 'ClusterRoleBinding') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['security', 'clusterrolebindings'] }),
+          queryClient.invalidateQueries({ queryKey: ['clusterrolebinding-describe', name] }),
+        ])
       } else if (kind === 'ConfigMap' && ns) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['configuration', 'configmaps'] }),
@@ -907,6 +939,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'ServiceAccount' && ns) return <ServiceAccountInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'Role' && ns) return <RoleInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'RoleBinding' && ns) return <RoleBindingInfo name={name} namespace={ns} rawJson={target.rawJson} />
+    if (kind === 'ClusterRole') return <ClusterRoleInfo name={name} rawJson={target.rawJson} />
+    if (kind === 'ClusterRoleBinding') return <ClusterRoleBindingInfo name={name} rawJson={target.rawJson} />
     if (kind === 'ConfigMap' && ns) return <ConfigMapInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'Secret' && ns) return <SecretInfo name={name} namespace={ns} rawJson={target.rawJson} />
     if (kind === 'HorizontalPodAutoscaler' && ns) return <HPAInfo name={name} namespace={ns} rawJson={target.rawJson} />

@@ -429,43 +429,43 @@ spec:
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
         <div className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[900px] table-fixed">
+          <table className="w-full text-sm min-w-[1040px] table-fixed">
             <thead className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[140px]">{tr('vpas.table.namespace', 'Namespace')}</th>
+                  <th className="text-left py-3 px-4 w-[150px]">{tr('vpas.table.namespace', 'Namespace')}</th>
                 )}
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.name', 'Name')}{renderSortIcon('name')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('target')}>
+                <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('target')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.reference', 'Reference')}{renderSortIcon('target')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('updateMode')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('updateMode')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.mode', 'Mode')}{renderSortIcon('updateMode')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('cpu')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('cpu')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.cpu', 'CPU')}{renderSortIcon('cpu')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('memory')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('memory')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.memory', 'Memory')}{renderSortIcon('memory')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('provided')}>
+                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('provided')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.provided', 'Provided')}{renderSortIcon('provided')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('vpas.table.age', 'Age')}{renderSortIcon('age')}
                   </span>

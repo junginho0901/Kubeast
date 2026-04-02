@@ -774,6 +774,13 @@ export interface WebhookConfigInfo {
   created_at: string
 }
 
+export interface WebhookConfigInfo {
+  name: string
+  webhooks_count: number
+  labels?: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
@@ -922,6 +929,24 @@ export interface RoleInfo {
 export interface RoleBindingInfo {
   name: string
   namespace: string
+  role_ref_kind: string
+  role_ref_name: string
+  subjects_count: number
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
+export interface ClusterRoleInfo {
+  name: string
+  rules_count: number
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
+export interface ClusterRoleBindingInfo {
+  name: string
   role_ref_kind: string
   role_ref_name: string
   subjects_count: number
@@ -2529,6 +2554,40 @@ export const api = {
 
   deleteRoleBinding: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/rolebindings/${name}`)
+  },
+
+  // ===== ClusterRoles =====
+  getClusterRoles: async (forceRefresh = false): Promise<ClusterRoleInfo[]> => {
+    const { data } = await client.get('/cluster/clusterroles', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeClusterRole: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/clusterroles/${name}/describe`)
+    return data
+  },
+
+  deleteClusterRole: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/clusterroles/${name}`)
+  },
+
+  // ===== ClusterRoleBindings =====
+  getClusterRoleBindings: async (forceRefresh = false): Promise<ClusterRoleBindingInfo[]> => {
+    const { data } = await client.get('/cluster/clusterrolebindings', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeClusterRoleBinding: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/clusterrolebindings/${name}/describe`)
+    return data
+  },
+
+  deleteClusterRoleBinding: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/clusterrolebindings/${name}`)
   },
 
   // ===== ConfigMaps =====

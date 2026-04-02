@@ -2276,6 +2276,47 @@
       "confirm": "롤 바인딩 \"{{name}}\"을(를) 삭제하시겠습니까?"
     }
   },
+  "clusterRolesPage": {
+    "title": "클러스터 롤",
+    "subtitle": "클러스터 전체의 ClusterRole을 관리합니다.",
+    "searchPlaceholder": "이름으로 검색...",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "create": "클러스터 롤 생성",
+    "createTitle": "YAML로 클러스터 롤 생성",
+    "noResults": "클러스터 롤이 없습니다.",
+    "matchCount": "{{count}}개 결과가 일치합니다.",
+    "stats": {
+      "total": "전체",
+      "totalRules": "총 규칙"
+    },
+    "table": {
+      "name": "이름",
+      "rules": "규칙",
+      "age": "생성 경과"
+    }
+  },
+  "clusterRoleBindingsPage": {
+    "title": "클러스터 롤 바인딩",
+    "subtitle": "클러스터 전체의 ClusterRoleBinding을 관리합니다.",
+    "searchPlaceholder": "이름 또는 롤 참조로 검색...",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "create": "클러스터 롤 바인딩 생성",
+    "createTitle": "YAML로 클러스터 롤 바인딩 생성",
+    "noResults": "클러스터 롤 바인딩이 없습니다.",
+    "matchCount": "{{count}}개 결과가 일치합니다.",
+    "stats": {
+      "total": "전체",
+      "totalSubjects": "총 대상"
+    },
+    "table": {
+      "name": "이름",
+      "roleRef": "롤 참조",
+      "subjects": "대상",
+      "age": "생성 경과"
+    }
+  },
   "configMapsPage": {
     "title": "컨피그맵",
     "subtitle": "네임스페이스별 컨피그맵을 관리합니다.",
