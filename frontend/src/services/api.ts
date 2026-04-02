@@ -937,6 +937,14 @@ export interface RoleBindingInfo {
   annotations?: Record<string, string> | null
 }
 
+export interface ClusterRoleInfo {
+  name: string
+  rules_count: number
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
 export interface ConfigMapInfo {
   name: string
   namespace: string
