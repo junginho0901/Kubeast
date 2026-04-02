@@ -414,38 +414,38 @@ spec:
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
         <div className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[900px] table-fixed">
+          <table className="w-full text-sm min-w-[1040px] table-fixed">
             <thead className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[140px]">{tr('hpas.table.namespace', 'Namespace')}</th>
+                  <th className="text-left py-3 px-4 w-[150px]">{tr('hpas.table.namespace', 'Namespace')}</th>
                 )}
-                <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('hpas.table.name', 'Name')}{renderSortIcon('name')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('target')}>
+                <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('target')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('hpas.table.reference', 'Reference')}{renderSortIcon('target')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[80px] cursor-pointer" onClick={() => handleSort('minReplicas')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('minReplicas')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('hpas.table.min', 'Min')}{renderSortIcon('minReplicas')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[80px] cursor-pointer" onClick={() => handleSort('maxReplicas')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('maxReplicas')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('hpas.table.max', 'Max')}{renderSortIcon('maxReplicas')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('currentReplicas')}>
+                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('currentReplicas')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('hpas.table.replicas', 'Replicas')}{renderSortIcon('currentReplicas')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('hpas.table.age', 'Age')}{renderSortIcon('age')}
                   </span>
