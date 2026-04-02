@@ -28,6 +28,7 @@ import ConfigStorageInfo from './resource-detail/ConfigStorageInfo'
 import ServiceAccountInfo from './resource-detail/ServiceAccountInfo'
 import RoleInfo from './resource-detail/RoleInfo'
 import RoleBindingInfo from './resource-detail/RoleBindingInfo'
+import ClusterRoleInfo from './resource-detail/ClusterRoleInfo'
 import ConfigMapInfo from './resource-detail/ConfigMapInfo'
 import SecretInfo from './resource-detail/SecretInfo'
 import HPAInfo from './resource-detail/HPAInfo'
@@ -74,6 +75,7 @@ function kindToPlural(kind: string): string {
     ServiceAccount: 'serviceaccount',
     Role: 'role',
     RoleBinding: 'rolebinding',
+    ClusterRole: 'clusterrole',
     PodDisruptionBudget: 'poddisruptionbudget',
     PriorityClass: 'priorityclass',
     RuntimeClass: 'runtimeclass',
@@ -104,7 +106,7 @@ function kindIcon(kind: string): string {
     ResourceClaim: '📋',
     ResourceClaimTemplate: '📄',
     ResourceSlice: '🧩',
-    ServiceAccount: '👤', Role: '🔐', RoleBinding: '🔗',
+    ServiceAccount: '👤', Role: '🔐', RoleBinding: '🔗', ClusterRole: '🔐',
     ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
     StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈', VerticalPodAutoscaler: '📊',
     PodDisruptionBudget: '🛡️',
