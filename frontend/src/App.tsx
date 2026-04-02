@@ -105,9 +105,9 @@ function App() {
             <Route path="gateway/backendtrafficpolicies" element={<BackendTrafficPolicies />} />
             <Route path="security/serviceaccounts" element={<ServiceAccounts />} />
             <Route path="security/roles" element={<Roles />} />
-            <Route path="security/clusterroles" element={<ComingSoon title="Cluster Roles" />} />
+            <Route path="security/clusterroles" element={<ClusterRoles />} />
             <Route path="security/rolebindings" element={<RoleBindings />} />
-            <Route path="security/clusterrolebindings" element={<ComingSoon title="Cluster Role Bindings" />} />
+            <Route path="security/clusterrolebindings" element={<ClusterRoleBindings />} />
             <Route path="configuration/configmaps" element={<ConfigMaps />} />
             <Route path="configuration/secrets" element={<Secrets />} />
             <Route path="workloads/hpas" element={<HPAs />} />
