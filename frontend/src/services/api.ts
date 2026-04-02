@@ -774,6 +774,13 @@ export interface WebhookConfigInfo {
   created_at: string
 }
 
+export interface WebhookConfigInfo {
+  name: string
+  webhooks_count: number
+  labels?: Record<string, string>
+  created_at: string
+}
+
 export interface PodInfo {
   name: string
   namespace: string
