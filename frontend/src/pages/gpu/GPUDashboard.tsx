@@ -75,6 +75,29 @@ export default function GPUDashboard() {
     retryDelay: 1000,
   })
 
+  const { data: metrics } = useQuery<GPUMetricsData>({
+    queryKey: ['gpu', 'metrics'],
+    queryFn: () => api.getGPUMetrics(),
+    refetchInterval: 15000,
+    retry: 1,
+    retryDelay: 2000,
+  })
+
+  const metricsAvailable = metrics?.available ?? false
+
+  // Per-GPU metrics grouped by hostname
+  const gpusByHost = useMemo(() => {
+    if (!metrics?.gpus) return new Map<string, GPUDeviceMetric[]>()
+    const map = new Map<string, GPUDeviceMetric[]>()
+    for (const gpu of metrics.gpus) {
+      const host = gpu.hostname || 'Unknown'
+      const list = map.get(host) ?? []
+      list.push(gpu)
+      map.set(host, list)
+    }
+    return map
+  }, [metrics])
+
   const allocationRate = useMemo(() => {
     if (!data || data.total_gpu_allocatable === 0) return 0
     return Math.round((data.total_gpu_used / data.total_gpu_allocatable) * 100)
@@ -83,6 +106,55 @@ export default function GPUDashboard() {
   const devicePluginHealthy = useMemo(() => {
     if (!data?.device_plugin_status) return false
     return data.device_plugin_status.ready >= data.device_plugin_status.desired
+  }, [data])
+
+  // Per-node GPU allocation bars
+  const nodeAllocation = useMemo(() => {
+    if (!data) return []
+    const nodes = data.gpu_nodes
+    // Count GPU usage per node from pods
+    const usedMap = new Map<string, number>()
+    for (const pod of data.gpu_pods) {
+      const node = pod.node_name ?? ''
+      if (node) usedMap.set(node, (usedMap.get(node) || 0) + pod.gpu_requested)
+    }
+    return nodes.map((node) => ({
+      ...node,
+      gpu_used: usedMap.get(node.name) ?? 0,
+    })).sort((a, b) => b.gpu_capacity - a.gpu_capacity)
+  }, [data])
+
+  // GPU model distribution
+  const modelDistribution = useMemo(() => {
+    if (!data) return []
+    const map = new Map<string, number>()
+    for (const node of data.gpu_nodes) {
+      const model = node.gpu_model ?? 'Unknown'
+      map.set(model, (map.get(model) || 0) + node.gpu_capacity)
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1])
+  }, [data])
+
+  // Pod status distribution
+  const podStatusDist = useMemo(() => {
+    if (!data) return []
+    const map = new Map<string, number>()
+    for (const pod of data.gpu_pods) {
+      map.set(pod.status, (map.get(pod.status) || 0) + 1)
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1])
+  }, [data])
+
+  // Recent pods (latest 5)
+  const recentPods = useMemo(() => {
+    if (!data) return []
+    return [...data.gpu_pods]
+      .sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+        return tb - ta
+      })
+      .slice(0, 5)
   }, [data])
 
   // Loading state
@@ -101,13 +173,11 @@ export default function GPUDashboard() {
           <SkeletonCard />
           <SkeletonCard />
         </div>
-        <SkeletonTable cols={7} />
-        <SkeletonTable cols={6} />
       </div>
     )
   }
 
-  // Error state — show retry button instead of misleading "no GPU" message
+  // Error state
   if (isError) {
     return (
       <div className="space-y-6">
