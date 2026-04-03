@@ -43,6 +43,8 @@
     "backendTrafficPolicies": "Backend Traffic Policies",
     "gpu": "GPU (Beta)",
     "gpuDashboard": "GPU Dashboard",
+    "gpuNodes": "GPU Nodes",
+    "gpuPods": "GPU Pods",
     "deviceClasses": "Device Classes",
     "resourceClaims": "Resource Claims",
     "resourceClaimTemplates": "Resource Claim Templates",

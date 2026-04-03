@@ -43,6 +43,8 @@ import ReferenceGrants from './pages/gateway/ReferenceGrants'
 import BackendTLSPolicies from './pages/gateway/BackendTLSPolicies'
 import BackendTrafficPolicies from './pages/gateway/BackendTrafficPolicies'
 import GPUDashboard from './pages/gpu/GPUDashboard'
+import GPUNodes from './pages/gpu/GPUNodes'
+import GPUPods from './pages/gpu/GPUPods'
 import DeviceClasses from './pages/gpu/DeviceClasses'
 import ResourceClaims from './pages/gpu/ResourceClaims'
 import ResourceClaimTemplates from './pages/gpu/ResourceClaimTemplates'
@@ -98,6 +100,8 @@ function App() {
             <Route path="gateway/grpcroutes" element={<GRPCRoutes />} />
             <Route path="gateway/referencegrants" element={<ReferenceGrants />} />
             <Route path="gpu/dashboard" element={<GPUDashboard />} />
+            <Route path="gpu/nodes" element={<GPUNodes />} />
+            <Route path="gpu/pods" element={<GPUPods />} />
             <Route path="gpu/deviceclasses" element={<DeviceClasses />} />
             <Route path="gpu/resourceclaims" element={<ResourceClaims />} />
             <Route path="gpu/resourceclaimtemplates" element={<ResourceClaimTemplates />} />

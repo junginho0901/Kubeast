@@ -5,6 +5,8 @@ import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 
 interface Props { name: string }
 
@@ -66,6 +68,24 @@ export default function NamespaceInfo({ name }: Props) {
       return tb - ta
     })
   }, [nsDescribe?.events])
+
+  // Prometheus namespace-level metrics
+  const promNsMetrics = usePrometheusQueries(
+    ['namespace-detail', name],
+    [
+      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${name}",container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${name}",container!="",container!="POD"})` },
+      { name: 'pod_count', promql: `count(kube_pod_info{namespace="${name}"})` },
+      { name: 'restart_total', promql: `sum(kube_pod_container_status_restarts_total{namespace="${name}"})` },
+    ],
+    { enabled: !!name },
+  )
+
+  const getNsMetricValue = (metricName: string): number | null => {
+    const resp = promNsMetrics.data[metricName]
+    if (!resp?.available || !resp.results?.length) return null
+    return resp.results[0].value
+  }
 
   const filteredPods = useMemo(() => {
     if (!Array.isArray(nsPods)) return []
@@ -166,6 +186,29 @@ export default function NamespaceInfo({ name }: Props) {
       <InfoSection title={tr('namespaces.detail.annotations', 'Annotations')}>
         <KeyValueTags data={nsDescribe.annotations} />
       </InfoSection>
+
+      {/* Prometheus Real-time Namespace Metrics */}
+      <PrometheusSection available={promNsMetrics.available} title="Real-time Resource Usage">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {getNsMetricValue('cpu') !== null && (
+            <MetricCard label="CPU Usage" value={getNsMetricValue('cpu')!} unit="m" thresholds={{ warn: 2000, danger: 4000 }} />
+          )}
+          {getNsMetricValue('memory') !== null && (
+            <MetricCard
+              label="Memory Usage"
+              value={getNsMetricValue('memory')! / (1024 * 1024 * 1024)}
+              unit=" GiB"
+              thresholds={{ warn: 8, danger: 16 }}
+            />
+          )}
+          {getNsMetricValue('pod_count') !== null && (
+            <MetricCard label="Pods" value={getNsMetricValue('pod_count')!} unit="" thresholds={{ warn: 50, danger: 100 }} />
+          )}
+          {getNsMetricValue('restart_total') !== null && (
+            <MetricCard label="Total Restarts" value={getNsMetricValue('restart_total')!} unit="" thresholds={{ warn: 10, danger: 50 }} />
+          )}
+        </div>
+      </PrometheusSection>
 
       {/* Resource Quotas */}
       <InfoSection title={tr('namespaces.detail.resourceQuotas', 'Resource Quotas')}>

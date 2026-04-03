@@ -542,6 +542,42 @@ export interface GPUDashboardData {
   time_slicing_config: Record<string, any> | null
 }
 
+export interface GPUDeviceMetric {
+  uuid: string
+  gpu: string
+  hostname: string
+  model_name: string
+  gpu_util: number
+  memory_used_mb: number
+  memory_free_mb: number
+  memory_total_mb: number
+  memory_util_percent: number
+  memory_temp: number
+  exported_pod?: string
+  exported_namespace?: string
+}
+
+export interface GPUMetricsData {
+  available: boolean
+  gpu_count: number
+  avg_gpu_util: number
+  avg_memory_util: number
+  total_memory_used_mb: number
+  total_memory_free_mb: number
+  total_memory_mb: number
+  gpus: GPUDeviceMetric[]
+}
+
+export interface PrometheusQueryResult {
+  metric: Record<string, string>
+  value: number
+}
+
+export interface PrometheusQueryResponse {
+  available: boolean
+  results: PrometheusQueryResult[]
+}
+
 export interface DeviceClassItem {
   name: string
   labels?: Record<string, string>
@@ -1507,6 +1543,23 @@ export const api = {
   // GPU Dashboard
   getGPUDashboard: async (): Promise<GPUDashboardData> => {
     const { data } = await client.get('/cluster/gpu/dashboard')
+    return data
+  },
+
+  // GPU Metrics (Prometheus / DCGM)
+  getGPUMetrics: async (): Promise<GPUMetricsData> => {
+    const { data } = await client.get('/cluster/gpu/metrics')
+    return data
+  },
+
+  // Prometheus (generic)
+  getPrometheusStatus: async (): Promise<{ available: boolean; endpoint?: string; message?: string }> => {
+    const { data } = await client.get('/cluster/prometheus/status')
+    return data
+  },
+
+  prometheusQuery: async (query: string): Promise<PrometheusQueryResponse> => {
+    const { data } = await client.get('/cluster/prometheus/query', { params: { query } })
     return data
   },
 

@@ -203,6 +203,8 @@ export default function Layout() {
       label: t('nav.gpu'),
       items: [
         { name: t('nav.gpuDashboard'), href: '/gpu/dashboard', icon: LayoutDashboard },
+        { name: t('nav.gpuNodes'), href: '/gpu/nodes', icon: Server },
+        { name: t('nav.gpuPods'), href: '/gpu/pods', icon: Box },
         { name: t('nav.deviceClasses'), href: '/gpu/deviceclasses', icon: FileCode },
         { name: t('nav.resourceClaims'), href: '/gpu/resourceclaims', icon: FileBox },
         { name: t('nav.resourceClaimTemplates'), href: '/gpu/resourceclaimtemplates', icon: Layers },

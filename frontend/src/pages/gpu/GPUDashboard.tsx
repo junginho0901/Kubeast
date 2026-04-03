@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import {
@@ -13,9 +14,10 @@ import {
   XCircle,
   Server,
   Box,
+  ArrowRight,
 } from 'lucide-react'
 
-import type { GPUDashboardData, GPUNodeInfo, GPUPodInfo } from '@/services/api'
+import type { GPUDashboardData, GPUMetricsData, GPUDeviceMetric, GPUPodInfo } from '@/services/api'
 
 function formatAge(createdAt?: string | null): string {
   if (!createdAt) return '-'
@@ -43,36 +45,6 @@ function StatusBadge({ enabled, label }: { enabled: boolean; label: string }) {
   )
 }
 
-function NodeStatusBadge({ status }: { status: string }) {
-  const isReady = status === 'Ready'
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-        isReady
-          ? 'bg-emerald-500/10 text-emerald-400'
-          : 'bg-red-500/10 text-red-400'
-      }`}
-    >
-      {status}
-    </span>
-  )
-}
-
-function PodStatusBadge({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    Running: 'bg-emerald-500/10 text-emerald-400',
-    Succeeded: 'bg-blue-500/10 text-blue-400',
-    Pending: 'bg-yellow-500/10 text-yellow-400',
-    Failed: 'bg-red-500/10 text-red-400',
-  }
-  const cls = colorMap[status] ?? 'bg-slate-500/10 text-slate-400'
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {status}
-    </span>
-  )
-}
-
 function SkeletonCard() {
   return (
     <div className="animate-pulse rounded-xl border border-slate-700/50 bg-slate-800/50 p-5">
@@ -82,18 +54,12 @@ function SkeletonCard() {
   )
 }
 
-function SkeletonTable({ rows = 3, cols = 5 }: { rows?: number; cols?: number }) {
-  return (
-    <div className="animate-pulse space-y-2">
-      {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="flex gap-4">
-          {Array.from({ length: cols }).map((_, c) => (
-            <div key={c} className="h-4 flex-1 rounded bg-slate-700" />
-          ))}
-        </div>
-      ))}
-    </div>
-  )
+function getStatusColor(status: string): string {
+  const lower = (status || '').toLowerCase()
+  if (lower === 'running' || lower === 'succeeded' || lower === 'completed' || lower === 'ready') return 'badge-success'
+  if (lower === 'pending') return 'badge-warning'
+  if (lower === 'failed' || lower.includes('error') || lower.includes('backoff') || lower.includes('notready')) return 'badge-error'
+  return 'badge-info'
 }
 
 export default function GPUDashboard() {
@@ -109,6 +75,29 @@ export default function GPUDashboard() {
     retryDelay: 1000,
   })
 
+  const { data: metrics } = useQuery<GPUMetricsData>({
+    queryKey: ['gpu', 'metrics'],
+    queryFn: () => api.getGPUMetrics(),
+    refetchInterval: 15000,
+    retry: 1,
+    retryDelay: 2000,
+  })
+
+  const metricsAvailable = metrics?.available ?? false
+
+  // Per-GPU metrics grouped by hostname
+  const gpusByHost = useMemo(() => {
+    if (!metrics?.gpus) return new Map<string, GPUDeviceMetric[]>()
+    const map = new Map<string, GPUDeviceMetric[]>()
+    for (const gpu of metrics.gpus) {
+      const host = gpu.hostname || 'Unknown'
+      const list = map.get(host) ?? []
+      list.push(gpu)
+      map.set(host, list)
+    }
+    return map
+  }, [metrics])
+
   const allocationRate = useMemo(() => {
     if (!data || data.total_gpu_allocatable === 0) return 0
     return Math.round((data.total_gpu_used / data.total_gpu_allocatable) * 100)
@@ -117,6 +106,55 @@ export default function GPUDashboard() {
   const devicePluginHealthy = useMemo(() => {
     if (!data?.device_plugin_status) return false
     return data.device_plugin_status.ready >= data.device_plugin_status.desired
+  }, [data])
+
+  // Per-node GPU allocation bars
+  const nodeAllocation = useMemo(() => {
+    if (!data) return []
+    const nodes = data.gpu_nodes
+    // Count GPU usage per node from pods
+    const usedMap = new Map<string, number>()
+    for (const pod of data.gpu_pods) {
+      const node = pod.node_name ?? ''
+      if (node) usedMap.set(node, (usedMap.get(node) || 0) + pod.gpu_requested)
+    }
+    return nodes.map((node) => ({
+      ...node,
+      gpu_used: usedMap.get(node.name) ?? 0,
+    })).sort((a, b) => b.gpu_capacity - a.gpu_capacity)
+  }, [data])
+
+  // GPU model distribution
+  const modelDistribution = useMemo(() => {
+    if (!data) return []
+    const map = new Map<string, number>()
+    for (const node of data.gpu_nodes) {
+      const model = node.gpu_model ?? 'Unknown'
+      map.set(model, (map.get(model) || 0) + node.gpu_capacity)
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1])
+  }, [data])
+
+  // Pod status distribution
+  const podStatusDist = useMemo(() => {
+    if (!data) return []
+    const map = new Map<string, number>()
+    for (const pod of data.gpu_pods) {
+      map.set(pod.status, (map.get(pod.status) || 0) + 1)
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1])
+  }, [data])
+
+  // Recent pods (latest 5)
+  const recentPods = useMemo(() => {
+    if (!data) return []
+    return [...data.gpu_pods]
+      .sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+        return tb - ta
+      })
+      .slice(0, 5)
   }, [data])
 
   // Loading state
@@ -135,13 +173,11 @@ export default function GPUDashboard() {
           <SkeletonCard />
           <SkeletonCard />
         </div>
-        <SkeletonTable cols={7} />
-        <SkeletonTable cols={6} />
       </div>
     )
   }
 
-  // Error state — show retry button instead of misleading "no GPU" message
+  // Error state
   if (isError) {
     return (
       <div className="space-y-6">
@@ -243,6 +279,9 @@ export default function GPUDashboard() {
     },
   ]
 
+  const nodeReadyCount = data.gpu_nodes.filter((n) => n.status === 'Ready').length
+  const nodeNotReadyCount = data.gpu_nodes.length - nodeReadyCount
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -332,111 +371,317 @@ export default function GPUDashboard() {
         )}
       </div>
 
-      {/* GPU Nodes Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-700/50 bg-slate-800/30">
-        <div className="flex items-center gap-2 border-b border-slate-700/50 px-5 py-3">
-          <Server className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-white">
-            {tr('gpuDashboardPage.nodes.title', 'GPU Nodes')}
-          </h2>
-          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
-            {data.gpu_nodes.length}
-          </span>
+      {/* Real-time GPU Metrics (from Prometheus/DCGM) */}
+      {metricsAvailable && metrics && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold text-white">
+                {tr('gpuDashboardPage.realtime.title', 'Real-time GPU Metrics')}
+              </h2>
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400 ring-1 ring-emerald-500/20">
+                Live
+              </span>
+            </div>
+            <span className="text-xs text-slate-500">
+              {metrics.gpu_count} GPU{metrics.gpu_count !== 1 ? 's' : ''} detected
+            </span>
+          </div>
+
+          {/* Avg metrics summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
+              <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.avgUtil', 'Avg GPU Utilization')}</div>
+              <div className="mt-1 text-lg font-semibold text-white">{Math.round(metrics.avg_gpu_util)}%</div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className={`h-full rounded-full ${metrics.avg_gpu_util >= 80 ? 'bg-red-500' : metrics.avg_gpu_util >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(metrics.avg_gpu_util, 100)}%` }}
+                />
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
+              <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.avgMemUtil', 'Avg Memory Utilization')}</div>
+              <div className="mt-1 text-lg font-semibold text-white">{Math.round(metrics.avg_memory_util)}%</div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className={`h-full rounded-full ${metrics.avg_memory_util >= 80 ? 'bg-red-500' : metrics.avg_memory_util >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                  style={{ width: `${Math.min(metrics.avg_memory_util, 100)}%` }}
+                />
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
+              <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.memUsed', 'Memory Used')}</div>
+              <div className="mt-1 text-lg font-semibold text-white">
+                {metrics.total_memory_mb > 0 ? `${(metrics.total_memory_used_mb / 1024).toFixed(1)} GiB` : '-'}
+              </div>
+              <div className="text-[11px] text-slate-500">
+                / {(metrics.total_memory_mb / 1024).toFixed(1)} GiB
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2.5">
+              <div className="text-[11px] text-slate-400">{tr('gpuDashboardPage.realtime.gpuCount', 'Physical GPUs')}</div>
+              <div className="mt-1 text-lg font-semibold text-white">{metrics.gpu_count}</div>
+            </div>
+          </div>
+
+          {/* Per-GPU bars by host */}
+          <div className="space-y-3">
+            {[...gpusByHost.entries()].map(([hostname, gpus]) => (
+              <div key={hostname} className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3">
+                <div className="text-xs font-medium text-slate-300 mb-2">{hostname}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {gpus.map((gpu) => (
+                    <div key={gpu.uuid} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">
+                          GPU {gpu.gpu} {gpu.model_name ? `(${gpu.model_name})` : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-500 w-8">Core</span>
+                        <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(gpu.gpu_util, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right">{Math.round(gpu.gpu_util)}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-500 w-8">Mem</span>
+                        <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${gpu.memory_util_percent >= 80 ? 'bg-red-500' : gpu.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                            style={{ width: `${Math.min(gpu.memory_util_percent, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-300 w-10 text-right">{Math.round(gpu.memory_util_percent)}%</span>
+                      </div>
+                      {gpu.memory_temp > 0 && (
+                        <div className="text-[10px] text-slate-500">
+                          Temp: <span className={gpu.memory_temp >= 85 ? 'text-red-400' : gpu.memory_temp >= 70 ? 'text-amber-400' : 'text-slate-400'}>{gpu.memory_temp}°C</span>
+                          {gpu.exported_pod && <span className="ml-2">Pod: {gpu.exported_namespace}/{gpu.exported_pod}</span>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-700/50 text-left text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.name', 'Name')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.gpuModel', 'GPU Model')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.gpuMemory', 'GPU Memory')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.capacity', 'Capacity')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.allocatable', 'Allocatable')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.status', 'Status')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.nodes.migStrategy', 'MIG Strategy')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/30">
-              {data.gpu_nodes.map((node: GPUNodeInfo) => (
-                <tr
-                  key={node.name}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({ kind: 'Node', name: node.name })}
-                >
-                  <td className="whitespace-nowrap px-5 py-3 font-medium text-white">{node.name}</td>
-                  <td className="whitespace-nowrap px-5 py-3">{node.gpu_model ?? '-'}</td>
-                  <td className="whitespace-nowrap px-5 py-3">{node.gpu_memory ?? '-'}</td>
-                  <td className="whitespace-nowrap px-5 py-3">{node.gpu_capacity}</td>
-                  <td className="whitespace-nowrap px-5 py-3">{node.gpu_allocatable}</td>
-                  <td className="whitespace-nowrap px-5 py-3">
-                    <NodeStatusBadge status={node.status} />
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3">{node.mig_strategy ?? '-'}</td>
-                </tr>
-              ))}
-              {data.gpu_nodes.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
-                    {tr('gpuDashboardPage.nodes.empty', 'No GPU nodes found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      )}
+
+      {/* Node GPU Allocation + GPU Model / Pod Status */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Per-Node GPU Allocation */}
+        <div className="xl:col-span-2 rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Server className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-white">
+                {tr('gpuDashboardPage.nodeAllocation.title', 'Node GPU Allocation')}
+              </h2>
+              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                {nodeReadyCount} {tr('gpuDashboardPage.nodeAllocation.ready', 'ready')}
+                {nodeNotReadyCount > 0 && (
+                  <span className="text-red-400"> / {nodeNotReadyCount} {tr('gpuDashboardPage.nodeAllocation.notReady', 'not ready')}</span>
+                )}
+              </span>
+            </div>
+            <Link
+              to="/gpu/nodes"
+              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              {tr('gpuDashboardPage.viewAll', 'View all')}
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          {nodeAllocation.length > 0 ? (
+            <div className="space-y-3">
+              {nodeAllocation.map((node) => {
+                const usedPct = node.gpu_allocatable > 0
+                  ? Math.round((node.gpu_used / node.gpu_allocatable) * 100)
+                  : 0
+                return (
+                  <div
+                    key={node.name}
+                    className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3 cursor-pointer hover:bg-slate-800/60 transition-colors"
+                    onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">{node.name}</span>
+                        <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
+                      </div>
+                      <span className="text-xs text-slate-400">
+                        {node.gpu_model ?? 'Unknown'} {node.gpu_memory ? `• ${node.gpu_memory}` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            usedPct >= 80 ? 'bg-red-500' : usedPct >= 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(usedPct, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono text-slate-300 whitespace-nowrap">
+                        {node.gpu_used}/{node.gpu_allocatable}
+                        <span className="text-slate-500 ml-1">({usedPct}%)</span>
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">{tr('gpuDashboardPage.nodeAllocation.empty', 'No GPU nodes available.')}</p>
+          )}
+        </div>
+
+        {/* Right column: GPU Model Distribution + Pod Status Distribution */}
+        <div className="flex flex-col gap-4">
+          {/* GPU Model Distribution */}
+          <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-white">
+                {tr('gpuDashboardPage.modelDist.title', 'GPU Models')}
+              </h2>
+            </div>
+            {modelDistribution.length > 0 ? (
+              <div className="space-y-3">
+                {modelDistribution.map(([model, gpuCount]) => {
+                  const pct = data.total_gpu_capacity > 0
+                    ? Math.round((gpuCount / data.total_gpu_capacity) * 100)
+                    : 0
+                  return (
+                    <div key={model}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-slate-300 truncate">{model}</span>
+                        <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">{gpuCount} GPU ({pct}%)</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">{tr('gpuDashboardPage.modelDist.empty', 'No GPU models detected.')}</p>
+            )}
+          </div>
+
+          {/* Pod Status Distribution */}
+          <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Box className="h-4 w-4 text-slate-400" />
+                <h2 className="text-sm font-semibold text-white">
+                  {tr('gpuDashboardPage.podStatus.title', 'Pod Status')}
+                </h2>
+                <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                  {data.gpu_pods.length}
+                </span>
+              </div>
+              <Link
+                to="/gpu/pods"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+              >
+                {tr('gpuDashboardPage.viewAll', 'View all')}
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {podStatusDist.length > 0 ? (
+              <div className="space-y-2">
+                {podStatusDist.map(([status, count]) => {
+                  const pct = data.gpu_pods.length > 0
+                    ? Math.round((count / data.gpu_pods.length) * 100)
+                    : 0
+                  return (
+                    <div key={status} className="flex items-center gap-3">
+                      <span className={`badge ${getStatusColor(status)} w-24 justify-center`}>{status}</span>
+                      <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            status === 'Running' ? 'bg-emerald-500'
+                            : status === 'Pending' ? 'bg-yellow-500'
+                            : status === 'Succeeded' ? 'bg-blue-500'
+                            : status === 'Failed' ? 'bg-red-500'
+                            : 'bg-slate-500'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-slate-400 w-16 text-right">{count} ({pct}%)</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">{tr('gpuDashboardPage.podStatus.empty', 'No GPU pods running.')}</p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* GPU Pods Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-700/50 bg-slate-800/30">
-        <div className="flex items-center gap-2 border-b border-slate-700/50 px-5 py-3">
-          <Box className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-white">
-            {tr('gpuDashboardPage.pods.title', 'GPU Pods')}
-          </h2>
-          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
-            {data.gpu_pods.length}
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-700/50 text-left text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.pods.namespace', 'Namespace')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.pods.name', 'Name')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.pods.node', 'Node')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.pods.gpus', 'GPUs')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.pods.status', 'Status')}</th>
-                <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.pods.age', 'Age')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/30">
-              {data.gpu_pods.map((pod: GPUPodInfo) => (
-                <tr
-                  key={`${pod.namespace}/${pod.name}`}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
-                >
-                  <td className="whitespace-nowrap px-5 py-3">{pod.namespace}</td>
-                  <td className="whitespace-nowrap px-5 py-3 font-medium text-white">{pod.name}</td>
-                  <td className="whitespace-nowrap px-5 py-3">{pod.node_name ?? '-'}</td>
-                  <td className="whitespace-nowrap px-5 py-3">{pod.gpu_requested}</td>
-                  <td className="whitespace-nowrap px-5 py-3">
-                    <PodStatusBadge status={pod.status} />
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-3">{formatAge(pod.created_at)}</td>
+      {/* Recent GPU Pods */}
+      {recentPods.length > 0 && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/30">
+          <div className="flex items-center justify-between border-b border-slate-700/50 px-5 py-3">
+            <div className="flex items-center gap-2">
+              <Box className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-white">
+                {tr('gpuDashboardPage.recentPods.title', 'Recent GPU Pods')}
+              </h2>
+            </div>
+            <Link
+              to="/gpu/pods"
+              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              {tr('gpuDashboardPage.viewAll', 'View all')}
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700/50 text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.namespace', 'Namespace')}</th>
+                  <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.name', 'Name')}</th>
+                  <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.node', 'Node')}</th>
+                  <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.gpus', 'GPUs')}</th>
+                  <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.status', 'Status')}</th>
+                  <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.age', 'Age')}</th>
                 </tr>
-              ))}
-              {data.gpu_pods.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
-                    {tr('gpuDashboardPage.pods.empty', 'No GPU pods found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-700/30">
+                {recentPods.map((pod: GPUPodInfo) => (
+                  <tr
+                    key={`${pod.namespace}/${pod.name}`}
+                    className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                  >
+                    <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{pod.namespace}</td>
+                    <td className="whitespace-nowrap px-5 py-3 font-medium text-white">{pod.name}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{pod.node_name ?? '-'}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{pod.gpu_requested}</td>
+                    <td className="whitespace-nowrap px-5 py-3">
+                      <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{formatAge(pod.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
