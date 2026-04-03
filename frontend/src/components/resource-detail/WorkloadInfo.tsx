@@ -2,6 +2,8 @@ import { type ReactNode, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import {
   InfoSection,
   InfoRow,
@@ -161,6 +163,28 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     const fromRaw = (spec.selector as Record<string, any> | undefined)?.matchLabels
     return (fromRaw as Record<string, string> | undefined) ?? {}
   }, [describe?.selector, spec.selector])
+
+  // Prometheus workload-level metrics
+  // Match pods by name prefix (e.g. "my-deploy-" matches "my-deploy-abc123-xyz")
+  const podPrefix = name ? `${name}-` : ''
+  const nsFilter = namespace ? `namespace="${namespace}"` : ''
+  const promWorkloadMetrics = usePrometheusQueries(
+    ['workload-detail', kind, namespace ?? '', name],
+    [
+      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum(container_memory_working_set_bytes{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"})` },
+      { name: 'cpu_per_pod', promql: `sum by(pod)(rate(container_cpu_usage_seconds_total{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'mem_per_pod', promql: `sum by(pod)(container_memory_working_set_bytes{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"})` },
+      { name: 'restarts', promql: `sum(kube_pod_container_status_restarts_total{${nsFilter},pod=~"${podPrefix}.+"})` },
+    ],
+    { enabled: !!name && !!namespace && !isJob && !isCronJob },
+  )
+
+  const getWorkloadMetric = (metricName: string): number | null => {
+    const resp = promWorkloadMetrics.data[metricName]
+    if (!resp?.available || !resp.results?.length) return null
+    return resp.results[0].value
+  }
 
   const selectorExpressions = useMemo(() => {
     if (Array.isArray(describe?.selector_expressions)) return describe.selector_expressions
@@ -410,6 +434,41 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
             <InfoRow label="Available" value={String(replicaView.available ?? '-')} />
           </InfoGrid>
         </InfoSection>
+      )}
+
+      {/* Prometheus Workload Metrics */}
+      {!isJob && !isCronJob && (
+        <PrometheusSection available={promWorkloadMetrics.available} title="Real-time Resource Usage">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+            {getWorkloadMetric('cpu') !== null && (
+              <MetricCard label="Total CPU" value={getWorkloadMetric('cpu')!} unit="m" thresholds={{ warn: 1000, danger: 2000 }} />
+            )}
+            {getWorkloadMetric('memory') !== null && (
+              <MetricCard label="Total Memory" value={getWorkloadMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 2048, danger: 4096 }} />
+            )}
+            {getWorkloadMetric('restarts') !== null && (
+              <MetricCard label="Total Restarts" value={getWorkloadMetric('restarts')!} unit="" thresholds={{ warn: 5, danger: 20 }} />
+            )}
+          </div>
+          {/* Per-pod breakdown */}
+          {promWorkloadMetrics.data['cpu_per_pod']?.results && promWorkloadMetrics.data['cpu_per_pod'].results.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[11px] text-slate-400 font-medium">Per-Pod CPU (millicores)</div>
+              {promWorkloadMetrics.data['cpu_per_pod']!.results.map((r) => (
+                <div key={r.metric?.pod} className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 w-48 truncate">{r.metric?.pod}</span>
+                  <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${r.value >= 500 ? 'bg-red-500' : r.value >= 200 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min((r.value / 1000) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-300 w-14 text-right">{r.value.toFixed(0)}m</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </PrometheusSection>
       )}
 
       {showStrategy && (

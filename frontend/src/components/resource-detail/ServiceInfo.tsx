@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 
 interface Props {
   name: string
@@ -119,6 +121,30 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const labels = (describe?.labels ?? (meta?.labels as Record<string, string> | undefined) ?? {})
   const annotations = (describe?.annotations ?? (meta?.annotations as Record<string, string> | undefined) ?? {})
 
+  // Prometheus service-level metrics — use endpoint pod names from describe data
+  const endpointPodNames = useMemo(() => {
+    const addrs = describe?.endpoint_summary?.ready_addresses
+    if (!Array.isArray(addrs)) return []
+    return addrs.map((a: any) => a?.target_ref?.name).filter(Boolean) as string[]
+  }, [describe?.endpoint_summary?.ready_addresses])
+
+  const podRegex = endpointPodNames.length > 0 ? endpointPodNames.join('|') : ''
+  const promSvcMetrics = usePrometheusQueries(
+    ['service-detail', namespace ?? '', name],
+    [
+      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"})` },
+      { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podRegex}",container!="",container!="POD"}))` },
+    ],
+    { enabled: !!name && !!namespace && endpointPodNames.length > 0 },
+  )
+
+  const getSvcMetric = (n: string): number | null => {
+    const resp = promSvcMetrics.data[n]
+    if (!resp?.available || !resp.results?.length) return null
+    return resp.results[0].value
+  }
+
   const externalIps = describe?.external_ips ?? (Array.isArray(spec?.externalIPs) ? (spec.externalIPs as string[]) : [])
   const lbIngress = describe?.load_balancer_ingress ?? ((status?.loadBalancer as any)?.ingress ?? [])
 
@@ -132,6 +158,21 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
 
   return (
     <>
+      {/* Prometheus Backend Pod Metrics */}
+      <PrometheusSection available={promSvcMetrics.available} title="Backend Pod Resource Usage">
+        <div className="grid grid-cols-3 gap-3">
+          {getSvcMetric('cpu') !== null && (
+            <MetricCard label="Total CPU" value={getSvcMetric('cpu')!} unit="m" thresholds={{ warn: 500, danger: 1000 }} />
+          )}
+          {getSvcMetric('memory') !== null && (
+            <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
+          )}
+          {getSvcMetric('pod_count') !== null && (
+            <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" thresholds={{ warn: 10, danger: 20 }} />
+          )}
+        </div>
+      </PrometheusSection>
+
       <InfoSection title="Service Info">
         {isLoading && <p className="text-xs text-slate-400 mb-2">Loading service details...</p>}
         {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
