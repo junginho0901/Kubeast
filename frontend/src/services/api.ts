@@ -1552,6 +1552,17 @@ export const api = {
     return data
   },
 
+  // Prometheus (generic)
+  getPrometheusStatus: async (): Promise<{ available: boolean; endpoint?: string; message?: string }> => {
+    const { data } = await client.get('/cluster/prometheus/status')
+    return data
+  },
+
+  prometheusQuery: async (query: string): Promise<PrometheusQueryResponse> => {
+    const { data } = await client.get('/cluster/prometheus/query', { params: { query } })
+    return data
+  },
+
   // DeviceClasses
   getDeviceClasses: async (forceRefresh = false): Promise<DeviceClassItem[]> => {
     const { data } = await client.get('/cluster/deviceclasses', {
