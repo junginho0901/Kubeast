@@ -45,36 +45,6 @@ function StatusBadge({ enabled, label }: { enabled: boolean; label: string }) {
   )
 }
 
-function NodeStatusBadge({ status }: { status: string }) {
-  const isReady = status === 'Ready'
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-        isReady
-          ? 'bg-emerald-500/10 text-emerald-400'
-          : 'bg-red-500/10 text-red-400'
-      }`}
-    >
-      {status}
-    </span>
-  )
-}
-
-function PodStatusBadge({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    Running: 'bg-emerald-500/10 text-emerald-400',
-    Succeeded: 'bg-blue-500/10 text-blue-400',
-    Pending: 'bg-yellow-500/10 text-yellow-400',
-    Failed: 'bg-red-500/10 text-red-400',
-  }
-  const cls = colorMap[status] ?? 'bg-slate-500/10 text-slate-400'
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {status}
-    </span>
-  )
-}
-
 function SkeletonCard() {
   return (
     <div className="animate-pulse rounded-xl border border-slate-700/50 bg-slate-800/50 p-5">
@@ -84,18 +54,12 @@ function SkeletonCard() {
   )
 }
 
-function SkeletonTable({ rows = 3, cols = 5 }: { rows?: number; cols?: number }) {
-  return (
-    <div className="animate-pulse space-y-2">
-      {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="flex gap-4">
-          {Array.from({ length: cols }).map((_, c) => (
-            <div key={c} className="h-4 flex-1 rounded bg-slate-700" />
-          ))}
-        </div>
-      ))}
-    </div>
-  )
+function getStatusColor(status: string): string {
+  const lower = (status || '').toLowerCase()
+  if (lower === 'running' || lower === 'succeeded' || lower === 'completed' || lower === 'ready') return 'badge-success'
+  if (lower === 'pending') return 'badge-warning'
+  if (lower === 'failed' || lower.includes('error') || lower.includes('backoff') || lower.includes('notready')) return 'badge-error'
+  return 'badge-info'
 }
 
 export default function GPUDashboard() {
