@@ -1546,6 +1546,12 @@ export const api = {
     return data
   },
 
+  // GPU Metrics (Prometheus / DCGM)
+  getGPUMetrics: async (): Promise<GPUMetricsData> => {
+    const { data } = await client.get('/cluster/gpu/metrics')
+    return data
+  },
+
   // DeviceClasses
   getDeviceClasses: async (forceRefresh = false): Promise<DeviceClassItem[]> => {
     const { data } = await client.get('/cluster/deviceclasses', {
