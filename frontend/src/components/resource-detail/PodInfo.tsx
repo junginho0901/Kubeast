@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
+import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import PodExecTerminal from '@/components/PodExecTerminal'
 
@@ -180,6 +182,30 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const createdAt = podDescribe?.created_at || (meta.creationTimestamp as string)
   const startTime = (podDescribe?.start_time as string | undefined) || (status.startTime as string | undefined)
   const restartCount = podDescribe?.restart_count ?? containers.reduce((sum: number, c: any) => sum + (c.restart_count || c.restartCount || 0), 0)
+
+  // Prometheus real-time container metrics
+  const promPodMetrics = usePrometheusQueries(
+    ['pod-detail', namespace, name],
+    [
+      { name: 'cpu', promql: `sum by(container)(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod="${name}",container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum by(container)(container_memory_working_set_bytes{namespace="${namespace}",pod="${name}",container!="",container!="POD"})` },
+    ],
+    { enabled: !!name && !!namespace },
+  )
+
+  const getContainerCpuMillis = (containerName: string): number | null => {
+    const resp = promPodMetrics.data['cpu']
+    if (!resp?.available || !resp.results?.length) return null
+    const match = resp.results.find((r) => r.metric?.container === containerName)
+    return match ? match.value : null
+  }
+
+  const getContainerMemoryMB = (containerName: string): number | null => {
+    const resp = promPodMetrics.data['memory']
+    if (!resp?.available || !resp.results?.length) return null
+    const match = resp.results.find((r) => r.metric?.container === containerName)
+    return match ? match.value / (1024 * 1024) : null
+  }
   const qosClass = (podDescribe?.qos_class as string | undefined) || (status.qosClass as string | undefined)
   const priority = podDescribe?.priority ?? spec.priority
   const priorityClass = (podDescribe?.priority_class as string | undefined) || (spec.priorityClassName as string | undefined)
@@ -391,6 +417,44 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           <KeyValueTags data={nodeSelector} />
         </InfoSection>
       )}
+
+      {/* Prometheus Real-time Container Metrics */}
+      <PrometheusSection available={promPodMetrics.available} title="Real-time Resource Usage">
+        <div className="space-y-3">
+          {containers.map((c: any) => {
+            const cpuMillis = getContainerCpuMillis(c.name)
+            const memMB = getContainerMemoryMB(c.name)
+            if (cpuMillis === null && memMB === null) return null
+            const cpuLimitStr = c.limits?.cpu || c.resources?.limits?.cpu
+            const memLimitStr = c.limits?.memory || c.resources?.limits?.memory
+            const cpuLimitMillis = cpuLimitStr ? (cpuLimitStr.endsWith('m') ? parseFloat(cpuLimitStr) : parseFloat(cpuLimitStr) * 1000) : null
+            const memLimitMB = memLimitStr ? (memLimitStr.endsWith('Gi') ? parseFloat(memLimitStr) * 1024 : memLimitStr.endsWith('Mi') ? parseFloat(memLimitStr) : parseFloat(memLimitStr) / (1024 * 1024)) : null
+            return (
+              <div key={c.name} className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-3">
+                <div className="text-xs font-medium text-slate-300 mb-2">{c.name}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {cpuMillis !== null && (
+                    <MetricBar
+                      label={`CPU ${cpuMillis.toFixed(0)}m${cpuLimitMillis ? ` / ${cpuLimitMillis}m` : ''}`}
+                      value={cpuLimitMillis ? (cpuMillis / cpuLimitMillis) * 100 : Math.min(cpuMillis / 10, 100)}
+                      max={100}
+                      unit="%"
+                    />
+                  )}
+                  {memMB !== null && (
+                    <MetricBar
+                      label={`Memory ${memMB.toFixed(0)} MiB${memLimitMB ? ` / ${memLimitMB.toFixed(0)} MiB` : ''}`}
+                      value={memLimitMB ? (memMB / memLimitMB) * 100 : Math.min((memMB / 512) * 100, 100)}
+                      max={100}
+                      unit="%"
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </PrometheusSection>
 
       {/* Container States */}
       <InfoSection title="Containers">
