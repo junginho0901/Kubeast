@@ -284,6 +284,11 @@ func main() {
 
 		// GPU / DRA
 		r.Get("/api/v1/gpu/dashboard", h.GetGPUDashboard)
+		r.Get("/api/v1/gpu/metrics", h.GetGPUMetrics)
+
+		// Prometheus integration
+		r.Get("/api/v1/prometheus/status", h.GetPrometheusStatus)
+		r.Get("/api/v1/prometheus/query", h.PrometheusQuery)
 
 		// DRA - DeviceClasses (cluster-scoped)
 		r.Get("/api/v1/deviceclasses", h.GetDeviceClasses)
