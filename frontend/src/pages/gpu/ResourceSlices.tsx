@@ -5,7 +5,7 @@ import { api, type ResourceSliceItem } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
-import { ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
 
@@ -317,6 +317,17 @@ export default function ResourceSlices() {
                   <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>
               ))}
+              {isLoading && (
+                <tr>
+                  <td colSpan={6} className="py-10 px-4 text-center text-slate-400">
+                    <div className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {sortedResourceSlices.length === 0 && !isLoading && (
                 <tr>
                   <td colSpan={6} className="py-6 px-4 text-center text-slate-400">

@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { api, type ClusterRoleInfo } from '@/services/api'
+import { api, type CRDInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
-type SortKey = null | 'name' | 'rules' | 'age'
+type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
 function parseAgeSeconds(createdAt?: string | null): number {
@@ -28,35 +28,45 @@ function formatAge(createdAt?: string | null): string {
   return `${m}m`
 }
 
-function normalizeWatchClusterRoleObject(obj: any): ClusterRoleInfo {
+function normalizeWatchCRDObject(obj: any): CRDInfo {
   if (
     typeof obj?.name === 'string' &&
-    typeof obj?.rules_count === 'number'
+    typeof obj?.group === 'string'
   ) {
-    return obj as ClusterRoleInfo
+    return obj as CRDInfo
   }
 
   const metadata = obj?.metadata ?? {}
-  const rules = Array.isArray(obj?.rules) ? obj.rules : []
+  const spec = obj?.spec ?? {}
+  const names = spec?.names ?? {}
+
+  let version = ''
+  if (Array.isArray(spec?.versions)) {
+    const storageVer = spec.versions.find((v: any) => v.storage)
+    version = storageVer?.name ?? spec.versions[0]?.name ?? ''
+  }
 
   return {
     name: metadata?.name ?? obj?.name ?? '',
-    rules_count: rules.length,
+    group: spec?.group ?? '',
+    version,
+    scope: spec?.scope ?? '',
+    kind: names?.kind ?? '',
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
     labels: metadata?.labels ?? obj?.labels ?? null,
     annotations: metadata?.annotations ?? obj?.annotations ?? null,
   }
 }
 
-function applyClusterRoleWatchEvent(
-  prev: ClusterRoleInfo[] | undefined,
+function applyCRDWatchEvent(
+  prev: CRDInfo[] | undefined,
   event: { type?: string; object?: any },
-): ClusterRoleInfo[] {
+): CRDInfo[] {
   const items = Array.isArray(prev) ? [...prev] : []
   const obj = event?.object
   if (!obj) return items
 
-  const normalized = normalizeWatchClusterRoleObject(obj)
+  const normalized = normalizeWatchCRDObject(obj)
   const name = normalized?.name
   if (!name) return items
 
@@ -73,7 +83,7 @@ function applyClusterRoleWatchEvent(
   return items
 }
 
-export default function ClusterRoles() {
+export default function CustomResourceDefinitions() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
@@ -88,9 +98,9 @@ export default function ClusterRoles() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
-  const { data: clusterRoles, isLoading } = useQuery({
-    queryKey: ['security', 'clusterroles'],
-    queryFn: () => api.getClusterRoles(false),
+  const { data: crds, isLoading } = useQuery({
+    queryKey: ['custom-resources', 'crds'],
+    queryFn: () => api.getCRDs(false),
   })
 
   const { data: me } = useQuery({
@@ -102,41 +112,49 @@ export default function ClusterRoles() {
 
   useKubeWatchList({
     enabled: true,
-    queryKey: ['security', 'clusterroles'],
-    path: '/apis/rbac.authorization.k8s.io/v1/clusterroles',
+    queryKey: ['custom-resources', 'crds'],
+    path: '/apis/apiextensions.k8s.io/v1/customresourcedefinitions',
     query: 'watch=1',
-    applyEvent: (prev, event) => applyClusterRoleWatchEvent(prev as ClusterRoleInfo[] | undefined, event),
+    applyEvent: (prev, event) => applyCRDWatchEvent(prev as CRDInfo[] | undefined, event),
     onEvent: (event) => {
       if (event?.type === 'DELETED') return
       const name = event?.object?.name || event?.object?.metadata?.name
       if (name) {
-        queryClient.invalidateQueries({ queryKey: ['clusterrole-describe', name] })
+        queryClient.invalidateQueries({ queryKey: ['crd-describe', name] })
       }
     },
   })
 
   const filteredItems = useMemo(() => {
-    if (!Array.isArray(clusterRoles)) return [] as ClusterRoleInfo[]
-    if (!searchQuery.trim()) return clusterRoles
+    if (!Array.isArray(crds)) return [] as CRDInfo[]
+    if (!searchQuery.trim()) return crds
     const q = searchQuery.toLowerCase()
-    return clusterRoles.filter(
-      (cr) => cr.name.toLowerCase().includes(q),
+    return crds.filter(
+      (crd) =>
+        crd.name.toLowerCase().includes(q) ||
+        crd.group.toLowerCase().includes(q) ||
+        crd.kind.toLowerCase().includes(q),
     )
-  }, [clusterRoles, searchQuery])
+  }, [crds, searchQuery])
 
   const summary = useMemo(() => {
     const total = filteredItems.length
-    let totalRules = 0
-    for (const cr of filteredItems) totalRules += cr.rules_count
-    return { total, totalRules }
+    let namespaced = 0
+    let cluster = 0
+    for (const crd of filteredItems) {
+      if (crd.scope === 'Namespaced') namespaced++
+      else cluster++
+    }
+    return { total, namespaced, cluster }
   }, [filteredItems])
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('clusterRolesPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('clusterRolesPage.stats.totalRules', 'Total Rules'), summary.totalRules, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('crdPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('crdPage.stats.namespaced', 'Namespaced'), summary.namespaced, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('crdPage.stats.cluster', 'Cluster-scoped'), summary.cluster, 'border-purple-700/40 bg-purple-900/10', 'text-purple-300'],
     ],
-    [summary.total, summary.totalRules, tr],
+    [summary.total, summary.namespaced, summary.cluster, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {
@@ -155,11 +173,14 @@ export default function ClusterRoles() {
   const sortedItems = useMemo(() => {
     if (!sortKey) return filteredItems
     const list = [...filteredItems]
-    const getValue = (cr: ClusterRoleInfo): string | number => {
+    const getValue = (crd: CRDInfo): string | number => {
       switch (sortKey) {
-        case 'name': return cr.name
-        case 'rules': return cr.rules_count
-        case 'age': return parseAgeSeconds(cr.created_at)
+        case 'name': return crd.name
+        case 'group': return crd.group
+        case 'version': return crd.version
+        case 'scope': return crd.scope
+        case 'kind': return crd.kind
+        case 'age': return parseAgeSeconds(crd.created_at)
         default: return ''
       }
     }
@@ -187,42 +208,59 @@ export default function ClusterRoles() {
     if (isRefreshing) return
     setIsRefreshing(true)
     try {
-      const data = await api.getClusterRoles(true)
-      queryClient.removeQueries({ queryKey: ['security', 'clusterroles'] })
-      queryClient.setQueryData(['security', 'clusterroles'], data)
+      const data = await api.getCRDs(true)
+      queryClient.removeQueries({ queryKey: ['custom-resources', 'crds'] })
+      queryClient.setQueryData(['custom-resources', 'crds'], data)
     } catch (error) {
-      console.error('ClusterRoles refresh failed:', error)
+      console.error('CRDs refresh failed:', error)
     }
     setTimeout(() => setIsRefreshing(false), 500)
   }
 
-  const createYamlTemplate = `apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+  const createYamlTemplate = `apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
 metadata:
-  name: sample-clusterrole
-rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+  name: samples.example.com
+spec:
+  group: example.com
+  names:
+    kind: Sample
+    listKind: SampleList
+    plural: samples
+    singular: sample
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                replicas:
+                  type: integer
 `
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('clusterRolesPage.title', 'Cluster Roles')}</h1>
-          <p className="mt-2 text-slate-400">{tr('clusterRolesPage.subtitle', 'Manage ClusterRoles across the cluster.')}</p>
+          <h1 className="text-3xl font-bold text-white">{tr('crdPage.title', 'Custom Resource Definitions')}</h1>
+          <p className="mt-2 text-slate-400">{tr('crdPage.subtitle', 'Manage Custom Resource Definitions registered in the cluster.')}</p>
         </div>
         <div className="flex items-center gap-2">
           {canCreate && (
             <button type="button" onClick={() => setCreateDialogOpen(true)} className="btn btn-primary flex items-center gap-2">
               <Plus className="w-4 h-4" />
-              {tr('clusterRolesPage.create', 'Create ClusterRole')}
+              {tr('crdPage.create', 'Create CRD')}
             </button>
           )}
-          <button type="button" onClick={handleRefresh} disabled={isRefreshing} title={tr('clusterRolesPage.refreshTitle', 'Force refresh')} className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          <button type="button" onClick={handleRefresh} disabled={isRefreshing} title={tr('crdPage.refreshTitle', 'Force refresh')} className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {tr('clusterRolesPage.refresh', 'Refresh')}
+            {tr('crdPage.refresh', 'Refresh')}
           </button>
         </div>
       </div>
@@ -230,11 +268,11 @@ rules:
       <div className="shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input type="text" placeholder={tr('clusterRolesPage.searchPlaceholder', 'Search by name...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          <input type="text" placeholder={tr('crdPage.searchPlaceholder', 'Search by name, group, or kind...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 shrink-0">
+      <div className="grid grid-cols-3 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
@@ -245,37 +283,53 @@ rules:
 
       {searchQuery && (
         <p className="text-sm text-slate-400 shrink-0">
-          {tr('clusterRolesPage.matchCount', '{{count}} result(s) match.', { count: filteredItems.length })}
+          {tr('crdPage.matchCount', '{{count}} result(s) match.', { count: filteredItems.length })}
         </p>
       )}
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
         <div className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[700px] table-fixed">
+          <table className="w-full text-sm min-w-[900px] table-fixed">
             <thead className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.name', 'Name')}{renderSortIcon('name')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('rules')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.rules', 'Rules')}{renderSortIcon('rules')}</span>
+                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.version', 'Version')}{renderSortIcon('version')}</span>
+                </th>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.scope', 'Scope')}{renderSortIcon('scope')}</span>
+                </th>
+                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
+                </th>
+                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedItems.map((cr) => (
-                <tr key={cr.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRole', name: cr.name })}>
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cr.name}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{cr.rules_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(cr.created_at)}</td>
+              {pagedItems.map((crd) => (
+                <tr key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
+                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crd.name}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono">{crd.version}</td>
+                  <td className="py-3 px-4 text-xs">
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium ${crd.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'}`}>
+                      {crd.scope}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.kind}</span></td>
+                  <td className="py-3 px-4 text-xs font-mono">{formatAge(crd.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
                 <tr>
-                  <td colSpan={3} className="py-10 px-4 text-center text-slate-400">
+                  <td colSpan={6} className="py-10 px-4 text-center text-slate-400">
                     <div className="inline-flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading...
@@ -286,8 +340,8 @@ rules:
 
               {sortedItems.length === 0 && !isLoading && (
                 <tr>
-                  <td colSpan={3} className="py-6 px-4 text-center text-slate-400">
-                    {tr('clusterRolesPage.noResults', 'No cluster roles found.')}
+                  <td colSpan={6} className="py-6 px-4 text-center text-slate-400">
+                    {tr('crdPage.noResults', 'No custom resource definitions found.')}
                   </td>
                 </tr>
               )}
@@ -319,11 +373,11 @@ rules:
 
       {createDialogOpen && (
         <ResourceYamlCreateDialog
-          title={tr('clusterRolesPage.createTitle', 'Create ClusterRole from YAML')}
+          title={tr('crdPage.createTitle', 'Create CRD from YAML')}
           initialYaml={createYamlTemplate}
           onClose={() => setCreateDialogOpen(false)}
           onCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ['security', 'clusterroles'] })
+            queryClient.invalidateQueries({ queryKey: ['custom-resources', 'crds'] })
           }}
         />
       )}

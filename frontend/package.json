@@ -22,6 +22,7 @@
     "i18next": "^23.12.2",
     "i18next-browser-languagedetector": "^7.2.0",
     "jsep": "^1.4.0",
+    "jsonpath-plus": "^10.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.307.0",
     "monaco-editor": "^0.55.1",

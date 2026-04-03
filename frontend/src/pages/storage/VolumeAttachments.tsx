@@ -6,7 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
-import { ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'attacher' | 'pv' | 'node' | 'attached' | 'error' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -519,7 +519,12 @@ spec:
 
               {isLoading && (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">{tr('common.loading', 'Loading...')}</td>
+                  <td colSpan={7} className="py-10 px-4 text-center text-slate-400">
+                    <div className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>

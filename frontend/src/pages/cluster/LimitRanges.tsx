@@ -6,7 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
-import { ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'types' | 'age'
 
@@ -460,6 +460,17 @@ spec:
                   <td className="py-3 px-4 text-xs font-mono">{formatAge(lr.created_at)}</td>
                 </tr>
               ))}
+              {isLoading && (
+                <tr>
+                  <td colSpan={showNamespaceColumn ? 4 : 3} className="py-10 px-4 text-center text-slate-400">
+                    <div className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {sortedLimitRanges.length === 0 && !isLoading && (
                 <tr>
                   <td colSpan={showNamespaceColumn ? 4 : 3} className="py-6 px-4 text-center text-slate-400">

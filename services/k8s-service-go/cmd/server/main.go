@@ -416,6 +416,17 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/leases/{name}/yaml", h.GetLeaseYAML)
 		r.Delete("/api/v1/namespaces/{namespace}/leases/{name}", h.DeleteLease)
 
+		// Custom Resource Definitions (cluster-scoped)
+		r.Get("/api/v1/crds", h.GetCRDs)
+		r.Get("/api/v1/crds/{name}/describe", h.DescribeCRD)
+		r.Delete("/api/v1/crds/{name}", h.DeleteCRD)
+
+		// Custom Resource Instances
+		r.Get("/api/v1/custom-resources/all", h.GetAllCustomResourceInstances)
+		r.Get("/api/v1/custom-resources/{group}/{version}/{plural}", h.GetCustomResourceInstances)
+		r.Get("/api/v1/custom-resources/{group}/{version}/{plural}/{namespace}/{name}/describe", h.DescribeCustomResourceInstance)
+		r.Delete("/api/v1/custom-resources/{group}/{version}/{plural}/{namespace}/{name}", h.DeleteCustomResourceInstance)
+
 		// Topology
 		r.Get("/api/v1/topology/namespace/{namespace}", h.GetNamespaceTopology)
 		r.Get("/api/v1/topology/service/{namespace}/{service_name}", h.GetServiceTopology)

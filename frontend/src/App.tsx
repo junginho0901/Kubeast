@@ -17,7 +17,6 @@ import AdminUsers from './pages/AdminUsers'
 import AdminAIModels from './pages/AdminAIModels'
 import AdminNodeShell from './pages/AdminNodeShell'
 import Account from './pages/Account'
-import ComingSoon from './pages/ComingSoon'
 import HPAs from './pages/workloads/HPAs'
 import VPAs from './pages/workloads/VPAs'
 import PDBs from './pages/workloads/PDBs'
@@ -62,6 +61,8 @@ import ResourceQuotas from './pages/cluster/ResourceQuotas'
 import LimitRanges from './pages/cluster/LimitRanges'
 import MutatingWebhookConfigurations from './pages/cluster/MutatingWebhookConfigurations'
 import ValidatingWebhookConfigurations from './pages/cluster/ValidatingWebhookConfigurations'
+import CustomResourceDefinitions from './pages/custom-resources/CustomResourceDefinitions'
+import CustomResourceInstances from './pages/custom-resources/CustomResourceInstances'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
@@ -120,8 +121,8 @@ function App() {
             <Route path="cluster/leases" element={<Leases />} />
             <Route path="cluster/mutatingwebhookconfigurations" element={<MutatingWebhookConfigurations />} />
             <Route path="cluster/validatingwebhookconfigurations" element={<ValidatingWebhookConfigurations />} />
-            <Route path="custom-resources/instances" element={<ComingSoon title="Custom Resource Instances" />} />
-            <Route path="custom-resources/groups" element={<ComingSoon title="Custom Resource Definitions" />} />
+            <Route path="custom-resources/instances" element={<CustomResourceInstances />} />
+            <Route path="custom-resources/groups" element={<CustomResourceDefinitions />} />
             <Route path="monitoring" element={<Monitoring />} />
             <Route path="cluster-view" element={<ClusterView />} />
             <Route path="account" element={<Account />} />

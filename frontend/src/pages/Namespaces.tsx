@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
-import { ChevronDown, ChevronUp, RefreshCw, Search, Boxes, Plus } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search, Boxes, Plus } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
@@ -373,6 +373,17 @@ export default function Namespaces() {
                   </tr>
                 )
               })}
+              {isLoadingNs && (
+                <tr>
+                  <td colSpan={4} className="py-10 px-4 text-center text-slate-400">
+                    <div className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {sortedNamespaces.length === 0 && !isLoadingNs && (
                 <tr>
                   <td colSpan={4} className="py-6 px-4 text-center text-slate-400">

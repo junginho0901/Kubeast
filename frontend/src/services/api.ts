@@ -975,6 +975,29 @@ export interface SecretInfo {
   created_at?: string | null
 }
 
+export interface CRDInfo {
+  name: string
+  group: string
+  version: string
+  scope: string
+  kind: string
+  created_at?: string | null
+  labels?: Record<string, string> | null
+  annotations?: Record<string, string> | null
+}
+
+export interface CustomResourceInstanceInfo {
+  name: string
+  namespace: string
+  kind: string
+  group: string
+  version: string
+  scope: string
+  crd_name: string
+  created_at?: string | null
+  labels?: Record<string, string> | null
+}
+
 export interface TopologyGraph {
   nodes: Array<{
     id: string
@@ -2641,6 +2664,45 @@ export const api = {
 
   deleteSecret: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/secrets/${name}`)
+  },
+
+  // ===== Custom Resource Definitions =====
+  getCRDs: async (forceRefresh = false): Promise<CRDInfo[]> => {
+    const { data } = await client.get('/cluster/crds', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  describeCRD: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/crds/${name}/describe`)
+    return data
+  },
+
+  deleteCRD: async (name: string): Promise<void> => {
+    await client.delete(`/cluster/crds/${name}`)
+  },
+
+  // ===== Custom Resource Instances =====
+  getAllCustomResourceInstances: async (forceRefresh = false): Promise<CustomResourceInstanceInfo[]> => {
+    const { data } = await client.get('/cluster/custom-resources/all', {
+      params: { force_refresh: forceRefresh },
+    })
+    return data
+  },
+
+  getCustomResourceInstances: async (group: string, version: string, plural: string): Promise<any[]> => {
+    const { data } = await client.get(`/cluster/custom-resources/${group}/${version}/${plural}`)
+    return data
+  },
+
+  describeCustomResourceInstance: async (group: string, version: string, plural: string, namespace: string, name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/custom-resources/${group}/${version}/${plural}/${namespace}/${name}/describe`)
+    return data
+  },
+
+  deleteCustomResourceInstance: async (group: string, version: string, plural: string, namespace: string, name: string): Promise<void> => {
+    await client.delete(`/cluster/custom-resources/${group}/${version}/${plural}/${namespace}/${name}`)
   },
 }
 

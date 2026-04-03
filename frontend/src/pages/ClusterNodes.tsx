@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
-import { ChevronDown, ChevronUp, Plus, RefreshCw, Search, Server } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search, Server } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
@@ -407,6 +407,17 @@ metadata:
                   </tr>
                 )
               })}
+              {isLoadingNodes && (
+                <tr>
+                  <td colSpan={9} className="py-10 px-4 text-center text-slate-400">
+                    <div className="inline-flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {sortedNodes.length === 0 && !isLoadingNodes && (
                 <tr>
                   <td colSpan={9} className="py-6 px-4 text-center text-slate-400">

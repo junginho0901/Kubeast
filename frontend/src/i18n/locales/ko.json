@@ -2384,5 +2384,80 @@
     "noData": "데이터 항목이 없습니다.",
     "ownerReferences": "소유자 참조",
     "maskedHint": "읽기 전용 사용자에게는 값이 숨겨집니다."
+  },
+  "crdPage": {
+    "title": "Custom Resource Definitions",
+    "subtitle": "클러스터에 등록된 Custom Resource Definition을 관리합니다.",
+    "searchPlaceholder": "이름, 그룹, Kind로 검색...",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "create": "CRD 생성",
+    "createTitle": "YAML로 CRD 생성",
+    "matchCount": "{{count}}개 결과 일치.",
+    "noResults": "Custom Resource Definition이 없습니다.",
+    "stats": {
+      "total": "전체",
+      "namespaced": "네임스페이스 범위",
+      "cluster": "클러스터 범위"
+    },
+    "table": {
+      "name": "이름",
+      "group": "그룹",
+      "version": "버전",
+      "scope": "범위",
+      "kind": "Kind",
+      "age": "생성 경과"
+    }
+  },
+  "crInstancesPage": {
+    "title": "Custom Resource Instances",
+    "subtitle": "모든 CRD에 걸친 커스텀 리소스 인스턴스를 조회합니다.",
+    "searchPlaceholder": "이름, 네임스페이스, Kind, 그룹으로 검색...",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "allKinds": "모든 Kind",
+    "matchCount": "{{count}}개 결과 일치.",
+    "noResults": "커스텀 리소스 인스턴스가 없습니다.",
+    "stats": {
+      "total": "전체 인스턴스",
+      "kinds": "Kind 수",
+      "namespaces": "네임스페이스"
+    },
+    "table": {
+      "name": "이름",
+      "namespace": "네임스페이스",
+      "kind": "Kind",
+      "group": "그룹",
+      "age": "생성 경과"
+    }
+  },
+  "crdInfo": {
+    "basicInfo": "기본 정보",
+    "group": "그룹",
+    "scope": "범위",
+    "resourceKind": "리소스 Kind",
+    "plural": "복수형",
+    "singular": "단수형",
+    "listKind": "리스트 Kind",
+    "shortNames": "단축 이름",
+    "categories": "카테고리",
+    "acceptedNames": "수락된 이름",
+    "versions": "버전",
+    "storedVersions": "저장된 버전",
+    "conditions": "컨디션",
+    "subresources": "서브리소스",
+    "instances": "커스텀 리소스",
+    "searchInstances": "인스턴스 검색...",
+    "noInstances": "인스턴스가 없습니다."
+  },
+  "crInstanceInfo": {
+    "basicInfo": "기본 정보",
+    "spec": "스펙",
+    "status": "상태",
+    "conditions": "컨디션",
+    "ownerReferences": "소유자 참조",
+    "finalizers": "파이널라이저",
+    "events": "이벤트",
+    "printerColumns": "추가 정보"
   }
 }

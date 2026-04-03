@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle, ChevronDown, Database, Plus, RefreshCw, Search } from 'lucide-react'
+import { CheckCircle, ChevronDown, Database, Loader2, Plus, RefreshCw, Search } from 'lucide-react'
 import { api, type StatefulSetInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -329,6 +329,16 @@ spec:
                 <td className="py-3 px-4 text-xs font-mono truncate">{sts.service_name || '-'}</td>
               </tr>
             ))}
+            {isLoading && (
+              <tr>
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
+                  <div className="inline-flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </div>
+                </td>
+              </tr>
+            )}
             {!isLoading && paged.length === 0 && (
               <tr>
                 <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">

@@ -2339,5 +2339,80 @@
     "noData": "No data entries.",
     "ownerReferences": "Owner References",
     "maskedHint": "Values are hidden for read-only users."
+  },
+  "crdPage": {
+    "title": "Custom Resource Definitions",
+    "subtitle": "Manage Custom Resource Definitions registered in the cluster.",
+    "searchPlaceholder": "Search by name, group, or kind...",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "create": "Create CRD",
+    "createTitle": "Create CRD from YAML",
+    "matchCount": "{{count}} result(s) match.",
+    "noResults": "No custom resource definitions found.",
+    "stats": {
+      "total": "Total",
+      "namespaced": "Namespaced",
+      "cluster": "Cluster-scoped"
+    },
+    "table": {
+      "name": "Name",
+      "group": "Group",
+      "version": "Version",
+      "scope": "Scope",
+      "kind": "Kind",
+      "age": "Age"
+    }
+  },
+  "crInstancesPage": {
+    "title": "Custom Resource Instances",
+    "subtitle": "Browse all custom resource instances across CRDs.",
+    "searchPlaceholder": "Search by name, namespace, kind, or group...",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "allKinds": "All kinds",
+    "matchCount": "{{count}} result(s) match.",
+    "noResults": "No custom resource instances found.",
+    "stats": {
+      "total": "Total Instances",
+      "kinds": "Unique Kinds",
+      "namespaces": "Namespaces"
+    },
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "kind": "Kind",
+      "group": "Group",
+      "age": "Age"
+    }
+  },
+  "crdInfo": {
+    "basicInfo": "Basic Info",
+    "group": "Group",
+    "scope": "Scope",
+    "resourceKind": "Resource Kind",
+    "plural": "Plural",
+    "singular": "Singular",
+    "listKind": "List Kind",
+    "shortNames": "Short Names",
+    "categories": "Categories",
+    "acceptedNames": "Accepted Names",
+    "versions": "Versions",
+    "storedVersions": "Stored Versions",
+    "conditions": "Conditions",
+    "subresources": "Subresources",
+    "instances": "Custom Resources",
+    "searchInstances": "Search instances...",
+    "noInstances": "No instances found."
+  },
+  "crInstanceInfo": {
+    "basicInfo": "Basic Info",
+    "spec": "Spec",
+    "status": "Status",
+    "conditions": "Conditions",
+    "ownerReferences": "Owner References",
+    "finalizers": "Finalizers",
+    "events": "Events",
+    "printerColumns": "Additional Info"
   }
 }
