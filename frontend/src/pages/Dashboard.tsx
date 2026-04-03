@@ -21,6 +21,7 @@ import {
 // import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Customized } from 'recharts'
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ReactMarkdown from 'react-markdown'
@@ -471,6 +472,23 @@ export default function Dashboard() {
       setMetricsUnavailable(true)
     }
   }, [topResourcesError])
+
+  // Prometheus cluster-wide metrics
+  const promCluster = usePrometheusQueries(
+    ['cluster-dashboard'],
+    [
+      { name: 'cpu', promql: '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)' },
+      { name: 'memory', promql: '(1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)) * 100' },
+      { name: 'disk', promql: '(1 - sum(node_filesystem_avail_bytes{mountpoint="/"}) / sum(node_filesystem_size_bytes{mountpoint="/"})) * 100' },
+      { name: 'pod_count', promql: 'count(kube_pod_info)' },
+    ],
+    { refetchInterval: 30000 },
+  )
+  const getClusterMetric = (n: string): number | null => {
+    const resp = promCluster.data[n]
+    if (!resp?.available || !resp.results?.length) return null
+    return resp.results[0].value
+  }
 
   useEffect(() => {
     if (metricsUnavailable) {
@@ -1894,6 +1912,70 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Prometheus Cluster Metrics */}
+      {promCluster.available && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <h2 className="text-xl font-bold text-white">{tr('dashboard.clusterMetrics', 'Cluster Resource Utilization')}</h2>
+            <span className="text-xs text-slate-500">Live</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {getClusterMetric('cpu') !== null && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">CPU</span>
+                  <span className="font-mono text-slate-300">{Math.round(getClusterMetric('cpu')!)}%</span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className={`h-full rounded-full transition-all ${getClusterMetric('cpu')! >= 80 ? 'bg-red-500' : getClusterMetric('cpu')! >= 60 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(getClusterMetric('cpu')!, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {getClusterMetric('memory') !== null && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Memory</span>
+                  <span className="font-mono text-slate-300">{Math.round(getClusterMetric('memory')!)}%</span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className={`h-full rounded-full transition-all ${getClusterMetric('memory')! >= 80 ? 'bg-red-500' : getClusterMetric('memory')! >= 60 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                    style={{ width: `${Math.min(getClusterMetric('memory')!, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {getClusterMetric('disk') !== null && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Disk</span>
+                  <span className="font-mono text-slate-300">{Math.round(getClusterMetric('disk')!)}%</span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className={`h-full rounded-full transition-all ${getClusterMetric('disk')! >= 80 ? 'bg-red-500' : getClusterMetric('disk')! >= 60 ? 'bg-amber-500' : 'bg-violet-500'}`}
+                    style={{ width: `${Math.min(getClusterMetric('disk')!, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {getClusterMetric('pod_count') !== null && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Pods</span>
+                  <span className="font-mono text-slate-300">{Math.round(getClusterMetric('pod_count')!)}</span>
+                </div>
+                <div className="text-2xl font-bold text-white">{Math.round(getClusterMetric('pod_count')!)}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Top 리소스 사용 Pod/Node */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
