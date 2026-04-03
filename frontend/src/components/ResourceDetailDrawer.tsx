@@ -254,6 +254,13 @@ export default function ResourceDetailDrawer() {
       if (kind === 'Node') return api.getNodeYaml(name, yamlRefreshNonce > 0)
       if (kind === 'Namespace') return api.getNamespaceYaml(name, yamlRefreshNonce > 0)
       if (kind === 'Secret' && ns) return api.getSecretYaml(ns, name)
+      if (kind === 'CustomResourceDefinition') return api.getResourceYaml('customresourcedefinitions', name, undefined)
+      if (kind === 'CustomResourceInstance') {
+        const rj = target?.rawJson as Record<string, unknown> | undefined
+        const crdN = (rj?.crd_name as string) || ''
+        const plural = crdN ? crdN.split('.')[0] : ''
+        if (plural) return api.getResourceYaml(plural, name, ns || undefined)
+      }
       return api.getResourceYaml(kindToPlural(kind), name, ns || undefined)
     },
     enabled: !!target && tab === 'yaml',
@@ -264,6 +271,13 @@ export default function ResourceDetailDrawer() {
   const handleApplyYaml = async (yaml: string) => {
     if (kind === 'Node') await api.applyNodeYaml(name, yaml)
     else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml)
+    else if (kind === 'CustomResourceDefinition') await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined)
+    else if (kind === 'CustomResourceInstance') {
+      const rj = target?.rawJson as Record<string, unknown> | undefined
+      const crdN = (rj?.crd_name as string) || ''
+      const plural = crdN ? crdN.split('.')[0] : ''
+      if (plural) await api.applyResourceYaml(plural, name, yaml, ns || undefined)
+    }
     else await api.applyResourceYaml(kindToPlural(kind), name, yaml, ns || undefined)
   }
 
