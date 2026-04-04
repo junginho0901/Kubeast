@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -358,18 +359,18 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Phase" value={<StatusBadge status={phase} />} />
-          <InfoRow label="Node" value={node} />
+          <InfoRow label="Node" value={node && node !== '-' ? <ResourceLink kind="Node" name={node} /> : '-'} />
           <InfoRow label="Pod IP" value={podIP} />
           {podIPs.length > 0 && <InfoRow label="Pod IPs" value={podIPs.join(', ')} />}
           <InfoRow label="Host IP" value={hostIP} />
           {hostIPs.length > 0 && <InfoRow label="Host IPs" value={hostIPs.join(', ')} />}
-          <InfoRow label="Service Account" value={serviceAccount} />
+          <InfoRow label="Service Account" value={serviceAccount && serviceAccount !== '-' ? <ResourceLink kind="ServiceAccount" name={serviceAccount} namespace={namespace} /> : '-'} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
           {startTime && <InfoRow label="Start Time" value={`${fmtTs(startTime)} (${fmtRel(startTime)})`} />}
           <InfoRow label="Restarts" value={String(restartCount)} />
           {qosClass && <InfoRow label="QoS Class" value={qosClass} />}
           {priority != null && <InfoRow label="Priority" value={String(priority)} />}
-          {priorityClass && <InfoRow label="Priority Class" value={priorityClass} />}
+          {priorityClass && <InfoRow label="Priority Class" value={<ResourceLink kind="PriorityClass" name={priorityClass} />} />}
           {nominatedNode && <InfoRow label="Nominated Node" value={nominatedNode} />}
           {podDescribe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{podDescribe.uid}</span>} />}
         </div>
@@ -963,7 +964,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                   <div className="text-xs text-slate-200 space-y-1">
                     {ownerRefs.map((ref: any, idx: number) => (
                       <div key={`${ref.kind || 'Owner'}-${ref.name || idx}`}>
-                        <span className="font-medium">{ref.kind || '-'}</span>/{ref.name || '-'}
+                        <span className="font-medium">{ref.kind || '-'}</span>/
+                        {ref.name ? <ResourceLink kind={ref.kind} name={ref.name} namespace={namespace} /> : '-'}
                         {ref.controller ? ' (controller)' : ''}
                       </div>
                     ))}
