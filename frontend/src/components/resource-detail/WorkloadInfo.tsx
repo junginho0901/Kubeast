@@ -147,9 +147,12 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30000 })
   const isWriteRole = me?.role === 'admin' || me?.role === 'write'
+  const isAdminRole = me?.role === 'admin'
 
   const [triggerDialogOpen, setTriggerDialogOpen] = useState(false)
   const [triggerToast, setTriggerToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
@@ -226,6 +229,23 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       setTriggerDialogOpen(false)
       setTriggerToast({ type: 'error', message: 'Failed to trigger job' })
       setTimeout(() => setTriggerToast(null), 3000)
+    },
+  })
+
+  // Rollback
+  const isRollbackKind = kind === 'Deployment' || kind === 'DaemonSet' || kind === 'StatefulSet'
+  const { data: revisions } = useQuery({
+    queryKey: ['workload-revisions', kind, namespace, name],
+    queryFn: () => api.getWorkloadRevisions(namespace as string, name, kind),
+    enabled: rollbackDialogOpen && isRollbackKind && !!namespace && !!name,
+  })
+
+  const rollbackMut = useMutation({
+    mutationFn: (revision: number) => api.rollbackWorkload(namespace as string, name, kind, revision),
+    onSuccess: () => {
+      setRollbackDialogOpen(false)
+      setSelectedRevision(null)
+      qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
     },
   })
 
@@ -454,7 +474,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         </div>
       )}
 
-      <InfoSection title="Basic Info">
+      <InfoSection title="Basic Info" actions={isRollbackKind && isAdminRole ? (
+        <button
+          onClick={() => setRollbackDialogOpen(true)}
+          className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500"
+        >
+          {tr('rollback.title', 'Rollback')}
+        </button>
+      ) : undefined}>
         <div className="space-y-2">
           <InfoRow label="Kind" value={kind} />
           <InfoRow label="Name" value={name} />
@@ -1048,12 +1075,70 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
                 onClick={() => setTriggerDialogOpen(false)}
                 disabled={triggerMut.isPending}
                 className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
-              >Cancel</button>
+              >{tr('rollback.cancel', 'Cancel')}</button>
               <button
                 onClick={() => triggerMut.mutate()}
                 disabled={triggerMut.isPending}
                 className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
               >{triggerMut.isPending ? '...' : tr('cronjob.runNow', 'Run Now')}</button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* Rollback Dialog */}
+      {rollbackDialogOpen && (
+        <ModalOverlay onClose={() => { if (!rollbackMut.isPending) setRollbackDialogOpen(false) }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-3">{tr('rollback.title', 'Rollback')}</h3>
+            <p className="text-sm text-slate-400 mb-4">{tr('rollback.selectRevision', 'Select a revision to rollback to')}</p>
+            {!revisions ? (
+              <p className="text-xs text-slate-400 py-4 text-center">Loading...</p>
+            ) : revisions.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No revisions found</p>
+            ) : (
+              <div className="max-h-[300px] overflow-auto space-y-1">
+                {revisions.map((rev: any) => (
+                  <label
+                    key={rev.revision}
+                    className={`flex items-center gap-3 px-3 py-2 rounded cursor-pointer text-xs ${
+                      rev.is_current ? 'opacity-50 cursor-not-allowed bg-slate-800/30' : 'hover:bg-slate-800/60'
+                    } ${selectedRevision === rev.revision ? 'bg-blue-900/30 border border-blue-700' : 'border border-transparent'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="revision"
+                      value={rev.revision}
+                      checked={selectedRevision === rev.revision}
+                      disabled={rev.is_current}
+                      onChange={() => setSelectedRevision(rev.revision)}
+                      className="accent-blue-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white font-medium">
+                        {tr('rollback.revision', 'Revision')} {rev.revision}
+                        {rev.is_current && <span className="ml-2 text-emerald-400">({tr('rollback.current', 'Current')})</span>}
+                      </div>
+                      {Array.isArray(rev.images) && rev.images.length > 0 && (
+                        <div className="text-slate-400 truncate">{rev.images.join(', ')}</div>
+                      )}
+                      {rev.created_at && <div className="text-slate-500">{fmtRel(rev.created_at)}</div>}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => { setRollbackDialogOpen(false); setSelectedRevision(null) }}
+                disabled={rollbackMut.isPending}
+                className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
+              >{tr('rollback.cancel', 'Cancel')}</button>
+              <button
+                onClick={() => { if (selectedRevision != null) rollbackMut.mutate(selectedRevision) }}
+                disabled={rollbackMut.isPending || selectedRevision == null}
+                className="px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+              >{rollbackMut.isPending ? '...' : tr('rollback.confirm', 'Rollback')}</button>
             </div>
           </div>
         </ModalOverlay>

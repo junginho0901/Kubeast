@@ -1724,6 +1724,17 @@ export const api = {
     await client.delete(`/cluster/namespaces/${namespace}/deployments/${deploymentName}`)
   },
 
+  getWorkloadRevisions: async (namespace: string, name: string, kind: string): Promise<any[]> => {
+    const plural = kind === 'Deployment' ? 'deployments' : kind === 'DaemonSet' ? 'daemonsets' : 'statefulsets'
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/${plural}/${name}/revisions`)
+    return data
+  },
+
+  rollbackWorkload: async (namespace: string, name: string, kind: string, revision: number): Promise<void> => {
+    const plural = kind === 'Deployment' ? 'deployments' : kind === 'DaemonSet' ? 'daemonsets' : 'statefulsets'
+    await client.post(`/cluster/namespaces/${namespace}/${plural}/${name}/rollback`, { revision })
+  },
+
   getReplicaSets: async (namespace: string, forceRefresh = false): Promise<ReplicaSetInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/replicasets`, {
       params: { force_refresh: forceRefresh },

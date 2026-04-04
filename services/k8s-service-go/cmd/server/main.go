@@ -116,6 +116,8 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/deployments", h.GetDeployments)
 		r.Get("/api/v1/namespaces/{namespace}/deployments/{name}/describe", h.DescribeDeployment)
 		r.Get("/api/v1/namespaces/{namespace}/deployments/{name}/yaml", h.GetDeploymentYAML)
+		r.Get("/api/v1/namespaces/{namespace}/deployments/{name}/revisions", h.GetWorkloadRevisions)
+		r.Post("/api/v1/namespaces/{namespace}/deployments/{name}/rollback", h.RollbackWorkload)
 		r.Delete("/api/v1/namespaces/{namespace}/deployments/{deployment_name}", h.DeleteDeployment)
 
 		// Services
@@ -156,6 +158,8 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/statefulsets", h.GetStatefulSets)
 		r.Get("/api/v1/namespaces/{namespace}/statefulsets/{name}/describe", h.DescribeStatefulSet)
 		r.Get("/api/v1/namespaces/{namespace}/statefulsets/{name}/yaml", h.GetStatefulSetYAML)
+		r.Get("/api/v1/namespaces/{namespace}/statefulsets/{name}/revisions", h.GetWorkloadRevisions)
+		r.Post("/api/v1/namespaces/{namespace}/statefulsets/{name}/rollback", h.RollbackWorkload)
 		r.Delete("/api/v1/namespaces/{namespace}/statefulsets/{name}", h.DeleteStatefulSet)
 
 		// Workloads - DaemonSets
@@ -163,6 +167,8 @@ func main() {
 		r.Get("/api/v1/namespaces/{namespace}/daemonsets", h.GetDaemonSets)
 		r.Get("/api/v1/namespaces/{namespace}/daemonsets/{name}/describe", h.DescribeDaemonSet)
 		r.Get("/api/v1/namespaces/{namespace}/daemonsets/{name}/yaml", h.GetDaemonSetYAML)
+		r.Get("/api/v1/namespaces/{namespace}/daemonsets/{name}/revisions", h.GetWorkloadRevisions)
+		r.Post("/api/v1/namespaces/{namespace}/daemonsets/{name}/rollback", h.RollbackWorkload)
 		r.Delete("/api/v1/namespaces/{namespace}/daemonsets/{name}", h.DeleteDaemonSet)
 
 		// Workloads - ReplicaSets

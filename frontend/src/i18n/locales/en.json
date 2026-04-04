@@ -2430,5 +2430,16 @@
     "jobStatus": "Status",
     "jobStarted": "Started",
     "jobDuration": "Duration"
+  },
+  "rollback": {
+    "title": "Rollback",
+    "selectRevision": "Select a revision to rollback to",
+    "revision": "Revision",
+    "images": "Images",
+    "created": "Created",
+    "current": "Current",
+    "confirm": "Rollback",
+    "cancel": "Cancel",
+    "success": "Rollback to revision {{revision}} initiated"
   }
 }
