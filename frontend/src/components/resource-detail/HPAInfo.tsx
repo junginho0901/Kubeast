@@ -10,6 +10,7 @@ import {
   EventsTable,
   fmtRel,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -72,7 +73,7 @@ export default function HPAInfo({ name, namespace }: Props) {
       <InfoSection title="Scale Target Reference">
         <div className="space-y-2">
           <InfoRow label="Kind" value={scaleTargetRef.kind || '-'} />
-          <InfoRow label="Name" value={scaleTargetRef.name || '-'} />
+          <InfoRow label="Name" value={scaleTargetRef.name ? <ResourceLink kind={scaleTargetRef.kind || 'Deployment'} name={scaleTargetRef.name} namespace={namespace} /> : '-'} />
           <InfoRow label="API Version" value={scaleTargetRef.api_version || '-'} />
         </div>
       </InfoSection>
