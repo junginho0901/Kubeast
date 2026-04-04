@@ -15,6 +15,7 @@ import {
   fmtRel,
   fmtTs,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -498,7 +499,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
             )}
             {showStatefulSetSettings && (
               <>
-                {(describe?.service_name || spec.serviceName) && <InfoRow label="Service Name" value={String(describe?.service_name || spec.serviceName)} />}
+                {(describe?.service_name || spec.serviceName) && <InfoRow label="Service Name" value={<ResourceLink kind="Service" name={String(describe?.service_name || spec.serviceName)} namespace={namespace} />} />}
                 {(describe?.pod_management_policy || spec.podManagementPolicy) && <InfoRow label="Pod Management Policy" value={String(describe?.pod_management_policy || spec.podManagementPolicy)} />}
                 {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
                 {describe?.revision_history_limit != null && <InfoRow label="Revision History Limit" value={String(describe.revision_history_limit)} />}
@@ -607,7 +608,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       {(serviceAccountName || priorityClassName) && (
         <InfoSection title="Pod Template">
           <div className="space-y-2">
-            {serviceAccountName && <InfoRow label="Service Account" value={serviceAccountName} />}
+            {serviceAccountName && <InfoRow label="Service Account" value={<ResourceLink kind="ServiceAccount" name={serviceAccountName} namespace={namespace} />} />}
             {priorityClassName && <InfoRow label="Priority Class" value={priorityClassName} />}
           </div>
         </InfoSection>
