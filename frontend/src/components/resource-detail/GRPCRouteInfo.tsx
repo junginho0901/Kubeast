@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -181,7 +182,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {parentRefs.map((parentRef, idx) => (
                   <tr key={`parent-ref-${idx}`} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words">{text(parentRef.name)}</td>
+                    <td className="py-1 pr-2 break-words">{parentRef.name ? <ResourceLink kind={parentRef.kind || 'Gateway'} name={parentRef.name} namespace={parentRef.namespace || namespace} /> : '-'}</td>
                     <td className="py-1 pr-2 break-words">{text(parentRef.namespace)}</td>
                     <td className="py-1 pr-2 break-words">{text(parentRef.kind)}</td>
                     <td className="py-1 pr-2 break-words">{text(parentRef.group)}</td>
@@ -254,7 +255,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
                         <tbody className="divide-y divide-slate-800">
                           {backendRefs.map((backendRef, backendRefIdx) => (
                             <tr key={`backend-ref-${idx}-${backendRefIdx}`} className="text-slate-200">
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.name)}</td>
+                              <td className="py-1 pr-2 break-words">{backendRef?.name ? <ResourceLink kind={backendRef?.kind || 'Service'} name={backendRef.name} namespace={backendRef?.namespace || namespace} /> : '-'}</td>
                               <td className="py-1 pr-2 break-words">{text(backendRef?.namespace)}</td>
                               <td className="py-1 pr-2 break-words">{text(backendRef?.kind)}</td>
                               <td className="py-1 pr-2 break-words">{text(backendRef?.group)}</td>
