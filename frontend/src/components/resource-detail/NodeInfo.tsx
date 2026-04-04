@@ -8,6 +8,7 @@ import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import NodeShellTerminal from '@/components/NodeShellTerminal'
 import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, fmtRel, fmtTs, fmtPodAge, SummaryBadge } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 
@@ -500,7 +501,7 @@ export default function NodeInfo({ name }: Props) {
             <tbody className="divide-y divide-slate-800">
               {pagedPods.map((pod: any) => (
                 <tr key={`${pod.namespace}-${pod.name}`} className="text-slate-200">
-                  <td className="py-2 pr-2 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
+                  <td className="py-2 pr-2 font-medium text-white"><span className="block truncate"><ResourceLink kind="Pod" name={pod.name} namespace={pod.namespace} /></span></td>
                   <td className="py-2 pr-2"><span className="block truncate">{pod.namespace}</span></td>
                   <td className="py-2 pr-2">{pod.ready || '-'}</td>
                   <td className="py-2 pr-2"><span className="block truncate">{pod.status || pod.phase || '-'}</span></td>
