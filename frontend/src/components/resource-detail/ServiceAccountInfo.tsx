@@ -9,6 +9,7 @@ import {
   fmtRel,
   fmtTs,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -62,7 +63,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         <InfoSection title="Secrets">
           <div className="space-y-1 text-xs text-slate-200">
             {secretsList.map((s: string) => (
-              <div key={s} className="font-mono">{s}</div>
+              <div key={s}><ResourceLink kind="Secret" name={s} namespace={namespace} /></div>
             ))}
           </div>
         </InfoSection>

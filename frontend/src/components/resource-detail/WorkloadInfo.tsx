@@ -1,7 +1,9 @@
-import { type ReactNode, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { type ReactNode, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import { Pause, Play, Zap } from 'lucide-react'
+import { ModalOverlay } from '@/components/ModalOverlay'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import {
@@ -12,9 +14,11 @@ import {
   ConditionsTable,
   EventsTable,
   SummaryBadge,
+  StatusBadge,
   fmtRel,
   fmtTs,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -123,7 +127,8 @@ function formatLabelSelector(sel: any): string {
 
 export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) {
   const { t } = useTranslation()
-  const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
+  const qc = useQueryClient()
 
   const needsDescribe = (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'ReplicaSet' || kind === 'Job' || kind === 'CronJob') && !!namespace && !!name
   const { data: describe, isLoading, isError } = useQuery({
@@ -139,6 +144,15 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     enabled: needsDescribe,
     retry: false,
   })
+
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30000 })
+  const isWriteRole = me?.role === 'admin' || me?.role === 'write'
+  const isAdminRole = me?.role === 'admin'
+
+  const [triggerDialogOpen, setTriggerDialogOpen] = useState(false)
+  const [triggerToast, setTriggerToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
+  const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
@@ -185,6 +199,55 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     if (!resp?.available || !resp.results?.length) return null
     return resp.results[0].value
   }
+
+  // CronJob owned jobs
+  const { data: ownedJobs } = useQuery({
+    queryKey: ['cronjob-owned-jobs', namespace, name],
+    queryFn: () => api.getCronJobOwnedJobs(namespace as string, name),
+    enabled: isCronJob && !!namespace && !!name,
+    staleTime: 10_000,
+  })
+
+  const suspendMut = useMutation({
+    mutationFn: (suspend: boolean) => api.suspendCronJob(namespace as string, name, suspend),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
+      qc.invalidateQueries({ queryKey: ['workloads', 'cronjobs'] })
+    },
+  })
+
+  const triggerMut = useMutation({
+    mutationFn: () => api.triggerCronJob(namespace as string, name),
+    onSuccess: (data) => {
+      setTriggerDialogOpen(false)
+      setTriggerToast({ type: 'success', message: tr('cronjob.runNowSuccess', 'Job {{name}} created', { name: data.job_name }) })
+      qc.invalidateQueries({ queryKey: ['cronjob-owned-jobs', namespace, name] })
+      qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
+      setTimeout(() => setTriggerToast(null), 3000)
+    },
+    onError: () => {
+      setTriggerDialogOpen(false)
+      setTriggerToast({ type: 'error', message: 'Failed to trigger job' })
+      setTimeout(() => setTriggerToast(null), 3000)
+    },
+  })
+
+  // Rollback
+  const isRollbackKind = kind === 'Deployment' || kind === 'DaemonSet' || kind === 'StatefulSet'
+  const { data: revisions } = useQuery({
+    queryKey: ['workload-revisions', kind, namespace, name],
+    queryFn: () => api.getWorkloadRevisions(namespace as string, name, kind),
+    enabled: rollbackDialogOpen && isRollbackKind && !!namespace && !!name,
+  })
+
+  const rollbackMut = useMutation({
+    mutationFn: (revision: number) => api.rollbackWorkload(namespace as string, name, kind, revision),
+    onSuccess: () => {
+      setRollbackDialogOpen(false)
+      setSelectedRevision(null)
+      qc.invalidateQueries({ queryKey: ['workload-describe', kind, namespace, name] })
+    },
+  })
 
   const selectorExpressions = useMemo(() => {
     if (Array.isArray(describe?.selector_expressions)) return describe.selector_expressions
@@ -411,7 +474,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         </div>
       )}
 
-      <InfoSection title="Basic Info">
+      <InfoSection title="Basic Info" actions={isRollbackKind && isAdminRole ? (
+        <button
+          onClick={() => setRollbackDialogOpen(true)}
+          className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500"
+        >
+          {tr('rollback.title', 'Rollback')}
+        </button>
+      ) : undefined}>
         <div className="space-y-2">
           <InfoRow label="Kind" value={kind} />
           <InfoRow label="Name" value={name} />
@@ -498,7 +568,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
             )}
             {showStatefulSetSettings && (
               <>
-                {(describe?.service_name || spec.serviceName) && <InfoRow label="Service Name" value={String(describe?.service_name || spec.serviceName)} />}
+                {(describe?.service_name || spec.serviceName) && <InfoRow label="Service Name" value={<ResourceLink kind="Service" name={String(describe?.service_name || spec.serviceName)} namespace={namespace} />} />}
                 {(describe?.pod_management_policy || spec.podManagementPolicy) && <InfoRow label="Pod Management Policy" value={String(describe?.pod_management_policy || spec.podManagementPolicy)} />}
                 {describe?.min_ready_seconds != null && <InfoRow label="Min Ready Seconds" value={String(describe.min_ready_seconds)} />}
                 {describe?.revision_history_limit != null && <InfoRow label="Revision History Limit" value={String(describe.revision_history_limit)} />}
@@ -557,7 +627,25 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       )}
 
       {isCronJob && (
-        <InfoSection title="CronJob Info">
+        <InfoSection title="CronJob Info" actions={isWriteRole ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => suspendMut.mutate(!(describe?.suspend ?? spec.suspend))}
+              disabled={suspendMut.isPending}
+              className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1 disabled:opacity-50"
+            >
+              {(describe?.suspend ?? spec.suspend) ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+              {(describe?.suspend ?? spec.suspend) ? tr('cronjob.resume', 'Resume') : tr('cronjob.suspend', 'Suspend')}
+            </button>
+            <button
+              onClick={() => setTriggerDialogOpen(true)}
+              className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
+            >
+              <Zap className="w-3 h-3" />
+              {tr('cronjob.runNow', 'Run Now')}
+            </button>
+          </div>
+        ) : undefined}>
           <div className="space-y-2">
             <InfoRow label="Schedule" value={String(describe?.schedule ?? spec.schedule ?? '-')} />
             <InfoRow label="Suspend" value={(describe?.suspend ?? spec.suspend) ? 'Yes' : 'No'} />
@@ -586,6 +674,34 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         </InfoSection>
       )}
 
+      {/* CronJob Owned Jobs */}
+      {isCronJob && Array.isArray(ownedJobs) && ownedJobs.length > 0 && (
+        <InfoSection title={tr('cronjob.ownedJobs', 'Jobs')}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs table-fixed min-w-[500px]">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-2 w-[35%]">{tr('cronjob.jobName', 'Name')}</th>
+                  <th className="text-left py-2 w-[15%]">{tr('cronjob.jobStatus', 'Status')}</th>
+                  <th className="text-left py-2 w-[25%]">{tr('cronjob.jobStarted', 'Started')}</th>
+                  <th className="text-left py-2 w-[25%]">{tr('cronjob.jobDuration', 'Duration')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {ownedJobs.slice(0, 20).map((job: any) => (
+                  <tr key={job.name} className="text-slate-200">
+                    <td className="py-2 pr-2"><ResourceLink kind="Job" name={job.name} namespace={job.namespace || namespace} /></td>
+                    <td className="py-2 pr-2"><StatusBadge status={job.status || '-'} /></td>
+                    <td className="py-2 pr-2">{job.start_time ? fmtRel(job.start_time) : '-'}</td>
+                    <td className="py-2 pr-2">{job.duration_seconds != null ? `${job.duration_seconds}s` : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </InfoSection>
+      )}
+
       {Object.keys(selector).length > 0 && (
         <InfoSection title="Selector">
           <KeyValueTags data={selector} />
@@ -607,7 +723,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       {(serviceAccountName || priorityClassName) && (
         <InfoSection title="Pod Template">
           <div className="space-y-2">
-            {serviceAccountName && <InfoRow label="Service Account" value={serviceAccountName} />}
+            {serviceAccountName && <InfoRow label="Service Account" value={<ResourceLink kind="ServiceAccount" name={serviceAccountName} namespace={namespace} />} />}
             {priorityClassName && <InfoRow label="Priority Class" value={priorityClassName} />}
           </div>
         </InfoSection>
@@ -939,6 +1055,93 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         <InfoSection title="Events">
           <EventsTable events={events} />
         </InfoSection>
+      )}
+
+      {/* Toast */}
+      {triggerToast && (
+        <div className={`fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg text-sm shadow-lg ${triggerToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          {triggerToast.message}
+        </div>
+      )}
+
+      {/* Trigger CronJob Dialog */}
+      {triggerDialogOpen && (
+        <ModalOverlay onClose={() => { if (!triggerMut.isPending) setTriggerDialogOpen(false) }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-3">{tr('cronjob.runNow', 'Run Now')}</h3>
+            <p className="text-sm text-slate-300 mb-6">{tr('cronjob.runNowConfirm', 'Are you sure you want to trigger a manual job from this CronJob?')}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setTriggerDialogOpen(false)}
+                disabled={triggerMut.isPending}
+                className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
+              >{tr('rollback.cancel', 'Cancel')}</button>
+              <button
+                onClick={() => triggerMut.mutate()}
+                disabled={triggerMut.isPending}
+                className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >{triggerMut.isPending ? '...' : tr('cronjob.runNow', 'Run Now')}</button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {/* Rollback Dialog */}
+      {rollbackDialogOpen && (
+        <ModalOverlay onClose={() => { if (!rollbackMut.isPending) setRollbackDialogOpen(false) }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-3">{tr('rollback.title', 'Rollback')}</h3>
+            <p className="text-sm text-slate-400 mb-4">{tr('rollback.selectRevision', 'Select a revision to rollback to')}</p>
+            {!revisions ? (
+              <p className="text-xs text-slate-400 py-4 text-center">Loading...</p>
+            ) : revisions.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No revisions found</p>
+            ) : (
+              <div className="max-h-[300px] overflow-auto space-y-1">
+                {revisions.map((rev: any) => (
+                  <label
+                    key={rev.revision}
+                    className={`flex items-center gap-3 px-3 py-2 rounded cursor-pointer text-xs ${
+                      rev.is_current ? 'opacity-50 cursor-not-allowed bg-slate-800/30' : 'hover:bg-slate-800/60'
+                    } ${selectedRevision === rev.revision ? 'bg-blue-900/30 border border-blue-700' : 'border border-transparent'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="revision"
+                      value={rev.revision}
+                      checked={selectedRevision === rev.revision}
+                      disabled={rev.is_current}
+                      onChange={() => setSelectedRevision(rev.revision)}
+                      className="accent-blue-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white font-medium">
+                        {tr('rollback.revision', 'Revision')} {rev.revision}
+                        {rev.is_current && <span className="ml-2 text-emerald-400">({tr('rollback.current', 'Current')})</span>}
+                      </div>
+                      {Array.isArray(rev.images) && rev.images.length > 0 && (
+                        <div className="text-slate-400 truncate">{rev.images.join(', ')}</div>
+                      )}
+                      {rev.created_at && <div className="text-slate-500">{fmtRel(rev.created_at)}</div>}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => { setRollbackDialogOpen(false); setSelectedRevision(null) }}
+                disabled={rollbackMut.isPending}
+                className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
+              >{tr('rollback.cancel', 'Cancel')}</button>
+              <button
+                onClick={() => { if (selectedRevision != null) rollbackMut.mutate(selectedRevision) }}
+                disabled={rollbackMut.isPending || selectedRevision == null}
+                className="px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+              >{rollbackMut.isPending ? '...' : tr('rollback.confirm', 'Rollback')}</button>
+            </div>
+          </div>
+        </ModalOverlay>
       )}
     </div>
   )

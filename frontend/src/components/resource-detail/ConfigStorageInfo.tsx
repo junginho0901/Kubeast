@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -331,22 +332,12 @@ function PVDetail({ name, rawJson }: { name: string; rawJson?: Record<string, un
           <InfoRow label="Capacity" value={capacity} />
           <InfoRow label="Access Modes" value={accessModes.join(', ') || '-'} />
           <InfoRow label="Reclaim Policy" value={reclaimPolicy} />
-          <InfoRow label="Storage Class" value={storageClass} />
+          <InfoRow label="Storage Class" value={storageClass && storageClass !== '-' ? <ResourceLink kind="StorageClass" name={storageClass} /> : '-'} />
           <InfoRow label="Volume Mode" value={volumeMode} />
           <InfoRow
             label="Claim"
-            value={claimRef?.name && claimRef?.namespace ? (
-              <button
-                type="button"
-                className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
-                onClick={() => openDetail({
-                  kind: 'PersistentVolumeClaim',
-                  name: String(claimRef.name),
-                  namespace: String(claimRef.namespace),
-                })}
-              >
-                {claimText}
-              </button>
+            value={claimRef?.name ? (
+              <ResourceLink kind="PersistentVolumeClaim" name={String(claimRef.name)} namespace={claimRef.namespace ? String(claimRef.namespace) : undefined} />
             ) : claimText}
           />
           <InfoRow label="Source" value={sourceText} />
@@ -532,9 +523,9 @@ function PVCDetail({ name, namespace, rawJson }: { name: string; namespace?: str
           <InfoRow label="Capacity" value={capacityStorage} />
           <InfoRow label="Requested" value={requestedStorage} />
           <InfoRow label="Access Modes" value={accessModes.join(', ') || '-'} />
-          <InfoRow label="Storage Class" value={storageClass} />
+          <InfoRow label="Storage Class" value={storageClass && storageClass !== '-' ? <ResourceLink kind="StorageClass" name={storageClass} /> : '-'} />
           <InfoRow label="Volume Mode" value={volumeMode} />
-          <InfoRow label="Volume Name" value={volumeName} />
+          <InfoRow label="Volume Name" value={volumeName && volumeName !== '-' ? <ResourceLink kind="PersistentVolume" name={volumeName} /> : '-'} />
           <InfoRow label="Selected Node" value={selectedNode} />
           <InfoRow label="Data Source" value={dataSource} />
           <InfoRow label="Data Source Ref" value={dataSourceRef} />

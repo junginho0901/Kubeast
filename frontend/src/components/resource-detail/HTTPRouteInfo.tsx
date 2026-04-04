@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -172,7 +173,9 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
           <div className="space-y-2 text-xs">
             {parentRefs.map((parentRef, idx) => (
               <div key={`parent-ref-${idx}`} className="rounded border border-slate-800 p-2 text-slate-200 break-words">
-                {formatParentRef(parentRef)}
+                {parentRef.name ? (
+                  <><ResourceLink kind={parentRef.kind || 'Gateway'} name={parentRef.name} namespace={parentRef.namespace || namespace} /> <span className="text-slate-400">{parentRef.sectionName ? `section=${parentRef.sectionName}` : ''}</span></>
+                ) : formatParentRef(parentRef)}
               </div>
             ))}
           </div>
@@ -241,7 +244,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
                         <tbody className="divide-y divide-slate-800">
                           {backendRefs.map((backendRef, backendRefIdx) => (
                             <tr key={`backend-ref-${idx}-${backendRefIdx}`} className="text-slate-200">
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.name)}</td>
+                              <td className="py-1 pr-2 break-words">{backendRef?.name ? <ResourceLink kind={backendRef?.kind || 'Service'} name={backendRef.name} namespace={backendRef?.namespace || namespace} /> : '-'}</td>
                               <td className="py-1 pr-2 break-words">{text(backendRef?.namespace)}</td>
                               <td className="py-1 pr-2 break-words">{text(backendRef?.kind)}</td>
                               <td className="py-1 pr-2 break-words">{text(backendRef?.group)}</td>

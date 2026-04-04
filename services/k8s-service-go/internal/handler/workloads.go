@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/junginho0901/kube-assistant/services/pkg/response"
@@ -331,6 +332,60 @@ func (h *Handler) GetCronJobYAML(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]interface{}{"yaml": data})
 }
 
+// SuspendCronJob handles PATCH /api/v1/namespaces/{namespace}/cronjobs/{name}/suspend.
+func (h *Handler) SuspendCronJob(w http.ResponseWriter, r *http.Request) {
+	if err := h.requireWrite(r); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	ctx := r.Context()
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+
+	var body struct {
+		Suspend bool `json:"suspend"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	if err := h.svc.SuspendCronJob(ctx, namespace, name, body.Suspend); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"suspend": body.Suspend})
+}
+
+// TriggerCronJob handles POST /api/v1/namespaces/{namespace}/cronjobs/{name}/trigger.
+func (h *Handler) TriggerCronJob(w http.ResponseWriter, r *http.Request) {
+	if err := h.requireWrite(r); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	ctx := r.Context()
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	jobName, err := h.svc.TriggerCronJob(ctx, namespace, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"job_name": jobName})
+}
+
+// GetCronJobOwnedJobs handles GET /api/v1/namespaces/{namespace}/cronjobs/{name}/jobs.
+func (h *Handler) GetCronJobOwnedJobs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	data, err := h.svc.GetCronJobOwnedJobs(ctx, namespace, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
 // DeleteCronJob handles DELETE /api/v1/namespaces/{namespace}/cronjobs/{name}.
 func (h *Handler) DeleteCronJob(w http.ResponseWriter, r *http.Request) {
 	if err := h.requireWrite(r); err != nil {
@@ -345,4 +400,75 @@ func (h *Handler) DeleteCronJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
+}
+
+// --- Revision History & Rollback ---
+
+// kindFromPath derives the workload kind from the URL path.
+func kindFromPath(path string) string {
+	if strings.Contains(path, "/deployments/") {
+		return "Deployment"
+	}
+	if strings.Contains(path, "/daemonsets/") {
+		return "DaemonSet"
+	}
+	if strings.Contains(path, "/statefulsets/") {
+		return "StatefulSet"
+	}
+	return ""
+}
+
+// GetWorkloadRevisions handles GET /api/v1/namespaces/{namespace}/{kind}/{name}/revisions.
+func (h *Handler) GetWorkloadRevisions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	kind := kindFromPath(r.URL.Path)
+	if kind == "" {
+		response.Error(w, http.StatusBadRequest, "unable to determine workload kind from URL")
+		return
+	}
+	data, err := h.svc.GetRevisionHistory(ctx, namespace, name, kind)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
+// RollbackWorkload handles POST /api/v1/namespaces/{namespace}/{kind}/{name}/rollback.
+func (h *Handler) RollbackWorkload(w http.ResponseWriter, r *http.Request) {
+	if err := h.requireAdmin(r); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	ctx := r.Context()
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	kind := kindFromPath(r.URL.Path)
+	if kind == "" {
+		response.Error(w, http.StatusBadRequest, "unable to determine workload kind from URL")
+		return
+	}
+
+	var body struct {
+		Revision int64 `json:"revision"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	if body.Revision <= 0 {
+		response.Error(w, http.StatusBadRequest, "revision must be a positive integer")
+		return
+	}
+
+	if err := h.svc.RollbackWorkload(ctx, namespace, name, kind, body.Revision); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"rolled_back": true,
+		"revision":    body.Revision,
+	})
 }

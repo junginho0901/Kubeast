@@ -5,6 +5,7 @@ import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 
@@ -293,7 +294,7 @@ export default function NamespaceInfo({ name }: Props) {
                 <tbody className="divide-y divide-slate-800">
                   {pagedPods.map((pod: any) => (
                     <tr key={pod.name} className="text-slate-200">
-                      <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}>{pod.name}</span></td>
+                      <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}><ResourceLink kind="Pod" name={pod.name} namespace={name} /></span></td>
                       <td className="py-2 pr-2"><span className={`badge ${podStatusColor(pod.status)}`}>{pod.status}</span></td>
                       <td className="py-2 pr-2">{pod.ready}</td>
                       <td className="py-2 pr-2">{pod.restarts}</td>

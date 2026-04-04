@@ -9,6 +9,7 @@ import {
   EventsTable,
   fmtRel,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -65,7 +66,7 @@ export default function VPAInfo({ name, namespace }: Props) {
       <InfoSection title="Target Reference">
         <div className="space-y-2">
           <InfoRow label="Kind" value={desc.target_ref_kind || '-'} />
-          <InfoRow label="Name" value={desc.target_ref_name || '-'} />
+          <InfoRow label="Name" value={desc.target_ref_name ? <ResourceLink kind={desc.target_ref_kind || 'Deployment'} name={desc.target_ref_name} namespace={namespace} /> : '-'} />
         </div>
       </InfoSection>
 

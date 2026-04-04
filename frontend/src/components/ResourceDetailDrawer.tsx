@@ -45,6 +45,81 @@ import CRDInfo from './resource-detail/CRDInfo'
 import CustomResourceInstanceInfo from './resource-detail/CustomResourceInstanceInfo'
 import GenericInfo from './resource-detail/GenericInfo'
 
+function decodeSecretYaml(yaml: string): string {
+  const lines = yaml.split('\n')
+  const result: string[] = []
+  let inDataBlock = false
+  let dataIndent = -1
+  for (const line of lines) {
+    if (/^data:\s*$/.test(line)) {
+      result.push('stringData:')
+      inDataBlock = true
+      dataIndent = -1
+      continue
+    }
+    if (inDataBlock) {
+      const match = line.match(/^(\s+)(\S+?):\s*(.+)$/)
+      if (match) {
+        const [, indent, key, value] = match
+        if (dataIndent < 0) dataIndent = indent.length
+        if (indent.length === dataIndent) {
+          const trimmed = value.trim()
+          try {
+            const decoded = atob(trimmed)
+            if (!/[\x00-\x08\x0E-\x1F]/.test(decoded)) {
+              const needsQuote = decoded.includes(':') || decoded.includes('#') || decoded.includes('\n') || decoded.includes('"') || decoded.includes("'") || decoded.startsWith(' ') || decoded.endsWith(' ')
+              result.push(`${indent}${key}: ${needsQuote ? JSON.stringify(decoded) : decoded}`)
+              continue
+            }
+          } catch { /* not valid base64, keep as-is */ }
+          result.push(line)
+          continue
+        }
+      }
+      if (line.length > 0 && !line.startsWith(' ')) {
+        inDataBlock = false
+      }
+    }
+    result.push(line)
+  }
+  return result.join('\n')
+}
+
+function encodeSecretYaml(yaml: string): string {
+  const lines = yaml.split('\n')
+  const result: string[] = []
+  let inStringDataBlock = false
+  let blockIndent = -1
+  for (const line of lines) {
+    if (/^stringData:\s*$/.test(line)) {
+      result.push('data:')
+      inStringDataBlock = true
+      blockIndent = -1
+      continue
+    }
+    if (inStringDataBlock) {
+      const match = line.match(/^(\s+)(\S+?):\s*(.+)$/)
+      if (match) {
+        const [, indent, key, value] = match
+        if (blockIndent < 0) blockIndent = indent.length
+        if (indent.length === blockIndent) {
+          let raw = value.trim()
+          if (raw.startsWith('"') && raw.endsWith('"')) {
+            try { raw = JSON.parse(raw) } catch { /* keep as-is */ }
+          }
+          result.push(`${indent}${key}: ${btoa(raw)}`)
+          continue
+        }
+      }
+      if (line.length > 0 && !line.startsWith(' ')) {
+        inStringDataBlock = false
+      }
+    }
+    result.push(line)
+  }
+  return result.join('\n')
+}
+
 type TabId = 'info' | 'yaml'
 
 const WORKLOAD_KINDS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob'])
@@ -270,7 +345,8 @@ export default function ResourceDetailDrawer() {
     retry: 1,
   })
 
-  const handleApplyYaml = async (yaml: string) => {
+  const handleApplyYaml = async (rawYaml: string) => {
+    const yaml = kind === 'Secret' && isWriteRole ? encodeSecretYaml(rawYaml) : rawYaml
     if (kind === 'Node') await api.applyNodeYaml(name, yaml)
     else if (kind === 'Namespace') await api.applyNamespaceYaml(name, yaml)
     else if (kind === 'CustomResourceDefinition') await api.applyResourceYaml('customresourcedefinitions', name, yaml, undefined)
@@ -1083,7 +1159,7 @@ export default function ResourceDetailDrawer() {
             <div className="h-full">
               <YamlEditor
                 key={`${kind}-${name}-${ns || ''}`}
-                value={yamlData?.yaml || ''}
+                value={kind === 'Secret' && isWriteRole && yamlData?.yaml ? decodeSecretYaml(yamlData.yaml) : yamlData?.yaml || ''}
                 canEdit={canEditYaml}
                 isLoading={yamlLoading}
                 isRefreshing={yamlFetching}

@@ -1,4 +1,5 @@
 import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -107,7 +108,7 @@ function IngressDetail({ name, namespace, rawJson }: { name: string; namespace?:
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
-          {spec.ingressClassName && <InfoRow label="Ingress Class" value={String(spec.ingressClassName)} />}
+          {spec.ingressClassName && <InfoRow label="Ingress Class" value={<ResourceLink kind="IngressClass" name={String(spec.ingressClassName)} />} />}
           {defaultBackend && (
             <InfoRow label="Default Backend" value={
               defaultBackend.service ? `${defaultBackend.service.name}:${defaultBackend.service.port?.number || defaultBackend.service.port?.name || ''}` : '-'
@@ -147,7 +148,11 @@ function IngressDetail({ name, namespace, rawJson }: { name: string; namespace?:
                         <tr key={pi} className="text-slate-200">
                           <td className="py-1 pr-2 font-mono">{path.path || '/'}</td>
                           <td className="py-1 pr-2">{path.pathType || 'Prefix'}</td>
-                          <td className="py-1 pr-2">{path.backend?.service?.name}:{path.backend?.service?.port?.number || path.backend?.service?.port?.name || ''}</td>
+                          <td className="py-1 pr-2">
+                            {path.backend?.service?.name ? (
+                              <><ResourceLink kind="Service" name={path.backend.service.name} namespace={namespace} />:{path.backend.service.port?.number || path.backend.service.port?.name || ''}</>
+                            ) : '-'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

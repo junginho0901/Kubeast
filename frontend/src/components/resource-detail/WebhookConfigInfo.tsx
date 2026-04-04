@@ -8,6 +8,7 @@ import {
   EventsTable,
   fmtRel,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -119,9 +120,15 @@ function WebhookClientConfigRow({ clientConfig }: { clientConfig?: any }) {
 
   if (clientConfig.service) {
     const svc = clientConfig.service
-    const value = `${svc.namespace || ''}/${svc.name || ''}${svc.path ? ` path: ${svc.path}` : ''}${svc.port ? ` port: ${svc.port}` : ''}`
     return (
-      <InfoRow label="Client Config (Service)" value={value} />
+      <InfoRow label="Client Config (Service)" value={
+        <span>
+          {svc.namespace || ''}/
+          {svc.name ? <ResourceLink kind="Service" name={svc.name} namespace={svc.namespace} /> : '-'}
+          {svc.path ? ` path: ${svc.path}` : ''}
+          {svc.port ? ` port: ${svc.port}` : ''}
+        </span>
+      } />
     )
   }
 

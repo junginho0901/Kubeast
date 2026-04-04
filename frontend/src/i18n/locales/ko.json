@@ -2461,5 +2461,30 @@
     "finalizers": "파이널라이저",
     "events": "이벤트",
     "printerColumns": "추가 정보"
+  },
+  "cronjob": {
+    "suspend": "일시정지",
+    "resume": "재개",
+    "suspendSuccess": "CronJob이 일시정지되었습니다",
+    "resumeSuccess": "CronJob이 재개되었습니다",
+    "runNow": "즉시 실행",
+    "runNowConfirm": "이 CronJob에서 수동으로 Job을 생성하시겠습니까?",
+    "runNowSuccess": "Job {{name}}이(가) 생성되었습니다",
+    "ownedJobs": "Jobs",
+    "jobName": "이름",
+    "jobStatus": "상태",
+    "jobStarted": "시작 시간",
+    "jobDuration": "소요 시간"
+  },
+  "rollback": {
+    "title": "롤백",
+    "selectRevision": "롤백할 리비전을 선택하세요",
+    "revision": "리비전",
+    "images": "이미지",
+    "created": "생성일",
+    "current": "현재",
+    "confirm": "롤백",
+    "cancel": "취소",
+    "success": "리비전 {{revision}}으로 롤백이 시작되었습니다"
   }
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -124,6 +125,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [logContainer, setLogContainer] = useState<string>('')
   const [logLines, setLogLines] = useState(100)
   const [showLogs, setShowLogs] = useState(false)
+  const logRef = useRef<HTMLDivElement>(null)
   const [execTarget, setExecTarget] = useState<string | null>(null)
   const [execSelectContainer, setExecSelectContainer] = useState<string>('')
   const [execCommand, setExecCommand] = useState<string>('/bin/sh')
@@ -153,6 +155,15 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     enabled: showLogs && !!logContainer,
     staleTime: 5000,
   })
+
+  const logSectionRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (logData && logRef.current) {
+      logRef.current.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
+      logSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [logData])
 
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
@@ -358,18 +369,18 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Basic Info">
         <div className="space-y-2">
           <InfoRow label="Phase" value={<StatusBadge status={phase} />} />
-          <InfoRow label="Node" value={node} />
+          <InfoRow label="Node" value={node && node !== '-' ? <ResourceLink kind="Node" name={node} /> : '-'} />
           <InfoRow label="Pod IP" value={podIP} />
           {podIPs.length > 0 && <InfoRow label="Pod IPs" value={podIPs.join(', ')} />}
           <InfoRow label="Host IP" value={hostIP} />
           {hostIPs.length > 0 && <InfoRow label="Host IPs" value={hostIPs.join(', ')} />}
-          <InfoRow label="Service Account" value={serviceAccount} />
+          <InfoRow label="Service Account" value={serviceAccount && serviceAccount !== '-' ? <ResourceLink kind="ServiceAccount" name={serviceAccount} namespace={namespace} /> : '-'} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
           {startTime && <InfoRow label="Start Time" value={`${fmtTs(startTime)} (${fmtRel(startTime)})`} />}
           <InfoRow label="Restarts" value={String(restartCount)} />
           {qosClass && <InfoRow label="QoS Class" value={qosClass} />}
           {priority != null && <InfoRow label="Priority" value={String(priority)} />}
-          {priorityClass && <InfoRow label="Priority Class" value={priorityClass} />}
+          {priorityClass && <InfoRow label="Priority Class" value={<ResourceLink kind="PriorityClass" name={priorityClass} />} />}
           {nominatedNode && <InfoRow label="Nominated Node" value={nominatedNode} />}
           {podDescribe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{podDescribe.uid}</span>} />}
         </div>
@@ -963,7 +974,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                   <div className="text-xs text-slate-200 space-y-1">
                     {ownerRefs.map((ref: any, idx: number) => (
                       <div key={`${ref.kind || 'Owner'}-${ref.name || idx}`}>
-                        <span className="font-medium">{ref.kind || '-'}</span>/{ref.name || '-'}
+                        <span className="font-medium">{ref.kind || '-'}</span>/
+                        {ref.name ? <ResourceLink kind={ref.kind} name={ref.name} namespace={namespace} /> : '-'}
                         {ref.controller ? ' (controller)' : ''}
                       </div>
                     ))}
@@ -986,6 +998,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {/* Logs Viewer */}
+      <div ref={logSectionRef}>
       <InfoSection title="Logs">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -1012,12 +1025,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             </button>
           </div>
           {showLogs && (
-            <div className="bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
+            <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
               {logsFetching ? 'Loading...' : logData || '(no logs)'}
             </div>
           )}
         </div>
       </InfoSection>
+      </div>
 
       {execTarget && (
         <ModalOverlay onClose={() => setExecTarget(null)}>

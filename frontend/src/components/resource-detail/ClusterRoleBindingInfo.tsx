@@ -8,6 +8,7 @@ import {
   fmtRel,
   fmtTs,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -48,7 +49,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
       <InfoSection title="Role Reference">
         <div className="space-y-2">
           <InfoRow label="Kind" value={describe?.role_ref_kind ?? '-'} />
-          <InfoRow label="Name" value={describe?.role_ref_name ?? '-'} />
+          <InfoRow label="Name" value={describe?.role_ref_name ? <ResourceLink kind="ClusterRole" name={describe.role_ref_name} /> : '-'} />
           <InfoRow label="API Group" value={describe?.role_ref_api_group ?? 'rbac.authorization.k8s.io'} />
         </div>
       </InfoSection>

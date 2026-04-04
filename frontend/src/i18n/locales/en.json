@@ -2416,5 +2416,30 @@
     "finalizers": "Finalizers",
     "events": "Events",
     "printerColumns": "Additional Info"
+  },
+  "cronjob": {
+    "suspend": "Suspend",
+    "resume": "Resume",
+    "suspendSuccess": "CronJob suspended",
+    "resumeSuccess": "CronJob resumed",
+    "runNow": "Run Now",
+    "runNowConfirm": "Are you sure you want to trigger a manual job from this CronJob?",
+    "runNowSuccess": "Job {{name}} created",
+    "ownedJobs": "Jobs",
+    "jobName": "Name",
+    "jobStatus": "Status",
+    "jobStarted": "Started",
+    "jobDuration": "Duration"
+  },
+  "rollback": {
+    "title": "Rollback",
+    "selectRevision": "Select a revision to rollback to",
+    "revision": "Revision",
+    "images": "Images",
+    "created": "Created",
+    "current": "Current",
+    "confirm": "Rollback",
+    "cancel": "Cancel",
+    "success": "Rollback to revision {{revision}} initiated"
   }
 }

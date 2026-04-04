@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 
 interface Props {
   name: string
@@ -118,7 +119,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
-          <InfoRow label="Gateway Class" value={className} />
+          <InfoRow label="Gateway Class" value={className && className !== '-' ? <ResourceLink kind="GatewayClass" name={className} /> : '-'} />
           <InfoRow label="Listeners" value={listenersCount} />
           <InfoRow label="Attached Routes" value={attachedRoutes} />
           <InfoRow label="Addresses" value={addressesCount} />
