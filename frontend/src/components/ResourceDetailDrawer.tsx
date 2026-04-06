@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { X, Info, FileCode, Trash2 } from 'lucide-react'
+import { X, Info, FileCode, Trash2, ArrowLeft } from 'lucide-react'
 import { useResourceDetail } from './ResourceDetailContext'
 import { api } from '@/services/api'
 import YamlEditor from './YamlEditor'
@@ -207,7 +207,7 @@ function kindIcon(kind: string): string {
 export default function ResourceDetailDrawer() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { target, close } = useResourceDetail()
+  const { target, close, goBack, canGoBack } = useResourceDetail()
   const [tab, setTab] = useState<TabId>('info')
   const [yamlRefreshNonce, setYamlRefreshNonce] = useState(0)
   const [isYamlDirty, setIsYamlDirty] = useState(false)
