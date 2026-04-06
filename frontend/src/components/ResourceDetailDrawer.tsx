@@ -1118,9 +1118,24 @@ export default function ResourceDetailDrawer() {
             </div>
             <h2 className="text-lg font-semibold text-white truncate">{name}</h2>
           </div>
-          <button onClick={handleClose} className="text-slate-400 hover:text-white p-1 shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {canGoBack && (
+              <button
+                onClick={() => {
+                  if (!confirmDiscardYaml()) return
+                  resetDrawerState()
+                  goBack()
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors"
+                title={t('common.back', { defaultValue: 'Back' })}
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <button onClick={handleClose} className="text-slate-400 hover:text-white p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
