@@ -21,7 +21,7 @@ func (h *Handler) HealthRoot(w http.ResponseWriter, r *http.Request) {
 // kubernetes 연결 상태는 별도로 짧은 타임아웃으로 확인한다.
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	k8sStatus := "connected"
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
 	defer cancel()
 	if err := h.svc.HealthCheck(ctx); err != nil {
 		k8sStatus = "disconnected"
