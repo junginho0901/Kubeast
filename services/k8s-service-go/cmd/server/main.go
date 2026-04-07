@@ -444,6 +444,10 @@ func main() {
 		// Dependency Graph
 		r.Get("/api/v1/namespaces/{namespace}/dependency-graph", h.GetDependencyGraph)
 
+		// Timeline (nginx rewrites /api/v1/cluster/namespaces/* → /api/v1/namespaces/*)
+		r.Get("/api/v1/namespaces/{namespace}/timeline", h.GetNamespaceTimeline)
+		r.Get("/api/v1/namespaces/{namespace}/timeline/{kind}/{name}", h.GetResourceTimeline)
+
 		// Topology
 		r.Get("/api/v1/topology/namespace/{namespace}", h.GetNamespaceTopology)
 		r.Get("/api/v1/topology/service/{namespace}/{service_name}", h.GetServiceTopology)
