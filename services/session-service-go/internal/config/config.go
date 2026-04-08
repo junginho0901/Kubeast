@@ -28,7 +28,7 @@ func Load() Config {
 		Port:  pkgconfig.GetEnvInt("PORT", 8003),
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),
 
-		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kagent:password@localhost:5432/kagent?sslmode=disable"),
+		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubest:password@localhost:5432/kubest?sslmode=disable"),
 
 		AuthJWKSURL: pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
 		JWTIssuer:   pkgconfig.GetEnv("JWT_ISSUER", "kube-assistant-auth"),

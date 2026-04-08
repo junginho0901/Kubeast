@@ -4185,7 +4185,7 @@ Remember: You're not just answering questions - you're **solving production prob
         return self._filter_tools_by_role(tools)
 
     def _get_k8s_readonly_tool_definitions(self) -> List[Dict]:
-        """kagent 스타일의 read-only k8s tool 정의"""
+        """kubest 스타일의 read-only k8s tool 정의"""
         return [
             {
                 "type": "function",
@@ -4317,7 +4317,7 @@ Remember: You're not just answering questions - you're **solving production prob
         ]
 
     def _get_k8s_write_tool_definitions(self) -> List[Dict]:
-        """kagent 스타일의 write k8s tool 정의"""
+        """kubest 스타일의 write k8s tool 정의"""
         return [
             {
                 "type": "function",

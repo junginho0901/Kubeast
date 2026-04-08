@@ -90,7 +90,7 @@ class DatabaseService:
     def __init__(self, database_url: str = None):
         import os
         if database_url is None:
-            database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./kagent.db")
+            database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./kubest.db")
         
         self.database_url = database_url
         self.engine = create_async_engine(database_url, echo=False)
