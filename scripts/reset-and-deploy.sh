@@ -87,7 +87,7 @@ if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
   fi
 
   # 모든 테이블 데이터 삭제 (순서 중요: FK 의존성)
-  kubectl exec -n "$NS" "$PG_POD" -- psql -U kagent -d kagent -c "
+  kubectl exec -n "$NS" "$PG_POD" -- psql -U kubest -d kubest -c "
     -- AI service tables
     DELETE FROM session_contexts;
     DELETE FROM messages;
@@ -258,32 +258,32 @@ if [[ -n "$PG_POD" ]]; then
     grep -q '0.0.0.0/0' /var/lib/postgresql/data/pg_hba.conf || echo 'host all all 0.0.0.0/0 scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf
     grep -q '::/0' /var/lib/postgresql/data/pg_hba.conf || echo 'host all all ::/0 scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf
   " >/dev/null 2>&1 || true
-  kubectl exec -n "$NS" "$PG_POD" -- psql -U kagent -d postgres -c "SELECT pg_reload_conf();" >/dev/null 2>&1 || true
+  kubectl exec -n "$NS" "$PG_POD" -- psql -U kubest -d postgres -c "SELECT pg_reload_conf();" >/dev/null 2>&1 || true
   ok "pg_hba.conf updated"
 else
   warn "Postgres pod not found for pg_hba.conf update"
 fi
 
-# Postgres 데이터가 남아있으면 kagent DB가 없을 수 있으므로 안전하게 생성
-step "Ensuring kagent database exists"
+# Postgres 데이터가 남아있으면 kubest DB가 없을 수 있으므로 안전하게 생성
+step "Ensuring kubest database exists"
 PG_POD=""
 for attempt in $(seq 1 10); do
   PG_POD=$(kubectl get pod -n "$NS" -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
   if [[ -n "$PG_POD" ]]; then
     # Pod Ready 상태인지 확인
-    kubectl exec -n "$NS" "$PG_POD" -- pg_isready -U kagent 2>/dev/null && break
+    kubectl exec -n "$NS" "$PG_POD" -- pg_isready -U kubest 2>/dev/null && break
   fi
   echo "  Waiting for postgres to be ready... (attempt $attempt/10)"
   sleep 3
 done
 
 if [[ -n "$PG_POD" ]]; then
-  DB_EXISTS=$(kubectl exec -n "$NS" "$PG_POD" -- psql -U kagent -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='kagent'" 2>/dev/null || echo "")
+  DB_EXISTS=$(kubectl exec -n "$NS" "$PG_POD" -- psql -U kubest -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='kubest'" 2>/dev/null || echo "")
   if [[ "$DB_EXISTS" != "1" ]]; then
-    kubectl exec -n "$NS" "$PG_POD" -- psql -U kagent -d postgres -c "CREATE DATABASE kagent;" 2>/dev/null
-    ok "Created kagent database"
+    kubectl exec -n "$NS" "$PG_POD" -- psql -U kubest -d postgres -c "CREATE DATABASE kubest;" 2>/dev/null
+    ok "Created kubest database"
   else
-    ok "kagent database already exists"
+    ok "kubest database already exists"
   fi
 else
   fail "Postgres pod not found"
