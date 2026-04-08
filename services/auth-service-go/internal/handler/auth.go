@@ -46,6 +46,20 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate HQ/Team against organizations if provided
+	if req.HQ != nil && strings.TrimSpace(*req.HQ) != "" {
+		if ok, _ := h.repo.OrganizationExists(r.Context(), "hq", strings.TrimSpace(*req.HQ)); !ok {
+			response.Error(w, http.StatusBadRequest, "Invalid HQ value")
+			return
+		}
+	}
+	if req.Team != nil && strings.TrimSpace(*req.Team) != "" {
+		if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*req.Team)); !ok {
+			response.Error(w, http.StatusBadRequest, "Invalid Team value")
+			return
+		}
+	}
+
 	existing, _ := h.repo.GetUserByEmail(r.Context(), req.Email)
 	if existing != nil {
 		response.Error(w, http.StatusConflict, "Email already exists")
@@ -65,7 +79,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Email:        req.Email,
 		HQ:           req.HQ,
 		Team:         req.Team,
-		Role:         "read",
+		Role:         "pending",
 		PasswordHash: hash,
 		CreatedAt:    now,
 		UpdatedAt:    now,
