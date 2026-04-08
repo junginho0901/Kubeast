@@ -36,6 +36,17 @@ export default function Login() {
   // Only redirect if setup is truly not configured (handled above).
   // Temporary k8s disconnections during rollout should not loop back to setup.
 
+  const { data: hqOptions = [] } = useQuery({
+    queryKey: ['organizations', 'hq'],
+    queryFn: () => api.listOrganizations('hq'),
+    staleTime: 60000,
+  })
+  const { data: teamOptions = [] } = useQuery({
+    queryKey: ['organizations', 'team'],
+    queryFn: () => api.listOrganizations('team'),
+    staleTime: 60000,
+  })
+
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
   const [hq, setHq] = useState('')
@@ -44,6 +55,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [registered, setRegistered] = useState(false)
 
   const redirectTo = useMemo(() => {
     const state = location.state as any
@@ -64,8 +76,8 @@ export default function Login() {
 
   const registerMutation = useMutation({
     mutationFn: () => api.register({ name, email, password, hq, team }),
-    onSuccess: async () => {
-      await loginMutation.mutateAsync()
+    onSuccess: () => {
+      setRegistered(true)
     },
   })
 
@@ -151,6 +163,29 @@ export default function Login() {
           </div>
 
           <div className="w-full">
+            {registered ? (
+              <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20">
+                  <UserPlus className="h-7 w-7 text-green-400" />
+                </div>
+                <h2 className="mt-5 text-xl font-semibold text-white">
+                  {tr('login.registered.title', 'Account created')}
+                </h2>
+                <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+                  {tr('login.registered.description', 'Your account has been created. An administrator needs to approve your account before you can sign in.')}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegistered(false)
+                    setMode('login')
+                  }}
+                  className="mt-6 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-500"
+                >
+                  {tr('login.registered.backToLogin', 'Back to sign in')}
+                </button>
+              </div>
+            ) : (
             <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -205,25 +240,31 @@ export default function Login() {
                       <label className="block text-xs text-slate-400 mb-1">
                         {tr('login.form.hq', 'HQ')}
                       </label>
-                      <input
+                      <select
                         value={hq}
                         onChange={(e) => setHq(e.target.value)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
-                        placeholder={tr('login.form.hqPlaceholder', 'e.g. Platform')}
-                        autoComplete="organization"
-                      />
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        <option value="">{tr('login.form.selectHq', 'Select HQ')}</option>
+                        {hqOptions.map((o) => (
+                          <option key={o.id} value={o.name}>{o.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-xs text-slate-400 mb-1">
                         {tr('login.form.team', 'Team')}
                       </label>
-                      <input
+                      <select
                         value={team}
                         onChange={(e) => setTeam(e.target.value)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
-                        placeholder={tr('login.form.teamPlaceholder', 'e.g. DevOps')}
-                        autoComplete="organization"
-                      />
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        <option value="">{tr('login.form.selectTeam', 'Select Team')}</option>
+                        {teamOptions.map((o) => (
+                          <option key={o.id} value={o.name}>{o.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 )}
@@ -305,6 +346,7 @@ export default function Login() {
               </button>
             </form>
           </div>
+            )}
 
           </div>
         </div>
