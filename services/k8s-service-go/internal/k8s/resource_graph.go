@@ -748,3 +748,123 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 			continue
 		}
 		// EndpointSlice owner is typically the Service
+		svcName := eps.Labels["kubernetes.io/service-name"]
+		if svcName != "" {
+			epsID := rgNodeID("EndpointSlice", eps.Namespace, eps.Name)
+			addNode(rgNode{
+				ID: epsID, Kind: "EndpointSlice",
+				Name: eps.Name, Namespace: eps.Namespace, Status: "Active",
+			})
+			svcID := rgNodeID("Service", eps.Namespace, svcName)
+			edges = append(edges, rgEdge{Source: epsID, Target: svcID, Type: RGEdgeEndpointOf})
+		}
+	}
+
+	// --- Endpoints → Service ---
+	for i := range res.endpoints {
+		ep := &res.endpoints[i]
+		if !inScope(ep.Namespace) {
+			continue
+		}
+		epID := rgNodeID("Endpoints", ep.Namespace, ep.Name)
+		addNode(rgNode{
+			ID: epID, Kind: "Endpoints",
+			Name: ep.Name, Namespace: ep.Namespace, Status: "Active",
+		})
+		// Endpoints share name with Service
+		svcID := rgNodeID("Service", ep.Namespace, ep.Name)
+		if _, exists := nodeMap[svcID]; exists {
+			edges = append(edges, rgEdge{Source: epID, Target: svcID, Type: RGEdgeEndpointOf})
+		}
+	}
+
+	// --- RoleBindings → Role/ClusterRole, ServiceAccount ---
+	for i := range res.roleBindings {
+		rb := &res.roleBindings[i]
+		if !inScope(rb.Namespace) {
+			continue
+		}
+		rbID := rgNodeID("RoleBinding", rb.Namespace, rb.Name)
+		addNode(rgNode{
+			ID: rbID, Kind: "RoleBinding",
+			Name: rb.Name, Namespace: rb.Namespace, Status: "Active",
+		})
+
+		roleKind := rb.RoleRef.Kind
+		roleName := rb.RoleRef.Name
+		roleNS := rb.Namespace
+		if roleKind == "ClusterRole" {
+			roleNS = ""
+		}
+		roleID := rgNodeID(roleKind, roleNS, roleName)
+		addNode(rgNode{
+			ID: roleID, Kind: roleKind, Name: roleName, Namespace: roleNS, Status: "Active",
+		})
+		edges = append(edges, rgEdge{Source: rbID, Target: roleID, Type: RGEdgeBinds})
+
+		for _, subj := range rb.Subjects {
+			if subj.Kind == "ServiceAccount" {
+				subjNS := subj.Namespace
+				if subjNS == "" {
+					subjNS = rb.Namespace
+				}
+				saID := rgNodeID("ServiceAccount", subjNS, subj.Name)
+				addNode(rgNode{
+					ID: saID, Kind: "ServiceAccount", Name: subj.Name, Namespace: subjNS, Status: "Active",
+				})
+				edges = append(edges, rgEdge{Source: rbID, Target: saID, Type: RGEdgeBinds})
+			}
+		}
+	}
+
+	// --- ServiceAccounts (ensure nodes exist) ---
+	for i := range res.serviceAccounts {
+		sa := &res.serviceAccounts[i]
+		if !inScope(sa.Namespace) {
+			continue
+		}
+		addNode(rgNode{
+			ID: rgNodeID("ServiceAccount", sa.Namespace, sa.Name), Kind: "ServiceAccount",
+			Name: sa.Name, Namespace: sa.Namespace, Status: "Active",
+		})
+	}
+
+	// --- ServiceAccount used by Deployments/DaemonSets ---
+	for i := range res.deployments {
+		d := &res.deployments[i]
+		if !inScope(d.Namespace) {
+			continue
+		}
+		saName := d.Spec.Template.Spec.ServiceAccountName
+		if saName == "" {
+			saName = "default"
+		}
+		saID := rgNodeID("ServiceAccount", d.Namespace, saName)
+		if _, exists := nodeMap[saID]; exists {
+			edges = append(edges, rgEdge{
+				Source: saID,
+				Target: rgNodeID("Deployment", d.Namespace, d.Name),
+				Type:   RGEdgeSAUsedBy,
+			})
+		}
+	}
+	for i := range res.daemonSets {
+		ds := &res.daemonSets[i]
+		if !inScope(ds.Namespace) {
+			continue
+		}
+		saName := ds.Spec.Template.Spec.ServiceAccountName
+		if saName == "" {
+			saName = "default"
+		}
+		saID := rgNodeID("ServiceAccount", ds.Namespace, saName)
+		if _, exists := nodeMap[saID]; exists {
+			edges = append(edges, rgEdge{
+				Source: saID,
+				Target: rgNodeID("DaemonSet", ds.Namespace, ds.Name),
+				Type:   RGEdgeSAUsedBy,
+			})
+		}
+	}
+
+	// ========== DEDUPLICATE EDGES ==========
