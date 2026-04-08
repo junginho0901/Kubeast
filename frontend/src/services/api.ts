@@ -2864,7 +2864,7 @@ export const api = {
     return data
   },
 
-  // ===== Dependency Graph =====
+  // ===== Dependency Graph (legacy) =====
   getDependencyGraph: async (namespace: string): Promise<{
     nodes: Array<{
       id: string
@@ -2882,6 +2882,18 @@ export const api = {
     }>
   }> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/dependency-graph`)
+    return data
+  },
+
+  // ===== Resource Graph (upgraded) =====
+  getResourceGraph: async (namespaces?: string[]): Promise<ResourceGraphResponse> => {
+    const params = namespaces?.length ? `?namespaces=${namespaces.join(',')}` : ''
+    const { data } = await client.get(`/resource-graph${params}`)
+    return data
+  },
+
+  getNamespaceResourceGraph: async (namespace: string): Promise<ResourceGraphResponse> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/resource-graph`)
     return data
   },
 }
