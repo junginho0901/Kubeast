@@ -119,6 +119,9 @@ func main() {
 		r.Post("/setup", setupHandler.PostSetup)
 		r.Get("/setup/rollout-status", setupHandler.RolloutStatus)
 
+		// Public (for registration form dropdowns)
+		r.Get("/organizations", authHandler.ListOrganizations)
+
 		// Protected endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
@@ -127,6 +130,11 @@ func main() {
 			r.Post("/change-password", authHandler.ChangePassword)
 
 			// Admin endpoints
+			r.Post("/admin/organizations", authHandler.AdminCreateOrganization)
+			r.Delete("/admin/organizations/{id}", authHandler.AdminDeleteOrganization)
+			r.Post("/admin/users/bulk", authHandler.AdminBulkCreateUsers)
+			r.Patch("/admin/users/bulk-role", authHandler.AdminBulkUpdateRole)
+			r.Post("/admin/users", authHandler.AdminCreateUser)
 			r.Get("/admin/users", authHandler.AdminListUsers)
 			r.Patch("/admin/users/{user_id}", authHandler.AdminUpdateUser)
 			r.Post("/admin/users/{user_id}/reset-password", authHandler.AdminResetPassword)
