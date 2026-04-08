@@ -1089,6 +1089,36 @@ export interface TopologyGraph {
   metadata: Record<string, any>
 }
 
+// Resource Graph types
+export type ResourceGraphEdgeType =
+  | 'owns' | 'selects' | 'mounts' | 'routes' | 'binds'
+  | 'bound_to' | 'provisions' | 'hpa_targets' | 'network_policy'
+  | 'endpoint_of' | 'sa_used_by'
+
+export interface ResourceGraphNode {
+  id: string
+  kind: string
+  name: string
+  namespace: string
+  status: string
+  ready?: string
+  labels?: Record<string, string>
+  nodeName?: string
+  ownerKind?: string
+  instanceLabel?: string
+}
+
+export interface ResourceGraphEdge {
+  source: string
+  target: string
+  type: ResourceGraphEdgeType
+}
+
+export interface ResourceGraphResponse {
+  nodes: ResourceGraphNode[]
+  edges: ResourceGraphEdge[]
+}
+
 export interface TopResources {
   top_pods: Array<{
     namespace: string
