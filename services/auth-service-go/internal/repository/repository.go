@@ -55,6 +55,13 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS organizations (
+			id SERIAL PRIMARY KEY,
+			type VARCHAR NOT NULL,
+			name VARCHAR NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			UNIQUE(type, name)
+		)`,
 		// Migration: add hq/team columns if missing
 		`DO $$ BEGIN
 			ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS hq VARCHAR;
