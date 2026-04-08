@@ -17,6 +17,7 @@
     "namespaces": "Namespaces",
     "nodes": "Nodes",
     "dependencyGraph": "Resource Dependency Graph",
+    "resourceGraph": "Resource Graph",
     "timeline": "Change History",
     "advancedSearch": "Advanced Search (Beta)",
     "pods": "Pods",
@@ -2113,6 +2114,16 @@
     "binds": "Binds",
     "noData": "No resources in this namespace",
     "search": "Search resources..."
+  },
+  "resourceGraph": {
+    "title": "Resource Graph",
+    "allNamespaces": "All Namespaces",
+    "search": "Search resources...",
+    "filter": "Filter",
+    "legend": "Legend",
+    "sources": "Sources",
+    "issuesOnly": "Issues",
+    "noData": "No resources found"
   },
   "advancedSearch": {
     "title": "Advanced Search",
