@@ -598,3 +598,153 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 				edges = append(edges, rgEdge{
 					Source: svcID,
 					Target: rgNodeID("Pod", pod.Namespace, pod.Name),
+					Type:   RGEdgeSelects,
+				})
+			}
+		}
+	}
+
+	// --- ConfigMaps (ensure nodes exist) ---
+	for i := range res.configMaps {
+		cm := &res.configMaps[i]
+		if !inScope(cm.Namespace) {
+			continue
+		}
+		addNode(rgNode{
+			ID: rgNodeID("ConfigMap", cm.Namespace, cm.Name), Kind: "ConfigMap",
+			Name: cm.Name, Namespace: cm.Namespace, Status: "Active",
+		})
+	}
+
+	// --- Secrets (ensure nodes exist) ---
+	for i := range res.secrets {
+		sec := &res.secrets[i]
+		if !inScope(sec.Namespace) {
+			continue
+		}
+		addNode(rgNode{
+			ID: rgNodeID("Secret", sec.Namespace, sec.Name), Kind: "Secret",
+			Name: sec.Name, Namespace: sec.Namespace, Status: "Active",
+		})
+	}
+
+	// --- PVCs ---
+	for i := range res.pvcs {
+		pvc := &res.pvcs[i]
+		if !inScope(pvc.Namespace) {
+			continue
+		}
+		pvcID := rgNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
+		addNode(rgNode{
+			ID: pvcID, Kind: "PersistentVolumeClaim",
+			Name: pvc.Name, Namespace: pvc.Namespace, Status: string(pvc.Status.Phase),
+		})
+		// PVC → PV (bound_to)
+		if pvc.Spec.VolumeName != "" {
+			pvID := rgNodeID("PersistentVolume", "", pvc.Spec.VolumeName)
+			edges = append(edges, rgEdge{Source: pvcID, Target: pvID, Type: RGEdgeBoundTo})
+		}
+	}
+
+	// --- PVs (cluster-scoped) ---
+	for i := range res.pvs {
+		pv := &res.pvs[i]
+		pvID := rgNodeID("PersistentVolume", "", pv.Name)
+		addNode(rgNode{
+			ID: pvID, Kind: "PersistentVolume",
+			Name: pv.Name, Status: string(pv.Status.Phase),
+		})
+		// PV → StorageClass (provisions)
+		if pv.Spec.StorageClassName != "" {
+			scID := rgNodeID("StorageClass", "", pv.Spec.StorageClassName)
+			edges = append(edges, rgEdge{Source: scID, Target: pvID, Type: RGEdgeProvisions})
+		}
+	}
+
+	// --- StorageClasses (cluster-scoped) ---
+	for i := range res.storageClasses {
+		sc := &res.storageClasses[i]
+		addNode(rgNode{
+			ID: rgNodeID("StorageClass", "", sc.Name), Kind: "StorageClass",
+			Name: sc.Name, Status: sc.Provisioner,
+		})
+	}
+
+	// --- Ingresses → Service ---
+	for i := range res.ingresses {
+		ing := &res.ingresses[i]
+		if !inScope(ing.Namespace) {
+			continue
+		}
+		ingID := rgNodeID("Ingress", ing.Namespace, ing.Name)
+		addNode(rgNode{
+			ID: ingID, Kind: "Ingress",
+			Name: ing.Name, Namespace: ing.Namespace, Status: "Active",
+			Labels: ing.Labels,
+		})
+		for _, rule := range ing.Spec.Rules {
+			if rule.HTTP == nil {
+				continue
+			}
+			for _, path := range rule.HTTP.Paths {
+				if path.Backend.Service != nil {
+					svcID := rgNodeID("Service", ing.Namespace, path.Backend.Service.Name)
+					edges = append(edges, rgEdge{Source: ingID, Target: svcID, Type: RGEdgeRoutes})
+				}
+			}
+		}
+		if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil {
+			svcID := rgNodeID("Service", ing.Namespace, ing.Spec.DefaultBackend.Service.Name)
+			edges = append(edges, rgEdge{Source: ingID, Target: svcID, Type: RGEdgeRoutes})
+		}
+	}
+
+	// --- HPA → Deployment / StatefulSet ---
+	for i := range res.hpas {
+		hpa := &res.hpas[i]
+		if !inScope(hpa.Namespace) {
+			continue
+		}
+		hpaID := rgNodeID("HorizontalPodAutoscaler", hpa.Namespace, hpa.Name)
+		ready := fmt.Sprintf("%d/%d", hpa.Status.CurrentReplicas, hpa.Status.DesiredReplicas)
+		addNode(rgNode{
+			ID: hpaID, Kind: "HorizontalPodAutoscaler",
+			Name: hpa.Name, Namespace: hpa.Namespace, Status: "Active", Ready: ready,
+		})
+		targetKind := hpa.Spec.ScaleTargetRef.Kind
+		targetName := hpa.Spec.ScaleTargetRef.Name
+		targetID := rgNodeID(targetKind, hpa.Namespace, targetName)
+		edges = append(edges, rgEdge{Source: hpaID, Target: targetID, Type: RGEdgeHPATargets})
+	}
+
+	// --- NetworkPolicy → Pod (selector matching) ---
+	for i := range res.networkPolicies {
+		np := &res.networkPolicies[i]
+		if !inScope(np.Namespace) {
+			continue
+		}
+		npID := rgNodeID("NetworkPolicy", np.Namespace, np.Name)
+		addNode(rgNode{
+			ID: npID, Kind: "NetworkPolicy",
+			Name: np.Name, Namespace: np.Namespace, Status: "Active",
+		})
+		if np.Spec.PodSelector.MatchLabels != nil {
+			for j := range res.pods {
+				pod := &res.pods[j]
+				if pod.Namespace != np.Namespace {
+					continue
+				}
+				if selectorMatchesStr(np.Spec.PodSelector.MatchLabels, pod.Labels) {
+					edges = append(edges, rgEdge{Source: npID, Target: rgNodeID("Pod", pod.Namespace, pod.Name), Type: RGEdgeNetworkPolicy})
+				}
+			}
+		}
+	}
+
+	// --- EndpointSlices → Service ---
+	for i := range res.endpointSlices {
+		eps := &res.endpointSlices[i]
+		if !inScope(eps.Namespace) {
+			continue
+		}
+		// EndpointSlice owner is typically the Service
