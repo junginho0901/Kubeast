@@ -428,3 +428,173 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 			continue
 		}
 		replicas := int32(1)
+		if rs.Spec.Replicas != nil {
+			replicas = *rs.Spec.Replicas
+		}
+		// Skip RS with 0 replicas (old revisions)
+		if replicas == 0 && rs.Status.Replicas == 0 {
+			continue
+		}
+		ready := fmt.Sprintf("%d/%d", rs.Status.ReadyReplicas, replicas)
+		rsID := rgNodeID("ReplicaSet", rs.Namespace, rs.Name)
+		ownerKind := ""
+		addNode(rgNode{
+			ID: rsID, Kind: "ReplicaSet",
+			Name: rs.Name, Namespace: rs.Namespace, Status: "Running", Ready: ready,
+			Labels: rs.Labels,
+		})
+		for _, ref := range rs.OwnerReferences {
+			ownerKind = ref.Kind
+			ownerID := rgNodeID(ref.Kind, rs.Namespace, ref.Name)
+			edges = append(edges, rgEdge{Source: ownerID, Target: rsID, Type: RGEdgeOwns})
+		}
+		if n, ok := nodeMap[rsID]; ok && ownerKind != "" {
+			n.OwnerKind = ownerKind
+			nodeMap[rsID] = n
+		}
+	}
+
+	// --- Jobs ---
+	for i := range res.jobs {
+		job := &res.jobs[i]
+		if !inScope(job.Namespace) {
+			continue
+		}
+		status := "Running"
+		if job.Status.Succeeded > 0 {
+			status = "Succeeded"
+		} else if job.Status.Failed > 0 {
+			status = "Failed"
+		}
+		jobID := rgNodeID("Job", job.Namespace, job.Name)
+		addNode(rgNode{
+			ID: jobID, Kind: "Job",
+			Name: job.Name, Namespace: job.Namespace, Status: status,
+			Labels: job.Labels,
+		})
+		for _, ref := range job.OwnerReferences {
+			if ref.Kind == "CronJob" {
+				ownerID := rgNodeID("CronJob", job.Namespace, ref.Name)
+				edges = append(edges, rgEdge{Source: ownerID, Target: jobID, Type: RGEdgeOwns})
+			}
+		}
+	}
+
+	// --- CronJobs ---
+	for i := range res.cronJobs {
+		cj := &res.cronJobs[i]
+		if !inScope(cj.Namespace) {
+			continue
+		}
+		addNode(rgNode{
+			ID: rgNodeID("CronJob", cj.Namespace, cj.Name), Kind: "CronJob",
+			Name: cj.Name, Namespace: cj.Namespace, Status: "Active",
+			Labels: cj.Labels,
+		})
+	}
+
+	// --- Pods ---
+	for i := range res.pods {
+		pod := &res.pods[i]
+		if !inScope(pod.Namespace) {
+			continue
+		}
+		status := string(pod.Status.Phase)
+		ready := podReadyCount(pod)
+		podID := rgNodeID("Pod", pod.Namespace, pod.Name)
+
+		ownerKind := ""
+		if len(pod.OwnerReferences) > 0 {
+			ownerKind = pod.OwnerReferences[0].Kind
+		}
+
+		addNode(rgNode{
+			ID: podID, Kind: "Pod",
+			Name: pod.Name, Namespace: pod.Namespace,
+			Status: status, Ready: ready, Labels: pod.Labels,
+			NodeName: pod.Spec.NodeName, OwnerKind: ownerKind,
+			InstanceLabel: pod.Labels["app.kubernetes.io/instance"],
+		})
+
+		// ownerReferences → owns edges
+		for _, ref := range pod.OwnerReferences {
+			ownerID := rgNodeID(ref.Kind, pod.Namespace, ref.Name)
+			edges = append(edges, rgEdge{Source: ownerID, Target: podID, Type: RGEdgeOwns})
+		}
+
+		// volume mounts → ConfigMap, Secret, PVC
+		for _, vol := range pod.Spec.Volumes {
+			if vol.ConfigMap != nil {
+				cmID := rgNodeID("ConfigMap", pod.Namespace, vol.ConfigMap.Name)
+				addNode(rgNode{ID: cmID, Kind: "ConfigMap", Name: vol.ConfigMap.Name, Namespace: pod.Namespace, Status: "Active"})
+				edges = append(edges, rgEdge{Source: podID, Target: cmID, Type: RGEdgeMounts})
+			}
+			if vol.Secret != nil {
+				sID := rgNodeID("Secret", pod.Namespace, vol.Secret.SecretName)
+				addNode(rgNode{ID: sID, Kind: "Secret", Name: vol.Secret.SecretName, Namespace: pod.Namespace, Status: "Active"})
+				edges = append(edges, rgEdge{Source: podID, Target: sID, Type: RGEdgeMounts})
+			}
+			if vol.PersistentVolumeClaim != nil {
+				pvcID := rgNodeID("PersistentVolumeClaim", pod.Namespace, vol.PersistentVolumeClaim.ClaimName)
+				edges = append(edges, rgEdge{Source: podID, Target: pvcID, Type: RGEdgeMounts})
+			}
+		}
+
+		// env references → ConfigMap, Secret
+		for _, c := range pod.Spec.Containers {
+			for _, ef := range c.EnvFrom {
+				if ef.ConfigMapRef != nil {
+					cmID := rgNodeID("ConfigMap", pod.Namespace, ef.ConfigMapRef.Name)
+					addNode(rgNode{ID: cmID, Kind: "ConfigMap", Name: ef.ConfigMapRef.Name, Namespace: pod.Namespace, Status: "Active"})
+					edges = append(edges, rgEdge{Source: podID, Target: cmID, Type: RGEdgeMounts})
+				}
+				if ef.SecretRef != nil {
+					sID := rgNodeID("Secret", pod.Namespace, ef.SecretRef.Name)
+					addNode(rgNode{ID: sID, Kind: "Secret", Name: ef.SecretRef.Name, Namespace: pod.Namespace, Status: "Active"})
+					edges = append(edges, rgEdge{Source: podID, Target: sID, Type: RGEdgeMounts})
+				}
+			}
+			for _, env := range c.Env {
+				if env.ValueFrom == nil {
+					continue
+				}
+				if env.ValueFrom.ConfigMapKeyRef != nil {
+					cmID := rgNodeID("ConfigMap", pod.Namespace, env.ValueFrom.ConfigMapKeyRef.Name)
+					addNode(rgNode{ID: cmID, Kind: "ConfigMap", Name: env.ValueFrom.ConfigMapKeyRef.Name, Namespace: pod.Namespace, Status: "Active"})
+					edges = append(edges, rgEdge{Source: podID, Target: cmID, Type: RGEdgeMounts})
+				}
+				if env.ValueFrom.SecretKeyRef != nil {
+					sID := rgNodeID("Secret", pod.Namespace, env.ValueFrom.SecretKeyRef.Name)
+					addNode(rgNode{ID: sID, Kind: "Secret", Name: env.ValueFrom.SecretKeyRef.Name, Namespace: pod.Namespace, Status: "Active"})
+					edges = append(edges, rgEdge{Source: podID, Target: sID, Type: RGEdgeMounts})
+				}
+			}
+		}
+	}
+
+	// --- Services → selector matching to Pods ---
+	for i := range res.services {
+		svc := &res.services[i]
+		if !inScope(svc.Namespace) {
+			continue
+		}
+		svcID := rgNodeID("Service", svc.Namespace, svc.Name)
+		svcType := string(svc.Spec.Type)
+		addNode(rgNode{
+			ID: svcID, Kind: "Service",
+			Name: svc.Name, Namespace: svc.Namespace, Status: svcType,
+			Labels: svc.Labels,
+		})
+
+		if len(svc.Spec.Selector) == 0 {
+			continue
+		}
+		for j := range res.pods {
+			pod := &res.pods[j]
+			if pod.Namespace != svc.Namespace {
+				continue
+			}
+			if selectorMatches(svc.Spec.Selector, pod.Labels) {
+				edges = append(edges, rgEdge{
+					Source: svcID,
+					Target: rgNodeID("Pod", pod.Namespace, pod.Name),
