@@ -28,6 +28,7 @@ import { api } from '@/services/api'
 import { clearAccessToken } from '@/services/auth'
 import { ResourceDetailProvider } from './ResourceDetailContext'
 import ResourceDetailDrawer from './ResourceDetailDrawer'
+import PendingApproval from './PendingApproval'
 
 type NavItem = {
   name: string
@@ -246,6 +247,7 @@ export default function Layout() {
       adminOnly: true,
       items: [
         { name: t('nav.userManagement'), href: '/admin/users', icon: Shield },
+        { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
         { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
       ],
@@ -282,6 +284,10 @@ export default function Layout() {
       next[groupId] = willOpen
       return next
     })
+  }
+
+  if (me?.role === 'pending') {
+    return <PendingApproval />
   }
 
   return (
