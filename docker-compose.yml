@@ -5,9 +5,9 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-kagent}
+      POSTGRES_USER: ${POSTGRES_USER:-kubest}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-kagent}
+      POSTGRES_DB: ${POSTGRES_DB:-kubest}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -15,7 +15,7 @@ services:
     networks:
       - msa-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kagent"]
+      test: ["CMD-SHELL", "pg_isready -U kubest"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,7 +45,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kagent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kagent}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubest}
       - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
       - JWT_EXPIRES_MINUTES=${JWT_EXPIRES_MINUTES:-10080}
@@ -77,7 +77,7 @@ services:
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kagent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kagent}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubest}
       - REDIS_URL=redis://redis:6379/0
       - K8S_SERVICE_URL=http://k8s-service:8002
       - SESSION_SERVICE_URL=http://session-service:8003
@@ -135,7 +135,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kagent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kagent}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubest}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
