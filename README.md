@@ -82,9 +82,9 @@ OPENAI_API_KEY=your-api-key-here
 OPENAI_MODEL=gpt-4
 
 # PostgreSQL
-POSTGRES_USER=kagent
+POSTGRES_USER=kubest
 POSTGRES_PASSWORD=your-password
-POSTGRES_DB=kagent
+POSTGRES_DB=kubest
 
 # Kubernetes
 K8S_API_HOST=your-k8s-api-host
@@ -205,7 +205,7 @@ pods = await k8s_client.get_pods(namespace="default")
 
 ```bash
 # PostgreSQL 컨테이너 접속
-docker exec -it agentforcmp-postgres-1 psql -U kagent -d kagent
+docker exec -it agentforcmp-postgres-1 psql -U kubest -d kubest
 
 # 테이블 확인
 \dt
