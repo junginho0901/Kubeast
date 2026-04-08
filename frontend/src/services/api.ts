@@ -1155,7 +1155,7 @@ export interface ChatResponse {
   actions: Array<any>
 }
 
-export type UserRole = 'admin' | 'read' | 'write'
+export type UserRole = 'admin' | 'read' | 'write' | 'pending'
 
 export interface Member {
   id: string
@@ -1166,6 +1166,13 @@ export interface Member {
   role: UserRole | string
   created_at: string
   updated_at: string
+}
+
+export interface Organization {
+  id: number
+  type: 'hq' | 'team'
+  name: string
+  created_at: string
 }
 
 export interface AuthResponse {
@@ -1232,6 +1239,20 @@ export const api = {
     await client.post('/auth/logout')
   },
 
+  listOrganizations: async (type: 'hq' | 'team'): Promise<Organization[]> => {
+    const { data } = await client.get('/auth/organizations', { params: { type } })
+    return Array.isArray(data) ? data : []
+  },
+
+  adminCreateOrganization: async (type: 'hq' | 'team', name: string): Promise<Organization> => {
+    const { data } = await client.post('/auth/admin/organizations', { type, name })
+    return data
+  },
+
+  adminDeleteOrganization: async (id: number): Promise<void> => {
+    await client.delete(`/auth/admin/organizations/${id}`)
+  },
+
   me: async (): Promise<Member> => {
     const { data } = await client.get('/auth/me')
     return data
@@ -1239,6 +1260,21 @@ export const api = {
 
   changePassword: async (request: { current_password: string; new_password: string }): Promise<Member> => {
     const { data } = await client.post('/auth/change-password', request)
+    return data
+  },
+
+  adminCreateUser: async (request: { name: string; email: string; password: string; role: UserRole; hq?: string; team?: string }): Promise<Member> => {
+    const { data } = await client.post('/auth/admin/users', request)
+    return data
+  },
+
+  adminBulkUpdateRole: async (userIds: string[], role: UserRole): Promise<Member[]> => {
+    const { data } = await client.patch('/auth/admin/users/bulk-role', { user_ids: userIds, role })
+    return data
+  },
+
+  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role: string; hq?: string; team?: string }>): Promise<{ created: Member[]; errors: Array<{ email: string; message: string }> }> => {
+    const { data } = await client.post('/auth/admin/users/bulk', { users })
     return data
   },
 
