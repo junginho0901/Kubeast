@@ -16,8 +16,8 @@ data:
   DEFAULT_ADMIN_EMAIL: "admin@local"
   KEY_DIR: "/app/.keys"
 
-  POSTGRES_USER: "kagent"
-  POSTGRES_DB: "kagent"
+  POSTGRES_USER: "kubest"
+  POSTGRES_DB: "kubest"
 
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"

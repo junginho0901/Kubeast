@@ -9,8 +9,8 @@ metadata:
   name: kube-assistant-config
   namespace: kube-assistant
 data:
-  POSTGRES_USER: kagent
-  POSTGRES_DB: kagent
+  POSTGRES_USER: kubest
+  POSTGRES_DB: kubest
   JWT_ISSUER: kube-assistant-auth
   JWT_AUDIENCE: kube-assistant
   JWT_EXPIRES_MINUTES: "10080"
