@@ -27,28 +27,16 @@ func New(svc *k8s.Service, cfg config.Config) *Handler {
 	}
 }
 
-// requireRole checks that the authenticated user has one of the given roles.
-func (h *Handler) requireRole(r *http.Request, roles ...string) error {
+// requirePermission checks that the authenticated user has the given permission.
+func (h *Handler) requirePermission(r *http.Request, perm string) error {
 	payload, ok := auth.FromContext(r.Context())
 	if !ok {
 		return fmt.Errorf("unauthorized")
 	}
-	for _, role := range roles {
-		if payload.Role == role {
-			return nil
-		}
+	if !payload.HasPermission(perm) {
+		return fmt.Errorf("forbidden: requires %s permission", perm)
 	}
-	return fmt.Errorf("forbidden: requires %v role", roles)
-}
-
-// requireWrite checks that the user has write or admin role.
-func (h *Handler) requireWrite(r *http.Request) error {
-	return h.requireRole(r, "write", "admin")
-}
-
-// requireAdmin checks that the user has admin role.
-func (h *Handler) requireAdmin(r *http.Request) error {
-	return h.requireRole(r, "admin")
+	return nil
 }
 
 // queryParam returns a query parameter value or a default.
