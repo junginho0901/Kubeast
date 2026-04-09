@@ -53,7 +53,7 @@ func setDrainStatus(ds *DrainStatus) {
 
 // DrainNode handles POST /api/v1/nodes/{name}/drain.
 func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireAdmin(r); err != nil {
+	if err := h.requirePermission(r, "resource.node.drain"); err != nil {
 		h.handleError(w, err)
 		return
 	}
