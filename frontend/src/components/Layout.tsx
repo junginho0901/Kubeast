@@ -53,11 +53,12 @@ export default function Layout() {
 
   const {
     data: me,
+    isLoading: isMeLoading,
     isError: isMeError,
   } = useQuery({
     queryKey: ['me'],
     queryFn: api.me,
-    retry: false,
+    retry: 1,
     staleTime: 30000,
   })
 
@@ -92,7 +93,15 @@ export default function Layout() {
   }
 
   const { t } = useTranslation()
-  const isAdmin = me?.role === 'admin'
+  const perms: string[] = me?.role?.permissions ?? []
+  const hasPermission = (perm: string): boolean =>
+    perms.some(
+      (p) =>
+        p === '*' ||
+        p === perm ||
+        (p.endsWith('.*') && perm.startsWith(p.slice(0, -1)))
+    )
+  const isAdmin = hasPermission('menu.admin')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
   const storageTabMatch = (tab: string, pathname: string, search: string) => {
@@ -286,7 +295,11 @@ export default function Layout() {
     })
   }
 
-  if (me?.role === 'pending') {
+  if (isMeLoading || !me) {
+    return <div className="min-h-screen bg-slate-900" />
+  }
+
+  if (!hasPermission('menu.dashboard')) {
     return <PendingApproval />
   }
 
