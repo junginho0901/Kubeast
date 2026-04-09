@@ -61,7 +61,7 @@ func (h *Handler) GetServiceAccountYAML(w http.ResponseWriter, r *http.Request) 
 
 // DeleteServiceAccount handles DELETE /api/v1/namespaces/{namespace}/serviceaccounts/{name}.
 func (h *Handler) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.serviceaccount.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -129,7 +129,7 @@ func (h *Handler) GetRoleYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRole handles DELETE /api/v1/namespaces/{namespace}/roles/{name}.
 func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.role.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -197,7 +197,7 @@ func (h *Handler) GetRoleBindingYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRoleBinding handles DELETE /api/v1/namespaces/{namespace}/rolebindings/{name}.
 func (h *Handler) DeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.rolebinding.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

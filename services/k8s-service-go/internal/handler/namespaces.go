@@ -45,7 +45,7 @@ func (h *Handler) GetNamespaceYAML(w http.ResponseWriter, r *http.Request) {
 
 // ApplyNamespaceYAML handles POST /api/v1/namespaces/{namespace}/yaml/apply.
 func (h *Handler) ApplyNamespaceYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.namespace.edit"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -70,7 +70,7 @@ func (h *Handler) ApplyNamespaceYAML(w http.ResponseWriter, r *http.Request) {
 
 // CreateNamespace handles POST /api/v1/namespaces.
 func (h *Handler) CreateNamespace(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.namespace.create"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -99,7 +99,7 @@ func (h *Handler) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 
 // DeleteNamespace handles DELETE /api/v1/namespaces/{namespace}.
 func (h *Handler) DeleteNamespace(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.namespace.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

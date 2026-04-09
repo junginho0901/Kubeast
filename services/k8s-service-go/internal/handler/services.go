@@ -59,7 +59,7 @@ func (h *Handler) GetServiceYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteService handles DELETE /api/v1/namespaces/{namespace}/services/{name}.
 func (h *Handler) DeleteService(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.service.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

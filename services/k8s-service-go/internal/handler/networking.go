@@ -67,7 +67,7 @@ func (h *Handler) GetIngressYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteIngress handles DELETE /api/v1/namespaces/{namespace}/ingresses/{name}.
 func (h *Handler) DeleteIngress(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.ingress.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -108,7 +108,7 @@ func (h *Handler) DescribeIngressClass(w http.ResponseWriter, r *http.Request) {
 
 // DeleteIngressClass handles DELETE /api/v1/ingressclasses/{name}.
 func (h *Handler) DeleteIngressClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.ingressclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -175,7 +175,7 @@ func (h *Handler) GetEndpointsYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteEndpoints handles DELETE /api/v1/namespaces/{namespace}/endpoints/{name}.
 func (h *Handler) DeleteEndpoints(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.endpoints.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -243,7 +243,7 @@ func (h *Handler) GetEndpointSliceYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteEndpointSlice handles DELETE /api/v1/namespaces/{namespace}/endpointslices/{name}.
 func (h *Handler) DeleteEndpointSlice(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.endpointslice.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -311,7 +311,7 @@ func (h *Handler) GetNetworkPolicyYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteNetworkPolicy handles DELETE /api/v1/namespaces/{namespace}/networkpolicies/{name}.
 func (h *Handler) DeleteNetworkPolicy(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.networkpolicy.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

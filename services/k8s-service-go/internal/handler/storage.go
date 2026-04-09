@@ -61,7 +61,7 @@ func (h *Handler) GetPVCYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeletePVC handles DELETE /api/v1/namespaces/{namespace}/pvcs/{name}.
 func (h *Handler) DeletePVC(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.pvc.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -127,7 +127,7 @@ func (h *Handler) GetPVYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeletePV handles DELETE /api/v1/pvs/{name}.
 func (h *Handler) DeletePV(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.pv.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -179,7 +179,7 @@ func (h *Handler) DescribeStorageClass(w http.ResponseWriter, r *http.Request) {
 
 // DeleteStorageClass handles DELETE /api/v1/storageclasses/{name}.
 func (h *Handler) DeleteStorageClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.storageclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -219,7 +219,7 @@ func (h *Handler) DescribeVolumeAttachment(w http.ResponseWriter, r *http.Reques
 
 // DeleteVolumeAttachment handles DELETE /api/v1/volumeattachments/{name}.
 func (h *Handler) DeleteVolumeAttachment(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.volumeattachment.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
