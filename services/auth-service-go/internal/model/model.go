@@ -5,6 +5,22 @@ import (
 	"time"
 )
 
+// Role represents a roles row.
+type Role struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	IsSystem    bool      `json:"is_system"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// RoleWithPermissions is a Role with its associated permissions.
+type RoleWithPermissions struct {
+	Role
+	Permissions []string `json:"permissions"`
+}
+
 // User represents an auth_users row.
 type User struct {
 	ID           string    `json:"id"`
@@ -12,35 +28,53 @@ type User struct {
 	Email        string    `json:"email"`
 	HQ           *string   `json:"hq"`
 	Team         *string   `json:"team"`
-	Role         string    `json:"role"`
+	RoleID       int       `json:"role_id"`
+	RoleName     string    `json:"role_name"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// RoleResponse is the role object embedded in API responses.
+type RoleResponse struct {
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Permissions []string `json:"permissions"`
+}
+
 // UserResponse is the public API representation (no password hash).
 type UserResponse struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	HQ        *string   `json:"hq"`
-	Team      *string   `json:"team"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	Email     string        `json:"email"`
+	HQ        *string       `json:"hq"`
+	Team      *string       `json:"team"`
+	Role      *RoleResponse `json:"role"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
 }
 
 func (u *User) ToResponse() UserResponse {
 	return UserResponse{
-		ID:        u.ID,
-		Name:      u.Name,
-		Email:     u.Email,
-		HQ:        u.HQ,
-		Team:      u.Team,
-		Role:      u.Role,
+		ID:    u.ID,
+		Name:  u.Name,
+		Email: u.Email,
+		HQ:    u.HQ,
+		Team:  u.Team,
+		Role: &RoleResponse{
+			ID:   u.RoleID,
+			Name: u.RoleName,
+		},
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
+}
+
+// ToResponseWithPermissions creates a UserResponse with permissions included.
+func (u *User) ToResponseWithPermissions(permissions []string) UserResponse {
+	resp := u.ToResponse()
+	resp.Role.Permissions = permissions
+	return resp
 }
 
 // AuditLog represents an auth_audit_logs row.
@@ -98,21 +132,35 @@ type ChangePasswordRequest struct {
 }
 
 type UpdateRoleRequest struct {
-	Role string `json:"role"`
+	RoleID int `json:"role_id"`
 }
 
 type AdminCreateUserRequest struct {
 	Name     string  `json:"name"`
 	Email    string  `json:"email"`
 	Password string  `json:"password"`
-	Role     string  `json:"role"`
+	RoleID   int     `json:"role_id"`
 	HQ       *string `json:"hq,omitempty"`
 	Team     *string `json:"team,omitempty"`
 }
 
 type BulkUpdateRoleRequest struct {
 	UserIDs []string `json:"user_ids"`
-	Role    string   `json:"role"`
+	RoleID  int      `json:"role_id"`
+}
+
+// --- Role request DTOs ---
+
+type CreateRoleRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
+type UpdateRolePermissionsRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
 }
 
 type BulkCreateUserRequest struct {
