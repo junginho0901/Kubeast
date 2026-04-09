@@ -1157,13 +1157,29 @@ export interface ChatResponse {
 
 export type UserRole = 'admin' | 'read' | 'write' | 'pending'
 
+export interface AuthRoleInfo {
+  id: number
+  name: string
+  permissions: string[]
+}
+
+export interface RoleWithDetails {
+  id: number
+  name: string
+  description: string
+  is_system: boolean
+  permissions: string[]
+  created_at: string
+  updated_at: string
+}
+
 export interface Member {
   id: string
   name: string
   email?: string
   hq?: string
   team?: string
-  role: UserRole | string
+  role: AuthRoleInfo | null
   created_at: string
   updated_at: string
 }
@@ -1263,17 +1279,17 @@ export const api = {
     return data
   },
 
-  adminCreateUser: async (request: { name: string; email: string; password: string; role: UserRole; hq?: string; team?: string }): Promise<Member> => {
+  adminCreateUser: async (request: { name: string; email: string; password: string; role_id: number; hq?: string; team?: string }): Promise<Member> => {
     const { data } = await client.post('/auth/admin/users', request)
     return data
   },
 
-  adminBulkUpdateRole: async (userIds: string[], role: UserRole): Promise<Member[]> => {
-    const { data } = await client.patch('/auth/admin/users/bulk-role', { user_ids: userIds, role })
+  adminBulkUpdateRole: async (userIds: string[], roleId: number): Promise<Member[]> => {
+    const { data } = await client.patch('/auth/admin/users/bulk-role', { user_ids: userIds, role_id: roleId })
     return data
   },
 
-  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role: string; hq?: string; team?: string }>): Promise<{ created: Member[]; errors: Array<{ email: string; message: string }> }> => {
+  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role_id: number; hq?: string; team?: string }>): Promise<{ created: Member[]; errors: Array<{ email: string; message: string }> }> => {
     const { data } = await client.post('/auth/admin/users/bulk', { users })
     return data
   },
@@ -1284,8 +1300,8 @@ export const api = {
     return data as Member[]
   },
 
-  adminUpdateUserRole: async (userId: string, role: UserRole): Promise<Member> => {
-    const { data } = await client.patch(`/auth/admin/users/${userId}`, { role })
+  adminUpdateUserRole: async (userId: string, roleId: number): Promise<Member> => {
+    const { data } = await client.patch(`/auth/admin/users/${userId}`, { role_id: roleId })
     return data
   },
 
@@ -1296,6 +1312,31 @@ export const api = {
 
   adminDeleteUser: async (userId: string): Promise<void> => {
     await client.delete(`/auth/admin/users/${userId}`)
+  },
+
+  // Roles
+  listRoles: async (): Promise<RoleWithDetails[]> => {
+    const { data } = await client.get('/auth/roles')
+    return Array.isArray(data) ? data : []
+  },
+
+  listPermissions: async (): Promise<Array<{ category: string; permissions: Array<{ key: string; description: string }> }>> => {
+    const { data } = await client.get('/auth/permissions')
+    return Array.isArray(data) ? data : []
+  },
+
+  adminCreateRole: async (request: { name: string; description: string; permissions: string[] }): Promise<RoleWithDetails> => {
+    const { data } = await client.post('/auth/admin/roles', request)
+    return data
+  },
+
+  adminUpdateRole: async (id: number, request: { name: string; description: string; permissions: string[] }): Promise<RoleWithDetails> => {
+    const { data } = await client.put(`/auth/admin/roles/${id}`, request)
+    return data
+  },
+
+  adminDeleteRole: async (id: number): Promise<void> => {
+    await client.delete(`/auth/admin/roles/${id}`)
   },
 
   // Cluster
