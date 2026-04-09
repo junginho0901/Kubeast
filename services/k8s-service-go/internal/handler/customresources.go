@@ -34,7 +34,7 @@ func (h *Handler) DescribeCRD(w http.ResponseWriter, r *http.Request) {
 
 // DeleteCRD handles DELETE /api/v1/crds/{name}.
 func (h *Handler) DeleteCRD(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireAdmin(r); err != nil {
+	if err := h.requirePermission(r, "resource.crd.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -92,7 +92,7 @@ func (h *Handler) DescribeCustomResourceInstance(w http.ResponseWriter, r *http.
 
 // DeleteCustomResourceInstance handles DELETE /api/v1/custom-resources/{group}/{version}/{plural}/{namespace}/{name}.
 func (h *Handler) DeleteCustomResourceInstance(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.customresource.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

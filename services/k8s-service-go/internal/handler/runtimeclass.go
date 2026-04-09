@@ -45,7 +45,7 @@ func (h *Handler) GetRuntimeClassYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRuntimeClass handles DELETE /api/v1/runtimeclasses/{name}.
 func (h *Handler) DeleteRuntimeClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireAdmin(r); err != nil {
+	if err := h.requirePermission(r, "resource.runtimeclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

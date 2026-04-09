@@ -158,7 +158,7 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 
 // ApplyResourceYAML handles POST /api/v1/resources/yaml/apply.
 func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.yaml.apply"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -178,9 +178,9 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 		body.Name = body.ResourceName
 	}
 
-	// Node YAML apply requires admin
+	// Node YAML apply requires node.edit permission
 	if strings.EqualFold(body.ResourceType, "nodes") || strings.EqualFold(body.ResourceType, "node") {
-		if err := h.requireAdmin(r); err != nil {
+		if err := h.requirePermission(r, "resource.node.edit"); err != nil {
 			h.handleError(w, err)
 			return
 		}
@@ -197,7 +197,7 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 
 // CreateResourcesFromYAML handles POST /api/v1/resources/yaml/create.
 func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.yaml.apply"); err != nil {
 		h.handleError(w, err)
 		return
 	}

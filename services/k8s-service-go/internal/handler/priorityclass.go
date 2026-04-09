@@ -45,7 +45,7 @@ func (h *Handler) GetPriorityClassYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeletePriorityClass handles DELETE /api/v1/priorityclasses/{name}.
 func (h *Handler) DeletePriorityClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireAdmin(r); err != nil {
+	if err := h.requirePermission(r, "resource.priorityclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

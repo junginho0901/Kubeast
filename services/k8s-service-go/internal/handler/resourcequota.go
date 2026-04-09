@@ -59,7 +59,7 @@ func (h *Handler) GetResourceQuotaYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteResourceQuota handles DELETE /api/v1/namespaces/{namespace}/resourcequotas/{name}.
 func (h *Handler) DeleteResourceQuota(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.resourcequota.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

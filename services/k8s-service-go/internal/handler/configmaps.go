@@ -58,7 +58,7 @@ func (h *Handler) DescribeConfigMap(w http.ResponseWriter, r *http.Request) {
 
 // DeleteConfigMap handles DELETE /api/v1/namespaces/{namespace}/configmaps/{name}.
 func (h *Handler) DeleteConfigMap(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.configmap.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -100,7 +100,7 @@ func (h *Handler) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	canReveal := h.requireWrite(r) == nil
+	canReveal := h.requirePermission(r, "resource.secret.reveal") == nil
 	data, err := h.svc.DescribeSecret(ctx, namespace, name, canReveal)
 	if err != nil {
 		h.handleError(w, err)
@@ -114,7 +114,7 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	canReveal := h.requireWrite(r) == nil
+	canReveal := h.requirePermission(r, "resource.secret.reveal") == nil
 	data, err := h.svc.GetSecretYAML(ctx, namespace, name, canReveal)
 	if err != nil {
 		h.handleError(w, err)
@@ -125,7 +125,7 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSecret handles DELETE /api/v1/namespaces/{namespace}/secrets/{name}.
 func (h *Handler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.secret.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

@@ -71,7 +71,7 @@ func (h *Handler) DescribeGateway(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGateway handles DELETE /api/v1/namespaces/{namespace}/gateways/{name}.
 func (h *Handler) DeleteGateway(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.gateway.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -120,7 +120,7 @@ func (h *Handler) DescribeGatewayClass(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGatewayClass handles DELETE /api/v1/gatewayclasses/{name}.
 func (h *Handler) DeleteGatewayClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.gatewayclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -185,7 +185,7 @@ func (h *Handler) DescribeHTTPRoute(w http.ResponseWriter, r *http.Request) {
 
 // DeleteHTTPRoute handles DELETE /api/v1/namespaces/{namespace}/httproutes/{name}.
 func (h *Handler) DeleteHTTPRoute(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.httproute.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -251,7 +251,7 @@ func (h *Handler) DescribeGRPCRoute(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGRPCRoute handles DELETE /api/v1/namespaces/{namespace}/grpcroutes/{name}.
 func (h *Handler) DeleteGRPCRoute(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.grpcroute.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -317,7 +317,7 @@ func (h *Handler) DescribeReferenceGrant(w http.ResponseWriter, r *http.Request)
 
 // DeleteReferenceGrant handles DELETE /api/v1/namespaces/{namespace}/referencegrants/{name}.
 func (h *Handler) DeleteReferenceGrant(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.referencegrant.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -383,7 +383,7 @@ func (h *Handler) DescribeBackendTLSPolicy(w http.ResponseWriter, r *http.Reques
 
 // DeleteBackendTLSPolicy handles DELETE /api/v1/namespaces/{namespace}/backendtlspolicies/{name}.
 func (h *Handler) DeleteBackendTLSPolicy(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.backendtlspolicy.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -449,7 +449,7 @@ func (h *Handler) DescribeBackendTrafficPolicy(w http.ResponseWriter, r *http.Re
 
 // DeleteBackendTrafficPolicy handles DELETE /api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}.
 func (h *Handler) DeleteBackendTrafficPolicy(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.backendtrafficpolicy.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

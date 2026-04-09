@@ -59,7 +59,7 @@ func (h *Handler) GetLimitRangeYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteLimitRange handles DELETE /api/v1/namespaces/{namespace}/limitranges/{name}.
 func (h *Handler) DeleteLimitRange(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.limitrange.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

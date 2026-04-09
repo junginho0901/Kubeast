@@ -59,7 +59,7 @@ func (h *Handler) GetHPAYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteHPA handles DELETE /api/v1/namespaces/{namespace}/hpas/{name}.
 func (h *Handler) DeleteHPA(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.hpa.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -125,7 +125,7 @@ func (h *Handler) GetPDBYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeletePDB handles DELETE /api/v1/namespaces/{namespace}/pdbs/{name}.
 func (h *Handler) DeletePDB(w http.ResponseWriter, r *http.Request) {
-	if err := h.requireWrite(r); err != nil {
+	if err := h.requirePermission(r, "resource.pdb.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
