@@ -1,6 +1,6 @@
 import os
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 import jwt
 from fastapi import Header, HTTPException
@@ -17,6 +17,15 @@ _jwk_client = jwt.PyJWKClient(AUTH_JWKS_URL)
 class TokenPayload:
     user_id: str
     role: str
+    permissions: tuple = ()  # frozen dataclass needs immutable type
+
+    def has_permission(self, perm: str) -> bool:
+        for p in self.permissions:
+            if p == "*" or p == perm:
+                return True
+            if p.endswith(".*") and perm.startswith(p[:-1]):
+                return True
+        return False
 
 
 def decode_access_token(token: str) -> TokenPayload:
@@ -33,7 +42,9 @@ def decode_access_token(token: str) -> TokenPayload:
         role = str(payload.get("role") or "").strip().lower()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return TokenPayload(user_id=user_id, role=role or "read")
+        raw_perms = payload.get("permissions") or []
+        permissions = tuple(str(p) for p in raw_perms if isinstance(p, str))
+        return TokenPayload(user_id=user_id, role=role or "read", permissions=permissions)
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except HTTPException:

@@ -103,7 +103,7 @@ class AIService:
         heavy LLM client.  This is called when the singleton AIService
         is reused across different users.
         """
-        new_role = self._resolve_user_role(authorization)
+        new_role = self._resolve_user_role(authorization)  # also sets self._token_payload
         if new_role != self.user_role or True:
             self.user_role = new_role
             self.k8s_service = K8sServiceClient(authorization=authorization)
@@ -117,6 +117,7 @@ class AIService:
             parts = authorization.split(" ", 1)
             token = parts[1].strip() if len(parts) == 2 else authorization.strip()
             payload = decode_access_token(token)
+            self._token_payload = payload
             role = (payload.role or "").strip().lower()
             if role in {"admin", "read", "write"}:
                 return role
@@ -124,11 +125,15 @@ class AIService:
             pass
         return "read"
 
+    @property
+    def token(self):
+        return getattr(self, "_token_payload", None)
+
     def _resolve_tool_server_url(self, role: str) -> Optional[str]:
-        role_key = (role or "").strip().lower()
-        if role_key == "admin":
+        # Permission-based: check if user has write/admin-level permissions
+        if self.token and self.token.has_permission("*"):
             return os.getenv("TOOL_SERVER_URL_ADMIN")
-        if role_key == "write":
+        if self.token and self.token.has_permission("ai.tool.*"):
             return os.getenv("TOOL_SERVER_URL_WRITE")
         return os.getenv("TOOL_SERVER_URL_READ")
 
@@ -136,12 +141,19 @@ class AIService:
         return await self.tool_server.call_tool(function_name, function_args)
 
     def _role_allows_write(self) -> bool:
+        if self.token:
+            return self.token.has_permission("resource.*.create")
         return self.user_role in {"write", "admin"}
 
     def _role_allows_admin(self) -> bool:
+        if self.token:
+            return self.token.has_permission("*")
         return self.user_role == "admin"
 
     def _is_tool_allowed(self, function_name: str) -> bool:
+        if self.token:
+            return self.token.has_permission(f"ai.tool.{function_name}")
+        # Fallback to legacy role-based checks
         write_tools = {
             "k8s_apply_manifest",
             "k8s_create_resource",
@@ -160,9 +172,9 @@ class AIService:
         }
 
         if function_name in admin_only_tools:
-            return self._role_allows_admin()
+            return self.user_role == "admin"
         if function_name in write_tools:
-            return self._role_allows_write()
+            return self.user_role in {"write", "admin"}
         return True
 
     def _filter_tools_by_role(self, tools: List[Dict]) -> List[Dict]:

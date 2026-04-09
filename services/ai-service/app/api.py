@@ -10,6 +10,10 @@ router = APIRouter()
 
 
 def _require_admin(payload):
+    if hasattr(payload, "has_permission") and payload.permissions:
+        if not payload.has_permission("admin.ai_models.*"):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        return
     role = (getattr(payload, "role", "") or "").lower()
     if role != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
