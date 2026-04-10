@@ -135,6 +135,15 @@ type UpdateRoleRequest struct {
 	RoleID int `json:"role_id"`
 }
 
+// AdminUpdateUserRequest is the payload for PATCH /auth/admin/users/{user_id}.
+// All fields are optional; only the provided ones are updated.
+type AdminUpdateUserRequest struct {
+	Name   *string `json:"name,omitempty"`
+	HQ     *string `json:"hq,omitempty"`
+	Team   *string `json:"team,omitempty"`
+	RoleID *int    `json:"role_id,omitempty"`
+}
+
 type AdminCreateUserRequest struct {
 	Name     string  `json:"name"`
 	Email    string  `json:"email"`
