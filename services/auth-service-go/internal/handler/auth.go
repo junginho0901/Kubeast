@@ -520,16 +520,9 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	userID := chi.URLParam(r, "user_id")
 
-	var req model.UpdateRoleRequest
+	var req model.AdminUpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	// Validate role_id
-	targetRole, err := h.repo.GetRoleByID(r.Context(), req.RoleID)
-	if err != nil || targetRole == nil {
-		response.Error(w, http.StatusBadRequest, "Invalid role_id")
 		return
 	}
 
@@ -539,21 +532,105 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate name
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		if trimmed == "" {
+			response.Error(w, http.StatusBadRequest, "Name cannot be empty")
+			return
+		}
+		req.Name = &trimmed
+	}
+
+	// Validate HQ
+	if req.HQ != nil {
+		trimmed := strings.TrimSpace(*req.HQ)
+		if trimmed != "" {
+			if ok, _ := h.repo.OrganizationExists(r.Context(), "hq", trimmed); !ok {
+				response.Error(w, http.StatusBadRequest, "Invalid HQ value")
+				return
+			}
+		}
+		req.HQ = &trimmed
+	}
+
+	// Validate Team
+	if req.Team != nil {
+		trimmed := strings.TrimSpace(*req.Team)
+		if trimmed != "" {
+			if ok, _ := h.repo.OrganizationExists(r.Context(), "team", trimmed); !ok {
+				response.Error(w, http.StatusBadRequest, "Invalid Team value")
+				return
+			}
+		}
+		req.Team = &trimmed
+	}
+
+	// Validate role_id (if provided)
+	var newRoleName string
 	oldRoleName := target.RoleName
-	if err := h.repo.UpdateUserRole(r.Context(), userID, req.RoleID); err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
-		return
+	if req.RoleID != nil {
+		targetRole, err := h.repo.GetRoleByID(r.Context(), *req.RoleID)
+		if err != nil || targetRole == nil {
+			response.Error(w, http.StatusBadRequest, "Invalid role_id")
+			return
+		}
+		newRoleName = targetRole.Name
+	}
+
+	// Apply profile updates (name/hq/team)
+	if req.Name != nil || req.HQ != nil || req.Team != nil {
+		if err := h.repo.UpdateUserProfile(r.Context(), userID, req.Name, req.HQ, req.Team); err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	// Apply role update
+	if req.RoleID != nil {
+		if err := h.repo.UpdateUserRole(r.Context(), userID, *req.RoleID); err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	// Audit
-	before := jsonRaw(map[string]string{"role": oldRoleName})
-	after := jsonRaw(map[string]string{"role": targetRole.Name})
+	beforeMap := map[string]interface{}{
+		"name": target.Name,
+		"hq":   derefStr(target.HQ),
+		"team": derefStr(target.Team),
+		"role": oldRoleName,
+	}
+	afterMap := map[string]interface{}{
+		"name": target.Name,
+		"hq":   derefStr(target.HQ),
+		"team": derefStr(target.Team),
+		"role": oldRoleName,
+	}
+	if req.Name != nil {
+		afterMap["name"] = *req.Name
+	}
+	if req.HQ != nil {
+		afterMap["hq"] = *req.HQ
+	}
+	if req.Team != nil {
+		afterMap["team"] = *req.Team
+	}
+	if req.RoleID != nil {
+		afterMap["role"] = newRoleName
+	}
+	before := jsonRaw(beforeMap)
+	after := jsonRaw(afterMap)
 	actor, _ := h.repo.GetUserByID(r.Context(), payload.UserID)
 	var actorEmail *string
 	if actor != nil {
 		actorEmail = &actor.Email
 	}
-	h.writeAuditLog(r, "user.role.update", &payload.UserID, actorEmail, &userID, &target.Email, before, after)
+	action := "user.update"
+	if req.RoleID != nil && req.Name == nil && req.HQ == nil && req.Team == nil {
+		action = "user.role.update"
+	}
+	h.writeAuditLog(r, action, &payload.UserID, actorEmail, &userID, &target.Email, before, after)
 
 	updated, _ := h.repo.GetUserByID(r.Context(), userID)
 	if updated == nil {
