@@ -2659,5 +2659,116 @@
       "userHq": "본부",
       "userTeam": "팀"
     }
+  },
+  "gpuDashboardPage": {
+    "title": "GPU 대시보드",
+    "subtitle": "클러스터 전체 GPU 리소스 개요",
+    "empty": "이 클러스터에서 GPU 리소스가 감지되지 않았습니다.",
+    "error": "GPU 데이터를 불러오지 못했습니다. 클러스터에 일시적으로 접속할 수 없을 수 있습니다.",
+    "retry": "다시 시도",
+    "viewAll": "전체 보기",
+    "summary": {
+      "capacity": "총 용량",
+      "allocatable": "할당 가능",
+      "used": "사용 중",
+      "allocationRate": "할당률"
+    },
+    "status": {
+      "ready": "정상",
+      "pluginHealthy": "디바이스 플러그인 정상",
+      "pluginUnhealthy": "디바이스 플러그인 비정상",
+      "pluginDetail": "플러그인",
+      "migEnabled": "MIG 사용",
+      "migDisabled": "MIG 미사용",
+      "timeSlicingEnabled": "Time-Slicing 사용",
+      "timeSlicingDisabled": "Time-Slicing 미사용"
+    },
+    "realtime": {
+      "title": "실시간 GPU 메트릭",
+      "avgUtil": "평균 GPU 사용률",
+      "avgMemUtil": "평균 메모리 사용률",
+      "memUsed": "메모리 사용량",
+      "gpuCount": "물리 GPU"
+    },
+    "nodeAllocation": {
+      "title": "노드별 GPU 할당",
+      "ready": "정상",
+      "notReady": "비정상",
+      "empty": "사용 가능한 GPU 노드가 없습니다."
+    },
+    "modelDist": {
+      "title": "GPU 모델",
+      "empty": "감지된 GPU 모델이 없습니다."
+    },
+    "podStatus": {
+      "title": "Pod 상태",
+      "empty": "실행 중인 GPU Pod가 없습니다."
+    },
+    "recentPods": {
+      "title": "최근 GPU Pod",
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "node": "노드",
+      "gpus": "GPU",
+      "status": "상태",
+      "age": "Age"
+    }
+  },
+  "gpuNodes": {
+    "title": "GPU 노드",
+    "subtitle": "GPU 노드 상태, 용량 및 모델 정보입니다.",
+    "metrics": "메트릭",
+    "refresh": "새로고침",
+    "searchPlaceholder": "노드 이름, GPU 모델, 드라이버 버전으로 검색...",
+    "noResults": "GPU 노드를 찾을 수 없습니다.",
+    "modelDistribution": "GPU 모델 분포",
+    "realtimeMetrics": "실시간 GPU 사용률",
+    "capacity": "용량",
+    "allocatable": "할당 가능",
+    "stats": {
+      "total": "전체 노드",
+      "ready": "정상",
+      "notReady": "비정상",
+      "capacity": "GPU 용량",
+      "allocatable": "할당 가능",
+      "used": "사용 중"
+    },
+    "table": {
+      "name": "이름",
+      "gpuModel": "GPU 모델",
+      "gpuMemory": "GPU 메모리",
+      "capacity": "용량",
+      "allocatable": "할당 가능",
+      "status": "상태",
+      "migStrategy": "MIG 전략"
+    }
+  },
+  "gpuPods": {
+    "title": "GPU Pod",
+    "subtitle": "클러스터에서 GPU 리소스를 사용하는 Pod입니다.",
+    "metrics": "메트릭",
+    "refresh": "새로고침",
+    "searchPlaceholder": "Pod 이름, 네임스페이스 또는 노드로 검색...",
+    "noResults": "GPU Pod를 찾을 수 없습니다.",
+    "nodeUsage": "노드별 GPU 사용량",
+    "statusDistribution": "상태 분포",
+    "stats": {
+      "total": "전체 Pod",
+      "running": "실행 중",
+      "pending": "대기 중",
+      "failed": "실패",
+      "namespaces": "네임스페이스",
+      "gpuRequested": "요청 GPU"
+    },
+    "table": {
+      "namespace": "네임스페이스",
+      "name": "이름",
+      "node": "노드",
+      "gpus": "GPU",
+      "status": "상태",
+      "age": "Age",
+      "gpuUtil": "GPU 사용률",
+      "memUtil": "메모리 사용률"
+    }
   }
 }
