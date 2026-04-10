@@ -2634,6 +2634,30 @@
     "addError": "추가에 실패했습니다. 이미 존재할 수 있습니다.",
     "empty": "등록된 항목이 없습니다.",
     "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
-    "deleteTitle": "삭제"
+    "deleteTitle": "삭제",
+    "viewMembers": "소속 사용자 보기",
+    "hqMembers": "본부 소속 사용자",
+    "teamMembers": "팀 소속 사용자",
+    "noMembers": "소속된 사용자가 없습니다.",
+    "close": "닫기",
+    "col": {
+      "name": "이름",
+      "email": "이메일",
+      "role": "Role",
+      "hq": "본부",
+      "team": "팀"
+    }
+  },
+  "adminRoles": {
+    "viewUsers": "이 역할의 사용자 보기",
+    "usersWithRole": "이 역할을 가진 사용자",
+    "noUsers": "이 역할이 할당된 사용자가 없습니다.",
+    "closeUsers": "닫기",
+    "col": {
+      "userName": "이름",
+      "userEmail": "이메일",
+      "userHq": "본부",
+      "userTeam": "팀"
+    }
   }
 }
