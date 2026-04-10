@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, RoleWithDetails } from '@/services/api'
-import { CheckCircle, ChevronDown, Clock, Download, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Download, Pencil, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearAccessToken } from '@/services/auth'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useTranslation } from 'react-i18next'
+import { usePermission } from '@/hooks/usePermission'
 
 export default function AdminUsers() {
   const navigate = useNavigate()
@@ -30,6 +31,22 @@ export default function AdminUsers() {
   const [bulkUploadModalOpen, setBulkUploadModalOpen] = useState(false)
   const [bulkUploadResult, setBulkUploadResult] = useState<{ created: Member[]; errors: Array<{ email: string; message: string }> } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Sorting
+  type SortKey = 'name' | 'email' | 'hq' | 'team' | 'role' | null
+  type SortDir = 'asc' | 'desc'
+  const [sortKey, setSortKey] = useState<SortKey>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // User detail modal
+  const [detailUserId, setDetailUserId] = useState<string | null>(null)
+  const [detailEditing, setDetailEditing] = useState(false)
+  const [detailDraft, setDetailDraft] = useState<{ name: string; hq: string; team: string; role_id: number }>({
+    name: '', hq: '', team: '', role_id: 0,
+  })
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const { has: hasPerm } = usePermission()
+  const canEditUsers = hasPerm('admin.users.update')
 
   const { data: hqOptions = [] } = useQuery({
     queryKey: ['organizations', 'hq'],
@@ -132,6 +149,47 @@ export default function AdminUsers() {
     },
   })
 
+  const updateUserMutation = useMutation({
+    mutationFn: ({ userId, payload }: { userId: string; payload: { name?: string; hq?: string; team?: string; role_id?: number } }) =>
+      api.adminUpdateUser(userId, payload),
+    onSuccess: (_data, vars) => {
+      const newRoleName = vars.payload.role_id != null
+        ? roles.find((r) => r.id === vars.payload.role_id)?.name
+        : undefined
+      if (me?.id && vars.userId === me.id && newRoleName && newRoleName !== 'admin') {
+        setReauthModalOpen(true)
+        setDetailUserId(null)
+        setDetailEditing(false)
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['me'] })
+      setDetailEditing(false)
+      setDetailError(null)
+    },
+    onError: (err: any) => {
+      setDetailError(err?.response?.data?.error || err?.message || 'Failed to update user')
+    },
+  })
+
+  const openDetail = (u: Member) => {
+    setDetailUserId(u.id)
+    setDetailEditing(false)
+    setDetailError(null)
+    setDetailDraft({
+      name: u.name,
+      hq: u.hq ?? '',
+      team: u.team ?? '',
+      role_id: u.role?.id ?? 0,
+    })
+  }
+
+  const closeDetail = () => {
+    setDetailUserId(null)
+    setDetailEditing(false)
+    setDetailError(null)
+  }
+
   useEffect(() => {
     roleDropdownRef.current = null
   }, [openRoleDropdownUserId])
@@ -158,6 +216,51 @@ export default function AdminUsers() {
   const rows: Member[] = Array.isArray(users) ? users : []
   const isBlocked = reauthModalOpen
   const pendingRows = rows.filter((u) => u.role?.name === 'pending')
+
+  const handleSort = (key: NonNullable<SortKey>) => {
+    if (sortKey !== key) {
+      setSortKey(key)
+      setSortDir('asc')
+      return
+    }
+    if (sortDir === 'asc') {
+      setSortDir('desc')
+      return
+    }
+    setSortKey(null)
+  }
+
+  const renderSortIcon = (key: NonNullable<SortKey>) => {
+    if (sortKey !== key) return null
+    return sortDir === 'asc' ? (
+      <ChevronUp className="inline w-3.5 h-3.5 text-slate-300 ml-1" />
+    ) : (
+      <ChevronDown className="inline w-3.5 h-3.5 text-slate-300 ml-1" />
+    )
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows
+    const list = [...rows]
+    const getValue = (u: Member): string => {
+      switch (sortKey) {
+        case 'name': return (u.name ?? '').toLowerCase()
+        case 'email': return (u.email ?? '').toLowerCase()
+        case 'hq': return (u.hq ?? '').toLowerCase()
+        case 'team': return (u.team ?? '').toLowerCase()
+        case 'role': return (u.role?.name ?? '').toLowerCase()
+        default: return ''
+      }
+    }
+    list.sort((a, b) => {
+      const av = getValue(a)
+      const bv = getValue(b)
+      if (av === bv) return 0
+      const cmp = av < bv ? -1 : 1
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [rows, sortKey, sortDir])
 
   const downloadCsvTemplate = () => {
     const bom = '\uFEFF'
@@ -281,15 +384,27 @@ export default function AdminUsers() {
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr className="text-left text-slate-300">
-              <th className="px-4 py-3">{tr('adminUsers.table.name', 'Name')}</th>
-              <th className="px-4 py-3">{tr('adminUsers.table.email', 'Email')}</th>
-              <th className="px-4 py-3">{tr('adminUsers.table.role', 'Role')}</th>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('name')}>
+                {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('email')}>
+                {tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('hq')}>
+                {tr('adminUsers.table.hq', 'HQ')}{renderSortIcon('hq')}
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('team')}>
+                {tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}
+              </th>
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('role')}>
+                {tr('adminUsers.table.role', 'Role')}{renderSortIcon('role')}
+              </th>
               <th className="px-4 py-3">{tr('adminUsers.table.password', 'Password')}</th>
               <th className="px-4 py-3">{tr('adminUsers.table.delete', 'Delete')}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((u) => {
+            {sortedRows.map((u) => {
               const isUpdating = updateRoleMutation.isPending && updateRoleMutation.variables?.userId === u.id
               const isResetting = resetPasswordMutation.isPending && resetPasswordMutation.variables?.userId === u.id
               const isDeleting = deleteUserMutation.isPending && deleteUserMutation.variables?.userId === u.id
@@ -305,7 +420,14 @@ export default function AdminUsers() {
                   className={`border-t border-slate-700 text-slate-200 ${isPending ? 'bg-amber-950/10' : ''}`}
                 >
                   <td className="px-4 py-3">
-                    {u.name}
+                    <button
+                      type="button"
+                      onClick={() => openDetail(u)}
+                      className="text-left text-slate-100 hover:text-primary-300 hover:underline focus:outline-none focus:ring-2 focus:ring-primary-600 rounded"
+                      title={tr('adminUsers.viewDetail', 'View details')}
+                    >
+                      {u.name}
+                    </button>
                     {isPending && (
                       <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-500/20">
                         {tr('adminUsers.pendingBadge', 'Pending')}
@@ -313,6 +435,8 @@ export default function AdminUsers() {
                     )}
                   </td>
                   <td className="px-4 py-3">{u.email ?? '-'}</td>
+                  <td className="px-4 py-3 text-slate-400">{u.hq || '-'}</td>
+                  <td className="px-4 py-3 text-slate-400">{u.team || '-'}</td>
                   <td className="px-4 py-3">
                     <div
                       className="relative inline-block"
@@ -422,9 +546,9 @@ export default function AdminUsers() {
                 </tr>
               )
             })}
-            {rows.length === 0 && (
+            {sortedRows.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-slate-300" colSpan={5}>
+                <td className="px-4 py-4 text-slate-300" colSpan={7}>
                   {tr('adminUsers.empty', 'No users found.')}
                 </td>
               </tr>
@@ -432,6 +556,222 @@ export default function AdminUsers() {
           </tbody>
         </table>
       </div>
+
+      {/* User detail modal */}
+      {detailUserId && (() => {
+        const u = rows.find((x) => x.id === detailUserId)
+        if (!u) return null
+        const userRole = roles.find((r) => r.id === (detailEditing ? detailDraft.role_id : u.role?.id ?? 0))
+        const permissions = userRole?.permissions ?? []
+        return (
+          <ModalOverlay onClose={closeDetail}>
+            <div
+              className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[85vh] flex flex-col"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
+                    <span className="text-sm font-semibold text-primary-300">
+                      {u.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      {tr('adminUsers.detail.title', 'User details')}
+                    </h2>
+                    <p className="text-sm text-slate-400">{u.email ?? '-'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canEditUsers && !detailEditing && (
+                    <button
+                      type="button"
+                      onClick={() => { setDetailEditing(true); setDetailError(null) }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      {tr('adminUsers.detail.edit', 'Edit')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeDetail}
+                    className="rounded p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">
+                      {tr('adminUsers.form.name', 'Name')}
+                    </label>
+                    {detailEditing ? (
+                      <input
+                        value={detailDraft.name}
+                        onChange={(e) => setDetailDraft((p) => ({ ...p, name: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      />
+                    ) : (
+                      <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.name}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">
+                      {tr('adminUsers.form.email', 'Email')}
+                    </label>
+                    <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-300">{u.email ?? '-'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">
+                      {tr('adminUsers.form.hq', 'HQ')}
+                    </label>
+                    {detailEditing ? (
+                      <select
+                        value={detailDraft.hq}
+                        onChange={(e) => setDetailDraft((p) => ({ ...p, hq: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        <option value="">{tr('adminUsers.form.selectHq', 'Select HQ')}</option>
+                        {hqOptions.map((o) => (
+                          <option key={o.id} value={o.name}>{o.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.hq || '-'}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">
+                      {tr('adminUsers.form.team', 'Team')}
+                    </label>
+                    {detailEditing ? (
+                      <select
+                        value={detailDraft.team}
+                        onChange={(e) => setDetailDraft((p) => ({ ...p, team: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        <option value="">{tr('adminUsers.form.selectTeam', 'Select Team')}</option>
+                        {teamOptions.map((o) => (
+                          <option key={o.id} value={o.name}>{o.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.team || '-'}</div>
+                    )}
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-slate-400 mb-1">
+                      {tr('adminUsers.form.role', 'Role')}
+                    </label>
+                    {detailEditing ? (
+                      <select
+                        value={detailDraft.role_id}
+                        onChange={(e) => setDetailDraft((p) => ({ ...p, role_id: Number(e.target.value) }))}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      >
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">
+                        {u.role?.name ?? '-'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+                    {tr('adminUsers.detail.permissions', 'Permissions')}
+                  </h3>
+                  <div className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3">
+                    {permissions.length === 0 ? (
+                      <p className="text-xs text-slate-500">{tr('adminUsers.detail.noPerms', 'No permissions assigned')}</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {permissions.map((p) => (
+                          <span
+                            key={p}
+                            className="inline-block rounded bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-slate-300 border border-slate-700"
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {detailError && (
+                <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+                  {detailError}
+                </div>
+              )}
+
+              <div className="mt-5 flex items-center justify-end gap-3">
+                {detailEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailEditing(false)
+                        setDetailError(null)
+                        setDetailDraft({
+                          name: u.name,
+                          hq: u.hq ?? '',
+                          team: u.team ?? '',
+                          role_id: u.role?.id ?? 0,
+                        })
+                      }}
+                      className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                    >
+                      {tr('adminUsers.form.cancel', 'Cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updateUserMutation.isPending || !detailDraft.name.trim()}
+                      onClick={() => {
+                        const payload: { name?: string; hq?: string; team?: string; role_id?: number } = {}
+                        if (detailDraft.name.trim() !== u.name) payload.name = detailDraft.name.trim()
+                        if (detailDraft.hq !== (u.hq ?? '')) payload.hq = detailDraft.hq
+                        if (detailDraft.team !== (u.team ?? '')) payload.team = detailDraft.team
+                        if (detailDraft.role_id !== (u.role?.id ?? 0)) payload.role_id = detailDraft.role_id
+                        if (Object.keys(payload).length === 0) {
+                          setDetailEditing(false)
+                          return
+                        }
+                        updateUserMutation.mutate({ userId: u.id, payload })
+                      }}
+                      className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+                    >
+                      {updateUserMutation.isPending
+                        ? tr('adminUsers.detail.saving', 'Saving...')
+                        : tr('adminUsers.detail.save', 'Save')}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={closeDetail}
+                    className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                  >
+                    {tr('adminUsers.detail.close', 'Close')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </ModalOverlay>
+        )
+      })()}
 
       {/* Pending approval modal */}
       {pendingModalOpen && (
