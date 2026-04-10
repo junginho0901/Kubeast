@@ -1931,6 +1931,8 @@
     "table": {
       "name": "이름",
       "email": "이메일",
+      "hq": "본부",
+      "team": "팀",
       "role": "Role",
       "password": "비밀번호",
       "delete": "삭제"
@@ -2002,6 +2004,16 @@
       "title": "권한이 변경되었습니다",
       "subtitle": "보안을 위해 다시 로그인해야 합니다. 확인을 누르면 로그인 화면으로 이동합니다.",
       "confirm": "확인"
+    },
+    "viewDetail": "상세 보기",
+    "detail": {
+      "title": "사용자 상세",
+      "edit": "편집",
+      "save": "저장",
+      "saving": "저장 중...",
+      "close": "닫기",
+      "permissions": "권한",
+      "noPerms": "할당된 권한이 없습니다."
     }
   },
   "account": {
