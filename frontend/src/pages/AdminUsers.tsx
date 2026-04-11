@@ -205,6 +205,31 @@ export default function AdminUsers() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [openRoleDropdownUserId])
 
+  const rows: Member[] = Array.isArray(users) ? users : []
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows
+    const list = [...rows]
+    const getValue = (u: Member): string => {
+      switch (sortKey) {
+        case 'name': return (u.name ?? '').toLowerCase()
+        case 'email': return (u.email ?? '').toLowerCase()
+        case 'hq': return (u.hq ?? '').toLowerCase()
+        case 'team': return (u.team ?? '').toLowerCase()
+        case 'role': return (u.role?.name ?? '').toLowerCase()
+        default: return ''
+      }
+    }
+    list.sort((a, b) => {
+      const av = getValue(a)
+      const bv = getValue(b)
+      if (av === bv) return 0
+      const cmp = av < bv ? -1 : 1
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [rows, sortKey, sortDir])
+
   if (isLoading) {
     return <div className="text-slate-300">{tr('adminUsers.loading', 'Loading...')}</div>
   }
@@ -213,7 +238,6 @@ export default function AdminUsers() {
     return <div className="text-slate-300">{tr('adminUsers.loadError', 'Failed to load users.')}</div>
   }
 
-  const rows: Member[] = Array.isArray(users) ? users : []
   const isBlocked = reauthModalOpen
   const pendingRows = rows.filter((u) => u.role?.name === 'pending')
 
@@ -238,29 +262,6 @@ export default function AdminUsers() {
       <ChevronDown className="inline w-3.5 h-3.5 text-slate-300 ml-1" />
     )
   }
-
-  const sortedRows = useMemo(() => {
-    if (!sortKey) return rows
-    const list = [...rows]
-    const getValue = (u: Member): string => {
-      switch (sortKey) {
-        case 'name': return (u.name ?? '').toLowerCase()
-        case 'email': return (u.email ?? '').toLowerCase()
-        case 'hq': return (u.hq ?? '').toLowerCase()
-        case 'team': return (u.team ?? '').toLowerCase()
-        case 'role': return (u.role?.name ?? '').toLowerCase()
-        default: return ''
-      }
-    }
-    list.sort((a, b) => {
-      const av = getValue(a)
-      const bv = getValue(b)
-      if (av === bv) return 0
-      const cmp = av < bv ? -1 : 1
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-    return list
-  }, [rows, sortKey, sortDir])
 
   const downloadCsvTemplate = () => {
     const bom = '\uFEFF'
