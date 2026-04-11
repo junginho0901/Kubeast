@@ -3254,7 +3254,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((node) => (
-                          <div key={node.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={node.name}
+                            onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-medium text-white">{node.name}</h3>
