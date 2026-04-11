@@ -159,6 +159,55 @@ helm uninstall kubest -n kubest
 
 ---
 
+## 설정 (values.yaml)
+
+자주 사용하는 설정 값:
+
+```yaml
+global:
+  imageTag: "v0.1.0"
+
+# 초기 관리자 계정
+admin:
+  email: admin@local
+  password: admin
+
+# AI 키 (Admin UI 에서 추가도 가능)
+ai:
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  geminiApiKey: ""
+  model: "gpt-4o-mini"
+
+# 내장 PostgreSQL 사용 (false 면 외부 DB 연결)
+postgresql:
+  enabled: true
+  user: kubest
+  password: kubest
+  database: kubest
+
+# 내장 Redis 사용
+redis:
+  enabled: true
+
+# Gateway 노출 방식
+gateway:
+  service:
+    type: NodePort        # NodePort | ClusterIP | LoadBalancer
+    nodePort: 30333
+
+# Ingress 사용 시
+ingress:
+  enabled: false
+  className: ""
+  host: kubest.example.com
+  tls: false
+```
+
+전체 옵션은 [helm/kubest/values.yaml](helm/kubest/values.yaml) 참고.
+
+---
+
 ## 📁 디렉토리 구조
 
 ```
