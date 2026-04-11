@@ -2025,7 +2025,12 @@ export default function Dashboard() {
             // 데이터가 있을 때: 데이터 표시 (백그라운드 갱신 중에도 이전 데이터 유지)
             <div className="space-y-3">
               {topResources.top_pods.map((pod, index) => (
-                <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                <button
+                  type="button"
+                  key={`${pod.namespace}-${pod.name}`}
+                  onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                  className="w-full text-left p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                >
                   <div className="flex items-center gap-3 mb-2">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-500/20">
                       <span className="text-primary-400 font-bold text-sm">#{index + 1}</span>
@@ -2047,7 +2052,7 @@ export default function Dashboard() {
                       <span className="text-blue-400 font-mono font-medium">{pod.memory}</span>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : topResources?.pod_error ? (
@@ -2131,7 +2136,12 @@ export default function Dashboard() {
                 const memoryPercent = parseFloat(node.memory_percent)
 
                 return (
-                  <div key={node.name} className="space-y-3">
+                  <button
+                    type="button"
+                    key={node.name}
+                    onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                    className="w-full text-left space-y-3 p-2 -m-2 rounded-lg hover:bg-slate-700/50 transition-colors cursor-pointer"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20">
                         <span className="text-cyan-400 font-bold text-sm">#{index + 1}</span>
@@ -2192,7 +2202,7 @@ export default function Dashboard() {
                         />
                       </div>
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -3058,7 +3068,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((ns) => (
-                          <div key={ns.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={ns.name}
+                            onClick={() => openDetail({ kind: 'Namespace', name: ns.name })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-medium text-white">{ns.name}</h3>
@@ -3093,7 +3107,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((pod) => (
-                          <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={`${pod.namespace}-${pod.name}`}
+                            onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 {pod.phase === 'Running' ? (
@@ -3134,7 +3152,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((svc) => (
-                          <div key={`${svc.namespace}-${svc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={`${svc.namespace}-${svc.name}`}
+                            onClick={() => openDetail({ kind: 'Service', name: svc.name, namespace: svc.namespace })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-medium text-white">{svc.name}</h3>
@@ -3162,7 +3184,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((deploy) => (
-                          <div key={`${deploy.namespace}-${deploy.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={`${deploy.namespace}-${deploy.name}`}
+                            onClick={() => openDetail({ kind: 'Deployment', name: deploy.name, namespace: deploy.namespace })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-medium text-white">{deploy.name}</h3>
@@ -3193,7 +3219,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((pvc) => (
-                          <div key={`${pvc.namespace}-${pvc.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={`${pvc.namespace}-${pvc.name}`}
+                            onClick={() => openDetail({ kind: 'PersistentVolumeClaim', name: pvc.name, namespace: pvc.namespace })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-medium text-white">{pvc.name}</h3>
@@ -3224,7 +3254,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((node) => (
-                          <div key={node.name} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={node.name}
+                            onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-medium text-white">{node.name}</h3>

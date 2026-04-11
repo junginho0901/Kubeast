@@ -1,282 +1,302 @@
-# 🚀 Kube Assistant - MSA 아키텍처
+# Kubest
 
-AI-powered Kubernetes cluster management assistant with Microservice Architecture. Natural language interface for K8s resource queries, log analysis, and cluster monitoring using OpenAI.
+> Kubernetes DevOps Assistant with AI Chat
 
-## 📊 아키텍처 개요
+Kubest는 자연어 기반 AI 어시스턴트와 풍부한 대시보드를 결합한 Kubernetes 운영 플랫폼입니다.
+멀티 클러스터 관리, GPU/DRA 모니터링, RBAC, Node Shell, 토폴로지 시각화 등 운영에 필요한 기능을
+하나의 UI에서 제공합니다.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    API Gateway (NGINX)                       │
-│                       Port: 8000                             │
-└─────────────────────────────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┬─────────────┐
-        ↓                   ↓                   ↓             ↓
-┌───────────────┐   ┌──────────────┐   ┌─────────────────┐  │
-│  AI Service   │   │ K8s Service  │   │ Session Service │  │
-│  Port: 8001   │   │  Port: 8002  │   │   Port: 8003    │  │
-│               │   │              │   │                 │  │
-│ - OpenAI      │   │ - Cluster    │   │ - Chat History  │  │
-│ - Chat Stream │   │ - Pods/Nodes │   │ - User Sessions │  │
-│ - Analysis    │   │ - Logs WS    │   │ - DB Management │  │
-│               │   │ - Topology   │   │                 │  │
-└───────┬───────┘   └──────┬───────┘   └────────┬────────┘  │
-        │                  │                     │           │
-        ↓                  ↓                     ↓           ↓
-┌───────────────┐   ┌──────────────┐   ┌─────────────────┐  │
-│   PostgreSQL  │←──┤   Redis      │   │   Frontend      │  │
-│   Port: 5432  │   │   Port: 6379 │   │   Port: 5173    │←─┘
-└───────────────┘   └──────────────┘   └─────────────────┘
-```
+---
 
-## 🎯 서비스 구성
+## 빠른 시작
 
-### 1. **AI Service** (Port 8001)
-- **역할**: OpenAI 통합 및 AI 기능 전담
-- **기능**:
-  - 세션 기반 AI 챗봇 (`/api/v1/ai/sessions/{id}/chat`)
-  - 로그 분석 (`/api/v1/ai/analyze-logs`)
-  - 트러블슈팅 (`/api/v1/ai/troubleshoot`)
-  - 리소스 설명 (`/api/v1/ai/explain-resource`)
-  - 최적화 제안 (`/api/v1/ai/suggest-optimization`)
-- **의존성**: PostgreSQL, Redis, K8s Service
+이미 동작 중인 Kubernetes 클러스터에 한 줄로 설치할 수 있습니다.
+모든 컴포넌트 이미지는 Docker Hub에 푸시되어 있으므로 별도 빌드가 필요 없습니다.
 
-### 2. **K8s Service** (Port 8002)
-- **역할**: Kubernetes 클러스터 관리 전담
-- **기능**:
-  - 클러스터 리소스 조회 (`/api/v1/cluster/*`)
-  - Pod/Deployment/Service 관리
-  - WebSocket 로그 스트리밍 (`/api/v1/ws/*`)
-  - 토폴로지 시각화 (`/api/v1/topology/*`)
-- **의존성**: Kubernetes API, kubeconfig
-
-### 3. **Session Service** (Port 8003)
-- **역할**: 채팅 세션 및 히스토리 관리
-- **기능**:
-  - 세션 CRUD (`/api/v1/sessions/*`)
-  - 메시지 히스토리 저장/조회
-  - Tool Context 저장 (Redis)
-- **의존성**: PostgreSQL
-
-### 4. **API Gateway** (Port 8000)
-- **역할**: 라우팅 및 로드 밸런싱
-- **기능**:
-  - 요청 라우팅
-  - CORS 처리
-  - SSE 및 WebSocket 프록시
-- **기술**: NGINX
-
-### 5. **Frontend** (Port 5173)
-- **역할**: React 기반 UI
-- **기술**: React + TypeScript + Tailwind CSS
-
-## 🚀 실행 방법
-
-### 1. 환경 변수 설정
-
-`.env` 파일 생성:
+### 옵션 1. 설치 스크립트 (가장 간단)
 
 ```bash
-# OpenAI
-OPENAI_API_KEY=your-api-key-here
-OPENAI_MODEL=gpt-4
-
-# PostgreSQL
-POSTGRES_USER=kubest
-POSTGRES_PASSWORD=your-password
-POSTGRES_DB=kubest
-
-# Kubernetes
-K8S_API_HOST=your-k8s-api-host
-K8S_API_IP=your-k8s-api-ip
+curl -sSL https://raw.githubusercontent.com/JeongInho/kube-assistant/main/install.sh | bash
 ```
 
-### 2. kubeconfig 파일 배치
-
-프로젝트 루트에 `kubeconfig.yaml` 파일을 배치하세요.
-
-### 3. 서비스 실행
+옵션 예시:
 
 ```bash
-# 모든 서비스 빌드 및 실행
-docker-compose up --build
+# NodePort 변경
+curl -sSL .../install.sh | bash -s -- --node-port 30080
 
-# 백그라운드 실행
-docker-compose up -d --build
+# LoadBalancer 사용 (클라우드 환경)
+curl -sSL .../install.sh | bash -s -- --load-balancer
 
-# 로그 확인
-docker-compose logs -f
-
-# 특정 서비스만 실행
-docker-compose up ai-service k8s-service
-
-# 서비스 중지
-docker-compose down
+# 네임스페이스 지정
+curl -sSL .../install.sh | bash -s -- --namespace my-ns
 ```
 
-### 4. 서비스 접속
-
-- **Frontend**: http://localhost:5173
-- **API Gateway**: http://localhost:8000
-- **AI Service**: http://localhost:8001
-- **K8s Service**: http://localhost:8002
-- **Session Service**: http://localhost:8003
-
-## 🔍 헬스 체크
-
-각 서비스의 상태 확인:
+### 옵션 2. Helm 직접 사용
 
 ```bash
-# API Gateway
-curl http://localhost:8000/health
+git clone https://github.com/JeongInho/kube-assistant.git
+cd kube-assistant
 
-# AI Service
-curl http://localhost:8001/health
-
-# K8s Service
-curl http://localhost:8002/health
-
-# Session Service
-curl http://localhost:8003/health
+helm install kubest ./helm/kubest \
+  --namespace kubest --create-namespace \
+  --set ai.openaiApiKey=$OPENAI_API_KEY
 ```
 
-## 📁 디렉토리 구조
+### 접속
+
+```bash
+kubectl -n kubest get pods
+kubectl -n kubest port-forward svc/gateway 8000:8000
+```
+
+브라우저에서 `http://localhost:8000/setup` 으로 접속한 뒤,
+
+- 기본 관리자 계정: `admin@local` / `admin`
+- 로그인 후 **Admin > AI Models** 에서 LLM 키를 등록하면 챗봇이 활성화됩니다.
+
+### 제거
+
+```bash
+helm uninstall kubest -n kubest
+```
+
+---
+
+## 주요 기능
+
+### AI Assistant
+- OpenAI · Anthropic · Gemini 다중 LLM 지원
+- 세션 기반 대화형 챗봇 (스트리밍)
+- 로그 분석 / 트러블슈팅 / 리소스 설명 / 최적화 제안
+- Tool calling 기반 K8s 리소스 자동 조회
+
+### Kubernetes 리소스 관리
+- **Workloads**: Pod, Deployment, StatefulSet, DaemonSet, Job, CronJob, ReplicaSet, HPA, VPA, PDB
+- **Network**: Service, Ingress, NetworkPolicy, EndpointSlice, Gateway API
+- **Storage**: PV, PVC, StorageClass, VolumeSnapshot
+- **Configuration**: ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass
+- **Security**: Role, ClusterRole, RoleBinding, ServiceAccount
+- **Custom Resources**: CRD 동적 탐색 및 편집
+
+### GPU & DRA (Dynamic Resource Allocation)
+- GPU 노드 / Pod / 사용률 대시보드
+- DeviceClass, ResourceClaim, ResourceClaimTemplate, ResourceSlice 관리
+- NVIDIA GPU 메트릭 시각화
+
+### 운영 도구
+- **Topology View**: 클러스터 리소스 관계 시각화 (React Flow)
+- **Dependency Graph**: 워크로드 간 의존성 그래프
+- **Node Shell**: 웹 기반 노드 터미널 (xterm.js)
+- **Advanced Search**: JSONPath · 표현식 기반 리소스 탐색
+- **Monitoring**: Prometheus 메트릭 차트, 이상 감지, 상관 분석
+- **Multi-Cluster**: 여러 클러스터 동시 관리
+
+### 인증 / 권한
+- JWT 기반 자체 인증 (auth-service)
+- 조직(Organization) / 팀(Team) / 사용자(User) 계층
+- 리소스 단위 RBAC (Custom Roles)
+- i18n: 한국어 · 영어
+
+---
+
+## 아키텍처
 
 ```
+                   ┌──────────────────────────┐
+                   │   Frontend (React + TS)  │
+                   └────────────┬─────────────┘
+                                │
+                   ┌────────────▼─────────────┐
+                   │   Gateway (NGINX, :8000) │
+                   └────────────┬─────────────┘
+        ┌───────────┬───────────┼───────────┬───────────┐
+        ▼           ▼           ▼           ▼           ▼
+   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌──────────┐
+   │  Auth   │ │   AI    │ │   K8s   │ │ Session │ │   Tool   │
+   │   Go    │ │ Python  │ │   Go    │ │   Go    │ │ Server   │
+   │  :8004  │ │  :8001  │ │  :8002  │ │  :8003  │ │   Go     │
+   └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬─────┘
+        │           │           │           │           │
+        └─────┬─────┴─────┬─────┴─────┬─────┘           │
+              ▼           ▼           ▼                  ▼
+        ┌──────────┐ ┌──────────┐ ┌──────────┐    ┌──────────┐
+        │ Postgres │ │  Redis   │ │   K8s    │    │  Model   │
+        │          │ │          │ │   API    │    │  Config  │
+        └──────────┘ └──────────┘ └──────────┘    │   CRD    │
+                                                   │Controller│
+                                                   └──────────┘
+```
+
+### 서비스 구성
+
+| 서비스 | 언어 | 포트 | 역할 |
+| --- | --- | --- | --- |
+| `gateway` | NGINX | 8000 | API 라우팅, CORS, SSE/WebSocket 프록시 |
+| `auth-service` | Go | 8004 | 사용자 인증, JWT 발급, JWKS, 조직/팀/RBAC |
+| `ai-service` | Python (FastAPI) | 8001 | LLM 통합, 챗봇, 로그 분석, Tool calling |
+| `k8s-service` | Go | 8002 | K8s 리소스 CRUD, WebSocket 로그/exec, 토폴로지 |
+| `session-service` | Go | 8003 | 채팅 세션 / 메시지 히스토리 |
+| `tool-server` | Go | - | AI Tool 호출 백엔드 |
+| `model-config-controller` | Go (controller-runtime) | - | `ModelConfig` CRD 컨트롤러 |
+| `frontend` | React + Vite + TS | 5173 | UI |
+| `postgres` | - | 5432 | 메인 DB |
+| `redis` | - | 6379 | 캐시 / 세션 컨텍스트 |
+
+### 컨테이너 이미지
+
+모든 이미지는 Docker Hub에 게시되어 있습니다.
+
+| 이미지 |
+| --- |
+| `jeonginho/kubest-frontend` |
+| `jeonginho/kubest-auth-service` |
+| `jeonginho/kubest-ai-service` |
+| `jeonginho/kubest-k8s-service` |
+| `jeonginho/kubest-session-service` |
+| `jeonginho/kubest-tool-server` |
+| `jeonginho/kubest-model-config-controller-go` |
+
+---
+
+## 설정 (values.yaml)
+
+자주 사용하는 설정 값:
+
+```yaml
+global:
+  imageTag: "v0.1.0"
+
+# 초기 관리자 계정
+admin:
+  email: admin@local
+  password: admin
+
+# AI 키 (Admin UI 에서 추가도 가능)
+ai:
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  geminiApiKey: ""
+  model: "gpt-4o-mini"
+
+# 내장 PostgreSQL 사용 (false 면 외부 DB 연결)
+postgresql:
+  enabled: true
+  user: kubest
+  password: kubest
+  database: kubest
+
+# 내장 Redis 사용
+redis:
+  enabled: true
+
+# Gateway 노출 방식
+gateway:
+  service:
+    type: NodePort        # NodePort | ClusterIP | LoadBalancer
+    nodePort: 30333
+
+# Ingress 사용 시
+ingress:
+  enabled: false
+  className: ""
+  host: kubest.example.com
+  tls: false
+```
+
+전체 옵션은 [helm/kubest/values.yaml](helm/kubest/values.yaml) 참고.
+
+---
+
+## 디렉토리 구조
+
+```
+.
 ├── services/
-│   ├── ai-service/           # AI 서비스
-│   │   ├── app/
-│   │   │   ├── api.py
-│   │   │   ├── config.py
-│   │   │   ├── database.py
-│   │   │   ├── ai.py
-│   │   │   └── services/
-│   │   │       ├── ai_service.py
-│   │   │       └── k8s_client.py
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── main.py
-│   ├── k8s-service/          # K8s 서비스
-│   │   ├── app/
-│   │   │   ├── api.py
-│   │   │   ├── config.py
-│   │   │   ├── cluster.py
-│   │   │   └── services/
-│   │   │       ├── k8s_service.py
-│   │   │       └── topology_service.py
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── main.py
-│   ├── session-service/      # Session 서비스
-│   │   ├── app/
-│   │   │   ├── api.py
-│   │   │   ├── config.py
-│   │   │   └── database.py
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── main.py
-│   └── gateway/              # API Gateway
-│       └── nginx.conf
-├── frontend/                 # 프론트엔드
-├── docker-compose.yml        # Docker Compose 설정
-└── README.md                 # 이 파일
+│   ├── ai-service/                  # Python · FastAPI · LLM 통합
+│   ├── auth-service-go/             # Go · 인증/RBAC
+│   ├── k8s-service-go/              # Go · K8s 리소스 API
+│   ├── session-service-go/          # Go · 채팅 세션
+│   ├── tool-server/                 # Go · AI Tool 백엔드
+│   ├── model-config-controller-go/  # Go · CRD 컨트롤러
+│   ├── gateway/                     # NGINX 설정
+│   └── pkg/                         # Go 공통 패키지
+├── frontend/                        # React + TS + Tailwind
+├── helm/kubest/                     # Helm 차트
+├── k8s/                             # 원본 매니페스트 (참고용)
+├── docs/                            # 기능 설계 문서
+└── install.sh                       # 원라인 설치 스크립트
 ```
 
-## 🔧 개발 가이드
+---
 
-### 서비스 간 통신
+## 개발
 
-AI Service에서 K8s Service 호출 예시:
+소스에서 직접 빌드해 개발하려는 경우:
 
-```python
-from app.services.k8s_client import K8sServiceClient
-
-k8s_client = K8sServiceClient()
-pods = await k8s_client.get_pods(namespace="default")
-```
-
-### 새로운 엔드포인트 추가
-
-1. 해당 서비스의 `app/api.py`에 라우터 추가
-2. Gateway의 `nginx.conf`에 라우팅 규칙 추가
-3. 서비스 재시작
-
-### 데이터베이스 마이그레이션
+### 프론트엔드
 
 ```bash
-# PostgreSQL 컨테이너 접속
-docker exec -it agentforcmp-postgres-1 psql -U kubest -d kubest
-
-# 테이블 확인
-\dt
-
-# 세션 확인
-SELECT * FROM chat_sessions;
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+npm run build
+npm run lint
 ```
 
-## 🐛 트러블슈팅
-
-### 서비스가 시작되지 않을 때
+### Go 서비스
 
 ```bash
-# 로그 확인
-docker-compose logs ai-service
-
-# 컨테이너 상태 확인
-docker-compose ps
-
-# 네트워크 확인
-docker network inspect agentforcmp_msa-network
+cd services/k8s-service-go
+go mod download
+go run ./cmd/server
 ```
 
-### Kubernetes 연결 오류
-
-1. kubeconfig 파일 경로 확인
-2. K8s API 접근 가능 여부 확인
-3. K8s Service 헬스 체크: `curl http://localhost:8002/health`
-
-### AI 서비스 오류
-
-1. OpenAI API 키 확인
-2. PostgreSQL 연결 확인
-3. AI Service 로그 확인: `docker logs agentforcmp-ai-service-1`
-
-## 📊 성능 및 확장성
-
-### 스케일링
+### Python AI 서비스
 
 ```bash
-# AI Service 복제본 3개로 확장
-docker-compose up --scale ai-service=3
-
-# K8s Service 복제본 2개로 확장
-docker-compose up --scale k8s-service=2
+cd services/ai-service
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8001
 ```
 
-### 모니터링
+---
 
-각 서비스는 독립적으로 모니터링 가능:
+## 헬스 체크
 
-- **메트릭**: 각 서비스 `/metrics` 엔드포인트
-- **로그**: `docker-compose logs -f [service-name]`
-- **헬스 체크**: `/health` 엔드포인트
+```bash
+curl http://localhost:8000/health   # Gateway
+curl http://localhost:8001/health   # AI
+curl http://localhost:8002/health   # K8s
+curl http://localhost:8003/health   # Session
+curl http://localhost:8004/health   # Auth
+```
 
-## 🔐 보안
+---
 
-- API Gateway에서 인증/인가 추가 권장
-- 환경 변수로 민감 정보 관리
-- 서비스 간 통신은 내부 네트워크 사용
-- Production 환경에서는 HTTPS 적용 필수
+## 기술 스택
 
-## 🎯 다음 단계
+**Backend**
+- Go 1.22+ (auth, k8s, session, tool-server, controller)
+- Python 3.11 + FastAPI (ai-service)
+- PostgreSQL 15, Redis 7
+- controller-runtime (CRD operator)
 
-- [ ] API Gateway에 JWT 인증 추가
-- [ ] Prometheus + Grafana 모니터링 구축
-- [ ] ELK Stack 로깅 시스템 구축
-- [ ] Kubernetes 배포 (Helm Chart)
-- [ ] CI/CD 파이프라인 구축
-- [ ] 추가 AI 기능 UI 구현
+**Frontend**
+- React 18, TypeScript, Vite
+- Tailwind CSS
+- TanStack Query, React Router
+- Monaco Editor, xterm.js
+- React Flow, dagre, elkjs (그래프 시각화)
+- Recharts (메트릭 차트)
+- i18next (한/영)
 
-## 📝 라이선스
+**Infra**
+- Kubernetes, Helm
+- NGINX (Gateway)
+
+---
+
+## 라이선스
 
 MIT License
