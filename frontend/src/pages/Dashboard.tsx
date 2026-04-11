@@ -3107,7 +3107,11 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       {filteredResources.length > 0 ? (
                         filteredResources.map((pod) => (
-                          <div key={`${pod.namespace}-${pod.name}`} className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                          <div
+                            key={`${pod.namespace}-${pod.name}`}
+                            onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                            className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 {pod.phase === 'Running' ? (
