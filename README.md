@@ -260,69 +260,43 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
 ```
 
-## 🐛 트러블슈팅
+---
 
-### 서비스가 시작되지 않을 때
-
-```bash
-# 로그 확인
-docker-compose logs ai-service
-
-# 컨테이너 상태 확인
-docker-compose ps
-
-# 네트워크 확인
-docker network inspect agentforcmp_msa-network
-```
-
-### Kubernetes 연결 오류
-
-1. kubeconfig 파일 경로 확인
-2. K8s API 접근 가능 여부 확인
-3. K8s Service 헬스 체크: `curl http://localhost:8002/health`
-
-### AI 서비스 오류
-
-1. OpenAI API 키 확인
-2. PostgreSQL 연결 확인
-3. AI Service 로그 확인: `docker logs agentforcmp-ai-service-1`
-
-## 📊 성능 및 확장성
-
-### 스케일링
+## 헬스 체크
 
 ```bash
-# AI Service 복제본 3개로 확장
-docker-compose up --scale ai-service=3
-
-# K8s Service 복제본 2개로 확장
-docker-compose up --scale k8s-service=2
+curl http://localhost:8000/health   # Gateway
+curl http://localhost:8001/health   # AI
+curl http://localhost:8002/health   # K8s
+curl http://localhost:8003/health   # Session
+curl http://localhost:8004/health   # Auth
 ```
 
-### 모니터링
+---
 
-각 서비스는 독립적으로 모니터링 가능:
+## 기술 스택
 
-- **메트릭**: 각 서비스 `/metrics` 엔드포인트
-- **로그**: `docker-compose logs -f [service-name]`
-- **헬스 체크**: `/health` 엔드포인트
+**Backend**
+- Go 1.22+ (auth, k8s, session, tool-server, controller)
+- Python 3.11 + FastAPI (ai-service)
+- PostgreSQL 15, Redis 7
+- controller-runtime (CRD operator)
 
-## 🔐 보안
+**Frontend**
+- React 18, TypeScript, Vite
+- Tailwind CSS
+- TanStack Query, React Router
+- Monaco Editor, xterm.js
+- React Flow, dagre, elkjs (그래프 시각화)
+- Recharts (메트릭 차트)
+- i18next (한/영)
 
-- API Gateway에서 인증/인가 추가 권장
-- 환경 변수로 민감 정보 관리
-- 서비스 간 통신은 내부 네트워크 사용
-- Production 환경에서는 HTTPS 적용 필수
+**Infra**
+- Kubernetes, Helm
+- NGINX (Gateway)
 
-## 🎯 다음 단계
+---
 
-- [ ] API Gateway에 JWT 인증 추가
-- [ ] Prometheus + Grafana 모니터링 구축
-- [ ] ELK Stack 로깅 시스템 구축
-- [ ] Kubernetes 배포 (Helm Chart)
-- [ ] CI/CD 파이프라인 구축
-- [ ] 추가 AI 기능 UI 구현
-
-## 📝 라이선스
+## 라이선스
 
 MIT License
