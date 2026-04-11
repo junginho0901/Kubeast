@@ -100,23 +100,36 @@ curl -sSL .../install.sh | bash -s -- --load-balancer
 curl -sSL .../install.sh | bash -s -- --namespace my-ns
 ```
 
-## 🔍 헬스 체크
-
-각 서비스의 상태 확인:
+### 옵션 2. Helm 직접 사용
 
 ```bash
-# API Gateway
-curl http://localhost:8000/health
+git clone https://github.com/JeongInho/kube-assistant.git
+cd kube-assistant
 
-# AI Service
-curl http://localhost:8001/health
-
-# K8s Service
-curl http://localhost:8002/health
-
-# Session Service
-curl http://localhost:8003/health
+helm install kubest ./helm/kubest \
+  --namespace kubest --create-namespace \
+  --set ai.openaiApiKey=$OPENAI_API_KEY
 ```
+
+### 접속
+
+```bash
+kubectl -n kubest get pods
+kubectl -n kubest port-forward svc/gateway 8000:8000
+```
+
+브라우저에서 `http://localhost:8000/setup` 으로 접속한 뒤,
+
+- 기본 관리자 계정: `admin@local` / `admin`
+- 로그인 후 **Admin > AI Models** 에서 LLM 키를 등록하면 챗봇이 활성화됩니다.
+
+### 제거
+
+```bash
+helm uninstall kubest -n kubest
+```
+
+---
 
 ## 📁 디렉토리 구조
 
