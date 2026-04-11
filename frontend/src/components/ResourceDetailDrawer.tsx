@@ -1005,8 +1005,8 @@ export default function ResourceDetailDrawer() {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-[998]" onClick={handleClose} />
-      <div className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 z-[999] flex flex-col shadow-2xl">
+      <div className="fixed inset-0 bg-black/30 z-[1100]" onClick={handleClose} />
+      <div className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 z-[1110] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700 shrink-0">
           <div className="min-w-0">
