@@ -208,78 +208,56 @@ ingress:
 
 ---
 
-## 📁 디렉토리 구조
+## 디렉토리 구조
 
 ```
+.
 ├── services/
-│   ├── ai-service/           # AI 서비스
-│   │   ├── app/
-│   │   │   ├── api.py
-│   │   │   ├── config.py
-│   │   │   ├── database.py
-│   │   │   ├── ai.py
-│   │   │   └── services/
-│   │   │       ├── ai_service.py
-│   │   │       └── k8s_client.py
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── main.py
-│   ├── k8s-service/          # K8s 서비스
-│   │   ├── app/
-│   │   │   ├── api.py
-│   │   │   ├── config.py
-│   │   │   ├── cluster.py
-│   │   │   └── services/
-│   │   │       ├── k8s_service.py
-│   │   │       └── topology_service.py
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── main.py
-│   ├── session-service/      # Session 서비스
-│   │   ├── app/
-│   │   │   ├── api.py
-│   │   │   ├── config.py
-│   │   │   └── database.py
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── main.py
-│   └── gateway/              # API Gateway
-│       └── nginx.conf
-├── frontend/                 # 프론트엔드
-├── docker-compose.yml        # Docker Compose 설정
-└── README.md                 # 이 파일
+│   ├── ai-service/                  # Python · FastAPI · LLM 통합
+│   ├── auth-service-go/             # Go · 인증/RBAC
+│   ├── k8s-service-go/              # Go · K8s 리소스 API
+│   ├── session-service-go/          # Go · 채팅 세션
+│   ├── tool-server/                 # Go · AI Tool 백엔드
+│   ├── model-config-controller-go/  # Go · CRD 컨트롤러
+│   ├── gateway/                     # NGINX 설정
+│   └── pkg/                         # Go 공통 패키지
+├── frontend/                        # React + TS + Tailwind
+├── helm/kubest/                     # Helm 차트
+├── k8s/                             # 원본 매니페스트 (참고용)
+├── docs/                            # 기능 설계 문서
+└── install.sh                       # 원라인 설치 스크립트
 ```
 
-## 🔧 개발 가이드
+---
 
-### 서비스 간 통신
+## 개발
 
-AI Service에서 K8s Service 호출 예시:
+소스에서 직접 빌드해 개발하려는 경우:
 
-```python
-from app.services.k8s_client import K8sServiceClient
-
-k8s_client = K8sServiceClient()
-pods = await k8s_client.get_pods(namespace="default")
-```
-
-### 새로운 엔드포인트 추가
-
-1. 해당 서비스의 `app/api.py`에 라우터 추가
-2. Gateway의 `nginx.conf`에 라우팅 규칙 추가
-3. 서비스 재시작
-
-### 데이터베이스 마이그레이션
+### 프론트엔드
 
 ```bash
-# PostgreSQL 컨테이너 접속
-docker exec -it agentforcmp-postgres-1 psql -U kubest -d kubest
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+npm run build
+npm run lint
+```
 
-# 테이블 확인
-\dt
+### Go 서비스
 
-# 세션 확인
-SELECT * FROM chat_sessions;
+```bash
+cd services/k8s-service-go
+go mod download
+go run ./cmd/server
+```
+
+### Python AI 서비스
+
+```bash
+cd services/ai-service
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8001
 ```
 
 ## 🐛 트러블슈팅
