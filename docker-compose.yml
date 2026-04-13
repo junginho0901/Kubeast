@@ -49,8 +49,8 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
       - JWT_EXPIRES_MINUTES=${JWT_EXPIRES_MINUTES:-10080}
-      - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin@local}
-      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
+      - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-change-me-do-not-use-in-prod}
       - KEY_DIR=/app/.keys
     volumes:
       - auth_keys:/app/.keys
