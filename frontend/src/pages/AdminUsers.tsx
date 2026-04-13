@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, RoleWithDetails } from '@/services/api'
-import { CheckCircle, ChevronDown, ChevronUp, Clock, Download, Pencil, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Pencil, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearAccessToken } from '@/services/auth'
@@ -110,10 +110,17 @@ export default function AdminUsers() {
     },
   })
 
+  // 비번 재발급 결과 (1회용 평문) — 모달로 한 번 보여주고 닫히면 잊어버림
+  const [resetResult, setResetResult] = useState<{ targetLabel: string; password: string } | null>(null)
+  const [resetCopied, setResetCopied] = useState(false)
+
   const resetPasswordMutation = useMutation({
-    mutationFn: ({ userId }: { userId: string }) => api.adminResetUserPassword(userId),
-    onSuccess: () => {
+    mutationFn: ({ userId, targetLabel }: { userId: string; targetLabel: string }) =>
+      api.adminResetUserPassword(userId).then((res) => ({ res, targetLabel })),
+    onSuccess: ({ res, targetLabel }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setResetCopied(false)
+      setResetResult({ targetLabel, password: res.temporary_password })
     },
   })
 
