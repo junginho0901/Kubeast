@@ -52,7 +52,7 @@ kubectl -n kubest port-forward svc/gateway 8000:8000
 
 브라우저에서 `http://localhost:8000/setup` 으로 접속한 뒤,
 
-- 기본 관리자 계정: `admin@local` / `admin`
+- 기본 관리자 계정: `admin` / `admin`
 - 로그인 후 **Admin > AI Models** 에서 LLM 키를 등록하면 챗봇이 활성화됩니다.
 
 ### 제거
@@ -169,7 +169,7 @@ global:
 
 # 초기 관리자 계정
 admin:
-  email: admin@local
+  email: admin
   password: admin
 
 # AI 키 (Admin UI 에서 추가도 가능)

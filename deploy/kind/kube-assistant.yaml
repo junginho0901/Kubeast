@@ -14,7 +14,7 @@ data:
   JWT_ISSUER: kube-assistant-auth
   JWT_AUDIENCE: kube-assistant
   JWT_EXPIRES_MINUTES: "10080"
-  DEFAULT_ADMIN_EMAIL: admin@local
+  DEFAULT_ADMIN_EMAIL: admin
   OPENAI_MODEL: gpt-4o-mini
   AUTH_JWKS_URL: http://auth-service:8004/api/v1/auth/jwks.json
   REDIS_URL: redis://redis:6379/0
