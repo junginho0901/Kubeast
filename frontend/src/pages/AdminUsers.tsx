@@ -504,16 +504,17 @@ export default function AdminUsers() {
                       type="button"
                       disabled={isResetting || isBlocked}
                       onClick={() => {
+                        const targetLabel = u.email ?? u.name
                         const ok = window.confirm(
-                          tr('adminUsers.resetPasswordConfirm', 'Reset password to 1111?\\n\\nTarget: {{target}}', {
-                            target: u.email ?? u.name,
+                          tr('adminUsers.resetPasswordConfirm', 'Generate a new random password?\n\nTarget: {{target}}', {
+                            target: targetLabel,
                           })
                         )
                         if (!ok) return
-                        resetPasswordMutation.mutate({ userId: u.id })
+                        resetPasswordMutation.mutate({ userId: u.id, targetLabel })
                       }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/40 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
-                      title={tr('adminUsers.resetPasswordTitle', 'Reset password to 1111')}
+                      title={tr('adminUsers.resetPasswordTitle', 'Reset to random password')}
                     >
                       <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
                       <span>
