@@ -82,7 +82,7 @@ k8s/secret.local.yaml.bak-20260224-001
 .dockerignore
 
 # External dependencies
-kubest/
+kubeast/
 argo-cd/
 .tmp/
 tools/
@@ -90,3 +90,4 @@ headlamp/
 .litellm-build/
 
 docs/
+k8sgpt/
