@@ -14,7 +14,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: k8s-service
-    namespace: kube-assistant
+    namespace: kubeast
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -25,7 +25,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: auth-service-setup
-  namespace: kube-assistant
+  namespace: kubeast
 rules:
   - apiGroups: [""]
     resources: ["secrets", "configmaps"]
@@ -41,11 +41,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: auth-service-setup
-  namespace: kube-assistant
+  namespace: kubeast
 subjects:
   - kind: ServiceAccount
     name: auth-service
-    namespace: kube-assistant
+    namespace: kubeast
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

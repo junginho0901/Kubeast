@@ -2,15 +2,15 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: model-config-controller-go
-  namespace: kube-assistant
+  namespace: kubeast
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: model-config-controller-go
-  namespace: kube-assistant
+  namespace: kubeast
 rules:
-  - apiGroups: ["ai.kube-assistant.io"]
+  - apiGroups: ["ai.kubeast.io"]
     resources: ["modelconfigs", "modelconfigs/status"]
     verbs: ["get", "list", "watch", "patch", "update"]
   - apiGroups: [""]
@@ -24,7 +24,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: model-config-controller-go
-  namespace: kube-assistant
+  namespace: kubeast
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -32,13 +32,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: model-config-controller-go
-    namespace: kube-assistant
+    namespace: kubeast
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: model-config-controller-go
-  namespace: kube-assistant
+  namespace: kubeast
 spec:
   replicas: 1
   selector:
@@ -52,7 +52,7 @@ spec:
       serviceAccountName: model-config-controller-go
       containers:
         - name: controller
-          image: kube-assistant/model-config-controller-go:local
+          image: kubeast/model-config-controller-go:local
           imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE
@@ -68,13 +68,13 @@ spec:
             - name: METRICS_ADDR
               value: "0"
             - name: MODEL_CONFIG_GROUP
-              value: ai.kube-assistant.io
+              value: ai.kubeast.io
             - name: MODEL_CONFIG_VERSION
               value: v1alpha1
             - name: MODEL_CONFIG_PLURAL
               value: modelconfigs
           envFrom:
             - configMapRef:
-                name: kube-assistant-config
+                name: kubeast-config
             - secretRef:
-                name: kube-assistant-secrets
+                name: kubeast-secrets
