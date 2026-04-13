@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/junginho0901/kube-assistant/services/session-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/model"
 )
 
 // Repository handles all database operations for sessions.

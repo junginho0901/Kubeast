@@ -1,4 +1,4 @@
-module github.com/junginho0901/kube-assistant/services/session-service-go
+module github.com/junginho0901/kubeast/services/session-service-go
 
 go 1.22
 
@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/cors v1.2.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.2
-	github.com/junginho0901/kube-assistant/services/pkg v0.0.0
+	github.com/junginho0901/kubeast/services/pkg v0.0.0
 )
 
 require (
@@ -20,4 +20,4 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 )
 
-replace github.com/junginho0901/kube-assistant/services/pkg => ../pkg
+replace github.com/junginho0901/kubeast/services/pkg => ../pkg

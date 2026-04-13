@@ -10,10 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/junginho0901/kube-assistant/services/pkg/auth"
-	"github.com/junginho0901/kube-assistant/services/pkg/response"
-	"github.com/junginho0901/kube-assistant/services/session-service-go/internal/model"
-	"github.com/junginho0901/kube-assistant/services/session-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/response"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
 )
 
 // SessionHandler handles session-related HTTP requests.

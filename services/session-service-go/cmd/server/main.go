@@ -15,11 +15,11 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/junginho0901/kube-assistant/services/pkg/auth"
-	pkglogger "github.com/junginho0901/kube-assistant/services/pkg/logger"
-	"github.com/junginho0901/kube-assistant/services/session-service-go/internal/config"
-	"github.com/junginho0901/kube-assistant/services/session-service-go/internal/handler"
-	"github.com/junginho0901/kube-assistant/services/session-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
 )
 
 func main() {

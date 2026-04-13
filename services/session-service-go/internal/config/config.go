@@ -1,7 +1,7 @@
 package config
 
 import (
-	pkgconfig "github.com/junginho0901/kube-assistant/services/pkg/config"
+	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
 )
 
 // Config holds all configuration for the session service.
@@ -28,11 +28,11 @@ func Load() Config {
 		Port:  pkgconfig.GetEnvInt("PORT", 8003),
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),
 
-		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubest:password@localhost:5432/kubest?sslmode=disable"),
+		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubeast:password@localhost:5432/kubeast?sslmode=disable"),
 
 		AuthJWKSURL: pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
-		JWTIssuer:   pkgconfig.GetEnv("JWT_ISSUER", "kube-assistant-auth"),
-		JWTAudience: pkgconfig.GetEnv("JWT_AUDIENCE", "kube-assistant"),
+		JWTIssuer:   pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience: pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 	}
