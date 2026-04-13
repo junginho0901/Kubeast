@@ -5,9 +5,9 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-kubest}
+      POSTGRES_USER: ${POSTGRES_USER:-kubeast}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-kubest}
+      POSTGRES_DB: ${POSTGRES_DB:-kubeast}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -15,7 +15,7 @@ services:
     networks:
       - msa-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kubest"]
+      test: ["CMD-SHELL", "pg_isready -U kubeast"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,9 +45,9 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubest}
-      - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
-      - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
+      - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
       - JWT_EXPIRES_MINUTES=${JWT_EXPIRES_MINUTES:-10080}
       - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-change-me-do-not-use-in-prod}
@@ -75,12 +75,13 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
-      - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
-      - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubest}
+      - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
       - REDIS_URL=redis://redis:6379/0
       - K8S_SERVICE_URL=http://k8s-service:8002
       - SESSION_SERVICE_URL=http://session-service:8003
+      - TOOL_SERVER_URL=http://tool-server:8086
     networks:
       - msa-network
     depends_on:
@@ -104,8 +105,8 @@ services:
     environment:
       - KUBECONFIG_PATH=/app/kubeconfig.yaml
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
-      - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
-      - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
+      - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
@@ -135,15 +136,44 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubest}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
-      - JWT_ISSUER=${JWT_ISSUER:-kube-assistant-auth}
-      - JWT_AUDIENCE=${JWT_AUDIENCE:-kube-assistant}
+      - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
     networks:
       - msa-network
     depends_on:
       postgres:
         condition: service_healthy
+      auth-service:
+        condition: service_started
+    restart: unless-stopped
+
+  # Tool Server (K8s tool executor)
+  tool-server:
+    build:
+      context: ./services/tool-server
+      dockerfile: Dockerfile
+    ports:
+      - "8086:8086"
+    env_file:
+      - .env
+    environment:
+      - KUBECONFIG_PATH=/app/kubeconfig.yaml
+      - TOOL_SERVER_USE_INCLUSTER=false
+      - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
+      - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
+    volumes:
+      - ./kubeconfig.yaml:/app/kubeconfig.yaml:ro
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      - "${K8S_API_HOST:-pd-dev-305-cmp.k8s-api}:${K8S_API_IP}"
+    networks:
+      - msa-network
+    depends_on:
       auth-service:
         condition: service_started
     restart: unless-stopped
