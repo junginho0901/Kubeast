@@ -77,6 +77,15 @@ func (u *User) ToResponseWithPermissions(permissions []string) UserResponse {
 	return resp
 }
 
+// AdminResetPasswordResponse is returned by the admin reset-password endpoint.
+// It carries the standard user fields plus the one-time plaintext password
+// that was just generated, so the admin can copy it and share with the user.
+// The plaintext is NOT stored anywhere — only the bcrypt hash lives in DB.
+type AdminResetPasswordResponse struct {
+	UserResponse
+	TemporaryPassword string `json:"temporary_password"`
+}
+
 // AuditLog represents an auth_audit_logs row.
 type AuditLog struct {
 	ID           int              `json:"id"`
