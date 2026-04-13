@@ -2,24 +2,24 @@
 
 ## 1) 이미지 빌드
 ```bash
-docker build -t kube-assistant/auth-service:local services/auth-service
-docker build -t kube-assistant/ai-service:local services/ai-service
-docker build -t kube-assistant/k8s-service:local services/k8s-service
-docker build -t kube-assistant/tool-server:local services/tool-server
-docker build -t kube-assistant/session-service:local services/session-service
-docker build -t kube-assistant/frontend:local frontend
-docker build -t kube-assistant/model-config-controller-go:local services/model-config-controller-go
+docker build -t kubeast/auth-service:local services/auth-service
+docker build -t kubeast/ai-service:local services/ai-service
+docker build -t kubeast/k8s-service:local services/k8s-service
+docker build -t kubeast/tool-server:local services/tool-server
+docker build -t kubeast/session-service:local services/session-service
+docker build -t kubeast/frontend:local frontend
+docker build -t kubeast/model-config-controller-go:local services/model-config-controller-go
 ```
 
 ## 2) kind 로드
 ```bash
-kind load docker-image kube-assistant/auth-service:local --name kube-assistant
-kind load docker-image kube-assistant/ai-service:local --name kube-assistant
-kind load docker-image kube-assistant/k8s-service:local --name kube-assistant
-kind load docker-image kube-assistant/tool-server:local --name kube-assistant
-kind load docker-image kube-assistant/session-service:local --name kube-assistant
-kind load docker-image kube-assistant/frontend:local --name kube-assistant
-kind load docker-image kube-assistant/model-config-controller-go:local --name kube-assistant
+kind load docker-image kubeast/auth-service:local --name kubeast
+kind load docker-image kubeast/ai-service:local --name kubeast
+kind load docker-image kubeast/k8s-service:local --name kubeast
+kind load docker-image kubeast/tool-server:local --name kubeast
+kind load docker-image kubeast/session-service:local --name kubeast
+kind load docker-image kubeast/frontend:local --name kubeast
+kind load docker-image kubeast/model-config-controller-go:local --name kubeast
 ```
 
 ## 3) 시크릿 값 수정
@@ -33,16 +33,16 @@ kubectl apply -k k8s
 ## 4-1) 외부 클러스터 연결 (선택)
 kind 내부가 아니라 **기존 클러스터**를 보려면 kubeconfig를 시크릿으로 주입하세요.
 ```bash
-KUBECONFIG=/Users/okestro/AgentForCMP/.kubeconfig-kind kubectl -n kube-assistant create secret generic k8s-kubeconfig \
+KUBECONFIG=/Users/okestro/AgentForCMP/.kubeconfig-kind kubectl -n kubeast create secret generic k8s-kubeconfig \
   --from-file=kubeconfig.yaml=/Users/okestro/AgentForCMP/kubeconfig-proxy.yaml \
   --dry-run=client -o yaml | KUBECONFIG=/Users/okestro/AgentForCMP/.kubeconfig-kind kubectl apply -f -
-KUBECONFIG=/Users/okestro/AgentForCMP/.kubeconfig-kind kubectl -n kube-assistant rollout restart deploy/k8s-service
+KUBECONFIG=/Users/okestro/AgentForCMP/.kubeconfig-kind kubectl -n kubeast rollout restart deploy/k8s-service
 ```
 > kubeconfig 경로는 로컬 환경에 맞게 바꿔주세요.
 
 ## 5) 접속 (NodePort)
 ```bash
-kubectl -n kube-assistant get svc gateway
+kubectl -n kubeast get svc gateway
 ```
 기본 NodePort는 `30080`이므로 `http://localhost:30080`로 접근합니다.
 
@@ -51,7 +51,7 @@ kubectl -n kube-assistant get svc gateway
 >
 > 예: `kind-config.yaml` 사용
 > ```bash
-> kind create cluster --name kube-assistant --config kind-config.yaml
+> kind create cluster --name kubeast --config kind-config.yaml
 > ```
 
 ## 참고
@@ -77,7 +77,7 @@ curl -s -X POST http://localhost:30080/api/v1/ai/model-configs \
     "provider":"openai",
     "model":"gpt-4o-mini",
     "base_url":"https://api.openai.com/v1",
-    "api_key_secret_name":"kube-assistant-secrets",
+    "api_key_secret_name":"kubeast-secrets",
     "api_key_secret_key":"OPENAI_API_KEY",
     "is_default":true
   }'
@@ -89,18 +89,18 @@ CRD와 컨트롤러로 ModelConfig를 관리합니다. 컨트롤러가 CRD를 DB
 ### 적용
 ```bash
 kubectl apply -f k8s/model-config-crd.yaml
-kubectl -n kube-assistant apply -f k8s/model-config-controller-go.yaml
+kubectl -n kubeast apply -f k8s/model-config-controller-go.yaml
 ```
 
 ### 컨트롤러 이미지 (kind)
 ```bash
-docker build -t kube-assistant/model-config-controller-go:local services/model-config-controller-go
-kind load docker-image kube-assistant/model-config-controller-go:local --name kube-assistant
-kubectl -n kube-assistant rollout restart deploy/model-config-controller-go
+docker build -t kubeast/model-config-controller-go:local services/model-config-controller-go
+kind load docker-image kubeast/model-config-controller-go:local --name kubeast
+kubectl -n kubeast rollout restart deploy/model-config-controller-go
 ```
 
 
 ### 예시 CR
 ```bash
-kubectl -n kube-assistant apply -f k8s/model-config-sample.yaml
+kubectl -n kubeast apply -f k8s/model-config-sample.yaml
 ```
