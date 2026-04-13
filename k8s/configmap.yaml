@@ -13,7 +13,7 @@ data:
   JWT_AUDIENCE: "kube-assistant"
   JWT_EXPIRES_MINUTES: "10080"
 
-  DEFAULT_ADMIN_EMAIL: "admin@local"
+  DEFAULT_ADMIN_EMAIL: "admin"
   KEY_DIR: "/app/.keys"
 
   POSTGRES_USER: "kubest"

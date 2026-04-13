@@ -66,7 +66,7 @@ AI 모델 설정을 DB에서 관리합니다. API 키는 **K8s Secret의 키 이
 # 로그인 → 토큰
 curl -s -X POST http://localhost:30080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@local","password":"admin"}'
+  -d '{"email":"admin","password":"admin"}'
 
 # 모델 설정 생성
 curl -s -X POST http://localhost:30080/api/v1/ai/model-configs \
