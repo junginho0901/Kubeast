@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/junginho0901/kube-assistant/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // AuthMiddleware validates JWTs using the local JWTManager's public key directly.

@@ -1,4 +1,4 @@
-module github.com/junginho0901/kube-assistant/services/auth-service-go
+module github.com/junginho0901/kubeast/services/auth-service-go
 
 go 1.22
 
@@ -8,7 +8,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.2
-	github.com/junginho0901/kube-assistant/services/pkg v0.0.0
+	github.com/junginho0901/kubeast/services/pkg v0.0.0
 	golang.org/x/crypto v0.31.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.29.3
@@ -57,4 +57,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/junginho0901/kube-assistant/services/pkg => ../pkg
+replace github.com/junginho0901/kubeast/services/pkg => ../pkg

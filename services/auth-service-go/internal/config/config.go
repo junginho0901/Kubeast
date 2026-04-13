@@ -1,7 +1,7 @@
 package config
 
 import (
-	pkgconfig "github.com/junginho0901/kube-assistant/services/pkg/config"
+	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
 )
 
 type Config struct {
@@ -45,10 +45,10 @@ func Load() Config {
 		Port:  pkgconfig.GetEnvInt("PORT", 8004),
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),
 
-		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubest:password@localhost:5432/kubest?sslmode=disable"),
+		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubeast:password@localhost:5432/kubeast?sslmode=disable"),
 
-		JWTIssuer:         pkgconfig.GetEnv("JWT_ISSUER", "kube-assistant-auth"),
-		JWTAudience:       pkgconfig.GetEnv("JWT_AUDIENCE", "kube-assistant"),
+		JWTIssuer:         pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience:       pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 		JWTExpiresMinutes: pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 10080),
 		KeyDir:            pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
 
@@ -65,11 +65,11 @@ func Load() Config {
 		DefaultWriteEmail:    pkgconfig.GetEnv("DEFAULT_WRITE_EMAIL", "write"),
 		DefaultWritePassword: pkgconfig.GetEnv("DEFAULT_WRITE_PASSWORD", "write"),
 
-		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kube-assistant.token"),
+		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
 
-		SetupNamespace:          pkgconfig.GetEnv("SETUP_NAMESPACE", "kube-assistant"),
+		SetupNamespace:          pkgconfig.GetEnv("SETUP_NAMESPACE", "kubeast"),
 		SetupKubeconfigSecret:   pkgconfig.GetEnv("SETUP_KUBECONFIG_SECRET", "k8s-kubeconfig"),
-		SetupConfigMapName:      pkgconfig.GetEnv("SETUP_CONFIGMAP_NAME", "kube-assistant-config"),
+		SetupConfigMapName:      pkgconfig.GetEnv("SETUP_CONFIGMAP_NAME", "kubeast-config"),
 		SetupRestartDeployments: pkgconfig.GetEnvList("SETUP_RESTART_DEPLOYMENTS", "k8s-service,tool-server-admin,tool-server-write,tool-server-read"),
 	}
 }

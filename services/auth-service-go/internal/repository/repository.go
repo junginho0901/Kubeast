@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/junginho0901/kube-assistant/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 )
 
 type Repository struct {

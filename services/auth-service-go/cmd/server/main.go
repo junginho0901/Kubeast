@@ -16,12 +16,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/junginho0901/kube-assistant/services/auth-service-go/internal/config"
-	"github.com/junginho0901/kube-assistant/services/auth-service-go/internal/handler"
-	"github.com/junginho0901/kube-assistant/services/auth-service-go/internal/model"
-	"github.com/junginho0901/kube-assistant/services/auth-service-go/internal/repository"
-	"github.com/junginho0901/kube-assistant/services/auth-service-go/internal/security"
-	pkglogger "github.com/junginho0901/kube-assistant/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
+	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
 func main() {
