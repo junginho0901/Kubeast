@@ -1120,6 +1120,73 @@ export default function AdminUsers() {
         </ModalOverlay>
       )}
 
+      {/* Reset password result modal — 1회용 평문 비밀번호 표시 */}
+      {resetResult && (
+        <ModalOverlay onClose={() => setResetResult(null)}>
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                <KeyRound className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {tr('adminUsers.resetResult.title', 'Password reset')}
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {tr('adminUsers.resetResult.target', 'Target: {{target}}', { target: resetResult.targetLabel })}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 mb-2">
+              {tr(
+                'adminUsers.resetResult.warning',
+                'Copy this temporary password now — it will not be shown again. Ask the user to change it after signing in.',
+              )}
+            </p>
+
+            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2">
+              <code className="flex-1 font-mono text-sm text-amber-300 break-all">
+                {resetResult.password}
+              </code>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(resetResult.password)
+                    setResetCopied(true)
+                    setTimeout(() => setResetCopied(false), 2000)
+                  } catch {
+                    /* clipboard API unavailable — silently ignore */
+                  }
+                }}
+                className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {resetCopied
+                  ? tr('adminUsers.resetResult.copied', 'Copied')
+                  : tr('adminUsers.resetResult.copy', 'Copy')}
+              </button>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResetResult(null)}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-500"
+              >
+                {tr('adminUsers.resetResult.close', 'Done')}
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
+
       {reauthModalOpen && (
         <ModalOverlay>
           <div
