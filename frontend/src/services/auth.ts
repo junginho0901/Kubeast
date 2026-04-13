@@ -1,5 +1,5 @@
-const ACCESS_TOKEN_STORAGE_KEY = 'kube-assistant:access-token'
-const REDIRECT_AFTER_LOGIN_KEY = 'kube-assistant:redirect-after-login'
+const ACCESS_TOKEN_STORAGE_KEY = 'kubeast:access-token'
+const REDIRECT_AFTER_LOGIN_KEY = 'kubeast:redirect-after-login'
 
 let handlingUnauthorized = false
 

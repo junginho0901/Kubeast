@@ -1,5 +1,5 @@
 {
-  "name": "k8s-devops-assistant-frontend",
+  "name": "kubeast-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
