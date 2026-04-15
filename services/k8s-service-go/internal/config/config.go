@@ -10,8 +10,9 @@ type Config struct {
 	AppName string
 
 	// Kubernetes
-	KubeconfigPath string
-	InCluster      bool
+	KubeconfigPath  string
+	InCluster       bool
+	KubeconfigWatch bool
 
 	// Auth
 	AuthJWKSURL    string
@@ -37,8 +38,9 @@ func Load() Config {
 		Debug:   pkgconfig.GetEnvBool("DEBUG", false),
 		AppName: pkgconfig.GetEnv("APP_NAME", "k8s-service"),
 
-		KubeconfigPath: pkgconfig.GetEnv("KUBECONFIG_PATH", ""),
-		InCluster:      pkgconfig.GetEnvBool("IN_CLUSTER", false),
+		KubeconfigPath:  pkgconfig.GetEnv("KUBECONFIG_PATH", ""),
+		InCluster:       pkgconfig.GetEnvBool("IN_CLUSTER", false),
+		KubeconfigWatch: pkgconfig.GetEnvBool("KUBECONFIG_WATCH", false),
 
 		AuthJWKSURL:    pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
 		JWTIssuer:      pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
