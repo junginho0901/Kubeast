@@ -189,6 +189,41 @@ class AIService:
                 filtered.append(tool)
         return filtered
 
+    def _detect_response_language(self, text: str) -> str:
+        """Detect the language the assistant should respond in, based on the user's latest message.
+
+        Returns a human-readable language name suitable for injecting into a system directive.
+        Heuristic: count Hangul vs ASCII letters — the dominant script wins. Falls back to
+        English when the message is too short or purely symbolic/code.
+        """
+        if not isinstance(text, str) or not text.strip():
+            return "English"
+
+        hangul = 0
+        ascii_letters = 0
+        for ch in text:
+            code = ord(ch)
+            if 0xAC00 <= code <= 0xD7A3 or 0x1100 <= code <= 0x11FF or 0x3130 <= code <= 0x318F:
+                hangul += 1
+            elif ch.isascii() and ch.isalpha():
+                ascii_letters += 1
+
+        if hangul == 0 and ascii_letters == 0:
+            return "English"
+        if hangul >= ascii_letters:
+            return "Korean"
+        return "English"
+
+    def _build_language_directive(self, user_message: str) -> str:
+        """Return a strong, final-position system directive forcing the output language."""
+        lang = self._detect_response_language(user_message)
+        return (
+            f"LANGUAGE OVERRIDE (highest priority): The user's current message is in {lang}. "
+            f"You MUST write your entire response in {lang}, regardless of the language used "
+            f"in earlier turns or the rest of this system prompt. Keep command names, code, "
+            f"and Kubernetes resource identifiers verbatim."
+        )
+
     def _sanitize_history_content(self, role: str, content: Optional[str]) -> str:
         """LLM 히스토리에 넣기 전에 tool 결과 블록을 제거/축약"""
         if not isinstance(content, str):
@@ -1017,6 +1052,9 @@ JSON 형식으로 응답해주세요:
     사용자의 질문에 답하기 위해 필요한 경우 Kubernetes API를 직접 호출할 수 있습니다.
     실시간 클러스터 정보를 조회하여 정확한 답변을 제공하세요.
 
+    **Language**: Respond in the same language as the user's latest message
+    (Korean → Korean, English → English, etc.). Keep commands/code/resource names verbatim.
+
     중요: 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
     사용자가 리소스 이름을 "대충" 던지는 경우(정확한 전체 이름이 아닌 식별자/부분 문자열)에는,
     먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 모든 네임스페이스에서 후보를 찾고
@@ -1031,11 +1069,22 @@ JSON 형식으로 응답해주세요:
                 "role": msg.role,
                 "content": self._sanitize_history_content(msg.role, msg.content),
             })
-        
-        # 컨텍스트 추가
+
+        # 컨텍스트 추가 (마지막 user/assistant 메시지에 append)
         if request.context:
             context_str = f"\n\n현재 컨텍스트:\n{request.context}"
             messages[-1]["content"] += context_str
+
+        # Inject language directive after history so it overrides Korean-biased prompt.
+        latest_user_msg = ""
+        for msg in reversed(request.messages):
+            if msg.role == "user" and isinstance(msg.content, str):
+                latest_user_msg = msg.content
+                break
+        messages.append({
+            "role": "system",
+            "content": self._build_language_directive(latest_user_msg),
+        })
         
         # Function definitions
         tools = [
@@ -2432,13 +2481,16 @@ Draft (rules-based, keep numbers unchanged):
 - **절대로 문장 중간에 멈추지 마세요**, 특히 tool call 후에는 더욱 그렇습니다
 - 최소한 분석 → 권장사항 → 실행 계획 순서로 완전한 응답을 제공해야 합니다
 
-## 언어
+## Language / 언어
 
-**중요**: 모든 응답은 **반드시 한국어로** 작성해야 합니다.
-- 기술 용어는 영어 원문을 병기할 수 있습니다 (예: "파드(Pod)")
-- 명령어와 코드는 그대로 유지
-- 분석, 설명, 권장사항은 모두 한국어로 작성
-- 친근하면서도 전문적인 톤 유지
+**Important**: Respond in the **same language as the user's latest message**.
+- If the user writes in Korean, respond in Korean.
+- If the user writes in English, respond in English.
+- If the user writes in another language, respond in that language.
+- Do NOT switch languages mid-conversation unless the user does.
+- Keep commands, code, and resource names (pod/service/namespace names) verbatim.
+- Korean technical terms may include the English original in parentheses (e.g., "파드(Pod)").
+- Maintain a friendly yet professional tone.
 
 항상 최소 침습적 접근으로 시작하고, 필요한 경우에만 진단을 확대하세요. 의심스러운 경우 변경을 권장하기 전에 더 많은 정보를 수집하세요.
 """
@@ -3597,6 +3649,12 @@ Draft (rules-based, keep numbers unchanged):
                     "role": msg.role,
                     "content": self._sanitize_history_content(msg.role, msg.content),
                 })
+            # Inject language directive AFTER history so it wins over Korean-biased prompt
+            # and any prior Korean conversation turns.
+            messages.append({
+                "role": "system",
+                "content": self._build_language_directive(message),
+            })
             
             # Tool Context 가져오기 또는 생성
             if session_id not in self.tool_contexts:
@@ -4027,13 +4085,16 @@ Draft (rules-based, keep numbers unchanged):
 - ❌ 긴 설명이나 배경 지식은 필요할 때만
 - ❌ 형식적인 인사나 불필요한 전문 용어 남발 금지
 
-## 언어
+## Language / 언어
 
-**중요**: 모든 응답은 **반드시 한국어로** 작성해야 합니다.
-- 기술 용어는 영어 원문을 병기할 수 있습니다 (예: "파드(Pod)")
-- 명령어와 코드는 그대로 유지
-- 분석, 설명, 권장사항은 모두 한국어로 작성
-- 친근하면서도 전문적인 톤 유지
+**Important**: Respond in the **same language as the user's latest message**.
+- If the user writes in Korean, respond in Korean.
+- If the user writes in English, respond in English.
+- If the user writes in another language, respond in that language.
+- Do NOT switch languages mid-conversation unless the user does.
+- Keep commands, code, and resource names (pod/service/namespace names) verbatim.
+- Korean technical terms may include the English original in parentheses (e.g., "파드(Pod)").
+- Maintain a friendly yet professional tone.
 
 항상 최소 침습적 접근으로 시작하고, 필요한 경우에만 진단을 확대하세요.
 
