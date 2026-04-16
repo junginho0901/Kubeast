@@ -66,7 +66,9 @@ func (h *Handler) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "deployment_name")
-	if err := h.svc.DeleteDeployment(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteDeployment(ctx, namespace, name)
+	h.recordAudit(r, "k8s.deployment.delete", "deployment", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

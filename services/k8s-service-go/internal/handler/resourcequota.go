@@ -66,7 +66,9 @@ func (h *Handler) DeleteResourceQuota(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteResourceQuota(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteResourceQuota(ctx, namespace, name)
+	h.recordAudit(r, "k8s.resourcequota.delete", "resourcequota", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

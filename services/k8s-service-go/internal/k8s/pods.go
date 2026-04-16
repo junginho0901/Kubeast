@@ -17,7 +17,7 @@ func (s *Service) GetPods(ctx context.Context, namespace string, labelSelector s
 	if labelSelector != "" {
 		opts.LabelSelector = labelSelector
 	}
-	podList, err := s.clientset.CoreV1().Pods(namespace).List(ctx, opts)
+	podList, err := s.Clientset().CoreV1().Pods(namespace).List(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
@@ -26,7 +26,7 @@ func (s *Service) GetPods(ctx context.Context, namespace string, labelSelector s
 
 // GetAllPods lists pods across all namespaces.
 func (s *Service) GetAllPods(ctx context.Context) ([]map[string]interface{}, error) {
-	podList, err := s.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	podList, err := s.Clientset().CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all pods: %w", err)
 	}
@@ -44,11 +44,11 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pod, podErr = s.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		pod, podErr = s.Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Pod", name),
 		})
 	}()
@@ -221,7 +221,7 @@ func (s *Service) GetPodLogs(ctx context.Context, namespace, name, container str
 		opts.TailLines = &tailLines
 	}
 
-	req := s.clientset.CoreV1().Pods(namespace).GetLogs(name, opts)
+	req := s.Clientset().CoreV1().Pods(namespace).GetLogs(name, opts)
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		return "", fmt.Errorf("get pod logs %s/%s: %w", namespace, name, err)
@@ -248,7 +248,7 @@ func (s *Service) StreamPodLogs(ctx context.Context, namespace, name, container 
 		opts.TailLines = &tailLines
 	}
 
-	req := s.clientset.CoreV1().Pods(namespace).GetLogs(name, opts)
+	req := s.Clientset().CoreV1().Pods(namespace).GetLogs(name, opts)
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("stream pod logs %s/%s: %w", namespace, name, err)
@@ -263,12 +263,12 @@ func (s *Service) DeletePod(ctx context.Context, namespace, name string, force b
 		grace := int64(0)
 		opts.GracePeriodSeconds = &grace
 	}
-	return s.clientset.CoreV1().Pods(namespace).Delete(ctx, name, opts)
+	return s.Clientset().CoreV1().Pods(namespace).Delete(ctx, name, opts)
 }
 
 // GetPodRBAC returns RBAC info for a pod's service account.
 func (s *Service) GetPodRBAC(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	pod, err := s.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	pod, err := s.Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get pod %s/%s: %w", namespace, name, err)
 	}
@@ -278,18 +278,18 @@ func (s *Service) GetPodRBAC(ctx context.Context, namespace, name string) (map[s
 		saName = "default"
 	}
 
-	sa, err := s.clientset.CoreV1().ServiceAccounts(namespace).Get(ctx, saName, metav1.GetOptions{})
+	sa, err := s.Clientset().CoreV1().ServiceAccounts(namespace).Get(ctx, saName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get service account %s: %w", saName, err)
 	}
 
 	// Find role bindings
-	roleBindings, err := s.clientset.RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
+	roleBindings, err := s.Clientset().RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list role bindings: %w", err)
 	}
 
-	clusterRoleBindings, err := s.clientset.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+	clusterRoleBindings, err := s.Clientset().RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list cluster role bindings: %w", err)
 	}

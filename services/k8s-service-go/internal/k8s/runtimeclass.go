@@ -12,7 +12,7 @@ import (
 
 // GetRuntimeClasses lists all RuntimeClasses.
 func (s *Service) GetRuntimeClasses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.NodeV1().RuntimeClasses().List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().NodeV1().RuntimeClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list runtimeclasses: %w", err)
 	}
@@ -29,11 +29,11 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		rc, rcErr = s.clientset.NodeV1().RuntimeClasses().Get(ctx, name, metav1.GetOptions{})
+		rc, rcErr = s.Clientset().NodeV1().RuntimeClasses().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=RuntimeClass", name),
 		})
 	}()
@@ -76,7 +76,7 @@ func (s *Service) DescribeRuntimeClass(ctx context.Context, name string) (map[st
 
 // DeleteRuntimeClass deletes a RuntimeClass.
 func (s *Service) DeleteRuntimeClass(ctx context.Context, name string) error {
-	return s.clientset.NodeV1().RuntimeClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().NodeV1().RuntimeClasses().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatRuntimeClassList(rcs []nodev1.RuntimeClass) []map[string]interface{} {

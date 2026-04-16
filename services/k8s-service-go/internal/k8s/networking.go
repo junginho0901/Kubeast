@@ -16,7 +16,7 @@ import (
 
 // GetIngresses lists ingresses in a namespace.
 func (s *Service) GetIngresses(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list ingresses: %w", err)
 	}
@@ -25,7 +25,7 @@ func (s *Service) GetIngresses(ctx context.Context, namespace string) ([]map[str
 
 // GetAllIngresses lists ingresses across all namespaces.
 func (s *Service) GetAllIngresses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all ingresses: %w", err)
 	}
@@ -43,15 +43,15 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		ing, ingErr = s.clientset.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
+		ing, ingErr = s.Clientset().NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		icList, icErr = s.clientset.NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
+		icList, icErr = s.Clientset().NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Ingress", name),
 		})
 	}()
@@ -90,14 +90,14 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 
 // DeleteIngress deletes an ingress.
 func (s *Service) DeleteIngress(ctx context.Context, namespace, name string) error {
-	return s.clientset.NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== IngressClasses ==========
 
 // GetIngressClasses lists all ingress classes.
 func (s *Service) GetIngressClasses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list ingress classes: %w", err)
 	}
@@ -110,7 +110,7 @@ func (s *Service) GetIngressClasses(ctx context.Context) ([]map[string]interface
 
 // DescribeIngressClass returns detailed info about an ingress class.
 func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[string]interface{}, error) {
-	ic, err := s.clientset.NetworkingV1().IngressClasses().Get(ctx, name, metav1.GetOptions{})
+	ic, err := s.Clientset().NetworkingV1().IngressClasses().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get ingress class %s: %w", name, err)
 	}
@@ -138,14 +138,14 @@ func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[st
 
 // DeleteIngressClass deletes an ingress class.
 func (s *Service) DeleteIngressClass(ctx context.Context, name string) error {
-	return s.clientset.NetworkingV1().IngressClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().NetworkingV1().IngressClasses().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Endpoints ==========
 
 // GetEndpoints lists endpoints in a namespace.
 func (s *Service) GetEndpoints(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoreV1().Endpoints(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoreV1().Endpoints(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list endpoints: %w", err)
 	}
@@ -158,7 +158,7 @@ func (s *Service) GetEndpoints(ctx context.Context, namespace string) ([]map[str
 
 // GetAllEndpoints lists endpoints across all namespaces.
 func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoreV1().Endpoints("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoreV1().Endpoints("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all endpoints: %w", err)
 	}
@@ -171,7 +171,7 @@ func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}
 
 // DescribeEndpoints returns detailed info about an endpoints resource.
 func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	ep, err := s.clientset.CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
+	ep, err := s.Clientset().CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get endpoints %s/%s: %w", namespace, name, err)
 	}
@@ -231,14 +231,14 @@ func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string)
 
 // DeleteEndpoints deletes an endpoints resource.
 func (s *Service) DeleteEndpoints(ctx context.Context, namespace, name string) error {
-	return s.clientset.CoreV1().Endpoints(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoreV1().Endpoints(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== EndpointSlices ==========
 
 // GetEndpointSlices lists endpoint slices in a namespace.
 func (s *Service) GetEndpointSlices(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list endpoint slices: %w", err)
 	}
@@ -247,7 +247,7 @@ func (s *Service) GetEndpointSlices(ctx context.Context, namespace string) ([]ma
 
 // GetAllEndpointSlices lists endpoint slices across all namespaces.
 func (s *Service) GetAllEndpointSlices(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.DiscoveryV1().EndpointSlices("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().DiscoveryV1().EndpointSlices("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all endpoint slices: %w", err)
 	}
@@ -256,7 +256,7 @@ func (s *Service) GetAllEndpointSlices(ctx context.Context) ([]map[string]interf
 
 // DescribeEndpointSlice returns detailed info about an endpoint slice.
 func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	es, err := s.clientset.DiscoveryV1().EndpointSlices(namespace).Get(ctx, name, metav1.GetOptions{})
+	es, err := s.Clientset().DiscoveryV1().EndpointSlices(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get endpoint slice %s/%s: %w", namespace, name, err)
 	}
@@ -323,14 +323,14 @@ func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name str
 
 // DeleteEndpointSlice deletes an endpoint slice.
 func (s *Service) DeleteEndpointSlice(ctx context.Context, namespace, name string) error {
-	return s.clientset.DiscoveryV1().EndpointSlices(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().DiscoveryV1().EndpointSlices(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== NetworkPolicies ==========
 
 // GetNetworkPolicies lists network policies in a namespace.
 func (s *Service) GetNetworkPolicies(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.NetworkingV1().NetworkPolicies(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().NetworkingV1().NetworkPolicies(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list network policies: %w", err)
 	}
@@ -339,7 +339,7 @@ func (s *Service) GetNetworkPolicies(ctx context.Context, namespace string) ([]m
 
 // GetAllNetworkPolicies lists network policies across all namespaces.
 func (s *Service) GetAllNetworkPolicies(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all network policies: %w", err)
 	}
@@ -348,7 +348,7 @@ func (s *Service) GetAllNetworkPolicies(ctx context.Context) ([]map[string]inter
 
 // DescribeNetworkPolicy returns detailed info about a network policy.
 func (s *Service) DescribeNetworkPolicy(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	np, err := s.clientset.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+	np, err := s.Clientset().NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get network policy %s/%s: %w", namespace, name, err)
 	}
@@ -361,7 +361,7 @@ func (s *Service) DescribeNetworkPolicy(ctx context.Context, namespace, name str
 
 // DeleteNetworkPolicy deletes a network policy.
 func (s *Service) DeleteNetworkPolicy(ctx context.Context, namespace, name string) error {
-	return s.clientset.NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Formatting helpers ==========

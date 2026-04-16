@@ -51,7 +51,9 @@ func (h *Handler) DeleteMutatingWebhookConfiguration(w http.ResponseWriter, r *h
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteMutatingWebhookConfiguration(ctx, name); err != nil {
+	err := h.svc.DeleteMutatingWebhookConfiguration(ctx, name)
+	h.recordAudit(r, "k8s.mutatingwebhook.delete", "mutatingwebhookconfiguration", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -102,7 +104,9 @@ func (h *Handler) DeleteValidatingWebhookConfiguration(w http.ResponseWriter, r 
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteValidatingWebhookConfiguration(ctx, name); err != nil {
+	err := h.svc.DeleteValidatingWebhookConfiguration(ctx, name)
+	h.recordAudit(r, "k8s.validatingwebhook.delete", "validatingwebhookconfiguration", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

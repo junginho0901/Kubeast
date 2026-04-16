@@ -20,7 +20,7 @@ import (
 
 // GetStatefulSets lists statefulsets in a namespace.
 func (s *Service) GetStatefulSets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list statefulsets: %w", err)
 	}
@@ -29,7 +29,7 @@ func (s *Service) GetStatefulSets(ctx context.Context, namespace string) ([]map[
 
 // GetAllStatefulSets lists statefulsets across all namespaces.
 func (s *Service) GetAllStatefulSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all statefulsets: %w", err)
 	}
@@ -46,11 +46,11 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		sts, stsErr = s.clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		sts, stsErr = s.Clientset().AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StatefulSet", name),
 		})
 	}()
@@ -174,14 +174,14 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 
 // DeleteStatefulSet deletes a statefulset.
 func (s *Service) DeleteStatefulSet(ctx context.Context, namespace, name string) error {
-	return s.clientset.AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== DaemonSets ==========
 
 // GetDaemonSets lists daemonsets in a namespace.
 func (s *Service) GetDaemonSets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list daemonsets: %w", err)
 	}
@@ -190,7 +190,7 @@ func (s *Service) GetDaemonSets(ctx context.Context, namespace string) ([]map[st
 
 // GetAllDaemonSets lists daemonsets across all namespaces.
 func (s *Service) GetAllDaemonSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AppsV1().DaemonSets("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AppsV1().DaemonSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all daemonsets: %w", err)
 	}
@@ -207,11 +207,11 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ds, dsErr = s.clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		ds, dsErr = s.Clientset().AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=DaemonSet", name),
 		})
 	}()
@@ -296,14 +296,14 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 
 // DeleteDaemonSet deletes a daemonset.
 func (s *Service) DeleteDaemonSet(ctx context.Context, namespace, name string) error {
-	return s.clientset.AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== ReplicaSets ==========
 
 // GetReplicaSets lists replicasets in a namespace.
 func (s *Service) GetReplicaSets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets: %w", err)
 	}
@@ -312,7 +312,7 @@ func (s *Service) GetReplicaSets(ctx context.Context, namespace string) ([]map[s
 
 // GetAllReplicaSets lists replicasets across all namespaces.
 func (s *Service) GetAllReplicaSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all replicasets: %w", err)
 	}
@@ -329,11 +329,11 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		rs, rsErr = s.clientset.AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		rs, rsErr = s.Clientset().AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ReplicaSet", name),
 		})
 	}()
@@ -414,14 +414,14 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 
 // DeleteReplicaSet deletes a replicaset.
 func (s *Service) DeleteReplicaSet(ctx context.Context, namespace, name string) error {
-	return s.clientset.AppsV1().ReplicaSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AppsV1().ReplicaSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Jobs ==========
 
 // GetJobs lists jobs in a namespace.
 func (s *Service) GetJobs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
@@ -430,7 +430,7 @@ func (s *Service) GetJobs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllJobs lists jobs across all namespaces.
 func (s *Service) GetAllJobs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.BatchV1().Jobs("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().BatchV1().Jobs("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all jobs: %w", err)
 	}
@@ -447,11 +447,11 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		job, jobErr = s.clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+		job, jobErr = s.Clientset().BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Job", name),
 		})
 	}()
@@ -548,7 +548,7 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 // DeleteJob deletes a job.
 func (s *Service) DeleteJob(ctx context.Context, namespace, name string) error {
 	propagation := metav1.DeletePropagationBackground
-	return s.clientset.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
+	return s.Clientset().BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
 		PropagationPolicy: &propagation,
 	})
 }
@@ -557,7 +557,7 @@ func (s *Service) DeleteJob(ctx context.Context, namespace, name string) error {
 
 // GetCronJobs lists cronjobs in a namespace.
 func (s *Service) GetCronJobs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list cronjobs: %w", err)
 	}
@@ -566,7 +566,7 @@ func (s *Service) GetCronJobs(ctx context.Context, namespace string) ([]map[stri
 
 // GetAllCronJobs lists cronjobs across all namespaces.
 func (s *Service) GetAllCronJobs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.BatchV1().CronJobs("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().BatchV1().CronJobs("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all cronjobs: %w", err)
 	}
@@ -583,11 +583,11 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		cj, cjErr = s.clientset.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+		cj, cjErr = s.Clientset().BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=CronJob", name),
 		})
 	}()
@@ -659,7 +659,7 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 // SuspendCronJob patches the suspend field of a cronjob.
 func (s *Service) SuspendCronJob(ctx context.Context, namespace, name string, suspend bool) error {
 	patch := fmt.Sprintf(`{"spec":{"suspend":%t}}`, suspend)
-	_, err := s.clientset.BatchV1().CronJobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{})
+	_, err := s.Clientset().BatchV1().CronJobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("patch cronjob %s/%s suspend: %w", namespace, name, err)
 	}
@@ -668,7 +668,7 @@ func (s *Service) SuspendCronJob(ctx context.Context, namespace, name string, su
 
 // TriggerCronJob creates a Job from a CronJob's jobTemplate.
 func (s *Service) TriggerCronJob(ctx context.Context, namespace, name string) (string, error) {
-	cj, err := s.clientset.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	cj, err := s.Clientset().BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("get cronjob %s/%s: %w", namespace, name, err)
 	}
@@ -698,7 +698,7 @@ func (s *Service) TriggerCronJob(ctx context.Context, namespace, name string) (s
 		Spec: cj.Spec.JobTemplate.Spec,
 	}
 
-	created, err := s.clientset.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+	created, err := s.Clientset().BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
 		return "", fmt.Errorf("create job from cronjob %s/%s: %w", namespace, name, err)
 	}
@@ -707,7 +707,7 @@ func (s *Service) TriggerCronJob(ctx context.Context, namespace, name string) (s
 
 // GetCronJobOwnedJobs lists Jobs owned by a CronJob via ownerReference.
 func (s *Service) GetCronJobOwnedJobs(ctx context.Context, namespace, name string) ([]map[string]interface{}, error) {
-	jobList, err := s.clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
+	jobList, err := s.Clientset().BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list jobs in %s: %w", namespace, err)
 	}
@@ -768,7 +768,7 @@ func (s *Service) GetCronJobOwnedJobs(ctx context.Context, namespace, name strin
 
 // DeleteCronJob deletes a cronjob.
 func (s *Service) DeleteCronJob(ctx context.Context, namespace, name string) error {
-	return s.clientset.BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Revision History & Rollback ==========
@@ -788,12 +788,12 @@ func (s *Service) GetRevisionHistory(ctx context.Context, namespace, name, kind 
 }
 
 func (s *Service) getDeploymentRevisionHistory(ctx context.Context, namespace, name string) ([]map[string]interface{}, error) {
-	deploy, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	deploy, err := s.Clientset().AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get deployment %s/%s: %w", namespace, name, err)
 	}
 
-	rsList, err := s.clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	rsList, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets in %s: %w", namespace, err)
 	}
@@ -854,7 +854,7 @@ func (s *Service) getDeploymentRevisionHistory(ctx context.Context, namespace, n
 }
 
 func (s *Service) getControllerRevisionHistory(ctx context.Context, namespace, name, kind string) ([]map[string]interface{}, error) {
-	crList, err := s.clientset.AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list controller revisions in %s: %w", namespace, err)
 	}
@@ -965,7 +965,7 @@ func (s *Service) RollbackWorkload(ctx context.Context, namespace, name, kind st
 }
 
 func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string, toRevision int64) error {
-	rsList, err := s.clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	rsList, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list replicasets in %s: %w", namespace, err)
 	}
@@ -1023,7 +1023,7 @@ func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string
 		return fmt.Errorf("marshal rollback patch: %w", err)
 	}
 
-	_, err = s.clientset.AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.Clientset().AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback deployment %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}
@@ -1031,7 +1031,7 @@ func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string
 }
 
 func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string, toRevision int64) error {
-	crList, err := s.clientset.AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list controller revisions in %s: %w", namespace, err)
 	}
@@ -1064,7 +1064,7 @@ func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string,
 		return fmt.Errorf("build rollback patch for daemonset %s/%s: %w", namespace, name, err)
 	}
 
-	_, err = s.clientset.AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.Clientset().AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback daemonset %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}
@@ -1072,7 +1072,7 @@ func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string,
 }
 
 func (s *Service) rollbackStatefulSet(ctx context.Context, namespace, name string, toRevision int64) error {
-	crList, err := s.clientset.AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list controller revisions in %s: %w", namespace, err)
 	}
@@ -1105,7 +1105,7 @@ func (s *Service) rollbackStatefulSet(ctx context.Context, namespace, name strin
 		return fmt.Errorf("build rollback patch for statefulset %s/%s: %w", namespace, name, err)
 	}
 
-	_, err = s.clientset.AppsV1().StatefulSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.Clientset().AppsV1().StatefulSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback statefulset %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}

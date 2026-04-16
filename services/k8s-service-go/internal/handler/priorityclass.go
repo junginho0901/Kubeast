@@ -51,7 +51,9 @@ func (h *Handler) DeletePriorityClass(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeletePriorityClass(ctx, name); err != nil {
+	err := h.svc.DeletePriorityClass(ctx, name)
+	h.recordAudit(r, "k8s.priorityclass.delete", "priorityclass", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

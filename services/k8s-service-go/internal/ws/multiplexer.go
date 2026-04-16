@@ -47,21 +47,26 @@ type subscription struct {
 
 const maxSubscriptions = 200
 
+// ClientProvider supplies K8s clients at use-time so hot-reload of the
+// underlying clientBundle is transparent to long-lived subscriptions.
+type ClientProvider interface {
+	Clientset() *kubernetes.Clientset
+	Dynamic() dynamic.Interface
+}
+
 // Multiplexer handles multiplexed WebSocket watch connections.
 type Multiplexer struct {
-	clientset *kubernetes.Clientset
-	dynamic   dynamic.Interface
+	provider ClientProvider
 
 	mu   sync.Mutex
 	subs map[string]*subscription // key -> subscription
 }
 
 // NewMultiplexer creates a new WebSocket multiplexer.
-func NewMultiplexer(clientset *kubernetes.Clientset, dynClient dynamic.Interface) *Multiplexer {
+func NewMultiplexer(p ClientProvider) *Multiplexer {
 	return &Multiplexer{
-		clientset: clientset,
-		dynamic:   dynClient,
-		subs:      make(map[string]*subscription),
+		provider: p,
+		subs:     make(map[string]*subscription),
 	}
 }
 
@@ -198,11 +203,17 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 			ResourceVersion: lastResourceVersion,
 		}
 
+		dyn := m.provider.Dynamic()
+		if dyn == nil {
+			slog.Warn("watch skipped: kubeconfig not loaded", "resource", resource)
+			sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": "kubeconfig not loaded"}}
+			return
+		}
 		var watcher watch.Interface
 		if namespace != "" {
-			watcher, err = m.dynamic.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
+			watcher, err = dyn.Resource(gvr).Namespace(namespace).Watch(ctx, opts)
 		} else {
-			watcher, err = m.dynamic.Resource(gvr).Watch(ctx, opts)
+			watcher, err = dyn.Resource(gvr).Watch(ctx, opts)
 		}
 		if err != nil {
 			slog.Warn("watch failed", "resource", resource, "err", err)

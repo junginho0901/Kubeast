@@ -12,7 +12,7 @@ import (
 
 // GetPDBs lists PDBs in a namespace.
 func (s *Service) GetPDBs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.PolicyV1().PodDisruptionBudgets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().PolicyV1().PodDisruptionBudgets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pdbs: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetPDBs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllPDBs lists PDBs across all namespaces.
 func (s *Service) GetAllPDBs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.PolicyV1().PodDisruptionBudgets("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().PolicyV1().PodDisruptionBudgets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all pdbs: %w", err)
 	}
@@ -38,11 +38,11 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pdb, pdbErr = s.clientset.PolicyV1().PodDisruptionBudgets(namespace).Get(ctx, name, metav1.GetOptions{})
+		pdb, pdbErr = s.Clientset().PolicyV1().PodDisruptionBudgets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PodDisruptionBudget", name),
 		})
 	}()
@@ -98,7 +98,7 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 
 // DeletePDB deletes a PDB.
 func (s *Service) DeletePDB(ctx context.Context, namespace, name string) error {
-	return s.clientset.PolicyV1().PodDisruptionBudgets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().PolicyV1().PodDisruptionBudgets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatPDBList(pdbs []policyv1.PodDisruptionBudget) []map[string]interface{} {

@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -68,6 +69,11 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 		Created: time.Now(),
 	}
 	setDrainStatus(ds)
+
+	// Record the drain *acceptance* at request time. The async runDrain
+	// may later complete or fail, but the user's intent is already audit-worthy.
+	h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", nil,
+		nil, audit.MustJSON(map[string]interface{}{"drain_id": drainID}))
 
 	go h.runDrain(nodeName, drainID)
 

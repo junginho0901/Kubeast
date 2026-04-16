@@ -151,7 +151,7 @@ func (s *Service) getTimelineEvents(ctx context.Context, namespace, kind, name s
 		opts.FieldSelector = fmt.Sprintf("involvedObject.name=%s", name)
 	}
 
-	eventList, err := s.clientset.CoreV1().Events(namespace).List(ctx, opts)
+	eventList, err := s.Clientset().CoreV1().Events(namespace).List(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("list timeline events: %w", err)
 	}
@@ -213,11 +213,11 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		deploys, deploysErr = s.clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+		deploys, deploysErr = s.Clientset().AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		rsList, rsErr = s.clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+		rsList, rsErr = s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	}()
 	wg.Wait()
 
@@ -291,7 +291,7 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 }
 
 func (s *Service) getDeploymentRolloutTimeline(ctx context.Context, namespace, name string, cutoff time.Time) ([]map[string]interface{}, error) {
-	rsList, err := s.clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	rsList, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets for timeline: %w", err)
 	}
@@ -352,7 +352,7 @@ func (s *Service) getDeploymentRolloutTimeline(ctx context.Context, namespace, n
 }
 
 func (s *Service) getControllerRevisionTimeline(ctx context.Context, namespace, kind, name string, cutoff time.Time) ([]map[string]interface{}, error) {
-	crList, err := s.clientset.AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list controller revisions for timeline: %w", err)
 	}

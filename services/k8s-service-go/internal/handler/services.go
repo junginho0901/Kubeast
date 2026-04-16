@@ -66,7 +66,9 @@ func (h *Handler) DeleteService(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteService(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteService(ctx, namespace, name)
+	h.recordAudit(r, "k8s.service.delete", "service", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

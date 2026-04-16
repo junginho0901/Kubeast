@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -40,7 +41,9 @@ func (h *Handler) DeleteCRD(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteCRD(ctx, name); err != nil {
+	err := h.svc.DeleteCRD(ctx, name)
+	h.recordAudit(r, "k8s.crd.delete", "crd", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -102,7 +105,10 @@ func (h *Handler) DeleteCustomResourceInstance(w http.ResponseWriter, r *http.Re
 	plural := chi.URLParam(r, "plural")
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteCustomResourceInstance(ctx, group, version, plural, namespace, name); err != nil {
+	err := h.svc.DeleteCustomResourceInstance(ctx, group, version, plural, namespace, name)
+	h.recordAuditWithPayload(r, "k8s.customresource.delete", plural, name, namespace, err,
+		nil, audit.MustJSON(map[string]interface{}{"group": group, "version": version, "plural": plural}))
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

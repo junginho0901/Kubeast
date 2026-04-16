@@ -68,7 +68,9 @@ func (h *Handler) DeletePVC(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeletePVC(ctx, namespace, name); err != nil {
+	err := h.svc.DeletePVC(ctx, namespace, name)
+	h.recordAudit(r, "k8s.pvc.delete", "pvc", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -133,7 +135,9 @@ func (h *Handler) DeletePV(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeletePV(ctx, name); err != nil {
+	err := h.svc.DeletePV(ctx, name)
+	h.recordAudit(r, "k8s.pv.delete", "pv", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -185,7 +189,9 @@ func (h *Handler) DeleteStorageClass(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteStorageClass(ctx, name); err != nil {
+	err := h.svc.DeleteStorageClass(ctx, name)
+	h.recordAudit(r, "k8s.storageclass.delete", "storageclass", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -225,7 +231,9 @@ func (h *Handler) DeleteVolumeAttachment(w http.ResponseWriter, r *http.Request)
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteVolumeAttachment(ctx, name); err != nil {
+	err := h.svc.DeleteVolumeAttachment(ctx, name)
+	h.recordAudit(r, "k8s.volumeattachment.delete", "volumeattachment", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

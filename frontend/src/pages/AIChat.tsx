@@ -4,7 +4,7 @@ import type { InfiniteData } from '@tanstack/react-query'
 import { api, Session } from '@/services/api'
 import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
 import ParticleWaveLoader from '@/components/ParticleWaveLoader'
-import { Send, Bot, User, Sparkles, Plus, MessageSquare, Trash2, Edit2, Check, X, StopCircle } from 'lucide-react'
+import { Send, Bot, User, Sparkles, Plus, MessageSquare, Trash2, Edit2, Check, X, StopCircle, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -75,6 +75,7 @@ export default function AIChat() {
   const [lastLoadedSessionId, setLastLoadedSessionId] = useState<string | null>(null)
   const [pendingFinalSyncSessionId, setPendingFinalSyncSessionId] = useState<string | null>(null)
   const [pinnedSessions, setPinnedSessions] = useState<Record<string, Session>>({})
+  const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const streamStateRef = useRef<ChatStreamState>(streamState)
   const messagesRef = useRef<Message[]>([])
@@ -836,6 +837,18 @@ export default function AIChat() {
     [t],
   )
 
+  const handleCopyMessage = async (message: Message, key: string) => {
+    try {
+      await navigator.clipboard.writeText(message.content || '')
+      setCopiedMessageKey(key)
+      setTimeout(() => {
+        setCopiedMessageKey(curr => (curr === key ? null : curr))
+      }, 1500)
+    } catch (err) {
+      console.warn('[AIChat] copy failed', err)
+    }
+  }
+
   const handleDownloadJson = async (message: Message) => {
     if (!message.toolCalls || message.toolCalls.length === 0) {
       console.warn('[DEBUG] No toolCalls available for download')
@@ -1381,21 +1394,41 @@ export default function AIChat() {
                         message.role === 'assistant' &&
                         (message.streamingPhase === 'waiting' || message.streamingPhase === 'tools')
                       
+                      const messageKey = message.id != null ? `db-${message.id}` : `tmp-${idx}`
+                      const showCopyButton = message.role === 'assistant' && !message.isTemporary
+                      const isCopied = copiedMessageKey === messageKey
                       return (
                         <>
-                          {message.toolCalls && message.toolCalls.length > 0 && (
-                            <div className="flex justify-end mb-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  handleDownloadJson(message)
-                                }}
-                                className="px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
-                              >
-                                {t('aiChat.resultZipDownload')}
-                              </button>
+                          {(showCopyButton || (message.toolCalls && message.toolCalls.length > 0)) && (
+                            <div className="flex justify-end gap-2 mb-2">
+                              {showCopyButton && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    handleCopyMessage(message, messageKey)
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
+                                  title={isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}
+                                >
+                                  {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                  <span>{isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}</span>
+                                </button>
+                              )}
+                              {message.toolCalls && message.toolCalls.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    handleDownloadJson(message)
+                                  }}
+                                  className="px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
+                                >
+                                  {t('aiChat.resultZipDownload')}
+                                </button>
+                              )}
                             </div>
                           )}
                           <ReactMarkdown

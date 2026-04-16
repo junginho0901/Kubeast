@@ -16,7 +16,7 @@ import (
 
 // GetNodes lists all nodes.
 func (s *Service) GetNodes(ctx context.Context) ([]map[string]interface{}, error) {
-	nodeList, err := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodeList, err := s.Clientset().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
@@ -39,11 +39,11 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		node, nodeErr = s.clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+		node, nodeErr = s.Clientset().CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", name),
 		})
 	}()
@@ -142,7 +142,7 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 
 // GetNodePods returns pods running on a node.
 func (s *Service) GetNodePods(ctx context.Context, nodeName string) ([]map[string]interface{}, error) {
-	pods, err := s.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+	pods, err := s.Clientset().CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	})
 	if err != nil {
@@ -153,7 +153,7 @@ func (s *Service) GetNodePods(ctx context.Context, nodeName string) ([]map[strin
 
 // GetNodeEvents returns events for a node.
 func (s *Service) GetNodeEvents(ctx context.Context, nodeName string) ([]map[string]interface{}, error) {
-	events, err := s.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+	events, err := s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", nodeName),
 	})
 	if err != nil {
@@ -178,7 +178,7 @@ func (s *Service) GetNodeEvents(ctx context.Context, nodeName string) ([]map[str
 
 // DeleteNode deletes a node.
 func (s *Service) DeleteNode(ctx context.Context, name string) error {
-	return s.clientset.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // CordonNode marks a node as unschedulable.
@@ -201,7 +201,7 @@ func (s *Service) setNodeUnschedulable(ctx context.Context, name string, unsched
 	if err != nil {
 		return fmt.Errorf("marshal patch: %w", err)
 	}
-	_, err = s.clientset.CoreV1().Nodes().Patch(ctx, name, types.StrategicMergePatchType, data, metav1.PatchOptions{})
+	_, err = s.Clientset().CoreV1().Nodes().Patch(ctx, name, types.StrategicMergePatchType, data, metav1.PatchOptions{})
 	if err != nil {
 		action := "cordon"
 		if !unschedulable {
@@ -221,7 +221,7 @@ func (s *Service) GetNodeYAML(ctx context.Context, name string, forceRefresh boo
 // ApplyNodeYAML applies labels and annotations from a YAML string to a node.
 // Protected keys with kubernetes.io/ and metadata.k8s.io/ prefixes are not modified.
 func (s *Service) ApplyNodeYAML(ctx context.Context, name string, yamlStr string) error {
-	node, err := s.clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	node, err := s.Clientset().CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("get node %s: %w", name, err)
 	}
@@ -260,7 +260,7 @@ func (s *Service) ApplyNodeYAML(ctx context.Context, name string, yamlStr string
 		}
 	}
 
-	_, err = s.clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = s.Clientset().CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("update node %s: %w", name, err)
 	}

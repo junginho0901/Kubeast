@@ -16,6 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"k8s.io/client-go/transport"
+
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 )
 
 var execUpgrader = websocket.Upgrader{
@@ -40,6 +42,10 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	if command == "" {
 		command = "/bin/sh"
 	}
+
+	// Audit at connection time (per §11 Q2).
+	h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, nil,
+		nil, audit.MustJSON(map[string]interface{}{"container": container, "command": command}))
 
 	conn, err := execUpgrader.Upgrade(w, r, nil)
 	if err != nil {

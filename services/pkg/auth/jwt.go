@@ -18,6 +18,7 @@ import (
 // TokenPayload contains the validated JWT claims.
 type TokenPayload struct {
 	UserID      string
+	Email       string   // populated from "email" claim (for audit logs)
 	Role        string   // 하위호환 유지
 	Permissions []string // 신규: permission 기반 접근 제어
 }
@@ -202,6 +203,11 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		return TokenPayload{}, fmt.Errorf("missing sub claim")
 	}
 
+	email := strings.TrimSpace(fmt.Sprintf("%v", claims["email"]))
+	if email == "<nil>" {
+		email = ""
+	}
+
 	role := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", claims["role"])))
 	if role == "" || role == "<nil>" {
 		role = "read"
@@ -218,7 +224,7 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		}
 	}
 
-	return TokenPayload{UserID: userID, Role: role, Permissions: permissions}, nil
+	return TokenPayload{UserID: userID, Email: email, Role: role, Permissions: permissions}, nil
 }
 
 // Middleware returns an HTTP middleware that validates JWT tokens.

@@ -470,6 +470,9 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
+          env:
+            - name: DATABASE_URL
+              value: postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)
           volumeMounts:
             - name: kubeconfig
               mountPath: /app/kubeconfig.yaml

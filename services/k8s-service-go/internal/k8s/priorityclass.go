@@ -12,7 +12,7 @@ import (
 
 // GetPriorityClasses lists all PriorityClasses.
 func (s *Service) GetPriorityClasses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.SchedulingV1().PriorityClasses().List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().SchedulingV1().PriorityClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list priorityclasses: %w", err)
 	}
@@ -29,11 +29,11 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pc, pcErr = s.clientset.SchedulingV1().PriorityClasses().Get(ctx, name, metav1.GetOptions{})
+		pc, pcErr = s.Clientset().SchedulingV1().PriorityClasses().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PriorityClass", name),
 		})
 	}()
@@ -76,7 +76,7 @@ func (s *Service) DescribePriorityClass(ctx context.Context, name string) (map[s
 
 // DeletePriorityClass deletes a PriorityClass.
 func (s *Service) DeletePriorityClass(ctx context.Context, name string) error {
-	return s.clientset.SchedulingV1().PriorityClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().SchedulingV1().PriorityClasses().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatPriorityClassList(pcs []schedulingv1.PriorityClass) []map[string]interface{} {

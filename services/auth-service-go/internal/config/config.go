@@ -38,6 +38,11 @@ type Config struct {
 	SetupKubeconfigSecret   string
 	SetupConfigMapName      string
 	SetupRestartDeployments []string
+
+	// Deployment mode: "k8s" (default, helm/kind) or "docker" (docker-compose)
+	DeploymentMode       string
+	DockerKubeconfigPath string
+	K8sServiceHealthURL  string
 }
 
 func Load() Config {
@@ -71,6 +76,10 @@ func Load() Config {
 		SetupKubeconfigSecret:   pkgconfig.GetEnv("SETUP_KUBECONFIG_SECRET", "k8s-kubeconfig"),
 		SetupConfigMapName:      pkgconfig.GetEnv("SETUP_CONFIGMAP_NAME", "kubeast-config"),
 		SetupRestartDeployments: pkgconfig.GetEnvList("SETUP_RESTART_DEPLOYMENTS", "k8s-service,tool-server-admin,tool-server-write,tool-server-read"),
+
+		DeploymentMode:       pkgconfig.GetEnv("DEPLOYMENT_MODE", "k8s"),
+		DockerKubeconfigPath: pkgconfig.GetEnv("DOCKER_KUBECONFIG_PATH", "/kubeconfig/kubeconfig.yaml"),
+		K8sServiceHealthURL:  pkgconfig.GetEnv("K8S_SERVICE_HEALTH_URL", "http://k8s-service:8002/health"),
 	}
 }
 

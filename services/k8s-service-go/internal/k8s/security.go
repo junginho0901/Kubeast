@@ -14,7 +14,7 @@ import (
 
 // GetServiceAccounts lists serviceaccounts in a namespace.
 func (s *Service) GetServiceAccounts(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list serviceaccounts: %w", err)
 	}
@@ -23,7 +23,7 @@ func (s *Service) GetServiceAccounts(ctx context.Context, namespace string) ([]m
 
 // GetAllServiceAccounts lists serviceaccounts across all namespaces.
 func (s *Service) GetAllServiceAccounts(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoreV1().ServiceAccounts("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoreV1().ServiceAccounts("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all serviceaccounts: %w", err)
 	}
@@ -40,11 +40,11 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		sa, saErr = s.clientset.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
+		sa, saErr = s.Clientset().CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ServiceAccount", name),
 		})
 	}()
@@ -67,14 +67,14 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 
 // DeleteServiceAccount deletes a serviceaccount.
 func (s *Service) DeleteServiceAccount(ctx context.Context, namespace, name string) error {
-	return s.clientset.CoreV1().ServiceAccounts(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoreV1().ServiceAccounts(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Roles ==========
 
 // GetRoles lists roles in a namespace.
 func (s *Service) GetRoles(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.RbacV1().Roles(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().RbacV1().Roles(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list roles: %w", err)
 	}
@@ -83,7 +83,7 @@ func (s *Service) GetRoles(ctx context.Context, namespace string) ([]map[string]
 
 // GetAllRoles lists roles across all namespaces.
 func (s *Service) GetAllRoles(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.RbacV1().Roles("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().RbacV1().Roles("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all roles: %w", err)
 	}
@@ -100,11 +100,11 @@ func (s *Service) DescribeRole(ctx context.Context, namespace, name string) (map
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		role, roleErr = s.clientset.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+		role, roleErr = s.Clientset().RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Role", name),
 		})
 	}()
@@ -127,14 +127,14 @@ func (s *Service) DescribeRole(ctx context.Context, namespace, name string) (map
 
 // DeleteRole deletes a role.
 func (s *Service) DeleteRole(ctx context.Context, namespace, name string) error {
-	return s.clientset.RbacV1().Roles(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().RbacV1().Roles(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== RoleBindings ==========
 
 // GetRoleBindings lists rolebindings in a namespace.
 func (s *Service) GetRoleBindings(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list rolebindings: %w", err)
 	}
@@ -143,7 +143,7 @@ func (s *Service) GetRoleBindings(ctx context.Context, namespace string) ([]map[
 
 // GetAllRoleBindings lists rolebindings across all namespaces.
 func (s *Service) GetAllRoleBindings(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.RbacV1().RoleBindings("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().RbacV1().RoleBindings("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all rolebindings: %w", err)
 	}
@@ -160,11 +160,11 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		rb, rbErr = s.clientset.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
+		rb, rbErr = s.Clientset().RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=RoleBinding", name),
 		})
 	}()
@@ -187,7 +187,7 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 
 // DeleteRoleBinding deletes a rolebinding.
 func (s *Service) DeleteRoleBinding(ctx context.Context, namespace, name string) error {
-	return s.clientset.RbacV1().RoleBindings(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().RbacV1().RoleBindings(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Format Functions ==========

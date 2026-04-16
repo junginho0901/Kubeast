@@ -127,6 +127,11 @@ const WORKLOAD_KINDS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'Repli
 const NETWORK_KINDS = new Set(['Ingress', 'IngressClass', 'NetworkPolicy', 'Endpoints', 'EndpointSlice'])
 const CONFIG_STORAGE_KINDS = new Set(['PersistentVolume', 'PersistentVolumeClaim', 'StorageClass', 'VolumeAttachment'])
 
+// Kinds whose info components fetch their own data and don't need injected rawJson.
+const SELF_LOADING_KINDS = new Set(['Node', 'Namespace'])
+// CustomResourceInstance needs crd_name in rawJson and cannot be resolved via kindToPlural.
+const UNRESOLVABLE_KINDS = new Set(['CustomResourceInstance'])
+
 function kindToPlural(kind: string): string {
   const map: Record<string, string> = {
     Pod: 'pod', Node: 'node', Namespace: 'namespace', Service: 'service',
@@ -223,6 +228,22 @@ export default function ResourceDetailDrawer() {
   const { has } = usePermission()
   const canDelete = has(`resource.${kind.toLowerCase()}.delete`)
   const canEditYaml = has(`resource.${kind.toLowerCase()}.edit`)
+
+  const needsRawJsonFetch = !!target
+    && !target.rawJson
+    && !SELF_LOADING_KINDS.has(kind)
+    && !UNRESOLVABLE_KINDS.has(kind)
+    && !!name
+
+  const { data: fetchedRawJson } = useQuery({
+    queryKey: ['resource-json', kind, ns, name],
+    queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
+    enabled: needsRawJsonFetch,
+    staleTime: 30_000,
+    retry: 1,
+  })
+
+  const effectiveRawJson = target?.rawJson ?? fetchedRawJson
 
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, isError: yamlError } = useQuery({
     queryKey: ['resource-yaml', kind, ns, name, yamlRefreshNonce],
@@ -965,42 +986,42 @@ export default function ResourceDetailDrawer() {
   const renderInfoContent = () => {
     if (kind === 'Node') return <NodeInfo name={name} />
     if (kind === 'Namespace') return <NamespaceInfo name={name} />
-    if (kind === 'Pod' && ns) return <PodInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'Service' && ns) return <ServiceInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'Gateway' && ns) return <GatewayInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'GatewayClass') return <GatewayClassInfo name={name} rawJson={target.rawJson} />
-    if (kind === 'HTTPRoute' && ns) return <HTTPRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'GRPCRoute' && ns) return <GRPCRouteInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'ReferenceGrant' && ns) return <ReferenceGrantInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'BackendTLSPolicy' && ns) return <BackendTLSPolicyInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'BackendTrafficPolicy' && ns) return <BackendTrafficPolicyInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'DeviceClass') return <DeviceClassInfoComp name={name} rawJson={target.rawJson} />
-    if (kind === 'ResourceClaim' && ns) return <ResourceClaimInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'ResourceClaimTemplate' && ns) return <ResourceClaimTemplateInfoComp name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'ResourceSlice') return <ResourceSliceInfoComp name={name} rawJson={target.rawJson} />
-    if (kind === 'ServiceAccount' && ns) return <ServiceAccountInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'Role' && ns) return <RoleInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'RoleBinding' && ns) return <RoleBindingInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'ClusterRole') return <ClusterRoleInfo name={name} rawJson={target.rawJson} />
-    if (kind === 'ClusterRoleBinding') return <ClusterRoleBindingInfo name={name} rawJson={target.rawJson} />
-    if (kind === 'ConfigMap' && ns) return <ConfigMapInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'Secret' && ns) return <SecretInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'HorizontalPodAutoscaler' && ns) return <HPAInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'VerticalPodAutoscaler' && ns) return <VPAInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'PodDisruptionBudget' && ns) return <PDBInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'PriorityClass') return <PriorityClassInfo name={name} rawJson={target.rawJson} />
-    if (kind === 'RuntimeClass') return <RuntimeClassInfo name={name} rawJson={target.rawJson} />
-    if (kind === 'Lease' && ns) return <LeaseInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'ResourceQuota' && ns) return <ResourceQuotaInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'LimitRange' && ns) return <LimitRangeInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (kind === 'MutatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="MutatingWebhookConfiguration" rawJson={target.rawJson} />
-    if (kind === 'ValidatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="ValidatingWebhookConfiguration" rawJson={target.rawJson} />
-    if (kind === 'CustomResourceDefinition') return <CRDInfo name={name} rawJson={target.rawJson} />
-    if (kind === 'CustomResourceInstance') return <CustomResourceInstanceInfo name={name} namespace={ns} rawJson={target.rawJson} />
-    if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
-    if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
-    if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
-    return <GenericInfo name={name} namespace={ns} kind={kind} rawJson={target.rawJson} />
+    if (kind === 'Pod' && ns) return <PodInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'Service' && ns) return <ServiceInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'Gateway' && ns) return <GatewayInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'GatewayClass') return <GatewayClassInfo name={name} rawJson={effectiveRawJson} />
+    if (kind === 'HTTPRoute' && ns) return <HTTPRouteInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'GRPCRoute' && ns) return <GRPCRouteInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'ReferenceGrant' && ns) return <ReferenceGrantInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'BackendTLSPolicy' && ns) return <BackendTLSPolicyInfoComp name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'BackendTrafficPolicy' && ns) return <BackendTrafficPolicyInfoComp name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'DeviceClass') return <DeviceClassInfoComp name={name} rawJson={effectiveRawJson} />
+    if (kind === 'ResourceClaim' && ns) return <ResourceClaimInfoComp name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'ResourceClaimTemplate' && ns) return <ResourceClaimTemplateInfoComp name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'ResourceSlice') return <ResourceSliceInfoComp name={name} rawJson={effectiveRawJson} />
+    if (kind === 'ServiceAccount' && ns) return <ServiceAccountInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'Role' && ns) return <RoleInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'RoleBinding' && ns) return <RoleBindingInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'ClusterRole') return <ClusterRoleInfo name={name} rawJson={effectiveRawJson} />
+    if (kind === 'ClusterRoleBinding') return <ClusterRoleBindingInfo name={name} rawJson={effectiveRawJson} />
+    if (kind === 'ConfigMap' && ns) return <ConfigMapInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'Secret' && ns) return <SecretInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'HorizontalPodAutoscaler' && ns) return <HPAInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'VerticalPodAutoscaler' && ns) return <VPAInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'PodDisruptionBudget' && ns) return <PDBInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'PriorityClass') return <PriorityClassInfo name={name} rawJson={effectiveRawJson} />
+    if (kind === 'RuntimeClass') return <RuntimeClassInfo name={name} rawJson={effectiveRawJson} />
+    if (kind === 'Lease' && ns) return <LeaseInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'ResourceQuota' && ns) return <ResourceQuotaInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'LimitRange' && ns) return <LimitRangeInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (kind === 'MutatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="MutatingWebhookConfiguration" rawJson={effectiveRawJson} />
+    if (kind === 'ValidatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="ValidatingWebhookConfiguration" rawJson={effectiveRawJson} />
+    if (kind === 'CustomResourceDefinition') return <CRDInfo name={name} rawJson={effectiveRawJson} />
+    if (kind === 'CustomResourceInstance') return <CustomResourceInstanceInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
+    if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    return <GenericInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
   }
 
   return (

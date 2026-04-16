@@ -12,7 +12,7 @@ import (
 
 // GetDeployments lists deployments in a namespace.
 func (s *Service) GetDeployments(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	depList, err := s.clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	depList, err := s.Clientset().AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list deployments: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetDeployments(ctx context.Context, namespace string) ([]map[s
 
 // GetAllDeployments lists deployments across all namespaces.
 func (s *Service) GetAllDeployments(ctx context.Context) ([]map[string]interface{}, error) {
-	depList, err := s.clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+	depList, err := s.Clientset().AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all deployments: %w", err)
 	}
@@ -39,11 +39,11 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		dep, depErr = s.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		dep, depErr = s.Clientset().AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Deployment", name),
 		})
 	}()
@@ -158,7 +158,7 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 
 // DeleteDeployment deletes a deployment.
 func (s *Service) DeleteDeployment(ctx context.Context, namespace, name string) error {
-	return s.clientset.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // formatDeploymentList formats a list of deployments.

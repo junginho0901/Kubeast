@@ -20,6 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/transport"
+
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 )
 
 var debugUpgrader = websocket.Upgrader{
@@ -45,6 +47,11 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	if image == "" {
 		image = "docker.io/library/busybox:latest"
 	}
+
+	// Audit at connection time (per §11 Q2). We do not record session
+	// duration or individual commands — that's a v2 decision.
+	h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, nil,
+		nil, audit.MustJSON(map[string]interface{}{"image": image}))
 
 	conn, err := debugUpgrader.Upgrade(w, r, nil)
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 
 // GetServices lists services in a namespace.
 func (s *Service) GetServices(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	svcList, err := s.clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	svcList, err := s.Clientset().CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list services: %w", err)
 	}
@@ -24,7 +24,7 @@ func (s *Service) GetServices(ctx context.Context, namespace string) ([]map[stri
 
 // GetAllServices lists services across all namespaces.
 func (s *Service) GetAllServices(ctx context.Context) ([]map[string]interface{}, error) {
-	svcList, err := s.clientset.CoreV1().Services("").List(ctx, metav1.ListOptions{})
+	svcList, err := s.Clientset().CoreV1().Services("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all services: %w", err)
 	}
@@ -44,21 +44,21 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		svc, svcErr = s.clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+		svc, svcErr = s.Clientset().CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		ep, epErr = s.clientset.CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
+		ep, epErr = s.Clientset().CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		esList, esErr = s.clientset.DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{
+		esList, esErr = s.Clientset().DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("kubernetes.io/service-name=%s", name),
 		})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service", name),
 		})
 	}()
@@ -251,12 +251,12 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 
 // DeleteService deletes a service.
 func (s *Service) DeleteService(ctx context.Context, namespace, name string) error {
-	return s.clientset.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // CheckServiceConnectivity performs a basic connectivity check on a service.
 func (s *Service) CheckServiceConnectivity(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	svc, err := s.clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+	svc, err := s.Clientset().CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get service %s/%s: %w", namespace, name, err)
 	}
@@ -268,7 +268,7 @@ func (s *Service) CheckServiceConnectivity(ctx context.Context, namespace, name 
 	}
 
 	// Check if endpoints exist
-	ep, err := s.clientset.CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
+	ep, err := s.Clientset().CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		result["has_endpoints"] = false
 		result["connectivity"] = "no_endpoints"

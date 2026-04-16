@@ -14,7 +14,7 @@ import (
 
 // GetNamespaces returns all namespaces.
 func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, error) {
-	nsList, err := s.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	nsList, err := s.Clientset().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list namespaces: %w", err)
 	}
@@ -45,49 +45,49 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 	wg.Add(9)
 	go func() {
 		defer wg.Done()
-		ns, nsErr = s.clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+		ns, nsErr = s.Clientset().CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		if pods, err := s.clientset.CoreV1().Pods(name).List(ctx, metav1.ListOptions{}); err == nil {
+		if pods, err := s.Clientset().CoreV1().Pods(name).List(ctx, metav1.ListOptions{}); err == nil {
 			podCount = len(pods.Items)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		if svcs, err := s.clientset.CoreV1().Services(name).List(ctx, metav1.ListOptions{}); err == nil {
+		if svcs, err := s.Clientset().CoreV1().Services(name).List(ctx, metav1.ListOptions{}); err == nil {
 			svcCount = len(svcs.Items)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		if deps, err := s.clientset.AppsV1().Deployments(name).List(ctx, metav1.ListOptions{}); err == nil {
+		if deps, err := s.Clientset().AppsV1().Deployments(name).List(ctx, metav1.ListOptions{}); err == nil {
 			depCount = len(deps.Items)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		if cms, err := s.clientset.CoreV1().ConfigMaps(name).List(ctx, metav1.ListOptions{}); err == nil {
+		if cms, err := s.Clientset().CoreV1().ConfigMaps(name).List(ctx, metav1.ListOptions{}); err == nil {
 			cmCount = len(cms.Items)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		if secrets, err := s.clientset.CoreV1().Secrets(name).List(ctx, metav1.ListOptions{}); err == nil {
+		if secrets, err := s.Clientset().CoreV1().Secrets(name).List(ctx, metav1.ListOptions{}); err == nil {
 			secretCount = len(secrets.Items)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		quotas, quotasErr = s.clientset.CoreV1().ResourceQuotas(name).List(ctx, metav1.ListOptions{})
+		quotas, quotasErr = s.Clientset().CoreV1().ResourceQuotas(name).List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		limits, limitsErr = s.clientset.CoreV1().LimitRanges(name).List(ctx, metav1.ListOptions{})
+		limits, limitsErr = s.Clientset().CoreV1().LimitRanges(name).List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(name).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(name).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Namespace", name),
 		})
 	}()
@@ -182,7 +182,7 @@ func (s *Service) CreateNamespace(ctx context.Context, name string, labels map[s
 			Labels: labels,
 		},
 	}
-	created, err := s.clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+	created, err := s.Clientset().CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("create namespace %s: %w", name, err)
 	}
@@ -196,12 +196,12 @@ func (s *Service) CreateNamespace(ctx context.Context, name string, labels map[s
 
 // DeleteNamespace deletes a namespace.
 func (s *Service) DeleteNamespace(ctx context.Context, name string) error {
-	return s.clientset.CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // GetNamespaceResourceQuotas lists resource quotas in a namespace.
 func (s *Service) GetNamespaceResourceQuotas(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	quotas, err := s.clientset.CoreV1().ResourceQuotas(namespace).List(ctx, metav1.ListOptions{})
+	quotas, err := s.Clientset().CoreV1().ResourceQuotas(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list resource quotas: %w", err)
 	}
@@ -229,7 +229,7 @@ func (s *Service) GetNamespaceResourceQuotas(ctx context.Context, namespace stri
 
 // GetNamespaceLimitRanges lists limit ranges in a namespace.
 func (s *Service) GetNamespaceLimitRanges(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	limits, err := s.clientset.CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})
+	limits, err := s.Clientset().CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list limit ranges: %w", err)
 	}
@@ -249,7 +249,7 @@ func (s *Service) GetNamespaceLimitRanges(ctx context.Context, namespace string)
 
 // GetNamespaceOwnedPods lists pods in a namespace.
 func (s *Service) GetNamespaceOwnedPods(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	pods, err := s.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	pods, err := s.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
 	}
@@ -283,7 +283,7 @@ func (s *Service) GetNamespaceOwnedPods(ctx context.Context, namespace string) (
 // ApplyNamespaceYAML applies labels/annotations from a YAML string to a namespace.
 // Protected keys with kubernetes.io/ and metadata.k8s.io/ prefixes are not modified.
 func (s *Service) ApplyNamespaceYAML(ctx context.Context, name string, yamlStr string) (map[string]interface{}, error) {
-	ns, err := s.clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+	ns, err := s.Clientset().CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get namespace %s: %w", name, err)
 	}
@@ -322,7 +322,7 @@ func (s *Service) ApplyNamespaceYAML(ctx context.Context, name string, yamlStr s
 		}
 	}
 
-	updated, err := s.clientset.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
+	updated, err := s.Clientset().CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("update namespace %s: %w", name, err)
 	}

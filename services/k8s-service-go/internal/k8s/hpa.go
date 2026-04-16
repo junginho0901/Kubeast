@@ -12,7 +12,7 @@ import (
 
 // GetHPAs lists HPAs in a namespace.
 func (s *Service) GetHPAs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AutoscalingV2().HorizontalPodAutoscalers(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list hpas: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetHPAs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllHPAs lists HPAs across all namespaces.
 func (s *Service) GetAllHPAs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AutoscalingV2().HorizontalPodAutoscalers("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AutoscalingV2().HorizontalPodAutoscalers("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all hpas: %w", err)
 	}
@@ -38,11 +38,11 @@ func (s *Service) DescribeHPA(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		hpa, hpaErr = s.clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Get(ctx, name, metav1.GetOptions{})
+		hpa, hpaErr = s.Clientset().AutoscalingV2().HorizontalPodAutoscalers(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=HorizontalPodAutoscaler", name),
 		})
 	}()
@@ -131,7 +131,7 @@ func (s *Service) DescribeHPA(ctx context.Context, namespace, name string) (map[
 
 // DeleteHPA deletes an HPA.
 func (s *Service) DeleteHPA(ctx context.Context, namespace, name string) error {
-	return s.clientset.AutoscalingV2().HorizontalPodAutoscalers(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AutoscalingV2().HorizontalPodAutoscalers(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatHPAList(hpas []autoscalingv2.HorizontalPodAutoscaler) []map[string]interface{} {

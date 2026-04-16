@@ -75,6 +75,7 @@
     "roleManagement": "Role Management",
     "aiModels": "AI Models",
     "nodeShell": "Node Shell",
+    "auditLogs": "Audit Logs",
     "organizations": "HQ / Team"
   },
   "layout": {
@@ -1333,6 +1334,8 @@
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
+    "copyMessage": "Copy",
+    "copied": "Copied",
     "inputPlaceholder": "Type a message...",
     "stop": "Stop",
     "send": "Send",

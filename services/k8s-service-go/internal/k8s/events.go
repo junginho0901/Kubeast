@@ -19,9 +19,9 @@ func (s *Service) GetEvents(ctx context.Context, namespace string, resourceName 
 	var err error
 
 	if namespace != "" {
-		eventList, err = s.clientset.CoreV1().Events(namespace).List(ctx, opts)
+		eventList, err = s.Clientset().CoreV1().Events(namespace).List(ctx, opts)
 	} else {
-		eventList, err = s.clientset.CoreV1().Events("").List(ctx, opts)
+		eventList, err = s.Clientset().CoreV1().Events("").List(ctx, opts)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("list events: %w", err)

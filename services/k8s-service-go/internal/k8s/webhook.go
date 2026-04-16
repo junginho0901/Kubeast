@@ -14,7 +14,7 @@ import (
 
 // GetMutatingWebhookConfigurations lists all MutatingWebhookConfigurations.
 func (s *Service) GetMutatingWebhookConfigurations(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list mutatingwebhookconfigurations: %w", err)
 	}
@@ -31,11 +31,11 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		mwc, mwcErr = s.clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, name, metav1.GetOptions{})
+		mwc, mwcErr = s.Clientset().AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=MutatingWebhookConfiguration", name),
 		})
 	}()
@@ -81,7 +81,7 @@ func (s *Service) DescribeMutatingWebhookConfiguration(ctx context.Context, name
 
 // DeleteMutatingWebhookConfiguration deletes a MutatingWebhookConfiguration.
 func (s *Service) DeleteMutatingWebhookConfiguration(ctx context.Context, name string) error {
-	return s.clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatMutatingWebhookConfigList(items []admissionregistrationv1.MutatingWebhookConfiguration) []map[string]interface{} {
@@ -156,7 +156,7 @@ func formatMutatingWebhooks(webhooks []admissionregistrationv1.MutatingWebhook) 
 
 // GetValidatingWebhookConfigurations lists all ValidatingWebhookConfigurations.
 func (s *Service) GetValidatingWebhookConfigurations(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().AdmissionregistrationV1().ValidatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list validatingwebhookconfigurations: %w", err)
 	}
@@ -173,11 +173,11 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		vwc, vwcErr = s.clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(ctx, name, metav1.GetOptions{})
+		vwc, vwcErr = s.Clientset().AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ValidatingWebhookConfiguration", name),
 		})
 	}()
@@ -223,7 +223,7 @@ func (s *Service) DescribeValidatingWebhookConfiguration(ctx context.Context, na
 
 // DeleteValidatingWebhookConfiguration deletes a ValidatingWebhookConfiguration.
 func (s *Service) DeleteValidatingWebhookConfiguration(ctx context.Context, name string) error {
-	return s.clientset.AdmissionregistrationV1().ValidatingWebhookConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().AdmissionregistrationV1().ValidatingWebhookConfigurations().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatValidatingWebhookConfigList(items []admissionregistrationv1.ValidatingWebhookConfiguration) []map[string]interface{} {

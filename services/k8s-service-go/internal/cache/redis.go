@@ -119,3 +119,15 @@ func (c *Cache) DeletePattern(ctx context.Context, pattern string) {
 func (c *Cache) IsConnected() bool {
 	return c.connected
 }
+
+// FlushAll drops every entry. Use sparingly — only when cached data may no
+// longer reflect reality (e.g. after the underlying K8s cluster changes).
+func (c *Cache) FlushAll(ctx context.Context) error {
+	if c.connected {
+		return c.rdb.FlushDB(ctx).Err()
+	}
+	c.mu.Lock()
+	c.mem = make(map[string]memEntry)
+	c.mu.Unlock()
+	return nil
+}

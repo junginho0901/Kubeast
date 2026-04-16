@@ -121,7 +121,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 
 	// --- Namespaced resources ---
 	fetch("pods", func() error {
-		list, err := s.clientset.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("services", func() error {
-		list, err := s.clientset.CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -143,7 +143,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("configmaps", func() error {
-		list, err := s.clientset.CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("secrets", func() error {
-		list, err := s.clientset.CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("pvcs", func() error {
-		list, err := s.clientset.CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("ingresses", func() error {
-		list, err := s.clientset.NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("rolebindings", func() error {
-		list, err := s.clientset.RbacV1().RoleBindings(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().RbacV1().RoleBindings(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -198,7 +198,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("serviceaccounts", func() error {
-		list, err := s.clientset.CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("replicasets", func() error {
-		list, err := s.clientset.AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -220,7 +220,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("deployments", func() error {
-		list, err := s.clientset.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -231,7 +231,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("statefulsets", func() error {
-		list, err := s.clientset.AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -242,7 +242,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("daemonsets", func() error {
-		list, err := s.clientset.AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("jobs", func() error {
-		list, err := s.clientset.BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -264,7 +264,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("cronjobs", func() error {
-		list, err := s.clientset.BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -275,7 +275,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("hpas", func() error {
-		list, err := s.clientset.AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("networkpolicies", func() error {
-		list, err := s.clientset.NetworkingV1().NetworkPolicies(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().NetworkingV1().NetworkPolicies(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -297,7 +297,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("endpointslices", func() error {
-		list, err := s.clientset.DiscoveryV1().EndpointSlices(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().DiscoveryV1().EndpointSlices(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -308,7 +308,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("endpoints", func() error {
-		list, err := s.clientset.CoreV1().Endpoints(ns).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Endpoints(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -320,7 +320,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 
 	// --- Cluster-scoped resources ---
 	fetch("pvs", func() error {
-		list, err := s.clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -331,7 +331,7 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	})
 
 	fetch("storageclasses", func() error {
-		list, err := s.clientset.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}

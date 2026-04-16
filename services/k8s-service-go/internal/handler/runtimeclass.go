@@ -51,7 +51,9 @@ func (h *Handler) DeleteRuntimeClass(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteRuntimeClass(ctx, name); err != nil {
+	err := h.svc.DeleteRuntimeClass(ctx, name)
+	h.recordAudit(r, "k8s.runtimeclass.delete", "runtimeclass", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -65,7 +66,9 @@ func (h *Handler) DeleteConfigMap(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteConfigMap(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteConfigMap(ctx, namespace, name)
+	h.recordAudit(r, "k8s.configmap.delete", "configmap", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -102,6 +105,11 @@ func (h *Handler) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	canReveal := h.requirePermission(r, "resource.secret.reveal") == nil
 	data, err := h.svc.DescribeSecret(ctx, namespace, name, canReveal)
+	// Meta-read audit: only when the caller actually had permission to see plaintext.
+	if canReveal {
+		h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+			nil, audit.MustJSON(map[string]interface{}{"via": "describe"}))
+	}
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -116,6 +124,10 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	canReveal := h.requirePermission(r, "resource.secret.reveal") == nil
 	data, err := h.svc.GetSecretYAML(ctx, namespace, name, canReveal)
+	if canReveal {
+		h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+			nil, audit.MustJSON(map[string]interface{}{"via": "yaml"}))
+	}
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -132,7 +144,9 @@ func (h *Handler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteSecret(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteSecret(ctx, namespace, name)
+	h.recordAudit(r, "k8s.secret.delete", "secret", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

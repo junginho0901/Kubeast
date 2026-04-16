@@ -31,7 +31,7 @@ var vpaGVR = schema.GroupVersionResource{
 
 // GetVPAs lists VPAs in a namespace using dynamic client.
 func (s *Service) GetVPAs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.dynamic.Resource(vpaGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Dynamic().Resource(vpaGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if isVPANotInstalled(err) {
 			return []map[string]interface{}{}, nil
@@ -43,7 +43,7 @@ func (s *Service) GetVPAs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllVPAs lists VPAs across all namespaces.
 func (s *Service) GetAllVPAs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.dynamic.Resource(vpaGVR).Namespace("").List(ctx, metav1.ListOptions{})
+	list, err := s.Dynamic().Resource(vpaGVR).Namespace("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if isVPANotInstalled(err) {
 			return []map[string]interface{}{}, nil
@@ -63,11 +63,11 @@ func (s *Service) DescribeVPA(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		vpa, vpaErr = s.dynamic.Resource(vpaGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+		vpa, vpaErr = s.Dynamic().Resource(vpaGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=VerticalPodAutoscaler", name),
 		})
 	}()
@@ -109,7 +109,7 @@ func (s *Service) DescribeVPA(ctx context.Context, namespace, name string) (map[
 
 // DeleteVPA deletes a VPA.
 func (s *Service) DeleteVPA(ctx context.Context, namespace, name string) error {
-	return s.dynamic.Resource(vpaGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Dynamic().Resource(vpaGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatVPAList(items []unstructured.Unstructured) []map[string]interface{} {

@@ -105,7 +105,9 @@ func (h *Handler) DeletePod(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "pod_name")
 	force := queryParamBool(r, "force", false)
-	if err := h.svc.DeletePod(ctx, namespace, name, force); err != nil {
+	err := h.svc.DeletePod(ctx, namespace, name, force)
+	h.recordAudit(r, "k8s.pod.delete", "pod", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

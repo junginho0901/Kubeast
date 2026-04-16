@@ -9,21 +9,24 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // Handler holds the dependencies for HTTP handlers.
 type Handler struct {
-	svc *k8s.Service
-	cfg config.Config
+	svc        *k8s.Service
+	cfg        config.Config
+	auditStore audit.Writer
 }
 
 // New creates a new Handler.
-func New(svc *k8s.Service, cfg config.Config) *Handler {
+func New(svc *k8s.Service, cfg config.Config, auditStore audit.Writer) *Handler {
 	return &Handler{
-		svc: svc,
-		cfg: cfg,
+		svc:        svc,
+		cfg:        cfg,
+		auditStore: auditStore,
 	}
 }
 

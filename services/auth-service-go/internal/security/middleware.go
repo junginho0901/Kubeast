@@ -45,6 +45,11 @@ func AuthMiddleware(jwtMgr *JWTManager) func(http.Handler) http.Handler {
 				return
 			}
 
+			email := strings.TrimSpace(fmt.Sprintf("%v", claims["email"]))
+			if email == "<nil>" {
+				email = ""
+			}
+
 			role := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", claims["role"])))
 			if role == "" || role == "<nil>" {
 				role = "read"
@@ -61,7 +66,7 @@ func AuthMiddleware(jwtMgr *JWTManager) func(http.Handler) http.Handler {
 				}
 			}
 
-			payload := auth.TokenPayload{UserID: userID, Role: role, Permissions: permissions}
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Permissions: permissions}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

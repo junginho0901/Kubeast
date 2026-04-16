@@ -82,7 +82,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	}
 
 	fetchTyped("pods", func() error {
-		list, err := s.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("services", func() error {
-		list, err := s.clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -104,7 +104,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("configmaps", func() error {
-		list, err := s.clientset.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("secrets", func() error {
-		list, err := s.clientset.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("pvcs", func() error {
-		list, err := s.clientset.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("ingresses", func() error {
-		list, err := s.clientset.NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("rolebindings", func() error {
-		list, err := s.clientset.RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	})
 
 	fetchTyped("serviceaccounts", func() error {
-		list, err := s.clientset.CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{})
+		list, err := s.Clientset().CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -333,7 +333,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 
 	// Build ReplicaSet owner chain: find RS owners from appsV1
 	// Fetch ReplicaSets to trace Deployment → ReplicaSet chain
-	rsList, err := s.clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	rsList, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for i := range rsList.Items {
 			rs := &rsList.Items[i]
@@ -364,7 +364,7 @@ func (s *Service) GetDependencyGraph(ctx context.Context, namespace string) (map
 	}
 
 	// Fetch Jobs to trace CronJob → Job chain
-	jobList, err := s.clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
+	jobList, err := s.Clientset().BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for i := range jobList.Items {
 			job := &jobList.Items[i]

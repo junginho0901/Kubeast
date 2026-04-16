@@ -75,6 +75,7 @@
     "roleManagement": "역할 관리",
     "aiModels": "AI 모델 설정",
     "nodeShell": "노드 셸",
+    "auditLogs": "감사 로그",
     "organizations": "본부 / 팀"
   },
   "layout": {
@@ -1341,6 +1342,8 @@
     "emptyTitle": "새 대화를 시작하세요",
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요",
     "resultZipDownload": "Result ZIP 다운로드",
+    "copyMessage": "복사",
+    "copied": "복사됨",
     "inputPlaceholder": "메시지를 입력하세요...",
     "stop": "중단",
     "send": "전송",

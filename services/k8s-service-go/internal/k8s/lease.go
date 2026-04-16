@@ -12,7 +12,7 @@ import (
 
 // GetLeases lists Leases in a namespace.
 func (s *Service) GetLeases(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoordinationV1().Leases(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoordinationV1().Leases(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list leases: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetLeases(ctx context.Context, namespace string) ([]map[string
 
 // GetAllLeases lists Leases across all namespaces.
 func (s *Service) GetAllLeases(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoordinationV1().Leases("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoordinationV1().Leases("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all leases: %w", err)
 	}
@@ -38,11 +38,11 @@ func (s *Service) DescribeLease(ctx context.Context, namespace, name string) (ma
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		lease, leaseErr = s.clientset.CoordinationV1().Leases(namespace).Get(ctx, name, metav1.GetOptions{})
+		lease, leaseErr = s.Clientset().CoordinationV1().Leases(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Lease", name),
 		})
 	}()
@@ -85,7 +85,7 @@ func (s *Service) DescribeLease(ctx context.Context, namespace, name string) (ma
 
 // DeleteLease deletes a Lease.
 func (s *Service) DeleteLease(ctx context.Context, namespace, name string) error {
-	return s.clientset.CoordinationV1().Leases(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoordinationV1().Leases(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatLeaseList(leases []coordinationv1.Lease) []map[string]interface{} {

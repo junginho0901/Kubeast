@@ -66,7 +66,9 @@ func (h *Handler) DeleteHPA(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteHPA(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteHPA(ctx, namespace, name)
+	h.recordAudit(r, "k8s.hpa.delete", "hpa", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -132,7 +134,9 @@ func (h *Handler) DeletePDB(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeletePDB(ctx, namespace, name); err != nil {
+	err := h.svc.DeletePDB(ctx, namespace, name)
+	h.recordAudit(r, "k8s.pdb.delete", "pdb", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

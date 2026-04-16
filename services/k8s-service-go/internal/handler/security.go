@@ -68,7 +68,9 @@ func (h *Handler) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteServiceAccount(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteServiceAccount(ctx, namespace, name)
+	h.recordAudit(r, "k8s.serviceaccount.delete", "serviceaccount", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -136,7 +138,9 @@ func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteRole(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteRole(ctx, namespace, name)
+	h.recordAudit(r, "k8s.role.delete", "role", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -204,7 +208,9 @@ func (h *Handler) DeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteRoleBinding(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteRoleBinding(ctx, namespace, name)
+	h.recordAudit(r, "k8s.rolebinding.delete", "rolebinding", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

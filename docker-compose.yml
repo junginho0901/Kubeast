@@ -52,8 +52,12 @@ services:
       - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-change-me-do-not-use-in-prod}
       - KEY_DIR=/app/.keys
+      - DEPLOYMENT_MODE=docker
+      - DOCKER_KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
+      - K8S_SERVICE_HEALTH_URL=http://k8s-service:8002/health
     volumes:
       - auth_keys:/app/.keys
+      - kubeconfig_data:/kubeconfig
     networks:
       - msa-network
     depends_on:
@@ -103,15 +107,17 @@ services:
     env_file:
       - .env
     environment:
-      - KUBECONFIG_PATH=/app/kubeconfig.yaml
+      - KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
+      - KUBECONFIG_WATCH=true
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
     volumes:
-      - ./kubeconfig.yaml:/app/kubeconfig.yaml:ro
+      - kubeconfig_data:/kubeconfig:ro
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -121,6 +127,8 @@ services:
       - msa-network
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       auth-service:
         condition: service_started
@@ -159,13 +167,14 @@ services:
     env_file:
       - .env
     environment:
-      - KUBECONFIG_PATH=/app/kubeconfig.yaml
+      - KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
+      - TOOL_SERVER_KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
       - TOOL_SERVER_USE_INCLUSTER=false
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
     volumes:
-      - ./kubeconfig.yaml:/app/kubeconfig.yaml:ro
+      - kubeconfig_data:/kubeconfig:ro
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -219,3 +228,4 @@ networks:
 volumes:
   postgres_data:
   auth_keys:
+  kubeconfig_data:

@@ -208,7 +208,7 @@ func (s *Service) GetNamespaceTopology(ctx context.Context, namespace string) (m
 
 // GetServiceTopology returns a topology graph centered on a service.
 func (s *Service) GetServiceTopology(ctx context.Context, namespace, serviceName string) (map[string]interface{}, error) {
-	svc, err := s.clientset.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+	svc, err := s.Clientset().CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get service %s/%s: %w", namespace, serviceName, err)
 	}
@@ -305,7 +305,7 @@ func (s *Service) GetServiceTopology(ctx context.Context, namespace, serviceName
 
 // GetDeploymentTopology returns a topology graph centered on a deployment.
 func (s *Service) GetDeploymentTopology(ctx context.Context, namespace, deploymentName string) (map[string]interface{}, error) {
-	dep, err := s.clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	dep, err := s.Clientset().AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get deployment %s/%s: %w", namespace, deploymentName, err)
 	}

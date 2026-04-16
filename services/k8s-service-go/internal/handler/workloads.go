@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -69,7 +71,9 @@ func (h *Handler) DeleteStatefulSet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteStatefulSet(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteStatefulSet(ctx, namespace, name)
+	h.recordAudit(r, "k8s.statefulset.delete", "statefulset", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -137,7 +141,9 @@ func (h *Handler) DeleteDaemonSet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteDaemonSet(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteDaemonSet(ctx, namespace, name)
+	h.recordAudit(r, "k8s.daemonset.delete", "daemonset", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -205,7 +211,9 @@ func (h *Handler) DeleteReplicaSet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteReplicaSet(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteReplicaSet(ctx, namespace, name)
+	h.recordAudit(r, "k8s.replicaset.delete", "replicaset", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -273,7 +281,9 @@ func (h *Handler) DeleteJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteJob(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteJob(ctx, namespace, name)
+	h.recordAudit(r, "k8s.job.delete", "job", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -349,7 +359,14 @@ func (h *Handler) SuspendCronJob(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, err)
 		return
 	}
-	if err := h.svc.SuspendCronJob(ctx, namespace, name, body.Suspend); err != nil {
+	err := h.svc.SuspendCronJob(ctx, namespace, name, body.Suspend)
+	action := "k8s.cronjob.suspend"
+	if !body.Suspend {
+		action = "k8s.cronjob.resume"
+	}
+	h.recordAuditWithPayload(r, action, "cronjob", name, namespace, err,
+		nil, audit.MustJSON(map[string]interface{}{"suspend": body.Suspend}))
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -366,6 +383,11 @@ func (h *Handler) TriggerCronJob(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
 	jobName, err := h.svc.TriggerCronJob(ctx, namespace, name)
+	var after json.RawMessage
+	if err == nil {
+		after = audit.MustJSON(map[string]interface{}{"job_name": jobName})
+	}
+	h.recordAuditWithPayload(r, "k8s.cronjob.trigger", "cronjob", name, namespace, err, nil, after)
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -395,7 +417,9 @@ func (h *Handler) DeleteCronJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteCronJob(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteCronJob(ctx, namespace, name)
+	h.recordAudit(r, "k8s.cronjob.delete", "cronjob", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -463,7 +487,11 @@ func (h *Handler) RollbackWorkload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.RollbackWorkload(ctx, namespace, name, kind, body.Revision); err != nil {
+	err := h.svc.RollbackWorkload(ctx, namespace, name, kind, body.Revision)
+	action := "k8s." + strings.ToLower(kind) + ".rollback"
+	h.recordAuditWithPayload(r, action, strings.ToLower(kind), name, namespace, err,
+		nil, audit.MustJSON(map[string]interface{}{"revision": body.Revision}))
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

@@ -74,7 +74,9 @@ func (h *Handler) DeleteIngress(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteIngress(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteIngress(ctx, namespace, name)
+	h.recordAudit(r, "k8s.ingress.delete", "ingress", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -114,7 +116,9 @@ func (h *Handler) DeleteIngressClass(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteIngressClass(ctx, name); err != nil {
+	err := h.svc.DeleteIngressClass(ctx, name)
+	h.recordAudit(r, "k8s.ingressclass.delete", "ingressclass", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -182,7 +186,9 @@ func (h *Handler) DeleteEndpoints(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteEndpoints(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteEndpoints(ctx, namespace, name)
+	h.recordAudit(r, "k8s.endpoints.delete", "endpoints", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -250,7 +256,9 @@ func (h *Handler) DeleteEndpointSlice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteEndpointSlice(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteEndpointSlice(ctx, namespace, name)
+	h.recordAudit(r, "k8s.endpointslice.delete", "endpointslice", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -318,7 +326,9 @@ func (h *Handler) DeleteNetworkPolicy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteNetworkPolicy(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteNetworkPolicy(ctx, namespace, name)
+	h.recordAudit(r, "k8s.networkpolicy.delete", "networkpolicy", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

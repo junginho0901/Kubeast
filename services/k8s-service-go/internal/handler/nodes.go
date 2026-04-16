@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -75,7 +76,9 @@ func (h *Handler) DeleteNode(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteNode(ctx, name); err != nil {
+	err := h.svc.DeleteNode(ctx, name)
+	h.recordAudit(r, "k8s.node.delete", "node", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -100,6 +103,8 @@ func (h *Handler) ApplyNodeYAML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := h.svc.ApplyResourceYAML(ctx, "nodes", "", name, body.YAML)
+	h.recordAuditWithPayload(r, "k8s.node.edit", "node", name, "", err,
+		nil, audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML)}))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -115,7 +120,9 @@ func (h *Handler) CordonNode(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.CordonNode(ctx, name); err != nil {
+	err := h.svc.CordonNode(ctx, name)
+	h.recordAudit(r, "k8s.node.cordon", "node", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -130,7 +137,9 @@ func (h *Handler) UncordonNode(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.UncordonNode(ctx, name); err != nil {
+	err := h.svc.UncordonNode(ctx, name)
+	h.recordAudit(r, "k8s.node.uncordon", "node", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

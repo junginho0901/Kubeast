@@ -13,12 +13,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 )
@@ -35,11 +37,45 @@ func main() {
 	// Init Redis cache
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB)
 
+	// Init shared Postgres pool (audit log) with a short timeout so that
+	// a misconfigured DB does not block k8s-service start-up indefinitely.
+	// On failure we fall back to the slog-backed audit store and continue.
+	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer bootCancel()
+
+	var auditStore audit.Writer
+	pgPool, pgErr := pgxpool.New(bootCtx, cfg.DatabaseURLForPgx())
+	if pgErr == nil {
+		pgErr = pgPool.Ping(bootCtx)
+	}
+	if pgErr != nil {
+		slog.Warn("audit: Postgres unavailable, falling back to slog writer", "error", pgErr)
+		auditStore = audit.NewSlogStore(audit.ServiceK8s)
+	} else {
+		defer pgPool.Close()
+		store := audit.NewPostgresStore(pgPool, audit.ServiceK8s)
+		if err := store.EnsureSchema(bootCtx); err != nil {
+			slog.Warn("audit: schema migration failed, falling back to slog writer", "error", err)
+			pgPool.Close()
+			auditStore = audit.NewSlogStore(audit.ServiceK8s)
+		} else {
+			auditStore = store
+			slog.Info("audit: Postgres writer ready")
+		}
+	}
+
 	// Init Kubernetes service
-	k8sSvc, err := k8s.NewService(cfg.KubeconfigPath, cfg.InCluster, redisCache)
+	k8sSvc, err := k8s.NewService(cfg.KubeconfigPath, cfg.InCluster, cfg.KubeconfigWatch, redisCache)
 	if err != nil {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
+	}
+
+	// Start kubeconfig hot-reload watcher (docker mode).
+	if cfg.KubeconfigWatch {
+		watcherCtx, cancelWatcher := context.WithCancel(context.Background())
+		defer cancelWatcher()
+		go k8sSvc.WatchKubeconfig(watcherCtx)
 	}
 
 	// Init JWT validator
@@ -50,10 +86,10 @@ func main() {
 	})
 
 	// Init handler
-	h := handler.New(k8sSvc, cfg)
+	h := handler.New(k8sSvc, cfg, auditStore)
 
 	// Init WebSocket multiplexer
-	wsMux := ws.NewMultiplexer(k8sSvc.Clientset(), k8sSvc.Dynamic())
+	wsMux := ws.NewMultiplexer(k8sSvc)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -359,6 +395,7 @@ func main() {
 		// Generic resources
 		r.Get("/api/v1/resources", h.GetGenericResources)
 		r.Post("/api/v1/search", h.SearchResources)
+		r.Get("/api/v1/resources/json", h.GetGenericResourceJSON)
 		r.Get("/api/v1/resources/yaml", h.GetGenericResourceYAML)
 		r.Post("/api/v1/resources/yaml/apply", h.ApplyResourceYAML)
 		r.Post("/api/v1/resources/yaml/create", h.CreateResourcesFromYAML)

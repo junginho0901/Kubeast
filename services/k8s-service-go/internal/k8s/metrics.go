@@ -108,7 +108,7 @@ func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{},
 
 	// Fetch node capacity for percentage calculation
 	nodeCapacity := make(map[string]struct{ cpuNano, memBytes int64 })
-	nodes, listErr := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, listErr := s.Clientset().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if listErr == nil {
 		for _, n := range nodes.Items {
 			cpuQ := n.Status.Capacity.Cpu()
@@ -209,7 +209,7 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 		if err := json.Unmarshal(nodeBody, &nodeResp); err == nil {
 			// Fetch node capacity
 			nodeCapacity := make(map[string]struct{ cpuNano, memBytes int64 })
-			nodeList, listErr := s.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			nodeList, listErr := s.Clientset().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 			if listErr == nil {
 				for _, n := range nodeList.Items {
 					nodeCapacity[n.Name] = struct{ cpuNano, memBytes int64 }{

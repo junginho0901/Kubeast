@@ -201,6 +201,8 @@ func allPermissions() []map[string]interface{} {
 			{"admin.organizations.create", "본부/팀 생성"},
 			{"admin.organizations.delete", "본부/팀 삭제"},
 			{"admin.ai_models.*", "AI 모델 설정"},
+			{"admin.audit.read", "감사 로그 조회"},
+			{"admin.audit.export", "감사 로그 내보내기 (CSV)"},
 		}},
 	}
 	return categories

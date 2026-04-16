@@ -78,7 +78,9 @@ func (h *Handler) DeleteGateway(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteGateway(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteGateway(ctx, namespace, name)
+	h.recordAudit(r, "k8s.gateway.delete", "gateway", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -126,7 +128,9 @@ func (h *Handler) DeleteGatewayClass(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteGatewayClass(ctx, name); err != nil {
+	err := h.svc.DeleteGatewayClass(ctx, name)
+	h.recordAudit(r, "k8s.gatewayclass.delete", "gatewayclass", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -192,7 +196,9 @@ func (h *Handler) DeleteHTTPRoute(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteHTTPRoute(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteHTTPRoute(ctx, namespace, name)
+	h.recordAudit(r, "k8s.httproute.delete", "httproute", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -258,7 +264,9 @@ func (h *Handler) DeleteGRPCRoute(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteGRPCRoute(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteGRPCRoute(ctx, namespace, name)
+	h.recordAudit(r, "k8s.grpcroute.delete", "grpcroute", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -324,7 +332,9 @@ func (h *Handler) DeleteReferenceGrant(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteReferenceGrant(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteReferenceGrant(ctx, namespace, name)
+	h.recordAudit(r, "k8s.referencegrant.delete", "referencegrant", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -390,7 +400,9 @@ func (h *Handler) DeleteBackendTLSPolicy(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteBackendTLSPolicy(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteBackendTLSPolicy(ctx, namespace, name)
+	h.recordAudit(r, "k8s.backendtlspolicy.delete", "backendtlspolicy", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -456,7 +468,9 @@ func (h *Handler) DeleteBackendTrafficPolicy(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteBackendTrafficPolicy(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteBackendTrafficPolicy(ctx, namespace, name)
+	h.recordAudit(r, "k8s.backendtrafficpolicy.delete", "backendtrafficpolicy", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}

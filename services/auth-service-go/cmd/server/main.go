@@ -21,6 +21,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -60,6 +61,14 @@ func main() {
 	}
 	slog.Info("database schema initialized")
 
+	// Shared audit store (applies v1.1 column/index migration on startup).
+	auditStore := audit.NewPostgresStore(pool, audit.ServiceAuth)
+	if err := auditStore.EnsureSchema(ctx); err != nil {
+		slog.Error("failed to migrate audit schema", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("audit schema ensured")
+
 	// Seed system roles and migrate auth_users.role → role_id
 	if err := repo.SeedSystemRoles(ctx); err != nil {
 		slog.Error("failed to seed system roles", "error", err)
@@ -82,7 +91,7 @@ func main() {
 	authMiddleware := security.AuthMiddleware(jwtMgr)
 
 	// Handlers
-	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg)
+	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
 	roleHandler := handler.NewRoleHandler(repo)
 	setupHandler := handler.NewSetupHandler(repo, cfg)
 	healthHandler := handler.NewHealthHandler(pool)
@@ -145,6 +154,7 @@ func main() {
 			r.Delete("/admin/roles/{id}", roleHandler.DeleteRole)
 			r.Post("/admin/organizations", authHandler.AdminCreateOrganization)
 			r.Delete("/admin/organizations/{id}", authHandler.AdminDeleteOrganization)
+			r.Get("/admin/audit-logs", authHandler.AdminListAuditLogs)
 			r.Post("/admin/users/bulk", authHandler.AdminBulkCreateUsers)
 			r.Patch("/admin/users/bulk-role", authHandler.AdminBulkUpdateRole)
 			r.Post("/admin/users", authHandler.AdminCreateUser)

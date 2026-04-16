@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dockersetup"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/k8ssetup"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
@@ -33,7 +35,7 @@ func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
 
 	status := "unknown"
 	var msg *string
-	connStatus, connMsg := k8ssetup.CheckK8sServiceHealth("http://k8s-service:8002/health", 2)
+	connStatus, connMsg := k8ssetup.CheckK8sServiceHealth(h.cfg.K8sServiceHealthURL, 2)
 	status = connStatus
 	if connMsg != "" {
 		msg = &connMsg
@@ -96,35 +98,46 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Upsert Secret
-		sName := h.cfg.SetupKubeconfigSecret
-		if err := k8ssetup.UpsertKubeconfigSecret(r.Context(), h.cfg.SetupNamespace, sName, *req.Kubeconfig); err != nil {
-			slog.Error("upsert kubeconfig secret failed", "error", err)
-			response.Error(w, http.StatusInternalServerError, "Failed to store kubeconfig: "+err.Error())
+		if h.cfg.DeploymentMode == "docker" {
+			if err := dockersetup.WriteKubeconfigAtomic(h.cfg.DockerKubeconfigPath, []byte(*req.Kubeconfig)); err != nil {
+				slog.Error("write kubeconfig failed", "error", err)
+				response.Error(w, http.StatusInternalServerError, "Failed to write kubeconfig: "+err.Error())
+				return
+			}
+			slog.Info("kubeconfig written", "path", h.cfg.DockerKubeconfigPath)
+		} else {
+			// Upsert Secret
+			sName := h.cfg.SetupKubeconfigSecret
+			if err := k8ssetup.UpsertKubeconfigSecret(r.Context(), h.cfg.SetupNamespace, sName, *req.Kubeconfig); err != nil {
+				slog.Error("upsert kubeconfig secret failed", "error", err)
+				response.Error(w, http.StatusInternalServerError, "Failed to store kubeconfig: "+err.Error())
+				return
+			}
+			secretName = &sName
+		}
+	}
+
+	if h.cfg.DeploymentMode != "docker" {
+		// Patch ConfigMap
+		inCluster := "true"
+		if req.Mode == "external" {
+			inCluster = "false"
+		}
+		cmData := map[string]string{
+			"IN_CLUSTER":      inCluster,
+			"KUBECONFIG_PATH": "/app/kubeconfig.yaml",
+		}
+		if err := k8ssetup.PatchConfigMap(r.Context(), h.cfg.SetupNamespace, h.cfg.SetupConfigMapName, cmData); err != nil {
+			slog.Error("patch configmap failed", "error", err)
+			response.Error(w, http.StatusInternalServerError, "Failed to update config: "+err.Error())
 			return
 		}
-		secretName = &sName
-	}
 
-	// Patch ConfigMap
-	inCluster := "true"
-	if req.Mode == "external" {
-		inCluster = "false"
-	}
-	cmData := map[string]string{
-		"IN_CLUSTER":      inCluster,
-		"KUBECONFIG_PATH": "/app/kubeconfig.yaml",
-	}
-	if err := k8ssetup.PatchConfigMap(r.Context(), h.cfg.SetupNamespace, h.cfg.SetupConfigMapName, cmData); err != nil {
-		slog.Error("patch configmap failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, "Failed to update config: "+err.Error())
-		return
-	}
-
-	// Restart deployments
-	for _, dep := range h.cfg.SetupRestartDeployments {
-		if err := k8ssetup.RestartDeployment(r.Context(), h.cfg.SetupNamespace, dep); err != nil {
-			slog.Error("restart deployment failed", "deployment", dep, "error", err)
+		// Restart deployments
+		for _, dep := range h.cfg.SetupRestartDeployments {
+			if err := k8ssetup.RestartDeployment(r.Context(), h.cfg.SetupNamespace, dep); err != nil {
+				slog.Error("restart deployment failed", "deployment", dep, "error", err)
+			}
 		}
 	}
 
@@ -145,6 +158,23 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 
 // RolloutStatus handles GET /auth/setup/rollout-status
 func (h *SetupHandler) RolloutStatus(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.DeploymentMode == "docker" {
+		s := dockersetup.GetStatus(r.Context(), h.cfg.DockerKubeconfigPath, h.cfg.K8sServiceHealthURL)
+		response.JSON(w, http.StatusOK, map[string]interface{}{
+			"ready": s.FileExists && s.K8sServiceReady,
+			"deployments": map[string]interface{}{
+				"kubeconfig-file": map[string]interface{}{
+					"ready":   s.FileExists,
+					"message": fmt.Sprintf("%d bytes", s.FileSize),
+				},
+				"k8s-service": map[string]interface{}{
+					"ready":   s.K8sServiceReady,
+					"message": s.Message,
+				},
+			},
+		})
+		return
+	}
 	result := k8ssetup.CheckRolloutStatus(r.Context(), h.cfg.SetupNamespace, h.cfg.SetupRestartDeployments)
 	response.JSON(w, http.StatusOK, result)
 }

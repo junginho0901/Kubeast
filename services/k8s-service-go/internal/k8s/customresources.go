@@ -22,7 +22,7 @@ var crdGVR = schema.GroupVersionResource{
 
 // GetCRDs lists all CustomResourceDefinitions.
 func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.dynamic.Resource(crdGVR).List(ctx, metav1.ListOptions{})
+	list, err := s.Dynamic().Resource(crdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list crds: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error)
 
 // DescribeCRD returns detailed info about a CRD.
 func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]interface{}, error) {
-	item, err := s.dynamic.Resource(crdGVR).Get(ctx, name, metav1.GetOptions{})
+	item, err := s.Dynamic().Resource(crdGVR).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get crd %s: %w", name, err)
 	}
@@ -189,7 +189,7 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 
 // DeleteCRD deletes a CustomResourceDefinition.
 func (s *Service) DeleteCRD(ctx context.Context, name string) error {
-	return s.dynamic.Resource(crdGVR).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Dynamic().Resource(crdGVR).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Custom Resource Instances ==========
@@ -197,7 +197,7 @@ func (s *Service) DeleteCRD(ctx context.Context, name string) error {
 // GetAllCustomResourceInstances lists all custom resource instances across all CRDs.
 func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[string]interface{}, error) {
 	// First get all CRDs
-	crdList, err := s.dynamic.Resource(crdGVR).List(ctx, metav1.ListOptions{})
+	crdList, err := s.Dynamic().Resource(crdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list crds for instances: %w", err)
 	}
@@ -261,7 +261,7 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[stri
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			crList, err := s.dynamic.Resource(gvr).List(ctx, metav1.ListOptions{})
+			crList, err := s.Dynamic().Resource(gvr).List(ctx, metav1.ListOptions{})
 			if err != nil {
 				// Skip CRDs that fail (e.g., permission issues)
 				return
@@ -313,7 +313,7 @@ func (s *Service) GetCustomResourceInstances(ctx context.Context, group, version
 		Resource: plural,
 	}
 
-	list, err := s.dynamic.Resource(gvr).List(ctx, metav1.ListOptions{})
+	list, err := s.Dynamic().Resource(gvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list custom resources %s/%s/%s: %w", group, version, plural, err)
 	}
@@ -368,9 +368,9 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 	go func() {
 		defer wg.Done()
 		if namespace != "" && namespace != "-" {
-			item, itemErr = s.dynamic.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+			item, itemErr = s.Dynamic().Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 		} else {
-			item, itemErr = s.dynamic.Resource(gvr).Get(ctx, name, metav1.GetOptions{})
+			item, itemErr = s.Dynamic().Resource(gvr).Get(ctx, name, metav1.GetOptions{})
 		}
 	}()
 
@@ -380,7 +380,7 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 		if evtNs == "" || evtNs == "-" {
 			evtNs = ""
 		}
-		events, eventsErr = s.clientset.CoreV1().Events(evtNs).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(evtNs).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s", name),
 		})
 	}()
@@ -460,7 +460,7 @@ func (s *Service) DeleteCustomResourceInstance(ctx context.Context, group, versi
 	}
 
 	if namespace != "" && namespace != "-" {
-		return s.dynamic.Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		return s.Dynamic().Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	}
-	return s.dynamic.Resource(gvr).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Dynamic().Resource(gvr).Delete(ctx, name, metav1.DeleteOptions{})
 }

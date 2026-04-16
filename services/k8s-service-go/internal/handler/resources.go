@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -132,6 +133,30 @@ func (h *Handler) SearchResources(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
+// GetGenericResourceJSON handles GET /api/v1/resources/json.
+// Returns a single K8s resource as full unstructured JSON (same shape Advanced Search uses).
+func (h *Handler) GetGenericResourceJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	resourceType := queryParam(r, "resource_type", "")
+	namespace := queryParam(r, "namespace", "")
+	name := queryParam(r, "resource_name", "")
+	if name == "" {
+		name = queryParam(r, "name", "")
+	}
+
+	if resourceType == "" || name == "" {
+		response.Error(w, http.StatusBadRequest, "resource_type and resource_name are required")
+		return
+	}
+
+	data, err := h.svc.GetGenericResourceRaw(ctx, resourceType, namespace, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
 // GetGenericResourceYAML handles GET /api/v1/resources/yaml.
 func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -188,6 +213,11 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	data, err := h.svc.ApplyResourceYAML(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
+	h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, err,
+		nil, audit.MustJSON(map[string]interface{}{
+			"resource_type": body.ResourceType,
+			"yaml_len":      len(body.YAML),
+		}))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -212,6 +242,8 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 
 	ctx := r.Context()
 	data, err := h.svc.CreateResourcesFromYAML(ctx, body.YAML)
+	h.recordAuditWithPayload(r, "k8s.yaml.create", "multi", "", "", err,
+		nil, audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML)}))
 	if err != nil {
 		h.handleError(w, err)
 		return

@@ -43,7 +43,7 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 		Version:  "v1beta1",
 		Resource: "deviceclasses",
 	}
-	_, err := s.dynamic.Resource(gvr).List(probeCtx, metav1.ListOptions{Limit: 1})
+	_, err := s.Dynamic().Resource(gvr).List(probeCtx, metav1.ListOptions{Limit: 1})
 	if err == nil {
 		s.draAPIVersionCache = "v1beta1"
 		slog.Info("DRA API version detected", "version", "v1beta1")
@@ -54,7 +54,7 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 	probeCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
 	gvr.Version = "v1alpha3"
-	_, err = s.dynamic.Resource(gvr).List(probeCtx2, metav1.ListOptions{Limit: 1})
+	_, err = s.Dynamic().Resource(gvr).List(probeCtx2, metav1.ListOptions{Limit: 1})
 	if err == nil {
 		s.draAPIVersionCache = "v1alpha3"
 		slog.Info("DRA API version detected", "version", "v1alpha3")
@@ -352,11 +352,11 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		nodeList, nodeErr = s.clientset.CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
+		nodeList, nodeErr = s.Clientset().CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		podList, podErr = s.clientset.CoreV1().Pods("").List(dashCtx, metav1.ListOptions{})
+		podList, podErr = s.Clientset().CoreV1().Pods("").List(dashCtx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
@@ -650,7 +650,7 @@ func getDevicePluginStatus(ctx context.Context, s *Service) map[string]interface
 	for _, c := range candidates {
 		// Short timeout per candidate so we don't block if the namespace doesn't exist
 		tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		ds, err := s.clientset.AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
+		ds, err := s.Clientset().AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
 		cancel()
 		if err != nil {
 			continue
@@ -674,7 +674,7 @@ func getTimeSlicingConfig(ctx context.Context, s *Service) map[string]interface{
 	for _, ns := range namespaces {
 		for _, name := range names {
 			tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-			cm, err := s.clientset.CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})
+			cm, err := s.Clientset().CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})
 			cancel()
 			if err != nil {
 				continue

@@ -151,7 +151,7 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 	}
 
 	for _, ns := range namespaces {
-		svcList, err := s.clientset.CoreV1().Services(ns).List(probeCtx, metav1.ListOptions{})
+		svcList, err := s.Clientset().CoreV1().Services(ns).List(probeCtx, metav1.ListOptions{})
 		if err != nil {
 			continue
 		}
@@ -190,7 +190,7 @@ func (s *Service) verifyPrometheusProxy(ctx context.Context, info *promServiceIn
 	proxyBase := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy",
 		info.Namespace, info.Name, info.Port)
 
-	result := s.clientset.CoreV1().RESTClient().Get().
+	result := s.Clientset().CoreV1().RESTClient().Get().
 		AbsPath(proxyBase).
 		Suffix("-", "healthy").
 		Do(ctx)
@@ -218,7 +218,7 @@ func (s *Service) prometheusViaProxy(ctx context.Context, info *promServiceInfo,
 		info.Namespace, info.Name, info.Port)
 
 	// Use the K8s RESTClient with proper param handling
-	req := s.clientset.CoreV1().RESTClient().Get().
+	req := s.Clientset().CoreV1().RESTClient().Get().
 		AbsPath(proxyBase)
 
 	// Parse promPath to separate the path and query parts

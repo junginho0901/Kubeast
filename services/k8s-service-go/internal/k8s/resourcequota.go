@@ -11,7 +11,7 @@ import (
 
 // GetResourceQuotas lists ResourceQuotas in a namespace.
 func (s *Service) GetResourceQuotas(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoreV1().ResourceQuotas(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoreV1().ResourceQuotas(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list resource quotas: %w", err)
 	}
@@ -20,7 +20,7 @@ func (s *Service) GetResourceQuotas(ctx context.Context, namespace string) ([]ma
 
 // GetAllResourceQuotas lists ResourceQuotas across all namespaces.
 func (s *Service) GetAllResourceQuotas(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientset.CoreV1().ResourceQuotas("").List(ctx, metav1.ListOptions{})
+	list, err := s.Clientset().CoreV1().ResourceQuotas("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all resource quotas: %w", err)
 	}
@@ -37,11 +37,11 @@ func (s *Service) DescribeResourceQuota(ctx context.Context, namespace, name str
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		rq, rqErr = s.clientset.CoreV1().ResourceQuotas(namespace).Get(ctx, name, metav1.GetOptions{})
+		rq, rqErr = s.Clientset().CoreV1().ResourceQuotas(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ResourceQuota", name),
 		})
 	}()
@@ -111,7 +111,7 @@ func (s *Service) DescribeResourceQuota(ctx context.Context, namespace, name str
 
 // DeleteResourceQuota deletes a ResourceQuota.
 func (s *Service) DeleteResourceQuota(ctx context.Context, namespace, name string) error {
-	return s.clientset.CoreV1().ResourceQuotas(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.Clientset().CoreV1().ResourceQuotas(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatResourceQuotaList(items []corev1.ResourceQuota) []map[string]interface{} {

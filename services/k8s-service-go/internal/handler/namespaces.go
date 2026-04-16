@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -61,6 +62,8 @@ func (h *Handler) ApplyNamespaceYAML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := h.svc.ApplyNamespaceYAML(ctx, namespace, body.YAML)
+	h.recordAuditWithPayload(r, "k8s.namespace.apply", "namespace", namespace, namespace, err,
+		nil, audit.MustJSON(map[string]interface{}{"yaml_len": len(body.YAML)}))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -90,6 +93,8 @@ func (h *Handler) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := h.svc.CreateNamespace(ctx, body.Name, body.Labels)
+	h.recordAuditWithPayload(r, "k8s.namespace.create", "namespace", body.Name, body.Name, err,
+		nil, audit.MustJSON(map[string]interface{}{"labels": body.Labels}))
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -106,7 +111,9 @@ func (h *Handler) DeleteNamespace(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 
-	if err := h.svc.DeleteNamespace(ctx, namespace); err != nil {
+	err := h.svc.DeleteNamespace(ctx, namespace)
+	h.recordAudit(r, "k8s.namespace.delete", "namespace", namespace, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
