@@ -89,10 +89,11 @@ func NewJWTManager(keyDir, issuer, audience string, expiresMinutes int) (*JWTMan
 }
 
 // CreateToken generates a signed JWT for a user.
-func (m *JWTManager) CreateToken(userID, roleName string, permissions []string) (string, error) {
+func (m *JWTManager) CreateToken(userID, email, roleName string, permissions []string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub":         userID,
+		"email":       email,
 		"role":        roleName,
 		"permissions": permissions,
 		"iss":         m.Issuer,
