@@ -75,6 +75,7 @@
     "roleManagement": "Role Management",
     "aiModels": "AI Models",
     "nodeShell": "Node Shell",
+    "auditLogs": "Audit Logs",
     "organizations": "HQ / Team"
   },
   "layout": {

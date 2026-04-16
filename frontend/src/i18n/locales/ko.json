@@ -75,6 +75,7 @@
     "roleManagement": "역할 관리",
     "aiModels": "AI 모델 설정",
     "nodeShell": "노드 셸",
+    "auditLogs": "감사 로그",
     "organizations": "본부 / 팀"
   },
   "layout": {

@@ -1196,6 +1196,48 @@ export interface Organization {
   created_at: string
 }
 
+// Audit log types — mirror services/pkg/audit/types.go Entry & Filter.
+export interface AuditLogEntry {
+  ID: number
+  CreatedAt: string
+  Service: string
+  Action: string
+  ActorUserID: string
+  ActorEmail: string
+  TargetID: string
+  TargetType: string
+  TargetEmail: string
+  Cluster: string
+  Namespace: string
+  Result: 'success' | 'failure' | string
+  Error: string
+  RequestIP: string
+  UserAgent: string
+  RequestID: string
+  Path: string
+  Before?: unknown
+  After?: unknown
+}
+
+export interface AuditLogFilter {
+  service?: string
+  action?: string
+  actor_email?: string
+  target_id?: string
+  cluster?: string
+  namespace?: string
+  result?: 'success' | 'failure'
+  since?: string  // RFC3339
+  until?: string  // RFC3339
+  limit?: number
+  offset?: number
+}
+
+export interface AuditLogListResponse {
+  total: number
+  items: AuditLogEntry[]
+}
+
 export interface AuthResponse {
   access_token: string
   token_type: string
@@ -1350,6 +1392,15 @@ export const api = {
 
   adminDeleteRole: async (id: number): Promise<void> => {
     await client.delete(`/auth/admin/roles/${id}`)
+  },
+
+  // Audit Logs
+  adminListAuditLogs: async (params?: AuditLogFilter): Promise<AuditLogListResponse> => {
+    const { data } = await client.get('/auth/admin/audit-logs', { params })
+    return {
+      total: data?.total ?? 0,
+      items: Array.isArray(data?.items) ? data.items : [],
+    }
   },
 
   // Cluster
