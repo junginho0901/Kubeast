@@ -126,7 +126,9 @@ func (h *Handler) DeleteDeviceClass(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteDeviceClass(ctx, name); err != nil {
+	err := h.svc.DeleteDeviceClass(ctx, name)
+	h.recordAudit(r, "k8s.deviceclass.delete", "deviceclass", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -188,7 +190,9 @@ func (h *Handler) DeleteResourceClaim(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteResourceClaim(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteResourceClaim(ctx, namespace, name)
+	h.recordAudit(r, "k8s.resourceclaim.delete", "resourceclaim", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -250,7 +254,9 @@ func (h *Handler) DeleteResourceClaimTemplate(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteResourceClaimTemplate(ctx, namespace, name); err != nil {
+	err := h.svc.DeleteResourceClaimTemplate(ctx, namespace, name)
+	h.recordAudit(r, "k8s.resourceclaimtemplate.delete", "resourceclaimtemplate", name, namespace, err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -295,7 +301,9 @@ func (h *Handler) DeleteResourceSlice(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	name := chi.URLParam(r, "name")
-	if err := h.svc.DeleteResourceSlice(ctx, name); err != nil {
+	err := h.svc.DeleteResourceSlice(ctx, name)
+	h.recordAudit(r, "k8s.resourceslice.delete", "resourceslice", name, "", err)
+	if err != nil {
 		h.handleError(w, err)
 		return
 	}
