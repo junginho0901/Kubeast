@@ -3109,6 +3109,17 @@ export const api = {
       )
       return data as HelmDiffResponse
     },
+    rollback: async (
+      namespace: string,
+      name: string,
+      payload: { revision: number; dryRun: boolean },
+    ): Promise<HelmRollbackResponse> => {
+      const { data } = await client.post(
+        `/helm/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/rollback`,
+        payload,
+      )
+      return data as HelmRollbackResponse
+    },
   },
 }
 
@@ -3165,6 +3176,15 @@ export interface HelmDiffResponse {
   to: number
   section: HelmSection
   diff: string
+}
+
+export interface HelmRollbackResponse {
+  dryRun: boolean
+  fromRevision: number
+  toRevision: number
+  newRevision?: number
+  status?: string
+  diff?: string
 }
 
 let metricsDisabled = false
