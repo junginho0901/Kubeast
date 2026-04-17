@@ -3055,6 +3055,20 @@ export const api = {
       const { data } = await client.get('/helm/releases', { params })
       return Array.isArray(data?.items) ? data.items : []
     },
+    getRelease: async (namespace: string, name: string): Promise<HelmReleaseDetail> => {
+      const { data } = await client.get(`/helm/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`)
+      return data as HelmReleaseDetail
+    },
+    getSection: async (
+      namespace: string,
+      name: string,
+      section: HelmSection,
+    ): Promise<HelmSectionResponse> => {
+      const { data } = await client.get(
+        `/helm/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${section}`,
+      )
+      return data as HelmSectionResponse
+    },
   },
 }
 
