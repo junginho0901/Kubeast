@@ -9,6 +9,7 @@
     "security": "Security",
     "configuration": "Configuration",
     "customResources": "Custom Resources",
+    "helm": "Helm",
     "admin": "Admin",
     "dashboard": "Dashboard",
     "clusterView": "Cluster View",
@@ -76,7 +77,8 @@
     "aiModels": "AI Models",
     "nodeShell": "Node Shell",
     "auditLogs": "Audit Logs",
-    "organizations": "HQ / Team"
+    "organizations": "HQ / Team",
+    "helmReleases": "Releases"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -2624,6 +2626,87 @@
       "userEmail": "Email",
       "userHq": "HQ",
       "userTeam": "Team"
+    }
+  },
+  "helmReleases": {
+    "title": "Helm Releases",
+    "subtitle": "Inspect and manage Helm releases installed in the cluster.",
+    "refresh": "Refresh",
+    "allNamespaces": "All namespaces",
+    "searchPlaceholder": "Search release name...",
+    "matchCount": "{{count}} release(s) match.",
+    "empty": {
+      "title": "No Helm releases",
+      "description": "Releases installed with Helm show up here. If your cluster has existing releases, check your kubeconfig and permissions."
+    },
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "revision": "Revision",
+      "status": "Status",
+      "chart": "Chart",
+      "chartVersion": "Chart version",
+      "appVersion": "App version",
+      "updated": "Updated"
+    }
+  },
+  "helmReleaseDetail": {
+    "subtitle": "Release detail",
+    "tabs": {
+      "overview": "Overview",
+      "values": "Values",
+      "manifest": "Manifest",
+      "notes": "Notes",
+      "history": "History",
+      "resources": "Resources"
+    },
+    "overview": {
+      "chart": "Chart",
+      "chartVersion": "Chart version",
+      "appVersion": "App version",
+      "revision": "Revision",
+      "status": "Status",
+      "updated": "Updated",
+      "description": "Description"
+    },
+    "history": {
+      "empty": "No revision history.",
+      "current": "current"
+    },
+    "resources": {
+      "empty": "No resources tracked for this release."
+    },
+    "rollback": {
+      "button": "Rollback",
+      "title": "Rollback to revision {{rev}}",
+      "subtitle": "{{ns}}/{{name}} — review the diff before applying",
+      "noChange": "No changes will be applied.",
+      "cancel": "Cancel",
+      "apply": "Apply rollback",
+      "applying": "Rolling back..."
+    },
+    "upgrade": {
+      "edit": "Edit values",
+      "cancel": "Cancel",
+      "preview": "Preview changes (dry-run)",
+      "title": "Values upgrade preview",
+      "subtitle": "{{ns}}/{{name}} — chart version unchanged; values only",
+      "noChange": "No changes will be applied.",
+      "apply": "Apply upgrade",
+      "applying": "Upgrading..."
+    },
+    "uninstall": {
+      "button": "Uninstall",
+      "title": "Uninstall release \"{{name}}\"",
+      "warning": "This will delete {{count}} Kubernetes resources owned by this release. This cannot be undone.",
+      "keepHistory": "Keep revision history (can be restored with helm rollback later)",
+      "confirmLabel": "Type the release name \"{{name}}\" to confirm.",
+      "cancel": "Cancel",
+      "apply": "Uninstall",
+      "applying": "Uninstalling..."
+    },
+    "error": {
+      "notFound": "Release not found."
     }
   }
 }

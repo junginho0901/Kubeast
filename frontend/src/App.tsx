@@ -71,6 +71,8 @@ import MutatingWebhookConfigurations from './pages/cluster/MutatingWebhookConfig
 import ValidatingWebhookConfigurations from './pages/cluster/ValidatingWebhookConfigurations'
 import CustomResourceDefinitions from './pages/custom-resources/CustomResourceDefinitions'
 import CustomResourceInstances from './pages/custom-resources/CustomResourceInstances'
+import HelmReleasesPage from './pages/helm/Releases'
+import HelmReleaseDetailPage from './pages/helm/ReleaseDetail'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 
 function App() {
@@ -136,6 +138,8 @@ function App() {
             <Route path="cluster/validatingwebhookconfigurations" element={<ValidatingWebhookConfigurations />} />
             <Route path="custom-resources/instances" element={<CustomResourceInstances />} />
             <Route path="custom-resources/groups" element={<CustomResourceDefinitions />} />
+            <Route path="helm/releases" element={<HelmReleasesPage />} />
+            <Route path="helm/releases/:namespace/:name" element={<HelmReleaseDetailPage />} />
             <Route path="monitoring" element={<Monitoring />} />
             <Route path="cluster-view" element={<ClusterView />} />
             <Route path="account" element={<Account />} />

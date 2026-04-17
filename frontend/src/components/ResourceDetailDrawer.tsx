@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { X, Info, FileCode, Trash2, ArrowLeft } from 'lucide-react'
+import { X, Info, FileCode, Trash2, ArrowLeft, ArrowUpRight, Package } from 'lucide-react'
 import { useResourceDetail } from './ResourceDetailContext'
 import { usePermission } from '@/hooks/usePermission'
 import { api } from '@/services/api'
@@ -45,6 +46,46 @@ import WebhookConfigInfo from './resource-detail/WebhookConfigInfo'
 import CRDInfo from './resource-detail/CRDInfo'
 import CustomResourceInstanceInfo from './resource-detail/CustomResourceInstanceInfo'
 import GenericInfo from './resource-detail/GenericInfo'
+
+// extractHelmRelease returns the owning Helm release coordinates
+// (namespace, name) if the given raw resource JSON carries the
+// meta.helm.sh annotations. The managed-by label is an extra signal
+// but we do not require it — Helm sets the annotations even when a
+// chart intentionally omits the label.
+function extractHelmRelease(
+  rawJson: Record<string, unknown> | null | undefined,
+): { namespace: string; name: string } | null {
+  const metadata = (rawJson?.metadata ?? {}) as Record<string, unknown>
+  const annotations = (metadata?.annotations ?? {}) as Record<string, string>
+  const name = annotations['meta.helm.sh/release-name']
+  const ns = annotations['meta.helm.sh/release-namespace']
+  if (typeof name !== 'string' || !name) return null
+  if (typeof ns !== 'string' || !ns) return null
+  return { namespace: ns, name }
+}
+
+// HelmReleaseBadge surfaces the owning Helm release on any resource
+// that was installed via Helm. Placed in the drawer header so users
+// can jump from "why is this pod here?" to the Helm detail page in
+// one click.
+function HelmReleaseBadge({ rawJson }: { rawJson: Record<string, unknown> | null | undefined }) {
+  const rel = extractHelmRelease(rawJson)
+  if (!rel) return null
+  const to = `/helm/releases/${encodeURIComponent(rel.namespace)}/${encodeURIComponent(rel.name)}`
+  return (
+    <Link
+      to={to}
+      className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 text-xs text-primary-200 hover:bg-primary-500/20"
+      title={`Helm release ${rel.namespace}/${rel.name}`}
+    >
+      <Package className="w-3 h-3" />
+      <span className="font-medium">{rel.name}</span>
+      <span className="text-primary-400/80">·</span>
+      <span className="text-primary-300/90">{rel.namespace}</span>
+      <ArrowUpRight className="w-3 h-3" />
+    </Link>
+  )
+}
 
 function decodeSecretYaml(yaml: string): string {
   const lines = yaml.split('\n')
@@ -1037,6 +1078,7 @@ export default function ResourceDetailDrawer() {
               {ns && <span className="text-xs text-slate-500">{ns}</span>}
             </div>
             <h2 className="text-lg font-semibold text-white truncate">{name}</h2>
+            <HelmReleaseBadge rawJson={effectiveRawJson} />
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {canGoBack && (
