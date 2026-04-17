@@ -25,6 +25,30 @@ func (h *Handler) recordAuditWithPayload(
 	err error,
 	before, after json.RawMessage,
 ) {
+	h.recordAuditAs(r, audit.ServiceK8s, action, targetType, targetID, namespace, err, before, after)
+}
+
+// recordHelmAudit is the helm-scoped counterpart to recordAudit. It
+// fixes Service=ServiceHelm so helm handlers do not have to spell out
+// the boilerplate (see docs/helm-plan.md §8-6 option B).
+func (h *Handler) recordHelmAudit(
+	r *http.Request,
+	action, targetType, targetID, namespace string,
+	err error,
+	before, after json.RawMessage,
+) {
+	h.recordAuditAs(r, audit.ServiceHelm, action, targetType, targetID, namespace, err, before, after)
+}
+
+// recordAuditAs is the shared implementation that lets callers pin the
+// audit Service field. Every helper above funnels through it so the
+// record shape stays identical across k8s-service and helm actions.
+func (h *Handler) recordAuditAs(
+	r *http.Request,
+	service, action, targetType, targetID, namespace string,
+	err error,
+	before, after json.RawMessage,
+) {
 	if h == nil || h.auditStore == nil {
 		return
 	}
@@ -32,7 +56,7 @@ func (h *Handler) recordAuditWithPayload(
 	payload, _ := auth.FromContext(r.Context())
 
 	rec := audit.FromHTTPRequest(r)
-	rec.Service = audit.ServiceK8s
+	rec.Service = service
 	rec.Action = action
 	rec.ActorUserID = payload.UserID
 	rec.ActorEmail = payload.Email
