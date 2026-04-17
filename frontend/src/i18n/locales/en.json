@@ -2676,6 +2676,35 @@
     "resources": {
       "empty": "No resources tracked for this release."
     },
+    "rollback": {
+      "button": "Rollback",
+      "title": "Rollback to revision {{rev}}",
+      "subtitle": "{{ns}}/{{name}} — review the diff before applying",
+      "noChange": "No changes will be applied.",
+      "cancel": "Cancel",
+      "apply": "Apply rollback",
+      "applying": "Rolling back..."
+    },
+    "upgrade": {
+      "edit": "Edit values",
+      "cancel": "Cancel",
+      "preview": "Preview changes (dry-run)",
+      "title": "Values upgrade preview",
+      "subtitle": "{{ns}}/{{name}} — chart version unchanged; values only",
+      "noChange": "No changes will be applied.",
+      "apply": "Apply upgrade",
+      "applying": "Upgrading..."
+    },
+    "uninstall": {
+      "button": "Uninstall",
+      "title": "Uninstall release \"{{name}}\"",
+      "warning": "This will delete {{count}} Kubernetes resources owned by this release. This cannot be undone.",
+      "keepHistory": "Keep revision history (can be restored with helm rollback later)",
+      "confirmLabel": "Type the release name \"{{name}}\" to confirm.",
+      "cancel": "Cancel",
+      "apply": "Uninstall",
+      "applying": "Uninstalling..."
+    },
     "error": {
       "notFound": "Release not found."
     }

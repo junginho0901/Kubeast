@@ -2920,6 +2920,35 @@
     "resources": {
       "empty": "이 Release가 관리하는 리소스를 찾지 못했습니다."
     },
+    "rollback": {
+      "button": "롤백",
+      "title": "리비전 {{rev}}로 롤백",
+      "subtitle": "{{ns}}/{{name}} — 변경 미리보기 확인 후 적용",
+      "noChange": "적용될 변경이 없습니다.",
+      "cancel": "취소",
+      "apply": "롤백 실행",
+      "applying": "롤백 중..."
+    },
+    "upgrade": {
+      "edit": "Values 편집",
+      "cancel": "취소",
+      "preview": "변경 미리보기 (Dry Run)",
+      "title": "Values 변경 미리보기",
+      "subtitle": "{{ns}}/{{name}} — chart 버전은 유지된 채 values 만 갱신됩니다",
+      "noChange": "적용될 변경이 없습니다.",
+      "apply": "업그레이드 실행",
+      "applying": "업그레이드 중..."
+    },
+    "uninstall": {
+      "button": "언인스톨",
+      "title": "Release \"{{name}}\" 언인스톨",
+      "warning": "이 Release가 관리하는 {{count}}개의 Kubernetes 리소스가 삭제됩니다. 되돌릴 수 없습니다.",
+      "keepHistory": "리비전 기록은 보존 (나중에 helm rollback 으로 복구 가능)",
+      "confirmLabel": "확인을 위해 Release 이름 \"{{name}}\"을 그대로 입력하세요.",
+      "cancel": "취소",
+      "apply": "언인스톨 실행",
+      "applying": "언인스톨 중..."
+    },
     "error": {
       "notFound": "Release를 찾을 수 없습니다."
     }
