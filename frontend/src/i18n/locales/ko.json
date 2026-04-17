@@ -2871,5 +2871,57 @@
       "devices": "디바이스",
       "age": "Age"
     }
+  },
+  "helmReleases": {
+    "title": "Helm Releases",
+    "subtitle": "클러스터에 설치된 Helm Release를 조회하고 관리합니다.",
+    "refresh": "새로고침",
+    "allNamespaces": "전체 네임스페이스",
+    "searchPlaceholder": "Release 이름 검색...",
+    "matchCount": "{{count}}개의 Release가 검색되었습니다.",
+    "empty": {
+      "title": "설치된 Release가 없습니다",
+      "description": "Helm으로 배포된 애플리케이션이 여기에 표시됩니다. 이미 클러스터에 Release가 있다면 kubeconfig와 권한을 확인해 보세요."
+    },
+    "table": {
+      "name": "이름",
+      "namespace": "네임스페이스",
+      "revision": "리비전",
+      "status": "상태",
+      "chart": "차트",
+      "chartVersion": "차트 버전",
+      "appVersion": "앱 버전",
+      "updated": "업데이트 시각"
+    }
+  },
+  "helmReleaseDetail": {
+    "subtitle": "Release 상세",
+    "tabs": {
+      "overview": "개요",
+      "values": "Values",
+      "manifest": "Manifest",
+      "notes": "Notes",
+      "history": "History",
+      "resources": "리소스"
+    },
+    "overview": {
+      "chart": "차트",
+      "chartVersion": "차트 버전",
+      "appVersion": "앱 버전",
+      "revision": "리비전",
+      "status": "상태",
+      "updated": "업데이트",
+      "description": "설명"
+    },
+    "history": {
+      "empty": "리비전 기록이 없습니다.",
+      "current": "현재"
+    },
+    "resources": {
+      "empty": "이 Release가 관리하는 리소스를 찾지 못했습니다."
+    },
+    "error": {
+      "notFound": "Release를 찾을 수 없습니다."
+    }
   }
 }
