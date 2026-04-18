@@ -3131,6 +3131,12 @@ export const api = {
       )
       return data as HelmUpgradeResponse
     },
+    test: async (namespace: string, name: string): Promise<HelmTestResponse> => {
+      const { data } = await client.post(
+        `/helm/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/test`,
+      )
+      return data as HelmTestResponse
+    },
     uninstall: async (
       namespace: string,
       name: string,
@@ -3230,6 +3236,18 @@ export interface HelmUninstallResponse {
   keepHistory: boolean
   resources?: HelmReleaseResource[]
   info?: string
+}
+
+export interface HelmTestHookResult {
+  name: string
+  phase: string
+  logs?: string
+  failed: boolean
+}
+
+export interface HelmTestResponse {
+  success: boolean
+  hooks: HelmTestHookResult[]
 }
 
 let metricsDisabled = false

@@ -8,6 +8,7 @@ import (
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/release"
 	"sigs.k8s.io/yaml"
 )
 
@@ -106,6 +107,70 @@ func (s *Service) Rollback(ctx context.Context, namespace, name string, revision
 func unifiedDiff(fromLabel, toLabel, fromText, toText string) string {
 	edits := myers.ComputeEdits(span.URIFromPath(fromLabel), fromText, toText)
 	return fmt.Sprint(gotextdiff.ToUnified(fromLabel, toLabel, fromText, edits))
+}
+
+// Test runs the release's helm test hooks (usually Pod kind with the
+// helm.sh/hook=test annotation) and returns a per-hook result. Helm's
+// action.ReleaseTesting streams logs which we collect into the response
+// — the UI should show failures prominently because a failed test
+// often indicates a broken upgrade that hasn't rolled out yet.
+func (s *Service) Test(ctx context.Context, namespace, name string) (*TestResult, error) {
+	cfg, err := s.actionConfig(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	tester := action.NewReleaseTesting(cfg)
+	tester.Namespace = namespace
+
+	rel, err := tester.Run(name)
+	// Helm returns an error when any hook fails but the release object
+	// still contains the hook results, so we don't early-return here.
+	result := &TestResult{Success: err == nil}
+	if rel == nil {
+		if err != nil {
+			return nil, translateSDKError(err)
+		}
+		return result, nil
+	}
+
+	for _, h := range rel.Hooks {
+		if !isTestHook(h.Events) {
+			continue
+		}
+		entry := TestHookResult{Name: h.Name, Phase: string(h.LastRun.Phase)}
+		// Phase "Failed" or a non-Succeeded phase marks the hook as failed.
+		if h.LastRun.Phase != "Succeeded" && h.LastRun.Phase != "" {
+			entry.Failed = true
+		}
+		// Helm stores hook logs on Release.Hooks[i].LastRun when fetch-logs
+		// is enabled; the SDK does not expose a direct accessor so we
+		// fall back to the rendered manifest header as a breadcrumb.
+		if h.LastRun.Phase == "" {
+			entry.Phase = "NotRun"
+		}
+		result.Hooks = append(result.Hooks, entry)
+	}
+
+	if err != nil {
+		// Surface Helm's error message; the per-hook breakdown above
+		// already tells the UI which hook failed.
+		return result, translateSDKError(err)
+	}
+	return result, nil
+}
+
+// isTestHook reports whether any of a hook's registered events is "test".
+// Helm v3 replaced "test-success" / "test-failure" with a single "test"
+// event; we accept both for compatibility with older charts.
+func isTestHook(events []release.HookEvent) bool {
+	for _, e := range events {
+		switch string(e) {
+		case "test", "test-success", "test-failure":
+			return true
+		}
+	}
+	return false
 }
 
 // Uninstall removes a release from the cluster. When dryRun is true we

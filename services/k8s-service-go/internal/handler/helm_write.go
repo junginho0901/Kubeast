@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -58,6 +59,38 @@ func (h *Handler) RollbackHelmRelease(w http.ResponseWriter, r *http.Request) {
 		})
 		h.recordHelmAudit(r, "helm.release.rollback", "release", name, ns, err, before, after)
 	}
+
+	if err != nil {
+		h.handleHelmError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, result)
+}
+
+// TestHelmRelease handles POST /api/v1/helm/releases/{namespace}/{name}/test.
+// Runs the release's helm test hooks (usually Pod kind with the
+// helm.sh/hook=test annotation) and reports per-hook pass/fail.
+func (h *Handler) TestHelmRelease(w http.ResponseWriter, r *http.Request) {
+	if err := h.requirePermission(r, "resource.helm.test"); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	ns := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+
+	result, err := h.helmSvc.Test(r.Context(), ns, name)
+
+	// Audit whether the test ran, success vs failure is captured via
+	// the Result field (error from action.ReleaseTesting means a hook
+	// failed, which for operators is a meaningful outcome).
+	var payload json.RawMessage
+	if result != nil {
+		payload = audit.MustJSON(map[string]any{
+			"success":   result.Success,
+			"hookCount": len(result.Hooks),
+		})
+	}
+	h.recordHelmAudit(r, "helm.release.test", "release", name, ns, err, nil, payload)
 
 	if err != nil {
 		h.handleHelmError(w, err)

@@ -2637,7 +2637,9 @@
     "matchCount": "{{count}} release(s) match.",
     "empty": {
       "title": "No Helm releases",
-      "description": "Releases installed with Helm show up here. If your cluster has existing releases, check your kubeconfig and permissions."
+      "description": "Releases installed with Helm show up here. If your cluster has existing releases, check your kubeconfig and permissions.",
+      "docs": "Helm docs",
+      "installGuide": "Chart install guide"
     },
     "table": {
       "name": "Name",
@@ -2667,11 +2669,19 @@
       "revision": "Revision",
       "status": "Status",
       "updated": "Updated",
-      "description": "Description"
+      "description": "Description",
+      "namespace": "Namespace",
+      "resourceCount": "Resources",
+      "imageCount": "Images"
     },
     "history": {
       "empty": "No revision history.",
       "current": "current"
+    },
+    "revision": {
+      "title": "Revision {{rev}} detail",
+      "diffVsCurrent": "Diff vs current",
+      "close": "Close"
     },
     "resources": {
       "empty": "No resources tracked for this release."
@@ -2694,6 +2704,16 @@
       "noChange": "No changes will be applied.",
       "apply": "Apply upgrade",
       "applying": "Upgrading..."
+    },
+    "test": {
+      "button": "Run tests",
+      "title": "Test release \"{{name}}\"",
+      "subtitle": "Executes the chart's helm test hooks (usually Pods).",
+      "running": "Running tests...",
+      "passed": "All tests passed",
+      "failed": "Tests failed — see per-hook details below",
+      "noHooks": "This chart defines no test hooks.",
+      "close": "Close"
     },
     "uninstall": {
       "button": "Uninstall",

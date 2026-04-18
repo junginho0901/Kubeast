@@ -505,6 +505,7 @@ func main() {
 		r.Get("/api/v1/helm/releases/{namespace}/{name}/revisions/{revision}/{section}", h.GetHelmRevisionSection)
 		// Helm writes (v1.1)
 		r.Post("/api/v1/helm/releases/{namespace}/{name}/rollback", h.RollbackHelmRelease)
+		r.Post("/api/v1/helm/releases/{namespace}/{name}/test", h.TestHelmRelease)
 		r.Put("/api/v1/helm/releases/{namespace}/{name}/values", h.UpgradeHelmValues)
 		r.Delete("/api/v1/helm/releases/{namespace}/{name}", h.UninstallHelmRelease)
 		// Keep the {section} catch-all last so chi resolves literal

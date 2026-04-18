@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Package, RefreshCw, Search } from 'lucide-react'
+import { ExternalLink, Loader2, Package, RefreshCw, Search } from 'lucide-react'
 import { api, type HelmReleaseSummary } from '@/services/api'
 
 // Release mutations are rare (install/upgrade minutes apart) so we
@@ -171,6 +171,12 @@ export default function HelmReleasesPage() {
   )
 }
 
+// Empty state buttons point at Helm's public docs. The "install guide"
+// link targets the subchapter most useful to a first-time user
+// ("Installing Apps with Helm") rather than the manpage index.
+const HELM_DOCS_URL = 'https://helm.sh/docs/'
+const HELM_INSTALL_GUIDE_URL = 'https://helm.sh/docs/intro/using_helm/'
+
 function EmptyState() {
   const { t } = useTranslation()
   return (
@@ -179,6 +185,26 @@ function EmptyState() {
       <div className="text-lg font-semibold text-white">{t('helmReleases.empty.title')}</div>
       <div className="max-w-md text-sm text-slate-400">
         {t('helmReleases.empty.description')}
+      </div>
+      <div className="flex gap-2 mt-2">
+        <a
+          href={HELM_DOCS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+        >
+          {t('helmReleases.empty.docs')}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <a
+          href={HELM_INSTALL_GUIDE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+        >
+          {t('helmReleases.empty.installGuide')}
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
     </div>
   )
