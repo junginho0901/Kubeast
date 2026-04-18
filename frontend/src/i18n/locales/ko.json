@@ -2881,7 +2881,9 @@
     "matchCount": "{{count}}개의 Release가 검색되었습니다.",
     "empty": {
       "title": "설치된 Release가 없습니다",
-      "description": "Helm으로 배포된 애플리케이션이 여기에 표시됩니다. 이미 클러스터에 Release가 있다면 kubeconfig와 권한을 확인해 보세요."
+      "description": "Helm으로 배포된 애플리케이션이 여기에 표시됩니다. 이미 클러스터에 Release가 있다면 kubeconfig와 권한을 확인해 보세요.",
+      "docs": "Helm 문서",
+      "installGuide": "차트 설치 가이드"
     },
     "table": {
       "name": "이름",
@@ -2946,6 +2948,16 @@
       "noChange": "적용될 변경이 없습니다.",
       "apply": "업그레이드 실행",
       "applying": "업그레이드 중..."
+    },
+    "test": {
+      "button": "테스트 실행",
+      "title": "Release \"{{name}}\" 테스트",
+      "subtitle": "chart 에 등록된 helm test hook (주로 Pod) 을 실행합니다.",
+      "running": "테스트 진행 중...",
+      "passed": "모든 테스트 통과",
+      "failed": "테스트 실패 - hook 별 상세는 아래 참조",
+      "noHooks": "이 chart 에는 test hook 이 정의되어 있지 않습니다.",
+      "close": "닫기"
     },
     "uninstall": {
       "button": "언인스톨",
