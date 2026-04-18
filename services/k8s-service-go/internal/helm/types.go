@@ -137,3 +137,20 @@ type UpgradeResult struct {
 	Diff         string `json:"diff,omitempty"`
 	ChartVersion string `json:"chartVersion"`
 }
+
+// TestResult captures the outcome of running the helm test hooks for a
+// release. Logs are included so the UI can show failure output without
+// a second round-trip.
+type TestResult struct {
+	Success bool            `json:"success"`
+	Hooks   []TestHookResult `json:"hooks"`
+}
+
+// TestHookResult is one per test hook (usually a Pod). Name + phase let
+// the UI render a per-hook status badge; Logs is the pod stdout/stderr.
+type TestHookResult struct {
+	Name   string `json:"name"`
+	Phase  string `json:"phase"`
+	Logs   string `json:"logs,omitempty"`
+	Failed bool   `json:"failed"`
+}
