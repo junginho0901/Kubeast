@@ -77,24 +77,9 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
   return (
     <>
       <div className="space-y-3">
-        <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
-          <Editor
-            height="50vh"
-            defaultLanguage="yaml"
-            value={draft}
-            theme="vs-dark"
-            onChange={(v) => setDraft(v ?? '')}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 12,
-              lineNumbers: 'on',
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              tabSize: 2,
-              insertSpaces: true,
-            }}
-          />
-        </div>
+        {/* Action row sits in the same slot as the read-mode [Edit]
+            button so the editor starts at an identical vertical
+            position in both modes — swapping does not jump the page. */}
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -129,6 +114,24 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
           >
             {t('helmReleaseDetail.upgrade.preview')}
           </button>
+        </div>
+        <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
+          <Editor
+            height="50vh"
+            defaultLanguage="yaml"
+            value={draft}
+            theme="vs-dark"
+            onChange={(v) => setDraft(v ?? '')}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 12,
+              lineNumbers: 'on',
+              wordWrap: 'on',
+              scrollBeyondLastLine: false,
+              tabSize: 2,
+              insertSpaces: true,
+            }}
+          />
         </div>
       </div>
 
