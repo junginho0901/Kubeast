@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ExternalLink, Loader2, Package, RefreshCw, Search } from 'lucide-react'
+import { CheckCircle, ChevronDown, ExternalLink, Loader2, Package, RefreshCw, Search } from 'lucide-react'
 import { api, type HelmReleaseSummary } from '@/services/api'
 
 // Release mutations are rare (install/upgrade minutes apart) so we
