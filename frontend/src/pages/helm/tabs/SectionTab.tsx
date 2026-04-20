@@ -4,6 +4,10 @@ import { api, type HelmSection } from '@/services/api'
 
 // Generic read-only renderer for the manifest / notes tabs. Values has
 // its own tab because it gains an edit mode in v1.1 (see ValuesTab).
+//
+// Manifest can easily be thousands of lines, so we swap <pre> for
+// Monaco — code folding collapses each K8s document to a single line
+// and the minimap lets you jump through a big manifest at a glance.
 export default function SectionTab({
   namespace,
   name,
