@@ -102,7 +102,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
               setEditing(false)
               setDraft('')
             }}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
           >
             {t('helmReleaseDetail.upgrade.cancel')}
           </button>
