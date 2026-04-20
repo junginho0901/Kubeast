@@ -77,24 +77,9 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
   return (
     <>
       <div className="space-y-3">
-        <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
-          <Editor
-            height="50vh"
-            defaultLanguage="yaml"
-            value={draft}
-            theme="vs-dark"
-            onChange={(v) => setDraft(v ?? '')}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 12,
-              lineNumbers: 'on',
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              tabSize: 2,
-              insertSpaces: true,
-            }}
-          />
-        </div>
+        {/* Action row sits in the same slot as the read-mode [Edit]
+            button so the editor starts at an identical vertical
+            position in both modes — swapping does not jump the page. */}
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -102,7 +87,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
               setEditing(false)
               setDraft('')
             }}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
           >
             {t('helmReleaseDetail.upgrade.cancel')}
           </button>
@@ -125,10 +110,28 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                 })
               }
             }}
-            className="px-4 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
           >
             {t('helmReleaseDetail.upgrade.preview')}
           </button>
+        </div>
+        <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
+          <Editor
+            height="60vh"
+            defaultLanguage="yaml"
+            value={draft}
+            theme="vs-dark"
+            onChange={(v) => setDraft(v ?? '')}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 12,
+              lineNumbers: 'on',
+              wordWrap: 'on',
+              scrollBeyondLastLine: false,
+              tabSize: 2,
+              insertSpaces: true,
+            }}
+          />
         </div>
       </div>
 

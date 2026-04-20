@@ -23,14 +23,19 @@ export default function TestResultModal({
 
   const runMutation = useMutation({
     mutationFn: () => api.helm.test(namespace, name),
-    onSuccess: (data) => setResult(data),
+    // Go marshals an empty slice as JSON null, so coerce hooks to [] here
+    // to keep the render paths from tripping over `null.length`.
+    onSuccess: (data) => setResult({ ...data, hooks: data.hooks ?? [] }),
     onError: (err: any) => {
       // A failing helm test still returns a response body shaped like
       // HelmTestResponse; surface both the error and any hook details
       // that made it through.
       const body = err?.response?.data
-      if (body && Array.isArray(body.hooks)) {
-        setResult(body as HelmTestResponse)
+      if (body && typeof body === 'object') {
+        setResult({
+          success: !!body.success,
+          hooks: Array.isArray(body.hooks) ? body.hooks : [],
+        })
       }
       setError(err?.response?.data?.detail ?? err?.message ?? 'test failed')
     },

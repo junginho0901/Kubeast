@@ -2,9 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 
 export default function ResourcesTab({ namespace, name }: { namespace: string; name: string }) {
   const { t } = useTranslation()
+  const { open } = useResourceDetail()
   const q = useQuery({
     queryKey: ['helm-resources', namespace, name],
     queryFn: () => api.helm.getResources(namespace, name),
@@ -37,7 +39,18 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
         </thead>
         <tbody className="bg-slate-900/40 divide-y divide-slate-800">
           {items.map((r, i) => (
-            <tr key={`${r.kind}/${r.namespace ?? ''}/${r.name}/${i}`} className="hover:bg-slate-800/60">
+            <tr
+              key={`${r.kind}/${r.namespace ?? ''}/${r.name}/${i}`}
+              className="hover:bg-slate-800/60 cursor-pointer"
+              onClick={() =>
+                open({
+                  kind: r.kind,
+                  name: r.name,
+                  namespace: r.namespace,
+                  apiVersion: r.apiVersion,
+                })
+              }
+            >
               <td className="px-3 py-2 text-white">{r.kind}</td>
               <td className="px-3 py-2 text-slate-400">{r.apiVersion}</td>
               <td className="px-3 py-2 text-slate-300">{r.name}</td>
