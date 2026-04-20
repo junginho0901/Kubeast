@@ -31,8 +31,11 @@ export default function TestResultModal({
       // HelmTestResponse; surface both the error and any hook details
       // that made it through.
       const body = err?.response?.data
-      if (body && Array.isArray(body.hooks)) {
-        setResult(body as HelmTestResponse)
+      if (body && typeof body === 'object') {
+        setResult({
+          success: !!body.success,
+          hooks: Array.isArray(body.hooks) ? body.hooks : [],
+        })
       }
       setError(err?.response?.data?.detail ?? err?.message ?? 'test failed')
     },
