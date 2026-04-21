@@ -2879,6 +2879,13 @@
     "allNamespaces": "전체 네임스페이스",
     "searchPlaceholder": "Release 이름 검색...",
     "matchCount": "{{count}}개의 Release가 검색되었습니다.",
+    "stats": {
+      "total": "전체",
+      "deployed": "배포됨",
+      "failed": "실패",
+      "pending": "진행 중",
+      "superseded": "대체됨"
+    },
     "empty": {
       "title": "설치된 Release가 없습니다",
       "description": "Helm으로 배포된 애플리케이션이 여기에 표시됩니다. 이미 클러스터에 Release가 있다면 kubeconfig와 권한을 확인해 보세요.",
