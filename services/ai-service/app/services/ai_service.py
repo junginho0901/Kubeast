@@ -4024,6 +4024,8 @@ Draft (rules-based, keep numbers unchanged):
             # 세션 제목 자동 생성 (첫 메시지인 경우)
             if len(messages_history) <= 1:  # 시스템 메시지 + 첫 사용자 메시지
                 title = message[:50] + "..." if len(message) > 50 else message
+                if title_prefix:
+                    title = title_prefix + title
                 await db.update_session_title(session_id, title)
             
             yield "data: [DONE]\n\n"
