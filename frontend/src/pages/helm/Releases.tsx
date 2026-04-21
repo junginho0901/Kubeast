@@ -397,6 +397,39 @@ export default function HelmReleasesPage() {
               })}
             </tbody>
           </table>
+          {sorted.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700">
+              <div className="text-xs text-slate-400">
+                {t('common.paginationRange', {
+                  start: (currentPage - 1) * rowsPerPage + 1,
+                  end: Math.min(currentPage * rowsPerPage, sorted.length),
+                  total: sorted.length,
+                  defaultValue: 'Showing {{start}}-{{end}} of {{total}}',
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+                >
+                  {t('common.prev', { defaultValue: 'Prev' })}
+                </button>
+                <span className="text-xs text-slate-300 min-w-[72px] text-center">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+                >
+                  {t('common.next', { defaultValue: 'Next' })}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
