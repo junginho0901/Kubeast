@@ -2635,6 +2635,13 @@
     "allNamespaces": "All namespaces",
     "searchPlaceholder": "Search release name...",
     "matchCount": "{{count}} release(s) match.",
+    "stats": {
+      "total": "Total",
+      "deployed": "Deployed",
+      "failed": "Failed",
+      "pending": "Pending",
+      "superseded": "Superseded"
+    },
     "empty": {
       "title": "No Helm releases",
       "description": "Releases installed with Helm show up here. If your cluster has existing releases, check your kubeconfig and permissions.",
