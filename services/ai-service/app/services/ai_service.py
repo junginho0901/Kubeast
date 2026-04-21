@@ -3660,7 +3660,10 @@ Draft (rules-based, keep numbers unchanged):
             ]
             recent_history = history_for_model[-MAX_HISTORY_MESSAGES:]
 
-            messages = [{"role": "system", "content": self._get_system_message()}]
+            messages = [{
+                "role": "system",
+                "content": system_prompt_override or self._get_system_message(),
+            }]
             for msg in recent_history:
                 messages.append({
                     "role": msg.role,
