@@ -224,10 +224,7 @@ export default function HelmReleasesPage() {
         </button>
       </div>
 
-      {/* Search + namespace filter — matches the Pods page layout
-          (h-12 search on the left, CustomDropdown on the right) so the
-          Helm list reads as part of the same family as other resource
-          lists rather than a bespoke page. */}
+      {/* Search + namespace filter */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
         <div className="xl:col-span-2">
           <div className="relative">
@@ -241,9 +238,6 @@ export default function HelmReleasesPage() {
             />
           </div>
         </div>
-        {/* Namespace dropdown — inline custom to match the h-12 trigger
-            used by the workloads pages (CustomDropdown component is
-            h-10 and would look short next to the search box). */}
         <div className="relative" ref={nsRef}>
           <button
             type="button"
@@ -291,16 +285,16 @@ export default function HelmReleasesPage() {
         </div>
       </div>
 
-      {filtered.length > 0 && (
-        <div className="text-xs text-slate-400">
-          {t('helmReleases.matchCount', { count: filtered.length })}
-        </div>
+      {sorted.length > 0 && (
+        <p className="text-xs text-slate-400 shrink-0">
+          {t('helmReleases.matchCount', { count: sorted.length })}
+        </p>
       )}
 
-      {/* Stats — counted from full items (not filtered), so the
-          numbers stay stable while the user narrows the table via
-          the search box. */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* Stats row — counts come from full items, not filtered, so the
+          header numbers stay stable when the search input narrows the
+          table. */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
           <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
             <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
@@ -310,7 +304,7 @@ export default function HelmReleasesPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-slate-400">
+        <div className="flex items-center justify-center py-16 text-slate-400 flex-1">
           <Loader2 className="w-5 h-5 animate-spin" />
         </div>
       ) : sorted.length === 0 ? (
@@ -320,86 +314,86 @@ export default function HelmReleasesPage() {
       ) : (
         <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
           <div className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[1000px] table-fixed">
-            <thead className="bg-slate-800 text-slate-300 text-left">
-              <tr>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.name')}{renderSortIcon('name')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('revision')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.revision')}{renderSortIcon('revision')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.status')}{renderSortIcon('status')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('chart')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.chart')}{renderSortIcon('chart')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('chartVersion')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.chartVersion')}{renderSortIcon('chartVersion')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('appVersion')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.appVersion')}{renderSortIcon('appVersion')}
-                  </span>
-                </th>
-                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('updated')}>
-                  <span className="inline-flex items-center gap-1">
-                    {t('helmReleases.table.updated')}{renderSortIcon('updated')}
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-slate-900/40 divide-y divide-slate-800">
-              {paged.map((r) => {
-                const to = `/helm/releases/${encodeURIComponent(r.namespace)}/${encodeURIComponent(r.name)}`
-                return (
-                <tr
-                  key={`${r.namespace}/${r.name}`}
-                  className="hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => navigate(to)}
-                >
-                  <td className="px-3 py-2 text-white font-medium">
-                    {/* Link kept on the name so cmd/middle-click
-                        still opens the detail in a new tab; the row
-                        onClick covers left-click anywhere else. */}
-                    <Link to={to} className="hover:text-primary-400" onClick={(e) => e.stopPropagation()}>
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 text-slate-300">{r.namespace}</td>
-                  <td className="px-3 py-2 text-slate-300">{r.revision}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(r.status)}`}
-                    >
-                      {r.status}
+            <table className="w-full text-sm min-w-[1000px] table-fixed">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.name')}{renderSortIcon('name')}
                     </span>
-                  </td>
-                  <td className="px-3 py-2 text-slate-300">{r.chart || '-'}</td>
-                  <td className="px-3 py-2 text-slate-300">{r.chartVersion || '-'}</td>
-                  <td className="px-3 py-2 text-slate-300">{r.appVersion || '-'}</td>
-                  <td className="px-3 py-2 text-slate-400">{formatUpdated(r.updated)}</td>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
+                    </span>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('revision')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.revision')}{renderSortIcon('revision')}
+                    </span>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.status')}{renderSortIcon('status')}
+                    </span>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('chart')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.chart')}{renderSortIcon('chart')}
+                    </span>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('chartVersion')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.chartVersion')}{renderSortIcon('chartVersion')}
+                    </span>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('appVersion')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.appVersion')}{renderSortIcon('appVersion')}
+                    </span>
+                  </th>
+                  <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('updated')}>
+                    <span className="inline-flex items-center gap-1">
+                      {t('helmReleases.table.updated')}{renderSortIcon('updated')}
+                    </span>
+                  </th>
                 </tr>
-                )
-              })}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {paged.map((r) => {
+                  const to = `/helm/releases/${encodeURIComponent(r.namespace)}/${encodeURIComponent(r.name)}`
+                  return (
+                    <tr
+                      key={`${r.namespace}/${r.name}`}
+                      className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
+                      onClick={() => navigate(to)}
+                    >
+                      <td className="py-3 px-4 font-medium text-white">
+                        {/* Link kept for cmd/middle-click new-tab;
+                            stopPropagation so the row onClick does not
+                            double-fire. */}
+                        <Link to={to} className="hover:text-primary-400" onClick={(e) => e.stopPropagation()}>
+                          <span className="block truncate">{r.name}</span>
+                        </Link>
+                      </td>
+                      <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{r.namespace}</span></td>
+                      <td className="py-3 px-4 text-xs font-mono">{r.revision}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(r.status)}`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-xs"><span className="block truncate">{r.chart || '-'}</span></td>
+                      <td className="py-3 px-4 text-xs font-mono">{r.chartVersion || '-'}</td>
+                      <td className="py-3 px-4 text-xs font-mono">{r.appVersion || '-'}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-slate-400">{formatUpdated(r.updated)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
           {sorted.length > 0 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
@@ -449,7 +443,7 @@ const HELM_INSTALL_GUIDE_URL = 'https://helm.sh/docs/intro/using_helm/'
 function EmptyState() {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center">
+    <div className="w-full flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center">
       <Package className="w-10 h-10 text-slate-500" />
       <div className="text-lg font-semibold text-white">{t('helmReleases.empty.title')}</div>
       <div className="max-w-md text-sm text-slate-400">
