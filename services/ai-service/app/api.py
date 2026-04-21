@@ -1,9 +1,12 @@
 """
 AI Service API 라우터
 """
+from typing import Optional
+
 from fastapi import APIRouter, Header, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from app.models.ai import ChatRequest
+from app.models.floating_ai import FloatingChatRequest
 from app.security import require_auth
 
 router = APIRouter()
