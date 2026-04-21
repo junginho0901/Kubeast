@@ -2,7 +2,7 @@
 AI 트러블슈팅 서비스
 """
 from openai import AsyncOpenAI
-from typing import List, Dict, Optional
+from typing import Callable, List, Dict, Optional
 import httpx
 import re
 import json
