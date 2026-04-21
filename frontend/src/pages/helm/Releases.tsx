@@ -290,25 +290,57 @@ export default function HelmReleasesPage() {
         <div className="flex items-center justify-center py-16 text-slate-400">
           <Loader2 className="w-5 h-5 animate-spin" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <EmptyState />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-700">
           <table className="w-full text-sm">
             <thead className="bg-slate-800 text-slate-300 text-left">
               <tr>
-                <th className="px-3 py-2">{t('helmReleases.table.name')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.namespace')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.revision')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.status')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.chart')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.chartVersion')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.appVersion')}</th>
-                <th className="px-3 py-2">{t('helmReleases.table.updated')}</th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('name')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.name')}{renderSortIcon('name')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('revision')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.revision')}{renderSortIcon('revision')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('status')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.status')}{renderSortIcon('status')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('chart')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.chart')}{renderSortIcon('chart')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('chartVersion')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.chartVersion')}{renderSortIcon('chartVersion')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('appVersion')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.appVersion')}{renderSortIcon('appVersion')}
+                  </span>
+                </th>
+                <th className="px-3 py-2 cursor-pointer" onClick={() => handleSort('updated')}>
+                  <span className="inline-flex items-center gap-1">
+                    {t('helmReleases.table.updated')}{renderSortIcon('updated')}
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody className="bg-slate-900/40 divide-y divide-slate-800">
-              {filtered.map((r) => {
+              {sorted.map((r) => {
                 const to = `/helm/releases/${encodeURIComponent(r.namespace)}/${encodeURIComponent(r.name)}`
                 return (
                 <tr
