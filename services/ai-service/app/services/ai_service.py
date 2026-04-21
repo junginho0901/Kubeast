@@ -3615,8 +3615,25 @@ Draft (rules-based, keep numbers unchanged):
         
         return suggestions[:5]  # 최대 5개
     
-    async def session_chat_stream(self, session_id: str, message: str):
-        """세션 기반 AI 챗봇 (스트리밍 + 세션 관리 + Tool Context)"""
+    async def session_chat_stream(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        system_prompt_override: Optional[str] = None,
+        tool_filter: Optional[Callable[[list], list]] = None,
+        extra_context_block: Optional[str] = None,
+        title_prefix: Optional[str] = None,
+    ):
+        """세션 기반 AI 챗봇 (스트리밍 + 세션 관리 + Tool Context).
+
+        확장점 4개(모두 선택적, 기본 None 은 기존 동작):
+        - system_prompt_override: 시스템 프롬프트를 대체 (ex. 플로팅 어시스턴트)
+        - tool_filter: tool 목록에 추가 필터 적용 (ex. READONLY 화이트리스트)
+        - extra_context_block: language directive 뒤에 추가 system 메시지 주입
+          (ex. 플로팅 위젯의 page_context 스냅샷)
+        - title_prefix: 자동 세션 제목 생성 시 앞에 붙이는 prefix (ex. "[플로팅] ")
+        """
         from app.database import get_db_service
         
         try:
