@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle, ChevronDown, ExternalLink, Loader2, Package, RefreshCw, Search } from 'lucide-react'
+import {
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Loader2,
+  Package,
+  RefreshCw,
+  Search,
+} from 'lucide-react'
 import { api, type HelmReleaseSummary } from '@/services/api'
 
 // Release mutations are rare (install/upgrade minutes apart) so we
@@ -10,6 +19,9 @@ import { api, type HelmReleaseSummary } from '@/services/api'
 // stream. The server caches the same query for 30s anyway, so the
 // extra poll costs one list-secrets on miss.
 const REFETCH_INTERVAL_MS = 30_000
+
+type SortKey = null | 'name' | 'namespace' | 'revision' | 'status' | 'chart' | 'chartVersion' | 'appVersion' | 'updated'
+type SortDir = 'asc' | 'desc'
 
 function formatUpdated(iso: string): string {
   if (!iso) return '-'
@@ -38,6 +50,8 @@ export default function HelmReleasesPage() {
   const [namespace, setNamespace] = useState<string>('')
   const [q, setQ] = useState<string>('')
   const [nsOpen, setNsOpen] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const nsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -110,6 +124,65 @@ export default function HelmReleasesPage() {
     for (const r of items) set.add(r.namespace)
     return Array.from(set).sort()
   }, [items])
+
+  const handleSort = (key: NonNullable<SortKey>) => {
+    if (sortKey !== key) {
+      setSortKey(key)
+      setSortDir('asc')
+      return
+    }
+    if (sortDir === 'asc') {
+      setSortDir('desc')
+      return
+    }
+    // Third click on same column clears the sort — returns natural order.
+    setSortKey(null)
+  }
+
+  const renderSortIcon = (key: NonNullable<SortKey>) => {
+    if (sortKey !== key) return null
+    return sortDir === 'asc'
+      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
+      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
+  }
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered
+    const list = [...filtered]
+    const getValue = (r: HelmReleaseSummary): string | number => {
+      switch (sortKey) {
+        case 'name':
+          return r.name
+        case 'namespace':
+          return r.namespace
+        case 'revision':
+          return r.revision
+        case 'status':
+          return r.status
+        case 'chart':
+          return r.chart
+        case 'chartVersion':
+          return r.chartVersion
+        case 'appVersion':
+          return r.appVersion
+        case 'updated':
+          return r.updated ? new Date(r.updated).getTime() : 0
+        default:
+          return ''
+      }
+    }
+    list.sort((a, b) => {
+      const av = getValue(a)
+      const bv = getValue(b)
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return sortDir === 'asc' ? av - bv : bv - av
+      }
+      const as = String(av)
+      const bs = String(bv)
+      return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
+    })
+    return list
+  }, [filtered, sortKey, sortDir])
 
   return (
     <div className="space-y-4">
