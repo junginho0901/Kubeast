@@ -3675,7 +3675,14 @@ Draft (rules-based, keep numbers unchanged):
                 "role": "system",
                 "content": self._build_language_directive(message),
             })
-            
+
+            # 확장점: 호출자가 넘긴 추가 system 블록 (ex. 플로팅 page_context)
+            if extra_context_block:
+                messages.append({
+                    "role": "system",
+                    "content": extra_context_block,
+                })
+
             # Tool Context 가져오기 또는 생성
             if session_id not in self.tool_contexts:
                 self.tool_contexts[session_id] = ToolContext(session_id)
