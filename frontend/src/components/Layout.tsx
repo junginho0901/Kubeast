@@ -31,6 +31,8 @@ import { clearAccessToken } from '@/services/auth'
 import { ResourceDetailProvider } from './ResourceDetailContext'
 import ResourceDetailDrawer from './ResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
+import { PageContextProvider } from './PageContextProvider'
+import FloatingAIChat from './FloatingAIChat'
 
 type NavItem = {
   name: string
@@ -323,8 +325,10 @@ export default function Layout() {
 
   return (
     <ResourceDetailProvider>
+    <PageContextProvider>
     <div className="min-h-screen bg-slate-900">
       <ResourceDetailDrawer />
+      <FloatingAIChat />
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-3 px-6 border-b border-slate-700 h-[100px]">
@@ -439,6 +443,7 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </PageContextProvider>
     </ResourceDetailProvider>
   )
 }
