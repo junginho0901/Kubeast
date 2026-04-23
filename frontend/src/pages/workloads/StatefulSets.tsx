@@ -6,7 +6,10 @@ import { api, type StatefulSetInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 export default function StatefulSets() {
   const queryClient = useQueryClient()
@@ -136,6 +139,39 @@ export default function StatefulSets() {
     const start = (currentPage - 1) * pageSize
     return filtered.slice(start, start + pageSize)
   }, [filtered, currentPage, pageSize])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(statefulsets) || statefulsets.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const unhealthy = summary.degraded + summary.unavailable
+    const prefix = summary.unavailable > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} StatefulSet ${summary.total}개 (Healthy ${summary.healthy}${unhealthy ? `, 문제 ${unhealthy}` : ''})`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: summary,
+        ...summarizeList(paged as unknown as Record<string, unknown>[], {
+          total: filtered.length,
+          currentPage,
+          pageSize,
+          topN: pageSize,
+          pickFields: ['name', 'namespace', 'replicas', 'ready_replicas', 'available_replicas', 'status'],
+          filterProblematic: (s) => {
+            const st = String((s as unknown as StatefulSetInfo).status || '').toLowerCase()
+            return st.includes('unavailable') || st.includes('degraded')
+          },
+          linkBuilder: (s) => {
+            const sts = s as unknown as StatefulSetInfo
+            return buildResourceLink('StatefulSet', sts.namespace, sts.name)
+          },
+        }),
+      },
+    }
+  }, [statefulsets, paged, filtered.length, currentPage, pageSize, selectedNamespace, searchQuery, summary])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
