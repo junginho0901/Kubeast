@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'ready' | 'status' | 'restarts' | 'pod_ip' | 'node_name' | 'age'
@@ -437,6 +440,71 @@ spec:
     const start = (currentPage - 1) * rowsPerPage
     return sortedPods.slice(start, start + rowsPerPage)
   }, [sortedPods, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 — Pod 목록 요약 + 문제 항목 + interpretations
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(pods) || pods.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const alertParts: string[] = []
+    if (podStats.error > 0) alertParts.push(`오류 ${podStats.error}`)
+    if (podStats.notReady > 0) alertParts.push(`Not Ready ${podStats.notReady}`)
+    if (podStats.pending > 0) alertParts.push(`Pending ${podStats.pending}`)
+    const prefix = podStats.error > 0 ? '⚠️ ' : ''
+    const alert = alertParts.length ? `, ${alertParts.join(', ')}` : ''
+    const summary = `${prefix}${nsLabel} Pod ${podStats.total}개 (Ready ${podStats.ready}${alert})`
+
+    const problematic = (p: PodInfo) => {
+      if (p.phase && p.phase !== 'Running') return true
+      if ((p.restart_count ?? 0) > 5) return true
+      const s = pickPodDisplayStatus(p)
+      return /error|crashloop|oomkilled|errimagepull|backoff/i.test(s)
+    }
+
+    return {
+      source: 'base' as const,
+      summary,
+      data: {
+        filters: {
+          namespace: selectedNamespace,
+          search: searchQuery || undefined,
+        },
+        stats: {
+          total: podStats.total,
+          ready: podStats.ready,
+          not_ready: podStats.notReady,
+          pending: podStats.pending,
+          error: podStats.error,
+          restarting: podStats.restarting,
+          top_reasons: podStats.topReasons.map(([reason, count]) => ({ reason, count })),
+        },
+        ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
+          total: sortedPods.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'phase', 'status', 'ready', 'restart_count', 'node_name'],
+          filterProblematic: (p) => problematic(p as unknown as PodInfo),
+          interpret: (items) => {
+            const out: string[] = []
+            const podsArr = items as unknown as PodInfo[]
+            const crashLoop = podsArr.filter((p) => /crashloop/i.test(pickPodDisplayStatus(p))).length
+            if (crashLoop > 0) out.push(`⚠️ ${crashLoop}개 Pod 이 CrashLoopBackOff 상태`)
+            const oom = podsArr.filter((p) => /oomkilled/i.test(pickPodDisplayStatus(p))).length
+            if (oom > 0) out.push(`⚠️ ${oom}개 Pod 이 OOMKilled`)
+            const highRestart = podsArr.filter((p) => (p.restart_count ?? 0) > 5).length
+            if (highRestart > 0) out.push(`⚠️ ${highRestart}개 Pod 의 재시작 횟수 5회 초과`)
+            return out
+          },
+          linkBuilder: (p) => {
+            const pod = p as unknown as PodInfo
+            return buildResourceLink('Pod', pod.namespace, pod.name)
+          },
+        }),
+      },
+    }
+  }, [pods, pagedPods, sortedPods.length, currentPage, rowsPerPage, selectedNamespace, searchQuery, podStats])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

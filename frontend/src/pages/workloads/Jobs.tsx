@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'completions' | 'status' | 'duration' | 'containers' | 'images' | 'age'
@@ -331,6 +334,49 @@ export default function Jobs() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedJobs.slice(start, start + rowsPerPage)
   }, [sortedJobs, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(jobs) || jobs.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = jobs.length
+    const failed = jobs.filter((j) => j.failed > 0).length
+    const running = jobs.filter((j) => j.active > 0).length
+    const succeeded = jobs.filter((j) => j.succeeded > 0 && j.active === 0 && j.failed === 0).length
+    const prefix = failed > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} Job ${total}개 (성공 ${succeeded}, 실행중 ${running}, 실패 ${failed})`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, running, succeeded, failed },
+        ...summarizeList(pagedJobs as unknown as Record<string, unknown>[], {
+          total: sortedJobs.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'completions', 'active', 'succeeded', 'failed', 'status', 'duration_seconds'],
+          filterProblematic: (j) => {
+            const job = j as unknown as JobInfo
+            return job.failed > 0
+          },
+          interpret: (items) => {
+            const out: string[] = []
+            const arr = items as unknown as JobInfo[]
+            const failures = arr.filter((j) => j.failed > 0).length
+            if (failures > 0) out.push(`⚠️ ${failures}개 Job 이 실패 상태`)
+            return out
+          },
+          linkBuilder: (j) => {
+            const job = j as unknown as JobInfo
+            return buildResourceLink('Job', job.namespace, job.name)
+          },
+        }),
+      },
+    }
+  }, [jobs, pagedJobs, sortedJobs.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

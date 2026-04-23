@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey =
@@ -316,6 +319,36 @@ export default function CronJobs() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedCronJobs.slice(start, start + rowsPerPage)
   }, [sortedCronJobs, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(cronjobs) || cronjobs.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = cronjobs.length
+    const suspended = cronjobs.filter((c) => c.suspend).length
+    const active = cronjobs.filter((c) => c.active > 0).length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} CronJob ${total}개 (실행중 ${active}, 일시중지 ${suspended})`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, active, suspended },
+        ...summarizeList(pagedCronJobs as unknown as Record<string, unknown>[], {
+          total: sortedCronJobs.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'schedule', 'suspend', 'active', 'last_schedule_time', 'last_successful_time'],
+          linkBuilder: (c) => {
+            const cj = c as unknown as CronJobInfo
+            return buildResourceLink('CronJob', cj.namespace, cj.name)
+          },
+        }),
+      },
+    }
+  }, [cronjobs, pagedCronJobs, sortedCronJobs.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

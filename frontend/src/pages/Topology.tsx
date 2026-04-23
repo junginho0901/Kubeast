@@ -1,10 +1,13 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { FileCode, Package, Network as NetworkIcon, Database, Key, Box, Clock, Globe, FileBox, HardDrive } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import { useAIContext } from '@/hooks/useAIContext'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 type ResourceType = 
   | 'deployment' 
@@ -107,6 +110,53 @@ export default function Topology() {
     gcTime: 0, // 캐시 비활성화 (항상 새로 가져오기)
     retry: false, // 에러 시 재시도하지 않음
   })
+
+  // Kind 매핑 (ResourceType → k8s Kind)
+  const typeToKind: Record<ResourceType, string> = {
+    deployment: 'Deployment',
+    service: 'Service',
+    pod: 'Pod',
+    configmap: 'ConfigMap',
+    secret: 'Secret',
+    statefulset: 'StatefulSet',
+    daemonset: 'DaemonSet',
+    ingress: 'Ingress',
+    job: 'Job',
+    cronjob: 'CronJob',
+    pvc: 'PersistentVolumeClaim',
+  }
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!namespace) return null
+    const items = Array.isArray(resources) ? (resources as Array<{ name: string } & Record<string, unknown>>) : []
+    const kind = typeToKind[selectedType]
+    const summary = `토폴로지 · ${namespace} · ${kind} ${items.length}개${selectedResource ? ` · 선택: ${selectedResource}` : ''}`
+    return {
+      source: 'base' as const,
+      summary,
+      data: {
+        namespace,
+        selected_type: selectedType,
+        selected_kind: kind,
+        selected_resource: selectedResource,
+        selected_yaml:
+          selectedResource && typeof yaml === 'string' && yaml
+            ? yaml.length > 2000 ? yaml.slice(0, 2000) + '\n... (truncated) ...' : yaml
+            : undefined,
+        ...summarizeList(items as unknown as Record<string, unknown>[], {
+          topN: 20,
+          pickFields: ['name'],
+          linkBuilder: (r) => {
+            const name = (r as { name?: string }).name
+            return name ? buildResourceLink(kind, namespace, name) : null
+          },
+        }),
+      },
+    }
+  }, [namespace, selectedType, selectedResource, resources, yaml])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   if (!namespace) {
     return (

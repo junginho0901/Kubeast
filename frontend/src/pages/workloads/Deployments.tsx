@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'ready' | 'updated' | 'available' | 'status' | 'image' | 'age'
@@ -297,6 +300,69 @@ export default function Deployments() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedDeployments.slice(start, start + rowsPerPage)
   }, [sortedDeployments, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(deployments) || deployments.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const unhealthy = summary.degraded + summary.unavailable
+    const prefix = summary.unavailable > 0 ? '⚠️ ' : ''
+    const summaryText = `${prefix}${nsLabel} Deployment ${summary.total}개 (Healthy ${summary.healthy}${unhealthy ? `, 문제 ${unhealthy}` : ''})`
+
+    const problematic = (d: DeploymentInfo) => {
+      const status = String(
+        d.status || computeDeploymentStatus(d.replicas || 0, d.ready_replicas || 0),
+      ).toLowerCase()
+      return !status.includes('healthy')
+    }
+
+    return {
+      source: 'base' as const,
+      summary: summaryText,
+      data: {
+        filters: {
+          namespace: selectedNamespace,
+          search: searchQuery || undefined,
+        },
+        stats: {
+          total: summary.total,
+          healthy: summary.healthy,
+          degraded: summary.degraded,
+          unavailable: summary.unavailable,
+        },
+        ...summarizeList(pagedDeployments as unknown as Record<string, unknown>[], {
+          total: sortedDeployments.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'replicas', 'ready_replicas', 'updated_replicas', 'available_replicas', 'status', 'image'],
+          filterProblematic: (d) => problematic(d as unknown as DeploymentInfo),
+          interpret: (items) => {
+            const out: string[] = []
+            const arr = items as unknown as DeploymentInfo[]
+            const unavail = arr.filter((d) => {
+              const s = String(d.status || '').toLowerCase()
+              return s.includes('unavailable')
+            }).length
+            if (unavail > 0) out.push(`⚠️ ${unavail}개 Deployment 가 Unavailable`)
+            const partial = arr.filter((d) => {
+              const ready = d.ready_replicas ?? 0
+              const total = d.replicas ?? 0
+              return total > 0 && ready < total
+            }).length
+            if (partial > 0) out.push(`⚠️ ${partial}개 Deployment 가 replica 일부만 ready`)
+            return out
+          },
+          linkBuilder: (d) => {
+            const dep = d as unknown as DeploymentInfo
+            return buildResourceLink('Deployment', dep.namespace, dep.name)
+          },
+        }),
+      },
+    }
+  }, [deployments, pagedDeployments, sortedDeployments.length, currentPage, rowsPerPage, selectedNamespace, searchQuery, summary])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

@@ -9,6 +9,8 @@ import SearchResultTable from '@/components/search/SearchResultTable'
 import SearchExamples from '@/components/search/SearchExamples'
 import SearchSettings from '@/components/search/SearchSettings'
 import { searchWithExpression, toSearchResult, SearchResult } from '@/components/search/searchEngine'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 const STORAGE_KEY_RESOURCES = 'advanced-search-resources'
 
@@ -191,6 +193,42 @@ export default function AdvancedSearch() {
   }, [deferredQuery, items])
 
   const deferredResults = useDeferredValue(searchResults)
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (searchResults.length === 0 && !rawQuery.trim()) return null
+    const byKind: Record<string, number> = {}
+    for (const r of searchResults) {
+      byKind[r.kind] = (byKind[r.kind] ?? 0) + 1
+    }
+    const summary = `고급 검색 ${searchResults.length}건 — 쿼리: "${rawQuery || '(없음)'}"${
+      namespace ? ` · namespace=${namespace}` : ''
+    }`
+    return {
+      source: 'base' as const,
+      summary,
+      data: {
+        query: rawQuery,
+        namespace: namespace || undefined,
+        selected_resource_types: Array.from(selectedResources),
+        total: searchResults.length,
+        by_kind: byKind,
+        top_results: searchResults.slice(0, 20).map((r) => {
+          const link = buildResourceLink(r.kind, r.namespace, r.name)
+          return {
+            kind: r.kind,
+            name: r.name,
+            namespace: r.namespace,
+            status: r.status,
+            age: r.age,
+            ...(link ? { _link: link } : {}),
+          }
+        }),
+      },
+    }
+  }, [searchResults, rawQuery, namespace, selectedResources])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleExampleSelect = useCallback((types: string[], query: string) => {
     if (types.length > 0) {

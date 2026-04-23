@@ -2735,5 +2735,66 @@
     "error": {
       "notFound": "Release not found."
     }
+  },
+  "floatingChat": {
+    "title": "AI Assistant",
+    "openAriaLabel": "Open AI Assistant",
+    "closeAriaLabel": "Close",
+    "currentPage": "Current page: {{title}}",
+    "contextIncluded": "Current page context included",
+    "sessionLoading": "Preparing session...",
+    "emptyHint": "Ask a question about the current page.",
+    "emptyExamples": "e.g. \"What's this?\", \"Any issues?\", \"Why is this?\"",
+    "inputPlaceholder": "Ask about this page...",
+    "sendAriaLabel": "Send",
+    "stopAriaLabel": "Stop",
+    "suggestedLabel": "Suggestions",
+    "suggested": {
+      "dashboard": [
+        "What looks the most dangerous on this screen right now?",
+        "Based on the Pod status distribution shown here, is the cluster healthy?",
+        "Is there anything on this dashboard I need to act on immediately?"
+      ],
+      "resourceList": [
+        "Which item in this list looks the most problematic?",
+        "How many of the items shown here are abnormal, and why?",
+        "What should I look at first in this list?"
+      ],
+      "resourceDetail": [
+        "Is this resource in a healthy state right now?",
+        "Based on what's shown here, what's the root cause of the issue?",
+        "How should I fix this resource?"
+      ],
+      "gpu": [
+        "Among the GPU nodes shown here, are any running inefficiently?",
+        "Anything unusual in this GPU utilization distribution?",
+        "If allocation is blocked here, why?"
+      ],
+      "monitoring": [
+        "Among the metrics shown, are any workloads near their limits?",
+        "Do you see any abnormal patterns in this graph?",
+        "Are any nodes shown here in a risky state?"
+      ],
+      "topology": [
+        "Are there any single points of failure (SPOF) in this topology?",
+        "Among the dependencies shown here, do any look risky?",
+        "Are there broken connections in this structure?"
+      ],
+      "search": [
+        "Do you see common patterns in these search results?",
+        "Are any items shown here problematic?",
+        "Does this result distribution look normal?"
+      ],
+      "helmList": [
+        "Are there releases in this list that need upgrading?",
+        "Are there failed or pending releases here? What's the cause?",
+        "Are any of these releases changing frequently lately?"
+      ],
+      "default": [
+        "What do I see on this screen? What's the key info?",
+        "What problems often come up here?",
+        "How should an operator look at this screen?"
+      ]
+    }
   }
 }

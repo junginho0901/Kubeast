@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'ready' | 'current' | 'desired' | 'updated' | 'available' | 'status' | 'images' | 'age'
@@ -329,6 +332,40 @@ export default function DaemonSets() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedDaemonSets.slice(start, start + rowsPerPage)
   }, [sortedDaemonSets, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(daemonsets) || daemonsets.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = daemonsets.length
+    const unavailable = daemonsets.filter((d) => d.unavailable > 0 || d.misscheduled > 0).length
+    const prefix = unavailable > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} DaemonSet ${total}개${unavailable ? ` (문제 ${unavailable})` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, unavailable },
+        ...summarizeList(pagedDaemonSets as unknown as Record<string, unknown>[], {
+          total: sortedDaemonSets.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'desired', 'current', 'ready', 'updated', 'available', 'unavailable', 'status'],
+          filterProblematic: (d) => {
+            const ds = d as unknown as DaemonSetInfo
+            return ds.unavailable > 0 || ds.misscheduled > 0 || ds.ready < ds.desired
+          },
+          linkBuilder: (d) => {
+            const ds = d as unknown as DaemonSetInfo
+            return buildResourceLink('DaemonSet', ds.namespace, ds.name)
+          },
+        }),
+      },
+    }
+  }, [daemonsets, pagedDaemonSets, sortedDaemonSets.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

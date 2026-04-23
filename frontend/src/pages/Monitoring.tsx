@@ -1,7 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, disableMetrics, isMetricsDisabled, isMetricsUnavailableError, type PodInfo } from '@/services/api'
+import { useAIContext } from '@/hooks/useAIContext'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { 
   Server, 
   Box,
@@ -108,6 +111,87 @@ export default function Monitoring() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isNamespaceDropdownOpen])
+
+  // 플로팅 AI 위젯용 스냅샷 — 현재 활성 탭의 메트릭만 요약
+  const aiSnapshot = useMemo(() => {
+    const parsePercent = (v?: string): number | null => {
+      if (!v) return null
+      const m = String(v).match(/(-?\d+(?:\.\d+)?)/)
+      return m ? Number(m[1]) : null
+    }
+
+    if (activeTab === 'nodes') {
+      if (!Array.isArray(nodeMetrics) || nodeMetrics.length === 0) return null
+      const items = [...nodeMetrics].sort(
+        (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
+      )
+      const highCpu = items.filter((n) => (parsePercent(n.cpu_percent) ?? 0) > 85)
+      const highMem = items.filter((n) => (parsePercent(n.memory_percent) ?? 0) > 85)
+      const prefix = highCpu.length > 0 || highMem.length > 0 ? '⚠️ ' : ''
+      const summary = `${prefix}노드 모니터링 — ${items.length}개 노드 실시간 사용량`
+      return {
+        source: 'base' as const,
+        summary,
+        data: {
+          tab: 'nodes',
+          ...summarizeList(items as unknown as Record<string, unknown>[], {
+            topN: 10,
+            pickFields: ['name', 'cpu', 'cpu_percent', 'memory', 'memory_percent'],
+            filterProblematic: (n) => {
+              const cpu = parsePercent((n as unknown as NodeMetric).cpu_percent)
+              const mem = parsePercent((n as unknown as NodeMetric).memory_percent)
+              return (cpu !== null && cpu > 85) || (mem !== null && mem > 85)
+            },
+            interpret: () => {
+              const out: string[] = []
+              if (highCpu.length > 0) {
+                out.push(
+                  `⚠️ CPU 85%+ ${highCpu.length}개: ${highCpu.slice(0, 5).map((n) => n.name).join(', ')}`,
+                )
+              }
+              if (highMem.length > 0) {
+                out.push(
+                  `⚠️ 메모리 85%+ ${highMem.length}개: ${highMem.slice(0, 5).map((n) => n.name).join(', ')}`,
+                )
+              }
+              return out
+            },
+            linkBuilder: (n) => {
+              const node = n as unknown as NodeMetric
+              return buildResourceLink('Node', undefined, node.name)
+            },
+          }),
+        },
+      }
+    }
+
+    // pods tab
+    if (!Array.isArray(podMetrics) || podMetrics.length === 0) return null
+    const items = [...podMetrics].sort((a, b) => {
+      const aCpu = Number(String(a.cpu).replace(/[^0-9.]/g, '')) || 0
+      const bCpu = Number(String(b.cpu).replace(/[^0-9.]/g, '')) || 0
+      return bCpu - aCpu
+    })
+    const nsLabel = selectedNamespace === 'all' ? '전체' : selectedNamespace
+    return {
+      source: 'base' as const,
+      summary: `Pod 모니터링 — ${nsLabel} ${items.length}개 Pod 실시간 사용량`,
+      data: {
+        tab: 'pods',
+        filters: { namespace: selectedNamespace },
+        ...summarizeList(items as unknown as Record<string, unknown>[], {
+          topN: 15,
+          pickFields: ['name', 'namespace', 'cpu', 'memory'],
+          linkBuilder: (p) => {
+            const pod = p as unknown as PodMetric
+            return buildResourceLink('Pod', pod.namespace, pod.name)
+          },
+        }),
+      },
+    }
+  }, [activeTab, nodeMetrics, podMetrics, selectedNamespace])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   useEffect(() => {
     if (metricsUnavailable) {

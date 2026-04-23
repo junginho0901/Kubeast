@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey =
@@ -340,6 +343,34 @@ export default function ReplicaSets() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedReplicaSets.slice(start, start + rowsPerPage)
   }, [sortedReplicaSets, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(replicasets) || replicasets.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = replicasets.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} ReplicaSet ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedReplicaSets as unknown as Record<string, unknown>[], {
+          total: sortedReplicaSets.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'replicas', 'ready_replicas', 'available_replicas', 'owner', 'status'],
+          linkBuilder: (r) => {
+            const rs = r as unknown as ReplicaSetInfo
+            return buildResourceLink('ReplicaSet', rs.namespace, rs.name)
+          },
+        }),
+      },
+    }
+  }, [replicasets, pagedReplicaSets, sortedReplicaSets.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

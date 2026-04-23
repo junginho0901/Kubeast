@@ -19,9 +19,10 @@ import {
 } from 'lucide-react'
 // recharts unused for status charts – kept for potential future use
 // import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Customized } from 'recharts'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { useAIContext } from '@/hooks/useAIContext'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ReactMarkdown from 'react-markdown'
@@ -417,6 +418,54 @@ export default function Dashboard() {
     staleTime: 30000,
     refetchInterval: 60000,
   })
+
+  // 플로팅 AI 위젯용 스냅샷 — 대시보드 요약
+  const aiSnapshot = useMemo(() => {
+    if (!overview) return null
+    const podStatus = overview.pod_status || {}
+    const running = podStatus['Running'] ?? 0
+    const total = overview.total_pods ?? 0
+    const unhealthy = total - running
+    const prefix = unhealthy > 0 ? '⚠️ ' : ''
+    const nodeLabel = typeof overview.node_count === 'number'
+      ? `노드 ${overview.node_count}개`
+      : '노드 정보 없음'
+    const summary = `${prefix}클러스터 — ${nodeLabel}, Pod ${running}/${total} Running${unhealthy > 0 ? `, 문제 ${unhealthy}` : ''}`
+
+    const interpretations: string[] = []
+    for (const [phase, count] of Object.entries(podStatus)) {
+      if (phase !== 'Running' && phase !== 'Succeeded' && (count as number) > 0) {
+        interpretations.push(`⚠️ Pod ${count}개가 ${phase} 상태`)
+      }
+    }
+
+    return {
+      source: 'base' as const,
+      summary,
+      data: {
+        cluster: {
+          version: overview.cluster_version,
+          node_count: overview.node_count,
+          total_namespaces: overview.total_namespaces,
+          total_pods: overview.total_pods,
+          total_services: overview.total_services,
+          total_deployments: overview.total_deployments,
+          total_pvcs: overview.total_pvcs,
+          total_pvs: overview.total_pvs,
+        },
+        pod_status: podStatus,
+        nodes: Array.isArray(nodes)
+          ? (nodes as Array<{ name: string; status: string }>).slice(0, 10).map((n) => ({
+              name: n.name,
+              status: n.status,
+            }))
+          : undefined,
+        ...(interpretations.length > 0 ? { interpretations } : {}),
+      },
+    }
+  }, [overview, nodes])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   // Top 리소스 사용 파드/노드 (5초마다 갱신)
   const {

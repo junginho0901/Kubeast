@@ -1,10 +1,12 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { X, Info, FileCode, Trash2, ArrowLeft, ArrowUpRight, Package } from 'lucide-react'
 import { useResourceDetail } from './ResourceDetailContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { api } from '@/services/api'
 import YamlEditor from './YamlEditor'
 import { ModalOverlay } from './ModalOverlay'
@@ -305,6 +307,48 @@ export default function ResourceDetailDrawer() {
     staleTime: 10_000,
     retry: 1,
   })
+
+  // 플로팅 AI 위젯용 오버레이 스냅샷 (Info/YAML 2탭만)
+  const aiSnapshot = useMemo(() => {
+    if (!target) return null
+    const link = buildResourceLink(kind, ns, name)
+    const base = {
+      kind,
+      name,
+      namespace: ns,
+      active_tab: tab,
+      ...(link ? { _link: link } : {}),
+    }
+    if (tab === 'yaml') {
+      const yamlText = typeof yamlData?.yaml === 'string' ? yamlData.yaml : ''
+      const truncated = yamlText.length > 2048 ? yamlText.slice(0, 2048) + '\n... (truncated) ...' : yamlText
+      return {
+        source: 'ResourceDetailDrawer' as const,
+        summary: `${kind} ${name}${ns ? ` (${ns})` : ''} 상세 — YAML 탭`,
+        data: { ...base, yaml: truncated },
+      }
+    }
+    // info tab — effectiveRawJson 의 metadata / status 요약만 포함
+    const rj = effectiveRawJson as Record<string, unknown> | undefined
+    const meta = (rj?.metadata as Record<string, unknown> | undefined) ?? {}
+    const status = rj?.status
+    return {
+      source: 'ResourceDetailDrawer' as const,
+      summary: `${kind} ${name}${ns ? ` (${ns})` : ''} 상세 — Info 탭`,
+      data: {
+        ...base,
+        labels: meta.labels,
+        annotations_keys: meta.annotations
+          ? Object.keys(meta.annotations as Record<string, unknown>)
+          : undefined,
+        creation_timestamp: meta.creationTimestamp,
+        owner_references: meta.ownerReferences,
+        status: status && typeof status === 'object' ? status : undefined,
+      },
+    }
+  }, [target, tab, kind, name, ns, yamlData, effectiveRawJson])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleApplyYaml = async (rawYaml: string) => {
     const yaml = kind === 'Secret' && canEditYaml ? encodeSecretYaml(rawYaml) : rawYaml

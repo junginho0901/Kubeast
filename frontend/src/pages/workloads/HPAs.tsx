@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'target' | 'minReplicas' | 'maxReplicas' | 'currentReplicas' | 'desiredReplicas' | 'age'
@@ -248,6 +251,34 @@ export default function HPAs() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedHPAs.slice(start, start + rowsPerPage)
   }, [sortedHPAs, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(hpas) || hpas.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = hpas.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} HPA ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedHPAs as unknown as Record<string, unknown>[], {
+          total: sortedHPAs.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'target_ref', 'min_replicas', 'max_replicas', 'current_replicas', 'desired_replicas'],
+          linkBuilder: (h) => {
+            const hpa = h as unknown as HPAInfo
+            return buildResourceLink('HorizontalPodAutoscaler', hpa.namespace, hpa.name)
+          },
+        }),
+      },
+    }
+  }, [hpas, pagedHPAs, sortedHPAs.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
