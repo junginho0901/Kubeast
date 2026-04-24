@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'class' | 'hosts' | 'backends' | 'addresses' | 'age'
@@ -417,6 +420,40 @@ export default function Ingresses() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedIngresses.slice(start, start + rowsPerPage)
   }, [sortedIngresses, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(ingresses) || ingresses.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = ingresses.length
+    const noAddress = ingresses.filter((i) => !i.addresses || i.addresses.length === 0).length
+    const prefix = noAddress > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} Ingress ${total}개${noAddress ? ` (주소 미할당 ${noAddress})` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, no_address: noAddress },
+        ...summarizeList(pagedIngresses as unknown as Record<string, unknown>[], {
+          total: sortedIngresses.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'class', 'hosts', 'backends', 'addresses'],
+          filterProblematic: (i) => {
+            const ing = i as unknown as IngressInfo
+            return !ing.addresses || ing.addresses.length === 0
+          },
+          linkBuilder: (i) => {
+            const ing = i as unknown as IngressInfo
+            return buildResourceLink('Ingress', ing.namespace, ing.name)
+          },
+        }),
+      },
+    }
+  }, [ingresses, pagedIngresses, sortedIngresses.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
