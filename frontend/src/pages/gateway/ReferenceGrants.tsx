@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'from' | 'to' | 'age'
@@ -278,6 +281,34 @@ export default function ReferenceGrants() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedReferenceGrants.slice(start, start + rowsPerPage)
   }, [sortedReferenceGrants, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(referenceGrants) || referenceGrants.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = referenceGrants.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} ReferenceGrant ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedReferenceGrants as unknown as Record<string, unknown>[], {
+          total: sortedReferenceGrants.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'from', 'to'],
+          linkBuilder: (r) => {
+            const rg = r as unknown as ReferenceGrantInfo
+            return buildResourceLink('ReferenceGrant', rg.namespace, rg.name)
+          },
+        }),
+      },
+    }
+  }, [referenceGrants, pagedReferenceGrants, sortedReferenceGrants.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
