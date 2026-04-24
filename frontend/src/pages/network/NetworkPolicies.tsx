@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey =
@@ -419,6 +422,35 @@ export default function NetworkPolicies() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedPolicies.slice(start, start + rowsPerPage)
   }, [sortedPolicies, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(policies) || policies.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = policies.length
+    const denyAll = policies.filter((p) => p.default_deny_ingress || p.default_deny_egress).length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} NetworkPolicy ${total}개${denyAll ? ` (default-deny ${denyAll})` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, default_deny: denyAll },
+        ...summarizeList(pagedPolicies as unknown as Record<string, unknown>[], {
+          total: sortedPolicies.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'policy_types', 'ingress_rules', 'egress_rules', 'default_deny_ingress', 'default_deny_egress'],
+          linkBuilder: (p) => {
+            const pol = p as unknown as NetworkPolicyInfo
+            return buildResourceLink('NetworkPolicy', pol.namespace, pol.name)
+          },
+        }),
+      },
+    }
+  }, [policies, pagedPolicies, sortedPolicies.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
