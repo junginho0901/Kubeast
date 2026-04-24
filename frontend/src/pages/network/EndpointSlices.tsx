@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey =
@@ -394,6 +397,42 @@ export default function EndpointSlices() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedEndpointSlices.slice(start, start + rowsPerPage)
   }, [sortedEndpointSlices, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(endpointSlices) || endpointSlices.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = endpointSlices.length
+    const notReady = endpointSlices.filter(
+      (e) => (e.endpoints_total ?? 0) - (e.endpoints_ready ?? 0) > 0,
+    ).length
+    const prefix = notReady > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} EndpointSlice ${total}개${notReady ? ` (NotReady 포함 ${notReady})` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, with_not_ready: notReady },
+        ...summarizeList(pagedEndpointSlices as unknown as Record<string, unknown>[], {
+          total: sortedEndpointSlices.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'service_name', 'address_type', 'endpoints_total', 'endpoints_ready', 'endpoints_not_ready'],
+          filterProblematic: (e) => {
+            const es = e as unknown as EndpointSliceInfo
+            return (es.endpoints_total ?? 0) - (es.endpoints_ready ?? 0) > 0
+          },
+          linkBuilder: (e) => {
+            const es = e as unknown as EndpointSliceInfo
+            return buildResourceLink('EndpointSlice', es.namespace, es.name)
+          },
+        }),
+      },
+    }
+  }, [endpointSlices, pagedEndpointSlices, sortedEndpointSlices.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
