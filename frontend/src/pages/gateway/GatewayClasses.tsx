@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'controller' | 'status' | 'parameters' | 'age'
@@ -278,6 +281,33 @@ export default function GatewayClasses() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedGatewayClasses.slice(start, start + rowsPerPage)
   }, [sortedGatewayClasses, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(gatewayClasses) || gatewayClasses.length === 0) return null
+    const total = gatewayClasses.length
+    return {
+      source: 'base' as const,
+      summary: `GatewayClass ${total}개`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedGatewayClasses as unknown as Record<string, unknown>[], {
+          total: sortedGatewayClasses.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'controller_name', 'accepted', 'status'],
+          linkBuilder: (c) => {
+            const gc = c as unknown as GatewayClassInfo
+            return buildResourceLink('GatewayClass', undefined, gc.name)
+          },
+        }),
+      },
+    }
+  }, [gatewayClasses, pagedGatewayClasses, sortedGatewayClasses.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
