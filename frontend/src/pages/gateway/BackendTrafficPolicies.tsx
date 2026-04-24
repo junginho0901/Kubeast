@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'targetRef' | 'age'
@@ -234,6 +237,34 @@ export default function BackendTrafficPolicies() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedPolicies.slice(start, start + rowsPerPage)
   }, [sortedPolicies, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(policies) || policies.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = policies.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} BackendTrafficPolicy ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedPolicies as unknown as Record<string, unknown>[], {
+          total: sortedPolicies.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'target_refs'],
+          linkBuilder: (p) => {
+            const pol = p as unknown as BackendTrafficPolicyInfo
+            return buildResourceLink('BackendTrafficPolicy', pol.namespace, pol.name)
+          },
+        }),
+      },
+    }
+  }, [policies, pagedPolicies, sortedPolicies.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
