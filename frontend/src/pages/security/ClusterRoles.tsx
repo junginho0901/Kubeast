@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'rules' | 'age'
@@ -178,6 +181,33 @@ export default function ClusterRoles() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedItems.slice(start, start + rowsPerPage)
   }, [sortedItems, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(clusterRoles) || clusterRoles.length === 0) return null
+    const total = clusterRoles.length
+    return {
+      source: 'base' as const,
+      summary: `ClusterRole ${total}개`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedItems as unknown as Record<string, unknown>[], {
+          total: sortedItems.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'rules_count'],
+          linkBuilder: (r) => {
+            const ri = r as unknown as ClusterRoleInfo
+            return buildResourceLink('ClusterRole', undefined, ri.name)
+          },
+        }),
+      },
+    }
+  }, [clusterRoles, pagedItems, sortedItems.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
