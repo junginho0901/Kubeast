@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'type' | 'data' | 'age'
@@ -222,6 +225,38 @@ export default function Secrets() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedItems.slice(start, start + rowsPerPage)
   }, [sortedItems, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(secrets) || secrets.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = secrets.length
+    const byType: Record<string, number> = {}
+    for (const s of secrets) {
+      byType[s.type] = (byType[s.type] ?? 0) + 1
+    }
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} Secret ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, by_type: byType },
+        ...summarizeList(pagedItems as unknown as Record<string, unknown>[], {
+          total: sortedItems.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'type', 'data_count'],
+          linkBuilder: (s) => {
+            const sec = s as unknown as SecretInfo
+            return buildResourceLink('Secret', sec.namespace, sec.name)
+          },
+        }),
+      },
+    }
+  }, [secrets, pagedItems, sortedItems.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
