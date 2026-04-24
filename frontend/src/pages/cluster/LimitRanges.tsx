@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'types' | 'age'
@@ -253,6 +256,34 @@ export default function LimitRanges() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedLimitRanges.slice(start, start + rowsPerPage)
   }, [sortedLimitRanges, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(limitRanges) || limitRanges.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = limitRanges.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} LimitRange ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedLimitRanges as unknown as Record<string, unknown>[], {
+          total: sortedLimitRanges.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace'],
+          linkBuilder: (l) => {
+            const lr = l as unknown as LimitRangeInfo
+            return buildResourceLink('LimitRange', lr.namespace, lr.name)
+          },
+        }),
+      },
+    }
+  }, [limitRanges, pagedLimitRanges, sortedLimitRanges.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

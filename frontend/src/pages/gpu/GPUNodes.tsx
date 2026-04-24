@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import {
   RefreshCw,
   Monitor,
@@ -180,6 +183,38 @@ export default function GPUNodes() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedNodes.slice(start, start + rowsPerPage)
   }, [sortedNodes, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (nodes.length === 0) return null
+    const total = nodes.length
+    const totalCapacity = nodes.reduce((s, n) => s + (n.gpu_capacity ?? 0), 0)
+    const totalAlloc = nodes.reduce((s, n) => s + (n.gpu_allocatable ?? 0), 0)
+    const notReady = nodes.filter((n) => !/ready/i.test(n.status)).length
+    const prefix = notReady > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}GPU 노드 ${total}개 (capacity ${totalCapacity}, allocatable ${totalAlloc}${notReady ? `, NotReady ${notReady}` : ''})`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total, total_capacity: totalCapacity, total_allocatable: totalAlloc, not_ready: notReady },
+        ...summarizeList(pagedNodes as unknown as Record<string, unknown>[], {
+          total: sortedNodes.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'gpu_model', 'gpu_capacity', 'gpu_allocatable', 'status', 'mig_strategy'],
+          filterProblematic: (n) => !/ready/i.test((n as unknown as GPUNodeInfo).status),
+          linkBuilder: (n) => {
+            const node = n as unknown as GPUNodeInfo
+            return buildResourceLink('Node', undefined, node.name)
+          },
+        }),
+      },
+    }
+  }, [nodes, pagedNodes, sortedNodes.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

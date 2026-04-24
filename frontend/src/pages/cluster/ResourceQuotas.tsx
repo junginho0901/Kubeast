@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'requests' | 'age'
@@ -233,6 +236,34 @@ export default function ResourceQuotas() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedResourceQuotas.slice(start, start + rowsPerPage)
   }, [sortedResourceQuotas, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(resourceQuotas) || resourceQuotas.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = resourceQuotas.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} ResourceQuota ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedResourceQuotas as unknown as Record<string, unknown>[], {
+          total: sortedResourceQuotas.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace'],
+          linkBuilder: (q) => {
+            const rq = q as unknown as ResourceQuotaInfo
+            return buildResourceLink('ResourceQuota', rq.namespace, rq.name)
+          },
+        }),
+      },
+    }
+  }, [resourceQuotas, pagedResourceQuotas, sortedResourceQuotas.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

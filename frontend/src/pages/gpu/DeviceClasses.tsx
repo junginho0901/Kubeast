@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'selectors' | 'conditions' | 'age'
@@ -236,6 +239,33 @@ export default function DeviceClasses() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedDeviceClasses.slice(start, start + rowsPerPage)
   }, [sortedDeviceClasses, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped, DRA)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(deviceClasses) || deviceClasses.length === 0) return null
+    const total = deviceClasses.length
+    return {
+      source: 'base' as const,
+      summary: `DeviceClass ${total}개 (DRA)`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedDeviceClasses as unknown as Record<string, unknown>[], {
+          total: sortedDeviceClasses.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name'],
+          linkBuilder: (d) => {
+            const dc = d as unknown as DeviceClassItem
+            return buildResourceLink('DeviceClass', undefined, dc.name)
+          },
+        }),
+      },
+    }
+  }, [deviceClasses, pagedDeviceClasses, sortedDeviceClasses.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'requests' | 'age'
@@ -229,6 +232,34 @@ export default function ResourceClaimTemplates() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedResourceClaimTemplates.slice(start, start + rowsPerPage)
   }, [sortedResourceClaimTemplates, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (DRA)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(resourceClaimTemplates) || resourceClaimTemplates.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = resourceClaimTemplates.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} ResourceClaimTemplate ${total}개 (DRA)`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedResourceClaimTemplates as unknown as Record<string, unknown>[], {
+          total: sortedResourceClaimTemplates.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace'],
+          linkBuilder: (r) => {
+            const rct = r as unknown as ResourceClaimTemplateItem
+            return buildResourceLink('ResourceClaimTemplate', rct.namespace, rct.name)
+          },
+        }),
+      },
+    }
+  }, [resourceClaimTemplates, pagedResourceClaimTemplates, sortedResourceClaimTemplates.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import {
   RefreshCw,
   Box,
@@ -221,6 +224,37 @@ export default function GPUPods() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedPods.slice(start, start + rowsPerPage)
   }, [sortedPods, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (pods.length === 0) return null
+    const total = pods.length
+    const totalGpuRequested = pods.reduce((s, p) => s + (p.gpu_requested ?? 0), 0)
+    const notRunning = pods.filter((p) => !/running/i.test(p.status)).length
+    const prefix = notRunning > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}GPU Pod ${total}개 (요청 ${totalGpuRequested}개${notRunning ? `, NotRunning ${notRunning}` : ''})`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total, total_gpu_requested: totalGpuRequested, not_running: notRunning },
+        ...summarizeList(pagedPods as unknown as Record<string, unknown>[], {
+          total: sortedPods.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'node_name', 'gpu_requested', 'status'],
+          filterProblematic: (p) => !/running/i.test((p as unknown as GPUPodInfo).status),
+          linkBuilder: (p) => {
+            const pod = p as unknown as GPUPodInfo
+            return buildResourceLink('Pod', pod.namespace, pod.name)
+          },
+        }),
+      },
+    }
+  }, [pods, pagedPods, sortedPods.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

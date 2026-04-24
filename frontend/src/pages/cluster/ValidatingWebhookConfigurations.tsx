@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'webhooksCount' | 'age'
@@ -190,6 +193,33 @@ export default function ValidatingWebhookConfigurations() {
     const start = (currentPage - 1) * rowsPerPage
     return sorted.slice(start, start + rowsPerPage)
   }, [sorted, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(items) || items.length === 0) return null
+    const total = items.length
+    return {
+      source: 'base' as const,
+      summary: `ValidatingWebhookConfiguration ${total}개`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(paged as unknown as Record<string, unknown>[], {
+          total: sorted.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'webhooks_count'],
+          linkBuilder: (w) => {
+            const wh = w as unknown as WebhookConfigInfo
+            return buildResourceLink('ValidatingWebhookConfiguration', undefined, wh.name)
+          },
+        }),
+      },
+    }
+  }, [items, paged, sorted.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

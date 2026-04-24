@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'holder' | 'duration' | 'age'
@@ -238,6 +241,34 @@ export default function Leases() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedLeases.slice(start, start + rowsPerPage)
   }, [sortedLeases, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(leases) || leases.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = leases.length
+    return {
+      source: 'base' as const,
+      summary: `${nsLabel} Lease ${total}개`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedLeases as unknown as Record<string, unknown>[], {
+          total: sortedLeases.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace'],
+          linkBuilder: (l) => {
+            const li = l as unknown as LeaseInfo
+            return buildResourceLink('Lease', li.namespace, li.name)
+          },
+        }),
+      },
+    }
+  }, [leases, pagedLeases, sortedLeases.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

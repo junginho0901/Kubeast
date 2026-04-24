@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'value' | 'globalDefault' | 'preemptionPolicy' | 'age'
@@ -207,6 +210,34 @@ export default function PriorityClasses() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedPCs.slice(start, start + rowsPerPage)
   }, [sortedPCs, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(priorityClasses) || priorityClasses.length === 0) return null
+    const total = priorityClasses.length
+    const defaults = priorityClasses.filter((p) => p.global_default).length
+    return {
+      source: 'base' as const,
+      summary: `PriorityClass ${total}개 (기본 ${defaults}개)`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total, defaults },
+        ...summarizeList(pagedPCs as unknown as Record<string, unknown>[], {
+          total: sortedPCs.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'value', 'global_default', 'preemption_policy', 'description'],
+          linkBuilder: (p) => {
+            const pc = p as unknown as PriorityClassInfo
+            return buildResourceLink('PriorityClass', undefined, pc.name)
+          },
+        }),
+      },
+    }
+  }, [priorityClasses, pagedPCs, sortedPCs.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return

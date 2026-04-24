@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'roleRef' | 'subjects' | 'age'
@@ -184,6 +187,33 @@ export default function ClusterRoleBindings() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedItems.slice(start, start + rowsPerPage)
   }, [sortedItems, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(clusterRoleBindings) || clusterRoleBindings.length === 0) return null
+    const total = clusterRoleBindings.length
+    return {
+      source: 'base' as const,
+      summary: `ClusterRoleBinding ${total}개`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedItems as unknown as Record<string, unknown>[], {
+          total: sortedItems.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'role_ref_kind', 'role_ref_name', 'subjects_count'],
+          linkBuilder: (r) => {
+            const rb = r as unknown as ClusterRoleBindingInfo
+            return buildResourceLink('ClusterRoleBinding', undefined, rb.name)
+          },
+        }),
+      },
+    }
+  }, [clusterRoleBindings, pagedItems, sortedItems.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
