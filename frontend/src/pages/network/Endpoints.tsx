@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'ready' | 'notReady' | 'addresses' | 'ports' | 'age'
@@ -370,6 +373,37 @@ export default function Endpoints() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedEndpoints.slice(start, start + rowsPerPage)
   }, [sortedEndpoints, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(endpoints) || endpoints.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = endpoints.length
+    const notReady = endpoints.filter((e) => e.not_ready_count > 0).length
+    const prefix = notReady > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} Endpoints ${total}개${notReady ? ` (NotReady ${notReady})` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, with_not_ready: notReady },
+        ...summarizeList(pagedEndpoints as unknown as Record<string, unknown>[], {
+          total: sortedEndpoints.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'ready_count', 'not_ready_count', 'ports'],
+          filterProblematic: (e) => (e as unknown as EndpointInfo).not_ready_count > 0,
+          linkBuilder: (e) => {
+            const ep = e as unknown as EndpointInfo
+            return buildResourceLink('Endpoints', ep.namespace, ep.name)
+          },
+        }),
+      },
+    }
+  }, [endpoints, pagedEndpoints, sortedEndpoints.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
