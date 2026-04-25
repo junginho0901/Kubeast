@@ -7,7 +7,10 @@ import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search, Boxes, Plus } from 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 /* ──────────── types ──────────── */
 interface NamespaceInfo {
@@ -209,6 +212,38 @@ export default function Namespaces() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedNamespaces.slice(start, start + rowsPerPage)
   }, [sortedNamespaces, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(namespaces) || namespaces.length === 0) return null
+    const total = namespaces.length
+    const inactive = (namespaces as NamespaceInfo[]).filter(
+      (n) => !/active/i.test(n.status),
+    ).length
+    const prefix = inactive > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}Namespace ${total}개${inactive ? ` (Inactive ${inactive})` : ''}`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total, inactive },
+        ...summarizeList(pagedNamespaces as unknown as Record<string, unknown>[], {
+          total: sortedNamespaces.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'status', 'age'],
+          filterProblematic: (n) => !/active/i.test((n as unknown as NamespaceInfo).status),
+          linkBuilder: (n) => {
+            const ns = n as unknown as NamespaceInfo
+            return buildResourceLink('Namespace', undefined, ns.name)
+          },
+        }),
+      },
+    }
+  }, [namespaces, pagedNamespaces, sortedNamespaces.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   /* ── handlers ── */
   const handleRefresh = async () => {
