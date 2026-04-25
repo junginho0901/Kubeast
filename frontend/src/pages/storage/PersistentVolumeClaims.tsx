@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey =
@@ -316,6 +319,41 @@ export default function PersistentVolumeClaims() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedPVCs.slice(start, start + rowsPerPage)
   }, [sortedPVCs, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(pvcs) || pvcs.length === 0) return null
+    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
+    const total = pvcs.length
+    const pending = pvcs.filter((p) => /pending/i.test(p.status)).length
+    const lost = pvcs.filter((p) => /lost/i.test(p.status)).length
+    const prefix = pending > 0 || lost > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}${nsLabel} PVC ${total}개${pending ? `, Pending ${pending}` : ''}${lost ? `, Lost ${lost}` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
+        stats: { total, pending, lost },
+        ...summarizeList(pagedPVCs as unknown as Record<string, unknown>[], {
+          total: sortedPVCs.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'status', 'volume', 'capacity', 'access_modes', 'storage_class'],
+          filterProblematic: (p) => {
+            const pvc = p as unknown as PVCInfo
+            return /pending|lost/i.test(pvc.status)
+          },
+          linkBuilder: (p) => {
+            const pvc = p as unknown as PVCInfo
+            return buildResourceLink('PersistentVolumeClaim', pvc.namespace, pvc.name)
+          },
+        }),
+      },
+    }
+  }, [pvcs, pagedPVCs, sortedPVCs.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
