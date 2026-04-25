@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { api, TimelineEvent, RolloutRevision } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useAIContext } from '@/hooks/useAIContext'
 
 const TIME_RANGES = [
   { value: 1, label: '1h' },
@@ -94,6 +95,44 @@ export default function Timeline() {
 
   const visibleItems = mergedItems.slice(0, showCount)
   const hasMore = mergedItems.length > showCount
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!timeline) return null
+    const totalEvents = timeline.events?.length ?? 0
+    const totalRollouts = timeline.rollout_history?.length ?? 0
+    const warnings = timeline.events?.filter((e) => e.type === 'Warning').length ?? 0
+    const prefix = warnings > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}타임라인 · ${namespace} · 최근 ${hours}h · 이벤트 ${totalEvents}, 롤아웃 ${totalRollouts}${warnings ? `, Warning ${warnings}` : ''}`,
+      data: {
+        filters: { namespace, hours, event_filter: eventFilter },
+        stats: { total_events: totalEvents, total_rollouts: totalRollouts, warnings },
+        recent_items: visibleItems.slice(0, 15).map((it) =>
+          it.type === 'event'
+            ? {
+                kind: 'event',
+                event_type: (it.data as TimelineEvent).type,
+                reason: (it.data as TimelineEvent).reason,
+                message: (it.data as TimelineEvent).message,
+                involved_object: (it.data as TimelineEvent).involved_object,
+                timestamp: it.timestamp,
+              }
+            : {
+                kind: 'rollout',
+                resource_kind: (it.data as RolloutRevision).kind,
+                resource_name: (it.data as RolloutRevision).name,
+                revision: (it.data as RolloutRevision).revision,
+                cause: (it.data as RolloutRevision).change_cause,
+                timestamp: it.timestamp,
+              },
+        ),
+      },
+    }
+  }, [timeline, namespace, hours, eventFilter, visibleItems])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleResourceClick = useCallback((kind: string, name: string, ns: string) => {
     openDetail({ kind, name, namespace: ns })
