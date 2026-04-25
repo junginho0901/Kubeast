@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, FlaskConical, Loader2, Trash2 } from 'lucide-react'
 import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
+import { useAIContext } from '@/hooks/useAIContext'
 import OverviewTab from './tabs/OverviewTab'
 import ValuesTab from './tabs/ValuesTab'
 import ManifestTab from './tabs/ManifestTab'
@@ -29,6 +30,31 @@ export default function HelmReleaseDetailPage() {
     queryFn: () => api.helm.getRelease(namespace, name),
     enabled: !!namespace && !!name,
   })
+
+  // 플로팅 AI 위젯용 스냅샷 (현재 활성 탭 기준)
+  const aiSnapshot = useMemo(() => {
+    const rel = detailQuery.data
+    if (!rel) return null
+    const status = String(rel.status ?? '')
+    const prefix = /fail|error/i.test(status) ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}Helm Release ${rel.name} (${rel.namespace}) · rev ${rel.revision} · ${status} · 탭: ${tab}`,
+      data: {
+        kind: 'HelmRelease',
+        name: rel.name,
+        namespace: rel.namespace,
+        revision: rel.revision,
+        status,
+        chart: rel.chart,
+        chart_version: rel.chartVersion,
+        app_version: rel.appVersion,
+        active_tab: tab,
+      },
+    }
+  }, [detailQuery.data, tab])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   if (detailQuery.isLoading) {
     return (
