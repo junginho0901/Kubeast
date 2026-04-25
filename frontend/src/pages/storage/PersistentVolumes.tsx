@@ -6,7 +6,10 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey =
@@ -332,6 +335,40 @@ export default function PersistentVolumes() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedPVs.slice(start, start + rowsPerPage)
   }, [sortedPVs, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(pvs) || pvs.length === 0) return null
+    const total = pvs.length
+    const released = pvs.filter((p) => /released/i.test(p.status)).length
+    const failed = pvs.filter((p) => /fail/i.test(p.status)).length
+    const prefix = released > 0 || failed > 0 ? '⚠️ ' : ''
+    return {
+      source: 'base' as const,
+      summary: `${prefix}PV ${total}개${released ? `, Released ${released}` : ''}${failed ? `, Failed ${failed}` : ''}`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total, released, failed },
+        ...summarizeList(pagedPVs as unknown as Record<string, unknown>[], {
+          total: sortedPVs.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'capacity', 'access_modes', 'reclaim_policy', 'status', 'claim', 'storage_class'],
+          filterProblematic: (p) => {
+            const pv = p as unknown as PVInfo
+            return /released|fail/i.test(pv.status)
+          },
+          linkBuilder: (p) => {
+            const pv = p as unknown as PVInfo
+            return buildResourceLink('PersistentVolume', undefined, pv.name)
+          },
+        }),
+      },
+    }
+  }, [pvs, pagedPVs, sortedPVs.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
