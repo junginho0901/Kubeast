@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { ChevronDown, CheckCircle, Search, Filter, Info } from 'lucide-react'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useAIContext } from '@/hooks/useAIContext'
 
 // Kind → emoji icon (matching ResourceDetailDrawer)
 const kindIcon: Record<string, string> = {
@@ -116,6 +117,32 @@ export default function DependencyGraph() {
     queryFn: () => api.getDependencyGraph(selectedNamespace),
     enabled: !!selectedNamespace,
   })
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!graphData) return null
+    const totalNodes = graphData.nodes?.length ?? 0
+    const totalEdges = graphData.edges?.length ?? 0
+    const byKind: Record<string, number> = {}
+    for (const n of graphData.nodes ?? []) {
+      byKind[n.kind] = (byKind[n.kind] ?? 0) + 1
+    }
+    return {
+      source: 'base' as const,
+      summary: `의존성 그래프 · ${selectedNamespace} · 노드 ${totalNodes}개, 엣지 ${totalEdges}개`,
+      data: {
+        filters: {
+          namespace: selectedNamespace,
+          kind_filters: Array.from(kindFilters),
+          edge_type_filters: Array.from(edgeTypeFilters),
+          search: searchQuery || undefined,
+        },
+        stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind },
+      },
+    }
+  }, [graphData, selectedNamespace, kindFilters, edgeTypeFilters, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   // Close ns dropdown on outside click
   useEffect(() => {
