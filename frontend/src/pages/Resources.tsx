@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { useAIContext } from '@/hooks/useAIContext'
 import { 
   Server, 
   Box, 
@@ -73,6 +74,34 @@ export default function Resources() {
     queryFn: () => api.getPVCs(namespace),
     enabled: activeTab === 'pvcs',
   })
+
+  // 플로팅 AI 위젯용 스냅샷 — 활성 탭 기준 단일 리스트 요약
+  const aiSnapshot = useMemo(() => {
+    if (!namespace) return null
+    const tabData: Record<ResourceType, unknown[] | undefined> = {
+      services: services as unknown[] | undefined,
+      deployments: deployments as unknown[] | undefined,
+      replicasets: replicasets as unknown[] | undefined,
+      hpas: hpas as unknown[] | undefined,
+      pdbs: pdbs as unknown[] | undefined,
+      pods: pods as unknown[] | undefined,
+      pvcs: pvcs as unknown[] | undefined,
+    }
+    const items = tabData[activeTab] ?? []
+    const total = items.length
+    return {
+      source: 'base' as const,
+      summary: `리소스 · ${namespace} · ${activeTab} ${total}개`,
+      data: {
+        namespace,
+        active_tab: activeTab,
+        filters: { search: searchQuery || undefined, pod_label_selector: podLabelSelector || undefined },
+        stats: { total },
+      },
+    }
+  }, [namespace, activeTab, services, deployments, replicasets, hpas, pdbs, pods, pvcs, searchQuery, podLabelSelector])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const filterBySearch = (items: any[] | undefined | null) => {
     if (!Array.isArray(items)) return []
