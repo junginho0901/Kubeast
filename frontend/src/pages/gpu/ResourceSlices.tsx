@@ -5,6 +5,9 @@ import { api, type ResourceSliceItem } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
@@ -208,6 +211,33 @@ export default function ResourceSlices() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedResourceSlices.slice(start, start + rowsPerPage)
   }, [sortedResourceSlices, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷 (cluster-scoped, DRA)
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(resourceSlices) || resourceSlices.length === 0) return null
+    const total = resourceSlices.length
+    return {
+      source: 'base' as const,
+      summary: `ResourceSlice ${total}개 (DRA)`,
+      data: {
+        filters: { search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedResourceSlices as unknown as Record<string, unknown>[], {
+          total: sortedResourceSlices.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name'],
+          linkBuilder: (r) => {
+            const rs = r as unknown as ResourceSliceItem
+            return buildResourceLink('ResourceSlice', undefined, rs.name)
+          },
+        }),
+      },
+    }
+  }, [resourceSlices, pagedResourceSlices, sortedResourceSlices.length, currentPage, rowsPerPage, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const handleRefresh = async () => {
     if (isRefreshing) return
