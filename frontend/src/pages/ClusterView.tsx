@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import type { PodInfo } from '@/services/api'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import PodExecTerminal from '@/components/PodExecTerminal'
@@ -294,6 +295,44 @@ export default function ClusterView() {
     queryKey: ['nodes'],
     queryFn: () => api.getNodes(false),
   })
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(nodes) || !Array.isArray(allPods)) return null
+    const totalNodes = nodes.length
+    const totalPods = allPods.length
+    const nodeReady = (nodes as Array<{ status: string }>).filter((n) =>
+      /ready/i.test(n.status),
+    ).length
+    const notRunning = (allPods as PodInfo[]).filter((p) => {
+      const ph = p.phase || p.status || ''
+      return ph !== 'Running' && ph !== 'Succeeded'
+    }).length
+    const prefix = notRunning > 0 ? '⚠️ ' : ''
+    const podsByNode: Record<string, number> = {}
+    for (const p of allPods as PodInfo[]) {
+      const n = p.node_name || 'unscheduled'
+      podsByNode[n] = (podsByNode[n] ?? 0) + 1
+    }
+    return {
+      source: 'base' as const,
+      summary: `${prefix}클러스터 뷰 · 노드 ${totalNodes}개 (Ready ${nodeReady}), Pod ${totalPods}개${notRunning ? ` (NotRunning ${notRunning})` : ''}`,
+      data: {
+        filters: { namespace: selectedNamespace },
+        stats: {
+          total_nodes: totalNodes,
+          ready_nodes: nodeReady,
+          total_pods: totalPods,
+          not_running_pods: notRunning,
+        },
+        pods_by_node: Object.fromEntries(
+          Object.entries(podsByNode).sort((a, b) => b[1] - a[1]).slice(0, 20),
+        ),
+      },
+    }
+  }, [nodes, allPods, selectedNamespace])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   // 로그 스트리밍 (WebSocket)
   useEffect(() => {
