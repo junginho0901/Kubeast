@@ -5,6 +5,9 @@ import { JSONPath } from 'jsonpath-plus'
 import { api, type CustomResourceInstanceInfo } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAIContext } from '@/hooks/useAIContext'
+import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'kind' | 'group' | 'age' | string
@@ -211,6 +214,33 @@ export default function CustomResourceInstances() {
     const start = (currentPage - 1) * rowsPerPage
     return sortedItems.slice(start, start + rowsPerPage)
   }, [sortedItems, currentPage, rowsPerPage])
+
+  // 플로팅 AI 위젯용 스냅샷
+  const aiSnapshot = useMemo(() => {
+    if (!Array.isArray(instances) || instances.length === 0) return null
+    const total = instances.length
+    return {
+      source: 'base' as const,
+      summary: `CustomResource 인스턴스 ${total}개${kindFilter ? ` · ${kindFilter}` : ''}`,
+      data: {
+        filters: { kind: kindFilter || undefined, search: searchQuery || undefined },
+        stats: { total },
+        ...summarizeList(pagedItems as unknown as Record<string, unknown>[], {
+          total: sortedItems.length,
+          currentPage,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
+          pickFields: ['name', 'namespace', 'kind', 'group'],
+          linkBuilder: (i) => {
+            const inst = i as unknown as CustomResourceInstanceInfo
+            return buildResourceLink('CustomResource', inst.namespace, inst.name)
+          },
+        }),
+      },
+    }
+  }, [instances, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, searchQuery])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   // Build a lookup from name+namespace to full instance for JSONPath
   const fullInstanceMap = useMemo(() => {
