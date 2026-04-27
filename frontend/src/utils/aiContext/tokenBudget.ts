@@ -1,6 +1,6 @@
 import type { VisibleDataLayer } from '@/components/PageContextProvider'
 
-const MAX_BYTES = 4096 // D9: 레이어당 4KB
+const MAX_BYTES = 8192 // 레이어당 8KB (모달 raw 데이터 + overlay 수용)
 const MAX_SUMMARY_LEN = 300
 
 /**
