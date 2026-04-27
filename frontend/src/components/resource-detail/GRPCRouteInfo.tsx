@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
   name: string
@@ -67,6 +68,8 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
     enabled,
     retry: false,
   })
+
+  useResourceDetailOverlay({ kind: 'GRPCRoute', name, namespace, describe })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
