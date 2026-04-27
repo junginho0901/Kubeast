@@ -3,6 +3,7 @@ import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
   name: string
@@ -284,6 +285,8 @@ function PVDetail({ name, rawJson }: { name: string; rawJson?: Record<string, un
     retry: false,
   })
 
+  useResourceDetailOverlay({ kind: 'PersistentVolume', name, describe })
+
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
@@ -478,6 +481,8 @@ function PVCDetail({ name, namespace, rawJson }: { name: string; namespace?: str
     retry: false,
   })
 
+  useResourceDetailOverlay({ kind: 'PersistentVolumeClaim', name, namespace, describe })
+
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
@@ -645,6 +650,8 @@ function StorageClassDetail({ name, rawJson }: { name: string; rawJson?: Record<
     enabled: !!name,
     retry: false,
   })
+
+  useResourceDetailOverlay({ kind: 'StorageClass', name, describe })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
@@ -822,6 +829,8 @@ function VolumeAttachmentDetail({ name, rawJson }: { name: string; rawJson?: Rec
     enabled: !!name,
     retry: false,
   })
+
+  useResourceDetailOverlay({ kind: 'VolumeAttachment', name, describe })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
