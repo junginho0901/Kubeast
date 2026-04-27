@@ -10,6 +10,7 @@ import {
   fmtRel,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
   name: string
@@ -24,6 +25,8 @@ export default function VPAInfo({ name, namespace }: Props) {
     staleTime: 10_000,
     retry: 1,
   })
+
+  useResourceDetailOverlay({ kind: 'VerticalPodAutoscaler', name, namespace, describe: desc })
 
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>

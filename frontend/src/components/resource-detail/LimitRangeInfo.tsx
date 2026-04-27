@@ -8,6 +8,7 @@ import {
   EventsTable,
   fmtRel,
 } from './DetailCommon'
+import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
   name: string
@@ -28,6 +29,8 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     staleTime: 10_000,
     retry: 1,
   })
+
+  useResourceDetailOverlay({ kind: 'LimitRange', name, namespace, describe: desc })
 
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
