@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 import { MarkdownLink } from './MarkdownLink'
 
@@ -102,7 +104,12 @@ function MessageBubble({ role, content, pending }: MessageBubbleProps) {
           <p className="whitespace-pre-wrap break-words">{content}</p>
         ) : (
           <div className="prose prose-invert prose-sm max-w-none break-words">
-            <ReactMarkdown urlTransform={urlTransform} components={{ a: MarkdownLink }}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              urlTransform={urlTransform}
+              components={{ a: MarkdownLink }}
+            >
               {content}
             </ReactMarkdown>
           </div>
