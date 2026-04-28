@@ -1,6 +1,8 @@
 import { type ReactNode, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { api } from '@/services/api'
 import { Pause, Play, Zap } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -205,6 +207,57 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     enabled: isCronJob && !!namespace && !!name,
     staleTime: 10_000,
   })
+
+  // 플로팅 AI 위젯용 overlay — Workload describe (replicas, pods, events, conditions)
+  const aiSnapshot = useMemo(() => {
+    if (!name || !kind) return null
+    const desc = describe as Record<string, unknown> | undefined
+    const events = (desc?.events as Array<{ type?: string; reason?: string; message?: string; last_timestamp?: string }>) ?? []
+    const conditions = (desc?.conditions as Array<{ type?: string; status?: string; reason?: string }>) ?? []
+    const pods = (desc?.pods as Array<{ name?: string; phase?: string; restart_count?: number }>) ?? []
+    const notRunning = pods.filter((p) => p.phase && p.phase !== 'Running' && p.phase !== 'Succeeded').length
+    const replicas = (desc?.replicas as number | undefined) ?? (status.replicas as number | undefined)
+    const ready = (desc?.ready_replicas as number | undefined) ?? (status.readyReplicas as number | undefined)
+    const prefix = notRunning > 0 || (replicas && ready !== undefined && ready < replicas) ? '⚠️ ' : ''
+    const summary = `${prefix}${kind} ${name} (${namespace}) — replicas ${ready ?? '?'}/${replicas ?? '?'}, Pod ${pods.length}개${notRunning ? ` (NotRunning ${notRunning})` : ''}`
+
+    return {
+      source: 'WorkloadInfo' as const,
+      summary,
+      data: {
+        kind,
+        name,
+        namespace,
+        _link: buildResourceLink(kind, namespace, name),
+        replicas,
+        ready_replicas: ready,
+        updated_replicas: desc?.updated_replicas ?? status.updatedReplicas,
+        available_replicas: desc?.available_replicas ?? status.availableReplicas,
+        unavailable_replicas: desc?.unavailable_replicas ?? status.unavailableReplicas,
+        strategy: desc?.strategy ?? spec.strategy,
+        selector,
+        conditions: conditions.slice(0, 8),
+        pods: pods.slice(0, 20).map((p: any) => ({
+          name: p.name,
+          phase: p.phase,
+          restart_count: p.restart_count,
+          ready: p.ready,
+          node_name: p.node_name,
+          _link: namespace && p.name ? buildResourceLink('Pod', namespace, p.name) : undefined,
+        })),
+        recent_events: events.slice(0, 10),
+        ...(isCronJob && Array.isArray(ownedJobs)
+          ? {
+              owned_jobs: (ownedJobs as Array<{ name: string; status?: string; start_time?: string }>)
+                .slice(0, 10)
+                .map((j) => ({ name: j.name, status: j.status, start_time: j.start_time })),
+            }
+          : {}),
+      },
+    }
+  }, [name, namespace, kind, describe, spec, status, selector, ownedJobs, isCronJob])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const suspendMut = useMutation({
     mutationFn: (suspend: boolean) => api.suspendCronJob(namespace as string, name, suspend),
