@@ -23,6 +23,9 @@ interface ChatPanelProps {
   currentPageType?: string
   /** 페이드/스케일 인-아웃 애니메이션 제어 (FloatingAIChat 에서 관리) */
   visible: boolean
+  /** 패널 닫고 다시 열어도 유지되도록 부모가 세션 id 를 소유 */
+  sessionId: string | null
+  onSessionIdChange: (id: string | null) => void
 }
 
 /**
@@ -40,10 +43,12 @@ export function ChatPanel({
   currentPageTitle,
   currentPageType,
   visible,
+  sessionId,
+  onSessionIdChange,
 }: ChatPanelProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const setSessionId = onSessionIdChange
   const [streamState, setStreamState] = useState<ChatStreamState>(
     floatingChatStreamManager.getState(),
   )
