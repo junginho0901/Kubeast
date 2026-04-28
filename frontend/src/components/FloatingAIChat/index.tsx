@@ -48,11 +48,19 @@ export default function FloatingAIChat() {
 
   useEffect(() => {
     if (isOpen) {
-      // 패널 열기: mount → 다음 tick 에 visible
+      // 패널 열기: mount → 두 번의 RAF 후 visible (React 18 batching 회피).
+      // 단일 RAF 만 쓰면 같은 microtask 에 setState 가 flushed 되어
+      // visible=false 첫 렌더가 paint 되지 않고 곧장 visible=true 로 그려져 transition 발생 안 함.
       setToggleVisible(false)
       setPanelMounted(true)
-      const id = window.requestAnimationFrame(() => setPanelVisible(true))
-      return () => window.cancelAnimationFrame(id)
+      let raf2 = 0
+      const raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(() => setPanelVisible(true))
+      })
+      return () => {
+        window.cancelAnimationFrame(raf1)
+        if (raf2) window.cancelAnimationFrame(raf2)
+      }
     }
     // 패널 닫기: visible=false → ANIM_MS 후 unmount + 토글 visible
     setPanelVisible(false)
