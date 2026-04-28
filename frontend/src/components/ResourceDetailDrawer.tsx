@@ -1120,7 +1120,14 @@ export default function ResourceDetailDrawer() {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-[1100]" onClick={handleClose} />
+      <div
+        className="fixed inset-0 bg-black/30 z-[1100]"
+        onClick={() => {
+          // 위에 중첩된 모달이 떠 있으면 backdrop 클릭은 그 모달이 먹어야 한다.
+          if (!isTopModal()) return
+          handleClose()
+        }}
+      />
       <div className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 z-[1110] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700 shrink-0">
