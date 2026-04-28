@@ -9,7 +9,9 @@ import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import PodExecTerminal from '@/components/PodExecTerminal'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 interface Props {
   name: string
@@ -149,6 +151,68 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     enabled: showLogs && !!logContainer,
     staleTime: 5000,
   })
+
+  // 플로팅 AI 위젯용 overlay — Pod 컨테이너/이벤트/conditions/로그
+  const aiSnapshot = useMemo(() => {
+    if (!name) return null
+    const desc = podDescribe as
+      | {
+          phase?: string
+          conditions?: Array<{ type?: string; status?: string; reason?: string }>
+          containers?: Array<Record<string, unknown>>
+          init_containers?: Array<Record<string, unknown>>
+          events?: Array<{ type?: string; reason?: string; message?: string; last_timestamp?: string }>
+          volumes?: Array<Record<string, unknown>>
+          qos_class?: string
+          node_name?: string
+          pod_ip?: string
+          host_ip?: string
+        }
+      | undefined
+    const events = desc?.events ?? []
+    const containers = desc?.containers ?? []
+    const restarts = containers.reduce((s, c) => s + Number((c.restart_count ?? 0) as number), 0)
+    const notReady = containers.filter((c) => c.ready === false).length
+    const prefix = notReady > 0 || restarts > 5 ? '⚠️ ' : ''
+    const summary = `${prefix}Pod ${name} (${namespace}) — phase ${desc?.phase ?? 'Unknown'}, 컨테이너 ${containers.length}개${notReady ? ` (NotReady ${notReady})` : ''}, restart ${restarts}, 이벤트 ${events.length}건`
+
+    const tail = typeof logData === 'string' && logData.length > 1500 ? logData.slice(-1500) : logData
+
+    return {
+      source: 'PodInfo' as const,
+      summary,
+      data: {
+        kind: 'Pod',
+        name,
+        namespace,
+        _link: buildResourceLink('Pod', namespace, name),
+        phase: desc?.phase,
+        qos_class: desc?.qos_class,
+        node_name: desc?.node_name,
+        pod_ip: desc?.pod_ip,
+        host_ip: desc?.host_ip,
+        conditions: desc?.conditions?.slice(0, 8),
+        containers: containers.slice(0, 10).map((c) => ({
+          name: c.name,
+          image: c.image,
+          ready: c.ready,
+          restart_count: c.restart_count,
+          state: c.state,
+        })),
+        init_containers: desc?.init_containers?.slice(0, 5),
+        volume_count: desc?.volumes?.length,
+        recent_events: events.slice(0, 10).map((e) => ({
+          type: e.type,
+          reason: e.reason,
+          message: e.message,
+          last_timestamp: e.last_timestamp,
+        })),
+        ...(showLogs && tail ? { log_tail: tail } : {}),
+      },
+    }
+  }, [name, namespace, podDescribe, logData, showLogs])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const logSectionRef = useRef<HTMLDivElement>(null)
 

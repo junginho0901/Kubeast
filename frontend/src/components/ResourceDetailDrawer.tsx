@@ -6,6 +6,7 @@ import { X, Info, FileCode, Trash2, ArrowLeft, ArrowUpRight, Package } from 'luc
 import { useResourceDetail } from './ResourceDetailContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useModalStackEntry } from '@/hooks/useModalStack'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { api } from '@/services/api'
 import YamlEditor from './YamlEditor'
@@ -257,6 +258,7 @@ export default function ResourceDetailDrawer() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { target, close, goBack, canGoBack } = useResourceDetail()
+  const isTopModal = useModalStackEntry(!!target)
   const [tab, setTab] = useState<TabId>('info')
   const [yamlRefreshNonce, setYamlRefreshNonce] = useState(0)
   const [isYamlDirty, setIsYamlDirty] = useState(false)
@@ -559,13 +561,15 @@ export default function ResourceDetailDrawer() {
     if (!target) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // 위에 중첩된 모달(예: Delete 확인)이 떠 있으면 그 모달이 처리해야 한다.
+        if (!isTopModal()) return
         e.stopPropagation()
         handleClose()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [target, isYamlDirty])
+  }, [target, isYamlDirty, isTopModal])
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -1116,7 +1120,14 @@ export default function ResourceDetailDrawer() {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-[1100]" onClick={handleClose} />
+      <div
+        className="fixed inset-0 bg-black/30 z-[1100]"
+        onClick={() => {
+          // 위에 중첩된 모달이 떠 있으면 backdrop 클릭은 그 모달이 먹어야 한다.
+          if (!isTopModal()) return
+          handleClose()
+        }}
+      />
       <div className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 z-[1110] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700 shrink-0">

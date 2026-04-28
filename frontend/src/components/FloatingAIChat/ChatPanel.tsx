@@ -8,6 +8,7 @@ import type {
   ChatStreamState,
 } from '@/services/chatStreamManager'
 import { api } from '@/services/api'
+import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { PageContextSnapshot } from '@/components/PageContextProvider'
 import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot'
 
@@ -23,6 +24,9 @@ interface ChatPanelProps {
   currentPageType?: string
   /** 페이드/스케일 인-아웃 애니메이션 제어 (FloatingAIChat 에서 관리) */
   visible: boolean
+  /** 패널 닫고 다시 열어도 유지되도록 부모가 세션 id 를 소유 */
+  sessionId: string | null
+  onSessionIdChange: (id: string | null) => void
 }
 
 /**
@@ -40,10 +44,12 @@ export function ChatPanel({
   currentPageTitle,
   currentPageType,
   visible,
+  sessionId,
+  onSessionIdChange,
 }: ChatPanelProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const setSessionId = onSessionIdChange
   const [streamState, setStreamState] = useState<ChatStreamState>(
     floatingChatStreamManager.getState(),
   )
@@ -52,18 +58,11 @@ export function ChatPanel({
     return floatingChatStreamManager.subscribe(setStreamState)
   }, [])
 
-  // 첫 마운트 시 세션 자동 생성 (AIChat 과 동일 세션 DB 공유, D22)
+  // 세션은 첫 질문 전송 시점에 생성 (D22 — AIChat 과 같은 세션 DB 공유).
+  // mount 시점에 자동 생성하면 패널 열고 닫을 때마다 빈 세션이 누적된다.
   const createSessionMutation = useMutation({
     mutationFn: () => api.createSession('New Chat'),
-    onSuccess: (session) => setSessionId(session.id),
   })
-
-  useEffect(() => {
-    if (!sessionId && !createSessionMutation.isPending) {
-      createSessionMutation.mutate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // 메시지 히스토리
   const { data: sessionDetail } = useQuery({
@@ -83,7 +82,18 @@ export function ChatPanel({
   }, [streamState.status, sessionId, queryClient])
 
   const handleSubmit = async (message: string) => {
-    if (!sessionId) return
+    // 세션이 없으면 즉시 생성 (지연 생성 — D22)
+    let activeSessionId = sessionId
+    if (!activeSessionId) {
+      try {
+        const session = await createSessionMutation.mutateAsync()
+        activeSessionId = session.id
+        setSessionId(activeSessionId)
+      } catch {
+        return
+      }
+    }
+
     const snapshot = getSnapshot()
     // consume 하면 contextChanged 플래그가 false 로 리셋되어 다음 질문에 전달 안 됨.
     // 스냅샷은 이미 현재 값을 참조하고 있으므로 consume 은 여기서 실행.
@@ -96,7 +106,7 @@ export function ChatPanel({
 
     try {
       await floatingChatStreamManager.startSessionChat(
-        sessionId,
+        activeSessionId,
         message,
         extraBody,
       )
@@ -105,8 +115,50 @@ export function ChatPanel({
     }
   }
 
-  const handleStop = () => {
-    void floatingChatStreamManager.stop()
+  const handleStop = async () => {
+    // AIChat 페이지와 같은 partial-save 패턴 — abort 후 그때까지 받은
+    // assistant content + tool calls 를 별도 API 로 저장한다.
+    // (백엔드 session_chat_stream 은 stream 끝까지 도달해야 add_message 하므로
+    //  중단 시점에서는 user 메시지만 DB 에 있고 assistant 는 사라진다.)
+    const snapshot = floatingChatStreamManager.getState()
+    if (!snapshot.sessionId || !snapshot.isStreaming) {
+      void floatingChatStreamManager.stop()
+      return
+    }
+
+    await floatingChatStreamManager.stop()
+
+    const assistantContent = snapshot.functionCallsContent + snapshot.assistantContent
+    if (!assistantContent) return
+
+    try {
+      const response = await fetch(`/api/v1/sessions/${snapshot.sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'assistant',
+              content: assistantContent,
+              tool_calls: snapshot.toolCalls && snapshot.toolCalls.length > 0
+                ? snapshot.toolCalls
+                : undefined,
+            },
+          ],
+        }),
+      })
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (response.ok) {
+        await queryClient.invalidateQueries({
+          queryKey: ['floating-session-detail', snapshot.sessionId],
+        })
+      }
+    } catch {
+      // 저장 실패 시 사용자 화면에는 stream 멈춘 그대로 표시되므로 무해
+    }
   }
 
   const messages: DisplayMessage[] = useMemo(() => {
@@ -138,11 +190,12 @@ export function ChatPanel({
 
   const streamingContent = isStreaming ? streamState.assistantContent : undefined
   const error = streamState.status === 'error' ? streamState.error : null
-  const disabled = !sessionId
+  // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.
+  const disabled = createSessionMutation.isPending
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-40 flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur transition-all duration-200 ease-out origin-bottom-right ${
+      className={`fixed bottom-6 right-6 z-[1200] flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur transition-all duration-200 ease-out origin-bottom-right ${
         visible
           ? 'opacity-100 scale-100 translate-y-0'
           : 'opacity-0 scale-95 translate-y-2 pointer-events-none'

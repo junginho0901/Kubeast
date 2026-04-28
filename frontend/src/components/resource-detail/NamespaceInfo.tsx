@@ -8,6 +8,8 @@ import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Summa
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 interface Props { name: string }
 
@@ -41,6 +43,59 @@ export default function NamespaceInfo({ name }: Props) {
     queryFn: () => api.getNamespacePods(name),
     enabled: !!name,
   })
+
+  // 플로팅 AI 위젯용 overlay — Namespace 상세 + ResourceQuotas/LimitRanges + Pods
+  const aiSnapshot = useMemo(() => {
+    if (!name) return null
+    const desc = nsDescribe as
+      | { status?: string; events?: Array<{ type?: string; reason?: string; message?: string; last_timestamp?: string }>; conditions?: Array<{ type?: string; status?: string }> }
+      | undefined
+    const podsArr = Array.isArray(nsPods) ? nsPods : []
+    const rqArr = Array.isArray(resourceQuotas) ? resourceQuotas : []
+    const lrArr = Array.isArray(limitRanges) ? limitRanges : []
+    const podsByPhase: Record<string, number> = {}
+    for (const p of podsArr as Array<{ phase?: string; status?: string }>) {
+      const ph = p.phase || p.status || 'Unknown'
+      podsByPhase[ph] = (podsByPhase[ph] ?? 0) + 1
+    }
+    const notRunning = podsArr.filter((p: { phase?: string; status?: string }) => {
+      const ph = p.phase || p.status || ''
+      return ph !== 'Running' && ph !== 'Succeeded'
+    }).length
+    const events = desc?.events ?? []
+    const prefix = notRunning > 0 || (desc?.status && !/active/i.test(desc.status)) ? '⚠️ ' : ''
+    const summary = `${prefix}Namespace ${name} — Pod ${podsArr.length}개${notRunning ? ` (NotRunning ${notRunning})` : ''}, RQ ${rqArr.length}, LR ${lrArr.length}, 이벤트 ${events.length}건`
+
+    return {
+      source: 'NamespaceInfo' as const,
+      summary,
+      data: {
+        kind: 'Namespace',
+        name,
+        _link: buildResourceLink('Namespace', undefined, name),
+        status: desc?.status,
+        conditions: desc?.conditions?.slice(0, 6),
+        pods_total: podsArr.length,
+        pods_not_running: notRunning,
+        pods_by_phase: podsByPhase,
+        pods: (podsArr as Array<{ name: string; phase?: string; restart_count?: number }>)
+          .slice(0, 20)
+          .map((p) => ({
+            name: p.name,
+            phase: p.phase,
+            restart_count: p.restart_count,
+            _link: buildResourceLink('Pod', name, p.name),
+          })),
+        resource_quotas: (rqArr as Array<{ name: string; hard?: Record<string, string>; used?: Record<string, string> }>)
+          .slice(0, 5)
+          .map((rq) => ({ name: rq.name, hard: rq.hard, used: rq.used })),
+        limit_ranges: (lrArr as Array<{ name: string }>).slice(0, 5).map((l) => ({ name: l.name })),
+        recent_events: events.slice(0, 10),
+      },
+    }
+  }, [name, nsDescribe, nsPods, resourceQuotas, limitRanges])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const applyNsEvent = (prev: any[] | undefined, event: { type?: string; object?: any }) => {
     const items = Array.isArray(prev) ? [...prev] : []

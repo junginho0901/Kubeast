@@ -1,10 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { usePageContext } from '../PageContextProvider'
 import { ChatPanel } from './ChatPanel'
 import { ToggleButton } from './ToggleButton'
 
 const ANIM_MS = 200
+const SESSION_STORAGE_KEY = 'kubest.floatingChat.sessionId'
+
+function readPersistedSessionId(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
 
 /**
  * 플로팅 AI 위젯 루트.
@@ -22,14 +32,35 @@ export default function FloatingAIChat() {
   const [panelVisible, setPanelVisible] = useState(false)
   // 토글 버튼은 패널의 반대 — 패널이 사라지는 동안 함께 페이드인
   const [toggleVisible, setToggleVisible] = useState(true)
+  // 세션 id 는 부모에서 소유 → 패널 unmount/remount 에도 살아남음.
+  // sessionStorage 에 미러링하여 F5 새로고침에도 유지, 탭 닫으면 자동 정리.
+  const [sessionId, setSessionId] = useState<string | null>(() => readPersistedSessionId())
+
+  const handleSessionIdChange = useCallback((id: string | null) => {
+    setSessionId(id)
+    try {
+      if (id) window.sessionStorage.setItem(SESSION_STORAGE_KEY, id)
+      else window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    } catch {
+      // sessionStorage 사용 불가 (private 모드 등) — in-memory 만 유지
+    }
+  }, [])
 
   useEffect(() => {
     if (isOpen) {
-      // 패널 열기: mount → 다음 tick 에 visible
+      // 패널 열기: mount → 두 번의 RAF 후 visible (React 18 batching 회피).
+      // 단일 RAF 만 쓰면 같은 microtask 에 setState 가 flushed 되어
+      // visible=false 첫 렌더가 paint 되지 않고 곧장 visible=true 로 그려져 transition 발생 안 함.
       setToggleVisible(false)
       setPanelMounted(true)
-      const id = window.requestAnimationFrame(() => setPanelVisible(true))
-      return () => window.cancelAnimationFrame(id)
+      let raf2 = 0
+      const raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(() => setPanelVisible(true))
+      })
+      return () => {
+        window.cancelAnimationFrame(raf1)
+        if (raf2) window.cancelAnimationFrame(raf2)
+      }
     }
     // 패널 닫기: visible=false → ANIM_MS 후 unmount + 토글 visible
     setPanelVisible(false)
@@ -53,6 +84,8 @@ export default function FloatingAIChat() {
           currentPageTitle={pageTitle}
           currentPageType={pageType}
           visible={panelVisible}
+          sessionId={sessionId}
+          onSessionIdChange={handleSessionIdChange}
         />
       )}
     </>

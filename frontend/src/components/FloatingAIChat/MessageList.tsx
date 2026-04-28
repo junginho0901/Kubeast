@@ -1,8 +1,23 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 import { MarkdownLink } from './MarkdownLink'
+
+/**
+ * react-markdown v10 의 기본 urlTransform 은 unknown scheme 을 sanitize 한다.
+ * `kubest://` 도 unknown 으로 보고 빈 문자열로 만들기 때문에 MarkdownLink 가
+ * 받는 href 가 비어 있어 클릭 시 현재 URL 로 새로고침된다.
+ *
+ * 우리는 `kubest://` 를 신뢰한다 (DNS-1123 검증은 MarkdownLink 가 한 번 더 함)
+ * 그 외 URL 은 기본 sanitize 유지.
+ */
+function urlTransform(url: string): string {
+  if (typeof url === 'string' && url.startsWith('kubest://')) return url
+  return defaultUrlTransform(url)
+}
 
 export interface DisplayMessage {
   id: string | number
@@ -89,7 +104,12 @@ function MessageBubble({ role, content, pending }: MessageBubbleProps) {
           <p className="whitespace-pre-wrap break-words">{content}</p>
         ) : (
           <div className="prose prose-invert prose-sm max-w-none break-words">
-            <ReactMarkdown components={{ a: MarkdownLink }}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              urlTransform={urlTransform}
+              components={{ a: MarkdownLink }}
+            >
               {content}
             </ReactMarkdown>
           </div>

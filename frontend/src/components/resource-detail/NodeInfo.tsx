@@ -11,7 +11,9 @@ import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, fmtRel, fmt
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 interface Props { name: string }
 
@@ -60,6 +62,98 @@ export default function NodeInfo({ name }: Props) {
     enabled: Boolean(drainId),
     refetchInterval: drainId ? 1000 : false,
   })
+
+  // 플로팅 AI 위젯용 overlay 스냅샷 — 노드 상세 + 이 노드의 Pod 목록 + 이벤트
+  // pods 는 사용자가 화면에서 보고 있는 페이지(필터+페이지네이션)와 일치시켜
+  // "지금 보이는 그 줄" 에 대한 답변이 가능하게 한다. 전체 통계는 도구 호출로 fallback.
+  const aiSnapshot = useMemo(() => {
+    if (!name) return null
+    const podsArr = Array.isArray(nodePods) ? nodePods : []
+    const eventsArr = Array.isArray(nodeEvents) ? nodeEvents : []
+    const nodeMetric = Array.isArray(metrics)
+      ? metrics.find((m: { name: string }) => m.name === name)
+      : undefined
+
+    const podsByNs: Record<string, number> = {}
+    const podsByPhase: Record<string, number> = {}
+    for (const p of podsArr as Array<{ namespace?: string; phase?: string; status?: string }>) {
+      const ns = p.namespace || 'default'
+      podsByNs[ns] = (podsByNs[ns] ?? 0) + 1
+      const ph = p.phase || p.status || 'Unknown'
+      podsByPhase[ph] = (podsByPhase[ph] ?? 0) + 1
+    }
+    const notRunning = podsArr.filter((p: { phase?: string; status?: string }) => {
+      const ph = p.phase || p.status || ''
+      return ph !== 'Running' && ph !== 'Succeeded'
+    }).length
+
+    const conditions = (nodeDescribe as { conditions?: Array<{ type?: string; status?: string; reason?: string }> } | undefined)?.conditions
+    const taints = (nodeDescribe as { taints?: Array<{ key?: string; value?: string; effect?: string }> } | undefined)?.taints
+    const unschedulable = (nodeDescribe as { unschedulable?: boolean } | undefined)?.unschedulable
+
+    const prefix = unschedulable || notRunning > 0 ? '⚠️ ' : ''
+
+    // 화면 페이지네이션과 일치하는 pod 목록만 LLM 에 전달.
+    type PodLike = { name: string; namespace: string; phase?: string; status?: string; restart_count?: number }
+    const PAGE_SIZE = 10
+    const filteredForView = podFilter.trim()
+      ? (podsArr as PodLike[]).filter((p) =>
+          p.name.toLowerCase().includes(podFilter.toLowerCase()) ||
+          p.namespace.toLowerCase().includes(podFilter.toLowerCase()),
+        )
+      : (podsArr as PodLike[])
+    const visibleStart = (podPage - 1) * PAGE_SIZE
+    const visibleEnd = visibleStart + PAGE_SIZE
+    const visiblePods = filteredForView.slice(visibleStart, visibleEnd)
+    const visibleSummary = filteredForView.length === 0
+      ? '(none)'
+      : `${visibleStart + 1}-${Math.min(visibleEnd, filteredForView.length)} / ${filteredForView.length}`
+
+    const summary = `${prefix}Node ${name} — Pod ${podsArr.length}개${notRunning ? ` (NotRunning ${notRunning})` : ''}, 화면 ${visibleSummary}, 이벤트 ${eventsArr.length}건${unschedulable ? ', cordoned' : ''}`
+
+    return {
+      source: 'NodeInfo' as const,
+      summary,
+      data: {
+        kind: 'Node',
+        name,
+        _link: buildResourceLink('Node', undefined, name),
+        unschedulable,
+        cpu_percent: nodeMetric?.cpu_percent,
+        memory_percent: nodeMetric?.memory_percent,
+        conditions: Array.isArray(conditions)
+          ? conditions
+              .filter((c) => c.status !== 'False' || c.type === 'Ready')
+              .slice(0, 6)
+              .map((c) => ({ type: c.type, status: c.status, reason: c.reason }))
+          : undefined,
+        taints,
+        pods_total: podsArr.length,
+        pods_not_running: notRunning,
+        pods_by_namespace: podsByNs,
+        pods_by_phase: podsByPhase,
+        pods_filter: podFilter || undefined,
+        pods_page: { current: podPage, size: PAGE_SIZE, filtered_total: filteredForView.length },
+        pods_visible: visiblePods.map((p) => ({
+          name: p.name,
+          namespace: p.namespace,
+          phase: p.phase || p.status,
+          restart_count: p.restart_count,
+          _link: buildResourceLink('Pod', p.namespace, p.name),
+        })),
+        recent_events: (eventsArr as Array<{ type?: string; reason?: string; message?: string; last_timestamp?: string }>)
+          .slice(0, 10)
+          .map((e) => ({
+            type: e.type,
+            reason: e.reason,
+            message: e.message,
+            last_timestamp: e.last_timestamp,
+          })),
+      },
+    }
+  }, [name, nodePods, nodeEvents, metrics, nodeDescribe, podFilter, podPage])
+
+  useAIContext(aiSnapshot, [aiSnapshot])
 
   const applyNodeEvent = (prev: any[] | undefined, event: { type?: string; object?: any }) => {
     const items = Array.isArray(prev) ? [...prev] : []
