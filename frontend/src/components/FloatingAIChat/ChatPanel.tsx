@@ -57,18 +57,11 @@ export function ChatPanel({
     return floatingChatStreamManager.subscribe(setStreamState)
   }, [])
 
-  // 첫 마운트 시 세션 자동 생성 (AIChat 과 동일 세션 DB 공유, D22)
+  // 세션은 첫 질문 전송 시점에 생성 (D22 — AIChat 과 같은 세션 DB 공유).
+  // mount 시점에 자동 생성하면 패널 열고 닫을 때마다 빈 세션이 누적된다.
   const createSessionMutation = useMutation({
     mutationFn: () => api.createSession('New Chat'),
-    onSuccess: (session) => setSessionId(session.id),
   })
-
-  useEffect(() => {
-    if (!sessionId && !createSessionMutation.isPending) {
-      createSessionMutation.mutate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // 메시지 히스토리
   const { data: sessionDetail } = useQuery({
@@ -88,7 +81,18 @@ export function ChatPanel({
   }, [streamState.status, sessionId, queryClient])
 
   const handleSubmit = async (message: string) => {
-    if (!sessionId) return
+    // 세션이 없으면 즉시 생성 (지연 생성 — D22)
+    let activeSessionId = sessionId
+    if (!activeSessionId) {
+      try {
+        const session = await createSessionMutation.mutateAsync()
+        activeSessionId = session.id
+        setSessionId(activeSessionId)
+      } catch {
+        return
+      }
+    }
+
     const snapshot = getSnapshot()
     // consume 하면 contextChanged 플래그가 false 로 리셋되어 다음 질문에 전달 안 됨.
     // 스냅샷은 이미 현재 값을 참조하고 있으므로 consume 은 여기서 실행.
@@ -101,7 +105,7 @@ export function ChatPanel({
 
     try {
       await floatingChatStreamManager.startSessionChat(
-        sessionId,
+        activeSessionId,
         message,
         extraBody,
       )
@@ -143,7 +147,8 @@ export function ChatPanel({
 
   const streamingContent = isStreaming ? streamState.assistantContent : undefined
   const error = streamState.status === 'error' ? streamState.error : null
-  const disabled = !sessionId
+  // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.
+  const disabled = createSessionMutation.isPending
 
   return (
     <div
