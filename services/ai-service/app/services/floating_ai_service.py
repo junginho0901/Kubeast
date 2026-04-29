@@ -31,6 +31,8 @@ class FloatingAIService:
         message: str,
         page_context: Optional[PageContextPayload] = None,
         cluster_name: Optional[str] = None,
+        audit_actor: Optional[dict] = None,
+        audit_http: Optional[dict] = None,
     ) -> AsyncGenerator[str, None]:
         system_prompt = build_floating_system_prompt()
         extra_context = (
@@ -44,5 +46,7 @@ class FloatingAIService:
             tool_filter=readonly_tool_filter,
             extra_context_block=extra_context,
             title_prefix=FLOATING_TITLE_PREFIX,
+            audit_actor=audit_actor,
+            audit_http=audit_http,
         ):
             yield event
