@@ -158,6 +158,7 @@ async def session_chat(
 async def floating_session_chat(
     session_id: str,
     body: FloatingChatRequest,
+    request: Request,
     authorization: str = Header(..., alias="Authorization"),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
@@ -174,6 +175,7 @@ async def floating_session_chat(
 
     ai_service = await _build_ai_service(authorization)
     floating_service = FloatingAIService(ai_service=ai_service)
+    audit_actor, audit_http = _extract_audit_meta(request, authorization)
 
     try:
         return StreamingResponse(
@@ -182,6 +184,8 @@ async def floating_session_chat(
                 message=body.message,
                 page_context=body.page_context,
                 cluster_name=x_cluster_name,
+                audit_actor=audit_actor,
+                audit_http=audit_http,
             ),
             media_type="text/event-stream",
             headers={
