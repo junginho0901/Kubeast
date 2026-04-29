@@ -3,11 +3,36 @@ AI Service API 라우터
 """
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Depends, Query
+from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from app.models.ai import ChatRequest
 from app.models.floating_ai import FloatingChatRequest
-from app.security import require_auth
+from app.security import require_auth, decode_access_token
+
+
+def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dict]:
+    """authorization 토큰 + 요청 헤더에서 audit actor/http 메타 추출.
+
+    실패해도 빈 dict 반환 — audit 는 best-effort.
+    """
+    actor: dict = {}
+    try:
+        token = authorization.split(" ", 1)[1] if " " in authorization else authorization
+        payload = decode_access_token(token)
+        actor = {"user_id": payload.user_id, "email": payload.email}
+    except Exception:
+        pass
+
+    headers = request.headers
+    fwd = headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
+    http = {
+        "ip": ip,
+        "user_agent": headers.get("user-agent", ""),
+        "request_id": headers.get("x-request-id", ""),
+        "path": str(request.url.path),
+    }
+    return actor, http
 
 router = APIRouter()
 
