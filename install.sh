@@ -18,7 +18,7 @@ RELEASE_NAME="kubeast"
 CHART_VERSION="0.1.0"
 SERVICE_TYPE="NodePort"
 NODE_PORT="30333"
-REPO_URL="https://github.com/JeongInho/kubeast"
+REPO_URL="https://github.com/junginho0901/Kubeast"
 
 # Colors
 RED='\033[0;31m'
