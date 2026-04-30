@@ -98,26 +98,6 @@ else
   touch "$ROOT/kubeconfig.yaml"
 fi
 
-# Resolve K8S API host/IP from kubeconfig for extra_hosts
-K8S_API_HOST=""
-K8S_API_IP=""
-if [[ -s "$ROOT/kubeconfig.yaml" ]]; then
-  API_SERVER=$(grep -oP 'server:\s*https?://\K[^:/]+' "$ROOT/kubeconfig.yaml" 2>/dev/null | head -1 || true)
-  if [[ -n "$API_SERVER" ]]; then
-    K8S_API_HOST="$API_SERVER"
-    # Try to resolve IP
-    RESOLVED_IP=$(getent hosts "$API_SERVER" 2>/dev/null | awk '{print $1}' | head -1 || \
-                  dig +short "$API_SERVER" 2>/dev/null | head -1 || \
-                  nslookup "$API_SERVER" 2>/dev/null | awk '/^Address: / { print $2 }' | head -1 || true)
-    if [[ -n "$RESOLVED_IP" && "$RESOLVED_IP" != ";" ]]; then
-      K8S_API_IP="$RESOLVED_IP"
-      ok "K8s API: $API_SERVER -> $RESOLVED_IP"
-    else
-      warn "Could not resolve $API_SERVER. Set K8S_API_IP in .env manually."
-    fi
-  fi
-fi
-
 # ─── Generate .env ───
 if [[ "$SKIP_ENV" == "true" && -f "$ROOT/.env" ]]; then
   ok "Using existing .env (--skip-env)"
