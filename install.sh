@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --namespace <ns>     Namespace (default: kubeast)"
-      echo "  --node-port <port>   NodePort number (default: 30080)"
+      echo "  --node-port <port>   NodePort number (default: 30333)"
       echo "  --load-balancer      Use LoadBalancer instead of NodePort"
       echo "  --cluster-ip         Use ClusterIP (for use with ingress)"
       echo "  --version <ver>      Chart version (default: $CHART_VERSION)"
