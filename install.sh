@@ -3,7 +3,7 @@
 # Kubest Installer
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/JeongInho/kubeast/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/junginho0901/Kubeast/main/install.sh | bash
 #
 #   # Or with options:
 #   curl -sSL ... | bash -s -- --node-port 30080
