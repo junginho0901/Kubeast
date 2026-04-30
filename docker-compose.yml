@@ -118,11 +118,6 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
     volumes:
       - kubeconfig_data:/kubeconfig:ro
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    extra_hosts:
-      - "${K8S_API_HOST:-pd-dev-305-cmp.k8s-api}:${K8S_API_IP}"
     networks:
       - msa-network
     depends_on:
@@ -175,11 +170,6 @@ services:
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
     volumes:
       - kubeconfig_data:/kubeconfig:ro
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    extra_hosts:
-      - "${K8S_API_HOST:-pd-dev-305-cmp.k8s-api}:${K8S_API_IP}"
     networks:
       - msa-network
     depends_on:

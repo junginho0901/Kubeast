@@ -3,7 +3,7 @@
 # Kubest Installer
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/JeongInho/kubeast/main/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/junginho0901/Kubeast/main/install.sh | bash
 #
 #   # Or with options:
 #   curl -sSL ... | bash -s -- --node-port 30080
@@ -18,7 +18,7 @@ RELEASE_NAME="kubeast"
 CHART_VERSION="0.1.0"
 SERVICE_TYPE="NodePort"
 NODE_PORT="30333"
-REPO_URL="https://github.com/JeongInho/kubeast"
+REPO_URL="https://github.com/junginho0901/Kubeast"
 
 # Colors
 RED='\033[0;31m'
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --namespace <ns>     Namespace (default: kubeast)"
-      echo "  --node-port <port>   NodePort number (default: 30080)"
+      echo "  --node-port <port>   NodePort number (default: 30333)"
       echo "  --load-balancer      Use LoadBalancer instead of NodePort"
       echo "  --cluster-ip         Use ClusterIP (for use with ingress)"
       echo "  --version <ver>      Chart version (default: $CHART_VERSION)"
@@ -68,25 +68,37 @@ command -v helm >/dev/null 2>&1 || fail "helm not found. Install it first: https
 kubectl cluster-info --request-timeout=5s >/dev/null 2>&1 || fail "Cannot connect to Kubernetes cluster. Check your kubeconfig."
 ok "Kubernetes cluster reachable"
 
-# ─── Download chart ───
-info "Downloading Kubest Helm chart..."
+# ─── Locate chart ───
+# 스크립트가 clone 된 repo 안에서 실행되면 로컬 차트를 사용하고,
+# `curl | bash` 처럼 단독 실행되면 원격에서 다운로드한다.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
+LOCAL_CHART="$SCRIPT_DIR/helm/kubeast"
 
-TMPDIR=$(mktemp -d)
-trap "rm -rf $TMPDIR" EXIT
-
-if command -v git >/dev/null 2>&1; then
-  git clone --depth 1 --branch "v${CHART_VERSION}" "$REPO_URL.git" "$TMPDIR/kubeast" 2>/dev/null || \
-  git clone --depth 1 "$REPO_URL.git" "$TMPDIR/kubeast" 2>/dev/null || \
-  fail "Failed to download chart. Check your internet connection."
+if [ -f "$LOCAL_CHART/Chart.yaml" ]; then
+  CHART_PATH="$LOCAL_CHART"
+  ok "Using local chart at $LOCAL_CHART"
 else
-  curl -sSL "$REPO_URL/archive/refs/heads/main.tar.gz" -o "$TMPDIR/kubeast.tar.gz" || fail "Failed to download chart."
-  tar -xzf "$TMPDIR/kubeast.tar.gz" -C "$TMPDIR"
-  mv "$TMPDIR"/kubeast-main "$TMPDIR/kubeast" 2>/dev/null || mv "$TMPDIR"/AgentForCMP-main "$TMPDIR/kubeast" 2>/dev/null || true
-fi
+  info "Downloading Kubest Helm chart..."
 
-CHART_PATH="$TMPDIR/kubeast/helm/kubeast"
-[ -f "$CHART_PATH/Chart.yaml" ] || fail "Chart not found in downloaded files."
-ok "Chart downloaded"
+  TMPDIR=$(mktemp -d)
+  trap "rm -rf $TMPDIR" EXIT
+
+  if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 --branch "v${CHART_VERSION}" "$REPO_URL.git" "$TMPDIR/kubeast" 2>/dev/null || \
+    git clone --depth 1 "$REPO_URL.git" "$TMPDIR/kubeast" 2>/dev/null || \
+    fail "Failed to download chart. Check your internet connection."
+  else
+    curl -sSL "$REPO_URL/archive/refs/heads/main.tar.gz" -o "$TMPDIR/kubeast.tar.gz" || fail "Failed to download chart."
+    tar -xzf "$TMPDIR/kubeast.tar.gz" -C "$TMPDIR"
+    # GitHub archive 디렉토리명은 저장소 이름과 동일 (대소문자 그대로)
+    mv "$TMPDIR"/Kubeast-main "$TMPDIR/kubeast" 2>/dev/null || \
+    mv "$TMPDIR"/kubeast-main "$TMPDIR/kubeast" 2>/dev/null || true
+  fi
+
+  CHART_PATH="$TMPDIR/kubeast/helm/kubeast"
+  [ -f "$CHART_PATH/Chart.yaml" ] || fail "Chart not found in downloaded files."
+  ok "Chart downloaded"
+fi
 
 # ─── Install ───
 echo ""

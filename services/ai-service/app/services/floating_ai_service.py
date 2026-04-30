@@ -16,7 +16,7 @@ from app.services.ai_service import AIService
 from app.services.tool_whitelists import readonly_tool_filter
 
 
-FLOATING_TITLE_PREFIX = "[플로팅] "
+FLOATING_TITLE_PREFIX = "[Floating] "
 
 
 class FloatingAIService:
