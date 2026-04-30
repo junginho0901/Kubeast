@@ -151,8 +151,6 @@ REDIS_DB=0
 # Kubernetes
 KUBECONFIG_PATH=/app/kubeconfig.yaml
 IN_CLUSTER=false
-K8S_API_HOST=${K8S_API_HOST:-localhost}
-K8S_API_IP=${K8S_API_IP:-127.0.0.1}
 
 # Frontend
 VITE_API_URL=http://localhost:${PORT}
