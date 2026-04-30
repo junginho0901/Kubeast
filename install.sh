@@ -90,7 +90,9 @@ else
   else
     curl -sSL "$REPO_URL/archive/refs/heads/main.tar.gz" -o "$TMPDIR/kubeast.tar.gz" || fail "Failed to download chart."
     tar -xzf "$TMPDIR/kubeast.tar.gz" -C "$TMPDIR"
-    mv "$TMPDIR"/kubeast-main "$TMPDIR/kubeast" 2>/dev/null || mv "$TMPDIR"/AgentForCMP-main "$TMPDIR/kubeast" 2>/dev/null || true
+    # GitHub archive 디렉토리명은 저장소 이름과 동일 (대소문자 그대로)
+    mv "$TMPDIR"/Kubeast-main "$TMPDIR/kubeast" 2>/dev/null || \
+    mv "$TMPDIR"/kubeast-main "$TMPDIR/kubeast" 2>/dev/null || true
   fi
 
   CHART_PATH="$TMPDIR/kubeast/helm/kubeast"
