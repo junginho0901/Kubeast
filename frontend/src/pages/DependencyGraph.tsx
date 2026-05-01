@@ -137,6 +137,23 @@ export default function DependencyGraph() {
       if (q && !(n.name?.toLowerCase().includes(q) || (n.namespace || '').toLowerCase().includes(q))) return false
       return true
     })
+    const isProblem = (n: { status?: string }) => {
+      const s = (n.status || '').toLowerCase()
+      return s !== '' && s !== 'running' && s !== 'ready' && s !== 'active' && s !== 'bound' && s !== 'succeeded'
+    }
+    const sorted = [...filteredNodes].sort((a: any, b: any) =>
+      (isProblem(a) ? 0 : 1) - (isProblem(b) ? 0 : 1),
+    )
+    const TOP_N = 30
+    const visibleItems = sorted.slice(0, TOP_N).map((n: any) => ({
+      kind: n.kind,
+      name: n.name,
+      namespace: n.namespace || undefined,
+      status: n.status,
+      _link: buildResourceLink(n.kind, n.namespace || selectedNamespace, n.name),
+    }))
+    const problematicCount = filteredNodes.filter(isProblem).length
+
     return {
       source: 'base' as const,
       summary: `의존성 그래프 · ${selectedNamespace} · 노드 ${totalNodes}개, 엣지 ${totalEdges}개`,
