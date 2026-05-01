@@ -391,6 +391,8 @@ export default function ResourceGraph() {
   })
 
   // 플로팅 AI 위젯용 스냅샷
+  // visible_items: 화면에 그려진 노드 중 (1) 검색·필터 통과 + (2) 문제 있는 것 우선,
+  // 토큰 한도 안에서 30 개 cap. 사용자가 그래프에 보이는 박스에 대해 묻기 위함.
   const aiSnapshot = useMemo(() => {
     if (!graphData) return null
     const totalNodes = graphData.nodes?.length ?? 0
