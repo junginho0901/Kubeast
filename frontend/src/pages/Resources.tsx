@@ -158,12 +158,14 @@ export default function Resources() {
 
     return {
       source: 'base' as const,
-      summary: `리소스 · ${namespace} · ${activeTab} ${total}개`,
+      summary: `리소스 · ${namespace} · ${activeTab} ${total}개${q ? ` (검색: "${q}")` : ''}`,
       data: {
         namespace,
         active_tab: activeTab,
         filters: { search: searchQuery || undefined, pod_label_selector: podLabelSelector || undefined },
         stats: { total },
+        ...summarized,
+        visible_items: visibleItemsWithLinks,
       },
     }
   }, [namespace, activeTab, services, deployments, replicasets, hpas, pdbs, pods, pvcs, searchQuery, podLabelSelector])
