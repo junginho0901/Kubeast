@@ -31,6 +31,12 @@ export default function HelmReleaseDetailPage() {
     enabled: !!namespace && !!name,
   })
 
+  const sectionQuery = useQuery({
+    queryKey: ['helm-section', namespace, name, tab as 'values' | 'manifest' | 'notes'],
+    queryFn: () => api.helm.getSection(namespace, name, tab as 'values' | 'manifest' | 'notes'),
+    enabled: !!namespace && !!name && (tab === 'values' || tab === 'manifest' || tab === 'notes'),
+  })
+
   // 플로팅 AI 위젯용 스냅샷 (현재 활성 탭 기준)
   const aiSnapshot = useMemo(() => {
     const rel = detailQuery.data
