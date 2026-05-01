@@ -78,6 +78,8 @@ export default function Resources() {
   })
 
   // 플로팅 AI 위젯용 스냅샷 — 활성 탭 기준 단일 리스트 요약
+  // 화면에서 검색 필터링이 적용된 결과의 상위 N 개를 visible_items 로 노출.
+  // (Resources 페이지는 페이지네이션 없음 → currentPage=1, pageSize=topN)
   const aiSnapshot = useMemo(() => {
     if (!namespace) return null
     const tabData: Record<ResourceType, unknown[] | undefined> = {
