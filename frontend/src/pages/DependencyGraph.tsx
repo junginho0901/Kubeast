@@ -128,6 +128,15 @@ export default function DependencyGraph() {
     for (const n of graphData.nodes ?? []) {
       byKind[n.kind] = (byKind[n.kind] ?? 0) + 1
     }
+
+    // 화면 필터(kind / search) 통과 + 문제 있는 노드 우선 → 상위 30개
+    const allNodes = graphData.nodes ?? []
+    const q = (searchQuery || '').trim().toLowerCase()
+    const filteredNodes = allNodes.filter((n: any) => {
+      if (kindFilters.size > 0 && !kindFilters.has(n.kind)) return false
+      if (q && !(n.name?.toLowerCase().includes(q) || (n.namespace || '').toLowerCase().includes(q))) return false
+      return true
+    })
     return {
       source: 'base' as const,
       summary: `의존성 그래프 · ${selectedNamespace} · 노드 ${totalNodes}개, 엣지 ${totalEdges}개`,
