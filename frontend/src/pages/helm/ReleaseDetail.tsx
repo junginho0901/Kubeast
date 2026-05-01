@@ -31,6 +31,8 @@ export default function HelmReleaseDetailPage() {
     enabled: !!namespace && !!name,
   })
 
+  // 활성 탭 별로 상세 데이터를 함께 fetch — TanStack Query 가 자식 탭 컴포넌트와
+  // 같은 queryKey 를 공유하므로 중복 호출 없음. LLM overlay 에 넘기는 용도.
   const sectionQuery = useQuery({
     queryKey: ['helm-section', namespace, name, tab as 'values' | 'manifest' | 'notes'],
     queryFn: () => api.helm.getSection(namespace, name, tab as 'values' | 'manifest' | 'notes'),
@@ -48,11 +50,20 @@ export default function HelmReleaseDetailPage() {
   })
 
   // 플로팅 AI 위젯용 스냅샷 (현재 활성 탭 기준)
+  // active_tab 에 따라 추가 데이터 (manifest/values/notes/history/resources) 를
+  // 8KB cap 으로 자른 뒤 함께 전달.
   const aiSnapshot = useMemo(() => {
     const rel = detailQuery.data
     if (!rel) return null
     const status = String(rel.status ?? '')
     const prefix = /fail|error/i.test(status) ? '⚠️ ' : ''
+
+    const TAB_CAP = 8 * 1024
+    const truncate = (s: unknown): string | undefined => {
+      if (typeof s !== 'string' || !s) return undefined
+      return s.length > TAB_CAP ? s.slice(0, TAB_CAP) + '\n... (truncated)' : s
+    }
+
     return {
       source: 'base' as const,
       summary: `${prefix}Helm Release ${rel.name} (${rel.namespace}) · rev ${rel.revision} · ${status} · 탭: ${tab}`,
