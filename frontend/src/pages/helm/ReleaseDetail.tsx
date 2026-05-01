@@ -107,9 +107,10 @@ export default function HelmReleaseDetailPage() {
         chart_version: rel.chartVersion,
         app_version: rel.appVersion,
         active_tab: tab,
+        ...(tabContent ?? {}),
       },
     }
-  }, [detailQuery.data, tab])
+  }, [detailQuery.data, tab, sectionQuery.data, historyQuery.data, resourcesQuery.data])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
