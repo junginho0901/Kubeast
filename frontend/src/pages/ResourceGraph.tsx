@@ -448,7 +448,8 @@ export default function ResourceGraph() {
           group_by: groupBy,
           status_filter: statusFilter,
         },
-        stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind },
+        stats: { total_nodes: totalNodes, total_edges: totalEdges, by_kind: byKind, filtered_total: filteredNodes.length, problematic: problematicCount },
+        visible_items: visibleItems,
       },
     }
   }, [graphData, nsArray, kindFilters, edgeTypeFilters, searchQuery, groupBy, statusFilter])
