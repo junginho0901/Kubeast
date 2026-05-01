@@ -141,6 +141,21 @@ export default function Resources() {
       ? allItems.filter((it: any) => typeof it?.name === 'string' && it.name.toLowerCase().includes(q))
       : allItems
     const total = filtered.length
+    const TOP_N = 15
+    const summarized = summarizeList(filtered as Record<string, unknown>[], {
+      total,
+      currentPage: 1,
+      pageSize: TOP_N,
+      topN: TOP_N,
+      pickFields: cfg.pick as any,
+      filterProblematic: cfg.problematic as ((item: Record<string, unknown>) => boolean) | undefined,
+    })
+    // _link 추가 (드로어 자동 오픈용)
+    const visibleItemsWithLinks = (summarized.visible_items as any[]).map((it) => ({
+      ...it,
+      _link: it?.name ? buildResourceLink(cfg.kind, it?.namespace ?? namespace, it.name) : undefined,
+    }))
+
     return {
       source: 'base' as const,
       summary: `리소스 · ${namespace} · ${activeTab} ${total}개`,
