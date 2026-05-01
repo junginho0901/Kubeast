@@ -82,17 +82,60 @@ export default function Resources() {
   // (Resources 페이지는 페이지네이션 없음 → currentPage=1, pageSize=topN)
   const aiSnapshot = useMemo(() => {
     if (!namespace) return null
-    const tabData: Record<ResourceType, unknown[] | undefined> = {
-      services: services as unknown[] | undefined,
-      deployments: deployments as unknown[] | undefined,
-      replicasets: replicasets as unknown[] | undefined,
-      hpas: hpas as unknown[] | undefined,
-      pdbs: pdbs as unknown[] | undefined,
-      pods: pods as unknown[] | undefined,
-      pvcs: pvcs as unknown[] | undefined,
+    type TabConfig = {
+      data: any[] | undefined
+      kind: string
+      pick: string[]
+      problematic?: (it: any) => boolean
     }
-    const items = tabData[activeTab] ?? []
-    const total = items.length
+    const tabConfig: Record<ResourceType, TabConfig> = {
+      services: {
+        data: services as any[] | undefined,
+        kind: 'Service',
+        pick: ['name', 'namespace', 'type', 'cluster_ip', 'ports'],
+      },
+      deployments: {
+        data: deployments as any[] | undefined,
+        kind: 'Deployment',
+        pick: ['name', 'namespace', 'replicas', 'ready_replicas', 'available_replicas', 'status'],
+        problematic: (d) => (d?.ready_replicas ?? 0) < (d?.replicas ?? 0),
+      },
+      replicasets: {
+        data: replicasets as any[] | undefined,
+        kind: 'ReplicaSet',
+        pick: ['name', 'namespace', 'replicas', 'ready_replicas', 'desired'],
+      },
+      hpas: {
+        data: hpas as any[] | undefined,
+        kind: 'HorizontalPodAutoscaler',
+        pick: ['name', 'namespace', 'min_replicas', 'max_replicas', 'current_replicas', 'target'],
+      },
+      pdbs: {
+        data: pdbs as any[] | undefined,
+        kind: 'PodDisruptionBudget',
+        pick: ['name', 'namespace', 'min_available', 'max_unavailable', 'current_healthy', 'desired_healthy'],
+      },
+      pods: {
+        data: pods as any[] | undefined,
+        kind: 'Pod',
+        pick: ['name', 'namespace', 'phase', 'status', 'restart_count', 'node_name'],
+        problematic: (p) => {
+          const ph = p?.phase || p?.status || ''
+          if (ph !== 'Running' && ph !== 'Succeeded') return true
+          if ((p?.restart_count ?? 0) > 5) return true
+          return /error|crashloop|oomkilled|errimagepull|backoff/i.test(String(p?.status ?? ''))
+        },
+      },
+      pvcs: {
+        data: pvcs as any[] | undefined,
+        kind: 'PersistentVolumeClaim',
+        pick: ['name', 'namespace', 'status', 'capacity', 'storage_class', 'access_modes'],
+        problematic: (p) => p?.status && p.status !== 'Bound',
+      },
+    }
+    const cfg = tabConfig[activeTab]
+    const allItems = Array.isArray(cfg.data) ? cfg.data : []
+    const total = allItems.length
     return {
       source: 'base' as const,
       summary: `리소스 · ${namespace} · ${activeTab} ${total}개`,
