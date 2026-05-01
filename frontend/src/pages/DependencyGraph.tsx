@@ -156,7 +156,7 @@ export default function DependencyGraph() {
 
     return {
       source: 'base' as const,
-      summary: `의존성 그래프 · ${selectedNamespace} · 노드 ${totalNodes}개, 엣지 ${totalEdges}개`,
+      summary: `의존성 그래프 · ${selectedNamespace} · 노드 ${totalNodes}개, 엣지 ${totalEdges}개${problematicCount > 0 ? `, 문제 ${problematicCount}` : ''}`,
       data: {
         filters: {
           namespace: selectedNamespace,
