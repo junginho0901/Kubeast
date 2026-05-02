@@ -91,6 +91,7 @@ headlamp/
 
 docs/
 .prompts/
+.claude/
 k8sgpt/
 CopilotKit/
 plugins/
