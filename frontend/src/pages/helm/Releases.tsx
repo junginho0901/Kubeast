@@ -17,12 +17,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-
-// Release mutations are rare (install/upgrade minutes apart) so we
-// refetch on a relaxed cadence rather than subscribing to a watch
-// stream. The server caches the same query for 30s anyway, so the
-// extra poll costs one list-secrets on miss.
-const REFETCH_INTERVAL_MS = 30_000
+import { useHelmWatchList } from '@/services/useHelmWatchList'
 
 type SortKey = null | 'name' | 'namespace' | 'revision' | 'status' | 'chart' | 'chartVersion' | 'appVersion' | 'updated'
 type SortDir = 'asc' | 'desc'
@@ -68,12 +63,27 @@ export default function HelmReleasesPage() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [nsOpen])
 
+  // Initial REST fetch primes the cache; the watch below keeps it fresh
+  // event-by-event, so refetchInterval is gone and staleTime is Infinity.
+  // refetch() (used by the manual "Refresh" button) still does a full
+  // list which is useful as a recovery hatch if the WS ever desyncs.
+  const queryKey = useMemo(
+    () => ['helm-releases', namespace] as const,
+    [namespace],
+  )
+
   const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['helm-releases', namespace],
+    queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
     placeholderData: keepPreviousData,
-    refetchInterval: REFETCH_INTERVAL_MS,
-    staleTime: REFETCH_INTERVAL_MS / 2,
+    staleTime: Infinity,
+  })
+
+  useHelmWatchList({
+    cluster: 'default',
+    namespace: namespace || undefined,
+    enabled: !isLoading,
+    queryKey,
   })
 
   const items: HelmReleaseSummary[] = data ?? []
