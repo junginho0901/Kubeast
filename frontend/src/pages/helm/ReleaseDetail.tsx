@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, FlaskConical, Loader2, Trash2 } from 'lucide-react'
 import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useHelmWatchList, type HelmWatchEvent } from '@/services/useHelmWatchList'
 import OverviewTab from './tabs/OverviewTab'
 import ValuesTab from './tabs/ValuesTab'
 import ManifestTab from './tabs/ManifestTab'
@@ -25,10 +26,45 @@ export default function HelmReleaseDetailPage() {
   const [uninstallOpen, setUninstallOpen] = useState(false)
   const [testOpen, setTestOpen] = useState(false)
 
+  const queryClient = useQueryClient()
+
   const detailQuery = useQuery({
     queryKey: ['helm-release', namespace, name],
     queryFn: () => api.helm.getRelease(namespace, name),
     enabled: !!namespace && !!name,
+    // The watch below invalidates this query on any release event, so
+    // we don't need a polling fallback. staleTime keeps the data warm
+    // until invalidate fires.
+    staleTime: Infinity,
+  })
+
+  // Watch the namespace's Helm releases and invalidate dependent queries
+  // when this specific release changes (rollback / upgrade / uninstall).
+  // We don't patch a list cache here — pass queryKey: null and rely on
+  // onEvent to drive react-query invalidation instead.
+  const handleHelmEvent = useCallback(
+    (event: HelmWatchEvent) => {
+      const obj = event.object
+      if (obj?.name !== name || obj?.namespace !== namespace) return
+      queryClient.invalidateQueries({ queryKey: ['helm-release', namespace, name] })
+      queryClient.invalidateQueries({ queryKey: ['helm-section', namespace, name] })
+      queryClient.invalidateQueries({ queryKey: ['helm-history', namespace, name] })
+      queryClient.invalidateQueries({ queryKey: ['helm-resources', namespace, name] })
+      // The list page (if mounted in another tab/route) shares this key
+      // and will pick up the change via its own useHelmWatchList — but
+      // invalidating here as well covers the case where the user lands
+      // on the detail page first.
+      queryClient.invalidateQueries({ queryKey: ['helm-releases'] })
+    },
+    [namespace, name, queryClient],
+  )
+
+  useHelmWatchList({
+    cluster: 'default',
+    namespace: namespace || undefined,
+    enabled: !!namespace && !!name,
+    queryKey: null,
+    onEvent: handleHelmEvent,
   })
 
   // 활성 탭 별로 상세 데이터를 함께 fetch — TanStack Query 가 자식 탭 컴포넌트와

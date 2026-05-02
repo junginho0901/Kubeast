@@ -497,6 +497,11 @@ func main() {
 
 		// Helm (v1.0 read-only — see docs/helm-plan.md §5)
 		r.Get("/api/v1/helm/releases", h.GetHelmReleases)
+		// Real-time release watch — replaces the prior 30s polling on
+		// the Releases / ReleaseDetail pages. Must come BEFORE the
+		// {namespace}/{name} route so chi routes the literal "watch"
+		// segment here instead of treating it as a namespace.
+		r.Get("/api/v1/helm/releases/watch", h.WatchHelmReleases)
 		r.Get("/api/v1/helm/releases/{namespace}/{name}", h.GetHelmRelease)
 		r.Get("/api/v1/helm/releases/{namespace}/{name}/history", h.GetHelmReleaseHistory)
 		r.Get("/api/v1/helm/releases/{namespace}/{name}/resources", h.GetHelmReleaseResources)
