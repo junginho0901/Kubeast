@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type CRDInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -100,7 +101,6 @@ export default function CustomResourceDefinitions() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const { data: crds, isLoading } = useQuery({
     queryKey: ['custom-resources', 'crds'],
@@ -192,7 +192,7 @@ export default function CustomResourceDefinitions() {
     return list
   }, [filteredItems, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, { recalculationKey: sortedItems.length })
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: sortedItems.length })
   const totalPages = Math.max(1, Math.ceil(sortedItems.length / rowsPerPage))
 
   useEffect(() => { setCurrentPage(1) }, [searchQuery])
@@ -314,9 +314,9 @@ spec:
       )}
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[900px] table-fixed">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.name', 'Name')}{renderSortIcon('name')}</span>
@@ -339,8 +339,9 @@ spec:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedItems.map((crd) => (
-                <tr key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
+              {pagedItems.map((crd, idx) => (
+                <tr
+                      ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crd.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{crd.version}</td>
@@ -372,6 +373,7 @@ spec:
                 </tr>
               )}
             </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={6} />
           </table>
         </div>
 

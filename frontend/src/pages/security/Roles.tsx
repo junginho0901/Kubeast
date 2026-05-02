@@ -5,7 +5,8 @@ import { api, type RoleInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -97,7 +98,6 @@ export default function Roles() {
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -205,7 +205,7 @@ export default function Roles() {
     return list
   }, [filteredItems, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, { recalculationKey: sortedItems.length })
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: sortedItems.length })
   const totalPages = Math.max(1, Math.ceil(sortedItems.length / rowsPerPage))
 
   useEffect(() => { setCurrentPage(1) }, [searchQuery, selectedNamespace])
@@ -341,9 +341,9 @@ rules:
       )}
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[700px] table-fixed">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
                   <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
@@ -362,8 +362,9 @@ rules:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedItems.map((role) => (
-                <tr key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace })}>
+              {pagedItems.map((role, idx) => (
+                <tr
+                      ref={idx === 0 ? firstRowRef : undefined} key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace })}>
                   {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{role.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{role.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{role.rules_count}</td>
@@ -389,6 +390,7 @@ rules:
                 </tr>
               )}
             </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />
           </table>
         </div>
 

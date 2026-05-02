@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type VolumeAttachmentInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -168,7 +169,6 @@ export default function VolumeAttachments() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const {
     data: volumeAttachments,
@@ -297,7 +297,7 @@ export default function VolumeAttachments() {
     return list
   }, [filteredVolumeAttachments, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: sortedVolumeAttachments.length,
   })
   const totalPages = Math.max(1, Math.ceil(sortedVolumeAttachments.length / rowsPerPage))
@@ -463,9 +463,9 @@ spec:
           </div>
         )}
 
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full min-w-[900px] text-sm">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.name', 'Name')}{renderSortIcon('name')}</span>
@@ -491,12 +491,13 @@ spec:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {pagedVolumeAttachments.map((va) => {
+              {pagedVolumeAttachments.map((va, idx) => {
                 const status = statusLabel(va)
                 const errors = errorText(va)
                 return (
                   <tr
                     key={va.name}
+                    ref={idx === 0 ? firstRowRef : undefined}
                     className="hover:bg-slate-800/30 cursor-pointer"
                     onClick={() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: toRawJson(va) })}
                   >
@@ -560,6 +561,7 @@ spec:
                 </tr>
               )}
             </tbody>
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedVolumeAttachments.length} columnCount={7} />
           </table>
         </div>
 

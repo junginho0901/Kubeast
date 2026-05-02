@@ -5,7 +5,8 @@ import { api, type LeaseInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -114,7 +115,6 @@ export default function Leases() {
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -222,7 +222,7 @@ export default function Leases() {
     return list
   }, [filteredLeases, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: sortedLeases.length,
   })
   const totalPages = Math.max(1, Math.ceil(sortedLeases.length / rowsPerPage))
@@ -412,9 +412,9 @@ spec:
       )}
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[700px] table-fixed">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">
@@ -446,8 +446,9 @@ spec:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedLeases.map((l) => (
+              {pagedLeases.map((l, idx) => (
                 <tr
+                      ref={idx === 0 ? firstRowRef : undefined}
                   key={`${l.namespace}/${l.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => openDetail({
@@ -485,6 +486,7 @@ spec:
                 </tr>
               )}
             </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedLeases.length} columnCount={4 + (showNamespaceColumn ? 1 : 0)} />
           </table>
         </div>
         {sortedLeases.length > 0 && (

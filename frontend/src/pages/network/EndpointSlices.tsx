@@ -5,7 +5,8 @@ import { api, type EndpointSliceInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -225,7 +226,6 @@ export default function EndpointSlices() {
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -380,7 +380,7 @@ export default function EndpointSlices() {
     return list
   }, [filteredEndpointSlices, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: sortedEndpointSlices.length,
   })
   const totalPages = Math.max(1, Math.ceil(sortedEndpointSlices.length / rowsPerPage))
@@ -580,9 +580,9 @@ endpoints:
       )}
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[1320px] table-fixed">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
                   <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
@@ -619,10 +619,11 @@ endpoints:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedEndpointSlices.map((es) => {
+              {pagedEndpointSlices.map((es, idx) => {
                 const notReady = resolveNotReadyCount(es)
                 return (
                   <tr
+                      ref={idx === 0 ? firstRowRef : undefined}
                     key={`${es.namespace}/${es.name}`}
                     className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                     onClick={() => openDetail({
@@ -664,6 +665,7 @@ endpoints:
                 </tr>
               )}
             </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedEndpointSlices.length} columnCount={9 + (showNamespaceColumn ? 1 : 0)} />
           </table>
         </div>
 

@@ -13,9 +13,10 @@ import {
   Search,
 } from 'lucide-react'
 import { api, type HelmReleaseSummary } from '@/services/api'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 
 // Release mutations are rare (install/upgrade minutes apart) so we
 // refetch on a relaxed cadence rather than subscribing to a watch
@@ -57,7 +58,6 @@ export default function HelmReleasesPage() {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const nsRef = useRef<HTMLDivElement>(null)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!nsOpen) return
@@ -189,10 +189,8 @@ export default function HelmReleasesPage() {
     return list
   }, [filtered, sortKey, sortDir])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: sorted.length,
-    rowHeight: 50,
-    footerHeight: 100,
   })
   const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage))
 
@@ -340,9 +338,9 @@ export default function HelmReleasesPage() {
         </div>
       ) : (
         <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-          <div className="overflow-x-auto flex-1 min-h-0">
+          <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
             <table className="w-full text-sm table-fixed">
-              <thead className="text-slate-400">
+              <thead ref={theadRef} className="text-slate-400">
                 <tr>
                   <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
                     <span className="inline-flex items-center gap-1">
@@ -387,11 +385,12 @@ export default function HelmReleasesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {paged.map((r) => {
+                {paged.map((r, idx) => {
                   const to = `/helm/releases/${encodeURIComponent(r.namespace)}/${encodeURIComponent(r.name)}`
                   return (
                     <tr
                       key={`${r.namespace}/${r.name}`}
+                      ref={idx === 0 ? firstRowRef : undefined}
                       className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                       onClick={() => navigate(to)}
                     >
@@ -420,6 +419,7 @@ export default function HelmReleasesPage() {
                   )
                 })}
               </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - paged.length} columnCount={8} />
             </table>
           </div>
           {sorted.length > 0 && (

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ClusterRoleBindingInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -93,7 +94,6 @@ export default function ClusterRoleBindings() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const { data: clusterRoleBindings, isLoading } = useQuery({
     queryKey: ['security', 'clusterrolebindings'],
@@ -177,7 +177,7 @@ export default function ClusterRoleBindings() {
     return list
   }, [filteredItems, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, { recalculationKey: sortedItems.length })
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: sortedItems.length })
   const totalPages = Math.max(1, Math.ceil(sortedItems.length / rowsPerPage))
 
   useEffect(() => { setCurrentPage(1) }, [searchQuery])
@@ -286,9 +286,9 @@ subjects:
       )}
 
       <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[700px] table-fixed">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
@@ -305,8 +305,9 @@ subjects:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedItems.map((crb) => (
-                <tr key={crb.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRoleBinding', name: crb.name })}>
+              {pagedItems.map((crb, idx) => (
+                <tr
+                      ref={idx === 0 ? firstRowRef : undefined} key={crb.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRoleBinding', name: crb.name })}>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crb.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate" title={`${crb.role_ref_kind}/${crb.role_ref_name}`}>
                     <span className="text-slate-400">{crb.role_ref_kind}/</span>{crb.role_ref_name}
@@ -334,6 +335,7 @@ subjects:
                 </tr>
               )}
             </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={4} />
           </table>
         </div>
 

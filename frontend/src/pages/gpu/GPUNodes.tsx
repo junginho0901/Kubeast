@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { useAdaptiveRowsPerPage } from '@/hooks/useAdaptiveRowsPerPage'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -34,7 +35,6 @@ export default function GPUNodes() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [showCharts, setShowCharts] = useState(false)
-  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading, refetch } = useQuery<GPUDashboardData>({
     queryKey: ['gpu', 'dashboard'],
@@ -166,7 +166,7 @@ export default function GPUNodes() {
     return list
   }, [filteredNodes, sortDir, sortKey])
 
-  const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
     recalculationKey: sortedNodes.length,
   })
   const totalPages = Math.max(1, Math.ceil(sortedNodes.length / rowsPerPage))
@@ -394,9 +394,9 @@ export default function GPUNodes() {
 
       {/* Table */}
       <div ref={tableContainerRef} className={`card flex flex-col ${showCharts ? 'min-h-[420px]' : 'flex-1 min-h-0'}`}>
-        <div className="overflow-x-auto flex-1 min-h-0">
+        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm min-w-[980px] table-fixed">
-            <thead className="text-slate-400">
+            <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.name', 'Name')}{renderSortIcon('name')}</span>
@@ -422,8 +422,9 @@ export default function GPUNodes() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {pagedNodes.map((node) => (
+              {pagedNodes.map((node, idx) => (
                 <tr
+                      ref={idx === 0 ? firstRowRef : undefined}
                   key={node.name}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => openDetail({ kind: 'Node', name: node.name })}
@@ -457,6 +458,7 @@ export default function GPUNodes() {
                 </tr>
               )}
             </tbody>
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={7} />
           </table>
         </div>
         {sortedNodes.length > 0 && (
