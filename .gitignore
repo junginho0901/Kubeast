@@ -90,6 +90,7 @@ headlamp/
 .litellm-build/
 
 docs/
+.prompts/
 k8sgpt/
 CopilotKit/
 plugins/
