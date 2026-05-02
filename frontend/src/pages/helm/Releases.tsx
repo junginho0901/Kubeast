@@ -191,6 +191,8 @@ export default function HelmReleasesPage() {
 
   const rowsPerPage = useAdaptiveRowsPerPage(tableContainerRef, {
     recalculationKey: sorted.length,
+    rowHeight: 50,
+    footerHeight: 100,
   })
   const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage))
 
@@ -316,12 +318,6 @@ export default function HelmReleasesPage() {
         </div>
       </div>
 
-      {sorted.length > 0 && (
-        <p className="text-xs text-slate-400 shrink-0">
-          {t('helmReleases.matchCount', { count: sorted.length })}
-        </p>
-      )}
-
       {/* Stats row — counts come from full items, not filtered, so the
           header numbers stay stable when the search input narrows the
           table. */}
@@ -345,7 +341,7 @@ export default function HelmReleasesPage() {
       ) : (
         <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
           <div className="overflow-x-auto flex-1 min-h-0">
-            <table className="w-full text-sm min-w-[1000px] table-fixed">
+            <table className="w-full text-sm table-fixed">
               <thead className="text-slate-400">
                 <tr>
                   <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
