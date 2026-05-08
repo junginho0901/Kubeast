@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,25 +10,6 @@ import (
 	"strings"
 	"time"
 )
-
-type ToolCallRequest struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments"`
-}
-
-type ToolCallResponse struct {
-	Content string `json:"content,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
-type ToolInfo struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-type ToolListResponse struct {
-	Tools []ToolInfo `json:"tools"`
-}
 
 type ToolHandler func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error)
 
@@ -74,60 +53,6 @@ func main() {
 	}
 }
 
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
-}
-
-func handleList(w http.ResponseWriter, r *http.Request, tools map[string]ToolDefinition) {
-	list := make([]ToolInfo, 0, len(tools))
-	for _, tool := range tools {
-		list = append(list, ToolInfo{Name: tool.Name, Description: tool.Description})
-	}
-	respondJSON(w, http.StatusOK, ToolListResponse{Tools: list})
-}
-
-func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDefinition) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	decoder := json.NewDecoder(r.Body)
-	decoder.UseNumber()
-
-	var req ToolCallRequest
-	if err := decoder.Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, ToolCallResponse{Error: "invalid json"})
-		return
-	}
-	if req.Name == "" {
-		respondJSON(w, http.StatusBadRequest, ToolCallResponse{Error: "name is required"})
-		return
-	}
-
-	tool, ok := tools[req.Name]
-	if !ok {
-		respondJSON(w, http.StatusNotFound, ToolCallResponse{Error: "unknown tool"})
-		return
-	}
-	log.Printf("tool call: %s", req.Name)
-
-	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
-	defer cancel()
-
-	output, err := tool.Handler(ctx, req.Arguments, r.Header)
-	if err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, errBadRequest) {
-			status = http.StatusBadRequest
-		}
-		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
-		return
-	}
-
-	respondJSON(w, http.StatusOK, ToolCallResponse{Content: output})
-}
 
 func buildToolRegistry() map[string]ToolDefinition {
 	registry := map[string]ToolDefinition{}
