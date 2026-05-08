@@ -18,6 +18,7 @@ import { HPATab } from './resources/HPATab'
 import { SearchBar } from './resources/SearchBar'
 import { TabNavigation } from './resources/TabNavigation'
 import { useResourceQueries } from './resources/useResourceQueries'
+import { compactSelector } from './resources/podHelpers'
 import type { ResourceType } from './resources/types'
 
 export default function Resources() {
@@ -246,21 +247,6 @@ export default function Resources() {
     const hasIssue = topReasons.some(([r]) => r !== 'Running') || Array.from(phaseCounts.keys()).some((p) => p !== 'Running')
     return { total: list.length, topReasons, phaseSummary, hasIssue }
   }, [activeTab, filteredPods])
-
-  const compactSelector = (selectorObj: Record<string, string> | undefined | null) => {
-    const obj = selectorObj || {}
-    const entries = Object.entries(obj)
-    if (entries.length === 0) return {}
-
-    // ReplicaSet/Deployment 등에서 자주 붙는 "버전/해시" 라벨은 노이즈가 되기 쉬워 숨긴다.
-    const noisyKeys = new Set([
-      'pod-template-hash',
-      'controller-revision-hash',
-    ])
-
-    const compact = Object.fromEntries(entries.filter(([k]) => !noisyKeys.has(k)))
-    return Object.keys(compact).length > 0 ? compact : obj
-  }
 
   const podMatchesSelector = (pod: any, selectorObj: Record<string, string> | undefined | null) => {
     const sel = selectorObj || {}
