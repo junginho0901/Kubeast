@@ -15,8 +15,7 @@ import {
   TrendingUp,
   Shield,
 } from 'lucide-react'
-
-type ResourceType = 'services' | 'deployments' | 'replicasets' | 'hpas' | 'pdbs' | 'pods' | 'pvcs'
+import type { ResourceType } from './resources/types'
 
 export default function Resources() {
   const queryClient = useQueryClient()
