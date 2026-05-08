@@ -15,6 +15,7 @@ import {
   Shield,
 } from 'lucide-react'
 import { HPATab } from './resources/HPATab'
+import { PDBTab } from './resources/PDBTab'
 import { SearchBar } from './resources/SearchBar'
 import { TabNavigation } from './resources/TabNavigation'
 import { useResourceQueries } from './resources/useResourceQueries'
@@ -155,13 +156,6 @@ export default function Resources() {
   const filteredPods = filterBySearch(pods)
   const filteredPVCs = filterBySearch(pvcs)
 
-  const selectorToString = (selectorObj: Record<string, string> | undefined | null) => {
-    const obj = selectorObj || {}
-    return Object.entries(obj)
-      .map(([k, v]) => `${k}=${v}`)
-      .join(',')
-  }
-
   const getPodReason = (pod: any) => {
     const phase = (pod?.phase || '').toString()
     if (phase && phase !== 'Running') return phase
@@ -248,25 +242,6 @@ export default function Resources() {
     return { total: list.length, topReasons, phaseSummary, hasIssue }
   }, [activeTab, filteredPods])
 
-  const podMatchesSelector = (pod: any, selectorObj: Record<string, string> | undefined | null) => {
-    const sel = selectorObj || {}
-    const entries = Object.entries(sel)
-    if (entries.length === 0) return false
-    const labels = pod?.labels || {}
-    return entries.every(([k, v]) => labels?.[k] === v)
-  }
-
-  const isPodReady = (pod: any) => {
-    const ready = (pod?.ready || '').toString()
-    const m = ready.match(/^(\d+)\/(\d+)$/)
-    if (m) {
-      const a = Number(m[1])
-      const b = Number(m[2])
-      if (!Number.isNaN(a) && !Number.isNaN(b) && b > 0) return a === b
-    }
-    return pod?.phase === 'Running'
-  }
-  
   const handleRefresh = async () => {
     setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신
@@ -510,117 +485,14 @@ export default function Resources() {
 
       {/* PDB */}
       {activeTab === 'pdbs' && (
-        <div className="space-y-4">
-          {pdbsError && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
-              PDB 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
-            </div>
-          )}
-          {filteredPDBs.map((pdb: any) => (
-            <div key={pdb.name} className="card">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{pdb.name}</h3>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {pdb.min_available ? `minAvailable=${pdb.min_available}` : pdb.max_unavailable ? `maxUnavailable=${pdb.max_unavailable}` : 'min/max: -'}
-                  </p>
-                  {(() => {
-                    const selectorObj = pdb.selector || {}
-                    const matched = (podsForPdbs || []).filter((pod: any) => podMatchesSelector(pod, selectorObj))
-                    const matchedCount = matched.length
-                    const readyCount = matched.filter(isPodReady).length
-                    const phaseCounts = matched.reduce((acc: Record<string, number>, pod: any) => {
-                      const phase = (pod?.phase || pod?.status || 'Unknown').toString()
-                      acc[phase] = (acc[phase] || 0) + 1
-                      return acc
-                    }, {})
-                    const phaseSummary = Object.entries(phaseCounts)
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 4)
-                      .map(([k, v]) => `${k}:${v}`)
-                      .join(' · ')
-
-                    if (Object.keys(selectorObj).length === 0) {
-                      return <p className="text-xs text-slate-500 mt-1">selector가 없어 매칭 Pod를 계산할 수 없습니다.</p>
-                    }
-
-                    return (
-                      <p className="text-xs text-slate-500 mt-1 font-mono">
-                        matchedPods: {matchedCount} · ready: {readyCount}{phaseSummary ? ` · phase: ${phaseSummary}` : ''}
-                      </p>
-                    )
-                  })()}
-
-                  {(() => {
-                    const expected = Number(pdb.expected_pods || 0)
-                    const currentHealthy = Number(pdb.current_healthy || 0)
-                    const desiredHealthy = Number(pdb.desired_healthy || 0)
-                    const allowed = Number(pdb.disruptions_allowed || 0)
-
-                    if (expected === 0) {
-                      return <p className="text-xs text-slate-400 mt-2">매칭 Pod가 없어 PDB가 적용되지 않습니다.</p>
-                    }
-                    if (allowed > 0) {
-                      return <p className="text-xs text-slate-400 mt-2">현재 {allowed}개까지 disruption(퇴거)이 허용됩니다.</p>
-                    }
-                    if (currentHealthy < desiredHealthy) {
-                      return (
-                        <p className="text-xs text-yellow-200 mt-2">
-                          현재는 보호 불가: healthy({currentHealthy})가 desiredHealthy({desiredHealthy}) 미만이라 disruptionsAllowed=0 입니다.
-                        </p>
-                      )
-                    }
-                    return <p className="text-xs text-yellow-200 mt-2">현재는 보호 불가: disruptionsAllowed=0 입니다.</p>
-                  })()}
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className={`badge ${pdb.disruptions_allowed > 0 ? 'badge-success' : 'badge-warning'}`}>
-                    disruptionsAllowed: {pdb.disruptions_allowed}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const selector = selectorToString(pdb.selector || {})
-                      setPodLabelSelector(selector)
-                      setSearchQuery('')
-                      setActiveTab('pods')
-                    }}
-                    disabled={!pdb.selector || Object.keys(pdb.selector).length === 0}
-                    className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="PDB selector로 Pod 목록을 필터링합니다"
-                  >
-                    Pods로 이동
-                  </button>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-4 gap-4">
-                <div>
-                  <p className="text-xs text-slate-400">CurrentHealthy</p>
-                  <p className="text-lg font-bold text-white">{pdb.current_healthy}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400">DesiredHealthy</p>
-                  <p className="text-lg font-bold text-white">{pdb.desired_healthy}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400">ExpectedPods</p>
-                  <p className="text-lg font-bold text-white">{pdb.expected_pods}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400">Selector</p>
-                  <p className="text-sm font-mono text-white truncate" title={Object.entries(pdb.selector || {}).map(([k, v]: any) => `${k}=${v}`).join(', ')}>
-                    {Object.entries(pdb.selector || {}).map(([k, v]: any) => `${k}=${v}`).join(', ') || '-'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-          {filteredPDBs.length === 0 && (
-            <div className="card">
-              <div className="text-slate-400">(없음)</div>
-            </div>
-          )}
-        </div>
+        <PDBTab
+          filteredPDBs={filteredPDBs}
+          pdbsError={pdbsError}
+          podsForPdbs={podsForPdbs as any[] | undefined}
+          setPodLabelSelector={setPodLabelSelector}
+          setSearchQuery={setSearchQuery}
+          setActiveTab={setActiveTab}
+        />
       )}
 
       {/* Services */}
