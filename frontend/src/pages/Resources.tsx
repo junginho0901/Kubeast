@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { SearchBar } from './resources/SearchBar'
 import { TabNavigation } from './resources/TabNavigation'
+import { useResourceQueries } from './resources/useResourceQueries'
 import type { ResourceType } from './resources/types'
 
 export default function Resources() {
@@ -26,56 +27,19 @@ export default function Resources() {
   const [searchQuery, setSearchQuery] = useState('')
   const [podLabelSelector, setPodLabelSelector] = useState<string>('')
 
-  const { data: services } = useQuery({
-    queryKey: ['services', namespace],
-    queryFn: () => api.getServices(namespace!),
-    enabled: !!namespace && activeTab === 'services',
-  })
-
-  const { data: deployments } = useQuery({
-    queryKey: ['deployments', namespace],
-    queryFn: () => api.getDeployments(namespace!),
-    enabled: !!namespace && activeTab === 'deployments',
-  })
-
-  const { data: replicasets, error: replicasetsError } = useQuery({
-    queryKey: ['replicasets', namespace],
-    queryFn: () => api.getReplicaSets(namespace!, false),
-    enabled: !!namespace && activeTab === 'replicasets',
-    retry: 0,
-  })
-
-  const { data: hpas, error: hpasError } = useQuery({
-    queryKey: ['hpas', namespace],
-    queryFn: () => api.getHPAs(namespace!, false),
-    enabled: !!namespace && activeTab === 'hpas',
-    retry: 0,
-  })
-
-  const { data: pdbs, error: pdbsError } = useQuery({
-    queryKey: ['pdbs', namespace],
-    queryFn: () => api.getPDBs(namespace!, false),
-    enabled: !!namespace && activeTab === 'pdbs',
-    retry: 0,
-  })
-
-  const { data: podsForPdbs } = useQuery({
-    queryKey: ['pods', namespace, '__for_pdbs__'],
-    queryFn: () => api.getPods(namespace!, undefined, false),
-    enabled: !!namespace && activeTab === 'pdbs',
-  })
-
-  const { data: pods } = useQuery({
-    queryKey: ['pods', namespace, podLabelSelector || ''],
-    queryFn: () => api.getPods(namespace!, podLabelSelector || undefined, false), // 자동 갱신은 캐시 사용
-    enabled: !!namespace && activeTab === 'pods',
-  })
-
-  const { data: pvcs } = useQuery({
-    queryKey: ['pvcs', namespace],
-    queryFn: () => api.getPVCs(namespace),
-    enabled: activeTab === 'pvcs',
-  })
+  const {
+    services,
+    deployments,
+    replicasets,
+    replicasetsError,
+    hpas,
+    hpasError,
+    pdbs,
+    pdbsError,
+    podsForPdbs,
+    pods,
+    pvcs,
+  } = useResourceQueries({ namespace, activeTab, podLabelSelector })
 
   // 플로팅 AI 위젯용 스냅샷 — 활성 탭 기준 단일 리스트 요약
   // 화면에서 검색 필터링이 적용된 결과의 상위 N 개를 visible_items 로 노출.
