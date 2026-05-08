@@ -5,16 +5,16 @@ import { api } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { 
-  Server, 
-  Box, 
-  Database, 
+import {
+  Server,
+  Box,
+  Database,
   RefreshCw,
-  Search,
   Layers,
   TrendingUp,
   Shield,
 } from 'lucide-react'
+import { SearchBar } from './resources/SearchBar'
 import { TabNavigation } from './resources/TabNavigation'
 import type { ResourceType } from './resources/types'
 
@@ -417,46 +417,23 @@ export default function Resources() {
 
       <TabNavigation tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Search */}
-      <div className="space-y-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            placeholder={searchPlaceholder[activeTab]}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          />
-        </div>
-        {activeTab === 'pods' && podLabelSelector && (
-          <div className="flex items-center justify-between gap-3 text-sm text-slate-300">
-            <div className="min-w-0">
-              <span className="text-slate-400">Label selector:</span>{' '}
-              <span className="font-mono break-words">{podLabelSelector}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPodLabelSelector('')}
-              className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1"
-              title="라벨 셀렉터 제거"
-            >
-              초기화
-            </button>
-          </div>
-        )}
-        {searchQuery && (
-          <p className="text-sm text-slate-400">
-            {activeTab === 'deployments' && `${filteredDeployments.length}개의 Deployment가 검색되었습니다`}
-            {activeTab === 'replicasets' && `${filteredReplicaSets.length}개의 ReplicaSet이 검색되었습니다`}
-            {activeTab === 'hpas' && `${filteredHPAs.length}개의 HPA가 검색되었습니다`}
-            {activeTab === 'pdbs' && `${filteredPDBs.length}개의 PDB가 검색되었습니다`}
-            {activeTab === 'services' && `${filteredServices.length}개의 Service가 검색되었습니다`}
-            {activeTab === 'pods' && `${filteredPods.length}개의 Pod가 검색되었습니다`}
-            {activeTab === 'pvcs' && `${filteredPVCs.length}개의 PVC가 검색되었습니다`}
-          </p>
-        )}
-      </div>
+      <SearchBar
+        activeTab={activeTab}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        podLabelSelector={podLabelSelector}
+        onClearPodLabelSelector={() => setPodLabelSelector('')}
+        searchPlaceholder={searchPlaceholder}
+        counts={{
+          services: filteredServices.length,
+          deployments: filteredDeployments.length,
+          replicasets: filteredReplicaSets.length,
+          hpas: filteredHPAs.length,
+          pdbs: filteredPDBs.length,
+          pods: filteredPods.length,
+          pvcs: filteredPVCs.length,
+        }}
+      />
 
       {/* Deployments */}
       {activeTab === 'deployments' && (
