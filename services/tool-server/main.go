@@ -256,8 +256,6 @@ func buildToolRegistry() map[string]ToolDefinition {
 	return registry
 }
 
-var errBadRequest = errors.New("bad request")
-
 func handleGetResources(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	resourceType := argString(args, "resource_type", "")
 	if resourceType == "" {
@@ -897,27 +895,3 @@ func resolveKubeconfigPath() string {
 
 
 
-func marshalJSON(value interface{}) (string, error) {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-func wrapBadRequest(message string) error {
-	return fmt.Errorf("%w: %s", errBadRequest, message)
-}
-
-func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
