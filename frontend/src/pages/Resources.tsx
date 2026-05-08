@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Shield,
 } from 'lucide-react'
+import { TabNavigation } from './resources/TabNavigation'
 import type { ResourceType } from './resources/types'
 
 export default function Resources() {
@@ -414,26 +415,7 @@ export default function Resources() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-700">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              flex items-center gap-2 px-4 py-3 font-medium transition-colors
-              border-b-2 -mb-px
-              ${activeTab === tab.id
-                ? 'border-primary-500 text-white'
-                : 'border-transparent text-slate-400 hover:text-white'
-              }
-            `}
-          >
-            <tab.icon className="w-4 h-4" />
-            {tab.name}
-          </button>
-        ))}
-      </div>
+      <TabNavigation tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Search */}
       <div className="space-y-2">
