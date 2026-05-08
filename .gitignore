@@ -99,3 +99,5 @@ devtron/
 helm-dashboard/
 spot-gpu-lotto/
 test-results/
+argo-cd/
+services/tool-server/tool-server
