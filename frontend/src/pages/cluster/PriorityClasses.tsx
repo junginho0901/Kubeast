@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PriorityClassInfo } from '@/services/api'
@@ -68,7 +69,7 @@ function applyPriorityClassWatchEvent(
     return items
   }
 
-  if (index >= 0) items[index] = normalized
+  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
   else items.push(normalized)
 
   return items

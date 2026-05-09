@@ -24,6 +24,18 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// WebSocket keepalive parameters.
+//
+// nginx proxy_read_timeout 기본값 60초 → 60초 동안 watch 이벤트 없으면
+// connection 이 idle 로 판단되어 끊김. 60초 사이의 K8s 변화는 영원히 lost
+// (새 watch 시작 시 LIST 안 보냄). 해결: 25초마다 ws ping 보내 nginx 가
+// traffic 으로 인식하게. ReadDeadline 은 dead connection 빠른 정리용.
+const (
+	pingPeriod = 25 * time.Second
+	pongWait   = 60 * time.Second
+	writeWait  = 10 * time.Second
+)
+
 // RequestMessage is the client request for a watch subscription.
 type RequestMessage struct {
 	Type      string `json:"type"`      // "REQUEST"
@@ -85,11 +97,21 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
+	// Keepalive: pong 받을 때마다 ReadDeadline 갱신. 60초 안에 pong 없으면
+	// ReadMessage 가 timeout 으로 break → defer 의 disconnect 처리.
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	// Channel to send messages to client
 	sendCh := make(chan ResponseMessage, 256)
 
-	// Writer goroutine
+	// Writer goroutine — DATA/ERROR 메시지 송신 + 25초마다 ping.
 	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -102,7 +124,13 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					continue
 				}
+				_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 				if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+					return
+				}
+			case <-ticker.C:
+				_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}
 			}
@@ -238,7 +266,12 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 				lastResourceVersion = rv
 			}
 
-			info := objectToInfo(resource, obj)
+			// gvr.Resource 가 정식 K8s 이름 (e.g. "persistentvolumes").
+			// resource 변수는 path 의 raw segment 라 alias ("pvs", "pvcs") 가
+			// 그대로 넘어옴 → objectToInfo switch 에 case 없어 default
+			// genericToInfo 가 호출되어 partial object 만 보내는 버그.
+			// 정식 이름 사용으로 매번 정확한 *ToInfo 호출 보장.
+			info := objectToInfo(gvr.Resource, obj)
 
 			sendCh <- ResponseMessage{
 				Type:  "DATA",
