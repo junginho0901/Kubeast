@@ -11,9 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-
-
-
 // --- VolumeAttachments ---
 
 // GetVolumeAttachments lists all volume attachments.
@@ -146,11 +143,6 @@ func (s *Service) DeleteVolumeAttachment(ctx context.Context, name string) error
 	return s.Clientset().StorageV1().VolumeAttachments().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
-// --- Formatting helpers ---
-
-
-
-
 func formatVolumeAttachment(va *storagev1.VolumeAttachment) map[string]interface{} {
 	pvName := ""
 	if va.Spec.Source.PersistentVolumeName != nil {
@@ -181,5 +173,3 @@ func formatVolumeAttachment(va *storagev1.VolumeAttachment) map[string]interface
 
 	return result
 }
-
-// findPodsUsingPVC finds pods that reference a given PVC name.
