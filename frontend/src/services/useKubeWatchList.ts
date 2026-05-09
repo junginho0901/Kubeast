@@ -62,9 +62,16 @@ export function useKubeWatchList(options: {
     const handle = (message: any) => {
       if (message?.type !== 'DATA') return
       const event = message?.data as WatchEvent
-      queryClient.setQueryData(options.queryKey, (prev: any[] | undefined) =>
-        (options.applyEvent ?? applyWatchEvent)(prev, event)
-      )
+      queryClient.setQueryData(options.queryKey, (prev: any[] | undefined) => {
+        // list 가 도착하기 전 (prev=undefined) 의 watch event 는 무시.
+        // K8s watch with resourceVersion="" 는 LIST 의 모든 item 을 ADDED
+        // event 로 stream 하는데, list 응답보다 일부 event 가 먼저 도착하면
+        // setQueryData 가 빈 prev → 부분 array 를 만들어 useQuery 의 list
+        // 응답을 race 로 덮어쓰거나 partial render 발생. list 가 정상적으로
+        // 도착하면 그 시점부터의 watch event 만 apply 해야 정합성 유지.
+        if (prev === undefined) return undefined
+        return (options.applyEvent ?? applyWatchEvent)(prev, event)
+      })
       options.onEvent?.(event)
     }
 
