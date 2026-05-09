@@ -48,7 +48,10 @@ function pickPodDisplayStatus(pod: PodInfo): string {
   for (const c of pod.containers || []) {
     const waitingReason = c?.state?.waiting?.reason
     if (waitingReason) reasons.push(String(waitingReason))
-    const terminatedReason = c?.state?.terminated?.reason || c?.last_state?.terminated?.reason
+    // last_state 는 무시 — 이전에 종료됐던 기록은 현재 상태와 무관.
+    // 한 번 Error 로 죽고 재시작되어 현재 Running 인 정상 pod 가 list 에
+    // "Error" 로 잘못 표시되는 버그 방지 (detail 화면은 phase 기반이라 정상).
+    const terminatedReason = c?.state?.terminated?.reason
     if (terminatedReason) reasons.push(String(terminatedReason))
   }
   if (reasons.length > 0) return reasons[0]
