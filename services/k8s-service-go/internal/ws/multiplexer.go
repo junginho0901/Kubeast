@@ -266,7 +266,12 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 				lastResourceVersion = rv
 			}
 
-			info := objectToInfo(resource, obj)
+			// gvr.Resource 가 정식 K8s 이름 (e.g. "persistentvolumes").
+			// resource 변수는 path 의 raw segment 라 alias ("pvs", "pvcs") 가
+			// 그대로 넘어옴 → objectToInfo switch 에 case 없어 default
+			// genericToInfo 가 호출되어 partial object 만 보내는 버그.
+			// 정식 이름 사용으로 매번 정확한 *ToInfo 호출 보장.
+			info := objectToInfo(gvr.Resource, obj)
 
 			sendCh <- ResponseMessage{
 				Type:  "DATA",
