@@ -856,12 +856,22 @@ func roleToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 func genericToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	metadata := obj.Object["metadata"].(map[string]interface{})
+	spec, _ := obj.Object["spec"].(map[string]interface{})
+	status, _ := obj.Object["status"].(map[string]interface{})
+	// 명시적 *ToInfo 가 없는 리소스 (endpoints, gateways, networkpolicies,
+	// volumeattachments 등) 의 fallback. metadata 만 보내면 frontend 의
+	// normalize 가 status/capacity 등을 'Unknown'/null 로 fallback 처리해
+	// list 의 정상 데이터를 watch event 로 덮어쓰는 버그 발생.
+	// raw K8s spec/status 통째로 포함 → frontend 의 normalize 가 raw K8s
+	// 형태 처리 경로 (metadata.x ?? obj.x, status.phase 등) 로 정상 추출.
 	return map[string]interface{}{
 		"name":       metadata["name"],
 		"namespace":  metadata["namespace"],
 		"kind":       obj.GetKind(),
 		"labels":     metadata["labels"],
 		"created_at": metadata["creationTimestamp"],
+		"spec":       spec,
+		"status":     status,
 	}
 }
 
