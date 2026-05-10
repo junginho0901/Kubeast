@@ -1,13 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import ReactFlow, {
   Node,
-  Edge,
   Controls,
   Background,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  MarkerType,
   BackgroundVariant,
 } from 'react-flow-renderer'
 import 'react-flow-renderer/dist/style.css'
@@ -37,7 +33,7 @@ import {
   type GroupBy,
 } from './resource-graph/constants'
 import { Glance } from './resource-graph/Glance'
-import { applyElkLayout } from './resource-graph/elkLayout'
+import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
 
 export default function ResourceGraph() {
   const { t } = useTranslation()
@@ -55,7 +51,6 @@ export default function ResourceGraph() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'issues'>('all')
   const [glanceNode, setGlanceNode] = useState<ResourceGraphNode | null>(null)
   const [glancePos, setGlancePos] = useState({ x: 0, y: 0 })
-  const [layoutReady, setLayoutReady] = useState(false)
 
   // Data fetching
   const { data: namespaces } = useQuery({
@@ -154,108 +149,14 @@ export default function ResourceGraph() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isNsDropdownOpen])
 
-  // Build react-flow nodes and edges, apply ELK layout
-  const { filteredNodes, filteredEdges } = useMemo(() => {
-    if (!graphData?.nodes || !graphData?.edges) return { filteredNodes: [] as Node[], filteredEdges: [] as Edge[] }
-
-    // Filter nodes
-    let gNodes = graphData.nodes.filter(n => kindFilters.has(n.kind))
-
-    if (statusFilter === 'issues') {
-      const issueStatuses = ['failed', 'error', 'crashloopbackoff', 'imagepullbackoff', 'pending', 'terminating']
-      gNodes = gNodes.filter(n => issueStatuses.some(s => n.status.toLowerCase().includes(s)))
-    }
-
-    const nodeIds = new Set(gNodes.map(n => n.id))
-
-    // Build RF nodes
-    const rfNodes: Node[] = gNodes.map(n => {
-      const icon = kindIcon[n.kind] || '📄'
-      const borderColor = statusColor(n.status)
-      const isHighlighted = searchQuery && n.name.toLowerCase().includes(searchQuery.toLowerCase())
-      return {
-        id: n.id,
-        data: {
-          label: (
-            <div className="flex items-center gap-1.5 px-2 py-1 min-w-0">
-              <span className="text-base flex-shrink-0">{icon}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] text-slate-400 leading-tight">{n.kind}</div>
-                <div className="text-xs font-medium text-white truncate leading-tight" title={n.name}>
-                  {n.name}
-                </div>
-                {n.ready && <div className="text-[10px] text-slate-400 leading-tight">{n.ready}</div>}
-              </div>
-            </div>
-          ),
-          raw: n,
-        },
-        position: { x: 0, y: 0 },
-        style: {
-          background: '#1e293b',
-          border: `2px solid ${borderColor}`,
-          borderRadius: '8px',
-          padding: 0,
-          width: 200,
-          boxShadow: isHighlighted ? '0 0 0 3px #3b82f6' : undefined,
-          opacity: searchQuery && !isHighlighted ? 0.3 : 1,
-        },
-      }
-    })
-
-    // Build RF edges
-    const rfEdges: Edge[] = graphData.edges
-      .filter(e => edgeTypeFilters.has(e.type) && nodeIds.has(e.source) && nodeIds.has(e.target))
-      .map((e, i) => {
-        const style = edgeStyles[e.type] || edgeStyles.owns
-        return {
-          id: `e-${i}`,
-          source: e.source,
-          target: e.target,
-          animated: e.type === 'selects',
-          style: { stroke: style.stroke, strokeDasharray: style.strokeDasharray, strokeWidth: 1.5 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: style.stroke },
-          label: style.label,
-          labelStyle: { fill: style.stroke, fontSize: 10 },
-          labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
-          labelBgPadding: [4, 2] as [number, number],
-          labelBgBorderRadius: 4,
-        }
-      })
-
-    return { filteredNodes: rfNodes, filteredEdges: rfEdges }
-  }, [graphData, kindFilters, edgeTypeFilters, searchQuery, statusFilter])
-
-  // Apply ELK layout
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
-
-  useEffect(() => {
-    if (filteredNodes.length === 0 || !graphData?.nodes) {
-      setNodes([])
-      setEdges([])
-      setLayoutReady(true)
-      return
-    }
-
-    setLayoutReady(false)
-    applyElkLayout(filteredNodes, filteredEdges, groupBy, graphData)
-      .then(({ nodes: ln, edges: le }) => {
-        setNodes(ln)
-        setEdges(le)
-        setLayoutReady(true)
-      })
-      .catch(err => {
-        console.error('ELK layout error:', err)
-        // Fallback: simple grid
-        setNodes(filteredNodes.map((n, i) => ({
-          ...n,
-          position: { x: (i % 8) * 250, y: Math.floor(i / 8) * 100 },
-        })))
-        setEdges(filteredEdges)
-        setLayoutReady(true)
-      })
-  }, [filteredNodes, filteredEdges, groupBy, graphData])
+  const { nodes, edges, onNodesChange, onEdgesChange, layoutReady } = useResourceGraphLayout({
+    graphData,
+    kindFilters,
+    edgeTypeFilters,
+    searchQuery,
+    statusFilter,
+    groupBy,
+  })
 
   // Interactions
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
