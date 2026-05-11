@@ -46,6 +46,8 @@ func (s *Service) DeleteNetworkPolicy(ctx context.Context, namespace, name strin
 	return s.Clientset().NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
+// ========== Formatting helpers ==========
+
 func formatNetworkPolicyList(items []networkingv1.NetworkPolicy) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for _, np := range items {
