@@ -6,15 +6,15 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw } from 'lucide-react'
-import { formatAge, getStatusColor, parseAgeSeconds, parseReadyPair, pickPodDisplayStatus, type SortKey, type SummaryCard } from './pods/podHelpers'
+import { Plus, RefreshCw } from 'lucide-react'
+import { parseAgeSeconds, parseReadyPair, pickPodDisplayStatus, type SortKey, type SummaryCard } from './pods/podHelpers'
 import { applyPodWatchEvent } from './pods/podWatchNormalize'
 import { PodFilters } from './pods/PodFilters'
+import { PodTable } from './pods/PodTable'
 
 export default function Pods() {
   const queryClient = useQueryClient()
@@ -149,26 +149,6 @@ spec:
         - containerPort: 80
 `
   }, [selectedNamespace])
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
 
   const sortedPods = useMemo(() => {
     if (!sortKey) return filteredPods
@@ -385,136 +365,26 @@ spec:
         </div>
       )}
 
-      <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[980px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[140px]">
-                    {tr('pods.table.namespace', 'Namespace')}
-                  </th>
-                )}
-                <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.name', 'Name')}{renderSortIcon('name')}
-                  </span>
-                </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('ready')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.ready', 'Ready')}{renderSortIcon('ready')}
-                  </span>
-                </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.status', 'Status')}{renderSortIcon('status')}
-                  </span>
-                </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('restarts')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.restarts', 'Restarts')}{renderSortIcon('restarts')}
-                  </span>
-                </th>
-                <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('pod_ip')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.podIp', 'Pod IP')}{renderSortIcon('pod_ip')}
-                  </span>
-                </th>
-                <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('node_name')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.node', 'Node')}{renderSortIcon('node_name')}
-                  </span>
-                </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">
-                    {tr('pods.table.age', 'Age')}{renderSortIcon('age')}
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedPods.map((pod, idx) => {
-                const displayStatus = pickPodDisplayStatus(pod)
-                return (
-                  <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                    key={`${pod.namespace}/${pod.name}`}
-                    className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                    onClick={() => openDetail({
-                      kind: 'Pod',
-                      name: pod.name,
-                      namespace: pod.namespace,
-                      rawJson: pod as unknown as Record<string, unknown>,
-                    })}
-                  >
-                    {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{pod.namespace}</td>}
-                    <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
-                    <td className="py-3 px-4 text-xs font-mono">{pod.ready || '-'}</td>
-                    <td className="py-3 px-4">
-                      <span className={`badge ${getStatusColor(displayStatus)}`}>{displayStatus}</span>
-                    </td>
-                    <td className="py-3 px-4 text-xs font-mono">{pod.restart_count ?? 0}</td>
-                    <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.pod_ip || '-'}</span></td>
-                    <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name || '-'}</span></td>
-                    <td className="py-3 px-4 text-xs font-mono">{formatAge(pod.created_at)}</td>
-                  </tr>
-                )
-              })}
-              {isLoadingPods && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {sortedPods.length === 0 && !isLoadingPods && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                    {tr('pods.noResults', 'No pods found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
-          </table>
-        </div>
-        {sortedPods.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedPods.length),
-                total: sortedPods.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <PodTable
+        pagedPods={pagedPods}
+        sortedPodsLength={sortedPods.length}
+        isLoadingPods={isLoadingPods}
+        showNamespaceColumn={showNamespaceColumn}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        openDetail={openDetail}
+        tr={tr}
+      />
 
       {createDialogOpen && (
         <ResourceYamlCreateDialog
