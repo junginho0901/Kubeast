@@ -120,6 +120,11 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 	}
 	result["owner_references"] = owners
 
+	// Owned pods (Pods whose ownerReferences include this ReplicaSet)
+	if ownedPods, err := s.listOwnedPods(ctx, namespace, "ReplicaSet", name); err == nil {
+		result["owned_pods"] = ownedPods
+	}
+
 	return result, nil
 }
 
