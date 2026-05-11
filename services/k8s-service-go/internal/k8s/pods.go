@@ -515,3 +515,46 @@ func podStatusString(pod *corev1.Pod) string {
 	}
 	return strings.TrimSpace(status)
 }
+
+// listOwnedPods returns pods directly owned by the given controller
+// (matched via metadata.ownerReferences kind/name). Used by DescribeDaemonSet
+// / DescribeReplicaSet / DescribeStatefulSet to embed an owned_pods list in
+// the detail response so the UI can show + link to children.
+func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, ownerName string) ([]map[string]interface{}, error) {
+	pods, err := s.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
+	}
+
+	result := make([]map[string]interface{}, 0)
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		owned := false
+		for _, ref := range pod.OwnerReferences {
+			if ref.Kind == ownerKind && ref.Name == ownerName {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			continue
+		}
+
+		restartCount := int32(0)
+		for _, cs := range pod.Status.ContainerStatuses {
+			restartCount += cs.RestartCount
+		}
+
+		result = append(result, map[string]interface{}{
+			"name":          pod.Name,
+			"namespace":     pod.Namespace,
+			"status":        podStatusString(pod),
+			"ready":         podReadyString(pod.Status.ContainerStatuses, len(pod.Spec.Containers)),
+			"restart_count": restartCount,
+			"node_name":     pod.Spec.NodeName,
+			"pod_ip":        pod.Status.PodIP,
+			"created_at":    toISO(&pod.CreationTimestamp),
+		})
+	}
+	return result, nil
+}
