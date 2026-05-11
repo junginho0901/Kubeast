@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle, ChevronDown, Database, Loader2, Plus, RefreshCw, Search } from 'lucide-react'
+import { CheckCircle, ChevronDown, Loader2, Plus, RefreshCw, Search } from 'lucide-react'
 import { api, type StatefulSetInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -346,10 +346,7 @@ spec:
               >
                 {showNamespaceColumn && <td className="py-3 px-4 font-mono text-xs truncate">{sts.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white">
-                  <div className="flex items-center gap-2">
-                    <Database className="w-4 h-4 text-primary-400 flex-shrink-0" />
-                    <span className="truncate">{sts.name}</span>
-                  </div>
+                  <span className="block truncate">{sts.name}</span>
                 </td>
                 <td className="py-3 px-4">{`${sts.ready_replicas ?? 0}/${sts.replicas ?? 0}`}</td>
                 <td className="py-3 px-4">{`${sts.updated_replicas ?? sts.current_replicas ?? 0}/${sts.replicas ?? 0}`}</td>
