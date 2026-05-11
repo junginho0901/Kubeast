@@ -163,6 +163,11 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	}
 	result["conditions"] = conditions
 
+	// Owned pods (Pods whose ownerReferences include this StatefulSet)
+	if ownedPods, err := s.listOwnedPods(ctx, namespace, "StatefulSet", name); err == nil {
+		result["owned_pods"] = ownedPods
+	}
+
 	return result, nil
 }
 
