@@ -277,47 +277,6 @@ func formatDRAList(list *unstructured.UnstructuredList) []map[string]interface{}
 	return result
 }
 
-func formatResourceSliceList(list *unstructured.UnstructuredList) []map[string]interface{} {
-	if list == nil {
-		return []map[string]interface{}{}
-	}
-	result := make([]map[string]interface{}, 0, len(list.Items))
-	for _, item := range list.Items {
-		entry := map[string]interface{}{
-			"name":       item.GetName(),
-			"labels":     item.GetLabels(),
-			"created_at": toISO(&metav1.Time{Time: item.GetCreationTimestamp().Time}),
-		}
-
-		if v := mapStr(item.Object, "nodeName"); v != "" {
-			entry["node_name"] = v
-		}
-		if v := mapStr(item.Object, "driverName"); v != "" {
-			entry["driver_name"] = v
-		}
-
-		pool := mapMap(item.Object, "pool")
-		if pool != nil {
-			if v := mapStr(pool, "name"); v != "" {
-				entry["pool_name"] = v
-			}
-			if v, ok := pool["generation"]; ok {
-				entry["pool_generation"] = v
-			}
-			if v, ok := pool["resourceSliceCount"]; ok {
-				entry["resource_slice_count"] = v
-			}
-		}
-
-		if devices := mapSlice(item.Object, "devices"); len(devices) > 0 {
-			entry["device_count"] = len(devices)
-		}
-
-		result = append(result, entry)
-	}
-	return result
-}
-
 // ========== GPU helpers ==========
 
 func getGPUQuantity(resources corev1.ResourceList) int {
