@@ -9,6 +9,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -215,4 +216,79 @@ func nodeReadyStatus(node *corev1.Node) string {
 		}
 	}
 	return "Unknown"
+}
+
+func getDevicePluginStatus(ctx context.Context, s *Service) map[string]interface{} {
+	// Try common NVIDIA device plugin DaemonSet names and namespaces
+	candidates := []struct {
+		namespace string
+		name      string
+	}{
+		{"kube-system", "nvidia-device-plugin-daemonset"},
+		{"gpu-operator", "nvidia-device-plugin-daemonset"},
+		{"nvidia-gpu-operator", "nvidia-device-plugin-daemonset"},
+		{"kube-system", "nvidia-device-plugin"},
+	}
+
+	for _, c := range candidates {
+		// Short timeout per candidate so we don't block if the namespace doesn't exist
+		tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		ds, err := s.Clientset().AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
+		cancel()
+		if err != nil {
+			continue
+		}
+		return map[string]interface{}{
+			"name":      ds.Name,
+			"namespace": ds.Namespace,
+			"desired":   ds.Status.DesiredNumberScheduled,
+			"ready":     ds.Status.NumberReady,
+			"available": ds.Status.NumberAvailable,
+		}
+	}
+
+	return nil
+}
+
+func getTimeSlicingConfig(ctx context.Context, s *Service) map[string]interface{} {
+	namespaces := []string{"gpu-operator", "nvidia-gpu-operator", "kube-system"}
+	names := []string{"time-slicing-config", "nvidia-plugin-configs", "time-slicing"}
+
+	for _, ns := range namespaces {
+		for _, name := range names {
+			tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			cm, err := s.Clientset().CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})
+			cancel()
+			if err != nil {
+				continue
+			}
+			result := map[string]interface{}{
+				"name":      cm.Name,
+				"namespace": cm.Namespace,
+			}
+			if cm.Data != nil {
+				// Try to extract replica count info
+				for k, v := range cm.Data {
+					if strings.Contains(v, "replicas") {
+						result["config_key"] = k
+						// Parse replicas count from config
+						if idx := strings.Index(v, "replicas:"); idx >= 0 {
+							rest := v[idx+len("replicas:"):]
+							rest = strings.TrimSpace(rest)
+							parts := strings.Fields(rest)
+							if len(parts) > 0 {
+								if n, err := strconv.Atoi(parts[0]); err == nil {
+									result["replicas"] = n
+								}
+							}
+						}
+						break
+					}
+				}
+			}
+			return result
+		}
+	}
+
+	return nil
 }
