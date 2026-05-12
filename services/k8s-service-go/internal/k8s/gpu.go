@@ -81,61 +81,6 @@ func (s *Service) isDRAUnavailable(ctx context.Context) bool {
 	return s.resolveDRAAPIVersion(ctx) == "unavailable"
 }
 
-// ========== DeviceClasses (cluster-scoped) ==========
-
-func (s *Service) GetDeviceClasses(ctx context.Context) ([]map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return []map[string]interface{}{}, nil
-	}
-	gvr := s.draGVR(ctx, "deviceclasses")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list deviceclasses: %w", err)
-	}
-	return formatDRAList(list), nil
-}
-
-func (s *Service) DescribeDeviceClass(ctx context.Context, name string) (map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return nil, fmt.Errorf("DRA API not available")
-	}
-	gvr := s.draGVR(ctx, "deviceclasses")
-	obj, err := s.GetResource(ctx, gvr, "", name)
-	if err != nil {
-		return nil, fmt.Errorf("get deviceclass %s: %w", name, err)
-	}
-
-	result := map[string]interface{}{
-		"name":        obj.GetName(),
-		"labels":      obj.GetLabels(),
-		"annotations": obj.GetAnnotations(),
-		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
-	}
-
-	spec := mapMap(obj.Object, "spec")
-	if spec != nil {
-		if selectors := mapSlice(spec, "selectors"); len(selectors) > 0 {
-			result["selectors"] = selectors
-		}
-		if config := mapMap(spec, "config"); config != nil {
-			result["config"] = config
-		}
-		if suitableNodes := mapMap(spec, "suitableNodes"); suitableNodes != nil {
-			result["suitable_nodes"] = suitableNodes
-		}
-	}
-
-	return result, nil
-}
-
-func (s *Service) DeleteDeviceClass(ctx context.Context, name string) error {
-	if s.isDRAUnavailable(ctx) {
-		return fmt.Errorf("DRA API not available")
-	}
-	gvr := s.draGVR(ctx, "deviceclasses")
-	return s.DeleteResource(ctx, gvr, "", name)
-}
-
 // ========== ResourceClaims (namespace-scoped) ==========
 
 func (s *Service) GetResourceClaims(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
