@@ -1,3 +1,10 @@
+// gpu.go — DRA (Dynamic Resource Allocation) 인프라 + 공유 리스트 포매터.
+//
+// DRA 도메인별 CRUD 는 gpu_dra_classes_claims.go (DeviceClass / ResourceClaim /
+// Template) 와 gpu_resource_slice.go (ResourceSlice) 로 분리됨. GPU 대시보드
+// 통합 응답은 gpu_dashboard.go. 본 파일은 K8s 버전별 (v1beta1 / v1alpha3) API
+// 자동 탐지 + GVR 헬퍼 + DRA 도메인이 공유하는 list 포매터만 보유.
+
 package k8s
 
 import (
@@ -78,6 +85,9 @@ func (s *Service) isDRAUnavailable(ctx context.Context) bool {
 
 // ========== DRA list formatters ==========
 
+// formatDRAList flattens DeviceClass / ResourceClaim / ResourceClaimTemplate
+// unstructured lists into the common list-card shape (name, labels, request
+// count, allocation status, conditions).
 func formatDRAList(list *unstructured.UnstructuredList) []map[string]interface{} {
 	if list == nil {
 		return []map[string]interface{}{}
@@ -138,4 +148,3 @@ func formatDRAList(list *unstructured.UnstructuredList) []map[string]interface{}
 	}
 	return result
 }
-
