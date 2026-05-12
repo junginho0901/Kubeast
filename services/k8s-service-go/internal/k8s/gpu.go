@@ -81,68 +81,6 @@ func (s *Service) isDRAUnavailable(ctx context.Context) bool {
 	return s.resolveDRAAPIVersion(ctx) == "unavailable"
 }
 
-// ========== ResourceClaimTemplates (namespace-scoped) ==========
-
-func (s *Service) GetResourceClaimTemplates(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return []map[string]interface{}{}, nil
-	}
-	gvr := s.draGVR(ctx, "resourceclaimtemplates")
-	list, err := s.ListResources(ctx, gvr, namespace, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list resourceclaimtemplates: %w", err)
-	}
-	return formatDRAList(list), nil
-}
-
-func (s *Service) GetAllResourceClaimTemplates(ctx context.Context) ([]map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return []map[string]interface{}{}, nil
-	}
-	gvr := s.draGVR(ctx, "resourceclaimtemplates")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all resourceclaimtemplates: %w", err)
-	}
-	return formatDRAList(list), nil
-}
-
-func (s *Service) DescribeResourceClaimTemplate(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return nil, fmt.Errorf("DRA API not available")
-	}
-	gvr := s.draGVR(ctx, "resourceclaimtemplates")
-	obj, err := s.GetResource(ctx, gvr, namespace, name)
-	if err != nil {
-		return nil, fmt.Errorf("get resourceclaimtemplate %s/%s: %w", namespace, name, err)
-	}
-
-	result := map[string]interface{}{
-		"name":        obj.GetName(),
-		"namespace":   obj.GetNamespace(),
-		"labels":      obj.GetLabels(),
-		"annotations": obj.GetAnnotations(),
-		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
-	}
-
-	spec := mapMap(obj.Object, "spec")
-	if spec != nil {
-		if claimSpec := mapMap(spec, "spec"); claimSpec != nil {
-			result["claim_spec"] = claimSpec
-		}
-	}
-
-	return result, nil
-}
-
-func (s *Service) DeleteResourceClaimTemplate(ctx context.Context, namespace, name string) error {
-	if s.isDRAUnavailable(ctx) {
-		return fmt.Errorf("DRA API not available")
-	}
-	gvr := s.draGVR(ctx, "resourceclaimtemplates")
-	return s.DeleteResource(ctx, gvr, namespace, name)
-}
-
 // ========== ResourceSlices (cluster-scoped) ==========
 
 func (s *Service) GetResourceSlices(ctx context.Context) ([]map[string]interface{}, error) {
