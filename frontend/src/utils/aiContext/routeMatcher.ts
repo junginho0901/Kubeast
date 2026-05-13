@@ -35,7 +35,6 @@ const STATIC_MAP: Record<string, StaticEntry> = {
   '/cluster/namespaces':                  { pageType: 'resource-list', resourceKind: 'Namespace',       titleKey: 'nav.namespaces',        pageTitle: '네임스페이스' },
   '/cluster/nodes':                       { pageType: 'resource-list', resourceKind: 'Node',            titleKey: 'nav.nodes',             pageTitle: '노드' },
   '/cluster/search':                      { pageType: 'search',                                         titleKey: 'nav.advancedSearch',    pageTitle: '고급 검색' },
-  '/cluster/dependency-graph':            { pageType: 'graph',                                          titleKey: 'nav.dependencyGraph',   pageTitle: '의존성 그래프' },
   '/cluster/resource-graph':              { pageType: 'graph',                                          titleKey: 'nav.resourceGraph',     pageTitle: '리소스 그래프' },
   '/timeline':                            { pageType: 'timeline',                                       titleKey: 'nav.timeline',          pageTitle: '변경 이력' },
 
