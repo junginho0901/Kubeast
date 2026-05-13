@@ -35,15 +35,15 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
         </Link>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="border-b border-slate-700/50 text-left text-xs uppercase tracking-wider text-slate-500">
-              <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.namespace', 'Namespace')}</th>
-              <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.name', 'Name')}</th>
-              <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.node', 'Node')}</th>
-              <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.gpus', 'GPUs')}</th>
-              <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.status', 'Status')}</th>
-              <th className="px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.age', 'Age')}</th>
+              <th className="w-[17%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.namespace', 'Namespace')}</th>
+              <th className="w-[30%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.name', 'Name')}</th>
+              <th className="w-[17%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.node', 'Node')}</th>
+              <th className="w-[8%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.gpus', 'GPUs')}</th>
+              <th className="w-[13%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.status', 'Status')}</th>
+              <th className="w-[15%] px-5 py-3 font-medium">{tr('gpuDashboardPage.recentPods.age', 'Age')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700/30">
@@ -53,14 +53,14 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                 onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
               >
-                <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{pod.namespace}</td>
-                <td className="whitespace-nowrap px-5 py-3 font-medium text-white">{pod.name}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{pod.node_name ?? '-'}</td>
-                <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{pod.gpu_requested}</td>
-                <td className="whitespace-nowrap px-5 py-3">
+                <td className="truncate px-5 py-3 text-xs font-mono">{pod.namespace}</td>
+                <td className="truncate px-5 py-3 font-medium text-white">{pod.name}</td>
+                <td className="truncate px-5 py-3 text-xs font-mono">{pod.node_name ?? '-'}</td>
+                <td className="truncate px-5 py-3 text-xs font-mono">{pod.gpu_requested}</td>
+                <td className="px-5 py-3">
                   <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>
                 </td>
-                <td className="whitespace-nowrap px-5 py-3 text-xs font-mono">{formatAge(pod.created_at)}</td>
+                <td className="truncate px-5 py-3 text-xs font-mono">{formatAge(pod.created_at)}</td>
               </tr>
             ))}
           </tbody>
