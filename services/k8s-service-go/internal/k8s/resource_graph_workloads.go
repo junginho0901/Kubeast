@@ -6,7 +6,11 @@
 
 package k8s
 
-import "fmt"
+import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+)
 
 // buildWorkloadGraph populates the resource graph with workload-related nodes
 // and edges (Deployments / StatefulSets / DaemonSets / ReplicaSets / Jobs /
@@ -223,4 +227,16 @@ func buildWorkloadGraph(
 	}
 
 	return edges
+}
+
+// podReadyCount returns "ready/total" for a pod's containers.
+func podReadyCount(pod *corev1.Pod) string {
+	total := len(pod.Spec.Containers)
+	ready := 0
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Ready {
+			ready++
+		}
+	}
+	return fmt.Sprintf("%d/%d", ready, total)
 }
