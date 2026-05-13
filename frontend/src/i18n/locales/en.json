@@ -17,7 +17,6 @@
     "aiChat": "AI Chat",
     "namespaces": "Namespaces",
     "nodes": "Nodes",
-    "dependencyGraph": "Resource Dependency Graph",
     "resourceGraph": "Resource Graph",
     "timeline": "Change History",
     "advancedSearch": "Advanced Search (Beta)",
@@ -2193,19 +2192,6 @@
       "save": "Save & Continue",
       "saving": "Saving..."
     }
-  },
-  "dependencyGraph": {
-    "title": "Resource Dependency Graph",
-    "selectNamespace": "Select Namespace",
-    "filter": "Filter",
-    "legend": "Legend",
-    "owns": "Owns",
-    "selects": "Selects",
-    "mounts": "Mounts",
-    "routes": "Routes",
-    "binds": "Binds",
-    "noData": "No resources in this namespace",
-    "search": "Search resources..."
   },
   "resourceGraph": {
     "title": "Resource Graph",

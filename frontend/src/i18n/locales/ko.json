@@ -17,7 +17,6 @@
     "aiChat": "AI 챗",
     "namespaces": "네임스페이스",
     "nodes": "노드",
-    "dependencyGraph": "리소스 의존성 그래프",
     "resourceGraph": "리소스 그래프",
     "timeline": "변경 이력",
     "advancedSearch": "고급 검색 (베타)",
@@ -2234,19 +2233,6 @@
       "save": "저장 후 계속",
       "saving": "저장 중..."
     }
-  },
-  "dependencyGraph": {
-    "title": "리소스 의존성 그래프",
-    "selectNamespace": "네임스페이스 선택",
-    "filter": "필터",
-    "legend": "범례",
-    "owns": "소유",
-    "selects": "선택",
-    "mounts": "마운트",
-    "routes": "라우팅",
-    "binds": "바인딩",
-    "noData": "이 네임스페이스에 리소스가 없습니다",
-    "search": "리소스 검색..."
   },
   "resourceGraph": {
     "title": "리소스 그래프",

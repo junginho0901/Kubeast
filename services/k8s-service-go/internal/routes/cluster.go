@@ -44,9 +44,6 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/events", h.GetEvents)
 	r.Get("/api/v1/namespaces/{namespace}/events", h.GetNamespaceEvents)
 
-	// Dependency Graph (legacy)
-	r.Get("/api/v1/namespaces/{namespace}/dependency-graph", h.GetDependencyGraph)
-
 	// Resource Graph (upgraded)
 	r.Get("/api/v1/resource-graph", h.GetResourceGraph)
 	r.Get("/api/v1/namespaces/{namespace}/resource-graph", h.GetNamespaceResourceGraph)

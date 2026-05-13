@@ -1,6 +1,5 @@
-// Topology API — namespace / storage topology, dependency graph
-// (legacy), resource graph (upgraded), and the per-namespace /
-// per-resource event timeline.
+// Topology API — namespace / storage topology, resource graph, and
+// the per-namespace / per-resource event timeline.
 
 import { client } from './client'
 import type { ResourceGraphResponse, TimelineResult, TopologyGraph } from './types'
@@ -32,28 +31,7 @@ export const topologyApi = {
     return data
   },
 
-  // Dependency Graph (legacy)
-  getDependencyGraph: async (namespace: string): Promise<{
-    nodes: Array<{
-      id: string
-      kind: string
-      name: string
-      namespace: string
-      status: string
-      ready?: string
-      labels?: Record<string, string>
-    }>
-    edges: Array<{
-      source: string
-      target: string
-      type: 'owns' | 'selects' | 'mounts' | 'routes' | 'binds'
-    }>
-  }> => {
-    const { data } = await client.get(`/cluster/namespaces/${namespace}/dependency-graph`)
-    return data
-  },
-
-  // Resource Graph (upgraded)
+  // Resource Graph
   getResourceGraph: async (namespaces?: string[]): Promise<ResourceGraphResponse> => {
     const params = namespaces?.length ? `?namespaces=${namespaces.join(',')}` : ''
     const { data } = await client.get(`/resource-graph${params}`)
