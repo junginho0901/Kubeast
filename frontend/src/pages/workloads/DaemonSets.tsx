@@ -78,19 +78,21 @@ export default function DaemonSets() {
   const summary = useMemo(() => {
     const total = filteredDaemonSets.length
     let healthy = 0
+    let idle = 0
     let degraded = 0
     let unavailable = 0
     for (const daemonset of filteredDaemonSets) {
       const status = (daemonset.status || '').toLowerCase()
       // backend workloads_formatters.go 는 "Healthy" / "Idle" (desired=0) /
-      // "Degraded" / "Unavailable" 4 값을 보냄. "Idle" 은 사용자가 의도해서
-      // desired=0 으로 만든 정상 비활성 상태이므로 healthy 에 합산 (Degraded
-      // 카드의 "문제 있음" 카운트가 부풀려지지 않도록).
-      if (status.includes('healthy') || status.includes('idle')) healthy += 1
+      // "Degraded" / "Unavailable" 4 값을 보냄. Idle 은 nodeSelector 미매칭 등
+      // 사용자가 인지해야 할 비활성 상태이므로 별도 카드로 표시 (ReplicaSets
+      // 와 동일한 5 카드 layout).
+      if (status.includes('healthy')) healthy += 1
+      else if (status.includes('idle')) idle += 1
       else if (status.includes('unavailable')) unavailable += 1
       else degraded += 1
     }
-    return { total, healthy, degraded, unavailable }
+    return { total, healthy, idle, degraded, unavailable }
   }, [filteredDaemonSets])
 
   const sortedDaemonSets = useMemo(() => {
@@ -278,7 +280,7 @@ spec:
         allNamespacesLabel={tr('daemonsets.allNamespaces', 'All namespaces')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('daemonsets.stats.total', 'Total')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
@@ -286,6 +288,10 @@ spec:
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('daemonsets.stats.healthy', 'Healthy')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.healthy}</p>
+        </div>
+        <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('daemonsets.stats.idle', 'Idle')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.idle}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('daemonsets.stats.degraded', 'Degraded')}</p>
