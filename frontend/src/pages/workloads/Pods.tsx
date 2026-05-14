@@ -77,12 +77,13 @@ export default function Pods() {
 
   const podStats = useMemo(() => {
     const sourcePods = Array.isArray(pods) ? pods : []
-    let total = sourcePods.length
+    const total = sourcePods.length
     let ready = 0
     let notReady = 0
     let pending = 0
     let error = 0
     let restarting = 0
+    let completed = 0
     const reasonMap = new Map<string, number>()
 
     for (const pod of sourcePods) {
@@ -92,6 +93,9 @@ export default function Pods() {
 
       if (phase === 'Pending') pending += 1
       if (pod.restart_count > 0) restarting += 1
+      // Job/CronJob 의 종료된 pod (phase Succeeded). K8s 의 정상 종료 상태.
+      // 이전엔 어느 카드에도 안 잡혀 total 과 카드 합이 어긋남.
+      if (phase === 'Succeeded') completed += 1
 
       const isReadyRunning = phase === 'Running' && totalCount > 0 && readyCount === totalCount
       if (isReadyRunning) {
@@ -117,7 +121,7 @@ export default function Pods() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
 
-    return { total, ready, notReady, pending, error, restarting, topReasons }
+    return { total, ready, notReady, pending, error, restarting, completed, topReasons }
   }, [pods])
 
   const summaryCards = useMemo<SummaryCard[]>(
@@ -128,8 +132,9 @@ export default function Pods() {
       [tr('pods.stats.pending', 'Pending'), podStats.pending, 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
       [tr('pods.stats.error', 'Error'), podStats.error, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
       [tr('pods.stats.restarting', 'Restarting'), podStats.restarting, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('pods.stats.completed', 'Completed'), podStats.completed, 'border-slate-600/50 bg-slate-800/30', 'text-slate-300'],
     ],
-    [podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarting, podStats.total, tr],
+    [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarting, podStats.total, tr],
   )
 
   const createPodYamlTemplate = useMemo(() => {
@@ -343,7 +348,7 @@ spec:
         </p>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 shrink-0">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
           <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
             <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>

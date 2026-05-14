@@ -113,7 +113,8 @@
       "notReady": "Not Ready",
       "pending": "Pending",
       "error": "Error",
-      "restarting": "Restarting"
+      "restarting": "Restarting",
+      "completed": "Completed"
     },
     "noResults": "No pods found.",
     "exec": {
