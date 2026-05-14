@@ -677,6 +677,7 @@
     "stats": {
       "total": "전체",
       "healthy": "정상",
+      "idle": "유휴",
       "degraded": "저하",
       "unavailable": "비가용"
     },

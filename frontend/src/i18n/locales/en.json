@@ -672,6 +672,7 @@
     "stats": {
       "total": "Total",
       "healthy": "Healthy",
+      "idle": "Idle",
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },
