@@ -250,9 +250,12 @@ export default function Jobs() {
     let failed = 0
     for (const job of filteredJobs) {
       const status = job.status.toLowerCase()
+      // backend workloads_job.go 는 condition 기반으로 "Active" / "Complete" /
+      // "Failed" 를 보냄. "Active" 가 running 카드에 잡혀야 함 (기존엔 어디에도
+      // 매칭 안 되어 running 0 으로 표시되던 버그).
       if (status.includes('complete') || status.includes('succeed')) completed += 1
       else if (status.includes('fail')) failed += 1
-      else if (status.includes('run') || status.includes('pending') || status.includes('suspend')) running += 1
+      else if (status.includes('active') || status.includes('run') || status.includes('pending') || status.includes('suspend')) running += 1
     }
     return { total, completed, running, failed }
   }, [filteredJobs])
