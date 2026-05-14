@@ -13,39 +13,13 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'ready' | 'updated' | 'available' | 'status' | 'image' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function computeDeploymentStatus(replicas: number, readyReplicas: number): string {
-  if (readyReplicas === 0) return 'Unavailable'
-  if (readyReplicas !== replicas) return 'Degraded'
-  return 'Healthy'
-}
-
-function getDeploymentStatusColor(status: string): string {
-  const lower = String(status || '').toLowerCase()
-  if (lower.includes('healthy')) return 'badge-success'
-  if (lower.includes('degraded') || lower.includes('progress')) return 'badge-warning'
-  if (lower.includes('unavailable') || lower.includes('failed')) return 'badge-error'
-  return 'badge-info'
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  computeDeploymentStatus,
+  getDeploymentStatusColor,
+  type SortKey,
+} from './deployments/deploymentHelpers'
 
 function normalizeWatchDeploymentObject(obj: any): DeploymentInfo {
   if (
