@@ -13,50 +13,13 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'ready' | 'current' | 'desired' | 'updated' | 'available' | 'status' | 'images' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function computeDaemonSetStatus(daemonset: {
-  desired: number
-  ready: number
-  misscheduled?: number
-  unavailable?: number
-}): string {
-  const desired = daemonset.desired || 0
-  const ready = daemonset.ready || 0
-  const misscheduled = daemonset.misscheduled || 0
-  const unavailable = daemonset.unavailable || 0
-
-  if (desired === 0) return 'Idle'
-  if (ready === 0) return 'Unavailable'
-  if (ready !== desired || misscheduled > 0 || unavailable > 0) return 'Degraded'
-  return 'Healthy'
-}
-
-function getDaemonSetStatusColor(status: string): string {
-  const lower = String(status || '').toLowerCase()
-  if (lower.includes('healthy')) return 'badge-success'
-  if (lower.includes('degraded') || lower.includes('idle')) return 'badge-warning'
-  if (lower.includes('unavailable') || lower.includes('error') || lower.includes('failed')) return 'badge-error'
-  return 'badge-info'
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  computeDaemonSetStatus,
+  getDaemonSetStatusColor,
+  type SortKey,
+} from './daemonsets/daemonSetHelpers'
 
 function normalizeWatchDaemonSetObject(obj: any): DaemonSetInfo {
   if (
