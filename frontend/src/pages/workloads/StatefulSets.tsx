@@ -120,7 +120,10 @@ export default function StatefulSets() {
     let unavailable = 0
     for (const item of items) {
       const s = String(item.status || '').toLowerCase()
-      if (s.includes('healthy')) healthy += 1
+      // backend workloads_formatters.go 는 "Healthy" / "Idle" (replicas=0) /
+      // "Degraded" / "Unavailable" 4 값을 보냄. "Idle" 은 사용자가 의도해서
+      // replicas=0 으로 만든 정상 비활성 상태이므로 healthy 에 합산.
+      if (s.includes('healthy') || s.includes('idle')) healthy += 1
       else if (s.includes('unavailable')) unavailable += 1
       else degraded += 1
     }
