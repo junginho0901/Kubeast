@@ -253,7 +253,11 @@ export default function ReplicaSets() {
     let unavailable = 0
     for (const rs of filteredReplicaSets) {
       const status = (rs.status || '').toLowerCase()
-      if (status.includes('healthy')) healthy += 1
+      // backend workloads_formatters.go 는 "Healthy" / "Idle" (replicas=0) /
+      // "Degraded" / "Unavailable" 4 값을 보냄. "Idle" 은 deployment rollout
+      // 잔여 old-generation RS 가 흔히 가지는 정상 비활성 상태이므로 healthy
+      // 에 합산 (Degraded 카드 카운트 부풀림 방지).
+      if (status.includes('healthy') || status.includes('idle')) healthy += 1
       else if (status.includes('unavailable')) unavailable += 1
       else degraded += 1
     }
