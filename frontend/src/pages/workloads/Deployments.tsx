@@ -14,6 +14,7 @@ import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
   computeDeploymentStatus,
+  classifyDeploymentStatus,
   type SortKey,
 } from './deployments/deploymentHelpers'
 import { applyDeploymentWatchEvent } from './deployments/deploymentWatchNormalize'
@@ -81,12 +82,10 @@ export default function Deployments() {
     let unavailable = 0
 
     for (const dep of filteredDeployments) {
-      const status = String(
-        dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0),
-      ).toLowerCase()
-
-      if (status.includes('healthy')) healthy += 1
-      else if (status.includes('unavailable')) unavailable += 1
+      const status = dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0)
+      const bucket = classifyDeploymentStatus(status)
+      if (bucket === 'healthy') healthy += 1
+      else if (bucket === 'unavailable') unavailable += 1
       else degraded += 1
     }
 
@@ -160,10 +159,8 @@ export default function Deployments() {
     const summaryText = `${prefix}${nsLabel} Deployment ${summary.total}개 (Healthy ${summary.healthy}${unhealthy ? `, 문제 ${unhealthy}` : ''})`
 
     const problematic = (d: DeploymentInfo) => {
-      const status = String(
-        d.status || computeDeploymentStatus(d.replicas || 0, d.ready_replicas || 0),
-      ).toLowerCase()
-      return !status.includes('healthy')
+      const status = d.status || computeDeploymentStatus(d.replicas || 0, d.ready_replicas || 0)
+      return classifyDeploymentStatus(status) !== 'healthy'
     }
 
     return {
@@ -190,10 +187,7 @@ export default function Deployments() {
           interpret: (items) => {
             const out: string[] = []
             const arr = items as unknown as DeploymentInfo[]
-            const unavail = arr.filter((d) => {
-              const s = String(d.status || '').toLowerCase()
-              return s.includes('unavailable')
-            }).length
+            const unavail = arr.filter((d) => classifyDeploymentStatus(d.status || '') === 'unavailable').length
             if (unavail > 0) out.push(`⚠️ ${unavail}개 Deployment 가 Unavailable`)
             const partial = arr.filter((d) => {
               const ready = d.ready_replicas ?? 0

@@ -30,12 +30,25 @@ export function computeDeploymentStatus(replicas: number, readyReplicas: number)
   return 'Healthy'
 }
 
+// status 단어 매핑: backend k8s-service-go/internal/k8s/deployments.go 는
+// "Available" / "Progressing" / "Failed" 를, frontend 의 computeDeploymentStatus
+// fallback 은 "Healthy" / "Degraded" / "Unavailable" 을 만들어내므로 양쪽 모두 매핑.
+// "available" 은 "unavailable" 부분문자열이라 검사 순서 주의 (unavailable 먼저).
 export function getDeploymentStatusColor(status: string): string {
   const lower = String(status || '').toLowerCase()
-  if (lower.includes('healthy')) return 'badge-success'
-  if (lower.includes('degraded') || lower.includes('progress')) return 'badge-warning'
   if (lower.includes('unavailable') || lower.includes('failed')) return 'badge-error'
+  if (lower.includes('healthy') || lower.includes('available')) return 'badge-success'
+  if (lower.includes('degraded') || lower.includes('progress')) return 'badge-warning'
   return 'badge-info'
+}
+
+// summary 4 카드 (Total/Healthy/Degraded/Unavailable) 분류.
+// getDeploymentStatusColor 와 같은 키워드 매핑 사용.
+export function classifyDeploymentStatus(status: string): 'healthy' | 'degraded' | 'unavailable' {
+  const lower = String(status || '').toLowerCase()
+  if (lower.includes('unavailable') || lower.includes('failed')) return 'unavailable'
+  if (lower.includes('healthy') || lower.includes('available')) return 'healthy'
+  return 'degraded'
 }
 
 export function deploymentToWorkloadRawJson(deployment: DeploymentInfo): Record<string, unknown> {
