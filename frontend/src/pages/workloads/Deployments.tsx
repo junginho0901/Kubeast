@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type DeploymentInfo } from '@/services/api'
@@ -11,7 +11,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
   formatAge,
@@ -20,6 +20,7 @@ import {
   type SortKey,
 } from './deployments/deploymentHelpers'
 import { applyDeploymentWatchEvent } from './deployments/deploymentWatchNormalize'
+import { DeploymentFilters } from './deployments/DeploymentFilters'
 
 function deploymentToWorkloadRawJson(deployment: DeploymentInfo): Record<string, unknown> {
   return {
@@ -60,13 +61,11 @@ export default function Deployments() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
-  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -94,17 +93,6 @@ export default function Deployments() {
     query: 'watch=1',
     applyEvent: (prev, event) => applyDeploymentWatchEvent(prev as DeploymentInfo[] | undefined, event),
   })
-
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
 
   const filteredDeployments = useMemo(() => {
     if (!Array.isArray(deployments)) return [] as DeploymentInfo[]
@@ -355,66 +343,15 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
-        <div className="xl:col-span-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder={tr('deployments.searchPlaceholder', 'Search deployments by name...')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="relative" ref={namespaceDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
-          >
-            <span className="text-sm font-medium">
-              {selectedNamespace === 'all' ? tr('deployments.allNamespaces', 'All namespaces') : selectedNamespace}
-            </span>
-            <ChevronDown
-              className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-          {isNamespaceDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[240px] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedNamespace('all')
-                  setIsNamespaceDropdownOpen(false)
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
-              >
-                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
-                  {tr('deployments.allNamespaces', 'All namespaces')}
-                </span>
-              </button>
-              {(namespaces || []).map((ns) => (
-                <button
-                  key={ns.name}
-                  type="button"
-                  onClick={() => {
-                    setSelectedNamespace(ns.name)
-                    setIsNamespaceDropdownOpen(false)
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
-                >
-                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                  <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <DeploymentFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedNamespace={selectedNamespace}
+        setSelectedNamespace={setSelectedNamespace}
+        namespaces={namespaces}
+        searchPlaceholder={tr('deployments.searchPlaceholder', 'Search deployments by name...')}
+        allNamespacesLabel={tr('deployments.allNamespaces', 'All namespaces')}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
