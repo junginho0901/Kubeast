@@ -118,7 +118,8 @@
       "notReady": "준비 안 됨",
       "pending": "대기",
       "error": "오류",
-      "restarting": "재시작 중"
+      "restarting": "재시작 중",
+      "completed": "완료"
     },
     "noResults": "파드가 없습니다.",
     "exec": {
@@ -598,6 +599,7 @@
     "stats": {
       "total": "전체",
       "healthy": "정상",
+      "idle": "유휴",
       "degraded": "저하",
       "unavailable": "비가용"
     },
@@ -640,6 +642,7 @@
     "stats": {
       "total": "전체",
       "healthy": "정상",
+      "idle": "유휴",
       "degraded": "저하",
       "unavailable": "비가용"
     },

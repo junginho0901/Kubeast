@@ -113,7 +113,8 @@
       "notReady": "Not Ready",
       "pending": "Pending",
       "error": "Error",
-      "restarting": "Restarting"
+      "restarting": "Restarting",
+      "completed": "Completed"
     },
     "noResults": "No pods found.",
     "exec": {
@@ -593,6 +594,7 @@
     "stats": {
       "total": "Total",
       "healthy": "Healthy",
+      "idle": "Idle",
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },
@@ -635,6 +637,7 @@
     "stats": {
       "total": "Total",
       "healthy": "Healthy",
+      "idle": "Idle",
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },

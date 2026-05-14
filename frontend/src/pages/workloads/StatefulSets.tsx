@@ -116,18 +116,20 @@ export default function StatefulSets() {
     const items = Array.isArray(filtered) ? filtered : []
     const total = items.length
     let healthy = 0
+    let idle = 0
     let degraded = 0
     let unavailable = 0
     for (const item of items) {
       const s = String(item.status || '').toLowerCase()
       // backend workloads_formatters.go 는 "Healthy" / "Idle" (replicas=0) /
-      // "Degraded" / "Unavailable" 4 값을 보냄. "Idle" 은 사용자가 의도해서
-      // replicas=0 으로 만든 정상 비활성 상태이므로 healthy 에 합산.
-      if (s.includes('healthy') || s.includes('idle')) healthy += 1
+      // "Degraded" / "Unavailable" 4 값을 보냄. Idle 은 사용자가 인지해야 할
+      // 비활성 상태이므로 별도 카드 (5 카드 layout, ReplicaSets/DaemonSets 와 동일).
+      if (s.includes('healthy')) healthy += 1
+      else if (s.includes('idle')) idle += 1
       else if (s.includes('unavailable')) unavailable += 1
       else degraded += 1
     }
-    return { total, healthy, degraded, unavailable }
+    return { total, healthy, idle, degraded, unavailable }
   }, [filtered])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -306,7 +308,7 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-xs text-slate-400">{tr('statefulsets.stats.total', 'Total')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
@@ -314,6 +316,10 @@ spec:
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-xs text-emerald-300">{tr('statefulsets.stats.healthy', 'Healthy')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.healthy}</p>
+        </div>
+        <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
+          <p className="text-xs text-slate-300">{tr('statefulsets.stats.idle', 'Idle')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.idle}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-xs text-amber-300">{tr('statefulsets.stats.degraded', 'Degraded')}</p>
