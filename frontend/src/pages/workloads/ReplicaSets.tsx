@@ -249,15 +249,23 @@ export default function ReplicaSets() {
   const summary = useMemo(() => {
     const total = filteredReplicaSets.length
     let healthy = 0
+    let idle = 0
     let degraded = 0
     let unavailable = 0
     for (const rs of filteredReplicaSets) {
       const status = (rs.status || '').toLowerCase()
+      // backend workloads_formatters.go 는 "Healthy" / "Idle" (replicas=0) /
+      // "Degraded" / "Unavailable" 4 값을 보냄. ReplicaSet 은 deployment rollout
+      // 마다 old-generation RS 가 replicas=0 으로 누적되어 Idle 이 매우 많음
+      // (deployment 1개 = RS N개 중 N-1개가 Idle). Healthy 에 합산하면 카운트가
+      // 부풀려져서 (e.g. 12 active vs 200+ idle) 운영 가시성이 떨어지므로 별도
+      // 카드로 분리 — DS/STS/Job 과 다른 layout (4→5 카드).
       if (status.includes('healthy')) healthy += 1
+      else if (status.includes('idle')) idle += 1
       else if (status.includes('unavailable')) unavailable += 1
       else degraded += 1
     }
-    return { total, healthy, degraded, unavailable }
+    return { total, healthy, idle, degraded, unavailable }
   }, [filteredReplicaSets])
 
   const handleSort = (key: NonNullable<SortKey>) => {
@@ -507,7 +515,7 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('replicasets.stats.total', 'Total')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
@@ -515,6 +523,10 @@ spec:
         <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('replicasets.stats.healthy', 'Healthy')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.healthy}</p>
+        </div>
+        <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('replicasets.stats.idle', 'Idle')}</p>
+          <p className="text-lg text-white font-semibold mt-1">{summary.idle}</p>
         </div>
         <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('replicasets.stats.degraded', 'Degraded')}</p>
