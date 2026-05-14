@@ -82,7 +82,11 @@ export default function DaemonSets() {
     let unavailable = 0
     for (const daemonset of filteredDaemonSets) {
       const status = (daemonset.status || '').toLowerCase()
-      if (status.includes('healthy')) healthy += 1
+      // backend workloads_formatters.go 는 "Healthy" / "Idle" (desired=0) /
+      // "Degraded" / "Unavailable" 4 값을 보냄. "Idle" 은 사용자가 의도해서
+      // desired=0 으로 만든 정상 비활성 상태이므로 healthy 에 합산 (Degraded
+      // 카드의 "문제 있음" 카운트가 부풀려지지 않도록).
+      if (status.includes('healthy') || status.includes('idle')) healthy += 1
       else if (status.includes('unavailable')) unavailable += 1
       else degraded += 1
     }
