@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ReplicaSetInfo } from '@/services/api'
@@ -7,171 +6,18 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey =
-  | null
-  | 'name'
-  | 'current'
-  | 'desired'
-  | 'ready'
-  | 'available'
-  | 'status'
-  | 'containers'
-  | 'images'
-  | 'selector'
-  | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function computeReplicaSetStatus(rs: {
-  replicas: number
-  ready_replicas: number
-}): string {
-  const desired = rs.replicas || 0
-  const ready = rs.ready_replicas || 0
-  if (desired === 0 && ready === 0) return 'Idle'
-  if (desired > 0 && ready === 0) return 'Unavailable'
-  if (ready !== desired) return 'Degraded'
-  return 'Healthy'
-}
-
-function getReplicaSetStatusColor(status: string): string {
-  const lower = String(status || '').toLowerCase()
-  if (lower.includes('healthy')) return 'badge-success'
-  if (lower.includes('degraded') || lower.includes('idle')) return 'badge-warning'
-  if (lower.includes('unavailable') || lower.includes('error') || lower.includes('failed')) return 'badge-error'
-  return 'badge-info'
-}
-
-function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.namespace === 'string' &&
-    typeof obj?.replicas === 'number'
-  ) {
-    return {
-      current_replicas: obj?.current_replicas ?? obj?.replicas ?? 0,
-      ...obj,
-    } as ReplicaSetInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-  const templateSpec = spec?.template?.spec ?? {}
-  const containers = Array.isArray(templateSpec?.containers) ? templateSpec.containers : []
-
-  const replicas = spec?.replicas ?? 0
-  const currentReplicas = status?.replicas ?? 0
-  const readyReplicas = status?.readyReplicas ?? 0
-  const availableReplicas = status?.availableReplicas ?? 0
-
-  const ownerReferences = Array.isArray(metadata?.ownerReferences) ? metadata.ownerReferences : []
-  const owner = ownerReferences.length > 0 && ownerReferences[0]?.kind && ownerReferences[0]?.name
-    ? `${ownerReferences[0].kind}/${ownerReferences[0].name}`
-    : null
-
-  const selector = spec?.selector?.matchLabels ?? {}
-  const images = containers.map((container: any) => container?.image).filter(Boolean)
-  const containerNames = containers.map((container: any) => container?.name).filter(Boolean)
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    current_replicas: currentReplicas,
-    replicas,
-    ready_replicas: readyReplicas,
-    available_replicas: availableReplicas,
-    image: images[0] ?? '',
-    images,
-    container_names: containerNames,
-    owner,
-    labels: metadata?.labels ?? {},
-    selector,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    status: computeReplicaSetStatus({ replicas, ready_replicas: readyReplicas }),
-  }
-}
-
-function applyReplicaSetWatchEvent(
-  prev: ReplicaSetInfo[] | undefined,
-  event: { type?: string; object?: any },
-): ReplicaSetInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchReplicaSetObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function replicaSetToWorkloadRawJson(replicaset: ReplicaSetInfo): Record<string, unknown> {
-  const labels = replicaset.selector || { app: replicaset.name }
-  const containers = (replicaset.images || []).map((image, idx) => ({
-    name: replicaset.container_names?.[idx] || `container-${idx + 1}`,
-    image,
-  }))
-
-  return {
-    apiVersion: 'apps/v1',
-    kind: 'ReplicaSet',
-    metadata: {
-      name: replicaset.name,
-      namespace: replicaset.namespace,
-      labels: replicaset.labels || {},
-      creationTimestamp: replicaset.created_at,
-    },
-    spec: {
-      replicas: replicaset.replicas,
-      selector: { matchLabels: labels },
-      template: {
-        metadata: { labels },
-        spec: { containers },
-      },
-    },
-    status: {
-      replicas: replicaset.current_replicas,
-      readyReplicas: replicaset.ready_replicas,
-      availableReplicas: replicaset.available_replicas,
-    },
-  }
-}
+import { Plus, RefreshCw } from 'lucide-react'
+import {
+  parseAgeSeconds,
+  type SortKey,
+} from './replicasets/replicaSetHelpers'
+import { applyReplicaSetWatchEvent } from './replicasets/replicaSetWatchNormalize'
+import { ReplicaSetFilters } from './replicasets/ReplicaSetFilters'
+import { ReplicaSetTable } from './replicasets/ReplicaSetTable'
 
 export default function ReplicaSets() {
   const queryClient = useQueryClient()
@@ -182,13 +28,11 @@ export default function ReplicaSets() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
-  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -216,17 +60,6 @@ export default function ReplicaSets() {
     query: 'watch=1',
     applyEvent: (prev, event) => applyReplicaSetWatchEvent(prev as ReplicaSetInfo[] | undefined, event),
   })
-
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
 
   const filteredReplicaSets = useMemo(() => {
     if (!Array.isArray(replicasets)) return [] as ReplicaSetInfo[]
@@ -267,26 +100,6 @@ export default function ReplicaSets() {
     }
     return { total, healthy, idle, degraded, unavailable }
   }, [filteredReplicaSets])
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
 
   const sortedReplicaSets = useMemo(() => {
     if (!sortKey) return filteredReplicaSets
@@ -456,64 +269,15 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
-        <div className="xl:col-span-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder={tr('replicasets.searchPlaceholder', 'Search replicasets by name...')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="relative" ref={namespaceDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setIsNamespaceDropdownOpen((v) => !v)}
-            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
-          >
-            <span className="text-sm font-medium">
-              {selectedNamespace === 'all' ? tr('replicasets.allNamespaces', 'All namespaces') : selectedNamespace}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {isNamespaceDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[240px] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedNamespace('all')
-                  setIsNamespaceDropdownOpen(false)
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
-              >
-                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
-                  {tr('replicasets.allNamespaces', 'All namespaces')}
-                </span>
-              </button>
-              {(namespaces || []).map((ns) => (
-                <button
-                  key={ns.name}
-                  type="button"
-                  onClick={() => {
-                    setSelectedNamespace(ns.name)
-                    setIsNamespaceDropdownOpen(false)
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
-                >
-                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                  <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <ReplicaSetFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedNamespace={selectedNamespace}
+        setSelectedNamespace={setSelectedNamespace}
+        namespaces={namespaces}
+        searchPlaceholder={tr('replicasets.searchPlaceholder', 'Search replicasets by name...')}
+        allNamespacesLabel={tr('replicasets.allNamespaces', 'All namespaces')}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
@@ -547,126 +311,26 @@ spec:
         </p>
       )}
 
-      <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[1480px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                {showNamespaceColumn && <th className="text-left py-3 px-4 w-[140px]">{tr('replicasets.table.namespace', 'Namespace')}</th>}
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('current')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.current', 'Current')}{renderSortIcon('current')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('desired')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.desired', 'Desired')}{renderSortIcon('desired')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.ready', 'Ready')}{renderSortIcon('ready')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('available')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.available', 'Available')}{renderSortIcon('available')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.status', 'Status')}{renderSortIcon('status')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.images', 'Images')}{renderSortIcon('images')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('replicasets.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedReplicaSets.map((rs, idx) => (
-                <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                  key={`${rs.namespace}/${rs.name}`}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
-                    kind: 'ReplicaSet',
-                    name: rs.name,
-                    namespace: rs.namespace,
-                    rawJson: replicaSetToWorkloadRawJson(rs),
-                  })}
-                >
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{rs.namespace}</td>}
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rs.name}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{rs.current_replicas ?? 0}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{rs.replicas ?? 0}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{rs.ready_replicas ?? 0}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{rs.available_replicas ?? 0}</td>
-                  <td className="py-3 px-4"><span className={`badge ${getReplicaSetStatusColor(rs.status)}`}>{rs.status || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.container_names || []).join(', ') || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{rs.owner || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(rs.created_at)}</td>
-                </tr>
-              ))}
-              {isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 13 : 12} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {sortedReplicaSets.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 13 : 12} className="py-6 px-4 text-center text-slate-400">
-                    {tr('replicasets.noResults', 'No replicasets found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedReplicaSets.length} columnCount={11 + (showNamespaceColumn ? 1 : 0)} />
-          </table>
-        </div>
-
-        {sortedReplicaSets.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedReplicaSets.length),
-                total: sortedReplicaSets.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <ReplicaSetTable
+        pagedReplicaSets={pagedReplicaSets}
+        sortedReplicaSetsLength={sortedReplicaSets.length}
+        isLoading={isLoading}
+        showNamespaceColumn={showNamespaceColumn}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        openDetail={openDetail}
+        tr={tr}
+      />
 
       {createDialogOpen && (
         <ResourceYamlCreateDialog
