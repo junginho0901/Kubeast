@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle, ChevronDown, Loader2, Plus, RefreshCw, Search } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Loader2, Plus, RefreshCw, Search } from 'lucide-react'
 import { api, type StatefulSetInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -10,6 +10,16 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
+
+type SortKey =
+  | null
+  | 'name'
+  | 'ready'
+  | 'upToDate'
+  | 'available'
+  | 'status'
+  | 'age'
+  | 'service'
 
 export default function StatefulSets() {
   const queryClient = useQueryClient()
@@ -25,6 +35,8 @@ export default function StatefulSets() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
+  const [sortKey, setSortKey] = useState<SortKey>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const namespaceDropdownRef = useRef<HTMLDivElement>(null)
   const { has } = usePermission()
   const canWrite = has('resource.statefulset.create')
@@ -83,18 +95,43 @@ export default function StatefulSets() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isNamespaceDropdownOpen])
 
+  const parseAgeSeconds = (iso?: string | null): number => {
+    if (!iso) return 0
+    const ms = new Date(iso).getTime()
+    if (!Number.isFinite(ms)) return 0
+    return Math.max(0, Math.floor((Date.now() - ms) / 1000))
+  }
+
   const formatAge = (iso?: string | null) => {
     if (!iso) return '-'
-    const createdAt = new Date(iso)
-    const createdMs = createdAt.getTime()
-    if (Number.isNaN(createdMs)) return '-'
-    const diffSec = Math.max(0, Math.floor((Date.now() - createdMs) / 1000))
+    const diffSec = parseAgeSeconds(iso)
+    if (diffSec === 0 && !iso) return '-'
     const days = Math.floor(diffSec / 86400)
     const hours = Math.floor((diffSec % 86400) / 3600)
     const minutes = Math.floor((diffSec % 3600) / 60)
     if (days > 0) return `${days}d ${hours}h`
     if (hours > 0) return `${hours}h ${minutes}m`
     return `${minutes}m`
+  }
+
+  const handleSort = (key: NonNullable<SortKey>) => {
+    if (sortKey !== key) {
+      setSortKey(key)
+      setSortDir('asc')
+      return
+    }
+    if (sortDir === 'asc') {
+      setSortDir('desc')
+      return
+    }
+    setSortKey(null)
+  }
+
+  const renderSortIcon = (key: NonNullable<SortKey>) => {
+    if (sortKey !== key) return null
+    return sortDir === 'asc'
+      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
+      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
   }
 
   const getStatusColor = (status?: string | null) => {
@@ -132,7 +169,43 @@ export default function StatefulSets() {
     return { total, healthy, idle, degraded, unavailable }
   }, [filtered])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered
+    const list = [...filtered]
+    const getValue = (sts: StatefulSetInfo): string | number => {
+      switch (sortKey) {
+        case 'name':
+          return sts.name
+        case 'ready':
+          return (sts.replicas || 0) === 0 ? 0 : (sts.ready_replicas || 0) / (sts.replicas || 1)
+        case 'upToDate':
+          return (sts.replicas || 0) === 0 ? 0 : (sts.updated_replicas ?? sts.current_replicas ?? 0) / (sts.replicas || 1)
+        case 'available':
+          return sts.available_replicas || 0
+        case 'status':
+          return String(sts.status || '')
+        case 'age':
+          return parseAgeSeconds(sts.created_at)
+        case 'service':
+          return String(sts.service_name || '')
+        default:
+          return ''
+      }
+    }
+    list.sort((a, b) => {
+      const av = getValue(a)
+      const bv = getValue(b)
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return sortDir === 'asc' ? av - bv : bv - av
+      }
+      return sortDir === 'asc'
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
+    })
+    return list
+  }, [filtered, sortKey, sortDir])
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
   useEffect(() => {
     setCurrentPage(1)
   }, [searchQuery, selectedNamespace, pageSize])
@@ -142,8 +215,8 @@ export default function StatefulSets() {
 
   const paged = useMemo(() => {
     const start = (currentPage - 1) * pageSize
-    return filtered.slice(start, start + pageSize)
-  }, [filtered, currentPage, pageSize])
+    return sorted.slice(start, start + pageSize)
+  }, [sorted, currentPage, pageSize])
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
@@ -337,13 +410,27 @@ spec:
           <thead className="text-slate-400">
             <tr>
               {showNamespaceColumn && <th className="text-left py-3 px-4 w-[15%]">{tr('statefulsets.table.namespace', 'Namespace')}</th>}
-              <th className="text-left py-3 px-4 w-[20%]">{tr('statefulsets.table.name', 'Name')}</th>
-              <th className="text-left py-3 px-4 w-[10%]">{tr('statefulsets.table.ready', 'Ready')}</th>
-              <th className="text-left py-3 px-4 w-[11%]">{tr('statefulsets.table.upToDate', 'Up to date')}</th>
-              <th className="text-left py-3 px-4 w-[11%]">{tr('statefulsets.table.available', 'Available')}</th>
-              <th className="text-left py-3 px-4 w-[10%]">{tr('statefulsets.table.status', 'Status')}</th>
-              <th className="text-left py-3 px-4 w-[10%]">{tr('statefulsets.table.age', 'Age')}</th>
-              <th className="text-left py-3 px-4 w-[13%]">{tr('statefulsets.table.service', 'Service')}</th>
+              <th className="text-left py-3 px-4 w-[20%] cursor-pointer" onClick={() => handleSort('name')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.name', 'Name')}{renderSortIcon('name')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[10%] cursor-pointer" onClick={() => handleSort('ready')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.ready', 'Ready')}{renderSortIcon('ready')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[11%] cursor-pointer" onClick={() => handleSort('upToDate')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.upToDate', 'Up to date')}{renderSortIcon('upToDate')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[11%] cursor-pointer" onClick={() => handleSort('available')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.available', 'Available')}{renderSortIcon('available')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[10%] cursor-pointer" onClick={() => handleSort('status')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.status', 'Status')}{renderSortIcon('status')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[10%] cursor-pointer" onClick={() => handleSort('age')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.age', 'Age')}{renderSortIcon('age')}</span>
+              </th>
+              <th className="text-left py-3 px-4 w-[13%] cursor-pointer" onClick={() => handleSort('service')}>
+                <span className="inline-flex items-center gap-1">{tr('statefulsets.table.service', 'Service')}{renderSortIcon('service')}</span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
