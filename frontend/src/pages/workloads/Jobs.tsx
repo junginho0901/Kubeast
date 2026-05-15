@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type JobInfo } from '@/services/api'
@@ -7,170 +6,19 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'completions' | 'status' | 'duration' | 'containers' | 'images' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatDuration(durationSeconds?: number | null): string {
-  if (durationSeconds == null || durationSeconds < 0) return '-'
-  const sec = Math.floor(durationSeconds)
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  const s = sec % 60
-  if (h > 0) return `${h}h ${m}m`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
-}
-
-function computeJobStatus(job: {
-  status?: string
-  active?: number
-  failed?: number
-  succeeded?: number
-}): string {
-  const explicit = String(job.status || '')
-  if (explicit) return explicit
-  if ((job.failed || 0) > 0) return 'Failed'
-  if ((job.succeeded || 0) > 0) return 'Complete'
-  if ((job.active || 0) > 0) return 'Running'
-  return 'Pending'
-}
-
-function getJobStatusColor(status: string): string {
-  const lower = String(status || '').toLowerCase()
-  if (lower.includes('complete') || lower.includes('succeeded')) return 'badge-success'
-  if (lower.includes('running') || lower.includes('pending') || lower.includes('suspend')) return 'badge-warning'
-  if (lower.includes('fail') || lower.includes('error')) return 'badge-error'
-  return 'badge-info'
-}
-
-function normalizeWatchJobObject(obj: any): JobInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.namespace === 'string' && typeof obj?.status === 'string') {
-    return obj as JobInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-  const templateSpec = spec?.template?.spec ?? {}
-  const containers = Array.isArray(templateSpec?.containers) ? templateSpec.containers : []
-
-  let durationSeconds: number | null = null
-  const startTime = status?.startTime ? String(status.startTime) : null
-  const completionTime = status?.completionTime ? String(status.completionTime) : null
-  if (startTime && completionTime) {
-    const start = new Date(startTime).getTime()
-    const end = new Date(completionTime).getTime()
-    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
-      durationSeconds = Math.floor((end - start) / 1000)
-    }
-  }
-
-  const normalized: JobInfo = {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    completions: spec?.completions ?? obj?.completions ?? null,
-    parallelism: spec?.parallelism ?? obj?.parallelism ?? null,
-    active: status?.active ?? obj?.active ?? 0,
-    succeeded: status?.succeeded ?? obj?.succeeded ?? 0,
-    failed: status?.failed ?? obj?.failed ?? 0,
-    status: '',
-    containers: containers.map((container: any) => container?.name).filter(Boolean),
-    images: containers.map((container: any) => container?.image).filter(Boolean),
-    start_time: startTime ?? obj?.start_time ?? null,
-    completion_time: completionTime ?? obj?.completion_time ?? null,
-    duration_seconds: durationSeconds ?? obj?.duration_seconds ?? null,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-  }
-
-  normalized.status = computeJobStatus(normalized)
-  return normalized
-}
-
-function applyJobWatchEvent(
-  prev: JobInfo[] | undefined,
-  event: { type?: string; object?: any },
-): JobInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchJobObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function jobToWorkloadRawJson(job: JobInfo): Record<string, unknown> {
-  const labels = { app: job.name }
-  const containers = (job.images || []).map((image, idx) => ({
-    name: job.containers?.[idx] || `container-${idx + 1}`,
-    image,
-  }))
-
-  return {
-    apiVersion: 'batch/v1',
-    kind: 'Job',
-    metadata: {
-      name: job.name,
-      namespace: job.namespace,
-      labels,
-      creationTimestamp: job.created_at,
-    },
-    spec: {
-      completions: job.completions,
-      parallelism: job.parallelism,
-      template: {
-        metadata: { labels },
-        spec: {
-          restartPolicy: 'Never',
-          containers,
-        },
-      },
-    },
-    status: {
-      active: job.active,
-      succeeded: job.succeeded,
-      failed: job.failed,
-      startTime: job.start_time,
-      completionTime: job.completion_time,
-    },
-  }
-}
+import { Plus, RefreshCw } from 'lucide-react'
+import {
+  parseAgeSeconds,
+  computeJobStatus,
+  type SortKey,
+} from './jobs/jobHelpers'
+import { applyJobWatchEvent } from './jobs/jobWatchNormalize'
+import { JobFilters } from './jobs/JobFilters'
+import { JobTable } from './jobs/JobTable'
 
 export default function Jobs() {
   const queryClient = useQueryClient()
@@ -181,13 +29,11 @@ export default function Jobs() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
-  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
 
   const { data: namespaces } = useQuery({
     queryKey: ['namespaces'],
@@ -216,18 +62,10 @@ export default function Jobs() {
     applyEvent: (prev, event) => applyJobWatchEvent(prev as JobInfo[] | undefined, event),
   })
 
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
-
-  const normalizedJobs = useMemo(() => (Array.isArray(jobs) ? jobs.map((job) => ({ ...job, status: computeJobStatus(job) })) : []), [jobs])
+  const normalizedJobs = useMemo(
+    () => (Array.isArray(jobs) ? jobs.map((job) => ({ ...job, status: computeJobStatus(job) })) : []),
+    [jobs],
+  )
 
   const filteredJobs = useMemo(() => {
     if (!searchQuery.trim()) return normalizedJobs
@@ -259,26 +97,6 @@ export default function Jobs() {
     }
     return { total, completed, running, failed }
   }, [filteredJobs])
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
 
   const sortedJobs = useMemo(() => {
     if (!sortKey) return filteredJobs
@@ -451,62 +269,15 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
-        <div className="xl:col-span-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder={tr('jobs.searchPlaceholder', 'Search jobs by name...')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="relative" ref={namespaceDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setIsNamespaceDropdownOpen((v) => !v)}
-            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2"
-          >
-            <span className="text-sm font-medium">
-              {selectedNamespace === 'all' ? tr('jobs.allNamespaces', 'All namespaces') : selectedNamespace}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {isNamespaceDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[240px] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedNamespace('all')
-                  setIsNamespaceDropdownOpen(false)
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
-              >
-                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>{tr('jobs.allNamespaces', 'All namespaces')}</span>
-              </button>
-              {(namespaces || []).map((ns) => (
-                <button
-                  key={ns.name}
-                  type="button"
-                  onClick={() => {
-                    setSelectedNamespace(ns.name)
-                    setIsNamespaceDropdownOpen(false)
-                  }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
-                >
-                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                  <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <JobFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedNamespace={selectedNamespace}
+        setSelectedNamespace={setSelectedNamespace}
+        namespaces={namespaces}
+        searchPlaceholder={tr('jobs.searchPlaceholder', 'Search jobs by name...')}
+        allNamespacesLabel={tr('jobs.allNamespaces', 'All namespaces')}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
@@ -536,116 +307,26 @@ spec:
         </p>
       )}
 
-      <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[1260px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                {showNamespaceColumn && <th className="text-left py-3 px-4 w-[140px]">{tr('jobs.table.namespace', 'Namespace')}</th>}
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('completions')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.completions', 'Completions')}{renderSortIcon('completions')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.status', 'Status')}{renderSortIcon('status')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('duration')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('jobs.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedJobs.map((job, idx) => (
-                <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                  key={`${job.namespace}/${job.name}`}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
-                    kind: 'Job',
-                    name: job.name,
-                    namespace: job.namespace,
-                    rawJson: jobToWorkloadRawJson(job),
-                  })}
-                >
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{job.namespace}</td>}
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{job.name}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">
-                    {(job.succeeded ?? 0)}/{(job.completions ?? '-')}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${getJobStatusColor(job.status)}`}>{job.status || '-'}</span>
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatDuration(job.duration_seconds)}</td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(job.created_at)}</td>
-                </tr>
-              ))}
-              {isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {sortedJobs.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                    {tr('jobs.noResults', 'No jobs found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedJobs.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
-          </table>
-        </div>
-
-        {sortedJobs.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedJobs.length),
-                total: sortedJobs.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <JobTable
+        pagedJobs={pagedJobs}
+        sortedJobsLength={sortedJobs.length}
+        isLoading={isLoading}
+        showNamespaceColumn={showNamespaceColumn}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        openDetail={openDetail}
+        tr={tr}
+      />
 
       {createDialogOpen && (
         <ResourceYamlCreateDialog
