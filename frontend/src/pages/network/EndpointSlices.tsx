@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type EndpointSliceInfo } from '@/services/api'
@@ -13,203 +12,18 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import {
+  endpointSliceToRawJson,
+  formatAge,
+  formatEndpointPreview,
+  formatPorts,
+  parseAgeSeconds,
+  resolveNotReadyCount,
+  type SortKey,
+} from './endpointslices/endpointSliceHelpers'
+import { applyEndpointSliceWatchEvent } from './endpointslices/endpointSliceWatchNormalize'
 
-type SortKey =
-  | null
-  | 'name'
-  | 'namespace'
-  | 'service'
-  | 'addressType'
-  | 'endpoints'
-  | 'ready'
-  | 'notReady'
-  | 'ports'
-  | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatPorts(ports: EndpointSliceInfo['ports']): string {
-  if (!Array.isArray(ports) || ports.length === 0) return '-'
-  return ports
-    .map((p) => {
-      const app = p.app_protocol ? ` (${p.app_protocol})` : ''
-      return `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}${app}`
-    })
-    .join(', ')
-}
-
-function formatEndpointPreview(row: EndpointSliceInfo): string {
-  const total = row.endpoints_total || 0
-  const endpoints = Array.isArray(row.endpoints) ? row.endpoints : []
-  if (total === 0 || endpoints.length === 0) return '-'
-  const addresses = endpoints.flatMap((ep) => ep.addresses || []).filter(Boolean)
-  if (addresses.length === 0) return `${total} endpoint${total === 1 ? '' : 's'}`
-  const preview = addresses.slice(0, 3).join(', ')
-  if (addresses.length <= 3) return preview
-  return `${preview} +${addresses.length - 3}`
-}
-
-function resolveNotReadyCount(slice: EndpointSliceInfo): number {
-  return slice.endpoints_not_ready ?? Math.max((slice.endpoints_total || 0) - (slice.endpoints_ready || 0), 0)
-}
-
-function normalizeWatchEndpointSliceObject(obj: any): EndpointSliceInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.namespace === 'string' &&
-    typeof obj?.endpoints_total === 'number' &&
-    typeof obj?.endpoints_ready === 'number' &&
-    Array.isArray(obj?.ports)
-  ) {
-    return {
-      ...obj,
-      endpoints_not_ready: typeof obj?.endpoints_not_ready === 'number'
-        ? obj.endpoints_not_ready
-        : Math.max((obj?.endpoints_total || 0) - (obj?.endpoints_ready || 0), 0),
-    } as EndpointSliceInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const labels = (metadata?.labels ?? {}) as Record<string, string>
-  const annotations = (metadata?.annotations ?? {}) as Record<string, string>
-  const rawEndpoints = Array.isArray(obj?.endpoints) ? obj.endpoints : []
-  const rawPorts = Array.isArray(obj?.ports) ? obj.ports : []
-
-  const endpoints = rawEndpoints.map((ep: any) => {
-    const cond = ep?.conditions ?? {}
-    const ref = ep?.targetRef ?? ep?.target_ref
-    const topology = ep?.topology ?? {}
-    return {
-      addresses: Array.isArray(ep?.addresses) ? ep.addresses : [],
-      hostname: ep?.hostname,
-      node_name: ep?.nodeName || ep?.node_name,
-      zone: ep?.zone || topology?.['topology.kubernetes.io/zone'] || topology?.['failure-domain.beta.kubernetes.io/zone'],
-      conditions: {
-        ready: cond?.ready,
-        serving: cond?.serving,
-        terminating: cond?.terminating,
-      },
-      target_ref: ref
-        ? {
-            kind: ref?.kind,
-            name: ref?.name,
-            namespace: ref?.namespace,
-            uid: ref?.uid,
-          }
-        : null,
-    }
-  })
-
-  let ready = 0
-  for (const ep of endpoints) {
-    const condReady = ep?.conditions?.ready
-    if (condReady === true || condReady == null) ready += 1
-  }
-
-  const ports = rawPorts.map((p: any) => ({
-    name: p?.name,
-    port: p?.port,
-    protocol: p?.protocol,
-    app_protocol: p?.appProtocol || p?.app_protocol,
-  }))
-
-  const total = endpoints.length
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    service_name: labels?.['kubernetes.io/service-name'] ?? obj?.service_name,
-    managed_by: labels?.['endpointslice.kubernetes.io/managed-by'] ?? obj?.managed_by,
-    address_type: obj?.addressType ?? obj?.address_type,
-    endpoints_total: total,
-    endpoints_ready: ready,
-    endpoints_not_ready: Math.max(total - ready, 0),
-    ports,
-    endpoints,
-    labels,
-    annotations,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-  }
-}
-
-function applyEndpointSliceWatchEvent(prev: EndpointSliceInfo[] | undefined, event: { type?: string; object?: any }): EndpointSliceInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchEndpointSliceObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function endpointSliceToRawJson(slice: EndpointSliceInfo): Record<string, unknown> {
-  return {
-    apiVersion: 'discovery.k8s.io/v1',
-    kind: 'EndpointSlice',
-    metadata: {
-      name: slice.name,
-      namespace: slice.namespace,
-      creationTimestamp: slice.created_at,
-      labels: slice.labels || {},
-      annotations: slice.annotations || {},
-    },
-    service_name: slice.service_name,
-    managed_by: slice.managed_by,
-    address_type: slice.address_type,
-    endpoints_total: slice.endpoints_total,
-    endpoints_ready: slice.endpoints_ready,
-    endpoints_not_ready: slice.endpoints_not_ready ?? Math.max((slice.endpoints_total || 0) - (slice.endpoints_ready || 0), 0),
-    addressType: slice.address_type,
-    endpoints: (slice.endpoints || []).map((ep) => ({
-      addresses: ep.addresses || [],
-      hostname: ep.hostname,
-      nodeName: ep.node_name,
-      zone: ep.zone,
-      conditions: {
-        ready: ep.conditions?.ready,
-        serving: ep.conditions?.serving,
-        terminating: ep.conditions?.terminating,
-      },
-      targetRef: ep.target_ref || undefined,
-    })),
-    ports: (slice.ports || []).map((p) => ({
-      name: p.name,
-      port: p.port,
-      protocol: p.protocol,
-      appProtocol: p.app_protocol,
-    })),
-  }
-}
 
 export default function EndpointSlices() {
   const queryClient = useQueryClient()
