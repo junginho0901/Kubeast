@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type EndpointInfo } from '@/services/api'
@@ -13,188 +12,18 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import {
+  endpointToRawJson,
+  formatAddresses,
+  formatAge,
+  formatPorts,
+  getEndpointAddressCount,
+  parseAgeSeconds,
+  type SortKey,
+} from './endpoints/endpointHelpers'
+import { applyEndpointWatchEvent } from './endpoints/endpointWatchNormalize'
 
-type SortKey = null | 'name' | 'namespace' | 'ready' | 'notReady' | 'addresses' | 'ports' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatPorts(ports: EndpointInfo['ports']): string {
-  if (!Array.isArray(ports) || ports.length === 0) return '-'
-  return ports
-    .map((p) => `${p.name || '-'}:${p.port ?? '-'}${p.protocol ? `/${p.protocol}` : ''}`)
-    .join(', ')
-}
-
-function formatAddresses(row: EndpointInfo): string {
-  const ready = row.ready_addresses || []
-  const notReady = row.not_ready_addresses || []
-  if (ready.length === 0 && notReady.length === 0) return '-'
-  if (notReady.length === 0) return ready.join(', ')
-  return `${ready.join(', ')} | not-ready: ${notReady.join(', ')}`
-}
-
-function getEndpointAddressCount(row: EndpointInfo): number {
-  return (row.ready_count || 0) + (row.not_ready_count || 0)
-}
-
-function normalizeWatchEndpointObject(obj: any): EndpointInfo {
-  if (
-    typeof obj?.name === 'string' &&
-    typeof obj?.namespace === 'string' &&
-    typeof obj?.ready_count === 'number' &&
-    typeof obj?.not_ready_count === 'number' &&
-    Array.isArray(obj?.ports)
-  ) {
-    return obj as EndpointInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const subsets = Array.isArray(obj?.subsets) ? obj.subsets : []
-
-  const readyAddresses: string[] = []
-  const notReadyAddresses: string[] = []
-  const readyTargets: EndpointInfo['ready_targets'] = []
-  const notReadyTargets: EndpointInfo['not_ready_targets'] = []
-  const ports: EndpointInfo['ports'] = []
-
-  for (const subset of subsets) {
-    for (const addr of subset?.addresses || []) {
-      const ip = addr?.ip
-      if (ip) readyAddresses.push(ip)
-      readyTargets.push({
-        ip,
-        node_name: addr?.nodeName || addr?.node_name,
-        target_ref: addr?.targetRef || addr?.target_ref || null,
-      })
-    }
-    for (const addr of subset?.notReadyAddresses || subset?.not_ready_addresses || []) {
-      const ip = addr?.ip
-      if (ip) notReadyAddresses.push(ip)
-      notReadyTargets.push({
-        ip,
-        node_name: addr?.nodeName || addr?.node_name,
-        target_ref: addr?.targetRef || addr?.target_ref || null,
-      })
-    }
-    for (const p of subset?.ports || []) {
-      ports.push({
-        name: p?.name,
-        port: p?.port,
-        protocol: p?.protocol,
-      })
-    }
-  }
-
-  const seen = new Set<string>()
-  const dedupPorts = ports.filter((p) => {
-    const key = `${p.name || ''}|${p.port || ''}|${p.protocol || ''}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    ready_count: readyAddresses.length,
-    not_ready_count: notReadyAddresses.length,
-    ready_addresses: readyAddresses,
-    not_ready_addresses: notReadyAddresses,
-    ready_targets: readyTargets,
-    not_ready_targets: notReadyTargets,
-    ports: dedupPorts,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? '',
-  }
-}
-
-function applyEndpointWatchEvent(prev: EndpointInfo[] | undefined, event: { type?: string; object?: any }): EndpointInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchEndpointObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function endpointToRawJson(endpoint: EndpointInfo): Record<string, unknown> {
-  const toAddress = (target: NonNullable<EndpointInfo['ready_targets']>[number]) => ({
-    ip: target?.ip,
-    nodeName: target?.node_name,
-    targetRef: target?.target_ref || undefined,
-  })
-
-  const addressesFromTargets = (endpoint.ready_targets || []).map(toAddress)
-  const notReadyFromTargets = (endpoint.not_ready_targets || []).map(toAddress)
-
-  const addresses = addressesFromTargets.length > 0
-    ? addressesFromTargets
-    : (endpoint.ready_addresses || []).map((ip) => ({ ip }))
-
-  const notReadyAddresses = notReadyFromTargets.length > 0
-    ? notReadyFromTargets
-    : (endpoint.not_ready_addresses || []).map((ip) => ({ ip }))
-
-  const subsets = (addresses.length > 0 || notReadyAddresses.length > 0 || (endpoint.ports || []).length > 0)
-    ? [{
-        addresses,
-        notReadyAddresses,
-        ports: (endpoint.ports || []).map((p) => ({
-          name: p.name,
-          port: p.port,
-          protocol: p.protocol,
-        })),
-      }]
-    : []
-
-  return {
-    apiVersion: 'v1',
-    kind: 'Endpoints',
-    metadata: {
-      name: endpoint.name,
-      namespace: endpoint.namespace,
-      creationTimestamp: endpoint.created_at,
-    },
-    ready_count: endpoint.ready_count,
-    not_ready_count: endpoint.not_ready_count,
-    ready_addresses: endpoint.ready_addresses || [],
-    not_ready_addresses: endpoint.not_ready_addresses || [],
-    ready_targets: endpoint.ready_targets || [],
-    not_ready_targets: endpoint.not_ready_targets || [],
-    ports: endpoint.ports || [],
-    subsets,
-  }
-}
 
 export default function Endpoints() {
   const queryClient = useQueryClient()
