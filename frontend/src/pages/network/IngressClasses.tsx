@@ -6,20 +6,19 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
-  formatAge,
   formatParameters,
-  ingressClassToRawJson,
   type SortKey,
 } from './ingressclasses/ingressClassHelpers'
 import { applyIngressClassWatchEvent } from './ingressclasses/ingressClassWatchNormalize'
+import { IngressClassFilters } from './ingressclasses/IngressClassFilters'
+import { IngressClassTable } from './ingressclasses/IngressClassTable'
 
 export default function IngressClasses() {
   const queryClient = useQueryClient()
@@ -83,26 +82,6 @@ export default function IngressClasses() {
 
     return { total, defaults, withParameters, withAnnotations }
   }, [filteredIngressClasses])
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
 
   const sortedIngressClasses = useMemo(() => {
     if (!sortKey) return filteredIngressClasses
@@ -239,16 +218,11 @@ spec:
         </div>
       </div>
 
-      <div className="relative shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-        <input
-          type="text"
-          placeholder={tr('ingressClassesPage.searchPlaceholder', 'Search ingress classes by name...')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        />
-      </div>
+      <IngressClassFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchPlaceholder={tr('ingressClassesPage.searchPlaceholder', 'Search ingress classes by name...')}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
@@ -278,107 +252,25 @@ spec:
         </p>
       )}
 
-      <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[1060px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('controller')}>
-                  <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.controller', 'Controller')}{renderSortIcon('controller')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('default')}>
-                  <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.default', 'Default')}{renderSortIcon('default')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[310px] cursor-pointer" onClick={() => handleSort('parameters')}>
-                  <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.parameters', 'Parameters')}{renderSortIcon('parameters')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedIngressClasses.map((item, idx) => (
-                <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                  key={item.name}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
-                    kind: 'IngressClass',
-                    name: item.name,
-                    rawJson: ingressClassToRawJson(item),
-                  })}
-                >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.controller || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs">
-                    {item.is_default
-                      ? <span className="badge badge-success">{tr('common.yes', 'Yes')}</span>
-                      : <span className="badge badge-info">{tr('common.no', 'No')}</span>}
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatParameters(item)}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
-                </tr>
-              ))}
-              {isLoading && (
-                <tr>
-                  <td colSpan={5} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {sortedIngressClasses.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
-                    {tr('ingressClassesPage.noResults', 'No ingress classes found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedIngressClasses.length} columnCount={5} />
-          </table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-xs text-slate-400 px-4 py-3 border-t border-slate-700 shrink-0">
-            <span>
-              {(() => {
-                const total = sortedIngressClasses.length
-                if (total === 0) return tr('common.pagination.empty', '0')
-                const from = (currentPage - 1) * rowsPerPage + 1
-                const to = Math.min(currentPage * rowsPerPage, total)
-                return tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', { from, to, total })
-              })()}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              >
-                {tr('common.pagination.prev', 'Prev')}
-              </button>
-              <span>{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              >
-                {tr('common.pagination.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <IngressClassTable
+        pagedIngressClasses={pagedIngressClasses}
+        sortedIngressClassesLength={sortedIngressClasses.length}
+        isLoading={isLoading}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        openDetail={openDetail}
+        tr={tr}
+      />
 
       {createDialogOpen && (
         <ResourceYamlCreateDialog
