@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type IngressClassInfo } from '@/services/api'
@@ -13,132 +12,14 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'controller' | 'default' | 'parameters' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatParameters(item: IngressClassInfo): string {
-  const p = item.parameters
-  if (!p) return '-'
-  const parts: string[] = []
-  if (p.kind) parts.push(p.kind)
-  if (p.api_group) parts.push(`.${p.api_group}`)
-  if (p.name) parts.push(`/${p.name}`)
-  if (p.scope) parts.push(` (${p.scope})`)
-  if (p.namespace) parts.push(` ns=${p.namespace}`)
-  const text = parts.join('')
-  return text || '-'
-}
-
-function normalizeWatchIngressClassObject(obj: any): IngressClassInfo {
-  if (typeof obj?.name === 'string' && Object.prototype.hasOwnProperty.call(obj, 'is_default')) {
-    return {
-      ...obj,
-      labels: obj?.labels || {},
-      annotations: obj?.annotations || {},
-      finalizers: Array.isArray(obj?.finalizers) ? obj.finalizers : [],
-    } as IngressClassInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const annotations = metadata?.annotations ?? {}
-  const labels = metadata?.labels ?? {}
-  const paramObj = spec?.parameters
-    ? {
-        api_group: spec.parameters?.apiGroup ?? null,
-        kind: spec.parameters?.kind ?? null,
-        name: spec.parameters?.name ?? null,
-        scope: spec.parameters?.scope ?? null,
-        namespace: spec.parameters?.namespace ?? null,
-      }
-    : null
-
-  return {
-    name: metadata?.name ?? '',
-    controller: spec?.controller ?? null,
-    is_default: annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
-    parameters: paramObj,
-    labels,
-    annotations,
-    finalizers: Array.isArray(metadata?.finalizers) ? metadata.finalizers : [],
-    created_at: metadata?.creationTimestamp ?? null,
-  }
-}
-
-function applyIngressClassWatchEvent(
-  prev: IngressClassInfo[] | undefined,
-  event: { type?: string; object?: any },
-): IngressClassInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchIngressClassObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function ingressClassToRawJson(item: IngressClassInfo): Record<string, unknown> {
-  const isDefault = Boolean(item.is_default)
-  const annotations = { ...(item.annotations || {}) }
-  if (isDefault && !annotations['ingressclass.kubernetes.io/is-default-class']) {
-    annotations['ingressclass.kubernetes.io/is-default-class'] = 'true'
-  }
-
-  return {
-    apiVersion: 'networking.k8s.io/v1',
-    kind: 'IngressClass',
-    metadata: {
-      name: item.name,
-      labels: item.labels || {},
-      annotations,
-      finalizers: item.finalizers || [],
-      creationTimestamp: item.created_at,
-    },
-    spec: {
-      controller: item.controller,
-      parameters: item.parameters
-        ? {
-            apiGroup: item.parameters.api_group,
-            kind: item.parameters.kind,
-            name: item.parameters.name,
-            scope: item.parameters.scope,
-            namespace: item.parameters.namespace,
-          }
-        : undefined,
-    },
-    is_default: item.is_default,
-    parameters: item.parameters,
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  formatParameters,
+  ingressClassToRawJson,
+  type SortKey,
+} from './ingressclasses/ingressClassHelpers'
+import { applyIngressClassWatchEvent } from './ingressclasses/ingressClassWatchNormalize'
 
 export default function IngressClasses() {
   const queryClient = useQueryClient()
