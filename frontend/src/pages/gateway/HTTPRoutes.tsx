@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type HTTPRouteInfo } from '@/services/api'
@@ -13,168 +12,14 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'namespace' | 'hostnames' | 'parents' | 'rules' | 'backends' | 'status' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatHostnames(item: HTTPRouteInfo): string {
-  const list = Array.isArray(item.hostnames) ? item.hostnames : []
-  if (list.length === 0) return '*'
-  return list.map((h) => h || '*').join(', ')
-}
-
-function normalizeWatchHTTPRouteObject(obj: any): HTTPRouteInfo {
-  if (
-    typeof obj?.name === 'string'
-    && typeof obj?.namespace === 'string'
-    && Object.prototype.hasOwnProperty.call(obj, 'rule_count')
-  ) {
-    return {
-      ...obj,
-      hostnames: Array.isArray(obj.hostnames) ? obj.hostnames : [],
-      parent_refs: Array.isArray(obj.parent_refs) ? obj.parent_refs : [],
-      rules: Array.isArray(obj.rules) ? obj.rules : [],
-      parents: Array.isArray(obj.parents) ? obj.parents : [],
-      conditions: Array.isArray(obj.conditions) ? obj.conditions : [],
-      labels: obj.labels || {},
-      annotations: obj.annotations || {},
-      finalizers: Array.isArray(obj.finalizers) ? obj.finalizers : [],
-    } as HTTPRouteInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-
-  const rules = Array.isArray(spec?.rules) ? spec.rules : []
-  const parentRefs = Array.isArray(spec?.parentRefs) ? spec.parentRefs : []
-  const parents = Array.isArray(status?.parents) ? status.parents : []
-
-  let backendRefsCount = 0
-  for (const rule of rules) {
-    const refs = Array.isArray(rule?.backendRefs) ? rule.backendRefs : []
-    backendRefsCount += refs.length
-  }
-
-  const conditions: Array<Record<string, any>> = []
-  for (const parent of parents) {
-    const parentConditions = Array.isArray(parent?.conditions) ? parent.conditions : []
-    for (const condition of parentConditions) {
-      if (condition && typeof condition === 'object') {
-        conditions.push(condition)
-      }
-    }
-  }
-
-  const accepted = conditions.some((c) => String(c?.type) === 'Accepted' && String(c?.status).toLowerCase() === 'true')
-  const resolvedRefs = conditions.some((c) => String(c?.type) === 'ResolvedRefs' && String(c?.status).toLowerCase() === 'true')
-
-  const trueCondition = conditions.find((c) => String(c?.status).toLowerCase() === 'true')
-  const falseCondition = conditions.find((c) => String(c?.status).toLowerCase() === 'false')
-  const statusText = accepted
-    ? 'Accepted'
-    : resolvedRefs
-      ? 'ResolvedRefs'
-      : trueCondition?.type
-        ? String(trueCondition.type)
-        : falseCondition?.type
-          ? `${String(falseCondition.type)}(False)`
-          : 'Unknown'
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    hostnames: Array.isArray(spec?.hostnames) ? spec.hostnames : [],
-    parent_refs: parentRefs,
-    rules,
-    parents,
-    rule_count: rules.length,
-    parent_refs_count: parentRefs.length,
-    backend_refs_count: backendRefsCount,
-    status: statusText,
-    accepted,
-    resolved_refs: resolvedRefs,
-    conditions,
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    annotations: metadata?.annotations ?? obj?.annotations ?? {},
-    finalizers: Array.isArray(metadata?.finalizers) ? metadata.finalizers : (obj?.finalizers || []),
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    api_version: obj?.apiVersion ?? obj?.api_version ?? null,
-  }
-}
-
-function applyHTTPRouteWatchEvent(
-  prev: HTTPRouteInfo[] | undefined,
-  event: { type?: string; object?: any },
-): HTTPRouteInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchHTTPRouteObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function httpRouteToRawJson(item: HTTPRouteInfo): Record<string, unknown> {
-  return {
-    apiVersion: item.api_version || 'gateway.networking.k8s.io/v1',
-    kind: 'HTTPRoute',
-    metadata: {
-      name: item.name,
-      namespace: item.namespace,
-      labels: item.labels || {},
-      annotations: item.annotations || {},
-      finalizers: item.finalizers || [],
-      creationTimestamp: item.created_at,
-    },
-    spec: {
-      hostnames: item.hostnames || [],
-      parentRefs: item.parent_refs || [],
-      rules: item.rules || [],
-    },
-    status: {
-      parents: item.parents || [],
-    },
-    rule_count: item.rule_count || 0,
-    parent_refs_count: item.parent_refs_count || 0,
-    backend_refs_count: item.backend_refs_count || 0,
-    status_text: item.status,
-    accepted: item.accepted,
-    resolved_refs: item.resolved_refs,
-    conditions: item.conditions || [],
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  formatHostnames,
+  httpRouteToRawJson,
+  type SortKey,
+} from './httproutes/httpRouteHelpers'
+import { applyHTTPRouteWatchEvent } from './httproutes/httpRouteWatchNormalize'
 
 export default function HTTPRoutes() {
   const queryClient = useQueryClient()
