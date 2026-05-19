@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ReferenceGrantInfo } from '@/services/api'
@@ -13,112 +12,15 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'namespace' | 'from' | 'to' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatFrom(item: ReferenceGrantInfo): string {
-  const from = Array.isArray(item.from) ? item.from : []
-  if (from.length === 0) return '-'
-  return from.map((f) => `${f.kind || '-'} (${f.namespace || '-'})`).join(', ')
-}
-
-function formatTo(item: ReferenceGrantInfo): string {
-  const to = Array.isArray(item.to) ? item.to : []
-  if (to.length === 0) return '-'
-  return to.map((t) => `${t.kind || '-'}${t.name ? ` (${t.name})` : ''}`).join(', ')
-}
-
-function normalizeWatchReferenceGrantObject(obj: any): ReferenceGrantInfo {
-  if (
-    typeof obj?.name === 'string'
-    && typeof obj?.namespace === 'string'
-    && (Array.isArray(obj?.from) || Array.isArray(obj?.to))
-  ) {
-    return {
-      ...obj,
-      from: Array.isArray(obj.from) ? obj.from : [],
-      to: Array.isArray(obj.to) ? obj.to : [],
-      labels: obj.labels || {},
-      annotations: obj.annotations || {},
-    } as ReferenceGrantInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    from: Array.isArray(spec?.from) ? spec.from : [],
-    to: Array.isArray(spec?.to) ? spec.to : [],
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    annotations: metadata?.annotations ?? obj?.annotations ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    api_version: obj?.apiVersion ?? obj?.api_version ?? null,
-  }
-}
-
-function applyReferenceGrantWatchEvent(
-  prev: ReferenceGrantInfo[] | undefined,
-  event: { type?: string; object?: any },
-): ReferenceGrantInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchReferenceGrantObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function referenceGrantToRawJson(item: ReferenceGrantInfo): Record<string, unknown> {
-  return {
-    apiVersion: item.api_version || 'gateway.networking.k8s.io/v1beta1',
-    kind: 'ReferenceGrant',
-    metadata: {
-      name: item.name,
-      namespace: item.namespace,
-      labels: item.labels || {},
-      annotations: item.annotations || {},
-      creationTimestamp: item.created_at,
-    },
-    spec: {
-      from: item.from || [],
-      to: item.to || [],
-    },
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  formatFrom,
+  formatTo,
+  referenceGrantToRawJson,
+  type SortKey,
+} from './referencegrants/referenceGrantHelpers'
+import { applyReferenceGrantWatchEvent } from './referencegrants/referenceGrantWatchNormalize'
 
 export default function ReferenceGrants() {
   const queryClient = useQueryClient()
