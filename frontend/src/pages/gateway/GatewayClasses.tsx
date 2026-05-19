@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type GatewayClassInfo } from '@/services/api'
@@ -13,139 +12,14 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'controller' | 'status' | 'parameters' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatParametersRef(item: GatewayClassInfo): string {
-  const ref = item.parameters_ref
-  if (!ref || typeof ref !== 'object') return '-'
-  const group = String(ref.group || '')
-  const kind = String(ref.kind || '')
-  const name = String(ref.name || '')
-  const namespace = String(ref.namespace || '')
-  const pieces = [
-    kind || '-',
-    group ? `.${group}` : '',
-    name ? `/${name}` : '',
-    namespace ? ` (ns: ${namespace})` : '',
-  ]
-  return pieces.join('') || '-'
-}
-
-function normalizeWatchGatewayClassObject(obj: any): GatewayClassInfo {
-  if (
-    typeof obj?.name === 'string'
-    && Object.prototype.hasOwnProperty.call(obj, 'controller_name')
-  ) {
-    return {
-      ...obj,
-      parameters_ref: obj.parameters_ref || null,
-      conditions: Array.isArray(obj.conditions) ? obj.conditions : [],
-      labels: obj.labels || {},
-      annotations: obj.annotations || {},
-      finalizers: Array.isArray(obj.finalizers) ? obj.finalizers : [],
-    } as GatewayClassInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-  const conditions = Array.isArray(status?.conditions) ? status.conditions : []
-
-  const accepted = conditions.some(
-    (c: any) => String(c?.type) === 'Accepted' && String(c?.status).toLowerCase() === 'true',
-  )
-
-  const trueCondition = conditions.find((c: any) => String(c?.status).toLowerCase() === 'true')
-  const falseCondition = conditions.find((c: any) => String(c?.status).toLowerCase() === 'false')
-  const statusText = accepted
-    ? 'Accepted'
-    : trueCondition?.type
-      ? String(trueCondition.type)
-      : falseCondition?.type
-        ? `${String(falseCondition.type)}(False)`
-        : 'Unknown'
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    controller_name: spec?.controllerName ?? obj?.controller_name ?? null,
-    description: metadata?.annotations?.['gateway.networking.k8s.io/description'] ?? obj?.description ?? null,
-    accepted,
-    status: statusText,
-    parameters_ref: spec?.parametersRef ?? obj?.parameters_ref ?? null,
-    conditions,
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    annotations: metadata?.annotations ?? obj?.annotations ?? {},
-    finalizers: Array.isArray(metadata?.finalizers) ? metadata.finalizers : (obj?.finalizers || []),
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    api_version: obj?.apiVersion ?? obj?.api_version ?? null,
-  }
-}
-
-function applyGatewayClassWatchEvent(
-  prev: GatewayClassInfo[] | undefined,
-  event: { type?: string; object?: any },
-): GatewayClassInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchGatewayClassObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function gatewayClassToRawJson(item: GatewayClassInfo): Record<string, unknown> {
-  return {
-    apiVersion: item.api_version || 'gateway.networking.k8s.io/v1',
-    kind: 'GatewayClass',
-    metadata: {
-      name: item.name,
-      labels: item.labels || {},
-      annotations: item.annotations || {},
-      finalizers: item.finalizers || [],
-      creationTimestamp: item.created_at,
-    },
-    spec: {
-      controllerName: item.controller_name || undefined,
-      parametersRef: item.parameters_ref || undefined,
-    },
-    status: {
-      conditions: item.conditions || [],
-    },
-    accepted: item.accepted,
-    status_text: item.status,
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  formatParametersRef,
+  gatewayClassToRawJson,
+  type SortKey,
+} from './gatewayclasses/gatewayClassHelpers'
+import { applyGatewayClassWatchEvent } from './gatewayclasses/gatewayClassWatchNormalize'
 
 export default function GatewayClasses() {
   const queryClient = useQueryClient()
