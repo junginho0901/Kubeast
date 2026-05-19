@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type GatewayInfo } from '@/services/api'
@@ -13,144 +12,13 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'namespace' | 'class' | 'status' | 'listeners' | 'routes' | 'addresses' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function inferGatewayStatus(conditions: any[]): string {
-  const list = Array.isArray(conditions) ? conditions : []
-  const programmed = list.find((c) => String(c?.type) === 'Programmed' && String(c?.status).toLowerCase() === 'true')
-  if (programmed) return 'Programmed'
-  const accepted = list.find((c) => String(c?.type) === 'Accepted' && String(c?.status).toLowerCase() === 'true')
-  if (accepted) return 'Accepted'
-  const firstTrue = list.find((c) => String(c?.status).toLowerCase() === 'true')
-  if (firstTrue?.type) return String(firstTrue.type)
-  const firstFalse = list.find((c) => String(c?.status).toLowerCase() === 'false')
-  if (firstFalse?.type) return `${String(firstFalse.type)}(False)`
-  return 'Unknown'
-}
-
-function normalizeWatchGatewayObject(obj: any): GatewayInfo {
-  if (
-    typeof obj?.name === 'string'
-    && typeof obj?.namespace === 'string'
-    && typeof obj?.listeners_count === 'number'
-  ) {
-    return {
-      ...obj,
-      listeners_count: Number(obj.listeners_count || 0),
-      attached_routes: Number(obj.attached_routes || 0),
-      addresses_count: Number(obj.addresses_count || 0),
-      listeners: Array.isArray(obj.listeners) ? obj.listeners : [],
-      status_listeners: Array.isArray(obj.status_listeners) ? obj.status_listeners : [],
-      addresses: Array.isArray(obj.addresses) ? obj.addresses : [],
-      conditions: Array.isArray(obj.conditions) ? obj.conditions : [],
-      labels: obj.labels || {},
-      annotations: obj.annotations || {},
-      finalizers: Array.isArray(obj.finalizers) ? obj.finalizers : [],
-    } as GatewayInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-  const listeners = Array.isArray(spec?.listeners) ? spec.listeners : []
-  const statusListeners = Array.isArray(status?.listeners) ? status.listeners : []
-  const addresses = Array.isArray(status?.addresses) ? status.addresses : []
-  const conditions = Array.isArray(status?.conditions) ? status.conditions : []
-  const attachedRoutes = statusListeners.reduce((sum: number, item: any) => {
-    const value = Number(item?.attachedRoutes || item?.attached_routes || 0)
-    return Number.isFinite(value) ? sum + value : sum
-  }, 0)
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    gateway_class_name: spec?.gatewayClassName ?? obj?.gateway_class_name ?? null,
-    listeners_count: listeners.length,
-    attached_routes: attachedRoutes,
-    addresses_count: addresses.length,
-    status: inferGatewayStatus(conditions),
-    programmed: conditions.some((c: any) => String(c?.type) === 'Programmed' && String(c?.status).toLowerCase() === 'true'),
-    accepted: conditions.some((c: any) => String(c?.type) === 'Accepted' && String(c?.status).toLowerCase() === 'true'),
-    listeners,
-    status_listeners: statusListeners,
-    addresses,
-    conditions,
-    labels: metadata?.labels || {},
-    annotations: metadata?.annotations || {},
-    finalizers: metadata?.finalizers || [],
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    api_version: obj?.apiVersion ?? obj?.api_version ?? null,
-  }
-}
-
-function applyGatewayWatchEvent(
-  prev: GatewayInfo[] | undefined,
-  event: { type?: string; object?: any },
-): GatewayInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchGatewayObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
-
-function gatewayToRawJson(gateway: GatewayInfo): Record<string, unknown> {
-  return {
-    apiVersion: gateway.api_version || 'gateway.networking.k8s.io/v1',
-    kind: 'Gateway',
-    metadata: {
-      name: gateway.name,
-      namespace: gateway.namespace,
-      labels: gateway.labels || {},
-      annotations: gateway.annotations || {},
-      finalizers: gateway.finalizers || [],
-      creationTimestamp: gateway.created_at,
-    },
-    spec: {
-      gatewayClassName: gateway.gateway_class_name || undefined,
-      listeners: gateway.listeners || [],
-    },
-    status: {
-      addresses: gateway.addresses || [],
-      listeners: gateway.status_listeners || [],
-      conditions: gateway.conditions || [],
-    },
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  gatewayToRawJson,
+  type SortKey,
+} from './gateways/gatewayHelpers'
+import { applyGatewayWatchEvent } from './gateways/gatewayWatchNormalize'
 
 export default function Gateways() {
   const queryClient = useQueryClient()
