@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type StorageClassInfo } from '@/services/api'
@@ -13,114 +12,13 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey =
-  | null
-  | 'name'
-  | 'provisioner'
-  | 'default'
-  | 'reclaimPolicy'
-  | 'bindingMode'
-  | 'allowExpansion'
-  | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function normalizeWatchStorageClassObject(obj: any): StorageClassInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.provisioner === 'string') {
-    return {
-      ...obj,
-      parameters: obj?.parameters ?? {},
-      mount_options: Array.isArray(obj?.mount_options) ? obj.mount_options : [],
-      allowed_topologies: Array.isArray(obj?.allowed_topologies) ? obj.allowed_topologies : [],
-    } as StorageClassInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const annotations = (metadata?.annotations ?? {}) as Record<string, string>
-  const labels = (metadata?.labels ?? {}) as Record<string, string>
-  const isDefault = annotations['storageclass.kubernetes.io/is-default-class'] === 'true'
-    || annotations['storageclass.beta.kubernetes.io/is-default-class'] === 'true'
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    provisioner: obj?.provisioner ?? '',
-    reclaim_policy: obj?.reclaimPolicy ?? obj?.reclaim_policy ?? null,
-    volume_binding_mode: obj?.volumeBindingMode ?? obj?.volume_binding_mode ?? null,
-    allow_volume_expansion: obj?.allowVolumeExpansion ?? obj?.allow_volume_expansion ?? null,
-    is_default: isDefault || Boolean(obj?.is_default),
-    parameters: (obj?.parameters ?? {}) as Record<string, any>,
-    mount_options: Array.isArray(obj?.mountOptions)
-      ? obj.mountOptions
-      : (Array.isArray(obj?.mount_options) ? obj.mount_options : []),
-    allowed_topologies: Array.isArray(obj?.allowed_topologies) ? obj.allowed_topologies : [],
-    labels,
-    annotations,
-    finalizers: Array.isArray(metadata?.finalizers) ? metadata.finalizers : [],
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-  }
-}
-
-function applyStorageClassWatchEvent(prev: StorageClassInfo[] | undefined, event: { type?: string; object?: any }): StorageClassInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchStorageClassObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function storageClassToRawJson(sc: StorageClassInfo): Record<string, unknown> {
-  const annotations: Record<string, string> = { ...(sc.annotations || {}) }
-  if (sc.is_default) {
-    annotations['storageclass.kubernetes.io/is-default-class'] = 'true'
-  }
-
-  return {
-    apiVersion: 'storage.k8s.io/v1',
-    kind: 'StorageClass',
-    metadata: {
-      name: sc.name,
-      labels: sc.labels || {},
-      annotations,
-      finalizers: sc.finalizers || [],
-      creationTimestamp: sc.created_at,
-    },
-    provisioner: sc.provisioner,
-    reclaimPolicy: sc.reclaim_policy || undefined,
-    volumeBindingMode: sc.volume_binding_mode || undefined,
-    allowVolumeExpansion: sc.allow_volume_expansion,
-    parameters: sc.parameters || {},
-    mountOptions: sc.mount_options || [],
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  storageClassToRawJson,
+  type SortKey,
+} from './storageclasses/storageClassHelpers'
+import { applyStorageClassWatchEvent } from './storageclasses/storageClassWatchNormalize'
 
 export default function StorageClasses() {
   const queryClient = useQueryClient()
