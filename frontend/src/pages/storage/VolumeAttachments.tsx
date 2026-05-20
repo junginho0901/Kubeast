@@ -6,23 +6,20 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
-  formatAge,
   statusLabel,
-  statusBadgeClass,
-  errorText,
-  volumeAttachmentToRawJson,
   type SortKey,
   type SummaryCard,
 } from './volumeattachments/volumeAttachmentHelpers'
 import { applyVolumeAttachmentWatchEvent } from './volumeattachments/volumeAttachmentWatchNormalize'
+import { VolumeAttachmentFilters } from './volumeattachments/VolumeAttachmentFilters'
+import { VolumeAttachmentTable } from './volumeattachments/VolumeAttachmentTable'
 
 export default function VolumeAttachments() {
   const queryClient = useQueryClient()
@@ -105,26 +102,6 @@ export default function VolumeAttachments() {
     ],
     [summary.attached, summary.detached, summary.errors, summary.total, tr],
   )
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
 
   const sortedVolumeAttachments = useMemo(() => {
     if (!sortKey) return filteredVolumeAttachments
@@ -297,18 +274,11 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 shrink-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            placeholder={tr('volumeattachments.searchPlaceholder', 'Search VolumeAttachments by name, PV, node, or attacher...')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          />
-        </div>
-      </div>
+      <VolumeAttachmentFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchPlaceholder={tr('volumeattachments.searchPlaceholder', 'Search VolumeAttachments by name, PV, node, or attacher...')}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
@@ -331,138 +301,24 @@ spec:
           </div>
         )}
 
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('attacher')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.attacher', 'Attacher')}{renderSortIcon('attacher')}</span>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('pv')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.persistentVolume', 'Persistent Volume')}{renderSortIcon('pv')}</span>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('node')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.node', 'Node')}{renderSortIcon('node')}</span>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('attached')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.attached', 'Attached')}{renderSortIcon('attached')}</span>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('error')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.error', 'Error')}{renderSortIcon('error')}</span>
-                </th>
-                <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {pagedVolumeAttachments.map((va, idx) => {
-                const status = statusLabel(va)
-                const errors = errorText(va)
-                return (
-                  <tr
-                    key={va.name}
-                    ref={idx === 0 ? firstRowRef : undefined}
-                    className="hover:bg-slate-800/30 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: volumeAttachmentToRawJson(va) })}
-                  >
-                    <td className="py-3 px-4 text-white font-mono break-all">{va.name}</td>
-                    <td className="py-3 px-4 text-slate-300 break-all">{va.attacher || '-'}</td>
-                    <td className="py-3 px-4 text-slate-300">
-                      {va.persistent_volume_name ? (
-                        <button
-                          type="button"
-                          className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openDetail({ kind: 'PersistentVolume', name: va.persistent_volume_name as string })
-                          }}
-                        >
-                          {va.persistent_volume_name}
-                        </button>
-                      ) : '-'}
-                    </td>
-                    <td className="py-3 px-4 text-slate-300">
-                      {va.node_name ? (
-                        <button
-                          type="button"
-                          className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openDetail({ kind: 'Node', name: va.node_name as string })
-                          }}
-                        >
-                          {va.node_name}
-                        </button>
-                      ) : '-'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`badge ${statusBadgeClass(status)}`}>{status}</span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-300 max-w-[320px]">
-                      <span className="block truncate" title={errors}>{errors}</span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-400">{formatAge(va.created_at)}</td>
-                  </tr>
-                )
-              })}
-
-              {!isLoading && pagedVolumeAttachments.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
-                    {tr('volumeattachments.noResults', 'No VolumeAttachments found.')}
-                  </td>
-                </tr>
-              )}
-
-              {isLoading && (
-                <tr>
-                  <td colSpan={7} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedVolumeAttachments.length} columnCount={7} />
-          </table>
-        </div>
-
-        <div className="px-4 py-3 border-t border-slate-800 flex items-center justify-between shrink-0">
-          <p className="text-xs text-slate-400">
-            {sortedVolumeAttachments.length > 0
-              ? tr('common.pageSummary', '{{start}}-{{end}} of {{total}}', {
-                  start: (currentPage - 1) * rowsPerPage + 1,
-                  end: Math.min(currentPage * rowsPerPage, sortedVolumeAttachments.length),
-                  total: sortedVolumeAttachments.length,
-                })
-              : tr('common.pageSummaryEmpty', '0 of 0')}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="btn btn-secondary px-2 py-1 text-xs disabled:opacity-50"
-            >
-              {tr('common.prev', 'Previous')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="btn btn-secondary px-2 py-1 text-xs disabled:opacity-50"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
+        <VolumeAttachmentTable
+          pagedVolumeAttachments={pagedVolumeAttachments}
+          sortedVolumeAttachmentsLength={sortedVolumeAttachments.length}
+          isLoading={isLoading}
+          sortKey={sortKey}
+          setSortKey={setSortKey}
+          sortDir={sortDir}
+          setSortDir={setSortDir}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          totalPages={totalPages}
+          rowsPerPage={rowsPerPage}
+          tableBodyRef={tableBodyRef}
+          theadRef={theadRef}
+          firstRowRef={firstRowRef}
+          openDetail={openDetail}
+          tr={tr}
+        />
       </div>
 
       {createDialogOpen && (
