@@ -6,22 +6,20 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import {
   parseAgeSeconds,
-  formatAge,
   parseQuantityToBytes,
   claimToText,
-  statusBadgeClass,
-  pvToRawJson,
   type SortKey,
 } from './pvs/pvHelpers'
 import { applyPvWatchEvent } from './pvs/pvWatchNormalize'
+import { PVFilters } from './pvs/PVFilters'
+import { PVTable } from './pvs/PVTable'
 
 export default function PersistentVolumes() {
   const queryClient = useQueryClient()
@@ -95,26 +93,6 @@ export default function PersistentVolumes() {
 
     return { total, bound, available, released, failed }
   }, [filteredPVs])
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
 
   const sortedPVs = useMemo(() => {
     if (!sortKey) return filteredPVs
@@ -274,20 +252,11 @@ spec:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 shrink-0">
-        <div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder={tr('pvs.searchPlaceholder', 'Search PVs by name...')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      </div>
+      <PVFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchPlaceholder={tr('pvs.searchPlaceholder', 'Search PVs by name...')}
+      />
 
       <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
@@ -321,123 +290,25 @@ spec:
         </p>
       )}
 
-      <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[1400px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.status', 'Status')}{renderSortIcon('status')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('storageClass')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.storageClass', 'StorageClass')}{renderSortIcon('storageClass')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('capacity')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.capacity', 'Capacity')}{renderSortIcon('capacity')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.accessModes', 'Access Modes')}{renderSortIcon('accessModes')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('reclaimPolicy')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.reclaimPolicy', 'Reclaim Policy')}{renderSortIcon('reclaimPolicy')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('claim')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.claim', 'Claim')}{renderSortIcon('claim')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('volumeMode')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.volumeMode', 'Volume Mode')}{renderSortIcon('volumeMode')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('source')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.source', 'Source')}{renderSortIcon('source')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('pvs.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedPVs.map((pv, idx) => (
-                <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                  key={pv.name}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
-                    kind: 'PersistentVolume',
-                    name: pv.name,
-                    rawJson: pvToRawJson(pv),
-                  })}
-                >
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pv.name}</span></td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${statusBadgeClass(pv.status)}`}>{pv.status || '-'}</span>
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pv.storage_class || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{pv.capacity || '-'}</td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{(pv.access_modes || []).join(', ') || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{pv.reclaim_policy || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{claimToText(pv.claim_ref)}</span></td>
-                  <td className="py-3 px-4 text-xs">{pv.volume_mode || '-'}</td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{pv.source || pv.driver || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(pv.created_at)}</td>
-                </tr>
-              ))}
-              {isLoading && (
-                <tr>
-                  <td colSpan={10} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {sortedPVs.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={10} className="py-6 px-4 text-center text-slate-400">
-                    {tr('pvs.noResults', 'No PVs found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedPVs.length} columnCount={10} />
-          </table>
-        </div>
-
-        {sortedPVs.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedPVs.length),
-                total: sortedPVs.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <PVTable
+        pagedPVs={pagedPVs}
+        sortedPVsLength={sortedPVs.length}
+        isLoading={isLoading}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        openDetail={openDetail}
+        tr={tr}
+      />
 
       {createDialogOpen && (
         <ResourceYamlCreateDialog
