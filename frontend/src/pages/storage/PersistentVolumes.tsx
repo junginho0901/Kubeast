@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PVInfo } from '@/services/api'
@@ -13,173 +12,16 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey =
-  | null
-  | 'name'
-  | 'status'
-  | 'storageClass'
-  | 'capacity'
-  | 'accessModes'
-  | 'reclaimPolicy'
-  | 'claim'
-  | 'volumeMode'
-  | 'source'
-  | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function parseQuantityToBytes(value?: string | null): number | null {
-  if (!value) return null
-  const s = String(value).trim()
-  if (!s) return null
-  const m = s.match(/^([0-9]+(?:\.[0-9]+)?)([a-zA-Z]+)?$/)
-  if (!m) return null
-
-  const num = Number(m[1])
-  if (Number.isNaN(num)) return null
-  const unit = (m[2] || '').trim()
-
-  const bin: Record<string, number> = {
-    Ki: 1024 ** 1,
-    Mi: 1024 ** 2,
-    Gi: 1024 ** 3,
-    Ti: 1024 ** 4,
-    Pi: 1024 ** 5,
-    Ei: 1024 ** 6,
-  }
-  const dec: Record<string, number> = {
-    K: 1000 ** 1,
-    M: 1000 ** 2,
-    G: 1000 ** 3,
-    T: 1000 ** 4,
-    P: 1000 ** 5,
-    E: 1000 ** 6,
-  }
-
-  if (!unit) return num
-  if (bin[unit] !== undefined) return num * bin[unit]
-  if (dec[unit] !== undefined) return num * dec[unit]
-  return null
-}
-
-function normalizeWatchPvObject(obj: any): PVInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.status === 'string') {
-    return {
-      ...obj,
-      access_modes: Array.isArray(obj?.access_modes) ? obj.access_modes : [],
-    } as PVInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    status: status?.phase ?? obj?.status ?? 'Unknown',
-    capacity: String(spec?.capacity?.storage ?? obj?.capacity ?? ''),
-    access_modes: Array.isArray(spec?.accessModes) ? spec.accessModes : (Array.isArray(obj?.access_modes) ? obj.access_modes : []),
-    storage_class: spec?.storageClassName ?? obj?.storage_class ?? null,
-    reclaim_policy: spec?.persistentVolumeReclaimPolicy ?? obj?.reclaim_policy ?? 'Delete',
-    claim_ref: spec?.claimRef
-      ? {
-          namespace: spec.claimRef.namespace,
-          name: spec.claimRef.name,
-        }
-      : (obj?.claim_ref ?? null),
-    volume_mode: spec?.volumeMode ?? obj?.volume_mode ?? null,
-    source: obj?.source ?? null,
-    driver: obj?.driver ?? null,
-    volume_handle: obj?.volume_handle ?? null,
-    node_affinity: obj?.node_affinity ?? null,
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-  }
-}
-
-function applyPvWatchEvent(prev: PVInfo[] | undefined, event: { type?: string; object?: any }): PVInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchPvObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function claimToText(claimRef?: { namespace?: string; name?: string } | null): string {
-  if (!claimRef?.name) return '-'
-  return claimRef.namespace ? `${claimRef.namespace}/${claimRef.name}` : claimRef.name
-}
-
-function pvToRawJson(pv: PVInfo): Record<string, unknown> {
-  const claimRef = pv.claim_ref?.name
-    ? {
-        namespace: pv.claim_ref.namespace,
-        name: pv.claim_ref.name,
-      }
-    : undefined
-
-  return {
-    apiVersion: 'v1',
-    kind: 'PersistentVolume',
-    metadata: {
-      name: pv.name,
-      creationTimestamp: pv.created_at,
-    },
-    spec: {
-      capacity: { storage: pv.capacity },
-      accessModes: pv.access_modes || [],
-      storageClassName: pv.storage_class,
-      persistentVolumeReclaimPolicy: pv.reclaim_policy,
-      volumeMode: pv.volume_mode,
-      claimRef,
-      csi: pv.driver
-        ? {
-            driver: pv.driver,
-            volumeHandle: pv.volume_handle,
-          }
-        : undefined,
-    },
-    status: {
-      phase: pv.status,
-    },
-  }
-}
-
-function statusBadgeClass(status?: string | null): string {
-  const lower = String(status || '').toLowerCase()
-  if (lower === 'bound' || lower === 'available') return 'badge-success'
-  if (lower === 'released' || lower === 'pending') return 'badge-warning'
-  if (lower === 'failed') return 'badge-error'
-  return 'badge-info'
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  parseQuantityToBytes,
+  claimToText,
+  statusBadgeClass,
+  pvToRawJson,
+  type SortKey,
+} from './pvs/pvHelpers'
+import { applyPvWatchEvent } from './pvs/pvWatchNormalize'
 
 export default function PersistentVolumes() {
   const queryClient = useQueryClient()
