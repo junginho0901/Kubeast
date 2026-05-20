@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type PVCInfo } from '@/services/api'
@@ -13,147 +12,14 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey =
-  | null
-  | 'namespace'
-  | 'name'
-  | 'status'
-  | 'storageClass'
-  | 'volume'
-  | 'requested'
-  | 'capacity'
-  | 'accessModes'
-  | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function parseQuantityToBytes(value?: string | null): number | null {
-  if (!value) return null
-  const s = String(value).trim()
-  if (!s) return null
-  const m = s.match(/^([0-9]+(?:\.[0-9]+)?)([a-zA-Z]+)?$/)
-  if (!m) return null
-
-  const num = Number(m[1])
-  if (Number.isNaN(num)) return null
-  const unit = (m[2] || '').trim()
-
-  const bin: Record<string, number> = {
-    Ki: 1024 ** 1,
-    Mi: 1024 ** 2,
-    Gi: 1024 ** 3,
-    Ti: 1024 ** 4,
-    Pi: 1024 ** 5,
-    Ei: 1024 ** 6,
-  }
-  const dec: Record<string, number> = {
-    K: 1000 ** 1,
-    M: 1000 ** 2,
-    G: 1000 ** 3,
-    T: 1000 ** 4,
-    P: 1000 ** 5,
-    E: 1000 ** 6,
-  }
-
-  if (!unit) return num
-  if (bin[unit] !== undefined) return num * bin[unit]
-  if (dec[unit] !== undefined) return num * dec[unit]
-  return null
-}
-
-function normalizeWatchPvcObject(obj: any): PVCInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.namespace === 'string' && typeof obj?.status === 'string') {
-    return {
-      ...obj,
-      access_modes: Array.isArray(obj?.access_modes) ? obj.access_modes : [],
-    } as PVCInfo
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-  const capacity = status?.capacity?.storage
-  const requested = spec?.resources?.requests?.storage
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    status: status?.phase ?? obj?.status ?? 'Unknown',
-    volume_name: spec?.volumeName ?? obj?.volume_name ?? null,
-    storage_class: spec?.storageClassName ?? obj?.storage_class ?? null,
-    capacity: capacity != null ? String(capacity) : (obj?.capacity ?? null),
-    requested: requested != null ? String(requested) : (obj?.requested ?? null),
-    access_modes: Array.isArray(spec?.accessModes) ? spec.accessModes : (Array.isArray(obj?.access_modes) ? obj.access_modes : []),
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-  }
-}
-
-function applyPvcWatchEvent(prev: PVCInfo[] | undefined, event: { type?: string; object?: any }): PVCInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchPvcObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function pvcToRawJson(pvc: PVCInfo): Record<string, unknown> {
-  return {
-    apiVersion: 'v1',
-    kind: 'PersistentVolumeClaim',
-    metadata: {
-      name: pvc.name,
-      namespace: pvc.namespace,
-      creationTimestamp: pvc.created_at,
-    },
-    spec: {
-      accessModes: pvc.access_modes || [],
-      storageClassName: pvc.storage_class,
-      volumeName: pvc.volume_name,
-      resources: {
-        requests: {
-          storage: pvc.requested,
-        },
-      },
-    },
-    status: {
-      phase: pvc.status,
-      capacity: {
-        storage: pvc.capacity,
-      },
-    },
-  }
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  parseQuantityToBytes,
+  pvcToRawJson,
+  type SortKey,
+} from './pvcs/pvcHelpers'
+import { applyPvcWatchEvent } from './pvcs/pvcWatchNormalize'
 
 export default function PersistentVolumeClaims() {
   const queryClient = useQueryClient()
