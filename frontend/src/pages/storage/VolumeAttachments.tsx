@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type VolumeAttachmentInfo } from '@/services/api'
@@ -13,149 +12,17 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'attacher' | 'pv' | 'node' | 'attached' | 'error' | 'age'
-type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function normalizeError(error?: { time?: string | null; message?: string | null } | null): { time?: string | null; message?: string | null } | null {
-  if (!error) return null
-  const message = typeof error.message === 'string' ? error.message : null
-  const time = typeof error.time === 'string' ? error.time : null
-  if (!message && !time) return null
-  return { message, time }
-}
-
-function normalizeWatchVolumeAttachmentObject(obj: any): VolumeAttachmentInfo {
-  if (typeof obj?.name === 'string') {
-    return {
-      name: obj.name,
-      attacher: obj?.attacher ?? null,
-      node_name: obj?.node_name ?? null,
-      persistent_volume_name: obj?.persistent_volume_name ?? null,
-      attached: typeof obj?.attached === 'boolean' ? obj.attached : null,
-      attach_error: normalizeError(obj?.attach_error),
-      detach_error: normalizeError(obj?.detach_error),
-      created_at: obj?.created_at ?? null,
-    }
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const source = spec?.source ?? {}
-  const status = obj?.status ?? {}
-  const attachError = status?.attachError ?? status?.attach_error
-  const detachError = status?.detachError ?? status?.detach_error
-
-  return {
-    name: metadata?.name ?? '',
-    attacher: spec?.attacher ?? null,
-    node_name: spec?.nodeName ?? spec?.node_name ?? null,
-    persistent_volume_name:
-      source?.persistentVolumeName
-      ?? source?.persistent_volume_name
-      ?? null,
-    attached: typeof status?.attached === 'boolean' ? status.attached : null,
-    attach_error: normalizeError(attachError),
-    detach_error: normalizeError(detachError),
-    created_at: metadata?.creationTimestamp ?? null,
-  }
-}
-
-function applyVolumeAttachmentWatchEvent(
-  prev: VolumeAttachmentInfo[] | undefined,
-  event: { type?: string; object?: any },
-): VolumeAttachmentInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchVolumeAttachmentObject(obj)
-  const name = normalized?.name
-  if (!name) return items
-
-  const index = items.findIndex((item) => item.name === name)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function statusLabel(va: VolumeAttachmentInfo): 'Attached' | 'Detached' | 'Error' | 'Unknown' {
-  if (va.attach_error?.message || va.detach_error?.message) return 'Error'
-  if (va.attached === true) return 'Attached'
-  if (va.attached === false) return 'Detached'
-  return 'Unknown'
-}
-
-function statusBadgeClass(status: string): string {
-  const lower = status.toLowerCase()
-  if (lower === 'attached') return 'badge-success'
-  if (lower === 'detached') return 'badge-warning'
-  if (lower === 'error') return 'badge-error'
-  return 'badge-info'
-}
-
-function toRawJson(va: VolumeAttachmentInfo): Record<string, unknown> {
-  return {
-    apiVersion: 'storage.k8s.io/v1',
-    kind: 'VolumeAttachment',
-    metadata: {
-      name: va.name,
-      creationTimestamp: va.created_at,
-    },
-    spec: {
-      attacher: va.attacher,
-      nodeName: va.node_name,
-      source: {
-        persistentVolumeName: va.persistent_volume_name,
-      },
-    },
-    status: {
-      attached: va.attached,
-      attachError: va.attach_error
-        ? {
-            message: va.attach_error.message,
-            time: va.attach_error.time,
-          }
-        : undefined,
-      detachError: va.detach_error
-        ? {
-            message: va.detach_error.message,
-            time: va.detach_error.time,
-          }
-        : undefined,
-    },
-  }
-}
-
-function errorText(va: VolumeAttachmentInfo): string {
-  const attachMessage = va.attach_error?.message || ''
-  const detachMessage = va.detach_error?.message || ''
-  if (attachMessage && detachMessage) return `${attachMessage} | ${detachMessage}`
-  return attachMessage || detachMessage || '-'
-}
+import {
+  parseAgeSeconds,
+  formatAge,
+  statusLabel,
+  statusBadgeClass,
+  errorText,
+  volumeAttachmentToRawJson,
+  type SortKey,
+  type SummaryCard,
+} from './volumeattachments/volumeAttachmentHelpers'
+import { applyVolumeAttachmentWatchEvent } from './volumeattachments/volumeAttachmentWatchNormalize'
 
 export default function VolumeAttachments() {
   const queryClient = useQueryClient()
@@ -500,7 +367,7 @@ spec:
                     key={va.name}
                     ref={idx === 0 ? firstRowRef : undefined}
                     className="hover:bg-slate-800/30 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: toRawJson(va) })}
+                    onClick={() => openDetail({ kind: 'VolumeAttachment', name: va.name, rawJson: volumeAttachmentToRawJson(va) })}
                   >
                     <td className="py-3 px-4 text-white font-mono break-all">{va.name}</td>
                     <td className="py-3 px-4 text-slate-300 break-all">{va.attacher || '-'}</td>
