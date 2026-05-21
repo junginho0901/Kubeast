@@ -62,6 +62,9 @@ logs/
 # Build
 build/
 dist/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # Go binaries
 services/session-service-go/server
