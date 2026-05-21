@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type ResourceClaimItem } from '@/services/api'
@@ -13,81 +12,8 @@ import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
-
-type SortKey = null | 'name' | 'namespace' | 'status' | 'requests' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function normalizeWatchResourceClaimObject(obj: any): ResourceClaimItem {
-  if (
-    typeof obj?.name === 'string'
-    && typeof obj?.namespace === 'string'
-    && Object.prototype.hasOwnProperty.call(obj, 'request_count')
-  ) {
-    return {
-      ...obj,
-      labels: obj.labels || {},
-    } as ResourceClaimItem
-  }
-
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  const status = obj?.status ?? {}
-
-  const requests = Array.isArray(spec?.devices?.requests) ? spec.devices.requests : []
-  const allocationStatus = status?.allocation ? 'Allocated' : (status?.reservedFor ? 'Reserved' : null)
-
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-    request_count: requests.length,
-    allocation_status: allocationStatus,
-  }
-}
-
-function applyResourceClaimWatchEvent(
-  prev: ResourceClaimItem[] | undefined,
-  event: { type?: string; object?: any },
-): ResourceClaimItem[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-
-  const normalized = normalizeWatchResourceClaimObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-
-  return items
-}
+import { parseAgeSeconds, formatAge, type SortKey } from './resourceclaims/resourceClaimsHelpers'
+import { applyResourceClaimWatchEvent } from './resourceclaims/resourceClaimsWatchNormalize'
 
 function getStatusBadge(status?: string | null) {
   if (status === 'Allocated') {
