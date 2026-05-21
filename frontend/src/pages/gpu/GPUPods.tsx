@@ -4,49 +4,16 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
-import {
-  RefreshCw,
-  Box,
-  Loader2,
-  Search,
-  ChevronUp,
-  ChevronDown,
-  BarChart3,
-} from 'lucide-react'
+import { RefreshCw, BarChart3 } from 'lucide-react'
 
 import type { GPUDashboardData, GPUMetricsData, GPUPodInfo } from '@/services/api'
-
-type SortKey = null | 'namespace' | 'name' | 'node_name' | 'gpu_requested' | 'status' | 'age'
-type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function getStatusColor(status: string): string {
-  const lower = (status || '').toLowerCase()
-  if (lower === 'running' || lower === 'succeeded' || lower === 'completed') return 'badge-success'
-  if (lower === 'pending') return 'badge-warning'
-  if (lower === 'failed' || lower.includes('error') || lower.includes('backoff')) return 'badge-error'
-  return 'badge-info'
-}
+import { parseAgeSeconds, type SortKey, type SummaryCard } from './gpupods/gpuPodsHelpers'
+import { GPUPodsFilters } from './gpupods/GPUPodsFilters'
+import { GPUPodsTable } from './gpupods/GPUPodsTable'
+import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
 
 export default function GPUPods() {
   const { t } = useTranslation()
@@ -160,28 +127,6 @@ export default function GPUPods() {
       .slice(0, 4)
   }, [pods])
 
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
-    }
-    if (sortDir === 'asc') {
-      setSortDir('desc')
-      return
-    }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc' ? (
-      <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-    ) : (
-      <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-    )
-  }
-
   const sortedPods = useMemo(() => {
     if (!sortKey) return filteredPods
     const list = [...filteredPods]
@@ -294,17 +239,11 @@ export default function GPUPods() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-        <input
-          type="text"
-          placeholder={tr('gpuPods.searchPlaceholder', 'Search by pod name, namespace, or node...')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        />
-      </div>
+      <GPUPodsFilters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchPlaceholder={tr('gpuPods.searchPlaceholder', 'Search by pod name, namespace, or node...')}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 shrink-0">
@@ -316,220 +255,37 @@ export default function GPUPods() {
         ))}
       </div>
 
-      {/* GPU Usage per Node + Status Distribution */}
-      {showCharts && (nodeGpuUsage.length > 0 || stats.topStatuses.length > 0) && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 shrink-0">
-          {/* GPU usage per node */}
-          {nodeGpuUsage.length > 0 && (
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-white">
-                  {tr('gpuPods.nodeUsage', 'GPU Usage by Node')}
-                </h2>
-                <Box className="w-4 h-4 text-slate-400" />
-              </div>
-              <div className="space-y-3">
-                {nodeGpuUsage.map(([node, info]) => (
-                  <div key={node} className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2.5">
-                    <div>
-                      <span className="text-sm font-medium text-white">{node}</span>
-                      <span className="ml-2 text-xs text-slate-400">
-                        {info.podCount} {info.podCount === 1 ? 'pod' : 'pods'}
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-violet-300">
-                      {info.totalGpu} GPU{info.totalGpu !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Status distribution */}
-          {stats.topStatuses.length > 0 && (
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-white">
-                  {tr('gpuPods.statusDistribution', 'Status Distribution')}
-                </h2>
-              </div>
-              <div className="space-y-3">
-                {stats.topStatuses.map(([status, count]) => {
-                  const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0
-                  return (
-                    <div key={status}>
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-slate-300">{status}</span>
-                        <span className="text-xs text-slate-400">{count} ({pct}%)</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            status === 'Running' ? 'bg-emerald-500'
-                            : status === 'Pending' ? 'bg-yellow-500'
-                            : status === 'Succeeded' ? 'bg-blue-500'
-                            : status === 'Failed' ? 'bg-red-500'
-                            : 'bg-slate-500'
-                          }`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+      {showCharts && (
+        <GPUPodsCharts
+          nodeGpuUsage={nodeGpuUsage}
+          topStatuses={stats.topStatuses}
+          total={stats.total}
+          tr={tr}
+        />
       )}
 
-      {/* Table */}
-      <div ref={tableContainerRef} className={`card flex flex-col ${showCharts ? 'min-h-[420px]' : 'flex-1 min-h-0'}`}>
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[980px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('gpuPods.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('gpuPods.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('node_name')}>
-                  <span className="inline-flex items-center gap-1">{tr('gpuPods.table.node', 'Node')}{renderSortIcon('node_name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('gpu_requested')}>
-                  <span className="inline-flex items-center gap-1">{tr('gpuPods.table.gpus', 'GPUs')}{renderSortIcon('gpu_requested')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="inline-flex items-center gap-1">{tr('gpuPods.table.status', 'Status')}{renderSortIcon('status')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('gpuPods.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-                {metricsAvailable && (
-                  <>
-                    <th className="text-left py-3 px-4 w-[140px]">
-                      {tr('gpuPods.table.gpuUtil', 'GPU Util')}
-                    </th>
-                    <th className="text-left py-3 px-4 w-[140px]">
-                      {tr('gpuPods.table.memUtil', 'Mem Util')}
-                    </th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedPods.map((pod, idx) => {
-                const podKey = `${pod.namespace}/${pod.name}`
-                const podMetric = podMetricsMap.get(podKey)
-                return (
-                <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                  key={podKey}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
-                >
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.namespace}</span></td>
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name ?? '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{pod.gpu_requested}</td>
-                  <td className="py-3 px-4">
-                    <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>
-                  </td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(pod.created_at)}</td>
-                  {metricsAvailable && (
-                    <>
-                      <td className="py-3 px-4">
-                        {podMetric ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${podMetric.gpu_util >= 80 ? 'bg-red-500' : podMetric.gpu_util >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                style={{ width: `${Math.min(podMetric.gpu_util, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-mono">{Math.round(podMetric.gpu_util)}%</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {podMetric ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${podMetric.memory_util_percent >= 80 ? 'bg-red-500' : podMetric.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
-                                style={{ width: `${Math.min(podMetric.memory_util_percent, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-mono">{Math.round(podMetric.memory_util_percent)}%</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500">-</span>
-                        )}
-                      </td>
-                    </>
-                  )}
-                </tr>
-                )
-              })}
-              {isLoading && (
-                <tr>
-                  <td colSpan={metricsAvailable ? 8 : 6} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {sortedPods.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={metricsAvailable ? 8 : 6} className="py-6 px-4 text-center text-slate-400">
-                    {tr('gpuPods.noResults', 'No GPU pods found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={8} />
-          </table>
-        </div>
-        {sortedPods.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedPods.length),
-                total: sortedPods.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <GPUPodsTable
+        pagedPods={pagedPods}
+        sortedPodsLength={sortedPods.length}
+        isLoading={isLoading}
+        metricsAvailable={metricsAvailable}
+        podMetricsMap={podMetricsMap}
+        showCharts={showCharts}
+        sortKey={sortKey}
+        setSortKey={setSortKey}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        openDetail={openDetail}
+        tr={tr}
+      />
     </div>
   )
 }
