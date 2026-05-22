@@ -271,3 +271,58 @@ func (h *Handler) DeleteClusterRole(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
 }
+
+// --- ClusterRoleBindings ---
+
+// GetClusterRoleBindings handles GET /api/v1/clusterrolebindings.
+func (h *Handler) GetClusterRoleBindings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data, err := h.svc.GetClusterRoleBindings(ctx)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
+// DescribeClusterRoleBinding handles GET /api/v1/clusterrolebindings/{name}/describe.
+func (h *Handler) DescribeClusterRoleBinding(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	data, err := h.svc.DescribeClusterRoleBinding(ctx, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
+// GetClusterRoleBindingYAML handles GET /api/v1/clusterrolebindings/{name}/yaml.
+func (h *Handler) GetClusterRoleBindingYAML(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	force := queryParamBool(r, "force_refresh", false)
+	data, err := h.svc.GetGenericResourceYAML(ctx, "clusterrolebindings", "", name, force)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"yaml": data})
+}
+
+// DeleteClusterRoleBinding handles DELETE /api/v1/clusterrolebindings/{name}.
+func (h *Handler) DeleteClusterRoleBinding(w http.ResponseWriter, r *http.Request) {
+	if err := h.requirePermission(r, "resource.clusterrolebinding.delete"); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	err := h.svc.DeleteClusterRoleBinding(ctx, name)
+	h.recordAudit(r, "k8s.clusterrolebinding.delete", "clusterrolebinding", name, "", err)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
+}
