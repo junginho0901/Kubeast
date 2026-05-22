@@ -216,3 +216,58 @@ func (h *Handler) DeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
 }
+
+// --- ClusterRoles ---
+
+// GetClusterRoles handles GET /api/v1/clusterroles.
+func (h *Handler) GetClusterRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data, err := h.svc.GetClusterRoles(ctx)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
+// DescribeClusterRole handles GET /api/v1/clusterroles/{name}/describe.
+func (h *Handler) DescribeClusterRole(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	data, err := h.svc.DescribeClusterRole(ctx, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
+// GetClusterRoleYAML handles GET /api/v1/clusterroles/{name}/yaml.
+func (h *Handler) GetClusterRoleYAML(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	force := queryParamBool(r, "force_refresh", false)
+	data, err := h.svc.GetGenericResourceYAML(ctx, "clusterroles", "", name, force)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"yaml": data})
+}
+
+// DeleteClusterRole handles DELETE /api/v1/clusterroles/{name}.
+func (h *Handler) DeleteClusterRole(w http.ResponseWriter, r *http.Request) {
+	if err := h.requirePermission(r, "resource.clusterrole.delete"); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	err := h.svc.DeleteClusterRole(ctx, name)
+	h.recordAudit(r, "k8s.clusterrole.delete", "clusterrole", name, "", err)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
+}
