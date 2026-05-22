@@ -20,22 +20,7 @@ import {
   type ProviderDef,
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
-
-/* ═══════════════════════════════════════
-   Shared types
-   ═══════════════════════════════════════ */
-type SetupMode = 'in_cluster' | 'external'
-type WizardPage = 'cluster' | 'ai-model'
-
-/* ───── cluster step phases ───── */
-type StepPhase = 'validate' | 'save' | 'rollout' | 'connect'
-interface StepDef { phase: StepPhase; labelKey: string; fallback: string }
-const STEPS: StepDef[] = [
-  { phase: 'validate', labelKey: 'setup.steps.validate', fallback: 'Validate' },
-  { phase: 'save',     labelKey: 'setup.steps.save',     fallback: 'Save config' },
-  { phase: 'rollout',  labelKey: 'setup.steps.rollout',  fallback: 'Restart service' },
-  { phase: 'connect',  labelKey: 'setup.steps.connect',  fallback: 'Connect cluster' },
-]
+import { STEPS, type SetupMode, type WizardPage, type StepPhase } from './setup/types'
 
 /* ═══════════════════════════════════════
    Component
