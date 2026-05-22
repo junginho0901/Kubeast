@@ -6,10 +6,10 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 )
 
-// RegisterSecurity — ServiceAccount, Role, RoleBinding, ClusterRole.
+// RegisterSecurity — ServiceAccount, Role, RoleBinding, ClusterRole, ClusterRoleBinding.
 //
 // Frontend 가 /cluster/X (gateway 가 /api/v1/X 로 prefix strip) 형식으로 호출.
-// ClusterRole 은 cluster-scoped 라 namespace path segment 없음.
+// ClusterRole / ClusterRoleBinding 은 cluster-scoped 라 namespace path segment 없음.
 func RegisterSecurity(r chi.Router, h *handler.Handler) {
 	// ServiceAccounts
 	r.Get("/api/v1/serviceaccounts/all", h.GetAllServiceAccounts)
@@ -37,4 +37,10 @@ func RegisterSecurity(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/clusterroles/{name}/describe", h.DescribeClusterRole)
 	r.Get("/api/v1/clusterroles/{name}/yaml", h.GetClusterRoleYAML)
 	r.Delete("/api/v1/clusterroles/{name}", h.DeleteClusterRole)
+
+	// ClusterRoleBindings (cluster-scoped)
+	r.Get("/api/v1/clusterrolebindings", h.GetClusterRoleBindings)
+	r.Get("/api/v1/clusterrolebindings/{name}/describe", h.DescribeClusterRoleBinding)
+	r.Get("/api/v1/clusterrolebindings/{name}/yaml", h.GetClusterRoleBindingYAML)
+	r.Delete("/api/v1/clusterrolebindings/{name}", h.DeleteClusterRoleBinding)
 }
