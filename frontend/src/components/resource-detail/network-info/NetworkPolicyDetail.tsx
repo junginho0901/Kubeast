@@ -1,0 +1,93 @@
+import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+
+interface Props {
+  name: string
+  namespace?: string
+  rawJson?: Record<string, unknown>
+}
+
+export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props) {
+  const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
+  const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
+  const labels = (meta.labels ?? {}) as Record<string, string>
+  const annotations = (meta.annotations ?? {}) as Record<string, string>
+  const finalizers = (meta.finalizers ?? rawJson?.finalizers ?? []) as string[]
+  const podSelector = (spec.podSelector as any)?.matchLabels as Record<string, string> | undefined
+  const ingress = (spec.ingress ?? []) as any[]
+  const egress = (spec.egress ?? []) as any[]
+  const policyTypes = (spec.policyTypes ?? []) as string[]
+
+  const isDefaultDenyIngress = policyTypes.includes('Ingress') && (!spec.ingress || (Array.isArray(spec.ingress) && (spec.ingress as any[]).length === 0))
+  const isDefaultDenyEgress = policyTypes.includes('Egress') && (!spec.egress || (Array.isArray(spec.egress) && (spec.egress as any[]).length === 0))
+
+  const renderPeer = (peer: any) => {
+    const parts: string[] = []
+    if (peer.ipBlock) parts.push(`CIDR: ${peer.ipBlock.cidr}${peer.ipBlock.except ? ` (except ${peer.ipBlock.except.join(', ')})` : ''}`)
+    if (peer.namespaceSelector?.matchLabels) parts.push(`ns: ${Object.entries(peer.namespaceSelector.matchLabels).map(([k, v]) => `${k}=${v}`).join(',')}`)
+    if (peer.podSelector?.matchLabels) parts.push(`pod: ${Object.entries(peer.podSelector.matchLabels).map(([k, v]) => `${k}=${v}`).join(',')}`)
+    return parts.join(' | ') || '*'
+  }
+
+  return (
+    <>
+      <InfoSection title="NetworkPolicy Info">
+        {(isDefaultDenyIngress || isDefaultDenyEgress) && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {isDefaultDenyIngress && <span className="badge badge-warning">Default Deny Ingress</span>}
+            {isDefaultDenyEgress && <span className="badge badge-warning">Default Deny Egress</span>}
+          </div>
+        )}
+        <div className="space-y-2">
+          <InfoRow label="Name" value={name} />
+          {namespace && <InfoRow label="Namespace" value={namespace} />}
+          <InfoRow label="Policy Types" value={policyTypes.join(', ') || '-'} />
+          <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
+        </div>
+      </InfoSection>
+
+      {podSelector && Object.keys(podSelector).length > 0 && (
+        <InfoSection title="Pod Selector">
+          <KeyValueTags data={podSelector} />
+        </InfoSection>
+      )}
+
+      {ingress.length > 0 && (
+        <InfoSection title="Ingress Rules">
+          <div className="space-y-2 text-xs">
+            {ingress.map((rule: any, i: number) => (
+              <div key={i} className="rounded border border-slate-800 p-2">
+                {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
+                <div className="text-slate-200">From: {(rule.from || [{ ipBlock: { cidr: '0.0.0.0/0' } }]).map(renderPeer).join(' ; ')}</div>
+              </div>
+            ))}
+          </div>
+        </InfoSection>
+      )}
+
+      {egress.length > 0 && (
+        <InfoSection title="Egress Rules">
+          <div className="space-y-2 text-xs">
+            {egress.map((rule: any, i: number) => (
+              <div key={i} className="rounded border border-slate-800 p-2">
+                {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
+                <div className="text-slate-200">To: {(rule.to || [{ ipBlock: { cidr: '0.0.0.0/0' } }]).map(renderPeer).join(' ; ')}</div>
+              </div>
+            ))}
+          </div>
+        </InfoSection>
+      )}
+
+      {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
+      {Object.keys(annotations).length > 0 && <InfoSection title="Annotations"><KeyValueTags data={annotations} /></InfoSection>}
+      {finalizers.length > 0 && (
+        <InfoSection title="Finalizers">
+          <div className="flex flex-wrap gap-1.5">
+            {finalizers.map((f, i) => (
+              <span key={`${f}-${i}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
+            ))}
+          </div>
+        </InfoSection>
+      )}
+    </>
+  )
+}
