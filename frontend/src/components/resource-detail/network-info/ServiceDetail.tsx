@@ -27,6 +27,8 @@ export default function ServiceDetail({ name, namespace, rawJson }: Props) {
           {externalIPs.length > 0 && <InfoRow label="External IPs" value={externalIPs.join(', ')} />}
           {lbIngress.length > 0 && <InfoRow label="Load Balancer" value={lbIngress.map((i: any) => i.ip || i.hostname).join(', ')} />}
           <InfoRow label="Session Affinity" value={String(spec.sessionAffinity ?? 'None')} />
+          {spec.externalTrafficPolicy != null && <InfoRow label="External Traffic Policy" value={String(spec.externalTrafficPolicy)} />}
+          {spec.internalTrafficPolicy != null && <InfoRow label="Internal Traffic Policy" value={String(spec.internalTrafficPolicy)} />}
           <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
         </div>
       </InfoSection>
