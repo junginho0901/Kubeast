@@ -147,6 +147,10 @@ func formatMutatingWebhooks(webhooks []admissionregistrationv1.MutatingWebhook) 
 			w["object_selector"] = formatLabelSelector(wh.ObjectSelector)
 		}
 
+		if len(wh.MatchConditions) > 0 {
+			w["match_conditions"] = formatMatchConditions(wh.MatchConditions)
+		}
+
 		result = append(result, w)
 	}
 	return result
@@ -288,9 +292,25 @@ func formatValidatingWebhooks(webhooks []admissionregistrationv1.ValidatingWebho
 			w["object_selector"] = formatLabelSelector(wh.ObjectSelector)
 		}
 
+		if len(wh.MatchConditions) > 0 {
+			w["match_conditions"] = formatMatchConditions(wh.MatchConditions)
+		}
+
 		result = append(result, w)
 	}
 	return result
+}
+
+// formatMatchConditions returns name/expression pairs for admission webhook CEL conditions.
+func formatMatchConditions(conditions []admissionregistrationv1.MatchCondition) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(conditions))
+	for _, c := range conditions {
+		out = append(out, map[string]interface{}{
+			"name":       c.Name,
+			"expression": c.Expression,
+		})
+	}
+	return out
 }
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
