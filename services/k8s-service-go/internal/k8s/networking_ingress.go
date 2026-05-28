@@ -207,6 +207,20 @@ func formatIngressDetail(ing *networkingv1.Ingress) map[string]interface{} {
 		if lb.Hostname != "" {
 			addr["hostname"] = lb.Hostname
 		}
+		if len(lb.Ports) > 0 {
+			ports := make([]map[string]interface{}, 0, len(lb.Ports))
+			for _, p := range lb.Ports {
+				port := map[string]interface{}{
+					"port":     int(p.Port),
+					"protocol": string(p.Protocol),
+				}
+				if p.Error != nil {
+					port["error"] = *p.Error
+				}
+				ports = append(ports, port)
+			}
+			addr["ports"] = ports
+		}
 		addresses = append(addresses, addr)
 	}
 
