@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from './DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -20,6 +20,7 @@ type ReferenceGrantDescribe = {
   created_at?: string | null
   apiVersion?: string
   metadata?: Record<string, unknown>
+  conditions?: Array<Record<string, unknown>>
 }
 
 function text(value: unknown): string {
@@ -125,6 +126,12 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
           </div>
         )}
       </InfoSection>
+
+      {Array.isArray(describe?.conditions) && describe.conditions.length > 0 && (
+        <InfoSection title="Conditions">
+          <ConditionsTable conditions={describe.conditions} />
+        </InfoSection>
+      )}
 
       <InfoSection title="Lifecycle">
         <div className="space-y-2">
