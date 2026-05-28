@@ -434,6 +434,24 @@ func (s *Service) DescribeCustomResourceInstance(ctx context.Context, group, ver
 		result["finalizers"] = finalizers
 	}
 
+	// Managed fields summary (server-side apply tracking)
+	if managed := item.GetManagedFields(); len(managed) > 0 {
+		mfs := make([]map[string]interface{}, 0, len(managed))
+		for _, mf := range managed {
+			entry := map[string]interface{}{
+				"manager":     mf.Manager,
+				"operation":   string(mf.Operation),
+				"api_version": mf.APIVersion,
+				"subresource": mf.Subresource,
+			}
+			if mf.Time != nil {
+				entry["time"] = mf.Time.UTC().Format("2006-01-02T15:04:05Z")
+			}
+			mfs = append(mfs, entry)
+		}
+		result["managed_fields"] = mfs
+	}
+
 	// Events
 	if eventsErr == nil && events != nil {
 		sortEventsByTime(events.Items)
