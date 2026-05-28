@@ -224,6 +224,7 @@ func formatPVDetail(pv *corev1.PersistentVolume) map[string]interface{} {
 		"driver":         driver,
 		"volume_handle":  volumeHandle,
 		"reason":         pv.Status.Reason,
+		"message":        pv.Status.Message,
 		"created_at":     toISO(&pv.CreationTimestamp),
 	}
 }
