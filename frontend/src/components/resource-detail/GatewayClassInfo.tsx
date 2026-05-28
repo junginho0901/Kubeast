@@ -26,6 +26,7 @@ type GatewayClassDescribe = {
   metadata?: Record<string, unknown>
   spec?: Record<string, unknown>
   status_detail?: Record<string, unknown>
+  supported_features?: Array<{ name?: string }>
 }
 
 function text(value: unknown): string {
@@ -114,6 +115,18 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
       <InfoSection title="Conditions">
         <ConditionsTable conditions={conditions as any[]} />
       </InfoSection>
+
+      {Array.isArray(describe?.supported_features) && describe.supported_features.length > 0 && (
+        <InfoSection title={`Supported Features (${describe.supported_features.length})`}>
+          <div className="flex flex-wrap gap-1.5">
+            {describe.supported_features.map((f, i) => (
+              <span key={i} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-mono text-slate-200">
+                {f?.name || '-'}
+              </span>
+            ))}
+          </div>
+        </InfoSection>
+      )}
 
       <InfoSection title="Lifecycle">
         <div className="space-y-2">
