@@ -19,9 +19,12 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
   const classController = String(rawJson?.class_controller ?? '-')
   const classDefaultRaw = rawJson?.class_is_default
   const classIsDefault = classDefaultRaw == null ? '-' : Boolean(classDefaultRaw) ? 'Yes' : 'No'
-  const lbAddresses = (((status.loadBalancer as any)?.ingress ?? []) as any[])
-    .map((a: any) => a?.ip || a?.hostname)
-    .filter(Boolean)
+  const lbIngress = ((status.loadBalancer as any)?.ingress ?? []) as any[]
+  const lbAddresses = lbIngress.map((a: any) => a?.ip || a?.hostname).filter(Boolean)
+  const lbPortStatuses = lbIngress.flatMap((a: any) => {
+    const ports = Array.isArray(a?.ports) ? a.ports : []
+    return ports.map((p: any) => ({ host: a?.ip || a?.hostname || '-', port: p?.port, protocol: p?.protocol, error: p?.error }))
+  })
 
   return (
     <>
@@ -42,6 +45,33 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
           <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
         </div>
       </InfoSection>
+
+      {lbPortStatuses.length > 0 && (
+        <InfoSection title="Load Balancer Ports">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Address</th>
+                  <th className="text-left py-1">Port</th>
+                  <th className="text-left py-1">Protocol</th>
+                  <th className="text-left py-1">Error</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {lbPortStatuses.map((p, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="py-1 pr-2 font-mono">{p.host}</td>
+                    <td className="py-1 pr-2">{p.port ?? '-'}</td>
+                    <td className="py-1 pr-2">{p.protocol || '-'}</td>
+                    <td className="py-1 pr-2 text-red-300">{p.error || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </InfoSection>
+      )}
 
       {tls.length > 0 && (
         <InfoSection title="TLS">
