@@ -72,6 +72,23 @@ func (s *Service) DescribeReferenceGrant(ctx context.Context, namespace, name st
 		result["to"] = toList
 	}
 
+	if status := mapMap(obj.Object, "status"); status != nil {
+		conditions := mapSlice(status, "conditions")
+		condList := make([]map[string]interface{}, 0, len(conditions))
+		for _, c := range conditions {
+			if cm, ok := c.(map[string]interface{}); ok {
+				condList = append(condList, map[string]interface{}{
+					"type":                 mapStr(cm, "type"),
+					"status":               mapStr(cm, "status"),
+					"reason":               mapStr(cm, "reason"),
+					"message":              mapStr(cm, "message"),
+					"last_transition_time": mapStr(cm, "lastTransitionTime"),
+				})
+			}
+		}
+		result["conditions"] = condList
+	}
+
 	return result, nil
 }
 
