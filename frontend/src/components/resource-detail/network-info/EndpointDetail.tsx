@@ -55,6 +55,8 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
           {namespace && <InfoRow label="Namespace" value={namespace} />}
           <InfoRow label="Ready Addresses" value={String(readyCount)} />
           <InfoRow label="Not Ready Addresses" value={String(notReadyCount)} />
+          {rawJson?.generation != null && <InfoRow label="Generation" value={String(rawJson.generation)} />}
+          {rawJson?.resource_version != null && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(rawJson.resource_version)}</span>} />}
           <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
         </div>
       </InfoSection>
