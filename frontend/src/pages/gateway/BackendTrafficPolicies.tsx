@@ -1,493 +1,61 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { mergeWatchUpdate } from '@/services/mergeWatchUpdate'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type BackendTrafficPolicyInfo } from '@/services/api'
-import { useKubeWatchList } from '@/services/useKubeWatchList'
-import { useResourceDetail } from '@/components/ResourceDetailContext'
-import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
-import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
-import { summarizeList } from '@/utils/aiContext/summarizeList'
-import { buildResourceLink } from '@/utils/resourceLink'
-import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
+import BackendPoliciesPage from './backend-policies/BackendPoliciesPage'
+import type { BackendPolicyConfig } from './backend-policies/useBackendPoliciesData'
 
-type SortKey = null | 'name' | 'namespace' | 'targetRef' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
+const config: BackendPolicyConfig<BackendTrafficPolicyInfo> = {
+  kind: 'BackendTrafficPolicy',
+  queryKeyPrefix: ['gateway', 'backendtrafficpolicies'] as const,
+  watchPath: (ns) => ns === 'all' ? '/api/v1/backendtrafficpolicies' : `/api/v1/namespaces/${ns}/backendtrafficpolicies`,
+  describeQueryKey: 'backendtrafficpolicy-describe',
+  permissionCreate: 'resource.backendtrafficpolicy.create',
+  list: (ns, force) => api.getBackendTrafficPolicies(ns, force),
+  listAll: (force) => api.getAllBackendTrafficPolicies(force),
+  aiSummaryLabel: 'BackendTrafficPolicy',
 }
 
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-function formatTargetRefs(item: BackendTrafficPolicyInfo): string {
-  const refs = Array.isArray(item.target_refs) ? item.target_refs : []
-  if (refs.length === 0) return '-'
-  return refs.map((r) => `${r.kind || 'Service'}/${r.name || '-'}`).join(', ')
-}
-
-function formatConditionStatus(item: BackendTrafficPolicyInfo): string {
-  const conds = Array.isArray(item.conditions) ? item.conditions : []
-  if (conds.length === 0) return '-'
-  const accepted = conds.find((c) => c.type === 'Accepted')
-  if (accepted) return accepted.status === 'True' ? 'Accepted' : accepted.reason || 'Not Accepted'
-  return conds[0]?.type || '-'
-}
-
-function normalizeWatchObject(obj: any): BackendTrafficPolicyInfo {
-  if (typeof obj?.name === 'string' && typeof obj?.namespace === 'string') {
-    return {
-      ...obj,
-      target_refs: Array.isArray(obj.target_refs) ? obj.target_refs : [],
-      labels: obj.labels || {},
-      annotations: obj.annotations || {},
-    } as BackendTrafficPolicyInfo
-  }
-  const metadata = obj?.metadata ?? {}
-  const spec = obj?.spec ?? {}
-  let targetRefs = Array.isArray(spec?.targetRefs) ? spec.targetRefs : []
-  if (targetRefs.length === 0 && spec?.targetRef) targetRefs = [spec.targetRef]
-  return {
-    name: metadata?.name ?? obj?.name ?? '',
-    namespace: metadata?.namespace ?? obj?.namespace ?? '',
-    target_refs: targetRefs,
-    labels: metadata?.labels ?? obj?.labels ?? {},
-    annotations: metadata?.annotations ?? obj?.annotations ?? {},
-    created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
-  }
-}
-
-function applyWatchEvent(
-  prev: BackendTrafficPolicyInfo[] | undefined,
-  event: { type?: string; object?: any },
-): BackendTrafficPolicyInfo[] {
-  const items = Array.isArray(prev) ? [...prev] : []
-  const obj = event?.object
-  if (!obj) return items
-  const normalized = normalizeWatchObject(obj)
-  const name = normalized?.name
-  const namespace = normalized?.namespace
-  if (!name || !namespace) return items
-  const key = `${namespace}/${name}`
-  const index = items.findIndex((item) => `${item.namespace}/${item.name}` === key)
-  if (event.type === 'DELETED') {
-    if (index >= 0) items.splice(index, 1)
-    return items
-  }
-  if (index >= 0) items[index] = mergeWatchUpdate(items[index], normalized)
-  else items.push(normalized)
-  return items
-}
-
-function toRawJson(item: BackendTrafficPolicyInfo): Record<string, unknown> {
-  return {
-    apiVersion: 'gateway.networking.k8s.io/v1alpha2',
-    kind: 'BackendTrafficPolicy',
-    metadata: {
-      name: item.name,
-      namespace: item.namespace,
-      labels: item.labels || {},
-      annotations: item.annotations || {},
-      creationTimestamp: item.created_at,
-    },
-    spec: { targetRefs: item.target_refs || [] },
-  }
-}
-
-export default function BackendTrafficPolicies() {
-  const queryClient = useQueryClient()
-  const { t } = useTranslation()
-  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
-    t(key, { defaultValue: fallback, ...options })
-  const { open: openDetail } = useResourceDetail()
-
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedNamespace, setSelectedNamespace] = useState<string>('all')
-  const [isNamespaceDropdownOpen, setIsNamespaceDropdownOpen] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>(null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const namespaceDropdownRef = useRef<HTMLDivElement>(null)
-
-  const { data: namespaces } = useQuery({
-    queryKey: ['namespaces'],
-    queryFn: () => api.getNamespaces(),
-    staleTime: 30000,
-  })
-
-  const { data: policies, isLoading } = useQuery({
-    queryKey: ['gateway', 'backendtrafficpolicies', selectedNamespace],
-    queryFn: () => (
-      selectedNamespace === 'all'
-        ? api.getAllBackendTrafficPolicies(false)
-        : api.getBackendTrafficPolicies(selectedNamespace, false)
-    ),
-  })
-  const { has } = usePermission()
-  const canCreate = has('resource.backendtrafficpolicy.create')
-
-  useKubeWatchList({
-    enabled: true,
-    queryKey: ['gateway', 'backendtrafficpolicies', selectedNamespace],
-    path: selectedNamespace === 'all'
-      ? '/api/v1/backendtrafficpolicies'
-      : `/api/v1/namespaces/${selectedNamespace}/backendtrafficpolicies`,
-    query: 'watch=1',
-    applyEvent: (prev, event) => applyWatchEvent(prev as BackendTrafficPolicyInfo[] | undefined, event),
-    onEvent: (event) => {
-      if (event?.type === 'DELETED') return
-      const name = event?.object?.name || event?.object?.metadata?.name
-      const ns = event?.object?.namespace || event?.object?.metadata?.namespace
-      if (name && ns) {
-        queryClient.invalidateQueries({ queryKey: ['backendtrafficpolicy-describe', ns, name] })
-      }
-    },
-  })
-
-  useEffect(() => {
-    if (!isNamespaceDropdownOpen) return
-    const handleClickOutside = (event: MouseEvent) => {
-      if (namespaceDropdownRef.current && !namespaceDropdownRef.current.contains(event.target as Node)) {
-        setIsNamespaceDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNamespaceDropdownOpen])
-
-  const filteredPolicies = useMemo(() => {
-    if (!Array.isArray(policies)) return [] as BackendTrafficPolicyInfo[]
-    if (!searchQuery.trim()) return policies
-    const q = searchQuery.toLowerCase()
-    return policies.filter((item) => (
-      item.name.toLowerCase().includes(q)
-      || item.namespace.toLowerCase().includes(q)
-      || formatTargetRefs(item).toLowerCase().includes(q)
-    ))
-  }, [policies, searchQuery])
-
-  const summary = useMemo(() => {
-    const total = filteredPolicies.length
-    let accepted = 0
-    let withTargetRefs = 0
-    for (const item of filteredPolicies) {
-      if ((item.target_refs || []).length > 0) withTargetRefs += 1
-      const conds = Array.isArray(item.conditions) ? item.conditions : []
-      const acc = conds.find((c) => c.type === 'Accepted')
-      if (acc && acc.status === 'True') accepted += 1
-    }
-    return { total, accepted, withTargetRefs }
-  }, [filteredPolicies])
-
-  const handleSort = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) { setSortKey(key); setSortDir('asc'); return }
-    if (sortDir === 'asc') { setSortDir('desc'); return }
-    setSortKey(null)
-  }
-
-  const renderSortIcon = (key: NonNullable<SortKey>) => {
-    if (sortKey !== key) return null
-    return sortDir === 'asc'
-      ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" />
-      : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />
-  }
-
-  const sortedPolicies = useMemo(() => {
-    if (!sortKey) return filteredPolicies
-    const list = [...filteredPolicies]
-    const getValue = (item: BackendTrafficPolicyInfo): string | number => {
-      switch (sortKey) {
-        case 'name': return item.name
-        case 'namespace': return item.namespace
-        case 'targetRef': return formatTargetRefs(item)
-        case 'age': return parseAgeSeconds(item.created_at)
-        default: return ''
-      }
-    }
-    list.sort((a, b) => {
-      const av = getValue(a)
-      const bv = getValue(b)
-      if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
-    return list
-  }, [filteredPolicies, sortDir, sortKey])
-
-  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({ recalculationKey: sortedPolicies.length })
-  const totalPages = Math.max(1, Math.ceil(sortedPolicies.length / rowsPerPage))
-
-  useEffect(() => { setCurrentPage(1) }, [searchQuery, selectedNamespace])
-  useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages) }, [currentPage, totalPages])
-
-  const pagedPolicies = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage
-    return sortedPolicies.slice(start, start + rowsPerPage)
-  }, [sortedPolicies, currentPage, rowsPerPage])
-
-  // 플로팅 AI 위젯용 스냅샷
-  const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(policies) || policies.length === 0) return null
-    const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
-    const total = policies.length
-    return {
-      source: 'base' as const,
-      summary: `${nsLabel} BackendTrafficPolicy ${total}개`,
-      data: {
-        filters: { namespace: selectedNamespace, search: searchQuery || undefined },
-        stats: { total },
-        ...summarizeList(pagedPolicies as unknown as Record<string, unknown>[], {
-          total: sortedPolicies.length,
-          currentPage,
-          pageSize: rowsPerPage,
-          topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'target_refs'],
-          linkBuilder: (p) => {
-            const pol = p as unknown as BackendTrafficPolicyInfo
-            return buildResourceLink('BackendTrafficPolicy', pol.namespace, pol.name)
-          },
-        }),
-      },
-    }
-  }, [policies, pagedPolicies, sortedPolicies.length, currentPage, rowsPerPage, selectedNamespace, searchQuery])
-
-  useAIContext(aiSnapshot, [aiSnapshot])
-
-  const handleRefresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      const data = selectedNamespace === 'all'
-        ? await api.getAllBackendTrafficPolicies(true)
-        : await api.getBackendTrafficPolicies(selectedNamespace, true)
-      queryClient.removeQueries({ queryKey: ['gateway', 'backendtrafficpolicies', selectedNamespace] })
-      queryClient.setQueryData(['gateway', 'backendtrafficpolicies', selectedNamespace], data)
-    } catch (error) {
-      console.error('BackendTrafficPolicies refresh failed:', error)
-    }
-    setTimeout(() => setIsRefreshing(false), 500)
-  }
-
-  const createYamlTemplate = useMemo(() => {
-    const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
-    return `apiVersion: gateway.networking.k8s.io/v1alpha2
-kind: BackendTrafficPolicy
-metadata:
-  name: sample-backendtrafficpolicy
-  namespace: ${ns}
-spec:
+const yamlBody = `spec:
   targetRefs:
     - group: ""
       kind: Service
       name: my-service
 `
-  }, [selectedNamespace])
 
-  const showNamespaceColumn = selectedNamespace === 'all'
+export default function BackendTrafficPolicies() {
+  const { t } = useTranslation()
+  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
+    t(key, { defaultValue: fallback, ...options })
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-white">{tr('backendTrafficPoliciesPage.title', 'Backend Traffic Policies')}</h1>
-          <p className="mt-2 text-slate-400">{tr('backendTrafficPoliciesPage.subtitle', 'Inspect and manage Gateway API BackendTrafficPolicy resources across namespaces.')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canCreate && (
-            <button type="button" onClick={() => setCreateDialogOpen(true)} className="btn btn-primary flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              {tr('backendTrafficPoliciesPage.create', 'Create BackendTrafficPolicy')}
-            </button>
-          )}
-          <button
-            type="button" onClick={handleRefresh} disabled={isRefreshing}
-            title={tr('backendTrafficPoliciesPage.refreshTitle', 'Force refresh')}
-            className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {tr('backendTrafficPoliciesPage.refresh', 'Refresh')}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 shrink-0">
-        <div className="xl:col-span-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder={tr('backendTrafficPoliciesPage.searchPlaceholder', 'Search BackendTrafficPolicies by name...')}
-              value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div className="relative" ref={namespaceDropdownRef}>
-          <button type="button" onClick={() => setIsNamespaceDropdownOpen((v) => !v)}
-            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">
-              {selectedNamespace === 'all' ? tr('backendTrafficPoliciesPage.allNamespaces', 'All namespaces') : selectedNamespace}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {isNamespaceDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[240px] overflow-y-auto">
-              <button type="button" onClick={() => { setSelectedNamespace('all'); setIsNamespaceDropdownOpen(false) }}
-                className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
-                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>{tr('backendTrafficPoliciesPage.allNamespaces', 'All namespaces')}</span>
-              </button>
-              {(namespaces || []).map((ns) => (
-                <button key={ns.name} type="button" onClick={() => { setSelectedNamespace(ns.name); setIsNamespaceDropdownOpen(false) }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
-                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
-                  <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('backendTrafficPoliciesPage.stats.total', 'Total')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.total}</p>
-        </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('backendTrafficPoliciesPage.stats.accepted', 'Accepted')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.accepted}</p>
-        </div>
-        <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('backendTrafficPoliciesPage.stats.withTargets', 'With Targets')}</p>
-          <p className="text-lg text-white font-semibold mt-1">{summary.withTargetRefs}</p>
-        </div>
-      </div>
-
-      {searchQuery && (
-        <p className="text-sm text-slate-400 shrink-0">
-          {tr('backendTrafficPoliciesPage.matchCount', '{{count}} BackendTrafficPolic{{suffix}} match.', {
-            count: filteredPolicies.length,
-            suffix: filteredPolicies.length === 1 ? 'y' : 'ies',
-          })}
-        </p>
-      )}
-
-      <div ref={tableContainerRef} className="card flex-1 min-h-0 flex flex-col">
-        <div ref={tableBodyRef} className="overflow-x-auto flex-1 min-h-0">
-          <table className="w-full text-sm min-w-[700px] table-fixed">
-            <thead ref={theadRef} className="text-slate-400">
-              <tr>
-                {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{tr('backendTrafficPoliciesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
-                  </th>
-                )}
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('backendTrafficPoliciesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('targetRef')}>
-                  <span className="inline-flex items-center gap-1">{tr('backendTrafficPoliciesPage.table.targetRef', 'Target Ref')}{renderSortIcon('targetRef')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[140px]">
-                  {tr('backendTrafficPoliciesPage.table.status', 'Status')}
-                </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('backendTrafficPoliciesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {pagedPolicies.map((item, idx) => (
-                <tr
-                      ref={idx === 0 ? firstRowRef : undefined}
-                  key={`${item.namespace}/${item.name}`}
-                  className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
-                    kind: 'BackendTrafficPolicy',
-                    name: item.name,
-                    namespace: item.namespace,
-                    rawJson: toRawJson(item),
-                  })}
-                >
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
-                  <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTargetRefs(item)}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{formatConditionStatus(item)}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
-                </tr>
-              ))}
-              {isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 5 : 4} className="py-10 px-4 text-center text-slate-400">
-                    <div className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {sortedPolicies.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 5 : 4} className="py-6 px-4 text-center text-slate-400">
-                    {tr('backendTrafficPoliciesPage.noResults', 'No BackendTrafficPolicies found.')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedPolicies.length} columnCount={4 + (showNamespaceColumn ? 1 : 0)} />
-          </table>
-        </div>
-
-        {sortedPolicies.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedPolicies.length),
-                total: sortedPolicies.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {createDialogOpen && (
-        <ResourceYamlCreateDialog
-          title={tr('backendTrafficPoliciesPage.createTitle', 'Create BackendTrafficPolicy from YAML')}
-          initialYaml={createYamlTemplate}
-          namespace={selectedNamespace !== 'all' ? selectedNamespace : undefined}
-          onClose={() => setCreateDialogOpen(false)}
-          onCreated={() => { queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies'] }) }}
-        />
-      )}
-    </div>
+    <BackendPoliciesPage<BackendTrafficPolicyInfo>
+      config={config}
+      apiVersion="gateway.networking.k8s.io/v1alpha2"
+      yamlBodyTemplate={yamlBody}
+      i18nPrefix="backendTrafficPoliciesPage"
+      strings={{
+        title: tr('backendTrafficPoliciesPage.title', 'Backend Traffic Policies'),
+        subtitle: tr('backendTrafficPoliciesPage.subtitle', 'Inspect and manage Gateway API BackendTrafficPolicy resources across namespaces.'),
+        createButton: tr('backendTrafficPoliciesPage.create', 'Create BackendTrafficPolicy'),
+        refreshTitle: tr('backendTrafficPoliciesPage.refreshTitle', 'Force refresh'),
+        searchPlaceholder: tr('backendTrafficPoliciesPage.searchPlaceholder', 'Search BackendTrafficPolicies by name...'),
+        allNamespaces: tr('backendTrafficPoliciesPage.allNamespaces', 'All namespaces'),
+        statsTotal: tr('backendTrafficPoliciesPage.stats.total', 'Total'),
+        statsAccepted: tr('backendTrafficPoliciesPage.stats.accepted', 'Accepted'),
+        statsWithTargets: tr('backendTrafficPoliciesPage.stats.withTargets', 'With Targets'),
+        matchCount: (count: number) => tr('backendTrafficPoliciesPage.matchCount', '{{count}} BackendTrafficPolic{{suffix}} match.', {
+          count,
+          suffix: count === 1 ? 'y' : 'ies',
+        }),
+        tableNamespace: tr('backendTrafficPoliciesPage.table.namespace', 'Namespace'),
+        tableName: tr('backendTrafficPoliciesPage.table.name', 'Name'),
+        tableTargetRef: tr('backendTrafficPoliciesPage.table.targetRef', 'Target Ref'),
+        tableStatus: tr('backendTrafficPoliciesPage.table.status', 'Status'),
+        tableAge: tr('backendTrafficPoliciesPage.table.age', 'Age'),
+        noResults: tr('backendTrafficPoliciesPage.noResults', 'No BackendTrafficPolicies found.'),
+        createDialogTitle: tr('backendTrafficPoliciesPage.createTitle', 'Create BackendTrafficPolicy from YAML'),
+        matchSuffixSingular: 'y',
+        matchSuffixPlural: 'ies',
+      }}
+    />
   )
 }
