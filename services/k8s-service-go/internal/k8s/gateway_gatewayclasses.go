@@ -58,6 +58,22 @@ func (s *Service) DescribeGatewayClass(ctx context.Context, name string) (map[st
 			}
 		}
 		result["conditions"] = condList
+
+		supported := mapSlice(status, "supportedFeatures")
+		features := make([]map[string]interface{}, 0, len(supported))
+		for _, f := range supported {
+			switch v := f.(type) {
+			case string:
+				features = append(features, map[string]interface{}{"name": v})
+			case map[string]interface{}:
+				features = append(features, map[string]interface{}{
+					"name": mapStr(v, "name"),
+				})
+			}
+		}
+		if len(features) > 0 {
+			result["supported_features"] = features
+		}
 	}
 
 	return result, nil
