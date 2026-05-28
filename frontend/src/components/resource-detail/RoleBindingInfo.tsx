@@ -63,6 +63,20 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
 
       {subjects.length > 0 && (
         <InfoSection title={`Subjects (${subjects.length})`}>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {(() => {
+              const counts: Record<string, number> = {}
+              for (const s of subjects as any[]) {
+                const k = String(s?.kind || 'Unknown')
+                counts[k] = (counts[k] || 0) + 1
+              }
+              return Object.entries(counts).map(([k, c]) => (
+                <span key={k} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
+                  {k}: <span className="font-mono">{String(c)}</span>
+                </span>
+              ))
+            })()}
+          </div>
           <div className="space-y-2">
             {subjects.map((subj: any, idx: number) => (
               <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
