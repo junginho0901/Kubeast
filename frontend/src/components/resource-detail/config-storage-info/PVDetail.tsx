@@ -56,6 +56,8 @@ interface PVDescribeResponse {
   used_by_pods?: PVUsedByPod[]
   conditions?: Array<Record<string, unknown>>
   events?: Array<Record<string, unknown>>
+  reason?: string | null
+  message?: string | null
 }
 
 export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
@@ -137,6 +139,8 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
               value={`${fmtTs(lastPhaseTransitionTime)} (${fmtRel(lastPhaseTransitionTime)})`}
             />
           )}
+          {describe?.reason && <InfoRow label="Failure Reason" value={String(describe.reason)} />}
+          {describe?.message && <InfoRow label="Failure Message" value={<span className="text-red-300 break-words">{String(describe.message)}</span>} />}
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400">Loading details...</p>}
