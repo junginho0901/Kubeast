@@ -85,6 +85,19 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
             <SelectorRow label="Namespace Selector" selector={wh.namespace_selector} />
             <SelectorRow label="Object Selector" selector={wh.object_selector} />
             <WebhookRulesTable rules={wh.rules} />
+            {Array.isArray(wh.match_conditions) && wh.match_conditions.length > 0 && (
+              <div>
+                <p className="text-[11px] text-slate-400 mt-2 mb-1">Match Conditions</p>
+                <div className="space-y-1">
+                  {wh.match_conditions.map((mc: any, mi: number) => (
+                    <div key={mi} className="rounded border border-slate-800 bg-slate-900/40 px-2 py-1.5">
+                      <p className="text-[11px] text-slate-300">{mc?.name || '-'}</p>
+                      <p className="font-mono text-[11px] text-slate-200 break-all">{mc?.expression || '-'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </InfoSection>
       ))}
