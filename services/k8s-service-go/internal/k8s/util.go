@@ -223,7 +223,31 @@ func formatPodTemplate(template corev1.PodTemplateSpec) map[string]interface{} {
 	}
 	result["tolerations"] = tolerations
 
+	if aff := marshalAffinity(template.Spec.Affinity); aff != nil {
+		result["affinity"] = aff
+	}
+
 	return result
+}
+
+// marshalAffinity round-trips Affinity through JSON so the detail UI receives
+// the same camelCase shape returned by the Kubernetes API.
+func marshalAffinity(aff *corev1.Affinity) map[string]interface{} {
+	if aff == nil {
+		return nil
+	}
+	b, err := json.Marshal(aff)
+	if err != nil {
+		return nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // labelsToString converts map to comma-separated k=v string.
