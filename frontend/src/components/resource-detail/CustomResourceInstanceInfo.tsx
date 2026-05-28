@@ -288,6 +288,34 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         </InfoSection>
       )}
 
+      {/* Managed Fields (server-side apply) */}
+      {Array.isArray(describe?.managed_fields) && describe.managed_fields.length > 0 && (
+        <InfoSection title={`Managed Fields (${describe.managed_fields.length})`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Manager</th>
+                  <th className="text-left py-1">Operation</th>
+                  <th className="text-left py-1">Subresource</th>
+                  <th className="text-left py-1">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {(describe.managed_fields as Array<Record<string, unknown>>).map((mf, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="py-1 pr-2 font-mono">{String(mf?.manager ?? '-')}</td>
+                    <td className="py-1 pr-2">{String(mf?.operation ?? '-')}</td>
+                    <td className="py-1 pr-2">{String(mf?.subresource ?? '-')}</td>
+                    <td className="py-1 pr-2 text-slate-400">{mf?.time ? fmtRel(String(mf.time)) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </InfoSection>
+      )}
+
       {/* Events */}
       {events.length > 0 && (
         <InfoSection title={tr('crInstanceInfo.events', 'Events')}>
