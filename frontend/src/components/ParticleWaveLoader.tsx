@@ -1,13 +1,8 @@
 import { useEffect, useRef } from 'react'
+import * as THREE from 'three'
 
 type ParticleWaveLoaderProps = {
   className?: string
-}
-
-declare global {
-  interface Window {
-    THREE: any
-  }
 }
 
 export default function ParticleWaveLoader({ className }: ParticleWaveLoaderProps) {
@@ -27,12 +22,6 @@ export default function ParticleWaveLoader({ className }: ParticleWaveLoaderProp
 
     function initParticleWave() {
       if (!mounted || !canvasRef.current || !containerRef.current) return
-      
-      const THREE = window.THREE
-      if (!THREE) {
-        setTimeout(initParticleWave, 100)
-        return
-      }
 
       const canvas = canvasRef.current
       const width = Math.max(1, Math.floor(containerRef.current.clientWidth))
@@ -211,18 +200,7 @@ export default function ParticleWaveLoader({ className }: ParticleWaveLoaderProp
       animate()
     }
 
-    // Three.js CDN 로드
-    if (!window.THREE) {
-      const script = document.createElement('script')
-      script.src = 'https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js'
-      script.async = true
-      script.onload = () => {
-        if (mounted) initParticleWave()
-      }
-      document.head.appendChild(script)
-    } else {
-      initParticleWave()
-    }
+    initParticleWave()
 
     return () => {
       mounted = false
