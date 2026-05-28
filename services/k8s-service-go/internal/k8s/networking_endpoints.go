@@ -46,6 +46,8 @@ func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string)
 	result := formatEndpointsFull(ep)
 	result["labels"] = ep.Labels
 	result["annotations"] = ep.Annotations
+	result["generation"] = ep.Generation
+	result["resource_version"] = ep.ResourceVersion
 
 	// Also include raw subsets for detailed view
 	subsets := make([]map[string]interface{}, 0, len(ep.Subsets))
