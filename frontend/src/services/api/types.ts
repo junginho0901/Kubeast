@@ -843,6 +843,7 @@ export interface PodInfo {
     controller?: boolean | null
   }>
   deletion_timestamp?: string | null
+  service_account_name?: string
 }
 
 export interface PodRbacRule {
