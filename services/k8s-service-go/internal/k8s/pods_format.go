@@ -173,6 +173,9 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		}
 		out["owner_references"] = refs
 	}
+	if sa := p.Spec.ServiceAccountName; sa != "" {
+		out["service_account_name"] = sa
+	}
 	return out
 }
 
