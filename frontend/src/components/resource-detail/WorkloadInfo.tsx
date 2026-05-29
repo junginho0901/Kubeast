@@ -168,6 +168,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         isStatefulSet={isStatefulSet}
         describe={describe}
         ownedJobs={ownedJobs}
+        volumeClaimTemplates={volumeClaimTemplates}
       />
 
       {Object.keys(selector).length > 0 && (

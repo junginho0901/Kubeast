@@ -17,6 +17,7 @@ interface Props {
   isStatefulSet: boolean
   describe: any
   ownedJobs: any
+  volumeClaimTemplates?: Array<any>
 }
 
 export default function WorkloadOwnedResources({
@@ -32,16 +33,18 @@ export default function WorkloadOwnedResources({
   isStatefulSet,
   describe,
   ownedJobs,
+  volumeClaimTemplates,
 }: Props) {
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
 
-  const { pods, replicaSets, podsEnabled, rsEnabled } = useOwnedWatchedResources({
+  const { pods, replicaSets, pvcsByPodName, podsEnabled, rsEnabled, pvcsEnabled } = useOwnedWatchedResources({
     kind,
     namespace,
     name,
     selector,
+    volumeClaimTemplates,
   })
 
   // Fallback to describe.owned_pods for DS/RS/STS until the first watch tick.
@@ -95,30 +98,50 @@ export default function WorkloadOwnedResources({
       {showOwnedPods && (
         <InfoSection title={tr('workload.ownedPods', `Pods (${displayPods.length})`)}>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[600px]">
+            <table className="w-full text-xs table-fixed min-w-[700px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[35%]">{tr('pods.table.name', 'Name')}</th>
-                  <th className="text-left py-2 w-[15%]">{tr('pods.table.status', 'Status')}</th>
-                  <th className="text-left py-2 w-[10%]">{tr('pods.table.ready', 'Ready')}</th>
-                  <th className="text-left py-2 w-[10%]">{tr('pods.table.restarts', 'Restarts')}</th>
-                  <th className="text-left py-2 w-[30%]">{tr('pods.table.node', 'Node')}</th>
+                  <th className="text-left py-2 w-[28%]">{tr('pods.table.name', 'Name')}</th>
+                  <th className="text-left py-2 w-[13%]">{tr('pods.table.status', 'Status')}</th>
+                  <th className="text-left py-2 w-[8%]">{tr('pods.table.ready', 'Ready')}</th>
+                  <th className="text-left py-2 w-[9%]">{tr('pods.table.restarts', 'Restarts')}</th>
+                  <th className="text-left py-2 w-[22%]">{tr('pods.table.node', 'Node')}</th>
+                  {pvcsEnabled && <th className="text-left py-2 w-[20%]">PVC Status</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {(displayPods as Array<any>).slice(0, 50).map((pod: any) => (
-                  <tr
-                    key={`${pod.namespace || namespace}/${pod.name}`}
-                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace || namespace || '' })}
-                  >
-                    <td className="py-2 pr-2 font-mono">{pod.name}</td>
-                    <td className="py-2 pr-2"><StatusBadge status={pod.status || pod.phase || '-'} /></td>
-                    <td className="py-2 pr-2 font-mono">{pod.ready || '-'}</td>
-                    <td className="py-2 pr-2 font-mono">{pod.restart_count ?? 0}</td>
-                    <td className="py-2 pr-2 font-mono truncate">{pod.node_name || '-'}</td>
-                  </tr>
-                ))}
+                {(displayPods as Array<any>).slice(0, 50).map((pod: any) => {
+                  const pvcEntries = pvcsEnabled ? (pvcsByPodName.get(pod.name) ?? []) : []
+                  return (
+                    <tr
+                      key={`${pod.namespace || namespace}/${pod.name}`}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace || namespace || '' })}
+                    >
+                      <td className="py-2 pr-2 font-mono">{pod.name}</td>
+                      <td className="py-2 pr-2"><StatusBadge status={pod.status || pod.phase || '-'} /></td>
+                      <td className="py-2 pr-2 font-mono">{pod.ready || '-'}</td>
+                      <td className="py-2 pr-2 font-mono">{pod.restart_count ?? 0}</td>
+                      <td className="py-2 pr-2 font-mono truncate">{pod.node_name || '-'}</td>
+                      {pvcsEnabled && (
+                        <td className="py-2 pr-2 text-[11px]">
+                          {pvcEntries.length === 0 ? (
+                            <span className="text-slate-500">-</span>
+                          ) : (
+                            <div className="flex flex-col gap-0.5">
+                              {pvcEntries.map((entry) => (
+                                <span key={entry.vct} className="font-mono truncate">
+                                  <span className="text-slate-400">{entry.vct}:</span>{' '}
+                                  <StatusBadge status={entry.pvc?.status || 'Missing'} />
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
