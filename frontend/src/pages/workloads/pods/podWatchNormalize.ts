@@ -126,6 +126,7 @@ function normalizeWatchPodObject(obj: any): PodInfo {
       uid: r?.uid ?? null,
       controller: r?.controller ?? null,
     })),
+    service_account_name: spec?.serviceAccountName ?? obj?.service_account_name ?? undefined,
   }
 }
 
