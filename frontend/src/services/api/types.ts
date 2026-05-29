@@ -635,6 +635,13 @@ export interface ReplicaSetInfo {
   images?: string[]
   container_names?: string[]
   owner?: string | null
+  owner_deployment?: string
+  owner_references?: Array<{
+    kind?: string | null
+    name?: string | null
+    uid?: string | null
+    controller?: boolean | null
+  }>
   labels: Record<string, string>
   selector: Record<string, string>
   created_at: string
@@ -829,6 +836,13 @@ export interface PodInfo {
   created_at: string
   restart_count: number
   ready: string
+  owner_references?: Array<{
+    kind?: string | null
+    name?: string | null
+    uid?: string | null
+    controller?: boolean | null
+  }>
+  deletion_timestamp?: string | null
 }
 
 export interface PodRbacRule {
