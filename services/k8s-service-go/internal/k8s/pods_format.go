@@ -161,6 +161,18 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 	if p.DeletionTimestamp != nil {
 		out["deletion_timestamp"] = toISO(p.DeletionTimestamp)
 	}
+	if len(p.OwnerReferences) > 0 {
+		refs := make([]map[string]interface{}, 0, len(p.OwnerReferences))
+		for _, r := range p.OwnerReferences {
+			refs = append(refs, map[string]interface{}{
+				"kind":       r.Kind,
+				"name":       r.Name,
+				"uid":        string(r.UID),
+				"controller": r.Controller != nil && *r.Controller,
+			})
+		}
+		out["owner_references"] = refs
+	}
 	return out
 }
 
