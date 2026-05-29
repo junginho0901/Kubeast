@@ -54,6 +54,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
     status,
     isJob,
     isCronJob,
+    isDeployment,
     isStatefulSet,
     isDaemonSet,
     isReplicaSet,
@@ -155,9 +156,14 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       />
 
       <WorkloadOwnedResources
+        kind={kind}
+        name={name}
         namespace={namespace}
+        selector={selector}
         isCronJob={isCronJob}
         isDaemonSet={isDaemonSet}
+        isDeployment={isDeployment}
+        isJob={isJob}
         isReplicaSet={isReplicaSet}
         isStatefulSet={isStatefulSet}
         describe={describe}
