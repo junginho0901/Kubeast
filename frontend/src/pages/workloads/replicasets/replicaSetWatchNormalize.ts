@@ -51,6 +51,12 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
     images,
     container_names: containerNames,
     owner,
+    owner_references: ownerReferences.map((r: any) => ({
+      kind: r?.kind ?? null,
+      name: r?.name ?? null,
+      uid: r?.uid ?? null,
+      controller: r?.controller ?? null,
+    })),
     labels: metadata?.labels ?? {},
     selector,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,

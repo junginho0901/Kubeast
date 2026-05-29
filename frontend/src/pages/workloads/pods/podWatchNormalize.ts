@@ -101,6 +101,10 @@ function normalizeWatchPodObject(obj: any): PodInfo {
   const phase = status?.phase ?? obj?.phase ?? (typeof obj?.status === 'string' ? obj.status : 'Unknown')
   const restartCount = containers.reduce((sum: number, c: any) => sum + (c?.restart_count ?? 0), 0)
 
+  const ownerReferences = Array.isArray(metadata?.ownerReferences)
+    ? metadata.ownerReferences
+    : (Array.isArray(obj?.owner_references) ? obj.owner_references : [])
+
   return {
     name,
     namespace,
@@ -116,6 +120,12 @@ function normalizeWatchPodObject(obj: any): PodInfo {
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
     restart_count: restartCount,
     ready: totalContainers > 0 ? `${readyContainers}/${totalContainers}` : (obj?.ready ?? '0/0'),
+    owner_references: ownerReferences.map((r: any) => ({
+      kind: r?.kind ?? null,
+      name: r?.name ?? null,
+      uid: r?.uid ?? null,
+      controller: r?.controller ?? null,
+    })),
   }
 }
 
