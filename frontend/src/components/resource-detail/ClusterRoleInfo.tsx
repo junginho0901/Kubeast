@@ -8,7 +8,9 @@ import {
   fmtRel,
   fmtTs,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'
 
 interface Props {
   name: string
@@ -27,6 +29,8 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
   })
 
   useResourceDetailOverlay({ kind: 'ClusterRole', name, describe })
+
+  const { bindings: referencedBy, truncated } = useReverseRoleBindings({ kind: 'ClusterRole', name })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -132,6 +136,40 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
           </div>
         </InfoSection>
       )}
+
+      <InfoSection title={`Referenced By ClusterRoleBindings (${referencedBy.length}${truncated ? '+' : ''})`}>
+        {referencedBy.length === 0 ? (
+          <p className="text-xs text-slate-400">No ClusterRoleBinding references this ClusterRole.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">ClusterRoleBinding</th>
+                  <th className="text-left py-1">Subjects</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {referencedBy.map((b) => (
+                  <tr key={b.name} className="text-slate-200">
+                    <td className="py-1 pr-2">
+                      <ResourceLink kind="ClusterRoleBinding" name={b.name} />
+                    </td>
+                    <td className="py-1 pr-2 text-slate-300">
+                      {b.subjects.length === 0
+                        ? '-'
+                        : b.subjects.map((s) => `${s.kind || '?'}/${s.name || '-'}`).join(', ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {truncated && (
+              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 ClusterRoleBindings (truncated for performance).</p>
+            )}
+          </div>
+        )}
+      </InfoSection>
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">
