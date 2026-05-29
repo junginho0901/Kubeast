@@ -1,5 +1,10 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import type { PodInfo } from '@/services/api'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import {
   InfoSection,
   InfoRow,
@@ -8,6 +13,7 @@ import {
   KeyValueTags,
   ConditionsTable,
   EventsTable,
+  StatusBadge,
   fmtRel,
 } from './DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -19,6 +25,7 @@ interface Props {
 }
 
 export default function PDBInfo({ name, namespace }: Props) {
+  const { open: openDetail } = useResourceDetail()
   const { data: desc, isLoading } = useQuery({
     queryKey: ['pdb-describe', namespace, name],
     queryFn: () => api.describePDB(namespace, name),
@@ -27,6 +34,30 @@ export default function PDBInfo({ name, namespace }: Props) {
   })
 
   useResourceDetailOverlay({ kind: 'PodDisruptionBudget', name, namespace, describe: desc })
+
+  const selectorMap = (desc?.selector as Record<string, string> | undefined) ?? {}
+  const selectorStr = useMemo(
+    () => Object.entries(selectorMap).map(([k, v]) => `${k}=${v}`).join(','),
+    [selectorMap],
+  )
+  const protectedEnabled = !!namespace && !!selectorStr
+
+  const { data: protectedPods } = useQuery({
+    queryKey: ['pdb-protected-pods', namespace, name, selectorStr],
+    queryFn: () => api.getPods(namespace, selectorStr),
+    enabled: protectedEnabled,
+    staleTime: 5_000,
+  })
+
+  useKubeWatchList({
+    enabled: protectedEnabled,
+    queryKey: ['pdb-protected-pods', namespace, name, selectorStr],
+    path: `/api/v1/namespaces/${namespace}/pods`,
+    query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
+    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
+  })
+
+  const pods = Array.isArray(protectedPods) ? protectedPods : []
 
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
@@ -126,6 +157,47 @@ export default function PDBInfo({ name, namespace }: Props) {
               </tbody>
             </table>
           </div>
+        </InfoSection>
+      )}
+
+      {/* Protected Pods (live) */}
+      {protectedEnabled && (
+        <InfoSection title={`Protected Pods (${pods.length})`}>
+          {pods.length === 0 ? (
+            <p className="text-xs text-slate-400">No pod matches this selector.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Pod</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Ready</th>
+                    <th className="text-left py-1">Node</th>
+                    <th className="text-left py-1">Age</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {pods.slice(0, 50).map((p: any) => (
+                    <tr
+                      key={`${p.namespace}/${p.name}`}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                    >
+                      <td className="py-1 pr-2 font-mono">{p.name}</td>
+                      <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                      <td className="py-1 pr-2">{p.ready ?? '-'}</td>
+                      <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
+                      <td className="py-1 pr-2 text-slate-400">{fmtRel(p.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {pods.length > 50 && (
+                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {pods.length} pods.</p>
+              )}
+            </div>
+          )}
         </InfoSection>
       )}
 
