@@ -185,6 +185,16 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 		rsStatus = "Unavailable"
 	}
 
+	ownerRefs := make([]map[string]interface{}, 0, len(rs.OwnerReferences))
+	for _, or := range rs.OwnerReferences {
+		ownerRefs = append(ownerRefs, map[string]interface{}{
+			"kind":       or.Kind,
+			"name":       or.Name,
+			"uid":        string(or.UID),
+			"controller": or.Controller != nil && *or.Controller,
+		})
+	}
+
 	return map[string]interface{}{
 		"name":               rs.Name,
 		"namespace":          rs.Namespace,
@@ -195,6 +205,7 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 		"images":             images,
 		"selector":           selector,
 		"owner_deployment":   owner,
+		"owner_references":   ownerRefs,
 		"status":             rsStatus,
 		"created_at":         toISO(&rs.CreationTimestamp),
 	}
