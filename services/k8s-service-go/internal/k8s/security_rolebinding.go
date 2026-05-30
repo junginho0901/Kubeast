@@ -71,12 +71,22 @@ func (s *Service) DeleteRoleBinding(ctx context.Context, namespace, name string)
 func formatRoleBindingList(items []rbacv1.RoleBinding) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for _, rb := range items {
+		subjects := make([]map[string]interface{}, 0, len(rb.Subjects))
+		for _, s := range rb.Subjects {
+			subjects = append(subjects, map[string]interface{}{
+				"kind":      s.Kind,
+				"name":      s.Name,
+				"namespace": s.Namespace,
+				"apiGroup":  s.APIGroup,
+			})
+		}
 		result = append(result, map[string]interface{}{
 			"name":           rb.Name,
 			"namespace":      rb.Namespace,
 			"role_ref_kind":  rb.RoleRef.Kind,
 			"role_ref_name":  rb.RoleRef.Name,
 			"subjects_count": len(rb.Subjects),
+			"subjects":       subjects,
 			"created_at":     toISO(&rb.CreationTimestamp),
 			"labels":         rb.Labels,
 			"annotations":    rb.Annotations,

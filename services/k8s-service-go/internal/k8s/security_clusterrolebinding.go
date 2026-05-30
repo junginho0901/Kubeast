@@ -62,11 +62,21 @@ func (s *Service) DeleteClusterRoleBinding(ctx context.Context, name string) err
 func formatClusterRoleBindingList(items []rbacv1.ClusterRoleBinding) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for _, crb := range items {
+		subjects := make([]map[string]interface{}, 0, len(crb.Subjects))
+		for _, s := range crb.Subjects {
+			subjects = append(subjects, map[string]interface{}{
+				"kind":      s.Kind,
+				"name":      s.Name,
+				"namespace": s.Namespace,
+				"apiGroup":  s.APIGroup,
+			})
+		}
 		result = append(result, map[string]interface{}{
 			"name":           crb.Name,
 			"role_ref_kind":  crb.RoleRef.Kind,
 			"role_ref_name":  crb.RoleRef.Name,
 			"subjects_count": len(crb.Subjects),
+			"subjects":       subjects,
 			"created_at":     toISO(&crb.CreationTimestamp),
 			"labels":         crb.Labels,
 			"annotations":    crb.Annotations,
