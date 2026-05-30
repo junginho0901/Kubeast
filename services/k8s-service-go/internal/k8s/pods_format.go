@@ -176,6 +176,12 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 	if sa := p.Spec.ServiceAccountName; sa != "" {
 		out["service_account_name"] = sa
 	}
+	if pc := p.Spec.PriorityClassName; pc != "" {
+		out["priority_class_name"] = pc
+	}
+	if p.Spec.RuntimeClassName != nil && *p.Spec.RuntimeClassName != "" {
+		out["runtime_class_name"] = *p.Spec.RuntimeClassName
+	}
 
 	// Collect ConfigMap / Secret references for reverse lookup (Used By Pods sections
 	// in ConfigMap/Secret detail modals). dedupe via map → sorted set not needed,
