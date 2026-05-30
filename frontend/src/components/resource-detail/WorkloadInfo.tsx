@@ -153,6 +153,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         has={has}
         suspendMut={suspendMut}
         setTriggerDialogOpen={setTriggerDialogOpen}
+        ownedJobs={ownedJobs}
       />
 
       <WorkloadOwnedResources
