@@ -16,6 +16,7 @@ import {
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'
 
 interface Props {
   name: string
@@ -49,6 +50,8 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
     const saName = p?.service_account_name ?? p?.spec?.serviceAccountName
     return saName === name
   })
+
+  const { bound: effectivePerms, loading: effectivePermsLoading } = useEffectivePermissions({ namespace, name })
 
   const { data: describe, isLoading } = useQuery({
     queryKey: ['serviceaccount-describe', namespace, name],
@@ -109,6 +112,63 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
           </div>
         </InfoSection>
       )}
+
+      <InfoSection title={`Effective Permissions (${effectivePerms.length} binding${effectivePerms.length === 1 ? '' : 's'}${effectivePermsLoading ? ', loading...' : ''})`}>
+        {effectivePerms.length === 0 ? (
+          <p className="text-xs text-slate-400">No RoleBinding or ClusterRoleBinding binds this ServiceAccount.</p>
+        ) : (
+          <div className="space-y-3">
+            {effectivePerms.map((b, i) => (
+              <div key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} className="rounded border border-slate-800 p-2">
+                <div className="flex items-center gap-2 text-xs mb-1">
+                  <span className="text-slate-400">via</span>
+                  <ResourceLink
+                    kind={b.binding_kind}
+                    name={b.binding_name}
+                    namespace={b.binding_kind === 'RoleBinding' ? b.binding_namespace : undefined}
+                  />
+                  <span className="text-slate-500">→</span>
+                  <ResourceLink
+                    kind={b.role_kind}
+                    name={b.role_name}
+                    namespace={b.role_kind === 'Role' ? b.role_namespace : undefined}
+                  />
+                </div>
+                {b.error ? (
+                  <p className="text-[11px] text-amber-300">Failed to load rules: {b.error}</p>
+                ) : b.loading ? (
+                  <p className="text-[11px] text-slate-500">Loading rules...</p>
+                ) : b.rules.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">No rules.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead className="text-slate-400">
+                        <tr>
+                          <th className="text-left py-1 pr-2">API Groups</th>
+                          <th className="text-left py-1 pr-2">Resources</th>
+                          <th className="text-left py-1 pr-2">Verbs</th>
+                          <th className="text-left py-1 pr-2">Resource Names</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {b.rules.map((r, ri) => (
+                          <tr key={ri} className="text-slate-200">
+                            <td className="py-1 pr-2 font-mono">{r.apiGroups.length === 0 ? '""' : r.apiGroups.join(', ')}</td>
+                            <td className="py-1 pr-2 font-mono">{r.resources.join(', ') || '-'}</td>
+                            <td className="py-1 pr-2 font-mono">{r.verbs.join(', ') || '-'}</td>
+                            <td className="py-1 pr-2 font-mono text-slate-400">{r.resourceNames?.join(', ') || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </InfoSection>
 
       <InfoSection title={`Pods Using This ServiceAccount (${usingPods.length})`}>
         {usingPods.length === 0 ? (
