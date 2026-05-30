@@ -92,6 +92,38 @@ func (s *Service) DeleteIngress(ctx context.Context, namespace, name string) err
 	return s.Clientset().NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
+// ListIngressesByClass returns ingresses cluster-wide whose ingressClassName
+// matches the given class. Capped at 50 to bound the response when an
+// IngressClass is widely referenced.
+func (s *Service) ListIngressesByClass(ctx context.Context, className string) ([]map[string]interface{}, error) {
+	list, err := s.Clientset().NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list all ingresses: %w", err)
+	}
+	out := make([]map[string]interface{}, 0)
+	for i := range list.Items {
+		ing := &list.Items[i]
+		ic := ""
+		if ing.Spec.IngressClassName != nil {
+			ic = *ing.Spec.IngressClassName
+		} else if ann, ok := ing.Annotations["kubernetes.io/ingress.class"]; ok {
+			ic = ann
+		}
+		if ic != className {
+			continue
+		}
+		out = append(out, map[string]interface{}{
+			"name":       ing.Name,
+			"namespace":  ing.Namespace,
+			"created_at": toISO(&ing.CreationTimestamp),
+		})
+		if len(out) >= 50 {
+			break
+		}
+	}
+	return out, nil
+}
+
 // ========== IngressClasses ==========
 
 // GetIngressClasses lists all ingress classes.
