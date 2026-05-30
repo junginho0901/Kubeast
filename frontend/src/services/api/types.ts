@@ -844,6 +844,8 @@ export interface PodInfo {
   }>
   deletion_timestamp?: string | null
   service_account_name?: string
+  config_map_refs?: string[]
+  secret_refs?: string[]
 }
 
 export interface PodRbacRule {
@@ -960,6 +962,8 @@ export interface ServiceAccountInfo {
   name: string
   namespace: string
   secrets: number
+  secrets_list?: string[]
+  image_pull_secrets?: string[]
   created_at?: string | null
   labels?: Record<string, string> | null
   annotations?: Record<string, string> | null
@@ -974,12 +978,20 @@ export interface RoleInfo {
   annotations?: Record<string, string> | null
 }
 
+export interface RoleBindingSubject {
+  kind?: string | null
+  name?: string | null
+  namespace?: string | null
+  apiGroup?: string | null
+}
+
 export interface RoleBindingInfo {
   name: string
   namespace: string
   role_ref_kind: string
   role_ref_name: string
   subjects_count: number
+  subjects?: RoleBindingSubject[]
   created_at?: string | null
   labels?: Record<string, string> | null
   annotations?: Record<string, string> | null
@@ -998,6 +1010,7 @@ export interface ClusterRoleBindingInfo {
   role_ref_kind: string
   role_ref_name: string
   subjects_count: number
+  subjects?: RoleBindingSubject[]
   created_at?: string | null
   labels?: Record<string, string> | null
   annotations?: Record<string, string> | null
