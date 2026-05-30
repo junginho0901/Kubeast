@@ -80,6 +80,14 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
   const pvcBoundCount = Number(usage.pvc_bound_count || 0)
   const pvRatio = pvCount > 0 ? `${pvBoundCount}/${pvCount}` : '-'
   const pvcRatio = pvcCount > 0 ? `${pvcBoundCount}/${pvcCount}` : '-'
+  const successRate = pvCount > 0 ? Math.round((pvBoundCount / pvCount) * 100) : null
+  const successCls = successRate == null
+    ? ''
+    : successRate >= 90
+      ? 'badge-success'
+      : successRate >= 70
+        ? 'badge-warning'
+        : 'badge-error'
 
   return (
     <>
@@ -93,6 +101,12 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
           <InfoRow label="Allow Expansion" value={(describe?.allow_volume_expansion ?? rawJson?.allowVolumeExpansion) ? 'Yes' : 'No'} />
           <InfoRow label="Bound PVs / Total PVs" value={pvRatio} />
           <InfoRow label="Bound PVCs / Total PVCs" value={pvcRatio} />
+          {successRate !== null && (
+            <InfoRow
+              label="Provisioning Success Rate"
+              value={<span className={`badge ${successCls}`}>{successRate}%</span>}
+            />
+          )}
           {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(describe.resource_version)}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
