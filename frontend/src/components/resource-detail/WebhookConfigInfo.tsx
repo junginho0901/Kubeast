@@ -43,6 +43,28 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
   const webhooks: any[] = desc.webhooks || []
   const events: any[] = desc.events || []
 
+  // Aggregate affected (apiGroup, resource) tuples and operation set across all
+  // webhook rules. K8s evaluates rules with OR semantics, so anything listed
+  // here can be intercepted by this webhook configuration.
+  const affectedSet = new Set<string>()
+  const operationSet = new Set<string>()
+  for (const wh of webhooks) {
+    const rules = Array.isArray(wh?.rules) ? wh.rules : []
+    for (const r of rules) {
+      const groups: string[] = Array.isArray(r?.apiGroups) ? r.apiGroups : ['']
+      const resources: string[] = Array.isArray(r?.resources) ? r.resources : []
+      const ops: string[] = Array.isArray(r?.operations) ? r.operations : []
+      for (const g of groups.length === 0 ? [''] : groups) {
+        for (const res of resources) {
+          affectedSet.add(`${g || '""'}/${res}`)
+        }
+      }
+      for (const op of ops) operationSet.add(op)
+    }
+  }
+  const affectedList = Array.from(affectedSet).sort()
+  const operationsList = Array.from(operationSet).sort()
+
   return (
     <div className="space-y-4">
       {/* Summary Badges */}
@@ -105,6 +127,32 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
       {webhooks.length === 0 && (
         <InfoSection title="Webhooks">
           <div className="text-xs text-slate-400">-</div>
+        </InfoSection>
+      )}
+
+      {affectedList.length > 0 && (
+        <InfoSection title={`Affected Resources (${affectedList.length} kinds, ${operationsList.length} ops)`}>
+          <div className="space-y-2">
+            <div>
+              <p className="text-[11px] text-slate-400 mb-1">Resource Types (apiGroup/resource)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {affectedList.slice(0, 50).map((s) => (
+                  <span key={s} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
+                ))}
+                {affectedList.length > 50 && (
+                  <span className="text-[11px] text-amber-300">+{affectedList.length - 50} more</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400 mb-1">Operations</p>
+              <div className="flex flex-wrap gap-1.5">
+                {operationsList.map((op) => (
+                  <span key={op} className="rounded border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
+                ))}
+              </div>
+            </div>
+          </div>
         </InfoSection>
       )}
 
