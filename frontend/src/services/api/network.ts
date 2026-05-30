@@ -71,6 +71,11 @@ export const networkApi = {
     return data
   },
 
+  listIngressesByClass: async (name: string): Promise<Array<{ name: string; namespace: string; created_at?: string }>> => {
+    const { data } = await client.get(`/cluster/ingressclasses/${name}/ingresses`)
+    return data
+  },
+
   deleteIngress: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/ingresses/${name}`)
   },
