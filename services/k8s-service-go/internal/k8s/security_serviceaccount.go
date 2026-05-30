@@ -70,13 +70,27 @@ func (s *Service) DeleteServiceAccount(ctx context.Context, namespace, name stri
 func formatServiceAccountList(items []corev1.ServiceAccount) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(items))
 	for _, sa := range items {
+		secretsList := make([]string, 0, len(sa.Secrets))
+		for _, s := range sa.Secrets {
+			if s.Name != "" {
+				secretsList = append(secretsList, s.Name)
+			}
+		}
+		imagePullSecrets := make([]string, 0, len(sa.ImagePullSecrets))
+		for _, ips := range sa.ImagePullSecrets {
+			if ips.Name != "" {
+				imagePullSecrets = append(imagePullSecrets, ips.Name)
+			}
+		}
 		result = append(result, map[string]interface{}{
-			"name":        sa.Name,
-			"namespace":   sa.Namespace,
-			"secrets":     len(sa.Secrets),
-			"created_at":  toISO(&sa.CreationTimestamp),
-			"labels":      sa.Labels,
-			"annotations": sa.Annotations,
+			"name":               sa.Name,
+			"namespace":          sa.Namespace,
+			"secrets":            len(sa.Secrets),
+			"secrets_list":       secretsList,
+			"image_pull_secrets": imagePullSecrets,
+			"created_at":         toISO(&sa.CreationTimestamp),
+			"labels":             sa.Labels,
+			"annotations":        sa.Annotations,
 		})
 	}
 	return result
