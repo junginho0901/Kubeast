@@ -167,6 +167,8 @@ function normalizeWatchPodObject(obj: any): PodInfo {
     service_account_name: spec?.serviceAccountName ?? obj?.service_account_name ?? undefined,
     config_map_refs: cmRefs.size > 0 ? Array.from(cmRefs) : undefined,
     secret_refs: secretRefs.size > 0 ? Array.from(secretRefs) : undefined,
+    priority_class_name: spec?.priorityClassName ?? obj?.priority_class_name ?? undefined,
+    runtime_class_name: spec?.runtimeClassName ?? obj?.runtime_class_name ?? undefined,
   }
 }
 
