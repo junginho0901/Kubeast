@@ -8,6 +8,7 @@ import {
   EventsTable,
   fmtRel,
 } from './DetailCommon'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -23,12 +24,21 @@ const typeColors: Record<string, 'green' | 'amber' | 'red' | 'default'> = {
 }
 
 export default function LimitRangeInfo({ name, namespace }: Props) {
+  const { open: openDetail } = useResourceDetail()
   const { data: desc, isLoading } = useQuery({
     queryKey: ['limitrange-describe', namespace, name],
     queryFn: () => api.describeLimitRange(namespace, name),
     staleTime: 10_000,
     retry: 1,
   })
+
+  const { data: violations } = useQuery({
+    queryKey: ['limitrange-violations', namespace, name],
+    queryFn: () => api.listPodsViolatingLimitRange(namespace, name),
+    enabled: !!namespace && !!name,
+    staleTime: 10_000,
+  })
+  const violationList = Array.isArray(violations) ? violations : []
 
   useResourceDetailOverlay({ kind: 'LimitRange', name, namespace, describe: desc })
 
@@ -52,6 +62,11 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         {uniqueTypes.map(t => (
           <SummaryBadge key={t} label={t} value="active" color={typeColors[t] || 'default'} />
         ))}
+        <SummaryBadge
+          label="Violating Pods"
+          value={violationList.length}
+          color={violationList.length === 0 ? 'green' : violationList.length < 5 ? 'amber' : 'red'}
+        />
       </div>
 
       {/* Summary */}
@@ -99,6 +114,44 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
             ))}
           </div>
         ) : <span className="text-slate-400 text-xs">(none)</span>}
+      </InfoSection>
+
+      <InfoSection title={`Violating Pods (${violationList.length})`}>
+        {violationList.length === 0 ? (
+          <p className="text-xs text-slate-400">No pod in this namespace currently violates this LimitRange.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Pod</th>
+                  <th className="text-left py-1">Container</th>
+                  <th className="text-left py-1">Field</th>
+                  <th className="text-left py-1">Actual</th>
+                  <th className="text-left py-1">Limit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {violationList.slice(0, 50).map((v, i) => (
+                  <tr
+                    key={i}
+                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'Pod', name: v.pod, namespace: v.namespace })}
+                  >
+                    <td className="py-1 pr-2 font-mono">{v.pod}</td>
+                    <td className="py-1 pr-2 font-mono">{v.container}</td>
+                    <td className="py-1 pr-2 font-mono">{v.field}</td>
+                    <td className="py-1 pr-2 font-mono text-amber-300">{v.actual}</td>
+                    <td className="py-1 pr-2 font-mono">{v.limit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {violationList.length > 50 && (
+              <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {violationList.length}.</p>
+            )}
+          </div>
+        )}
       </InfoSection>
 
       {/* Events */}
