@@ -35,6 +35,20 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
 
   useResourceDetailOverlay({ kind: 'ResourceClaimTemplate', name, namespace, describe })
 
+  // Count ResourceClaims spawned from this template. K8s sets
+  // ownerReference.name = template name + .kind = ResourceClaimTemplate when
+  // the claim is auto-created by a Pod's resourceClaims block.
+  const { data: nsClaims } = useQuery({
+    queryKey: ['rct-related-claims', namespace, name],
+    queryFn: () => api.getResourceClaims(namespace),
+    enabled,
+    staleTime: 30_000,
+  })
+  const relatedClaimCount = (Array.isArray(nsClaims) ? nsClaims : []).filter((c: any) => {
+    const refs = Array.isArray(c?.owner_references) ? c.owner_references : []
+    return refs.some((r: any) => r?.kind === 'ResourceClaimTemplate' && r?.name === name)
+  }).length
+
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
 
   const labels = (describe?.labels ?? (meta.labels as Record<string, string> | undefined) ?? {})
@@ -60,6 +74,10 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
+          <InfoRow
+            label="Related ResourceClaims"
+            value={<span className={`badge ${relatedClaimCount > 0 ? 'badge-success' : 'badge-info'}`}>{relatedClaimCount}</span>}
+          />
         </div>
       </InfoSection>
 
