@@ -176,6 +176,74 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 	if sa := p.Spec.ServiceAccountName; sa != "" {
 		out["service_account_name"] = sa
 	}
+
+	// Collect ConfigMap / Secret references for reverse lookup (Used By Pods sections
+	// in ConfigMap/Secret detail modals). dedupe via map → sorted set not needed,
+	// frontend filters by membership.
+	cms := map[string]struct{}{}
+	secrets := map[string]struct{}{}
+	for _, v := range p.Spec.Volumes {
+		if v.ConfigMap != nil && v.ConfigMap.Name != "" {
+			cms[v.ConfigMap.Name] = struct{}{}
+		}
+		if v.Secret != nil && v.Secret.SecretName != "" {
+			secrets[v.Secret.SecretName] = struct{}{}
+		}
+		if v.Projected != nil {
+			for _, src := range v.Projected.Sources {
+				if src.ConfigMap != nil && src.ConfigMap.Name != "" {
+					cms[src.ConfigMap.Name] = struct{}{}
+				}
+				if src.Secret != nil && src.Secret.Name != "" {
+					secrets[src.Secret.Name] = struct{}{}
+				}
+			}
+		}
+	}
+	collectEnvRefs := func(containers []corev1.Container) {
+		for _, c := range containers {
+			for _, e := range c.EnvFrom {
+				if e.ConfigMapRef != nil && e.ConfigMapRef.Name != "" {
+					cms[e.ConfigMapRef.Name] = struct{}{}
+				}
+				if e.SecretRef != nil && e.SecretRef.Name != "" {
+					secrets[e.SecretRef.Name] = struct{}{}
+				}
+			}
+			for _, env := range c.Env {
+				if env.ValueFrom == nil {
+					continue
+				}
+				if env.ValueFrom.ConfigMapKeyRef != nil && env.ValueFrom.ConfigMapKeyRef.Name != "" {
+					cms[env.ValueFrom.ConfigMapKeyRef.Name] = struct{}{}
+				}
+				if env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Name != "" {
+					secrets[env.ValueFrom.SecretKeyRef.Name] = struct{}{}
+				}
+			}
+		}
+	}
+	collectEnvRefs(p.Spec.Containers)
+	collectEnvRefs(p.Spec.InitContainers)
+	for _, ips := range p.Spec.ImagePullSecrets {
+		if ips.Name != "" {
+			secrets[ips.Name] = struct{}{}
+		}
+	}
+	if len(cms) > 0 {
+		list := make([]string, 0, len(cms))
+		for k := range cms {
+			list = append(list, k)
+		}
+		out["config_map_refs"] = list
+	}
+	if len(secrets) > 0 {
+		list := make([]string, 0, len(secrets))
+		for k := range secrets {
+			list = append(list, k)
+		}
+		out["secret_refs"] = list
+	}
 	return out
 }
 
