@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from './DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -24,6 +25,7 @@ type DeviceClassDescribe = {
 const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 
 export default function DeviceClassInfo({ name, rawJson }: Props) {
+  const { open: openDetail } = useResourceDetail()
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['deviceclass-describe', name],
     queryFn: () => api.describeDeviceClass(name) as Promise<DeviceClassDescribe>,
@@ -32,6 +34,19 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
   })
 
   useResourceDetailOverlay({ kind: 'DeviceClass', name, describe })
+
+  // Cluster-wide ResourceClaim scan + filter by deviceClassName. K8s 1.30+
+  // DRA: claim.spec.devices.requests[].deviceClassName references the class.
+  const { data: allClaims } = useQuery({
+    queryKey: ['deviceclass-using-claims', name],
+    queryFn: () => api.getAllResourceClaims(),
+    enabled: !!name,
+    staleTime: 30_000,
+  })
+  const usingClaims = (Array.isArray(allClaims) ? allClaims : []).filter((c: any) => {
+    const requests = c?.spec?.devices?.requests ?? c?.devices?.requests ?? []
+    return Array.isArray(requests) && requests.some((r: any) => (r?.deviceClassName ?? r?.device_class_name) === name)
+  }).slice(0, 50)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
 
@@ -153,6 +168,38 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
           </div>
         </InfoSection>
       )}
+
+      <InfoSection title={`Used By ResourceClaims (${usingClaims.length})`}>
+        {usingClaims.length === 0 ? (
+          <p className="text-xs text-slate-400">No ResourceClaim in the cluster references this DeviceClass.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Namespace</th>
+                  <th className="text-left py-1">ResourceClaim</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {usingClaims.map((c: any) => (
+                  <tr
+                    key={`${c.namespace}/${c.name}`}
+                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'ResourceClaim', name: c.name, namespace: c.namespace })}
+                  >
+                    <td className="py-1 pr-2 font-mono">{c.namespace ?? '-'}</td>
+                    <td className="py-1 pr-2 font-mono">{c.name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {usingClaims.length >= 50 && (
+              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
+            )}
+          </div>
+        )}
+      </InfoSection>
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">
