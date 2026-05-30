@@ -4,12 +4,14 @@ import { api } from '@/services/api'
 import {
   InfoSection,
   InfoRow,
+  StatusBadge,
   KeyValueTags,
   EventsTable,
   fmtRel,
   fmtTs,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -21,6 +23,7 @@ interface Props {
 export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const { open: openDetail } = useResourceDetail()
 
   const { data: describe, isLoading } = useQuery({
     queryKey: ['rolebinding-describe', namespace, name],
@@ -37,6 +40,23 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const subjects = Array.isArray(describe?.subjects) ? describe.subjects : []
   const events = Array.isArray(describe?.events) ? describe.events : []
+
+  // ServiceAccount subjects 가 가리키는 SA 의 ns 의 Pod (serviceAccountName 매칭).
+  // RoleBinding 은 ns-scoped 이라 subjects.namespace 가 binding ns 와 같다고 가정.
+  // ns Pod list 1번 + subjects[].kind=ServiceAccount filter.
+  const saSubjectNames = subjects
+    .filter((s: any) => s?.kind === 'ServiceAccount' && (s?.namespace ?? namespace) === namespace)
+    .map((s: any) => s?.name)
+    .filter(Boolean)
+  const { data: nsPods } = useQuery({
+    queryKey: ['rolebinding-bound-pods', namespace, name],
+    queryFn: () => api.getPods(namespace),
+    enabled: !!namespace && saSubjectNames.length > 0,
+    staleTime: 30_000,
+  })
+  const boundPods = (Array.isArray(nsPods) ? nsPods : [])
+    .filter((p: any) => saSubjectNames.includes(p?.service_account_name))
+    .slice(0, 50)
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -111,6 +131,44 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
       {subjects.length === 0 && (
         <InfoSection title="Subjects">
           <p className="text-xs text-slate-500">No subjects defined.</p>
+        </InfoSection>
+      )}
+
+      {saSubjectNames.length > 0 && (
+        <InfoSection title={`Bound Pods via ServiceAccount Subjects (${boundPods.length})`}>
+          {boundPods.length === 0 ? (
+            <p className="text-xs text-slate-400">No pod uses any of the bound ServiceAccounts.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Pod</th>
+                    <th className="text-left py-1">SA</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Node</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {boundPods.map((p: any) => (
+                    <tr
+                      key={`${p.namespace}/${p.name}`}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                    >
+                      <td className="py-1 pr-2 font-mono">{p.name}</td>
+                      <td className="py-1 pr-2 font-mono text-slate-400">{p.service_account_name}</td>
+                      <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                      <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {boundPods.length >= 50 && (
+                <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
+              )}
+            </div>
+          )}
         </InfoSection>
       )}
 
