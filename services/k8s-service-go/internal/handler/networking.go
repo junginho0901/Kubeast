@@ -108,6 +108,18 @@ func (h *Handler) DescribeIngressClass(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
+// ListIngressesByClass handles GET /api/v1/ingressclasses/{name}/ingresses.
+func (h *Handler) ListIngressesByClass(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	name := chi.URLParam(r, "name")
+	data, err := h.svc.ListIngressesByClass(ctx, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
 // DeleteIngressClass handles DELETE /api/v1/ingressclasses/{name}.
 func (h *Handler) DeleteIngressClass(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePermission(r, "resource.ingressclass.delete"); err != nil {
