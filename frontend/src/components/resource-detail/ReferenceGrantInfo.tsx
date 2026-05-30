@@ -59,6 +59,26 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
 
   const createdAt = describe?.created_at ?? (meta.creationTimestamp as string | undefined)
 
+  // Detect duplicated (group, kind, namespace) in `from` and (group, kind, name) in `to`.
+  // ReferenceGrant unions duplicates at admission time so duplicates are redundant
+  // and signal that the spec may have unintended permissive rules.
+  const dupFrom = (() => {
+    const seen = new Map<string, number>()
+    for (const f of from) {
+      const key = `${f?.group ?? ''}|${f?.kind ?? ''}|${f?.namespace ?? ''}`
+      seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    return Array.from(seen.entries()).filter(([, c]) => c > 1).map(([k, c]) => ({ key: k, count: c }))
+  })()
+  const dupTo = (() => {
+    const seen = new Map<string, number>()
+    for (const t of to) {
+      const key = `${t?.group ?? ''}|${t?.kind ?? ''}|${t?.name ?? '*'}`
+      seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    return Array.from(seen.entries()).filter(([, c]) => c > 1).map(([k, c]) => ({ key: k, count: c }))
+  })()
+
   return (
     <>
       <InfoSection title="ReferenceGrant Info">
@@ -126,6 +146,24 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
           </div>
         )}
       </InfoSection>
+
+      {(dupFrom.length > 0 || dupTo.length > 0) && (
+        <InfoSection title={`Rule Conflict Warnings (${dupFrom.length + dupTo.length})`}>
+          <p className="text-[11px] text-amber-300 mb-2">
+            Duplicate from/to entries — admission silently unions them, so duplicates may indicate spec mistakes.
+          </p>
+          <div className="space-y-1 text-xs text-slate-200">
+            {dupFrom.map((d) => {
+              const [g, k, ns] = d.key.split('|')
+              return <div key={`from-${d.key}`}>From: <span className="font-mono">{g || '""'}/{k || '?'}/{ns || '?'}</span> × {d.count}</div>
+            })}
+            {dupTo.map((d) => {
+              const [g, k, n] = d.key.split('|')
+              return <div key={`to-${d.key}`}>To: <span className="font-mono">{g || '""'}/{k || '?'}/{n}</span> × {d.count}</div>
+            })}
+          </div>
+        </InfoSection>
+      )}
 
       {Array.isArray(describe?.conditions) && describe.conditions.length > 0 && (
         <InfoSection title="Conditions">
