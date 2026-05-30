@@ -29,6 +29,7 @@ func RegisterNetwork(r chi.Router, h *handler.Handler) {
 	// IngressClasses
 	r.Get("/api/v1/ingressclasses", h.GetIngressClasses)
 	r.Get("/api/v1/ingressclasses/{name}/describe", h.DescribeIngressClass)
+	r.Get("/api/v1/ingressclasses/{name}/ingresses", h.ListIngressesByClass)
 	r.Delete("/api/v1/ingressclasses/{name}", h.DeleteIngressClass)
 
 	// Endpoints
