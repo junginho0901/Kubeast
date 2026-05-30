@@ -173,6 +173,50 @@ export default function NamespaceInfo({ name }: Props) {
     return 'badge-info'
   }
 
+  // Aggregate CPU (millicores) and memory (bytes) across all containers of all pods.
+  // Parses k8s quantity strings ("100m", "1", "128Mi", "1Gi"). Unknown units → 0.
+  const resourceSummary = useMemo(() => {
+    if (!Array.isArray(nsPods)) return null
+    const parseCpu = (s: any): number => {
+      if (typeof s !== 'string' || s.length === 0) return 0
+      if (s.endsWith('m')) return parseFloat(s.slice(0, -1)) || 0
+      return (parseFloat(s) || 0) * 1000
+    }
+    const memUnits: Array<[string, number]> = [
+      ['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4],
+      ['K', 1000], ['M', 1000 ** 2], ['G', 1000 ** 3], ['T', 1000 ** 4],
+    ]
+    const parseMem = (s: any): number => {
+      if (typeof s !== 'string' || s.length === 0) return 0
+      for (const [u, mult] of memUnits) {
+        if (s.endsWith(u)) return (parseFloat(s.slice(0, -u.length)) || 0) * mult
+      }
+      return parseFloat(s) || 0
+    }
+    let cpuReq = 0, cpuLim = 0, memReq = 0, memLim = 0
+    for (const p of nsPods as any[]) {
+      for (const c of p?.containers ?? []) {
+        const req = c?.resources?.requests ?? {}
+        const lim = c?.resources?.limits ?? {}
+        cpuReq += parseCpu(req.cpu)
+        cpuLim += parseCpu(lim.cpu)
+        memReq += parseMem(req.memory)
+        memLim += parseMem(lim.memory)
+      }
+    }
+    const fmtCpu = (m: number) => m >= 1000 ? `${(m / 1000).toFixed(2)} cores` : `${Math.round(m)}m`
+    const fmtMem = (b: number) => b >= 1024 ** 3
+      ? `${(b / 1024 ** 3).toFixed(2)} GiB`
+      : `${(b / 1024 ** 2).toFixed(0)} MiB`
+    return {
+      cpuReq: fmtCpu(cpuReq),
+      cpuLim: fmtCpu(cpuLim),
+      memReq: fmtMem(memReq),
+      memLim: fmtMem(memLim),
+      podCount: nsPods.length,
+    }
+  }, [nsPods])
+
   if (isLoading) return <p className="text-slate-400">{tr('namespaces.detail.loading', 'Loading...')}</p>
   if (isError) return <p className="text-red-400">{tr('namespaces.detail.error', 'Failed to load.')}</p>
   if (!nsDescribe) return <p className="text-slate-400">{tr('namespaces.detail.notFound', 'Not found.')}</p>
@@ -242,6 +286,26 @@ export default function NamespaceInfo({ name }: Props) {
       <InfoSection title={tr('namespaces.detail.annotations', 'Annotations')}>
         <KeyValueTags data={nsDescribe.annotations} />
       </InfoSection>
+
+      {resourceSummary && resourceSummary.podCount > 0 && (
+        <InfoSection title={`Resource Summary (sum across ${resourceSummary.podCount} pods)`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Resource</th>
+                  <th className="text-left py-1">Requests</th>
+                  <th className="text-left py-1">Limits</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                <tr className="text-slate-200"><td className="py-1 pr-2 font-mono">CPU</td><td className="py-1 pr-2 font-mono">{resourceSummary.cpuReq}</td><td className="py-1 pr-2 font-mono">{resourceSummary.cpuLim}</td></tr>
+                <tr className="text-slate-200"><td className="py-1 pr-2 font-mono">Memory</td><td className="py-1 pr-2 font-mono">{resourceSummary.memReq}</td><td className="py-1 pr-2 font-mono">{resourceSummary.memLim}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </InfoSection>
+      )}
 
       {/* Prometheus Real-time Namespace Metrics */}
       <PrometheusSection available={promNsMetrics.available} title="Real-time Resource Usage">
