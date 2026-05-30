@@ -5,10 +5,12 @@ import {
   InfoRow,
   InfoGrid,
   SummaryBadge,
+  StatusBadge,
   KeyValueTags,
   EventsTable,
   fmtRel,
 } from './DetailCommon'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -17,12 +19,25 @@ interface Props {
 }
 
 export default function PriorityClassInfo({ name }: Props) {
+  const { open: openDetail } = useResourceDetail()
   const { data: desc, isLoading } = useQuery({
     queryKey: ['priorityclass-describe', name],
     queryFn: () => api.describePriorityClass(name),
     staleTime: 10_000,
     retry: 1,
   })
+
+  // Cluster-wide Pod scan for spec.priorityClassName matches. max 50 cap since
+  // a system PriorityClass can be referenced by hundreds of pods.
+  const { data: allPods } = useQuery({
+    queryKey: ['priorityclass-using-pods', name],
+    queryFn: () => api.getAllPods(),
+    enabled: !!name,
+    staleTime: 30_000,
+  })
+  const usingPods = (Array.isArray(allPods) ? allPods : [])
+    .filter((p: any) => p?.priority_class_name === name)
+    .slice(0, 50)
 
   useResourceDetailOverlay({ kind: 'PriorityClass', name, describe: desc })
 
@@ -65,6 +80,44 @@ export default function PriorityClassInfo({ name }: Props) {
           <InfoRow label="Global Default" value={globalDefault ? 'True' : 'False'} />
           <InfoRow label="Preemption Policy" value={preemptionPolicy} />
         </InfoGrid>
+      </InfoSection>
+
+      <InfoSection title={`Used By Pods (${usingPods.length})`}>
+        {usingPods.length === 0 ? (
+          <p className="text-xs text-slate-400">No pod in the cluster uses this PriorityClass.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Namespace</th>
+                  <th className="text-left py-1">Pod</th>
+                  <th className="text-left py-1">Status</th>
+                  <th className="text-left py-1">Node</th>
+                  <th className="text-left py-1">Age</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {usingPods.map((p: any) => (
+                  <tr
+                    key={`${p.namespace}/${p.name}`}
+                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                  >
+                    <td className="py-1 pr-2 font-mono">{p.namespace}</td>
+                    <td className="py-1 pr-2 font-mono">{p.name}</td>
+                    <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                    <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
+                    <td className="py-1 pr-2 text-slate-400">{fmtRel(p.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {usingPods.length >= 50 && (
+              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
+            )}
+          </div>
+        )}
       </InfoSection>
 
       {/* Description */}
