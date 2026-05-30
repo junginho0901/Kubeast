@@ -2,11 +2,16 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import type { PodInfo } from '@/services/api'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import {
   InfoSection,
   InfoRow,
   KeyValueTags,
   EventsTable,
+  StatusBadge,
   fmtRel,
   fmtTs,
 } from './DetailCommon'
@@ -22,6 +27,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const { open: openDetail } = useResourceDetail()
 
   const { data: describe, isLoading } = useQuery({
     queryKey: ['configmap-describe', namespace, name],
@@ -31,6 +37,25 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   })
 
   useResourceDetailOverlay({ kind: 'ConfigMap', name, namespace, describe })
+
+  const podsEnabled = !!namespace && !!name
+  const { data: nsPods } = useQuery({
+    queryKey: ['cm-used-by-pods', namespace, name],
+    queryFn: () => api.getPods(namespace),
+    enabled: podsEnabled,
+    staleTime: 5_000,
+  })
+  useKubeWatchList({
+    enabled: podsEnabled,
+    queryKey: ['cm-used-by-pods', namespace, name],
+    path: `/api/v1/namespaces/${namespace}/pods`,
+    query: 'watch=1',
+    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
+  })
+  const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {
+    const refs = Array.isArray(p?.config_map_refs) ? p.config_map_refs : []
+    return refs.includes(name)
+  })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -151,6 +176,46 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
               </span>
             ))}
           </div>
+        </InfoSection>
+      )}
+
+      {podsEnabled && (
+        <InfoSection title={`Used By Pods (${usingPods.length})`}>
+          {usingPods.length === 0 ? (
+            <p className="text-xs text-slate-400">No pod in this namespace references this ConfigMap.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Pod</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Ready</th>
+                    <th className="text-left py-1">Node</th>
+                    <th className="text-left py-1">Age</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {usingPods.slice(0, 50).map((p: any) => (
+                    <tr
+                      key={`${p.namespace}/${p.name}`}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                    >
+                      <td className="py-1 pr-2 font-mono">{p.name}</td>
+                      <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                      <td className="py-1 pr-2">{p.ready ?? '-'}</td>
+                      <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
+                      <td className="py-1 pr-2 text-slate-400">{fmtRel(p.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {usingPods.length > 50 && (
+                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingPods.length} pods.</p>
+              )}
+            </div>
+          )}
         </InfoSection>
       )}
 
