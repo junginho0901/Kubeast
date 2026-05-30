@@ -82,6 +82,7 @@ func RegisterConfiguration(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/limitranges/all", h.GetAllLimitRanges)
 	r.Get("/api/v1/namespaces/{namespace}/limitranges", h.GetLimitRanges)
 	r.Get("/api/v1/namespaces/{namespace}/limitranges/{name}/describe", h.DescribeLimitRange)
+	r.Get("/api/v1/namespaces/{namespace}/limitranges/{name}/violations", h.ListPodsViolatingLimitRange)
 	r.Get("/api/v1/namespaces/{namespace}/limitranges/{name}/yaml", h.GetLimitRangeYAML)
 	r.Delete("/api/v1/namespaces/{namespace}/limitranges/{name}", h.DeleteLimitRange)
 
