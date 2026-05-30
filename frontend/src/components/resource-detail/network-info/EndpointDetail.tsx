@@ -55,8 +55,18 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
           {namespace && <InfoRow label="Namespace" value={namespace} />}
           <InfoRow label="Ready Addresses" value={String(readyCount)} />
           <InfoRow label="Not Ready Addresses" value={String(notReadyCount)} />
-          {rawJson?.generation != null && <InfoRow label="Generation" value={String(rawJson.generation)} />}
-          {rawJson?.resource_version != null && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(rawJson.resource_version)}</span>} />}
+          {(readyCount + notReadyCount) > 0 && (
+            <InfoRow
+              label="Ready Ratio"
+              value={
+                <span className={`badge ${notReadyCount === 0 ? 'badge-success' : (readyCount === 0 ? 'badge-error' : 'badge-warning')}`}>
+                  {Math.round((readyCount / (readyCount + notReadyCount)) * 100)}% ({readyCount}/{readyCount + notReadyCount})
+                </span>
+              }
+            />
+          )}
+          {((rawJson?.generation ?? (meta as any).generation) != null) && <InfoRow label="Generation" value={String(rawJson?.generation ?? (meta as any).generation)} />}
+          {((rawJson?.resource_version ?? (meta as any).resourceVersion) != null) && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(rawJson?.resource_version ?? (meta as any).resourceVersion)}</span>} />}
           <InfoRow label="Created" value={meta.creationTimestamp ? `${fmtTs(meta.creationTimestamp as string)} (${fmtRel(meta.creationTimestamp as string)})` : '-'} />
         </div>
       </InfoSection>
