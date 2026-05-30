@@ -119,6 +119,11 @@ export const configurationApi = {
     return data
   },
 
+  listPodsViolatingLimitRange: async (namespace: string, name: string): Promise<Array<{ pod: string; namespace: string; container: string; field: string; actual: string; limit: string }>> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/limitranges/${name}/violations`)
+    return data
+  },
+
   deleteLimitRange: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/limitranges/${name}`)
   },
