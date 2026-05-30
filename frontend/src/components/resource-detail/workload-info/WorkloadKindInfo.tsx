@@ -11,6 +11,7 @@ interface Props {
   has: (permission: string) => boolean
   suspendMut: { isPending: boolean; mutate: (suspend: boolean) => void }
   setTriggerDialogOpen: (open: boolean) => void
+  ownedJobs?: Array<any>
 }
 
 export default function WorkloadKindInfo({
@@ -22,6 +23,7 @@ export default function WorkloadKindInfo({
   has,
   suspendMut,
   setTriggerDialogOpen,
+  ownedJobs,
 }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
@@ -104,6 +106,41 @@ export default function WorkloadKindInfo({
               <InfoRow label="Last Successful" value={fmtTs(String(describe?.last_successful_time ?? status.lastSuccessfulTime))} />
             )}
           </div>
+
+          {Array.isArray(ownedJobs) && ownedJobs.length > 0 && (() => {
+            const sorted = [...ownedJobs]
+              .filter((j: any) => j?.start_time)
+              .sort((a: any, b: any) => String(b.start_time).localeCompare(String(a.start_time)))
+              .slice(0, 3)
+            if (sorted.length === 0) return null
+            return (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-slate-300 mb-1">Recent Runs (last {sorted.length})</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="text-slate-400">
+                      <tr>
+                        <th className="text-left py-1">Job</th>
+                        <th className="text-left py-1">Status</th>
+                        <th className="text-left py-1">Started</th>
+                        <th className="text-left py-1">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {sorted.map((j: any) => (
+                        <tr key={j.name} className="text-slate-200">
+                          <td className="py-1 pr-2 font-mono">{j.name}</td>
+                          <td className="py-1 pr-2">{j.status || '-'}</td>
+                          <td className="py-1 pr-2 text-slate-400">{fmtRel(j.start_time)}</td>
+                          <td className="py-1 pr-2">{j.duration_seconds != null ? `${j.duration_seconds}s` : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
         </InfoSection>
       )}
     </>
