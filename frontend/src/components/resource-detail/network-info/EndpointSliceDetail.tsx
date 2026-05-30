@@ -1,3 +1,6 @@
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/services/api'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
 
 interface Props {
@@ -30,6 +33,18 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
   const total = Number(rawJson?.endpoints_total ?? endpoints.length ?? 0)
   const ready = Number(rawJson?.endpoints_ready ?? endpoints.filter((ep: any) => ep?.conditions?.ready !== false).length ?? 0)
   const notReady = Number(rawJson?.endpoints_not_ready ?? Math.max(total - ready, 0))
+
+  const { open: openDetail } = useResourceDetail()
+  const { data: nsSlices } = useQuery({
+    queryKey: ['endpointslice-peers', namespace, serviceName],
+    queryFn: () => api.getEndpointSlices(namespace as string),
+    enabled: !!namespace && serviceName !== '-',
+    staleTime: 5_000,
+  })
+  const peerSlices = (Array.isArray(nsSlices) ? nsSlices : []).filter((s: any) => {
+    const svc = s?.service_name ?? s?.labels?.['kubernetes.io/service-name']
+    return svc === serviceName && s?.name !== name
+  })
 
   return (
     <>
@@ -100,6 +115,39 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
               )
             })}
           </div>
+        </InfoSection>
+      )}
+
+      {serviceName !== '-' && (
+        <InfoSection title={`Peer EndpointSlices for ${serviceName} (${peerSlices.length})`}>
+          {peerSlices.length === 0 ? (
+            <p className="text-xs text-slate-400">No other EndpointSlice for this Service in the namespace.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Name</th>
+                    <th className="text-left py-1">Address Type</th>
+                    <th className="text-left py-1">Ready / Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {peerSlices.slice(0, 50).map((s: any) => (
+                    <tr
+                      key={s.name}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'EndpointSlice', name: s.name, namespace: s.namespace })}
+                    >
+                      <td className="py-1 pr-2 font-mono">{s.name}</td>
+                      <td className="py-1 pr-2">{s.address_type ?? '-'}</td>
+                      <td className="py-1 pr-2 font-mono">{(s.endpoints_ready ?? 0)}/{(s.endpoints_total ?? 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </InfoSection>
       )}
 
