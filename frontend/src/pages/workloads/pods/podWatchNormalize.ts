@@ -105,6 +105,44 @@ function normalizeWatchPodObject(obj: any): PodInfo {
     ? metadata.ownerReferences
     : (Array.isArray(obj?.owner_references) ? obj.owner_references : [])
 
+  // ConfigMap / Secret references — extracted from raw spec when present,
+  // falling back to backend-summarized fields for list responses.
+  const cmRefs = new Set<string>()
+  const secretRefs = new Set<string>()
+  const volumesArr = Array.isArray(spec?.volumes) ? spec.volumes : []
+  for (const v of volumesArr) {
+    if (v?.configMap?.name) cmRefs.add(v.configMap.name)
+    if (v?.secret?.secretName) secretRefs.add(v.secret.secretName)
+    const sources = Array.isArray(v?.projected?.sources) ? v.projected.sources : []
+    for (const s of sources) {
+      if (s?.configMap?.name) cmRefs.add(s.configMap.name)
+      if (s?.secret?.name) secretRefs.add(s.secret.name)
+    }
+  }
+  const collectEnv = (list: any[]) => {
+    for (const c of list ?? []) {
+      for (const e of c?.envFrom ?? []) {
+        if (e?.configMapRef?.name) cmRefs.add(e.configMapRef.name)
+        if (e?.secretRef?.name) secretRefs.add(e.secretRef.name)
+      }
+      for (const e of c?.env ?? []) {
+        if (e?.valueFrom?.configMapKeyRef?.name) cmRefs.add(e.valueFrom.configMapKeyRef.name)
+        if (e?.valueFrom?.secretKeyRef?.name) secretRefs.add(e.valueFrom.secretKeyRef.name)
+      }
+    }
+  }
+  collectEnv(spec?.containers)
+  collectEnv(spec?.initContainers)
+  for (const ips of spec?.imagePullSecrets ?? []) {
+    if (ips?.name) secretRefs.add(ips.name)
+  }
+  for (const n of Array.isArray(obj?.config_map_refs) ? obj.config_map_refs : []) {
+    if (n) cmRefs.add(n)
+  }
+  for (const n of Array.isArray(obj?.secret_refs) ? obj.secret_refs : []) {
+    if (n) secretRefs.add(n)
+  }
+
   return {
     name,
     namespace,
@@ -127,6 +165,8 @@ function normalizeWatchPodObject(obj: any): PodInfo {
       controller: r?.controller ?? null,
     })),
     service_account_name: spec?.serviceAccountName ?? obj?.service_account_name ?? undefined,
+    config_map_refs: cmRefs.size > 0 ? Array.from(cmRefs) : undefined,
+    secret_refs: secretRefs.size > 0 ? Array.from(secretRefs) : undefined,
   }
 }
 
