@@ -3,14 +3,20 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, Copy, Check, ShieldCheck, Container } from 'lucide-react'
 import { api } from '@/services/api'
+import type { PodInfo, ServiceAccountInfo } from '@/services/api'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import {
   InfoSection,
   InfoRow,
   KeyValueTags,
   EventsTable,
+  StatusBadge,
   fmtRel,
   fmtTs,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -22,6 +28,81 @@ interface Props {
 export default function SecretInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const { open: openDetail } = useResourceDetail()
+
+  const enabled = !!namespace && !!name
+
+  const { data: nsPods } = useQuery({
+    queryKey: ['secret-used-by-pods', namespace, name],
+    queryFn: () => api.getPods(namespace),
+    enabled,
+    staleTime: 5_000,
+  })
+  useKubeWatchList({
+    enabled,
+    queryKey: ['secret-used-by-pods', namespace, name],
+    path: `/api/v1/namespaces/${namespace}/pods`,
+    query: 'watch=1',
+    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
+  })
+
+  const { data: nsSAs } = useQuery({
+    queryKey: ['secret-used-by-sas', namespace, name],
+    queryFn: () => api.getServiceAccounts(namespace),
+    enabled,
+    staleTime: 5_000,
+  })
+  useKubeWatchList({
+    enabled,
+    queryKey: ['secret-used-by-sas', namespace, name],
+    path: `/api/v1/namespaces/${namespace}/serviceaccounts`,
+    query: 'watch=1',
+    applyEvent: (prev, event) => {
+      const items = Array.isArray(prev) ? [...(prev as ServiceAccountInfo[])] : []
+      const obj = event?.object
+      if (!obj) return items
+      const m = obj?.metadata ?? {}
+      const saName = m?.name
+      const saNs = m?.namespace
+      if (!saName || !saNs) return items
+      const secretsList = Array.isArray(obj?.secrets)
+        ? obj.secrets.map((s: any) => s?.name).filter(Boolean)
+        : []
+      const imagePullSecrets = Array.isArray(obj?.imagePullSecrets)
+        ? obj.imagePullSecrets.map((s: any) => s?.name).filter(Boolean)
+        : []
+      const normalized: ServiceAccountInfo = {
+        name: saName,
+        namespace: saNs,
+        secrets: secretsList.length,
+        secrets_list: secretsList,
+        image_pull_secrets: imagePullSecrets,
+        created_at: m?.creationTimestamp ?? null,
+        labels: m?.labels ?? null,
+        annotations: m?.annotations ?? null,
+      }
+      const idx = items.findIndex((s) => s.name === saName && s.namespace === saNs)
+      if (event?.type === 'DELETED') {
+        if (idx >= 0) items.splice(idx, 1)
+        return items
+      }
+      if (idx >= 0) items[idx] = normalized
+      else items.push(normalized)
+      return items
+    },
+  })
+
+  const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {
+    const refs = Array.isArray(p?.secret_refs) ? p.secret_refs : []
+    return refs.includes(name)
+  })
+  const usingSAs = (Array.isArray(nsSAs) ? nsSAs : []).filter((sa: any) => {
+    const refs = [
+      ...(Array.isArray(sa?.secrets_list) ? sa.secrets_list : []),
+      ...(Array.isArray(sa?.image_pull_secrets) ? sa.image_pull_secrets : []),
+    ]
+    return refs.includes(name)
+  })
 
   const { data: describe, isLoading } = useQuery({
     queryKey: ['secret-describe', namespace, name],
@@ -245,6 +326,73 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
               </div>
             ))}
           </div>
+        </InfoSection>
+      )}
+
+      {enabled && (
+        <InfoSection title={`Used By Pods (${usingPods.length})`}>
+          {usingPods.length === 0 ? (
+            <p className="text-xs text-slate-400">No pod in this namespace directly references this Secret.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Pod</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Ready</th>
+                    <th className="text-left py-1">Node</th>
+                    <th className="text-left py-1">Age</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {usingPods.slice(0, 50).map((p: any) => (
+                    <tr
+                      key={`${p.namespace}/${p.name}`}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                    >
+                      <td className="py-1 pr-2 font-mono">{p.name}</td>
+                      <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                      <td className="py-1 pr-2">{p.ready ?? '-'}</td>
+                      <td className="py-1 pr-2 truncate max-w-[160px]">{p.node_name || '-'}</td>
+                      <td className="py-1 pr-2 text-slate-400">{fmtRel(p.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {usingPods.length > 50 && (
+                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingPods.length} pods.</p>
+              )}
+            </div>
+          )}
+        </InfoSection>
+      )}
+
+      {enabled && (
+        <InfoSection title={`Used By ServiceAccounts (${usingSAs.length})`}>
+          {usingSAs.length === 0 ? (
+            <p className="text-xs text-slate-400">No ServiceAccount in this namespace references this Secret.</p>
+          ) : (
+            <div className="space-y-1 text-xs text-slate-200">
+              {usingSAs.slice(0, 50).map((sa: any) => {
+                const inPull = (sa?.image_pull_secrets ?? []).includes(name)
+                const inMount = (sa?.secrets_list ?? []).includes(name)
+                const tags: string[] = []
+                if (inMount) tags.push('mount')
+                if (inPull) tags.push('imagePullSecret')
+                return (
+                  <div key={`${sa.namespace}/${sa.name}`} className="flex items-center gap-2">
+                    <ResourceLink kind="ServiceAccount" name={sa.name} namespace={sa.namespace} />
+                    <span className="text-[10px] text-slate-400">({tags.join(', ')})</span>
+                  </div>
+                )
+              })}
+              {usingSAs.length > 50 && (
+                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingSAs.length} ServiceAccounts.</p>
+              )}
+            </div>
+          )}
         </InfoSection>
       )}
 
