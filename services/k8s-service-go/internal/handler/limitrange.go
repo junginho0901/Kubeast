@@ -43,6 +43,19 @@ func (h *Handler) DescribeLimitRange(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
+// ListPodsViolatingLimitRange handles GET /api/v1/namespaces/{namespace}/limitranges/{name}/violations.
+func (h *Handler) ListPodsViolatingLimitRange(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	data, err := h.svc.ListPodsViolatingLimitRange(ctx, namespace, name)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, data)
+}
+
 // GetLimitRangeYAML handles GET /api/v1/namespaces/{namespace}/limitranges/{name}/yaml.
 func (h *Handler) GetLimitRangeYAML(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
