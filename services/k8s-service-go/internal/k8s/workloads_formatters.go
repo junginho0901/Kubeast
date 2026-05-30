@@ -251,18 +251,29 @@ func formatJobDetail(job *batchv1.Job) map[string]interface{} {
 		}
 	}
 
+	ownerRefs := make([]map[string]interface{}, 0, len(job.OwnerReferences))
+	for _, ref := range job.OwnerReferences {
+		ownerRefs = append(ownerRefs, map[string]interface{}{
+			"kind":       ref.Kind,
+			"name":       ref.Name,
+			"uid":        string(ref.UID),
+			"controller": ref.Controller != nil && *ref.Controller,
+		})
+	}
+
 	result := map[string]interface{}{
-		"name":        job.Name,
-		"namespace":   job.Namespace,
-		"completions": completions,
-		"parallelism": parallelism,
-		"succeeded":   job.Status.Succeeded,
-		"failed":      job.Status.Failed,
-		"active":      job.Status.Active,
-		"status":      status,
-		"image":       image,
-		"images":      images,
-		"created_at":  toISO(&job.CreationTimestamp),
+		"name":             job.Name,
+		"namespace":        job.Namespace,
+		"completions":      completions,
+		"parallelism":      parallelism,
+		"succeeded":        job.Status.Succeeded,
+		"failed":           job.Status.Failed,
+		"active":           job.Status.Active,
+		"status":           status,
+		"image":            image,
+		"images":           images,
+		"owner_references": ownerRefs,
+		"created_at":       toISO(&job.CreationTimestamp),
 	}
 
 	if job.Status.StartTime != nil {
