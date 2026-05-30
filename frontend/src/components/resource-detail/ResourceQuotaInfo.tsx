@@ -16,6 +16,37 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
+// Parse k8s quantity strings to a numeric value usable for ratios. Returns null
+// for unparseable inputs (count-only quotas like "5" are parsed as 5, percentages
+// remain meaningful). For CPU keys returns millicores; for memory returns bytes.
+function parseQuantity(s: string | undefined | null): number | null {
+  if (typeof s !== 'string' || s.length === 0) return null
+  if (s.endsWith('m')) {
+    const n = parseFloat(s.slice(0, -1))
+    return Number.isFinite(n) ? n : null
+  }
+  const memUnits: Array<[string, number]> = [
+    ['Ki', 1024], ['Mi', 1024 ** 2], ['Gi', 1024 ** 3], ['Ti', 1024 ** 4],
+    ['Pi', 1024 ** 5], ['Ei', 1024 ** 6],
+    ['K', 1000], ['M', 1000 ** 2], ['G', 1000 ** 3], ['T', 1000 ** 4],
+  ]
+  for (const [u, mult] of memUnits) {
+    if (s.endsWith(u)) {
+      const n = parseFloat(s.slice(0, -u.length))
+      return Number.isFinite(n) ? n * mult : null
+    }
+  }
+  const n = parseFloat(s)
+  return Number.isFinite(n) ? n : null
+}
+
+function computeQuotaPct(used: string | undefined, hard: string | undefined): number | null {
+  const u = parseQuantity(used)
+  const h = parseQuantity(hard)
+  if (u == null || h == null || h === 0) return null
+  return Math.round((u / h) * 100)
+}
+
 export default function ResourceQuotaInfo({ name, namespace }: Props) {
   const { data: desc, isLoading } = useQuery({
     queryKey: ['resourcequota-describe', namespace, name],
@@ -67,22 +98,32 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
           <span className="text-slate-400 text-xs">(none)</span>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs table-fixed min-w-[400px]">
+            <table className="w-full text-xs table-fixed min-w-[480px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[40%]">Resource</th>
-                  <th className="text-left py-2 w-[30%]">Used</th>
-                  <th className="text-left py-2 w-[30%]">Hard</th>
+                  <th className="text-left py-2 w-[35%]">Resource</th>
+                  <th className="text-left py-2 w-[20%]">Used</th>
+                  <th className="text-left py-2 w-[20%]">Hard</th>
+                  <th className="text-left py-2 w-[25%]">Usage %</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {resourceKeys.map((key) => (
-                  <tr key={key} className="text-slate-200">
-                    <td className="py-2 pr-2 font-medium break-all whitespace-normal align-top">{key}</td>
-                    <td className="py-2 pr-2 align-top">{statusUsed[key] ?? '-'}</td>
-                    <td className="py-2 pr-2 align-top">{statusHard[key] ?? '-'}</td>
-                  </tr>
-                ))}
+                {resourceKeys.map((key) => {
+                  const used = statusUsed[key]
+                  const hard = statusHard[key]
+                  const pct = computeQuotaPct(used, hard)
+                  const cls = pct == null ? '' : pct > 90 ? 'badge-error' : pct > 70 ? 'badge-warning' : 'badge-success'
+                  return (
+                    <tr key={key} className="text-slate-200">
+                      <td className="py-2 pr-2 font-medium break-all whitespace-normal align-top">{key}</td>
+                      <td className="py-2 pr-2 align-top">{used ?? '-'}</td>
+                      <td className="py-2 pr-2 align-top">{hard ?? '-'}</td>
+                      <td className="py-2 pr-2 align-top">
+                        {pct == null ? <span className="text-slate-500">-</span> : <span className={`badge ${cls}`}>{pct}%</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
