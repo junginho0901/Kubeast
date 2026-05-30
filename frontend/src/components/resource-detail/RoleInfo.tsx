@@ -41,6 +41,33 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
   const rules = Array.isArray(describe?.rules) ? describe.rules : []
   const events = Array.isArray(describe?.events) ? describe.events : []
 
+  // Detect overlapping rules — same (apiGroup, resource) covered by multiple
+  // rules. Often unintentional duplication that obscures the effective verb set
+  // and makes least-privilege review harder.
+  const ruleConflicts: Array<{ apiGroup: string; resource: string; rules: number[] }> = (() => {
+    const map = new Map<string, number[]>()
+    for (let i = 0; i < rules.length; i++) {
+      const r: any = rules[i]
+      const groups: string[] = Array.isArray(r?.apiGroups) ? r.apiGroups : ['']
+      const resources: string[] = Array.isArray(r?.resources) ? r.resources : []
+      for (const g of groups.length === 0 ? [''] : groups) {
+        for (const res of resources) {
+          const key = `${g}|${res}`
+          const list = map.get(key)
+          if (list) list.push(i)
+          else map.set(key, [i])
+        }
+      }
+    }
+    const out: Array<{ apiGroup: string; resource: string; rules: number[] }> = []
+    for (const [key, indices] of map) {
+      if (indices.length < 2) continue
+      const [g, r] = key.split('|')
+      out.push({ apiGroup: g, resource: r, rules: indices })
+    }
+    return out
+  })()
+
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
   return (
@@ -101,6 +128,34 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                 </div>
               )
             })}
+          </div>
+        </InfoSection>
+      )}
+
+      {ruleConflicts.length > 0 && (
+        <InfoSection title={`Rule Conflict Warnings (${ruleConflicts.length})`}>
+          <p className="text-[11px] text-amber-300 mb-2">
+            Same (apiGroup, resource) is covered by multiple rules — verbs are unioned at evaluation time but the duplication may be unintentional.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">API Group</th>
+                  <th className="text-left py-1">Resource</th>
+                  <th className="text-left py-1">Rules</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {ruleConflicts.map((c, i) => (
+                  <tr key={i} className="text-slate-200">
+                    <td className="py-1 pr-2 font-mono">{c.apiGroup || '""'}</td>
+                    <td className="py-1 pr-2 font-mono">{c.resource}</td>
+                    <td className="py-1 pr-2 font-mono">#{c.rules.map((r) => r + 1).join(', #')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </InfoSection>
       )}
