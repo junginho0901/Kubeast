@@ -71,6 +71,26 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
   const attachmentMetadata = (describe?.attachment_metadata ?? {}) as Record<string, string>
   const inlineVolumeSpec = describe?.source_inline_volume_spec
 
+  // PV → PVC → Pods chain. Resolves bound PV (1 describe), then bound PVC
+  // (1 describe), then the PVC's used_by_pods list (already in PVC describe).
+  // Each fetch is independent and react-query dedupes if same PV viewed twice.
+  const { data: pvDescribe } = useQuery({
+    queryKey: ['va-chain-pv', pvName],
+    queryFn: () => api.describePV(pvName),
+    enabled: pvName !== '-' && !!pvName,
+    staleTime: 30_000,
+  })
+  const boundClaim = (pvDescribe?.bound_claim ?? pvDescribe?.claim_ref) as
+    | { name?: string; namespace?: string }
+    | undefined
+  const { data: pvcDescribe } = useQuery({
+    queryKey: ['va-chain-pvc', boundClaim?.namespace, boundClaim?.name],
+    queryFn: () => api.describePVC(boundClaim!.namespace!, boundClaim!.name!),
+    enabled: !!boundClaim?.name && !!boundClaim?.namespace,
+    staleTime: 30_000,
+  })
+  const chainPods = Array.isArray(pvcDescribe?.used_by_pods) ? pvcDescribe.used_by_pods : []
+
   return (
     <>
       <InfoSection title="VolumeAttachment Info">
@@ -161,6 +181,49 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
             <InfoRow label="Source" value={String(pvSummary.source ?? '-')} />
             <InfoRow label="Driver" value={String(pvSummary.driver ?? '-')} />
             <InfoRow label="Volume Handle" value={pvSummary.volume_handle ? <span className="font-mono break-all text-[11px]">{String(pvSummary.volume_handle)}</span> : '-'} />
+          </div>
+        </InfoSection>
+      )}
+
+      {boundClaim?.name && (
+        <InfoSection title={`Bound Chain — PV → PVC → Pods (${chainPods.length})`}>
+          <div className="space-y-2 text-xs">
+            <InfoRow
+              label="PVC"
+              value={(
+                <button
+                  type="button"
+                  className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 break-all text-left"
+                  onClick={() => openDetail({ kind: 'PersistentVolumeClaim', name: boundClaim.name!, namespace: boundClaim.namespace! })}
+                >
+                  {boundClaim.namespace}/{boundClaim.name}
+                </button>
+              )}
+            />
+            {chainPods.length === 0 ? (
+              <p className="text-xs text-slate-400">No pod currently mounts this PVC.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-slate-400">
+                    <tr><th className="text-left py-1">Pod</th><th className="text-left py-1">Status</th><th className="text-left py-1">Node</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {chainPods.slice(0, 20).map((p: any) => (
+                      <tr
+                        key={`${p.namespace}/${p.name}`}
+                        className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                        onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                      >
+                        <td className="py-1 pr-2 font-mono">{p.name}</td>
+                        <td className="py-1 pr-2"><StatusBadge status={String(p.status ?? p.phase ?? '-')} /></td>
+                        <td className="py-1 pr-2 font-mono">{p.node_name ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </InfoSection>
       )}
