@@ -42,6 +42,21 @@ export default function LeaseInfo({ name, namespace }: Props) {
   const acquireTime = desc.acquire_time
   const events: any[] = desc.events || []
 
+  // Derived from acquire/renew times. Computed at render — not "real time", but
+  // close enough for a detail drawer (refreshes on next describe poll).
+  const nowMs = Date.now()
+  const ageSeconds = acquireTime ? Math.max(0, Math.floor((nowMs - new Date(acquireTime).getTime()) / 1000)) : null
+  const expiresInSeconds = (renewTime && leaseDuration != null)
+    ? Math.floor((new Date(renewTime).getTime() + (leaseDuration as number) * 1000 - nowMs) / 1000)
+    : null
+  const fmtDur = (s: number): string => {
+    if (s < 0) return `${-s}s ago (expired)`
+    if (s < 60) return `${s}s`
+    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
+    if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+    return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`
+  }
+
   return (
     <div className="space-y-4">
       {/* Summary Badges */}
@@ -73,6 +88,17 @@ export default function LeaseInfo({ name, namespace }: Props) {
           <InfoRow label="Lease Transitions" value={leaseTransitions != null ? String(leaseTransitions) : '-'} />
           <InfoRow label="Renew Time" value={renewTime ? fmtRel(renewTime) : '-'} />
           <InfoRow label="Acquire Time" value={acquireTime ? fmtRel(acquireTime) : '-'} />
+          {ageSeconds != null && <InfoRow label="Lease Age" value={fmtDur(ageSeconds)} />}
+          {expiresInSeconds != null && (
+            <InfoRow
+              label="Expires In"
+              value={
+                <span className={`badge ${expiresInSeconds < 0 ? 'badge-error' : (expiresInSeconds < 10 ? 'badge-warning' : 'badge-success')}`}>
+                  {fmtDur(expiresInSeconds)}
+                </span>
+              }
+            />
+          )}
         </InfoGrid>
       </InfoSection>
 
