@@ -846,6 +846,8 @@ export interface PodInfo {
   service_account_name?: string
   config_map_refs?: string[]
   secret_refs?: string[]
+  priority_class_name?: string
+  runtime_class_name?: string
 }
 
 export interface PodRbacRule {
