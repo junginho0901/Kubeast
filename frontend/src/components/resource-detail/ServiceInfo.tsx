@@ -1,7 +1,11 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import type { PodInfo } from '@/services/api'
+import { useKubeWatchList } from '@/services/useKubeWatchList'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -94,6 +98,7 @@ function formatIngress(ingress: Array<{ ip?: string | null; hostname?: string | 
 
 export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
+  const { open: openDetail } = useResourceDetail()
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['service-describe', namespace, name],
     queryFn: () => api.describeService(namespace as string, name) as Promise<ServiceDescribe>,
@@ -106,6 +111,30 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
+
+  const selectorForWatch = (describe?.selector ?? (spec?.selector as Record<string, string> | undefined) ?? {})
+  const selectorStr = useMemo(
+    () => Object.entries(selectorForWatch).map(([k, v]) => `${k}=${v}`).join(','),
+    [selectorForWatch],
+  )
+  const matchingEnabled = !!namespace && !!selectorStr
+
+  const { data: matchingPods } = useQuery({
+    queryKey: ['service-matching-pods', namespace, name, selectorStr],
+    queryFn: () => api.getPods(namespace as string, selectorStr),
+    enabled: matchingEnabled,
+    staleTime: 5_000,
+  })
+
+  useKubeWatchList({
+    enabled: matchingEnabled,
+    queryKey: ['service-matching-pods', namespace, name, selectorStr],
+    path: `/api/v1/namespaces/${namespace}/pods`,
+    query: `watch=1&labelSelector=${encodeURIComponent(selectorStr)}`,
+    applyEvent: (prev, event) => applyPodWatchEvent(prev as PodInfo[] | undefined, event),
+  })
+
+  const matchingPodsList = Array.isArray(matchingPods) ? matchingPods : []
 
   const ports = useMemo(() => {
     if (Array.isArray(describe?.ports)) return describe.ports
@@ -282,6 +311,48 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
       {Object.keys(selector).length > 0 && (
         <InfoSection title="Selector">
           <KeyValueTags data={selector} />
+        </InfoSection>
+      )}
+
+      {matchingEnabled && (
+        <InfoSection title={`Matching Pods (${matchingPodsList.length})`}>
+          {matchingPodsList.length === 0 ? (
+            <p className="text-xs text-slate-400">No pods match this selector.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Pod</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Ready</th>
+                    <th className="text-left py-1">Restarts</th>
+                    <th className="text-left py-1">Node</th>
+                    <th className="text-left py-1">Age</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {matchingPodsList.slice(0, 50).map((p) => (
+                    <tr
+                      key={`${p.namespace}/${p.name}`}
+                      className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                    >
+                      <td className="py-1 pr-2 font-mono">{p.name}</td>
+                      <td className="py-1 pr-2"><StatusBadge status={String((p as any).phase ?? (p as any).status ?? '-')} /></td>
+                      <td className="py-1 pr-2">{(p as any).ready ?? '-'}</td>
+                      <td className="py-1 pr-2">{String((p as any).restart_count ?? 0)}</td>
+                      <td className="py-1 pr-2 truncate max-w-[160px]">{(p as any).node_name || '-'}</td>
+                      <td className="py-1 pr-2 text-slate-400">{fmtRel((p as any).created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {matchingPodsList.length > 50 && (
+                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {matchingPodsList.length} pods.</p>
+              )}
+            </div>
+          )}
         </InfoSection>
       )}
 
