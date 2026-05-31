@@ -28,6 +28,34 @@ export default function VPAInfo({ name, namespace }: Props) {
 
   useResourceDetailOverlay({ kind: 'VerticalPodAutoscaler', name, namespace, describe: desc })
 
+  // Inline target controller status — saves a click vs ResourceLink navigate.
+  // Supports Deployment / StatefulSet / DaemonSet / ReplicaSet. Other kinds
+  // (custom controllers) fall back to ResourceLink only.
+  const targetKind = desc?.target_ref_kind as string | undefined
+  const targetName = desc?.target_ref_name as string | undefined
+  const targetDescribeFn = (() => {
+    if (!targetKind || !targetName) return null
+    switch (targetKind) {
+      case 'Deployment': return () => api.describeDeployment(namespace, targetName)
+      case 'StatefulSet': return () => api.describeStatefulSet(namespace, targetName)
+      case 'DaemonSet': return () => api.describeDaemonSet(namespace, targetName)
+      case 'ReplicaSet': return () => api.describeReplicaSet(namespace, targetName)
+      default: return null
+    }
+  })()
+  const { data: targetDescribe } = useQuery({
+    queryKey: ['vpa-target', namespace, targetKind, targetName],
+    queryFn: targetDescribeFn!,
+    enabled: !!targetDescribeFn,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const targetStatus = targetDescribe ? {
+    desired: (targetDescribe as any)?.replicas ?? (targetDescribe as any)?.desired ?? '-',
+    ready: (targetDescribe as any)?.ready_replicas ?? (targetDescribe as any)?.ready ?? '-',
+    available: (targetDescribe as any)?.available_replicas ?? (targetDescribe as any)?.available ?? '-',
+  } : null
+
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
   }
@@ -70,6 +98,12 @@ export default function VPAInfo({ name, namespace }: Props) {
         <div className="space-y-2">
           <InfoRow label="Kind" value={desc.target_ref_kind || '-'} />
           <InfoRow label="Name" value={desc.target_ref_name ? <ResourceLink kind={desc.target_ref_kind || 'Deployment'} name={desc.target_ref_name} namespace={namespace} /> : '-'} />
+          {targetStatus && (
+            <InfoRow
+              label="Target Status"
+              value={<span className="font-mono">Desired: {String(targetStatus.desired)} · Ready: {String(targetStatus.ready)} · Available: {String(targetStatus.available)}</span>}
+            />
+          )}
         </div>
       </InfoSection>
 
