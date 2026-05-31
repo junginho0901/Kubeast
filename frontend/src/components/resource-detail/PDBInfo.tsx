@@ -15,6 +15,7 @@ import {
   EventsTable,
   StatusBadge,
   fmtRel,
+  usePagination,
 } from './DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -58,6 +59,7 @@ export default function PDBInfo({ name, namespace }: Props) {
   })
 
   const pods = Array.isArray(protectedPods) ? protectedPods : []
+  const { items: pagedPods, nav: podsNav } = usePagination(pods, 10)
 
   if (isLoading) {
     return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
@@ -178,7 +180,7 @@ export default function PDBInfo({ name, namespace }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pods.slice(0, 50).map((p: any) => (
+                  {pagedPods.map((p: any) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -193,9 +195,7 @@ export default function PDBInfo({ name, namespace }: Props) {
                   ))}
                 </tbody>
               </table>
-              {pods.length > 50 && (
-                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {pods.length} pods.</p>
-              )}
+              {podsNav}
             </div>
           )}
         </InfoSection>

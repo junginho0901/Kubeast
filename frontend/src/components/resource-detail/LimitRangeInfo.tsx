@@ -7,6 +7,7 @@ import {
   KeyValueTags,
   EventsTable,
   fmtRel,
+  usePagination,
 } from './DetailCommon'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -39,6 +40,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
     staleTime: 10_000,
   })
   const violationList = Array.isArray(violations) ? violations : []
+  const { items: pagedViolations, nav: violationsNav } = usePagination(violationList, 10)
 
   useResourceDetailOverlay({ kind: 'LimitRange', name, namespace, describe: desc })
 
@@ -132,7 +134,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {violationList.slice(0, 50).map((v, i) => (
+                {pagedViolations.map((v, i) => (
                   <tr
                     key={i}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -147,9 +149,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
                 ))}
               </tbody>
             </table>
-            {violationList.length > 50 && (
-              <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {violationList.length}.</p>
-            )}
+            {violationsNav}
           </div>
         )}
       </InfoSection>
