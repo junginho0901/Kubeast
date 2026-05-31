@@ -169,6 +169,20 @@ function normalizeWatchPodObject(obj: any): PodInfo {
     secret_refs: secretRefs.size > 0 ? Array.from(secretRefs) : undefined,
     priority_class_name: spec?.priorityClassName ?? obj?.priority_class_name ?? undefined,
     runtime_class_name: spec?.runtimeClassName ?? obj?.runtime_class_name ?? undefined,
+    resource_claims: (() => {
+      const fromObj = Array.isArray(obj?.resource_claims) ? obj.resource_claims : null
+      if (fromObj) return fromObj
+      const raw = Array.isArray(spec?.resourceClaims) ? spec.resourceClaims : []
+      const names = raw.map((rc: any) => rc?.source?.resourceClaimName).filter(Boolean)
+      return names.length > 0 ? names : undefined
+    })(),
+    resource_claim_templates: (() => {
+      const fromObj = Array.isArray(obj?.resource_claim_templates) ? obj.resource_claim_templates : null
+      if (fromObj) return fromObj
+      const raw = Array.isArray(spec?.resourceClaims) ? spec.resourceClaims : []
+      const names = raw.map((rc: any) => rc?.source?.resourceClaimTemplateName).filter(Boolean)
+      return names.length > 0 ? names : undefined
+    })(),
   }
 }
 

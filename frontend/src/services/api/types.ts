@@ -693,6 +693,12 @@ export interface JobInfo {
   completion_time?: string | null
   duration_seconds?: number | null
   created_at?: string | null
+  owner_references?: Array<{
+    kind?: string | null
+    name?: string | null
+    uid?: string | null
+    controller?: boolean | null
+  }>
 }
 
 export interface CronJobInfo {
@@ -848,6 +854,8 @@ export interface PodInfo {
   secret_refs?: string[]
   priority_class_name?: string
   runtime_class_name?: string
+  resource_claims?: string[]
+  resource_claim_templates?: string[]
 }
 
 export interface PodRbacRule {
