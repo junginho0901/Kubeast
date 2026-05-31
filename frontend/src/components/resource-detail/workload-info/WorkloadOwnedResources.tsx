@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, StatusBadge, fmtRel } from '../DetailCommon'
+import { InfoSection, StatusBadge, fmtRel, usePagination } from '../DetailCommon'
 import { ResourceLink } from '../ResourceLink'
 import { useOwnedWatchedResources } from './useOwnedWatchedResources'
 
@@ -39,7 +39,7 @@ export default function WorkloadOwnedResources({
   const { open: openDetail } = useResourceDetail()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
 
-  const { pods, replicaSets, pvcsByPodName, podsEnabled, rsEnabled, pvcsEnabled } = useOwnedWatchedResources({
+  const { pods, replicaSets, jobs: liveJobs, pvcsByPodName, podsEnabled, rsEnabled, jobsEnabled, pvcsEnabled } = useOwnedWatchedResources({
     kind,
     namespace,
     name,
@@ -53,7 +53,20 @@ export default function WorkloadOwnedResources({
   const displayPods = podsEnabled && pods.length > 0 ? pods : (Array.isArray(fallbackPods) ? fallbackPods : [])
   const showOwnedPods = (isDaemonSet || isReplicaSet || isStatefulSet || isJob) && displayPods.length > 0
   const showDeploymentRS = isDeployment && rsEnabled
-  const showOwnedJobs = isCronJob && Array.isArray(ownedJobs) && ownedJobs.length > 0
+  // CronJob owned Jobs — prefer live hook result, fallback to prop (parent's
+  // staleTime-only query) until first watch tick.
+  const displayJobs = jobsEnabled && liveJobs.length > 0
+    ? liveJobs
+    : (Array.isArray(ownedJobs) ? ownedJobs : [])
+  const showOwnedJobs = isCronJob && displayJobs.length > 0
+
+  // Pre-sort/pre-slice computed lists for pagination. Keeps existing display
+  // semantics (RS sorted newest first; Owned Pods table).
+  const sortedRs = [...(Array.isArray(replicaSets) ? replicaSets : [])]
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+  const { items: pagedRs, nav: rsNav } = usePagination(sortedRs, 10)
+  const { items: pagedDisplayPods, nav: displayPodsNav } = usePagination(displayPods as Array<any>, 10)
+  const { items: pagedOwnedJobs, nav: ownedJobsNav } = usePagination(displayJobs, 10)
 
   return (
     <>
@@ -75,21 +88,19 @@ export default function WorkloadOwnedResources({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {[...replicaSets]
-                    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-                    .slice(0, 20)
-                    .map((rs) => (
-                      <tr key={`${rs.namespace}/${rs.name}`} className="text-slate-200">
-                        <td className="py-2 pr-2"><ResourceLink kind="ReplicaSet" name={rs.name} namespace={rs.namespace} /></td>
-                        <td className="py-2 pr-2 font-mono">{rs.replicas}</td>
-                        <td className="py-2 pr-2 font-mono">{rs.ready_replicas}</td>
-                        <td className="py-2 pr-2 font-mono">{rs.available_replicas}</td>
-                        <td className="py-2 pr-2"><StatusBadge status={rs.status || '-'} /></td>
-                        <td className="py-2 pr-2 text-slate-400">{fmtRel(rs.created_at)}</td>
-                      </tr>
-                    ))}
+                  {pagedRs.map((rs) => (
+                    <tr key={`${rs.namespace}/${rs.name}`} className="text-slate-200">
+                      <td className="py-2 pr-2"><ResourceLink kind="ReplicaSet" name={rs.name} namespace={rs.namespace} /></td>
+                      <td className="py-2 pr-2 font-mono">{rs.replicas}</td>
+                      <td className="py-2 pr-2 font-mono">{rs.ready_replicas}</td>
+                      <td className="py-2 pr-2 font-mono">{rs.available_replicas}</td>
+                      <td className="py-2 pr-2"><StatusBadge status={rs.status || '-'} /></td>
+                      <td className="py-2 pr-2 text-slate-400">{fmtRel(rs.created_at)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
+              {rsNav}
             </div>
           )}
         </InfoSection>
@@ -110,7 +121,7 @@ export default function WorkloadOwnedResources({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {(displayPods as Array<any>).slice(0, 50).map((pod: any) => {
+                {pagedDisplayPods.map((pod: any) => {
                   const pvcEntries = pvcsEnabled ? (pvcsByPodName.get(pod.name) ?? []) : []
                   return (
                     <tr
@@ -144,6 +155,7 @@ export default function WorkloadOwnedResources({
                 })}
               </tbody>
             </table>
+            {displayPodsNav}
           </div>
         </InfoSection>
       )}
@@ -161,7 +173,7 @@ export default function WorkloadOwnedResources({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {ownedJobs.slice(0, 20).map((job: any) => (
+                {pagedOwnedJobs.map((job: any) => (
                   <tr key={job.name} className="text-slate-200">
                     <td className="py-2 pr-2"><ResourceLink kind="Job" name={job.name} namespace={job.namespace || namespace} /></td>
                     <td className="py-2 pr-2"><StatusBadge status={job.status || '-'} /></td>
@@ -171,6 +183,7 @@ export default function WorkloadOwnedResources({
                 ))}
               </tbody>
             </table>
+            {ownedJobsNav}
           </div>
         </InfoSection>
       )}

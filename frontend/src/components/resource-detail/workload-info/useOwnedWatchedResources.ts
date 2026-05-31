@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { PodInfo, ReplicaSetInfo, PVCInfo } from '@/services/api'
+import type { PodInfo, ReplicaSetInfo, PVCInfo, JobInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
 import { applyReplicaSetWatchEvent } from '@/pages/workloads/replicasets/replicaSetWatchNormalize'
+import { applyJobWatchEvent } from '@/pages/workloads/jobs/jobWatchNormalize'
 
 interface Params {
   kind: string
@@ -17,9 +18,11 @@ interface Params {
 interface Result {
   pods: PodInfo[]
   replicaSets: ReplicaSetInfo[]
+  jobs: JobInfo[]
   pvcsByPodName: Map<string, Array<{ vct: string; pvc?: PVCInfo }>>
   podsEnabled: boolean
   rsEnabled: boolean
+  jobsEnabled: boolean
   pvcsEnabled: boolean
 }
 
@@ -101,6 +104,38 @@ export function useOwnedWatchedResources({ kind, namespace, name, selector, volu
     },
   })
 
+  // CronJob 의 owned Jobs — useWorkloadData 의 기존 api.getCronJobOwnedJobs
+  // (backend 가 owner match 한 list 반환) 가 useQuery 만 사용했음. 여기에 watch
+  // 추가로 kubectl 로 Job 생성/완료 시 모달이 즉시 반영.
+  const jobsEnabled = kind === 'CronJob' && !!namespace && !!name
+
+  const { data: ownedJobsLive } = useQuery({
+    queryKey: ['owned-watched-jobs', namespace, name],
+    queryFn: async () => {
+      const all = await api.getJobs(namespace as string)
+      return all.filter((j: any) => {
+        const refs = j?.owner_references || j?.metadata?.ownerReferences || []
+        return Array.isArray(refs) && refs.some((r: any) => r?.name === name && r?.kind === 'CronJob')
+      })
+    },
+    enabled: jobsEnabled,
+    staleTime: 5_000,
+  })
+
+  useKubeWatchList({
+    enabled: jobsEnabled,
+    queryKey: ['owned-watched-jobs', namespace, name],
+    path: `/apis/batch/v1/namespaces/${namespace}/jobs`,
+    query: 'watch=1',
+    applyEvent: (prev, event) => {
+      const next = applyJobWatchEvent(prev as JobInfo[] | undefined, event)
+      return next.filter((j: any) => {
+        const refs = j?.owner_references || []
+        return Array.isArray(refs) && refs.some((r: any) => r?.name === name && r?.kind === 'CronJob')
+      })
+    },
+  })
+
   const vctNames = useMemo(
     () => (Array.isArray(volumeClaimTemplates)
       ? volumeClaimTemplates
@@ -148,9 +183,11 @@ export function useOwnedWatchedResources({ kind, namespace, name, selector, volu
   return {
     pods: Array.isArray(pods) ? pods : [],
     replicaSets: Array.isArray(replicaSets) ? replicaSets : [],
+    jobs: Array.isArray(ownedJobsLive) ? ownedJobsLive : [],
     pvcsByPodName,
     podsEnabled,
     rsEnabled,
+    jobsEnabled,
     pvcsEnabled,
   }
 }
