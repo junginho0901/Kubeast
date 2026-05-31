@@ -15,6 +15,7 @@ import {
   StatusBadge,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -65,12 +66,19 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
       const saName = m?.name
       const saNs = m?.namespace
       if (!saName || !saNs) return items
-      const secretsList = Array.isArray(obj?.secrets)
-        ? obj.secrets.map((s: any) => s?.name).filter(Boolean)
-        : []
-      const imagePullSecrets = Array.isArray(obj?.imagePullSecrets)
-        ? obj.imagePullSecrets.map((s: any) => s?.name).filter(Boolean)
-        : []
+      // wsMultiplexer serviceAccountToInfo 는 secrets_list / image_pull_secrets
+      // string array 로 미리 가공. raw K8s shape (obj.secrets[].name / obj.imagePullSecrets[].name) 도
+      // genericToInfo fallback 시 들어올 수 있어 둘 다 지원.
+      const secretsList = Array.isArray(obj?.secrets_list)
+        ? obj.secrets_list.filter(Boolean)
+        : Array.isArray(obj?.secrets)
+          ? obj.secrets.map((s: any) => s?.name).filter(Boolean)
+          : []
+      const imagePullSecrets = Array.isArray(obj?.image_pull_secrets)
+        ? obj.image_pull_secrets.filter(Boolean)
+        : Array.isArray(obj?.imagePullSecrets)
+          ? obj.imagePullSecrets.map((s: any) => s?.name).filter(Boolean)
+          : []
       const normalized: ServiceAccountInfo = {
         name: saName,
         namespace: saNs,
@@ -103,6 +111,8 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
     ]
     return refs.includes(name)
   })
+  const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
+  const { items: pagedUsingSAs, nav: usingSAsNav } = usePagination(usingSAs, 10)
 
   const { data: describe, isLoading } = useQuery({
     queryKey: ['secret-describe', namespace, name],
@@ -346,7 +356,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {usingPods.slice(0, 50).map((p: any) => (
+                  {pagedUsingPods.map((p: any) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -361,9 +371,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {usingPods.length > 50 && (
-                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingPods.length} pods.</p>
-              )}
+              {usingPodsNav}
             </div>
           )}
         </InfoSection>
@@ -375,7 +383,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
             <p className="text-xs text-slate-400">No ServiceAccount in this namespace references this Secret.</p>
           ) : (
             <div className="space-y-1 text-xs text-slate-200">
-              {usingSAs.slice(0, 50).map((sa: any) => {
+              {pagedUsingSAs.map((sa: any) => {
                 const inPull = (sa?.image_pull_secrets ?? []).includes(name)
                 const inMount = (sa?.secrets_list ?? []).includes(name)
                 const tags: string[] = []
@@ -388,9 +396,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                   </div>
                 )
               })}
-              {usingSAs.length > 50 && (
-                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingSAs.length} ServiceAccounts.</p>
-              )}
+              {usingSAsNav}
             </div>
           )}
         </InfoSection>

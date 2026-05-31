@@ -13,6 +13,7 @@ import {
   StatusBadge,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -50,8 +51,10 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
     const saName = p?.service_account_name ?? p?.spec?.serviceAccountName
     return saName === name
   })
+  const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
   const { bound: effectivePerms, loading: effectivePermsLoading } = useEffectivePermissions({ namespace, name })
+  const { items: pagedEffectivePerms, nav: effectivePermsNav } = usePagination(effectivePerms, 5)
 
   const { data: describe, isLoading } = useQuery({
     queryKey: ['serviceaccount-describe', namespace, name],
@@ -118,7 +121,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
           <p className="text-xs text-slate-400">No RoleBinding or ClusterRoleBinding binds this ServiceAccount.</p>
         ) : (
           <div className="space-y-3">
-            {effectivePerms.map((b, i) => (
+            {pagedEffectivePerms.map((b, i) => (
               <div key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} className="rounded border border-slate-800 p-2">
                 <div className="flex items-center gap-2 text-xs mb-1">
                   <span className="text-slate-400">via</span>
@@ -166,6 +169,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                 )}
               </div>
             ))}
+            {effectivePermsNav}
           </div>
         )}
       </InfoSection>
@@ -186,7 +190,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {usingPods.slice(0, 50).map((p: any) => (
+                {pagedUsingPods.map((p: any) => (
                   <tr
                     key={`${p.namespace}/${p.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -201,9 +205,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                 ))}
               </tbody>
             </table>
-            {usingPods.length > 50 && (
-              <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingPods.length} pods.</p>
-            )}
+            {usingPodsNav}
           </div>
         )}
       </InfoSection>

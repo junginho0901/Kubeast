@@ -14,6 +14,7 @@ import {
   StatusBadge,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -56,6 +57,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
     const refs = Array.isArray(p?.config_map_refs) ? p.config_map_refs : []
     return refs.includes(name)
   })
+  const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -196,7 +198,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {usingPods.slice(0, 50).map((p: any) => (
+                  {pagedUsingPods.map((p: any) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -211,9 +213,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {usingPods.length > 50 && (
-                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {usingPods.length} pods.</p>
-              )}
+              {usingPodsNav}
             </div>
           )}
         </InfoSection>
