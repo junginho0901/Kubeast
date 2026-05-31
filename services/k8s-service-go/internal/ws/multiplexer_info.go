@@ -342,6 +342,191 @@ func podToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	if dt, ok := metadata["deletionTimestamp"].(string); ok && dt != "" {
 		out["deletion_timestamp"] = dt
 	}
+
+	// owner_references — pods_format.formatPodDetail 과 동일 shape. ownerRef
+	// 매칭에 필수 (WorkloadOwnedResources / RB Bound Pods 등).
+	if ors, ok := metadata["ownerReferences"].([]interface{}); ok && len(ors) > 0 {
+		refs := make([]map[string]interface{}, 0, len(ors))
+		for _, r := range ors {
+			rm, _ := r.(map[string]interface{})
+			if rm == nil {
+				continue
+			}
+			ctrl, _ := rm["controller"].(bool)
+			refs = append(refs, map[string]interface{}{
+				"kind":       rm["kind"],
+				"name":       rm["name"],
+				"uid":        rm["uid"],
+				"controller": ctrl,
+			})
+		}
+		out["owner_references"] = refs
+	}
+
+	// service_account_name — SA reverse lookup (ServiceAccountInfo Pods Using).
+	if sa, _ := spec["serviceAccountName"].(string); sa != "" {
+		out["service_account_name"] = sa
+	}
+
+	// priority_class_name / runtime_class_name — 5.7.
+	if pc, _ := spec["priorityClassName"].(string); pc != "" {
+		out["priority_class_name"] = pc
+	}
+	if rc, _ := spec["runtimeClassName"].(string); rc != "" {
+		out["runtime_class_name"] = rc
+	}
+
+	// config_map_refs / secret_refs — 5.4 ConfigMap/Secret Used By Pods reverse
+	// lookup. backend pods_format.formatPodDetail 과 동일한 추출 로직 (volumes /
+	// projected / envFrom / env.valueFrom / imagePullSecrets).
+	cms := map[string]struct{}{}
+	secrets := map[string]struct{}{}
+	if vols, ok := spec["volumes"].([]interface{}); ok {
+		for _, v := range vols {
+			vm, _ := v.(map[string]interface{})
+			if vm == nil {
+				continue
+			}
+			if cm, _ := vm["configMap"].(map[string]interface{}); cm != nil {
+				if n, _ := cm["name"].(string); n != "" {
+					cms[n] = struct{}{}
+				}
+			}
+			if sec, _ := vm["secret"].(map[string]interface{}); sec != nil {
+				if n, _ := sec["secretName"].(string); n != "" {
+					secrets[n] = struct{}{}
+				}
+			}
+			if proj, _ := vm["projected"].(map[string]interface{}); proj != nil {
+				if srcs, _ := proj["sources"].([]interface{}); ok {
+					for _, s := range srcs {
+						sm, _ := s.(map[string]interface{})
+						if sm == nil {
+							continue
+						}
+						if cm, _ := sm["configMap"].(map[string]interface{}); cm != nil {
+							if n, _ := cm["name"].(string); n != "" {
+								cms[n] = struct{}{}
+							}
+						}
+						if sec, _ := sm["secret"].(map[string]interface{}); sec != nil {
+							if n, _ := sec["name"].(string); n != "" {
+								secrets[n] = struct{}{}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	collectEnvRefs := func(containers []interface{}) {
+		for _, c := range containers {
+			cm, _ := c.(map[string]interface{})
+			if cm == nil {
+				continue
+			}
+			if envFrom, ok := cm["envFrom"].([]interface{}); ok {
+				for _, e := range envFrom {
+					em, _ := e.(map[string]interface{})
+					if em == nil {
+						continue
+					}
+					if r, _ := em["configMapRef"].(map[string]interface{}); r != nil {
+						if n, _ := r["name"].(string); n != "" {
+							cms[n] = struct{}{}
+						}
+					}
+					if r, _ := em["secretRef"].(map[string]interface{}); r != nil {
+						if n, _ := r["name"].(string); n != "" {
+							secrets[n] = struct{}{}
+						}
+					}
+				}
+			}
+			if envs, ok := cm["env"].([]interface{}); ok {
+				for _, e := range envs {
+					em, _ := e.(map[string]interface{})
+					if em == nil {
+						continue
+					}
+					vf, _ := em["valueFrom"].(map[string]interface{})
+					if vf == nil {
+						continue
+					}
+					if r, _ := vf["configMapKeyRef"].(map[string]interface{}); r != nil {
+						if n, _ := r["name"].(string); n != "" {
+							cms[n] = struct{}{}
+						}
+					}
+					if r, _ := vf["secretKeyRef"].(map[string]interface{}); r != nil {
+						if n, _ := r["name"].(string); n != "" {
+							secrets[n] = struct{}{}
+						}
+					}
+				}
+			}
+		}
+	}
+	if cs, ok := spec["containers"].([]interface{}); ok {
+		collectEnvRefs(cs)
+	}
+	if ics, ok := spec["initContainers"].([]interface{}); ok {
+		collectEnvRefs(ics)
+	}
+	if ips, ok := spec["imagePullSecrets"].([]interface{}); ok {
+		for _, s := range ips {
+			sm, _ := s.(map[string]interface{})
+			if sm == nil {
+				continue
+			}
+			if n, _ := sm["name"].(string); n != "" {
+				secrets[n] = struct{}{}
+			}
+		}
+	}
+	if len(cms) > 0 {
+		list := make([]string, 0, len(cms))
+		for k := range cms {
+			list = append(list, k)
+		}
+		out["config_map_refs"] = list
+	}
+	if len(secrets) > 0 {
+		list := make([]string, 0, len(secrets))
+		for k := range secrets {
+			list = append(list, k)
+		}
+		out["secret_refs"] = list
+	}
+
+	// DRA resource claims — 5.6 #20.
+	if rcs, ok := spec["resourceClaims"].([]interface{}); ok && len(rcs) > 0 {
+		claimNames := make([]string, 0)
+		templateNames := make([]string, 0)
+		for _, rc := range rcs {
+			rm, _ := rc.(map[string]interface{})
+			if rm == nil {
+				continue
+			}
+			src, _ := rm["source"].(map[string]interface{})
+			if src == nil {
+				continue
+			}
+			if n, _ := src["resourceClaimName"].(string); n != "" {
+				claimNames = append(claimNames, n)
+			}
+			if n, _ := src["resourceClaimTemplateName"].(string); n != "" {
+				templateNames = append(templateNames, n)
+			}
+		}
+		if len(claimNames) > 0 {
+			out["resource_claims"] = claimNames
+		}
+		if len(templateNames) > 0 {
+			out["resource_claim_templates"] = templateNames
+		}
+	}
+
 	return out
 }
 
@@ -1141,18 +1326,28 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 	selector := selectorMatchLabels(spec)
 
-	// owner_deployment — ownerReferences 에서 Kind=="Deployment" 의 Name
+	// owner_deployment — ownerReferences 에서 Kind=="Deployment" 의 Name. owner_references 전체도
+	// 함께 노출 (5.2 Deployment Owned RS / WorkloadOwnedResources 의 ownerRef filter 가
+	// watch event 에서 정확히 매칭하도록).
 	owner := ""
-	if ors, ok := metadata["ownerReferences"].([]interface{}); ok {
+	var ownerRefs []map[string]interface{}
+	if ors, ok := metadata["ownerReferences"].([]interface{}); ok && len(ors) > 0 {
+		ownerRefs = make([]map[string]interface{}, 0, len(ors))
 		for _, o := range ors {
 			om, _ := o.(map[string]interface{})
 			if om == nil {
 				continue
 			}
-			if k, _ := om["kind"].(string); k == "Deployment" {
+			ctrl, _ := om["controller"].(bool)
+			ownerRefs = append(ownerRefs, map[string]interface{}{
+				"kind":       om["kind"],
+				"name":       om["name"],
+				"uid":        om["uid"],
+				"controller": ctrl,
+			})
+			if k, _ := om["kind"].(string); k == "Deployment" && owner == "" {
 				if n, _ := om["name"].(string); n != "" {
 					owner = n
-					break
 				}
 			}
 		}
@@ -1167,7 +1362,7 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		rsStatus = "Unavailable"
 	}
 
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"name":               metadata["name"],
 		"namespace":          metadata["namespace"],
 		"replicas":           replicas,
@@ -1180,6 +1375,10 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"status":             rsStatus,
 		"created_at":         metadata["creationTimestamp"],
 	}
+	if len(ownerRefs) > 0 {
+		out["owner_references"] = ownerRefs
+	}
+	return out
 }
 
 // jobToInfo — list endpoint: formatJobDetail (workloads_formatters.go).
@@ -1238,6 +1437,25 @@ func jobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		image = images[0]
 	}
 
+	// owner_references — CronJob owned Jobs 매칭에 필수 (5.6 #12).
+	var ownerRefs []map[string]interface{}
+	if ors, ok := metadata["ownerReferences"].([]interface{}); ok && len(ors) > 0 {
+		ownerRefs = make([]map[string]interface{}, 0, len(ors))
+		for _, r := range ors {
+			rm, _ := r.(map[string]interface{})
+			if rm == nil {
+				continue
+			}
+			ctrl, _ := rm["controller"].(bool)
+			ownerRefs = append(ownerRefs, map[string]interface{}{
+				"kind":       rm["kind"],
+				"name":       rm["name"],
+				"uid":        rm["uid"],
+				"controller": ctrl,
+			})
+		}
+	}
+
 	out := map[string]interface{}{
 		"name":        metadata["name"],
 		"namespace":   metadata["namespace"],
@@ -1250,6 +1468,9 @@ func jobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"image":       image,
 		"images":      images,
 		"created_at":  metadata["creationTimestamp"],
+	}
+	if len(ownerRefs) > 0 {
+		out["owner_references"] = ownerRefs
 	}
 
 	if st, ok := startTime.(string); ok && st != "" {
@@ -1569,17 +1790,45 @@ func secretToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	}
 }
 
-// serviceAccountToInfo — list endpoint: formatServiceAccountList (security.go).
+// serviceAccountToInfo — list endpoint: formatServiceAccountList (security_serviceaccount.go).
+// Secret detail 의 "Used By ServiceAccounts" watch 가 obj.secrets_list /
+// obj.image_pull_secrets 두 string array 를 검사하므로 backend list formatter
+// 와 동일 shape 로 노출.
 func serviceAccountToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	metadata := obj.Object["metadata"].(map[string]interface{})
-	secrets, _ := obj.Object["secrets"].([]interface{})
+	rawSecrets, _ := obj.Object["secrets"].([]interface{})
+	rawIPS, _ := obj.Object["imagePullSecrets"].([]interface{})
+
+	secretsList := make([]string, 0, len(rawSecrets))
+	for _, s := range rawSecrets {
+		sm, _ := s.(map[string]interface{})
+		if sm == nil {
+			continue
+		}
+		if n, _ := sm["name"].(string); n != "" {
+			secretsList = append(secretsList, n)
+		}
+	}
+	imagePullSecrets := make([]string, 0, len(rawIPS))
+	for _, s := range rawIPS {
+		sm, _ := s.(map[string]interface{})
+		if sm == nil {
+			continue
+		}
+		if n, _ := sm["name"].(string); n != "" {
+			imagePullSecrets = append(imagePullSecrets, n)
+		}
+	}
+
 	return map[string]interface{}{
-		"name":        metadata["name"],
-		"namespace":   metadata["namespace"],
-		"secrets":     len(secrets),
-		"created_at":  metadata["creationTimestamp"],
-		"labels":      metadata["labels"],
-		"annotations": metadata["annotations"],
+		"name":               metadata["name"],
+		"namespace":          metadata["namespace"],
+		"secrets":            len(rawSecrets),
+		"secrets_list":       secretsList,
+		"image_pull_secrets": imagePullSecrets,
+		"created_at":         metadata["creationTimestamp"],
+		"labels":             metadata["labels"],
+		"annotations":        metadata["annotations"],
 	}
 }
 
@@ -1844,7 +2093,7 @@ func genericToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	metadata := obj.Object["metadata"].(map[string]interface{})
 	spec, _ := obj.Object["spec"].(map[string]interface{})
 	status, _ := obj.Object["status"].(map[string]interface{})
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"name":       metadata["name"],
 		"namespace":  metadata["namespace"],
 		"kind":       obj.GetKind(),
@@ -1853,6 +2102,26 @@ func genericToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"spec":       spec,
 		"status":     status,
 	}
+	// metadata 전체를 통과시키지 않으므로 ownerReferences 가 누락됨. 명시적
+	// 노출 — ResourceClaimTemplate-owned RC 같은 reverse-lookup watch 시 필요.
+	if ors, ok := metadata["ownerReferences"].([]interface{}); ok && len(ors) > 0 {
+		refs := make([]map[string]interface{}, 0, len(ors))
+		for _, r := range ors {
+			rm, _ := r.(map[string]interface{})
+			if rm == nil {
+				continue
+			}
+			ctrl, _ := rm["controller"].(bool)
+			refs = append(refs, map[string]interface{}{
+				"kind":       rm["kind"],
+				"name":       rm["name"],
+				"uid":        rm["uid"],
+				"controller": ctrl,
+			})
+		}
+		out["owner_references"] = refs
+	}
+	return out
 }
 
 // ========== helpers ==========
