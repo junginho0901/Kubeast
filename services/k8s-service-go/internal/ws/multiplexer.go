@@ -210,7 +210,8 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 	}
 
 	params := parseQuery(queryStr)
-	_ = params // For future use (label_selector, field_selector, etc.)
+	labelSelector := params["labelSelector"]
+	fieldSelector := params["fieldSelector"]
 
 	gvr, ok := resourceToGVR(resource)
 	if !ok {
@@ -229,6 +230,8 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 			Watch:           true,
 			TimeoutSeconds:  int64Ptr(300),
 			ResourceVersion: lastResourceVersion,
+			LabelSelector:   labelSelector,
+			FieldSelector:   fieldSelector,
 		}
 
 		dyn := m.provider.Dynamic()
