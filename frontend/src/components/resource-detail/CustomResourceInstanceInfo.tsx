@@ -11,7 +11,9 @@ import {
   EventsTable,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -135,6 +137,7 @@ function formatDateValue(value: string): string {
 export default function CustomResourceInstanceInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const { open: openDetail } = useResourceDetail()
 
   const group = (rawJson?.group as string) || ''
   const version = (rawJson?.version as string) || ''
@@ -158,6 +161,22 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
 
   const crKind = (describe?.kind as string | undefined) || (crdDescribe?.kind as string | undefined) || 'CustomResource'
   useResourceDetailOverlay({ kind: crKind, name, namespace, describe })
+
+  // Peer instances — same CRD's other instances (exclude self).
+  const { data: allInstances } = useQuery({
+    queryKey: ['cri-peer', group, version, plural],
+    queryFn: () => api.getCustomResourceInstances(group, version, plural),
+    enabled: !!group && !!version && !!plural,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const peerInstances = (Array.isArray(allInstances) ? allInstances : [])
+    .filter((it: any) => {
+      const itName = it?.name ?? it?.metadata?.name
+      const itNs = it?.namespace ?? it?.metadata?.namespace ?? ''
+      return !(itName === name && itNs === (namespace ?? ''))
+    })
+  const { items: pagedPeerInstances, nav: peerInstancesNav } = usePagination(peerInstances, 10)
 
   // Extract printer columns from the CRD's storage version
   const printerColumns = useMemo(() => {
@@ -320,6 +339,45 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
       {events.length > 0 && (
         <InfoSection title={tr('crInstanceInfo.events', 'Events')}>
           <EventsTable events={events} />
+        </InfoSection>
+      )}
+
+      {plural && (
+        <InfoSection title={`Peer Instances (${peerInstances.length})`}>
+          {peerInstances.length === 0 ? (
+            <p className="text-xs text-slate-400">No other instance of {crKind} in the cluster.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1">Namespace</th>
+                    <th className="text-left py-1">Name</th>
+                    <th className="text-left py-1">Age</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {pagedPeerInstances.map((it: any) => {
+                    const itName = it?.name ?? it?.metadata?.name
+                    const itNs = it?.namespace ?? it?.metadata?.namespace ?? ''
+                    const itCreated = it?.created_at ?? it?.metadata?.creationTimestamp
+                    return (
+                      <tr
+                        key={`${itNs}/${itName}`}
+                        className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                        onClick={() => openDetail({ kind: 'CustomResourceInstance', name: itName, namespace: itNs, rawJson: { ...it, group, version, crd_name: crdName } as any })}
+                      >
+                        <td className="py-1 pr-2 font-mono">{itNs || '-'}</td>
+                        <td className="py-1 pr-2 font-mono">{itName}</td>
+                        <td className="py-1 pr-2 text-slate-400">{itCreated ? fmtRel(itCreated) : '-'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {peerInstancesNav}
+            </div>
+          )}
         </InfoSection>
       )}
 
