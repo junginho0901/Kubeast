@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs, usePagination } from '../DetailCommon'
 
 interface Props {
   name: string
@@ -17,6 +17,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
     staleTime: 10_000,
   })
   const usedList = Array.isArray(usedByIngresses) ? usedByIngresses : []
+  const { items: pagedUsedList, nav: usedListNav } = usePagination(usedList, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
@@ -63,7 +64,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {usedList.slice(0, 50).map((ing) => (
+                {pagedUsedList.map((ing) => (
                   <tr
                     key={`${ing.namespace}/${ing.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -76,9 +77,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
                 ))}
               </tbody>
             </table>
-            {usedList.length >= 50 && (
-              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
-            )}
+            {usedListNav}
           </div>
         )}
       </InfoSection>

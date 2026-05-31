@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, fmtRel, fmtTs, usePagination } from './DetailCommon'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -135,6 +135,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   })
 
   const matchingPodsList = Array.isArray(matchingPods) ? matchingPods : []
+  const { items: pagedMatchingPods, nav: matchingPodsNav } = usePagination(matchingPodsList, 10)
 
   const ports = useMemo(() => {
     if (Array.isArray(describe?.ports)) return describe.ports
@@ -332,7 +333,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {matchingPodsList.slice(0, 50).map((p) => (
+                  {pagedMatchingPods.map((p) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -348,9 +349,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {matchingPodsList.length > 50 && (
-                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {matchingPodsList.length} pods.</p>
-              )}
+              {matchingPodsNav}
             </div>
           )}
         </InfoSection>

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs, usePagination } from '../DetailCommon'
 
 interface Props {
   name: string
@@ -45,6 +45,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
     const svc = s?.service_name ?? s?.labels?.['kubernetes.io/service-name']
     return svc === serviceName && s?.name !== name
   })
+  const { items: pagedPeerSlices, nav: peerSlicesNav } = usePagination(peerSlices, 10)
 
   return (
     <>
@@ -133,7 +134,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {peerSlices.slice(0, 50).map((s: any) => (
+                  {pagedPeerSlices.map((s: any) => (
                     <tr
                       key={s.name}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -146,6 +147,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                   ))}
                 </tbody>
               </table>
+              {peerSlicesNav}
             </div>
           )}
         </InfoSection>

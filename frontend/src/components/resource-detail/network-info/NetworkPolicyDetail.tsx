@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs, usePagination } from '../DetailCommon'
 
 interface Props {
   name: string
@@ -44,6 +44,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
   })
 
   const pods = Array.isArray(affectedPods) ? affectedPods : []
+  const { items: pagedPods, nav: podsNav } = usePagination(pods, 10)
   const ingress = (spec.ingress ?? []) as any[]
   const egress = (spec.egress ?? []) as any[]
   const policyTypes = (spec.policyTypes ?? []) as string[]
@@ -126,7 +127,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {pods.slice(0, 50).map((p) => (
+                  {pagedPods.map((p) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -142,9 +143,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
                   ))}
                 </tbody>
               </table>
-              {pods.length > 50 && (
-                <p className="text-[11px] text-slate-400 mt-1">Showing first 50 of {pods.length} pods.</p>
-              )}
+              {podsNav}
             </div>
           )}
         </InfoSection>
