@@ -8,6 +8,7 @@ import {
   EventsTable,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -33,6 +34,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
   useResourceDetailOverlay({ kind: 'Role', name, namespace, describe })
 
   const { bindings: referencedBy, truncated } = useReverseRoleBindings({ kind: 'Role', namespace, name })
+  const { items: pagedReferencedBy, nav: referencedByNav } = usePagination(referencedBy, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -173,7 +175,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {referencedBy.map((b) => (
+                {pagedReferencedBy.map((b) => (
                   <tr key={`${b.namespace}/${b.name}`} className="text-slate-200">
                     <td className="py-1 pr-2">
                       <ResourceLink kind="RoleBinding" name={b.name} namespace={b.namespace} />
@@ -187,6 +189,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                 ))}
               </tbody>
             </table>
+            {referencedByNav}
           </div>
         )}
       </InfoSection>

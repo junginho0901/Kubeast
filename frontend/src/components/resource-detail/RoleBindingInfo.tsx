@@ -9,6 +9,7 @@ import {
   EventsTable,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -56,7 +57,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
   })
   const boundPods = (Array.isArray(nsPods) ? nsPods : [])
     .filter((p: any) => saSubjectNames.includes(p?.service_account_name))
-    .slice(0, 50)
+  const { items: pagedBoundPods, nav: boundPodsNav } = usePagination(boundPods, 10)
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -150,7 +151,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {boundPods.map((p: any) => (
+                  {pagedBoundPods.map((p: any) => (
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -164,9 +165,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   ))}
                 </tbody>
               </table>
-              {boundPods.length >= 50 && (
-                <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
-              )}
+              {boundPodsNav}
             </div>
           )}
         </InfoSection>
