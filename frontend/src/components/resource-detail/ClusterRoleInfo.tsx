@@ -7,6 +7,7 @@ import {
   KeyValueTags,
   fmtRel,
   fmtTs,
+  usePagination,
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -31,6 +32,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
   useResourceDetailOverlay({ kind: 'ClusterRole', name, describe })
 
   const { bindings: referencedBy, truncated } = useReverseRoleBindings({ kind: 'ClusterRole', name })
+  const { items: pagedReferencedBy, nav: referencedByNav } = usePagination(referencedBy, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const labels = (describe?.labels as Record<string, string> | undefined) ?? (meta.labels as Record<string, string> | undefined) ?? {}
@@ -150,7 +152,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {referencedBy.map((b) => (
+                {pagedReferencedBy.map((b) => (
                   <tr key={b.name} className="text-slate-200">
                     <td className="py-1 pr-2">
                       <ResourceLink kind="ClusterRoleBinding" name={b.name} />
@@ -164,6 +166,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                 ))}
               </tbody>
             </table>
+            {referencedByNav}
             {truncated && (
               <p className="text-[11px] text-amber-300 mt-1">Showing first 50 ClusterRoleBindings (truncated for performance).</p>
             )}
