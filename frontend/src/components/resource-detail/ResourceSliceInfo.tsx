@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs, usePagination } from './DetailCommon'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -26,6 +27,7 @@ type ResourceSliceDescribe = {
 const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 
 export default function ResourceSliceInfo({ name, rawJson }: Props) {
+  const { open: openDetail } = useResourceDetail()
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['resourceslice-describe', name],
     queryFn: () => api.describeResourceSlice(name) as Promise<ResourceSliceDescribe>,
@@ -34,6 +36,16 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
   })
 
   useResourceDetailOverlay({ kind: 'ResourceSlice', name, describe })
+
+  // cluster-wide ResourceClaim 중 status.allocation.devices 가 이 slice 의
+  // device 를 가리키는 것 찾기. K8s DRA: claim.status.allocation.devices.results
+  // [].driver + pool + device 가 slice 의 pool.name 과 일치.
+  const { data: allClaims } = useQuery({
+    queryKey: ['resourceslice-allocations', name],
+    queryFn: () => api.getAllResourceClaims(),
+    enabled: !!name,
+    staleTime: 30_000,
+  })
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
 
@@ -53,6 +65,27 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
 
   /* ── Parse devices ── */
   const deviceList = Array.isArray(devices) ? devices : []
+
+  // Build slice device names for cross-ref lookup.
+  const sliceDeviceNames = new Set<string>(
+    deviceList.map((d: any) => d?.name).filter(Boolean) as string[],
+  )
+  // RC 의 status.allocation.devices.results[] = [{driver, pool, device, request}]
+  // pool === slice 의 poolName 이고 device 가 slice 의 device 목록에 있으면 매칭.
+  const allocations = (Array.isArray(allClaims) ? allClaims : []).flatMap((c: any) => {
+    const results = c?.status?.allocation?.devices?.results ?? []
+    if (!Array.isArray(results)) return []
+    return results
+      .filter((r: any) => (poolName && r?.pool === poolName) || sliceDeviceNames.has(r?.device))
+      .map((r: any) => ({
+        claim_namespace: c.namespace,
+        claim_name: c.name,
+        device: r.device,
+        driver: r.driver,
+        request: r.request,
+      }))
+  })
+  const { items: pagedAllocations, nav: allocationsNav } = usePagination(allocations, 10)
 
   return (
     <>
@@ -129,6 +162,40 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
           <p className="text-xs text-slate-400">No devices</p>
         </InfoSection>
       )}
+
+      <InfoSection title={`Device Allocations (${allocations.length})`}>
+        {allocations.length === 0 ? (
+          <p className="text-xs text-slate-400">No ResourceClaim currently allocates a device from this slice.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">ResourceClaim</th>
+                  <th className="text-left py-1">Device</th>
+                  <th className="text-left py-1">Driver</th>
+                  <th className="text-left py-1">Request</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {pagedAllocations.map((a: any, i: number) => (
+                  <tr
+                    key={i}
+                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'ResourceClaim', name: a.claim_name, namespace: a.claim_namespace })}
+                  >
+                    <td className="py-1 pr-2 font-mono">{a.claim_namespace}/{a.claim_name}</td>
+                    <td className="py-1 pr-2 font-mono">{a.device ?? '-'}</td>
+                    <td className="py-1 pr-2 font-mono text-slate-400">{a.driver ?? '-'}</td>
+                    <td className="py-1 pr-2 font-mono text-slate-400">{a.request ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {allocationsNav}
+          </div>
+        )}
+      </InfoSection>
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">
