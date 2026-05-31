@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, SummaryBadge, fmtRel, fmtTs } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, fmtRel, fmtTs, usePagination } from './DetailCommon'
+import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -29,6 +30,7 @@ const text = (v: unknown) => (v != null && v !== '' ? String(v) : '-')
 
 export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
   const enabled = !!name && !!namespace
+  const { open: openDetail } = useResourceDetail()
   const { data: describe, isLoading, isError } = useQuery({
     queryKey: ['resourceclaim-describe', namespace, name],
     queryFn: () => api.describeResourceClaim(namespace, name) as Promise<ResourceClaimDescribe>,
@@ -37,6 +39,26 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
   })
 
   useResourceDetailOverlay({ kind: 'ResourceClaim', name, namespace, describe })
+
+  // ns Pod 중 spec.resourceClaims 에서 이 RC 이름을 직접 참조 또는 RCTemplate
+  // 를 거쳐 자동 생성된 RC (template name 매칭) 인 경우. backend Pod formatter
+  // 가 resource_claims / resource_claim_templates 두 string array 노출 — 두
+  // 케이스 모두 cover.
+  const { data: nsPods } = useQuery({
+    queryKey: ['rc-using-pods', namespace, name],
+    queryFn: () => api.getPods(namespace),
+    enabled,
+    staleTime: 30_000,
+  })
+  const usingPods = (Array.isArray(nsPods) ? nsPods : []).filter((p: any) => {
+    const direct = Array.isArray(p?.resource_claims) ? p.resource_claims : []
+    if (direct.includes(name)) return true
+    // RCT 자동 생성 RC 의 K8s naming convention: "<podName>-<rcKey>-<random>"
+    // 직접 매칭은 어려우므로 RCT 이름이 RC name prefix 인지로 휴리스틱.
+    const templates = Array.isArray(p?.resource_claim_templates) ? p.resource_claim_templates : []
+    return templates.some((tmpl: string) => name.startsWith(`${tmpl}-`) || name.includes(tmpl))
+  })
+  const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
 
@@ -161,6 +183,38 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
           </div>
         </InfoSection>
       )}
+
+      <InfoSection title={`Using Pods (${usingPods.length})`}>
+        {usingPods.length === 0 ? (
+          <p className="text-xs text-slate-400">No pod in this namespace references this ResourceClaim.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="text-left py-1">Pod</th>
+                  <th className="text-left py-1">Status</th>
+                  <th className="text-left py-1">Node</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {pagedUsingPods.map((p: any) => (
+                  <tr
+                    key={`${p.namespace}/${p.name}`}
+                    className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
+                    onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                  >
+                    <td className="py-1 pr-2 font-mono">{p.name}</td>
+                    <td className="py-1 pr-2"><StatusBadge status={String(p.phase ?? p.status ?? '-')} /></td>
+                    <td className="py-1 pr-2 font-mono">{p.node_name ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {usingPodsNav}
+          </div>
+        )}
+      </InfoSection>
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">
