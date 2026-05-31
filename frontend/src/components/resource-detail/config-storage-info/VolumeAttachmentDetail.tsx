@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs } from '../DetailCommon'
+import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, fmtRel, fmtTs, usePagination } from '../DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface VolumeAttachmentDescribeResponse {
@@ -90,6 +90,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
     staleTime: 30_000,
   })
   const chainPods = Array.isArray(pvcDescribe?.used_by_pods) ? pvcDescribe.used_by_pods : []
+  const { items: pagedChainPods, nav: chainPodsNav } = usePagination(chainPods, 10)
 
   return (
     <>
@@ -209,7 +210,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
                     <tr><th className="text-left py-1">Pod</th><th className="text-left py-1">Status</th><th className="text-left py-1">Node</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {chainPods.slice(0, 20).map((p: any) => (
+                    {pagedChainPods.map((p: any) => (
                       <tr
                         key={`${p.namespace}/${p.name}`}
                         className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -222,6 +223,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
                     ))}
                   </tbody>
                 </table>
+                {chainPodsNav}
               </div>
             )}
           </div>
