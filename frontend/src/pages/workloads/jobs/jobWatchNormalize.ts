@@ -31,6 +31,16 @@ export function normalizeWatchJobObject(obj: any): JobInfo {
     }
   }
 
+  const rawOwnerRefs = Array.isArray(metadata?.ownerReferences)
+    ? metadata.ownerReferences
+    : (Array.isArray(obj?.owner_references) ? obj.owner_references : [])
+  const ownerReferences = rawOwnerRefs.map((r: any) => ({
+    kind: r?.kind ?? null,
+    name: r?.name ?? null,
+    uid: r?.uid ?? null,
+    controller: r?.controller ?? null,
+  }))
+
   const normalized: JobInfo = {
     name: metadata?.name ?? obj?.name ?? '',
     namespace: metadata?.namespace ?? obj?.namespace ?? '',
@@ -46,6 +56,7 @@ export function normalizeWatchJobObject(obj: any): JobInfo {
     completion_time: completionTime ?? obj?.completion_time ?? null,
     duration_seconds: durationSeconds ?? obj?.duration_seconds ?? null,
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,
+    owner_references: ownerReferences,
   }
 
   normalized.status = computeJobStatus(normalized)
