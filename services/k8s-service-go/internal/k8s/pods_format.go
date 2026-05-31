@@ -183,6 +183,27 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		out["runtime_class_name"] = *p.Spec.RuntimeClassName
 	}
 
+	// DRA ResourceClaim refs — Pod.spec.resourceClaims[].source 가 명시한
+	// 직접 RC 이름 또는 RCTemplate 이름. 둘 다 별도 키로 노출. K8s 1.30+ shape.
+	if len(p.Spec.ResourceClaims) > 0 {
+		claimNames := make([]string, 0)
+		templateNames := make([]string, 0)
+		for _, rc := range p.Spec.ResourceClaims {
+			if rc.Source.ResourceClaimName != nil && *rc.Source.ResourceClaimName != "" {
+				claimNames = append(claimNames, *rc.Source.ResourceClaimName)
+			}
+			if rc.Source.ResourceClaimTemplateName != nil && *rc.Source.ResourceClaimTemplateName != "" {
+				templateNames = append(templateNames, *rc.Source.ResourceClaimTemplateName)
+			}
+		}
+		if len(claimNames) > 0 {
+			out["resource_claims"] = claimNames
+		}
+		if len(templateNames) > 0 {
+			out["resource_claim_templates"] = templateNames
+		}
+	}
+
 	// Collect ConfigMap / Secret references for reverse lookup (Used By Pods sections
 	// in ConfigMap/Secret detail modals). dedupe via map → sorted set not needed,
 	// frontend filters by membership.
