@@ -9,6 +9,7 @@ import {
   KeyValueTags,
   EventsTable,
   fmtRel,
+  usePagination,
 } from './DetailCommon'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -37,7 +38,7 @@ export default function PriorityClassInfo({ name }: Props) {
   })
   const usingPods = (Array.isArray(allPods) ? allPods : [])
     .filter((p: any) => p?.priority_class_name === name)
-    .slice(0, 50)
+  const { items: pagedPods, nav: podsNav } = usePagination(usingPods, 10)
 
   useResourceDetailOverlay({ kind: 'PriorityClass', name, describe: desc })
 
@@ -98,7 +99,7 @@ export default function PriorityClassInfo({ name }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {usingPods.map((p: any) => (
+                {pagedPods.map((p: any) => (
                   <tr
                     key={`${p.namespace}/${p.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -113,9 +114,7 @@ export default function PriorityClassInfo({ name }: Props) {
                 ))}
               </tbody>
             </table>
-            {usingPods.length >= 50 && (
-              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
-            )}
+            {podsNav}
           </div>
         )}
       </InfoSection>

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs, usePagination } from './DetailCommon'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -46,7 +46,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
   const usingClaims = (Array.isArray(allClaims) ? allClaims : []).filter((c: any) => {
     const requests = c?.spec?.devices?.requests ?? c?.devices?.requests ?? []
     return Array.isArray(requests) && requests.some((r: any) => (r?.deviceClassName ?? r?.device_class_name) === name)
-  }).slice(0, 50)
+  })
+  const { items: pagedUsingClaims, nav: usingClaimsNav } = usePagination(usingClaims, 10)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
 
@@ -182,7 +183,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {usingClaims.map((c: any) => (
+                {pagedUsingClaims.map((c: any) => (
                   <tr
                     key={`${c.namespace}/${c.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
@@ -194,9 +195,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
                 ))}
               </tbody>
             </table>
-            {usingClaims.length >= 50 && (
-              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 (truncated for performance).</p>
-            )}
+            {usingClaimsNav}
           </div>
         )}
       </InfoSection>
