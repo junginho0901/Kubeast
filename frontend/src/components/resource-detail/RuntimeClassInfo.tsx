@@ -11,6 +11,7 @@ import {
   fmtRel,
   usePagination,
 } from './DetailCommon'
+import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -38,6 +39,14 @@ export default function RuntimeClassInfo({ name }: Props) {
     .filter((p: any) => p?.runtime_class_name === name)
   const { items: pagedPods, nav: podsNav } = usePagination(usingPods, 10)
 
+  // scheduling.node_selector 가 있을 때만 cluster-wide Node 목록을 fetch (equality match 로 필터)
+  const { data: allNodes } = useQuery({
+    queryKey: ['all-nodes'],
+    queryFn: () => api.getNodes(false),
+    enabled: !!name,
+    staleTime: 60_000,
+  })
+
   useResourceDetailOverlay({ kind: 'RuntimeClass', name, describe: desc })
 
   if (isLoading) {
@@ -55,6 +64,17 @@ export default function RuntimeClassInfo({ name }: Props) {
 
   const hasOverhead = Object.keys(overhead).length > 0
   const hasScheduling = Object.keys(scheduling).length > 0
+
+  const nodeSelector = (scheduling.node_selector as Record<string, string> | undefined) ?? undefined
+  // nodeSelector 없으면 cluster-wide schedulable 로 간주, 별도 표시 X
+  const schedulableNodes = (() => {
+    if (!nodeSelector || Object.keys(nodeSelector).length === 0) return null
+    const nodes = Array.isArray(allNodes) ? allNodes : []
+    return nodes.filter((n: any) => {
+      const labels = (n?.labels as Record<string, string> | undefined) ?? {}
+      return Object.entries(nodeSelector).every(([k, v]) => labels[k] === v)
+    })
+  })()
 
   return (
     <div className="space-y-4">
@@ -113,6 +133,25 @@ export default function RuntimeClassInfo({ name }: Props) {
                 ))}
               </div>
             </div>
+          )}
+        </InfoSection>
+      )}
+
+      {schedulableNodes && (
+        <InfoSection title={`Schedulable Nodes (${schedulableNodes.length})`}>
+          {schedulableNodes.length === 0 ? (
+            <p className="text-xs text-slate-400">No Node matches scheduling.nodeSelector.</p>
+          ) : (
+            <>
+              {schedulableNodes.length > 20 && (
+                <p className="text-[11px] text-slate-400 mb-2">Showing first 20 of {schedulableNodes.length} nodes.</p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {schedulableNodes.slice(0, 20).map((n: any) => (
+                  <ResourceLink key={n.name} kind="Node" name={String(n.name)} />
+                ))}
+              </div>
+            </>
           )}
         </InfoSection>
       )}
