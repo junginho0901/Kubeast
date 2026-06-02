@@ -109,6 +109,11 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 		"resource_version": cm.ResourceVersion,
 	}
 
+	// Immutable — true 면 update 불가. Secret 은 이미 노출, ConfigMap 도 일관성.
+	if cm.Immutable != nil {
+		result["immutable"] = *cm.Immutable
+	}
+
 	// Events
 	events, eventsErr := s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ConfigMap", name),

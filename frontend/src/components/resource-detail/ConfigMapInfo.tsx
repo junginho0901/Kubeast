@@ -108,6 +108,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
           <InfoRow label="Data Keys" value={String(describe?.data_count ?? dataKeys.length)} />
           {binaryKeys.length > 0 && <InfoRow label="Binary Keys" value={String(describe?.binary_count ?? binaryKeys.length)} />}
+          {(describe as any)?.immutable !== undefined && <InfoRow label="Immutable" value={(describe as any).immutable ? 'true' : 'false'} />}
         </div>
       </InfoSection>
 
