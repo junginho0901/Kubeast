@@ -4,16 +4,19 @@ import {
   formatContainerCommand,
   formatContainerSecurityContext,
   formatProbe,
+  normalizeEnvFrom,
   toEntryPairs,
   toMounts,
   toPorts,
 } from './podInfoFormatters'
 import { fmtTs } from '../DetailCommon'
+import { ResourceLink } from '../ResourceLink'
 
 interface Props {
   container: any
   index: number
   variant: 'container' | 'init'
+  namespace?: string  // envFrom 의 ConfigMap/Secret ResourceLink 용
   onExec?: (name: string) => void
   canExec?: boolean
   execTooltip?: string
@@ -24,6 +27,7 @@ export default function ContainerCard({
   container: c,
   index: i,
   variant,
+  namespace,
   onExec,
   canExec,
   execTooltip,
@@ -127,6 +131,28 @@ export default function ContainerCard({
             <span className="text-slate-200 font-mono">{envCount}</span>
           </ContainerKvRow>
         )}
+        {(() => {
+          const envFrom = normalizeEnvFrom(c)
+          if (envFrom.length === 0) return null
+          return (
+            <ContainerKvRow label="Env From">
+              <div className="flex flex-col gap-1">
+                {envFrom.map((ef, idx) => (
+                  <div key={`envfrom-${kp}-${idx}`} className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-slate-400">{ef.kind}:</span>
+                    {namespace ? (
+                      <ResourceLink kind={ef.kind} name={ef.name} namespace={namespace} />
+                    ) : (
+                      <span className="font-mono text-[11px]">{ef.name}</span>
+                    )}
+                    {ef.prefix && <span className="text-[11px] text-slate-500">prefix={ef.prefix}</span>}
+                    {ef.optional && <span className="text-[11px] text-slate-500">(optional)</span>}
+                  </div>
+                ))}
+              </div>
+            </ContainerKvRow>
+          )
+        })()}
         {toMounts(mounts).length > 0 && (
           <ContainerKvRow label="Mounts">
             <div className="flex flex-wrap gap-1">
@@ -153,15 +179,20 @@ export default function ContainerCard({
             <span className="font-mono break-words">{formatProbe(c.startupProbe)}</span>
           </ContainerKvRow>
         )}
-        {formatContainerSecurityContext(c.securityContext).length > 0 && (
-          <>
-            {formatContainerSecurityContext(c.securityContext).map(([label, val]) => (
-              <ContainerKvRow key={`sec-${kp}-${label}`} label={label}>
-                <span className="font-mono">{val}</span>
-              </ContainerKvRow>
-            ))}
-          </>
-        )}
+        {(() => {
+          // backend snake_case + raw spec camelCase 둘 다 처리
+          const secRows = formatContainerSecurityContext(c.security_context ?? c.securityContext)
+          if (secRows.length === 0) return null
+          return (
+            <>
+              {secRows.map(([label, val]) => (
+                <ContainerKvRow key={`sec-${kp}-${label}`} label={label}>
+                  <span className="font-mono">{val}</span>
+                </ContainerKvRow>
+              ))}
+            </>
+          )
+        })()}
       </div>
     </div>
   )

@@ -75,12 +75,18 @@ export function getVolumeDetail(v: any): { type: string; detail: string } {
 
 export function formatContainerSecurityContext(sc: any): Array<[string, string]> {
   if (!sc) return []
+  // backend 는 snake_case (read_only_root_filesystem) 로, raw spec 은 camelCase 로
+  // 보내므로 둘 다 받는다.
+  const get = (camel: string, snake: string) => sc[camel] ?? sc[snake]
   const rows: Array<[string, string]> = []
   if (sc.privileged != null) rows.push(['Privileged', String(sc.privileged)])
-  if (sc.runAsUser != null) rows.push(['Run As User', String(sc.runAsUser)])
-  if (sc.runAsNonRoot != null) rows.push(['Run As Non-Root', String(sc.runAsNonRoot)])
-  if (sc.readOnlyRootFilesystem != null) rows.push(['Read-Only Root FS', String(sc.readOnlyRootFilesystem)])
-  if (sc.allowPrivilegeEscalation != null) rows.push(['Allow Privilege Escalation', String(sc.allowPrivilegeEscalation)])
+  if (get('runAsUser', 'run_as_user') != null) rows.push(['Run As User', String(get('runAsUser', 'run_as_user'))])
+  if (get('runAsGroup', 'run_as_group') != null) rows.push(['Run As Group', String(get('runAsGroup', 'run_as_group'))])
+  if (get('runAsNonRoot', 'run_as_non_root') != null) rows.push(['Run As Non-Root', String(get('runAsNonRoot', 'run_as_non_root'))])
+  if (get('readOnlyRootFilesystem', 'read_only_root_filesystem') != null)
+    rows.push(['Read-Only Root FS', String(get('readOnlyRootFilesystem', 'read_only_root_filesystem'))])
+  if (get('allowPrivilegeEscalation', 'allow_privilege_escalation') != null)
+    rows.push(['Allow Privilege Escalation', String(get('allowPrivilegeEscalation', 'allow_privilege_escalation'))])
   if (sc.capabilities) {
     if (Array.isArray(sc.capabilities.add) && sc.capabilities.add.length > 0)
       rows.push(['Capabilities (add)', sc.capabilities.add.join(', ')])
@@ -88,4 +94,34 @@ export function formatContainerSecurityContext(sc: any): Array<[string, string]>
       rows.push(['Capabilities (drop)', sc.capabilities.drop.join(', ')])
   }
   return rows
+}
+
+// envFrom — Pod 가 ConfigMap / Secret 통째로 환경변수로 가져오는 출처.
+// backend: container.env_from = [{config_map?, secret?, prefix?, optional?}]
+// raw spec: container.envFrom = [{configMapRef?, secretRef?, prefix?}]
+export interface EnvFromEntry {
+  kind: 'ConfigMap' | 'Secret'
+  name: string
+  prefix?: string
+  optional?: boolean
+}
+
+export function normalizeEnvFrom(c: any): EnvFromEntry[] {
+  const result: EnvFromEntry[] = []
+  // backend snake_case 형식
+  if (Array.isArray(c.env_from)) {
+    for (const ef of c.env_from) {
+      if (ef.config_map) result.push({ kind: 'ConfigMap', name: ef.config_map, prefix: ef.prefix, optional: ef.optional })
+      else if (ef.secret) result.push({ kind: 'Secret', name: ef.secret, prefix: ef.prefix, optional: ef.optional })
+    }
+    return result
+  }
+  // raw spec camelCase
+  if (Array.isArray(c.envFrom)) {
+    for (const ef of c.envFrom) {
+      if (ef.configMapRef?.name) result.push({ kind: 'ConfigMap', name: ef.configMapRef.name, prefix: ef.prefix, optional: ef.configMapRef.optional })
+      else if (ef.secretRef?.name) result.push({ kind: 'Secret', name: ef.secretRef.name, prefix: ef.prefix, optional: ef.secretRef.optional })
+    }
+  }
+  return result
 }

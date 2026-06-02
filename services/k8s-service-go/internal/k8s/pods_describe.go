@@ -84,6 +84,14 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	result["host_pid"] = pod.Spec.HostPID
 	result["host_ipc"] = pod.Spec.HostIPC
 
+	// imagePullSecrets — registry 인증용 Secret. 사용자가 Pod 모달에서 어느 Secret
+	// 으로 이미지 pull 하는지 즉시 보고 ResourceLink 로 Secret detail 점프하기 위함.
+	pullSecrets := make([]string, 0, len(pod.Spec.ImagePullSecrets))
+	for _, s := range pod.Spec.ImagePullSecrets {
+		pullSecrets = append(pullSecrets, s.Name)
+	}
+	result["image_pull_secrets"] = pullSecrets
+
 	// Start time and deletion timestamp
 	if pod.Status.StartTime != nil {
 		result["start_time"] = toISO(pod.Status.StartTime)

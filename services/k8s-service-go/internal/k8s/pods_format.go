@@ -75,6 +75,75 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		container["volume_mounts"] = volumeMounts
 		container["env_count"] = len(c.Env)
 
+		// envFrom — Pod 가 ConfigMap / Secret 통째로 환경변수로 가져오는 출처.
+		// 사용자가 자주 보는 Pod 모달에서 어느 CM/Secret 에서 환경변수가 오는지 추적용.
+		envFrom := make([]map[string]interface{}, 0, len(c.EnvFrom))
+		for _, ef := range c.EnvFrom {
+			entry := map[string]interface{}{}
+			if ef.Prefix != "" {
+				entry["prefix"] = ef.Prefix
+			}
+			if ef.ConfigMapRef != nil {
+				entry["config_map"] = ef.ConfigMapRef.Name
+				if ef.ConfigMapRef.Optional != nil {
+					entry["optional"] = *ef.ConfigMapRef.Optional
+				}
+			} else if ef.SecretRef != nil {
+				entry["secret"] = ef.SecretRef.Name
+				if ef.SecretRef.Optional != nil {
+					entry["optional"] = *ef.SecretRef.Optional
+				}
+			}
+			envFrom = append(envFrom, entry)
+		}
+		container["env_from"] = envFrom
+
+		// 컨테이너 단위 securityContext — runAsUser / capabilities 등.
+		if c.SecurityContext != nil {
+			sc := map[string]interface{}{}
+			if c.SecurityContext.RunAsUser != nil {
+				sc["run_as_user"] = *c.SecurityContext.RunAsUser
+			}
+			if c.SecurityContext.RunAsGroup != nil {
+				sc["run_as_group"] = *c.SecurityContext.RunAsGroup
+			}
+			if c.SecurityContext.RunAsNonRoot != nil {
+				sc["run_as_non_root"] = *c.SecurityContext.RunAsNonRoot
+			}
+			if c.SecurityContext.ReadOnlyRootFilesystem != nil {
+				sc["read_only_root_filesystem"] = *c.SecurityContext.ReadOnlyRootFilesystem
+			}
+			if c.SecurityContext.AllowPrivilegeEscalation != nil {
+				sc["allow_privilege_escalation"] = *c.SecurityContext.AllowPrivilegeEscalation
+			}
+			if c.SecurityContext.Privileged != nil {
+				sc["privileged"] = *c.SecurityContext.Privileged
+			}
+			if c.SecurityContext.Capabilities != nil {
+				caps := map[string]interface{}{}
+				if len(c.SecurityContext.Capabilities.Add) > 0 {
+					adds := make([]string, 0, len(c.SecurityContext.Capabilities.Add))
+					for _, a := range c.SecurityContext.Capabilities.Add {
+						adds = append(adds, string(a))
+					}
+					caps["add"] = adds
+				}
+				if len(c.SecurityContext.Capabilities.Drop) > 0 {
+					drops := make([]string, 0, len(c.SecurityContext.Capabilities.Drop))
+					for _, d := range c.SecurityContext.Capabilities.Drop {
+						drops = append(drops, string(d))
+					}
+					caps["drop"] = drops
+				}
+				if len(caps) > 0 {
+					sc["capabilities"] = caps
+				}
+			}
+			if len(sc) > 0 {
+				container["security_context"] = sc
+			}
+		}
+
 		if len(c.Command) > 0 {
 			container["command"] = c.Command
 		}

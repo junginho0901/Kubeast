@@ -354,6 +354,30 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Host Network" value={hostNetwork ? 'Enabled' : 'Disabled'} />
           <InfoRow label="Host PID" value={hostPID ? 'Enabled' : 'Disabled'} />
           <InfoRow label="Host IPC" value={hostIPC ? 'Enabled' : 'Disabled'} />
+          {(() => {
+            // imagePullSecrets — registry 인증용 Secret list. backend snake_case +
+            // raw spec camelCase 둘 다 처리. ResourceLink 로 Secret detail 점프.
+            const pullSecrets: string[] = (() => {
+              const b = (podDescribe as any)?.image_pull_secrets
+              if (Array.isArray(b)) return b
+              const raw = (spec as any)?.imagePullSecrets
+              if (Array.isArray(raw)) return raw.map((s: any) => s?.name).filter(Boolean)
+              return []
+            })()
+            if (pullSecrets.length === 0) return null
+            return (
+              <InfoRow
+                label="Image Pull Secrets"
+                value={
+                  <div className="flex flex-wrap gap-2">
+                    {pullSecrets.map((n: string) => (
+                      <ResourceLink key={n} kind="Secret" name={n} namespace={namespace} />
+                    ))}
+                  </div>
+                }
+              />
+            )
+          })()}
         </div>
       </InfoSection>
 
@@ -436,6 +460,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 container={c}
                 index={i}
                 variant="container"
+                namespace={namespace}
                 onExec={setExecTarget}
                 canExec={has('resource.pod.exec')}
                 execTooltip={t('pods.exec.openExec', { defaultValue: 'Open terminal' })}
@@ -645,6 +670,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 container={c}
                 index={i}
                 variant="init"
+                namespace={namespace}
               />
             ))}
           </div>
@@ -672,11 +698,24 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {(((podDescribe?.volumes as any[]) ?? (spec.volumes as any[])) as any[]).map((v: any, i: number) => {
                   const { type, detail } = getVolumeDetail(v)
+                  // Backend (snake_case) / raw spec (camelCase) 양쪽에서 ConfigMap /
+                  // Secret / PVC 이름 추출 → ResourceLink 로 점프 가능.
+                  const cmName = v.configMap?.name ?? v.config_map
+                  const secretName = v.secret?.secretName ?? v.secret
+                  const pvcName = v.persistentVolumeClaim?.claimName ?? v.pvc
+                  let detailNode: React.ReactNode = detail
+                  if (type === 'ConfigMap' && cmName) {
+                    detailNode = <ResourceLink kind="ConfigMap" name={cmName} namespace={namespace} />
+                  } else if (type === 'Secret' && secretName) {
+                    detailNode = <ResourceLink kind="Secret" name={secretName} namespace={namespace} />
+                  } else if ((type === 'PVC' || type === 'PersistentVolumeClaim') && pvcName) {
+                    detailNode = <ResourceLink kind="PersistentVolumeClaim" name={pvcName} namespace={namespace} />
+                  }
                   return (
                     <tr key={i} className="text-slate-200">
                       <td className="py-1 pr-2 font-medium text-white break-all">{v.name}</td>
                       <td className="py-1 pr-2 text-slate-400">{type}</td>
-                      <td className="py-1 pr-2 font-mono break-all">{detail}</td>
+                      <td className="py-1 pr-2 font-mono break-all">{detailNode}</td>
                     </tr>
                   )
                 })}
