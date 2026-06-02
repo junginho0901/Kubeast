@@ -74,6 +74,9 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
+  // CSI volumeAttributes는 spec.csi.volumeAttributes 에서 직접 읽음 (describe 는 평탄화하지 않음)
+  const csiSpec = (spec.csi as Record<string, unknown> | undefined) ?? undefined
+  const csiVolumeAttributes = (csiSpec?.volumeAttributes as Record<string, string> | undefined) ?? undefined
   const rawClaimRef = (spec.claimRef as Record<string, unknown> | undefined) ?? undefined
   const claimRef = (describe?.claim_ref ?? {
     namespace: rawClaimRef?.namespace as string | undefined,
@@ -145,6 +148,11 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400">Loading details...</p>}
       {isError && <p className="text-xs text-amber-300">Some detailed PV fields are unavailable right now.</p>}
+      {csiVolumeAttributes && Object.keys(csiVolumeAttributes).length > 0 && (
+        <InfoSection title="Volume Attributes">
+          <KeyValueTags data={csiVolumeAttributes} />
+        </InfoSection>
+      )}
       {boundClaim?.name && (
         <InfoSection title="Bound PersistentVolumeClaim">
           <div className="space-y-2">

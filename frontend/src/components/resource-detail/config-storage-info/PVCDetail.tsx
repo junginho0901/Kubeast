@@ -99,8 +99,20 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
   const resizeConditions = Array.isArray(describe?.resize_conditions) ? describe.resize_conditions : []
   const events = Array.isArray(describe?.events) ? describe.events : []
   const selectedNode = describe?.selected_node || annotations['volume.kubernetes.io/selected-node'] || '-'
-  const dataSource = formatDataSourceRef(describe?.data_source)
-  const dataSourceRef = formatDataSourceRef(describe?.data_source_ref)
+  // describe 가 비어있을 수 있으므로 rawJson spec 도 fallback 으로 사용
+  const rawDataSource = (spec.dataSource as Record<string, unknown> | undefined)
+  const rawDataSourceRef = (spec.dataSourceRef as Record<string, unknown> | undefined)
+  const effectiveDataSource: PVCDataSourceRef | null = describe?.data_source ?? (rawDataSource
+    ? { kind: rawDataSource.kind as string | null, name: rawDataSource.name as string | null, api_group: rawDataSource.apiGroup as string | null }
+    : null)
+  const effectiveDataSourceRef: PVCDataSourceRef | null = describe?.data_source_ref ?? (rawDataSourceRef
+    ? {
+        kind: rawDataSourceRef.kind as string | null,
+        name: rawDataSourceRef.name as string | null,
+        api_group: rawDataSourceRef.apiGroup as string | null,
+        namespace: rawDataSourceRef.namespace as string | null,
+      }
+    : null)
   const boundPv = describe?.bound_pv ?? null
   const usedByPods = Array.isArray(describe?.used_by_pods) ? describe.used_by_pods : []
   const displayedUsedByPods = usedByPods.slice(0, 50)
@@ -127,8 +139,8 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
           <InfoRow label="Volume Mode" value={volumeMode} />
           <InfoRow label="Volume Name" value={volumeName && volumeName !== '-' ? <ResourceLink kind="PersistentVolume" name={volumeName} /> : '-'} />
           <InfoRow label="Selected Node" value={selectedNode} />
-          <InfoRow label="Data Source" value={dataSource} />
-          <InfoRow label="Data Source Ref" value={dataSourceRef} />
+          {effectiveDataSource && <InfoRow label="Data Source" value={formatDataSourceRef(effectiveDataSource)} />}
+          {effectiveDataSourceRef && <InfoRow label="Data Source Ref" value={formatDataSourceRef(effectiveDataSourceRef)} />}
           <InfoRow label="Resize State" value={resizeState} />
           {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{String(describe.resource_version)}</span>} />}
