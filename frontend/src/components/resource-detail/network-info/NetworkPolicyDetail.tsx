@@ -60,6 +60,21 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     return parts.join(' | ') || '*'
   }
 
+  // egress to[] 의 namespaceSelector 만 별도 인라인 태그로 강조 (k=v 쌍 단위)
+  const renderEgressNsTags = (peer: any) => {
+    const matchLabels = peer?.namespaceSelector?.matchLabels as Record<string, string> | undefined
+    if (!matchLabels || Object.keys(matchLabels).length === 0) return null
+    return (
+      <span className="inline-flex flex-wrap gap-1 ml-1">
+        {Object.entries(matchLabels).map(([k, v]) => (
+          <span key={`${k}=${v}`} className="inline-flex rounded border border-cyan-700/50 bg-cyan-900/30 px-1.5 py-0.5 text-[10px] font-mono text-cyan-200">
+            ns:{k}={v}
+          </span>
+        ))}
+      </span>
+    )
+  }
+
   return (
     <>
       <InfoSection title="NetworkPolicy Info">
@@ -99,12 +114,23 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
       {egress.length > 0 && (
         <InfoSection title="Egress Rules">
           <div className="space-y-2 text-xs">
-            {egress.map((rule: any, i: number) => (
-              <div key={i} className="rounded border border-slate-800 p-2">
-                {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
-                <div className="text-slate-200">To: {(rule.to || [{ ipBlock: { cidr: '0.0.0.0/0' } }]).map(renderPeer).join(' ; ')}</div>
-              </div>
-            ))}
+            {egress.map((rule: any, i: number) => {
+              const peers: any[] = rule.to || [{ ipBlock: { cidr: '0.0.0.0/0' } }]
+              return (
+                <div key={i} className="rounded border border-slate-800 p-2">
+                  {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
+                  <div className="text-slate-200">To: {peers.map(renderPeer).join(' ; ')}</div>
+                  {peers.some((p) => p?.namespaceSelector?.matchLabels) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {peers.map((peer, pi) => {
+                        const tags = renderEgressNsTags(peer)
+                        return tags ? <span key={pi}>{tags}</span> : null
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </InfoSection>
       )}
