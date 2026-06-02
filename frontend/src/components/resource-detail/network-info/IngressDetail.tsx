@@ -78,7 +78,10 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
           <div className="space-y-1 text-xs">
             {tls.map((t: any, i: number) => (
               <div key={i} className="text-slate-200">
-                <span className="text-slate-400">Secret:</span> {t.secretName || '-'} <span className="text-slate-400">→</span> {(t.hosts || []).join(', ')}
+                <span className="text-slate-400">Secret:</span>{' '}
+                {t.secretName ? (
+                  <ResourceLink kind="Secret" name={String(t.secretName)} namespace={namespace} />
+                ) : '-'} <span className="text-slate-400">→</span> {(t.hosts || []).join(', ')}
               </div>
             ))}
           </div>
