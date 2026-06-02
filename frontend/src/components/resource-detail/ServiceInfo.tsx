@@ -225,6 +225,16 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="IP Family Policy" value={describe?.ip_family_policy || '-'} />
           <InfoRow label="External Name" value={describe?.external_name || '-'} />
           <InfoRow label="Publish Not Ready" value={String(describe?.publish_not_ready_addresses ?? '-')} />
+          {(() => {
+            // topology-aware-routing — annotation 또는 spec.topologyKeys 로 어느 zone 우선
+            // 라우팅인지 결정. EndpointSlice hints.forZones 와 짝.
+            const ann: Record<string, string> = (describe as any)?.annotations || {}
+            const hint = ann['service.kubernetes.io/topology-aware-hints'] || ann['service.kubernetes.io/topology-mode']
+            const keys = (spec as any)?.topologyKeys
+            const display = hint || (Array.isArray(keys) && keys.length > 0 ? `topologyKeys: ${keys.join(', ')}` : null)
+            if (!display) return null
+            return <InfoRow label="Topology Aware Routing" value={display} />
+          })()}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
