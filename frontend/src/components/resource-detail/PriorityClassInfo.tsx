@@ -40,6 +40,14 @@ export default function PriorityClassInfo({ name }: Props) {
     .filter((p: any) => p?.priority_class_name === name)
   const { items: pagedPods, nav: podsNav } = usePagination(usingPods, 10)
 
+  // globalDefault 충돌 검출용: cluster-wide PriorityClass list 를 가져옴
+  const { data: allPriorityClasses } = useQuery({
+    queryKey: ['all-priorityclasses'],
+    queryFn: () => api.getPriorityClasses(false),
+    enabled: !!name,
+    staleTime: 60_000,
+  })
+
   useResourceDetailOverlay({ kind: 'PriorityClass', name, describe: desc })
 
   if (isLoading) {
@@ -55,6 +63,11 @@ export default function PriorityClassInfo({ name }: Props) {
   const preemptionPolicy = desc.preemption_policy || 'PreemptLowerPriority'
   const description = desc.description || '-'
   const events: any[] = desc.events || []
+
+  // 현재 PC 가 globalDefault=true 일 때만 cluster-wide 에서 다른 globalDefault=true PC 들 찾기
+  const collidingGlobalDefaults = globalDefault && Array.isArray(allPriorityClasses)
+    ? allPriorityClasses.filter((pc) => pc.global_default && pc.name !== name)
+    : []
 
   return (
     <div className="space-y-4">
@@ -82,6 +95,23 @@ export default function PriorityClassInfo({ name }: Props) {
           <InfoRow label="Preemption Policy" value={preemptionPolicy} />
         </InfoGrid>
       </InfoSection>
+
+      {collidingGlobalDefaults.length > 0 && (
+        <InfoSection title="Global Default Conflict">
+          <div className="rounded border border-amber-700/50 bg-amber-900/20 p-2 space-y-1.5">
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-200">
+              <span>⚠ Multiple globalDefault PriorityClasses ({collidingGlobalDefaults.length + 1}) — only one is honored</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {[{ name } as { name: string }, ...collidingGlobalDefaults].map((pc) => (
+                <span key={pc.name} className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-mono ${pc.name === name ? 'border-amber-500/60 bg-amber-800/30 text-amber-100' : 'border-slate-700 bg-slate-800 text-slate-200'}`}>
+                  {pc.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        </InfoSection>
+      )}
 
       <InfoSection title={`Used By Pods (${usingPods.length})`}>
         {usingPods.length === 0 ? (
