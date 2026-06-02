@@ -107,6 +107,13 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                     <div className="text-slate-200 break-all"><span className="text-slate-400">Zone:</span> {ep?.zone || '-'}</div>
                     <div className="text-slate-200 break-all"><span className="text-slate-400">TargetRef:</span> {refText}</div>
                   </div>
+                  {/* topology-aware-routing hints — Service annotation 의 topology-aware-hints 가 켜져 있으면 EndpointSlice 에 hints.forZones 가 채워짐 */}
+                  {Array.isArray(ep?.hints?.for_zones) && ep.hints.for_zones.length > 0 && (
+                    <div className="text-xs text-slate-200 break-all">
+                      <span className="text-slate-400">Hints (for zones):</span>{' '}
+                      <span className="font-mono">{ep.hints.for_zones.join(', ')}</span>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
                     {renderConditionBadge('Ready', ep?.conditions?.ready)}
                     {renderConditionBadge('Serving', ep?.conditions?.serving)}

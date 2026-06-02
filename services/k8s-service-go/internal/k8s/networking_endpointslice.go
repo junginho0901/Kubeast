@@ -72,6 +72,21 @@ func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name str
 		if ep.Zone != nil {
 			e["zone"] = *ep.Zone
 		}
+		// topology-aware-routing hints — Pod 가 어느 zone 에 priority 라우팅되는지.
+		// Service annotation service.kubernetes.io/topology-aware-hints 와 같이 봄.
+		if ep.Hints != nil {
+			hints := map[string]interface{}{}
+			if len(ep.Hints.ForZones) > 0 {
+				zones := make([]string, 0, len(ep.Hints.ForZones))
+				for _, z := range ep.Hints.ForZones {
+					zones = append(zones, z.Name)
+				}
+				hints["for_zones"] = zones
+			}
+			if len(hints) > 0 {
+				e["hints"] = hints
+			}
+		}
 		endpoints = append(endpoints, e)
 	}
 	result["endpoints"] = endpoints
