@@ -207,6 +207,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
 
       <WorkloadContainers containers={containers} />
 
+      {/* STS volumeClaimTemplates: verified — shows name / storage class / access modes / size */}
       {isStatefulSet && volumeClaimTemplates.length > 0 && (
         <InfoSection title="Volume Claim Templates">
           <div className="space-y-2 text-xs text-slate-200">

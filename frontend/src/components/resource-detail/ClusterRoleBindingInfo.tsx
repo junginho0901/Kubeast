@@ -104,7 +104,11 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
                   </div>
                   <div>
                     <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Name:</span>
-                    <span className="font-mono">{subj.name || '-'}</span>
+                    {subj.kind === 'ServiceAccount' && subj.name && subj.namespace ? (
+                      <ResourceLink kind="ServiceAccount" name={subj.name} namespace={subj.namespace} />
+                    ) : (
+                      <span className="font-mono">{subj.name || '-'}</span>
+                    )}
                   </div>
                   {subj.namespace && (
                     <div>

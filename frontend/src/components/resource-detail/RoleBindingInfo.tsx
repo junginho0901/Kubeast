@@ -108,7 +108,11 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   </div>
                   <div>
                     <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Name:</span>
-                    <span className="font-mono">{subj.name || '-'}</span>
+                    {subj.kind === 'ServiceAccount' && subj.name ? (
+                      <ResourceLink kind="ServiceAccount" name={subj.name} namespace={subj.namespace ?? namespace} />
+                    ) : (
+                      <span className="font-mono">{subj.name || '-'}</span>
+                    )}
                   </div>
                   {subj.namespace && (
                     <div>

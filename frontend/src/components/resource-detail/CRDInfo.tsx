@@ -182,6 +182,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                     <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400">Not Served</span>
                   )}
                 </div>
+                {/* describe.versions[].additionalPrinterColumns 는 backend 가 spec 의 원형을 그대로 forward 함 — verified */}
                 {Array.isArray(ver.additionalPrinterColumns) && ver.additionalPrinterColumns.length > 0 && (
                   <div className="mt-2">
                     <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Additional Printer Columns</p>

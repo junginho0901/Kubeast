@@ -91,7 +91,7 @@ export default function HPAInfo({ name, namespace }: Props) {
         </InfoGrid>
       </InfoSection>
 
-      {/* Metrics */}
+      {/* Metrics — verified already aligned (Target/Current per index in metrics_spec[]) */}
       {metricsSpec.length > 0 && (
         <InfoSection title="Metrics">
           <div className="overflow-x-auto">

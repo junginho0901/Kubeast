@@ -74,6 +74,13 @@ export default function WorkloadReplicasSection({
           <InfoRow label="Ready" value={String(replicaView.ready ?? '-')} />
           <InfoRow label="Up to date" value={String(replicaView.updated ?? '-')} />
           <InfoRow label="Available" value={String(replicaView.available ?? '-')} />
+          {isDaemonSet && (
+            <>
+              {/* DaemonSet 만의 상세 status counts — 디버깅에 유용. amber/red 색상 강조는 위의 SummaryBadge 에서 처리 */}
+              <InfoRow label="Misscheduled" value={String(daemonSetStatus.misscheduled ?? '-')} />
+              <InfoRow label="Unavailable" value={String(daemonSetStatus.unavailable ?? '-')} />
+            </>
+          )}
         </InfoGrid>
       </InfoSection>
 
