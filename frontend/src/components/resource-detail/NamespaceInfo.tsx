@@ -194,7 +194,11 @@ export default function NamespaceInfo({ name }: Props) {
       return parseFloat(s) || 0
     }
     let cpuReq = 0, cpuLim = 0, memReq = 0, memLim = 0
+    // Phase 별 Pod count — Resource Summary 옆에 시각적으로 표시.
+    const phaseCounts: Record<string, number> = {}
     for (const p of nsPods as any[]) {
+      const ph = String(p?.phase ?? p?.status ?? 'Unknown')
+      phaseCounts[ph] = (phaseCounts[ph] || 0) + 1
       for (const c of p?.containers ?? []) {
         const req = c?.resources?.requests ?? {}
         const lim = c?.resources?.limits ?? {}
@@ -214,6 +218,7 @@ export default function NamespaceInfo({ name }: Props) {
       memReq: fmtMem(memReq),
       memLim: fmtMem(memLim),
       podCount: nsPods.length,
+      phaseCounts,
     }
   }, [nsPods])
 
@@ -289,6 +294,21 @@ export default function NamespaceInfo({ name }: Props) {
 
       {resourceSummary && resourceSummary.podCount > 0 && (
         <InfoSection title={`Resource Summary (sum across ${resourceSummary.podCount} pods)`}>
+          {/* Phase 별 Pod count 배지 — Running 초록, Pending/Failed 등 amber/red */}
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {Object.entries(resourceSummary.phaseCounts).map(([phase, count]) => {
+              const color = phase === 'Running' || phase === 'Succeeded'
+                ? 'border-emerald-700 bg-emerald-900/20 text-emerald-300'
+                : phase === 'Pending'
+                ? 'border-amber-700 bg-amber-900/20 text-amber-300'
+                : 'border-red-700 bg-red-900/20 text-red-300'
+              return (
+                <span key={phase} className={`rounded border px-2 py-0.5 text-[11px] ${color}`}>
+                  {phase}: <span className="font-mono">{String(count)}</span>
+                </span>
+              )
+            })}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-slate-400">
