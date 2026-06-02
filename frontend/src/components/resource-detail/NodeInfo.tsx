@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, fmtRel, fmtTs, SummaryBadge } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, fmtRel, fmtTs, SummaryBadge, usePagination } from './DetailCommon'
 import { useNodeData } from './node-info/useNodeData'
 import NodeActions from './node-info/NodeActions'
 import NodeGpuInfo from './node-info/NodeGpuInfo'
@@ -194,10 +194,108 @@ export default function NodeInfo({ name }: Props) {
         tr={tr}
       />
 
+      {/* Images — Node 가 cache 한 컨테이너 이미지 목록 (top N by size) */}
+      <NodeImages images={(nodeDescribe as any).images} />
+
+      {/* Volumes Attached / In Use — CSI driver / kubelet 의 volume 상태 */}
+      <NodeVolumes
+        volumesAttached={(nodeDescribe as any).volumes_attached}
+        volumesInUse={(nodeDescribe as any).volumes_in_use}
+      />
+
       {/* Events */}
       <InfoSection title={tr('nodes.detail.eventsTitle', 'Events')}>
         <EventsTable events={sortedEvents} />
       </InfoSection>
     </>
+  )
+}
+
+// Node 가 cache 한 컨테이너 이미지 목록. size desc 정렬 후 page 10 cap.
+// "Node 의 디스크가 왜 차지" 디버깅에 유용.
+function NodeImages({ images }: { images: any }) {
+  if (!Array.isArray(images) || images.length === 0) return null
+  const sorted = [...images].sort((a, b) => (b?.size ?? 0) - (a?.size ?? 0))
+  const fmtSize = (n: number) => {
+    if (!Number.isFinite(n) || n <= 0) return '-'
+    const units = ['B', 'KiB', 'MiB', 'GiB']
+    let v = n, i = 0
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
+    return `${v.toFixed(1)} ${units[i]}`
+  }
+  const { items: paged, nav, total } = usePagination(sorted, 10)
+  return (
+    <InfoSection title={`Images (${total})`}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs table-fixed min-w-[400px]">
+          <thead className="text-slate-400">
+            <tr>
+              <th className="text-left py-1 w-[80%]">Name</th>
+              <th className="text-left py-1 w-[20%]">Size</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {paged.map((img: any, i: number) => (
+              <tr key={i} className="text-slate-200">
+                <td className="py-1 pr-2 font-mono break-all">
+                  {Array.isArray(img?.names) && img.names.length > 0 ? img.names[0] : '-'}
+                </td>
+                <td className="py-1 pr-2 font-mono">{fmtSize(img?.size)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {nav}
+    </InfoSection>
+  )
+}
+
+// CSI driver 가 attach 한 volume + kubelet 이 mount 중인 volume.
+// "stuck CSI attach" / volume detach 안 됨 디버깅용.
+function NodeVolumes({ volumesAttached, volumesInUse }: { volumesAttached: any; volumesInUse: any }) {
+  const attached = Array.isArray(volumesAttached) ? volumesAttached : []
+  const inUse = Array.isArray(volumesInUse) ? volumesInUse : []
+  if (attached.length === 0 && inUse.length === 0) return null
+  return (
+    <InfoSection title="Volumes">
+      <div className="space-y-3">
+        {attached.length > 0 && (
+          <div>
+            <div className="text-xs font-semibold text-slate-300 mb-1">Attached ({attached.length})</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs table-fixed min-w-[400px]">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="text-left py-1 w-[60%]">Volume Name</th>
+                    <th className="text-left py-1 w-[40%]">Device Path</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {attached.map((va: any, i: number) => (
+                    <tr key={i} className="text-slate-200">
+                      <td className="py-1 pr-2 font-mono break-all">{va.name || '-'}</td>
+                      <td className="py-1 pr-2 font-mono break-all">{va.device_path || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        {inUse.length > 0 && (
+          <div>
+            <div className="text-xs font-semibold text-slate-300 mb-1">In Use ({inUse.length})</div>
+            <div className="flex flex-wrap gap-1">
+              {inUse.map((vi: string, i: number) => (
+                <span key={i} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">
+                  {vi}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </InfoSection>
   )
 }

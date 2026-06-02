@@ -117,6 +117,24 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	}
 	result["images"] = images
 
+	// volumesAttached — CSI driver 가 이 Node 에 attach 한 volume list.
+	// "stuck CSI attach" 디버깅에 핵심 정보 (kubectl describe node 와 동등).
+	volumesAttached := make([]map[string]interface{}, 0, len(node.Status.VolumesAttached))
+	for _, va := range node.Status.VolumesAttached {
+		volumesAttached = append(volumesAttached, map[string]interface{}{
+			"name":         string(va.Name),
+			"device_path":  va.DevicePath,
+		})
+	}
+	result["volumes_attached"] = volumesAttached
+
+	// volumesInUse — kubelet 이 현재 mount 중인 volume list.
+	volumesInUse := make([]string, 0, len(node.Status.VolumesInUse))
+	for _, vi := range node.Status.VolumesInUse {
+		volumesInUse = append(volumesInUse, string(vi))
+	}
+	result["volumes_in_use"] = volumesInUse
+
 	// Events
 	if eventsErr == nil {
 		sortEventsByTime(events.Items)
