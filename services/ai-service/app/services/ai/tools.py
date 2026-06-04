@@ -361,3 +361,65 @@ K8S_WRITE_TOOLS: List[Dict] = [
         },
     },
 ]
+
+
+def get_tools_definition(service) -> List[Dict]:
+    """Tools 정의 반환 (상세한 설명 포함).
+
+    ai_service.AIService._get_tools_definition 에서 추출. role 기반 필터링은
+    service._filter_tools_by_role 에 위임 (해당 메서드는 self._role_allows_*
+    프로퍼티에 의존하므로 AIService 에 잔존)."""
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_cluster_overview",
+                "description": """Get a comprehensive overview of the entire Kubernetes cluster health.
+                    
+                    Returns:
+                    - Total counts: namespaces, pods, services, deployments, PVCs, PVs
+                    - Pod status breakdown (Running, Pending, Failed, etc.)
+                    - Node count and cluster version
+                    
+                    Use this FIRST when user asks about cluster health or wants a general status check.""",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_pod_metrics",
+                "description": """Get pod resource usage (CPU and memory) - equivalent to 'kubectl top pods'.
+                    
+                    Use this to:
+                    - Check which pods are consuming the most resources
+                    - Identify resource-heavy workloads
+                    - Diagnose performance issues
+                    - Monitor resource utilization""",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "namespace": {"type": "string", "description": "Optional namespace filter. If not provided, shows all pods across all namespaces."}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_node_metrics",
+                "description": """Get node resource usage (CPU and memory) - equivalent to 'kubectl top nodes'.
+                    
+                    Use this to:
+                    - Check node resource utilization
+                    - Identify nodes under heavy load
+                    - Monitor cluster capacity
+                    - Diagnose node-level performance issues""",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        }
+    ]
+
+    tools.extend(K8S_READONLY_TOOLS)
+    tools.extend(K8S_WRITE_TOOLS)
+    return service._filter_tools_by_role(tools)
