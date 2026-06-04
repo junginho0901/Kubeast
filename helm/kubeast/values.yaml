@@ -1,0 +1,82 @@
+# Kubest - K8s DevOps Assistant
+# Default configuration values
+
+global:
+  imageTag: "v0.1.0"
+  imagePullPolicy: IfNotPresent
+
+# --- Admin account (created on first boot) ---
+# password 를 비워두면 helm install 시 자동 생성 (randAlphaNum 20).
+# 생성된 비번은 다음 명령으로 확인:
+#   kubectl -n <namespace> get secret kubeast-secrets \
+#     -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d ; echo
+admin:
+  email: admin
+  password: ""
+
+# --- AI Configuration ---
+ai:
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  geminiApiKey: ""
+  model: "gpt-4o-mini"
+  baseUrl: ""
+
+# --- PostgreSQL ---
+postgresql:
+  enabled: true          # Set false to use external postgres
+  user: kubeast
+  password: kubeast
+  database: kubeast
+  # External postgres (when enabled=false):
+  # externalHost: my-rds.amazonaws.com
+  # externalPort: 5432
+
+# --- Redis ---
+redis:
+  enabled: true
+
+# --- Gateway ---
+gateway:
+  service:
+    type: NodePort
+    nodePort: 30333       # Change for your environment
+    # type: ClusterIP     # Use with ingress
+    # type: LoadBalancer   # Cloud environments
+
+# --- Ingress (optional) ---
+ingress:
+  enabled: false
+  className: ""
+  host: kubeast.example.com
+  tls: false
+  tlsSecretName: ""
+
+# --- NetworkPolicy (optional, opt-in) ---
+# Adds default-deny + per-component egress whitelist. Requires a CNI that
+# supports NetworkPolicy (Calico, Cilium, Weave). Flannel / kindnet ignore it.
+# Production cluster operators should enable this after confirming their CNI.
+networkPolicy:
+  enabled: false
+  # CoreDNS namespace (DNS egress is allowed cluster-wide)
+  dnsNamespace: kube-system
+  # Additional external CIDRs to allow for ai-service egress (e.g. private
+  # LLM gateway). Default is "0.0.0.0/0 except RFC1918" — covers public LLM
+  # APIs but blocks internal-only access.
+  allowExternalEgressCIDRs: []
+  # kube-apiserver CIDR for k8s-service / tool-server / model-config-controller
+  # egress. Empty string = allow private (10/12/192.168) ranges + public.
+  apiserverCIDR: ""
+
+# --- Image overrides (usually not needed) ---
+images:
+  frontend: jeonginho/kubeast-frontend
+  authService: jeonginho/kubeast-auth-service
+  aiService: jeonginho/kubeast-ai-service
+  k8sService: jeonginho/kubeast-k8s-service
+  sessionService: jeonginho/kubeast-session-service
+  toolServer: jeonginho/kubeast-tool-server
+  modelConfigController: jeonginho/kubeast-model-config-controller-go
+  postgres: postgres:15-alpine
+  redis: redis:7-alpine
+  gateway: nginx:alpine

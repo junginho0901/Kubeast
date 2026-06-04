@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeast-config
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+data:
+  APP_NAME: "Kubest"
+  APP_VERSION: {{ .Values.global.imageTag | quote }}
+  DEBUG: "false"
+  ALLOWED_ORIGINS: "*"
+  WS_HEARTBEAT_INTERVAL: "30"
+  JWT_ISSUER: "kubeast-auth"
+  JWT_AUDIENCE: "kubeast"
+  JWT_EXPIRES_MINUTES: "10080"
+  DEFAULT_ADMIN_EMAIL: {{ .Values.admin.email | quote }}
+  KEY_DIR: "/app/.keys"
+  POSTGRES_USER: {{ .Values.postgresql.user | quote }}
+  POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  OPENAI_MODEL: {{ .Values.ai.model | quote }}
+  OPENAI_BASE_URL: {{ .Values.ai.baseUrl | quote }}
+  IN_CLUSTER: "true"
+  KUBECONFIG_PATH: "/app/kubeconfig.yaml"
+  SETUP_NAMESPACE: {{ include "kubeast.namespace" . | quote }}
+  SETUP_KUBECONFIG_SECRET: "k8s-kubeconfig"
+  SETUP_CONFIGMAP_NAME: "kubeast-config"
+  SETUP_RESTART_DEPLOYMENTS: "k8s-service,tool-server"
+  AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
+  TOOL_SERVER_URL: "http://tool-server:8086"
+  TOOL_SERVER_URL_READ: "http://tool-server:8086"
+  TOOL_SERVER_URL_WRITE: "http://tool-server:8086"
+  TOOL_SERVER_URL_ADMIN: "http://tool-server:8086"
+  TOOL_SERVER_TOKEN_PASSTHROUGH: "true"
+  TOOL_SERVER_USE_INCLUSTER: "false"

@@ -1,0 +1,440 @@
+{{- if .Values.networkPolicy.enabled }}
+# Kubeast NetworkPolicy — opt-in. Default-deny + per-component whitelist.
+#
+# Phase 1: default-deny ingress/egress + DNS allow (cluster-wide).
+# Phase 2: gateway (external in, internal-fanout out) + frontend (gateway-only in).
+# Phase 3: postgres / redis (clients only).
+# Phase 4: backend microservices + kube-apiserver + external LLM egress.
+#
+# Requires a CNI that enforces NetworkPolicy (Calico / Cilium / Weave).
+# Flannel and kindnet (kind default) silently ignore these resources.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Phase 1 — default-deny + DNS
+# ───────────────────────────────────────────────────────────────────────────
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-default-deny
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  # 빈 podSelector = release namespace 안의 모든 Pod
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# 모든 Pod 에서 CoreDNS egress 허용 — 없으면 cluster-internal Service DNS lookup
+# 이 죽어서 거의 모든 통신이 실패한다.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-dns
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.dnsNamespace | default "kube-system" }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+# ───────────────────────────────────────────────────────────────────────────
+# Phase 2 — gateway / frontend
+# ───────────────────────────────────────────────────────────────────────────
+---
+# gateway: ingress=any (NodePort/Ingress 외부 진입점), egress=내부 5개 서비스만
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - {}  # 외부 진입점 — 출처 무제한
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [frontend, ai-service, k8s-service, session-service, auth-service]
+---
+# frontend: ingress=gateway 만, egress=DNS 만 (default-deny + allow-dns 로 커버됨)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-frontend
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway
+
+# ───────────────────────────────────────────────────────────────────────────
+# Phase 3 — postgres / redis (DB·캐시는 실제 클라이언트만 inbound)
+# ───────────────────────────────────────────────────────────────────────────
+{{- if .Values.postgresql.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [auth-service, ai-service, session-service, tool-server]
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- if .Values.redis.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-redis
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [ai-service, session-service]
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+
+# ───────────────────────────────────────────────────────────────────────────
+# Phase 4 — 백엔드 마이크로서비스 + kube-apiserver + 외부 LLM egress
+# ───────────────────────────────────────────────────────────────────────────
+---
+# auth-service: gateway 에서 inbound, postgres egress (DNS 는 allow-dns 로 별도)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-auth-service
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                # gateway: 외부 진입, k8s-service / session-service: JWKS endpoint 조회,
+                # auth-service-go 의 setup handler 가 k8s-service health 조회
+                values: [gateway, k8s-service, session-service, ai-service]
+  egress:
+{{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+    # k8s-service health check (dockersetup.GetStatus)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: k8s-service
+      ports:
+        - protocol: TCP
+          port: 8002
+    # kube-apiserver (k8ssetup.go 의 /healthz)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- with .Values.networkPolicy.apiserverCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+---
+# session-service: gateway 에서 inbound, postgres + redis + auth(JWKS) egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-session-service
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: session-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway
+  egress:
+{{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+    # JWKS endpoint
+    - to:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+      ports:
+        - protocol: TCP
+          port: 8004
+---
+# ai-service: gateway 에서 inbound (+ tool-server 양방향), postgres + redis +
+# auth(JWKS) + k8s-service + tool-server + 외부 LLM egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-ai-service
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [gateway, tool-server]
+  egress:
+{{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [k8s-service, tool-server, auth-service]
+    # 외부 LLM API — RFC1918 private 대역 제외 모든 공인 IP 허용 (443).
+    # OpenAI / Anthropic / Gemini 등 IP 변동에 강건. 사내 게이트웨이는
+    # allowExternalEgressCIDRs values 로 별도 명시.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- range .Values.networkPolicy.allowExternalEgressCIDRs }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- end }}
+---
+# k8s-service: gateway 에서 inbound, kube-apiserver egress + auth(JWKS)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-k8s-service
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: k8s-service
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                # auth-service 의 dockersetup 이 /health 조회, ai-service 가 tool 호출
+                values: [gateway, auth-service, ai-service, tool-server]
+  egress:
+    # JWKS endpoint
+    - to:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+      ports:
+        - protocol: TCP
+          port: 8004
+    # kube-apiserver — 사설망 (kind / on-prem) + 공인 IP 모두 허용
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    {{- with .Values.networkPolicy.apiserverCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+    {{- end }}
+---
+# tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-tool-server
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: tool-server
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ai-service
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: ai-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: k8s-service
+      ports:
+        - protocol: TCP
+          port: 8002
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+---
+# model-config-controller-go: ingress 없음 (controller), kube-apiserver egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-model-config-controller
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: model-config-controller-go
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+
+{{- end }}

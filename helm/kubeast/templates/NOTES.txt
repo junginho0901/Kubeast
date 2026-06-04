@@ -1,0 +1,35 @@
+═══════════════════════════════════════════════════════════
+  Kubest 가 설치되었습니다 ({{ .Release.Name }} / {{ .Release.Namespace }})
+═══════════════════════════════════════════════════════════
+
+▸ 게이트웨이 접속
+
+{{- if eq .Values.gateway.service.type "NodePort" }}
+  NodePort 사용 중. 노드 IP 와 포트 {{ .Values.gateway.service.nodePort }} 로 접속하세요:
+    http://<node-ip>:{{ .Values.gateway.service.nodePort }}/setup
+{{- else if eq .Values.gateway.service.type "LoadBalancer" }}
+  LoadBalancer 외부 IP 가 할당되면:
+    kubectl -n {{ .Release.Namespace }} get svc gateway
+{{- else }}
+  포트포워드 후 브라우저에서 접속:
+    kubectl -n {{ .Release.Namespace }} port-forward svc/gateway 8000:8000
+    http://localhost:8000/setup
+{{- end }}
+
+▸ 초기 관리자 계정
+
+  ID:       {{ .Values.admin.email }}
+  Password: 다음 명령으로 확인하세요
+            (helm 이 자동 생성한 랜덤 비번입니다)
+
+    kubectl -n {{ .Release.Namespace }} get secret kubeast-secrets \
+      -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d ; echo
+
+  ⚠ 로그인 후 즉시 비밀번호를 변경하세요.
+
+▸ AI 모델 등록
+
+  로그인 후 [Admin > AI Models] 페이지에서 OpenAI / Anthropic / Gemini
+  등의 API 키를 등록하면 챗봇이 활성화됩니다.
+
+═══════════════════════════════════════════════════════════

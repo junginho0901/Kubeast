@@ -1,0 +1,15 @@
+apiVersion: v2
+name: kubeast
+description: Kubest - K8s DevOps Assistant with AI Chat
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - devops
+  - ai
+  - monitoring
+  - dashboard
+home: https://github.com/JeongInho/kubeast
+maintainers:
+  - name: JeongInho
