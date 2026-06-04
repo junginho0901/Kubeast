@@ -85,8 +85,8 @@ k8s/secret.local.yaml.bak-20260224-001
 # Docker
 .dockerignore
 
-# External dependencies
-kubeast/
+# External dependencies (root-level only — helm/kubeast/ 는 우리 차트라 tracked)
+/kubeast/
 argo-cd/
 .tmp/
 tools/
