@@ -1,14 +1,18 @@
-// Pod 상세 모달의 Logs 탭. ClusterView.tsx 에서 추출 (Phase 3.1.c).
+// Pod 상세 모달의 Logs 탭. SSE (EventSource) 로 logs streaming.
 //
-// WebSocket 으로 logs streaming + container/tailLines dropdown + 다운로드 기능.
-// 모든 logs 관련 state/ref/effect/handler 자체 소유 — 부모는 selectedContainer
-// (Summary 의 container 검색과 공유라 부모 유지) + container 검색 query 만
-// 전달. unmount 시 WebSocket cleanup 자동.
+// 이전 WebSocket 구현엔 cancelled flag / currentWs / detachAndClose / FileReader
+// binary path / 401 close-code 분기 등 retry-style race 코드가 ~80줄 있었음.
+// SSE 는 browser EventSource 가 자동 reconnect 처리하므로:
+//  - es.close() 한 줄로 cleanup 끝
+//  - 401 / 일시적 끊김 / proxy idle 다 EventSource 가 자동 재시도
+//  - backend 의 retry 도 정상 위치 defer 로 inotify watcher 누적 해결
+//
+// 이전 README 의 "여러 logs 왔다갔다 했더니 stuck" 회귀가 이 한 번의 전환으로
+// 거의 모든 race 표면 제거.
 
 import { useEffect, useRef, useState } from 'react'
 import { Search, X, ChevronDown, CheckCircle, Download } from 'lucide-react'
 import { api } from '@/services/api'
-import { handleUnauthorized } from '@/services/auth'
 
 interface PodLike {
   name: string
@@ -44,18 +48,11 @@ export function PodLogsTab({
   const containerDropdownRef = useRef<HTMLDivElement>(null)
   const tailLinesDropdownRef = useRef<HTMLDivElement>(null)
 
-  // 로그 스트리밍 (WebSocket).
+  // 로그 스트리밍 (Server-Sent Events).
   //
-  // 의도: 사용자가 logs 탭에서 떠날 때 ws 가 즉시 끊기고 backend 의 kubelet
-  // logs reader 도 즉시 종료. retry 같은 자동 재연결 로직은 들이지 않음 —
-  // backend 의 StreamPodLogs(Follow=true) 가 kubelet inotify watcher 를
-  // 생성하는데, 자동 재시도로 stream 이 누적되면 host 의 inotify 한도가
-  // 차서 모든 pod 의 fsnotify 의존 앱이 실패. 사용자 원래 설계대로 단순한
-  // 1:1 ws 모델 유지.
-  //
-  // 진짜 'No logs available' stuck 의 원인은 backend 의 podToInfo 가 watch
-  // 응답에 containers 필드를 누락해서 selectedContainer 가 빈 값이 되는 것.
-  // 그건 backend 측에서 fix.
+  // 한 EventSource = 한 container 의 log stream. container/pod 가 바뀌면
+  // close + 새 EventSource. EventSource 가 자동 reconnect 처리하므로
+  // ws 시절의 cancelled flag / detachAndClose / FileReader 분기 다 제거.
   useEffect(() => {
     if (!selectedContainer) {
       setLogs('')
@@ -66,81 +63,36 @@ export function PodLogsTab({
     setIsStreamingLogs(true)
     setLogs('')
 
-    let cancelled = false
-    let currentWs: WebSocket | null = null
+    const url = `/api/v1/cluster/namespaces/${pod.namespace}/pods/${pod.name}` +
+      `/logs/stream?container=${encodeURIComponent(selectedContainer)}&tail_lines=100`
 
-    const detachAndClose = (ws: WebSocket | null) => {
-      if (!ws) return
-      ws.onopen = null
-      ws.onmessage = null
-      ws.onerror = null
-      ws.onclose = null
-      try {
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close()
-        }
-      } catch (e) {
-        console.error('Error closing WebSocket:', e)
-      }
+    const es = new EventSource(url, { withCredentials: true })
+
+    es.onmessage = (e) => {
+      // SSE 한 메시지 = 로그 한 줄. backend bufio.Scanner 가 split.
+      setLogs((prev) => prev + e.data + '\n')
     }
 
-    try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const rawWsBase = (import.meta.env.VITE_WS_URL || '').trim()
-      let wsBase = rawWsBase
-      if (wsBase && wsBase.startsWith('http')) {
-        wsBase = wsBase.replace(/^http/, 'ws')
-      }
-      if (!wsBase) {
-        wsBase = `${protocol}//${window.location.host}`
-      }
-      wsBase = wsBase.replace(/\/$/, '')
-      const wsUrl = `${wsBase}/api/v1/cluster/namespaces/${pod.namespace}/pods/${pod.name}/logs/ws?container=${selectedContainer}&tail_lines=100`
-
-      const ws = new WebSocket(wsUrl)
-      currentWs = ws
-
-      ws.onmessage = (event) => {
-        if (cancelled) return
-        if (typeof event.data === 'string') {
-          setLogs((prev) => prev + event.data)
-        } else {
-          const reader = new FileReader()
-          reader.onload = () => {
-            if (cancelled) return
-            const text = reader.result as string
-            setLogs((prev) => prev + text)
-          }
-          reader.readAsText(event.data)
-        }
-      }
-
-      ws.onerror = (error) => {
-        console.warn('Pod logs WS error:', error)
-      }
-
-      ws.onclose = (event) => {
-        if (cancelled) return
-        if (event.code === 1008) {
-          handleUnauthorized()
-          return
-        }
-        // 정상/비정상 모두 그대로 끝냄. 사용자가 logs 탭으로 다시 들어오면
-        // PodLogsTab 이 새 effect 를 시작하면서 새 ws 한 번 만듦 (key prop
-        // 으로 pod 변경 시엔 컴포넌트 자체 remount).
+    es.addEventListener('error', () => {
+      // CLOSED 상태는 영구 실패 (e.g. 401, backend error 이벤트 후 close).
+      // CONNECTING 상태는 browser 가 자동 재시도 중 — 우리가 할 일 없음.
+      if (es.readyState === EventSource.CLOSED) {
         setIsStreamingLogs(false)
       }
-    } catch (error: any) {
-      console.error('Error creating WebSocket:', error)
-      setIsStreamingLogs(false)
-    }
+    })
+
+    // backend 가 startup 실패 시 보내는 named 'error' 이벤트
+    es.addEventListener('error' as any, (e: any) => {
+      if (e?.data) {
+        console.warn('pod logs sse error frame', e.data)
+      }
+    })
 
     return () => {
-      cancelled = true
-      detachAndClose(currentWs)
-      currentWs = null
+      es.close()
+      setIsStreamingLogs(false)
     }
-  }, [pod, selectedContainer, tr])
+  }, [pod, selectedContainer])
 
   // 자동 스크롤
   useEffect(() => {
