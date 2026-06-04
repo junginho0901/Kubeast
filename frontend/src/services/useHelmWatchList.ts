@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { HelmReleaseSummary } from './api'
 
-// Helm release watch — separate WebSocket per (cluster, namespace) pair.
-// Not multiplexed with the K8s native watch socket on purpose: the
-// backend decodes & enriches each Helm Secret before sending it on, so
-// it lives on its own dedicated endpoint at /api/v1/helm/releases/watch.
+// Helm release watch — Server-Sent Events 로 cluster + namespace 별 release
+// 변화를 실시간 push. backend 가 Helm Secret 을 decode 해서 보내주므로 K8s
+// native watch multiplexer 와는 별도 endpoint (/api/v1/helm/releases/stream).
 //
-// Replaces the prior 30s polling on the Releases / ReleaseDetail pages.
+// 이전엔 WebSocket 이었으나 단방향 read-only 라 SSE 로 전환 — frontend
+// retry/backoff/cancelled flag 코드 제거 (EventSource 가 자동 reconnect).
+// ping/pong 도 backend 의 ': keepalive\n\n' comment 라인으로 자동 처리.
 
 type HelmWatchEventType = 'ADDED' | 'MODIFIED' | 'DELETED'
 
@@ -18,9 +19,8 @@ interface HelmWatchEvent {
 
 export interface UseHelmWatchListOptions {
   /**
-   * cluster id. Today only "default" is meaningful — kept as a parameter
-   * so the multi-cluster transition (see prereq doc) is a one-line
-   * change at the call site rather than a hook signature change.
+   * cluster id. 현재는 "default" 만 의미. multi-cluster 전환 시 callsite 한 줄
+   * 변경으로 끝나도록 파라미터로 둠.
    */
   cluster: string
   /**
@@ -34,31 +34,23 @@ export interface UseHelmWatchListOptions {
   /**
    * react-query key whose cache the hook should mutate. The page's
    * useQuery must use the same key for the watch to take effect. Pass
-   * `null` to disable list-cache mutation entirely (useful for the
-   * detail page, which uses onEvent to invalidate sibling queries
-   * instead of patching a list).
+   * `null` to disable list-cache mutation entirely.
    */
   queryKey: readonly unknown[] | null
   /**
    * Called for every release event after the cache has been mutated.
-   * Useful to invalidate dependent queries (detail/history/resources)
-   * on the ReleaseDetail page. Captured by ref so changing this prop
-   * does not tear down the WebSocket.
+   * Captured by ref so changing this prop does not tear down the stream.
    */
   onEvent?: (event: HelmWatchEvent) => void
 }
 
 export type { HelmWatchEvent }
 
-const RECONNECT_BASE_MS = 1_000
-const RECONNECT_MAX_MS = 30_000
-
 const buildHelmWatchURL = (cluster: string, namespace?: string): string => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const base = `${protocol}//${window.location.host}`
   const params = new URLSearchParams({ cluster })
   if (namespace) params.set('namespace', namespace)
-  return `${base}/api/v1/helm/releases/watch?${params.toString()}`
+  // 같은 origin → cookie auth 자동 (withCredentials)
+  return `/api/v1/helm/releases/stream?${params.toString()}`
 }
 
 const releaseKey = (rel: HelmReleaseSummary): string =>
@@ -79,10 +71,9 @@ const applyHelmWatchEvent = (
     return items
   }
 
-  // Helm increments revision on every install/upgrade/rollback. Only
-  // accept ADDED/MODIFIED if the revision is at least the cached one —
-  // out-of-order delivery from a re-list would otherwise rewind the UI
-  // to a stale state.
+  // Helm increments revision on every install/upgrade/rollback. Only accept
+  // ADDED/MODIFIED if the revision is at least the cached one — out-of-order
+  // delivery from a re-list would otherwise rewind the UI to a stale state.
   if (idx >= 0) {
     const existing = items[idx]
     if (existing.revision > obj.revision) return items
@@ -95,24 +86,20 @@ const applyHelmWatchEvent = (
 }
 
 /**
- * useHelmWatchList — subscribes to /api/v1/helm/releases/watch and keeps
- * the named react-query cache entry in lockstep with the cluster's
- * Helm release Secrets.
+ * useHelmWatchList — /api/v1/helm/releases/stream 에 SSE 로 구독하고 named
+ * react-query cache 를 Helm release Secret 변화에 따라 갱신.
  *
- * Reconnects with exponential backoff on disconnect, capped at
- * RECONNECT_MAX_MS. JWT auth piggybacks on the cookie that the rest of
- * the app already uses — no token plumbing needed here.
+ * EventSource 가 자동 reconnect 처리 (idle timeout / 네트워크 일시 끊김).
+ * JWT auth 는 cookie 로 자동 (withCredentials).
  */
 export function useHelmWatchList(options: UseHelmWatchListOptions): void {
   const queryClient = useQueryClient()
   const { cluster, namespace, enabled = true, queryKey } = options
 
-  // Stringify queryKey for the dep array — array identity is unstable
-  // across renders, but the contents are what we care about.
+  // Stringify queryKey — array identity 가 매 render 마다 다르지만 contents 만 중요.
   const queryKeyDep = JSON.stringify(queryKey)
 
-  // Capture onEvent in a ref so changing it does not retrigger the
-  // effect (which would tear down the WebSocket).
+  // onEvent 를 ref 로 받아 prop 변경이 stream 을 끊지 않게.
   const onEventRef = useRef(options.onEvent)
   useEffect(() => {
     onEventRef.current = options.onEvent
@@ -121,20 +108,12 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
   useEffect(() => {
     if (!enabled) return
 
-    let socket: WebSocket | null = null
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-    let attempt = 0
-    let cancelled = false
+    const url = buildHelmWatchURL(cluster, namespace)
+    const es = new EventSource(url, { withCredentials: true })
 
-    const handleEvent = (raw: MessageEvent) => {
+    es.onmessage = (raw: MessageEvent) => {
       try {
-        const msg = JSON.parse(raw.data) as HelmWatchEvent | { type: 'ERROR'; error?: string }
-        if (msg.type === 'ERROR') {
-          // Backend signalled an unrecoverable error for this stream.
-          // Logging only — the close that follows will trigger reconnect.
-          console.warn('helm watch error frame', (msg as { error?: string }).error)
-          return
-        }
+        const msg = JSON.parse(raw.data) as HelmWatchEvent
         if (queryKey !== null) {
           queryClient.setQueryData(queryKey, (prev: HelmReleaseSummary[] | undefined) =>
             applyHelmWatchEvent(prev, msg),
@@ -146,47 +125,23 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
       }
     }
 
-    const connect = () => {
-      if (cancelled) return
-      const url = buildHelmWatchURL(cluster, namespace)
-      const ws = new WebSocket(url)
-      socket = ws
-
-      ws.onopen = () => {
-        attempt = 0 // success resets the backoff
+    // backend 가 startSecretWatch 실패 시 보내는 named 'error' 이벤트.
+    es.addEventListener('error', (e) => {
+      // EventSource 의 onerror 도 같은 핸들러로 들어옴 — readyState 로 구분.
+      // CLOSED = 영구 실패 (autoreconnect 안 함). CONNECTING = 일시 끊김.
+      if (es.readyState === EventSource.CLOSED) {
+        console.warn('helm watch sse closed (permanent)')
+        return
       }
-      ws.onmessage = handleEvent
-      ws.onerror = (e) => {
-        console.warn('helm watch socket error', e)
+      // CONNECTING 은 brower 가 알아서 재시도 — 우리가 할 일 0.
+      const errData = (e as MessageEvent).data
+      if (errData) {
+        console.warn('helm watch sse error frame', errData)
       }
-      ws.onclose = () => {
-        if (cancelled) return
-        // Exponential backoff with jitter — avoid hammering the server
-        // when many tabs reconnect simultaneously after a deploy.
-        const delay = Math.min(
-          RECONNECT_MAX_MS,
-          RECONNECT_BASE_MS * 2 ** Math.min(attempt, 5),
-        )
-        const jitter = Math.random() * 250
-        attempt += 1
-        reconnectTimer = setTimeout(connect, delay + jitter)
-      }
-    }
-
-    connect()
+    })
 
     return () => {
-      cancelled = true
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      if (socket) {
-        // Drop our handlers first so the in-flight close doesn't trigger
-        // a reconnect after unmount.
-        socket.onclose = null
-        socket.onerror = null
-        socket.onmessage = null
-        socket.onopen = null
-        socket.close()
-      }
+      es.close()
     }
   }, [cluster, namespace, enabled, queryClient, queryKeyDep])
 }

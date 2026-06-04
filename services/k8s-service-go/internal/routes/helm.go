@@ -16,9 +16,10 @@ import (
 func RegisterHelm(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/helm/releases", h.GetHelmReleases)
 
-	// Real-time release watch — must come BEFORE the {namespace}/{name}
-	// route so chi treats "watch" as a literal segment, not a namespace.
-	r.Get("/api/v1/helm/releases/watch", h.WatchHelmReleases)
+	// Real-time release watch (Server-Sent Events) — must come BEFORE the
+	// {namespace}/{name} route so chi treats "stream" as a literal segment,
+	// not a namespace. 이전 WebSocket route 는 즉시 제거 (호출처 frontend 한 곳).
+	r.Get("/api/v1/helm/releases/stream", h.WatchHelmReleases)
 
 	r.Get("/api/v1/helm/releases/{namespace}/{name}", h.GetHelmRelease)
 	r.Get("/api/v1/helm/releases/{namespace}/{name}/history", h.GetHelmReleaseHistory)
