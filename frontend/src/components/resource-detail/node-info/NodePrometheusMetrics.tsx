@@ -1,5 +1,5 @@
-import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
-import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
+import { usePrometheusQueries, usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, MetricCard, Sparkline } from '../PrometheusMetrics'
 
 interface NodePrometheusMetricsProps {
   name: string
@@ -51,6 +51,8 @@ export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetric
           <MetricCard label="Load (1m)" value={findNodeValue('load1')!} unit="" thresholds={{ warn: 4, danger: 8 }} />
         )}
       </div>
+      <NodeResourceTrend name={name} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(findNodeValue('disk_read') !== null || findNodeValue('disk_write') !== null) && (
           <div className="space-y-2">
@@ -88,5 +90,93 @@ export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetric
         )}
       </div>
     </PrometheusSection>
+  )
+}
+
+// NodeResourceTrend — last-24h CPU% / Memory% sparklines for the selected node.
+// node_exporter's `instance` label varies across deployments (sometimes
+// `<nodeName>:9100`, sometimes just `<nodeName>`); we render the first
+// matching series in the response. Gracefully hidden if there's no data.
+function NodeResourceTrend({ name }: { name: string }) {
+  const esc = name.replace(/"/g, '\\"')
+  // We don't pin to a single `instance="<node>:9100"` here — different
+  // node-exporter deployments expose 9100 / 9101 / no-port. Instead we ask
+  // Prometheus for *all* series and the JS layer picks the one whose
+  // `instance` contains the node name (matches the existing pattern used by
+  // findNodeValue() above).
+  const cpuQ = `100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`
+  const memQ = `(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100`
+
+  const cpu = usePrometheusRangeQuery(['node-cpu-24h', name], cpuQ, { step: 300 })
+  const mem = usePrometheusRangeQuery(['node-mem-24h', name], memQ, { step: 300 })
+
+  const pickSeries = (resp: typeof cpu.data) => {
+    if (!resp?.available || !resp.results?.length) return null
+    const match = resp.results.find((r) => {
+      const inst = String(r.metric?.instance || r.metric?.nodename || '')
+      return inst.includes(esc)
+    })
+    return (match ?? (resp.results.length === 1 ? resp.results[0] : null))?.points ?? null
+  }
+
+  const cpuPoints = pickSeries(cpu.data)
+  const memPoints = pickSeries(mem.data)
+  if (!cpuPoints && !memPoints) return null
+
+  const ranges = (pts: { v: number }[] | null) => {
+    if (!pts || pts.length === 0) return null
+    const vs = pts.map((p) => p.v)
+    return { min: Math.min(...vs), max: Math.max(...vs), avg: vs.reduce((a, b) => a + b, 0) / vs.length }
+  }
+  const cpuStats = ranges(cpuPoints)
+  const memStats = ranges(memPoints)
+
+  return (
+    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+          <span>24h CPU%</span>
+          {cpuStats && (
+            <span className="font-mono">avg {cpuStats.avg.toFixed(1)} · max {cpuStats.max.toFixed(1)}</span>
+          )}
+        </div>
+        {cpuPoints ? (
+          <Sparkline
+            points={cpuPoints}
+            width={420}
+            height={50}
+            stroke="#ef4444"
+            fillFrom="rgba(239, 68, 68, 0.28)"
+            fillTo="rgba(239, 68, 68, 0)"
+            min={0}
+            max={100}
+          />
+        ) : (
+          <div className="text-[10px] text-slate-500">(no data)</div>
+        )}
+      </div>
+      <div>
+        <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+          <span>24h Memory%</span>
+          {memStats && (
+            <span className="font-mono">avg {memStats.avg.toFixed(1)} · max {memStats.max.toFixed(1)}</span>
+          )}
+        </div>
+        {memPoints ? (
+          <Sparkline
+            points={memPoints}
+            width={420}
+            height={50}
+            stroke="#3b82f6"
+            fillFrom="rgba(59, 130, 246, 0.28)"
+            fillTo="rgba(59, 130, 246, 0)"
+            min={0}
+            max={100}
+          />
+        ) : (
+          <div className="text-[10px] text-slate-500">(no data)</div>
+        )}
+      </div>
+    </div>
   )
 }
