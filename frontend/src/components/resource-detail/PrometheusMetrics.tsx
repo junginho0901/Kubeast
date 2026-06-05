@@ -119,3 +119,66 @@ export function sumValues(resp: PrometheusQueryResponse | undefined): number | n
   if (!resp?.available || !resp.results?.length) return null
   return resp.results.reduce((sum, r) => sum + r.value, 0)
 }
+
+/**
+ * Lightweight inline-SVG sparkline. Renders one series with a stroked line
+ * and an optional gradient fill underneath. No external chart library so the
+ * detail modal bundle stays small.
+ *
+ * `points` is a chronologically-ordered list of (t, v) where t is unix
+ * seconds (ignored by the renderer — used by callers for tooltips later).
+ * If `min` / `max` are not given they're derived from the data.
+ */
+export function Sparkline({
+  points,
+  width = 240,
+  height = 48,
+  stroke = '#10b981',
+  fillFrom = 'rgba(16, 185, 129, 0.25)',
+  fillTo = 'rgba(16, 185, 129, 0)',
+  min,
+  max,
+}: {
+  points: Array<{ t: number; v: number }>
+  width?: number
+  height?: number
+  stroke?: string
+  fillFrom?: string
+  fillTo?: string
+  min?: number
+  max?: number
+}) {
+  if (!points || points.length === 0) {
+    return <div className="text-[10px] text-slate-500">(no data)</div>
+  }
+
+  const vs = points.map((p) => p.v)
+  const yMin = min ?? Math.min(...vs)
+  const yMaxRaw = max ?? Math.max(...vs)
+  const yMax = yMaxRaw === yMin ? yMin + 1 : yMaxRaw
+  const w = width
+  const h = height
+  const pad = 2
+  const stepX = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0
+  const yScale = (v: number) => {
+    const ratio = (v - yMin) / (yMax - yMin)
+    return h - pad - ratio * (h - pad * 2)
+  }
+  const coords = points.map((p, i) => ({ x: pad + i * stepX, y: yScale(p.v) }))
+  const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ')
+  const fillPath = `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ${h - pad} L ${coords[0].x.toFixed(1)} ${h - pad} Z`
+  const gradientId = `spark-grad-${Math.random().toString(36).slice(2, 9)}`
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={fillFrom} />
+          <stop offset="100%" stopColor={fillTo} />
+        </linearGradient>
+      </defs>
+      <path d={fillPath} fill={`url(#${gradientId})`} stroke="none" />
+      <path d={linePath} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
