@@ -5,10 +5,12 @@
 
 import { client } from './client'
 import type {
+  ClusterFeatures,
   DeviceClassItem,
   GPUDashboardData,
   GPUMetricsData,
   PrometheusQueryResponse,
+  PrometheusRangeResponse,
   ResourceClaimItem,
   ResourceClaimTemplateItem,
   ResourceSliceItem,
@@ -35,6 +37,26 @@ export const gpuApi = {
 
   prometheusQuery: async (query: string): Promise<PrometheusQueryResponse> => {
     const { data } = await client.get('/cluster/prometheus/query', { params: { query } })
+    return data
+  },
+
+  // Range query — Prometheus /api/v1/query_range. start/end are unix seconds;
+  // step is the resolution in seconds. Defaults backend-side: 24h window, 5m step.
+  prometheusQueryRange: async (
+    query: string,
+    opts?: { start?: number; end?: number; step?: number },
+  ): Promise<PrometheusRangeResponse> => {
+    const params: Record<string, string | number> = { query }
+    if (opts?.start != null) params.start = opts.start
+    if (opts?.end != null) params.end = opts.end
+    if (opts?.step != null) params.step = opts.step
+    const { data } = await client.get('/cluster/prometheus/query_range', { params })
+    return data
+  },
+
+  // Operator-opt-in feature flags, read once at app boot.
+  getClusterFeatures: async (): Promise<ClusterFeatures> => {
+    const { data } = await client.get('/cluster/features')
     return data
   },
 
