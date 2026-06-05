@@ -12,6 +12,8 @@ import {
 } from './DetailCommon'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, Sparkline } from './PrometheusMetrics'
 
 interface Props {
   name: string
@@ -168,6 +170,9 @@ export default function HPAInfo({ name, namespace }: Props) {
         </InfoSection>
       )}
 
+      {/* Scaling History (24h) — Prometheus-backed sparkline */}
+      <HPAScalingHistory name={name} namespace={namespace} />
+
       {/* Conditions */}
       <InfoSection title="Conditions">
         <ConditionsTable conditions={conditions} />
@@ -187,6 +192,60 @@ export default function HPAInfo({ name, namespace }: Props) {
         <KeyValueTags data={desc.annotations} />
       </InfoSection>
     </div>
+  )
+}
+
+// HPAScalingHistory — last-24h sparkline of currentReplicas from kube-state-metrics.
+// Counts "rescales" (consecutive points where the value changed) so operators
+// can spot HPAs that flap. Gracefully hidden when Prometheus is unavailable or
+// the toggle is off (handled by PrometheusSection / range-query stub).
+function HPAScalingHistory({ name, namespace }: { name: string; namespace: string }) {
+  const escName = name.replace(/"/g, '\\"')
+  const escNs = namespace.replace(/"/g, '\\"')
+  const promql = `kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="${escName}",namespace="${escNs}"}`
+  const { data } = usePrometheusRangeQuery(['hpa-replicas', namespace, name], promql, {
+    step: 300, // 5-minute resolution → 288 points over 24h
+  })
+
+  const available = !!data?.available
+  const series = data?.results?.[0]?.points ?? []
+
+  // Count rescales = transitions where value changes between consecutive samples
+  let rescales = 0
+  let minReplicas = Number.POSITIVE_INFINITY
+  let maxReplicas = Number.NEGATIVE_INFINITY
+  for (let i = 0; i < series.length; i++) {
+    const v = series[i].v
+    if (v < minReplicas) minReplicas = v
+    if (v > maxReplicas) maxReplicas = v
+    if (i > 0 && series[i].v !== series[i - 1].v) rescales++
+  }
+  if (!Number.isFinite(minReplicas)) minReplicas = 0
+  if (!Number.isFinite(maxReplicas)) maxReplicas = 0
+
+  return (
+    <PrometheusSection available={available} title="Scaling History (24h)">
+      {series.length === 0 ? (
+        <div className="text-[11px] text-slate-500">
+          Requires kube-state-metrics with HPA series scraped.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span>{rescales} rescale{rescales === 1 ? '' : 's'} · {series.length} samples</span>
+            <span className="font-mono">min {minReplicas} · max {maxReplicas}</span>
+          </div>
+          <Sparkline
+            points={series}
+            width={480}
+            height={56}
+            stroke="#34d399"
+            fillFrom="rgba(52, 211, 153, 0.30)"
+            fillTo="rgba(52, 211, 153, 0)"
+          />
+        </div>
+      )}
+    </PrometheusSection>
   )
 }
 
