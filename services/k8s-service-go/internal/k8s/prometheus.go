@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -55,13 +57,40 @@ var (
 
 const promCacheTTL = 10 * time.Minute
 
-// PrometheusAvailable returns true if a Prometheus service was discovered.
+// PrometheusFeatureEnabled reports whether the operator has explicitly
+// enabled Prometheus integration via the PROMETHEUS_ENABLED env var
+// (wired through the helm ConfigMap). When unset the integration is
+// considered enabled so local-dev (no helm) keeps auto-discovery.
+func PrometheusFeatureEnabled() bool {
+	raw := strings.TrimSpace(os.Getenv("PROMETHEUS_ENABLED"))
+	if raw == "" {
+		return true
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true
+	}
+	return b
+}
+
+// PrometheusAvailable returns true if a Prometheus service was discovered
+// AND the integration has been enabled by the operator. When disabled all
+// query methods short-circuit so the UI never sees Prometheus data.
 func (s *Service) PrometheusAvailable(ctx context.Context) bool {
+	if !PrometheusFeatureEnabled() {
+		return false
+	}
 	return s.getPromService(ctx) != nil
 }
 
 // PrometheusStatus returns status information about the Prometheus integration.
 func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
+	if !PrometheusFeatureEnabled() {
+		return map[string]interface{}{
+			"available": false,
+			"message":   "Prometheus integration disabled (features.prometheus.enabled=false)",
+		}
+	}
 	svc := s.getPromService(ctx)
 	if svc == nil {
 		return map[string]interface{}{
@@ -78,6 +107,9 @@ func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 // PrometheusQuery runs an instant query and returns parsed results.
 // Returns (nil, nil) if Prometheus is unavailable.
 func (s *Service) PrometheusQuery(ctx context.Context, query string) ([]PrometheusQueryResult, error) {
+	if !PrometheusFeatureEnabled() {
+		return nil, nil
+	}
 	svc := s.getPromService(ctx)
 	if svc == nil {
 		return nil, nil
@@ -102,11 +134,73 @@ func (s *Service) PrometheusQuery(ctx context.Context, query string) ([]Promethe
 
 // PrometheusQueryRaw runs an instant query and returns raw Prometheus result maps.
 func (s *Service) PrometheusQueryRaw(ctx context.Context, query string) ([]map[string]interface{}, error) {
+	if !PrometheusFeatureEnabled() {
+		return nil, nil
+	}
 	svc := s.getPromService(ctx)
 	if svc == nil {
 		return nil, nil
 	}
 	return s.prometheusViaProxy(ctx, svc, "/api/v1/query?query="+url.QueryEscape(query))
+}
+
+// PrometheusRangeSeries is one labelled time series returned by a range query.
+// Points are ordered chronologically; each pair is (unix_seconds, value).
+type PrometheusRangeSeries struct {
+	Metric map[string]interface{} `json:"metric"`
+	Points []PrometheusRangePoint `json:"points"`
+}
+
+// PrometheusRangePoint is a single (timestamp, value) sample.
+type PrometheusRangePoint struct {
+	T float64 `json:"t"` // unix seconds (Prometheus native)
+	V float64 `json:"v"`
+}
+
+// PrometheusQueryRange runs a Prometheus /api/v1/query_range request and
+// returns one PrometheusRangeSeries per label set. Returns (nil, nil) if
+// the feature is disabled or Prometheus was not discovered.
+//
+// step is the resolution in seconds (e.g. 300 = one sample every 5 minutes).
+func (s *Service) PrometheusQueryRange(ctx context.Context, query string, start, end time.Time, stepSeconds int) ([]PrometheusRangeSeries, error) {
+	if !PrometheusFeatureEnabled() {
+		return nil, nil
+	}
+	svc := s.getPromService(ctx)
+	if svc == nil {
+		return nil, nil
+	}
+	if stepSeconds <= 0 {
+		stepSeconds = 60
+	}
+	params := url.Values{}
+	params.Set("query", query)
+	params.Set("start", strconv.FormatInt(start.Unix(), 10))
+	params.Set("end", strconv.FormatInt(end.Unix(), 10))
+	params.Set("step", strconv.Itoa(stepSeconds))
+	raw, err := s.prometheusViaProxy(ctx, svc, "/api/v1/query_range?"+params.Encode())
+	if err != nil {
+		return nil, err
+	}
+	results := make([]PrometheusRangeSeries, 0, len(raw))
+	for _, r := range raw {
+		metric, _ := r["metric"].(map[string]interface{})
+		values, _ := r["values"].([]interface{})
+		points := make([]PrometheusRangePoint, 0, len(values))
+		for _, pt := range values {
+			pair, ok := pt.([]interface{})
+			if !ok || len(pair) < 2 {
+				continue
+			}
+			t, _ := pair[0].(float64)
+			strVal, _ := pair[1].(string)
+			var v float64
+			fmt.Sscanf(strVal, "%f", &v)
+			points = append(points, PrometheusRangePoint{T: t, V: v})
+		}
+		results = append(results, PrometheusRangeSeries{Metric: metric, Points: points})
+	}
+	return results, nil
 }
 
 // ========== Internal ==========
