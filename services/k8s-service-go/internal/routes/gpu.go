@@ -18,6 +18,7 @@ func RegisterGPU(r chi.Router, h *handler.Handler) {
 	// Prometheus integration
 	r.Get("/api/v1/prometheus/status", h.GetPrometheusStatus)
 	r.Get("/api/v1/prometheus/query", h.PrometheusQuery)
+	r.Get("/api/v1/prometheus/query_range", h.PrometheusQueryRange)
 
 	// DRA - DeviceClasses (cluster-scoped)
 	r.Get("/api/v1/deviceclasses", h.GetDeviceClasses)
