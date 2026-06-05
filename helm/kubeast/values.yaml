@@ -68,6 +68,17 @@ networkPolicy:
   # egress. Empty string = allow private (10/12/192.168) ranges + public.
   apiserverCIDR: ""
 
+# --- Feature flags ---
+# Optional integrations the operator can opt in/out of without changing
+# manifests. When prometheus.enabled=false the frontend never issues
+# Prometheus queries and every PrometheusSection stays hidden, even if
+# a Prometheus service happens to be discoverable in the target cluster.
+# Default is `false` so a fresh install behaves the same as before the
+# Prometheus dependency was introduced; flip to `true` to opt in.
+features:
+  prometheus:
+    enabled: false
+
 # --- Image overrides (usually not needed) ---
 images:
   frontend: jeonginho/kubeast-frontend
