@@ -3,6 +3,7 @@ package handler
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -66,6 +67,10 @@ func (h *Handler) GetPodYAML(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPodLogs handles GET /api/v1/namespaces/{namespace}/pods/{name}/logs.
+//
+// Audit: 명시적 사용자 행위 (PodInfo 의 "Load Logs" 또는 PodLogsTab 의
+// "Download" 버튼). logs 에 token / password 가 노출되기도 하니 누가 언제 어떤
+// container 의 몇 줄을 가져갔는지 기록. 자동 폴링 없으니 noise X.
 func (h *Handler) GetPodLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
@@ -73,6 +78,15 @@ func (h *Handler) GetPodLogs(w http.ResponseWriter, r *http.Request) {
 	container := queryParam(r, "container", "")
 	tailLines := queryParamInt(r, "tail_lines", 100)
 	data, err := h.svc.GetPodLogs(ctx, namespace, name, container, int64(tailLines))
+
+	// after payload — container + tail_lines (logs 본문은 audit 에 저장 X — DB
+	// 폭증 + 자체 logs 가 audit 데이터 라 순환 문제).
+	after, _ := json.Marshal(map[string]interface{}{
+		"container":  container,
+		"tail_lines": tailLines,
+	})
+	h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+
 	if err != nil {
 		h.handleError(w, err)
 		return
