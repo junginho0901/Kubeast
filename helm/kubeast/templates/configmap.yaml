@@ -35,3 +35,5 @@ data:
   TOOL_SERVER_URL_ADMIN: "http://tool-server:8086"
   TOOL_SERVER_TOKEN_PASSTHROUGH: "true"
   TOOL_SERVER_USE_INCLUSTER: "false"
+  # Feature flags — wired to frontend via /api/v1/cluster/features.
+  PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
