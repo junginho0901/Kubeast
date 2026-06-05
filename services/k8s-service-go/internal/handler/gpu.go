@@ -2,9 +2,12 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -85,6 +88,83 @@ func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"available": true,
 		"results":   items,
+	})
+}
+
+// PrometheusQueryRange backs GET /api/v1/prometheus/query_range. Same response
+// shape as the instant variant but each result has `points: [{t, v}]` instead
+// of a single `value`. Used by feature detail modals (HPA scaling history,
+// Node 24h CPU/Mem trend) — see refactor-plan.md.
+func (h *Handler) PrometheusQueryRange(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query().Get("query")
+	if q == "" {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"detail": "query parameter required"})
+		return
+	}
+
+	// Defaults: 24h window, 5m step.
+	end := time.Now()
+	start := end.Add(-24 * time.Hour)
+	stepSec := 300
+
+	if v := r.URL.Query().Get("start"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			start = time.Unix(n, 0)
+		}
+	}
+	if v := r.URL.Query().Get("end"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			end = time.Unix(n, 0)
+		}
+	}
+	if v := r.URL.Query().Get("step"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			stepSec = n
+		}
+	}
+
+	if !h.svc.PrometheusAvailable(ctx) {
+		response.JSON(w, http.StatusOK, map[string]interface{}{
+			"available": false,
+			"results":   []interface{}{},
+		})
+		return
+	}
+
+	results, err := h.svc.PrometheusQueryRange(ctx, q, start, end, stepSec)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	items := make([]map[string]interface{}, 0, len(results))
+	for _, r := range results {
+		pts := make([]map[string]float64, 0, len(r.Points))
+		for _, p := range r.Points {
+			pts = append(pts, map[string]float64{"t": p.T, "v": p.V})
+		}
+		items = append(items, map[string]interface{}{
+			"metric": r.Metric,
+			"points": pts,
+		})
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"available": true,
+		"results":   items,
+	})
+}
+
+// GetClusterFeatures backs GET /api/v1/cluster/features. Returns the set of
+// optional integrations the operator has enabled. The frontend reads this
+// once at boot and uses it to skip e.g. all Prometheus queries when the
+// integration is disabled.
+func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"prometheus": map[string]interface{}{
+			"enabled": k8s.PrometheusFeatureEnabled(),
+		},
 	})
 }
 
