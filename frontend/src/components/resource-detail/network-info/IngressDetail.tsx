@@ -1,5 +1,7 @@
 import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
 import { ResourceLink } from '../ResourceLink'
+import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 
 interface Props {
   name: string
@@ -118,7 +120,75 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
+      <IngressLatencyMetrics name={name} namespace={namespace} />
+
       {Object.keys(labels).length > 0 && <InfoSection title="Labels"><KeyValueTags data={labels} /></InfoSection>}
     </>
+  )
+}
+
+// IngressLatencyMetrics — pulls request_duration_seconds_bucket histograms
+// from nginx-ingress-controller and renders P50/P95/P99 as MetricCards.
+// Auto-picks display unit (ms < 1s, otherwise s) based on the largest value.
+// Hidden entirely when Prometheus is unavailable / toggle off.
+function IngressLatencyMetrics({ name, namespace }: { name: string; namespace?: string }) {
+  const ns = namespace ?? ''
+  const escName = name.replace(/"/g, '\\"')
+  const escNs = ns.replace(/"/g, '\\"')
+  const selector = `ingress="${escName}",exported_namespace="${escNs}"`
+  const histBucket = `nginx_ingress_controller_request_duration_seconds_bucket{${selector}}`
+  const buildQ = (q: number) =>
+    `histogram_quantile(${q}, sum(rate(${histBucket}[5m])) by (le))`
+
+  const metrics = usePrometheusQueries(
+    ['ingress-latency', ns, name],
+    [
+      { name: 'p50', promql: buildQ(0.5) },
+      { name: 'p95', promql: buildQ(0.95) },
+      { name: 'p99', promql: buildQ(0.99) },
+    ],
+    { enabled: !!name },
+  )
+
+  const pick = (key: string): number | null => {
+    const r = metrics.data[key]
+    if (!r?.available || !r.results?.length) return null
+    const v = r.results[0]?.value
+    return typeof v === 'number' && Number.isFinite(v) ? v : null
+  }
+
+  const p50 = pick('p50')
+  const p95 = pick('p95')
+  const p99 = pick('p99')
+  const hasAny = p50 !== null || p95 !== null || p99 !== null
+
+  // Promql returns seconds. If the largest measured value is < 1s, switch to ms
+  // so 90% of dashboards (typical web latencies) render nicely.
+  const maxVal = Math.max(p50 ?? 0, p95 ?? 0, p99 ?? 0)
+  const useMs = maxVal > 0 && maxVal < 1
+  const toDisplay = (v: number | null) =>
+    v == null ? null : (useMs ? v * 1000 : v)
+  const unit = useMs ? 'ms' : 's'
+
+  return (
+    <PrometheusSection available={metrics.available} title="Response Time">
+      {!hasAny ? (
+        <div className="text-[11px] text-slate-500">
+          Requires nginx-ingress-controller with metrics scraped.
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          {p50 !== null && (
+            <MetricCard label="P50" value={toDisplay(p50)!} unit={unit} thresholds={{ warn: useMs ? 200 : 0.2, danger: useMs ? 500 : 0.5 }} />
+          )}
+          {p95 !== null && (
+            <MetricCard label="P95" value={toDisplay(p95)!} unit={unit} thresholds={{ warn: useMs ? 500 : 0.5, danger: useMs ? 1000 : 1 }} />
+          )}
+          {p99 !== null && (
+            <MetricCard label="P99" value={toDisplay(p99)!} unit={unit} thresholds={{ warn: useMs ? 1000 : 1, danger: useMs ? 2000 : 2 }} />
+          )}
+        </div>
+      )}
+    </PrometheusSection>
   )
 }
