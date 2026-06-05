@@ -15,6 +15,9 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/cluster-config", h.GetClusterConfig)
 	r.Get("/api/v1/componentstatuses", h.GetComponentStatuses)
 
+	// Cluster feature flags (used by frontend to opt out of e.g. Prometheus).
+	r.Get("/api/v1/features", h.GetClusterFeatures)
+
 	// Namespaces
 	r.Get("/api/v1/namespaces", h.GetNamespaces)
 	r.Post("/api/v1/namespaces", h.CreateNamespace)
