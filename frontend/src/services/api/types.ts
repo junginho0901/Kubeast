@@ -575,6 +575,28 @@ export interface PrometheusQueryResponse {
   results: PrometheusQueryResult[]
 }
 
+// Range query — one (t, v) per sample, points ordered chronologically.
+export interface PrometheusRangePoint {
+  t: number // unix seconds
+  v: number
+}
+
+export interface PrometheusRangeSeries {
+  metric: Record<string, string>
+  points: PrometheusRangePoint[]
+}
+
+export interface PrometheusRangeResponse {
+  available: boolean
+  results: PrometheusRangeSeries[]
+}
+
+// /api/v1/cluster/features — operator-opt-in toggles, read once at boot
+// and cached on the React Query client. See helm values.yaml `features.*`.
+export interface ClusterFeatures {
+  prometheus: { enabled: boolean }
+}
+
 export interface DeviceClassItem {
   name: string
   labels?: Record<string, string>
