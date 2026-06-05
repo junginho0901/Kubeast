@@ -6,6 +6,31 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized, getAccessToken } from '@/services/auth'
 
+/*
+ * FUTURE — exec session audit log persistence.
+ *
+ * Today exec output is wired directly between the kubelet WS and xterm.js;
+ * nothing is persisted. Operators have asked us to record exec sessions to
+ * an audit DB so post-hoc forensics is possible (who ran what command in
+ * which pod, when, and what came back).
+ *
+ * Implementation sketch (out of scope for this PR — see refactor-plan.md
+ * Out-of-Scope #4):
+ *   - new DB table `pod_exec_sessions` (id, actor, pod, namespace, container,
+ *     command, started_at, ended_at) + `pod_exec_chunks` (session_id, ts,
+ *     direction, payload_bytes)
+ *   - audit_writer.go gains a streaming writer used by the ws handler in
+ *     k8s-service exec.go to mirror stdout/stderr (caps payload + sampling
+ *     to keep DB bounded)
+ *   - frontend captures input keystrokes (already on `term.onData`) and
+ *     POSTs them alongside session start/end markers so the audit log can
+ *     be replayed deterministically
+ *   - admin UI page to list & replay sessions
+ *
+ * Skipping in this drop because it spans DB migration + new service code +
+ * UI page, which is too large for a single agent run.
+ */
+
 interface PodExecTerminalProps {
   podName: string
   namespace: string
