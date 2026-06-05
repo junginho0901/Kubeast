@@ -760,6 +760,13 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
+      {/* Image Pull History — filters the standard events list to image-related
+          reasons (Pulling/Pulled/Failed/BackOff) in the last hour, so operators
+          can spot slow pulls / ErrImagePull / ImagePullBackOff without scanning
+          the full event stream. Renders only when ≥1 matching event is present,
+          independent of the Prometheus toggle. */}
+      <PodImagePullHistory events={events} />
+
       {/* Events */}
       {events.length > 0 && (
         <InfoSection title="Events">
@@ -820,5 +827,73 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         </ModalOverlay>
       )}
     </>
+  )
+}
+
+// PodImagePullHistory — last-hour image-pull related events. Filters the
+// describe-events list by reason ∈ {Pulling, Pulled, Failed, BackOff} where
+// the message mentions "image" (covers ErrImagePull / ImagePullBackOff /
+// Failed-to-pull). Section is hidden when there are no matches; it does NOT
+// gate on Prometheus availability.
+function PodImagePullHistory({ events }: { events: any[] }) {
+  if (!Array.isArray(events) || events.length === 0) return null
+  const PULL_REASONS = new Set(['Pulling', 'Pulled', 'Failed', 'BackOff'])
+  const oneHourAgo = Date.now() - 60 * 60 * 1000
+
+  const filtered = events
+    .filter((e) => {
+      const reason = String(e?.reason || '')
+      if (!PULL_REASONS.has(reason)) return false
+      // For Failed/BackOff, only count when the message references images so
+      // we don't grab unrelated CrashLoopBackOff / Failed-mount events.
+      const msg = String(e?.message || '').toLowerCase()
+      if (reason === 'Failed' || reason === 'BackOff') {
+        if (!msg.includes('image') && !msg.includes('pull')) return false
+      }
+      const tsStr = e?.last_timestamp || e?.lastTimestamp || e?.first_timestamp || e?.firstTimestamp
+      const ts = tsStr ? Date.parse(tsStr) : NaN
+      if (!Number.isFinite(ts)) return true // keep events without parseable ts
+      return ts >= oneHourAgo
+    })
+    .sort((a, b) => {
+      const ta = Date.parse(a?.last_timestamp || a?.lastTimestamp || a?.first_timestamp || a?.firstTimestamp || '') || 0
+      const tb = Date.parse(b?.last_timestamp || b?.lastTimestamp || b?.first_timestamp || b?.firstTimestamp || '') || 0
+      return tb - ta
+    })
+
+  if (filtered.length === 0) return null
+
+  const reasonBadge = (reason: string) => {
+    if (reason === 'Failed' || reason === 'BackOff') return 'badge-error'
+    if (reason === 'Pulling') return 'badge-info'
+    if (reason === 'Pulled') return 'badge-info'
+    return 'badge-info'
+  }
+
+  return (
+    <InfoSection title={`Image Pull History (${filtered.length}, last 1h)`}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs table-fixed min-w-[560px]">
+          <thead className="text-slate-400">
+            <tr>
+              <th className="text-left py-1 w-[14%]">Reason</th>
+              <th className="text-left py-1 w-[16%]">When</th>
+              <th className="text-left py-1 w-[10%]">Count</th>
+              <th className="text-left py-1 w-[60%]">Message</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {filtered.map((e: any, i: number) => (
+              <tr key={`${e.reason}-${i}`} className="text-slate-200">
+                <td className="py-1 pr-2"><span className={`badge ${reasonBadge(String(e.reason || ''))}`}>{e.reason || '-'}</span></td>
+                <td className="py-1 pr-2">{fmtRel(e.last_timestamp || e.lastTimestamp || e.first_timestamp || e.firstTimestamp)}</td>
+                <td className="py-1 pr-2 font-mono">{e.count ?? 1}</td>
+                <td className="py-1 pr-2 break-words whitespace-normal">{e.message || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </InfoSection>
   )
 }
