@@ -1,11 +1,85 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter } from '@/services/api'
-import { ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Search } from 'lucide-react'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
+
+// Custom dropdown — Kubeast 의 다른 곳 (ClusterView NamespaceDropdown / PodLogsTab
+// Container dropdown 등) 과 동일 패턴. 외부 클릭 / ESC 로 close.
+interface DropdownProps<T> {
+  value: T
+  options: Array<{ value: T; label: string }>
+  onChange: (v: T) => void
+  minWidth?: string
+}
+
+function CustomDropdown<T extends string | number>({
+  value,
+  options,
+  onChange,
+  minWidth = 'min-w-[120px]',
+}: DropdownProps<T>) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [open])
+
+  const selected = options.find((o) => o.value === value) ?? options[0]
+
+  return (
+    <div className="relative mt-1" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full ${minWidth} px-2 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
+      >
+        <span className="font-medium truncate">{selected?.label ?? '-'}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-600 rounded shadow-xl z-50 max-h-[300px] overflow-y-auto">
+          {options.map((opt) => (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() => {
+                onChange(opt.value)
+                setOpen(false)
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-2 first:rounded-t last:rounded-b"
+            >
+              {value === opt.value && (
+                <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+              )}
+              <span className={value === opt.value ? 'font-medium' : ''}>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AdminAudit() {
   const { t } = useTranslation()
@@ -104,17 +178,15 @@ export default function AdminAudit() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="flex flex-col text-xs text-slate-300">
             {tr('adminAudit.filter.service', 'Service')}
-            <select
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+            <CustomDropdown
               value={draft.service ?? ''}
-              onChange={(e) => setDraft({ ...draft, service: e.target.value || undefined })}
-            >
-              {SERVICES.map((s) => (
-                <option key={s || 'all'} value={s}>
-                  {s || tr('adminAudit.filter.any', '전체')}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setDraft({ ...draft, service: v || undefined })}
+              options={SERVICES.map((s) => ({
+                value: s,
+                label: s || tr('adminAudit.filter.any', '전체'),
+              }))}
+              minWidth="min-w-[140px]"
+            />
           </label>
 
           <label className="flex flex-col text-xs text-slate-300">
@@ -141,22 +213,20 @@ export default function AdminAudit() {
 
           <label className="flex flex-col text-xs text-slate-300">
             {tr('adminAudit.filter.result', '결과')}
-            <select
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+            <CustomDropdown
               value={draft.result ?? ''}
-              onChange={(e) =>
+              onChange={(v) =>
                 setDraft({
                   ...draft,
-                  result: (e.target.value as 'success' | 'failure' | '') || undefined,
+                  result: (v as 'success' | 'failure' | '') || undefined,
                 })
               }
-            >
-              {RESULTS.map((r) => (
-                <option key={r || 'all'} value={r}>
-                  {r || tr('adminAudit.filter.any', '전체')}
-                </option>
-              ))}
-            </select>
+              options={RESULTS.map((r) => ({
+                value: r,
+                label: r || tr('adminAudit.filter.any', '전체'),
+              }))}
+              minWidth="min-w-[140px]"
+            />
           </label>
 
           <label className="flex flex-col text-xs text-slate-300">
@@ -201,17 +271,12 @@ export default function AdminAudit() {
 
           <label className="flex flex-col text-xs text-slate-300">
             {tr('adminAudit.filter.limit', '페이지당 건수')}
-            <select
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+            <CustomDropdown
               value={draft.limit ?? 50}
-              onChange={(e) => setDraft({ ...draft, limit: Number(e.target.value) })}
-            >
-              {[25, 50, 100, 200].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setDraft({ ...draft, limit: Number(v) })}
+              options={[25, 50, 100, 200].map((n) => ({ value: n, label: String(n) }))}
+              minWidth="min-w-[140px]"
+            />
           </label>
         </div>
 
@@ -235,8 +300,10 @@ export default function AdminAudit() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg bg-slate-800/30 border border-slate-700 overflow-hidden">
-        <table className="w-full text-sm">
+      {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
+          table 의 min-w-[1100px] 로 컬럼이 너무 압축되지 않게 보장. */}
+      <div className="rounded-lg bg-slate-800/30 border border-slate-700 overflow-x-auto">
+        <table className="w-full min-w-[1100px] text-sm">
           <thead className="bg-slate-800 text-slate-300">
             <tr>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.time', '시각')}</th>
