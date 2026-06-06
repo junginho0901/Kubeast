@@ -147,7 +147,7 @@ func newServiceWithFakes(t *testing.T) *Service {
 	)
 
 	s := &Service{}
-	s.active.Store(&clientBundle{
+	s.defaultBundle.Store(&clientBundle{
 		dynamic:   fakeDyn,
 		discovery: fakeDiscovery,
 	})

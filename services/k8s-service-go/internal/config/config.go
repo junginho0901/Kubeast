@@ -14,6 +14,11 @@ type Config struct {
 	InCluster       bool
 	KubeconfigWatch bool
 
+	// Multi-cluster
+	DeploymentMode string // "k8s" | "docker" — selects the kubeconfig Secret store
+	PodNamespace   string // namespace holding per-cluster kubeconfig Secrets (k8s mode)
+	KubeconfigDir  string // directory holding per-cluster kubeconfig files (docker mode)
+
 	// Auth
 	AuthJWKSURL    string
 	JWTIssuer      string
@@ -44,6 +49,10 @@ func Load() Config {
 		KubeconfigPath:  pkgconfig.GetEnv("KUBECONFIG_PATH", ""),
 		InCluster:       pkgconfig.GetEnvBool("IN_CLUSTER", false),
 		KubeconfigWatch: pkgconfig.GetEnvBool("KUBECONFIG_WATCH", false),
+
+		DeploymentMode: pkgconfig.GetEnv("DEPLOYMENT_MODE", "k8s"),
+		PodNamespace:   pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
+		KubeconfigDir:  pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),
 
 		AuthJWKSURL:    pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
 		JWTIssuer:      pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),

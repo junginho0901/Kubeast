@@ -14,6 +14,8 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
@@ -23,6 +25,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -44,20 +47,23 @@ func main() {
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer bootCancel()
 
-	var auditStore audit.Writer
+	// The pool is required for the cluster registry, so it is kept alive even
+	// when the audit writer falls back to slog.
 	pgPool, pgErr := pgxpool.New(bootCtx, cfg.DatabaseURLForPgx())
-	if pgErr == nil {
-		pgErr = pgPool.Ping(bootCtx)
-	}
 	if pgErr != nil {
-		slog.Warn("audit: Postgres unavailable, falling back to slog writer", "error", pgErr)
+		slog.Error("failed to create postgres pool", "error", pgErr)
+		os.Exit(1)
+	}
+	defer pgPool.Close()
+
+	var auditStore audit.Writer
+	if err := pgPool.Ping(bootCtx); err != nil {
+		slog.Warn("audit: Postgres unreachable at boot, using slog writer", "error", err)
 		auditStore = audit.NewSlogStore(audit.ServiceK8s)
 	} else {
-		defer pgPool.Close()
 		store := audit.NewPostgresStore(pgPool, audit.ServiceK8s)
 		if err := store.EnsureSchema(bootCtx); err != nil {
-			slog.Warn("audit: schema migration failed, falling back to slog writer", "error", err)
-			pgPool.Close()
+			slog.Warn("audit: schema migration failed, using slog writer", "error", err)
 			auditStore = audit.NewSlogStore(audit.ServiceK8s)
 		} else {
 			auditStore = store
@@ -65,19 +71,30 @@ func main() {
 		}
 	}
 
-	// Init Kubernetes service
-	k8sSvc, err := k8s.NewService(cfg.KubeconfigPath, cfg.InCluster, cfg.KubeconfigWatch, redisCache)
+	// Cluster registry: per-cluster kubeconfigs are read at request time (no
+	// rollout on registration). In k8s mode they live in Secrets read via the
+	// in-cluster ServiceAccount; in docker mode they are files on disk.
+	var secretStore cluster.SecretReader
+	if cfg.DeploymentMode == "docker" {
+		secretStore = cluster.NewFilesystemSecretStore(cfg.KubeconfigDir)
+	} else if selfCfg, scErr := rest.InClusterConfig(); scErr == nil {
+		if selfClient, scErr := kubernetes.NewForConfig(selfCfg); scErr == nil {
+			secretStore = cluster.NewK8sSecretStore(selfClient, cfg.PodNamespace)
+		} else {
+			slog.Warn("cluster: self clientset for secret store failed", "err", scErr)
+		}
+	}
+	registry := cluster.NewPostgresRegistry(pgPool, secretStore)
+
+	// Init Kubernetes service (cluster-aware; starts even if unconfigured).
+	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	k8sSvc, err := k8s.NewService(startCtx, registry, cfg.KubeconfigWatch, redisCache)
+	startCancel()
 	if err != nil {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
 	}
-
-	// Start kubeconfig hot-reload watcher (docker mode).
-	if cfg.KubeconfigWatch {
-		watcherCtx, cancelWatcher := context.WithCancel(context.Background())
-		defer cancelWatcher()
-		go k8sSvc.WatchKubeconfig(watcherCtx)
-	}
+	k8sSvc.SetHelmKubeconfigPath(cfg.KubeconfigPath)
 
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{

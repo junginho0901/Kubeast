@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -25,9 +27,9 @@ import (
 )
 
 // clientBundle holds all Kubernetes clients derived from a single REST config.
-// It is swapped atomically when the kubeconfig file is hot-reloaded, so
-// in-flight requests keep using the bundle they captured and never observe a
-// torn state.
+// One bundle exists per managed cluster; it is swapped atomically when that
+// cluster's kubeconfig is reloaded, so in-flight requests keep using the bundle
+// they captured and never observe a torn state.
 type clientBundle struct {
 	clientset  *kubernetes.Clientset
 	dynamic    dynamic.Interface
@@ -35,13 +37,24 @@ type clientBundle struct {
 	restConfig *rest.Config
 }
 
-// Service is the core Kubernetes service providing access to all cluster resources.
-type Service struct {
-	active atomic.Pointer[clientBundle]
+// Close releases resources held by the bundle. There are no long-lived
+// informers yet; this is the cleanup hook for LRU eviction (load handling).
+func (b *clientBundle) Close() error { return nil }
 
-	kubeconfigPath string
-	inCluster      bool
-	watchEnabled   bool
+// Service is the core Kubernetes service. It resolves a clientBundle per cluster
+// from a cluster.Registry, building each lazily on first use. Context-less
+// accessors target the registry's default cluster; the *For(ctx) variants
+// target the cluster carried in the request context.
+type Service struct {
+	registry      cluster.Registry
+	bundles       sync.Map // map[cluster.ID]*atomic.Pointer[clientBundle]
+	defaultBundle atomic.Pointer[clientBundle]
+
+	// helmKubeconfigPath is the legacy env kubeconfig path, kept only for the
+	// Helm SDK until it becomes cluster-aware. Not used to build bundles.
+	helmKubeconfigPath string
+
+	watchEnabled bool
 
 	cache *cache.Cache
 
@@ -62,95 +75,161 @@ type Service struct {
 	apiResourcesAt    time.Time
 }
 
-// NewService creates a new K8s service.
-//
-// When watchEnabled is true and the kubeconfig file is missing at startup, the
-// Service is returned without an active clientBundle; callers must invoke
-// WatchKubeconfig so the first Create/Write event can populate it. In all other
-// configurations an error is returned on failure.
-func NewService(kubeconfigPath string, inCluster bool, watchEnabled bool, c *cache.Cache) (*Service, error) {
+var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
+
+// NewService creates a K8s service backed by registry. Failure isolation: if no
+// clusters are registered yet (pre-Setup) or the default cluster is unreachable
+// at startup, the service still starts; bundles are built lazily on first use.
+func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache) (*Service, error) {
 	s := &Service{
-		kubeconfigPath: kubeconfigPath,
-		inCluster:      inCluster,
-		watchEnabled:   watchEnabled,
-		cache:          c,
-		prom:           &promCache{},
+		registry:     registry,
+		watchEnabled: watchEnabled,
+		cache:        c,
+		prom:         &promCache{},
 	}
 
-	if inCluster {
-		cfg, err := rest.InClusterConfig()
-		if err != nil {
-			return nil, fmt.Errorf("in-cluster config: %w", err)
-		}
-		slog.Info("using in-cluster config")
-		if err := s.installBundle(cfg); err != nil {
-			return nil, err
+	defaultID, err := registry.Default(ctx)
+	if err != nil {
+		// Not configured yet: no clusters registered (ErrNotFound), the schema
+		// is still being created by auth-service, or the DB is booting. Start
+		// anyway — bundles resolve lazily once a cluster is registered.
+		if !errors.Is(err, cluster.ErrNotFound) {
+			slog.Warn("k8s: cluster registry not ready at startup, continuing", "err", err)
+		} else {
+			slog.Info("k8s: no clusters registered yet; starting unconfigured")
 		}
 		return s, nil
 	}
-
-	if kubeconfigPath != "" && fileExists(kubeconfigPath) {
-		if err := s.reloadFromPath(kubeconfigPath); err != nil {
-			return nil, err
-		}
-		slog.Info("using kubeconfig", "path", kubeconfigPath)
-		return s, nil
+	if b, err := s.For(ctx, defaultID); err != nil {
+		slog.Warn("k8s: default cluster unreachable at startup, continuing",
+			"cluster", defaultID, "err", err)
+	} else {
+		s.defaultBundle.Store(b)
 	}
-
-	if watchEnabled {
-		// Docker-mode first boot: file may not exist yet. Watcher will
-		// populate the bundle when the file arrives.
-		slog.Warn("kubeconfig not found; waiting for watcher", "path", kubeconfigPath)
-		return s, nil
-	}
-
-	home, _ := os.UserHomeDir()
-	defaultPath := filepath.Join(home, ".kube", "config")
-	if err := s.reloadFromPath(defaultPath); err != nil {
-		return nil, fmt.Errorf("default kubeconfig: %w", err)
-	}
-	slog.Info("using default kubeconfig", "path", defaultPath)
 	return s, nil
 }
 
-// installBundle builds clients from a REST config and stores them atomically.
-func (s *Service) installBundle(cfg *rest.Config) error {
+// SetHelmKubeconfigPath records the legacy env kubeconfig path used by the Helm
+// SDK. (Helm becomes cluster-aware in a later change.)
+func (s *Service) SetHelmKubeconfigPath(p string) { s.helmKubeconfigPath = p }
+
+// buildClientBundle constructs a clientBundle from cluster.Info. The connection
+// mode is chosen by which field is set. No connection test is performed — the
+// build is lazy and the first API call surfaces an unreachable cluster.
+func buildClientBundle(info cluster.Info) (*clientBundle, error) {
+	var (
+		cfg *rest.Config
+		err error
+	)
+	switch {
+	case info.InCluster:
+		cfg, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, fmt.Errorf("in-cluster config: %w", err)
+		}
+	case info.KubeconfigBlob != "":
+		cfg, err = clientcmd.RESTConfigFromKubeConfig([]byte(info.KubeconfigBlob))
+		if err != nil {
+			return nil, fmt.Errorf("kubeconfig blob: %w", err)
+		}
+	case info.KubeconfigPath != "":
+		cfg, err = clientcmd.BuildConfigFromFlags("", info.KubeconfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("kubeconfig %s: %w", info.KubeconfigPath, err)
+		}
+	default:
+		home, _ := os.UserHomeDir()
+		path := filepath.Join(home, ".kube", "config")
+		cfg, err = clientcmd.BuildConfigFromFlags("", path)
+		if err != nil {
+			return nil, fmt.Errorf("default kubeconfig: %w", err)
+		}
+	}
+
 	cfg.QPS = 100
 	cfg.Burst = 200
-
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("create clientset: %w", err)
+		return nil, fmt.Errorf("create clientset: %w", err)
 	}
 	dynClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("create dynamic client: %w", err)
+		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
-	s.active.Store(&clientBundle{
+	return &clientBundle{
 		clientset:  clientset,
 		dynamic:    dynClient,
 		discovery:  clientset.Discovery(),
 		restConfig: cfg,
-	})
-	return nil
+	}, nil
 }
 
-// reloadFromPath rebuilds clients from the given kubeconfig file and atomically
-// swaps them in. Caches derived from the previous clientset are flushed so the
-// next request sees a consistent view of the new cluster.
-func (s *Service) reloadFromPath(path string) error {
-	cfg, err := clientcmd.BuildConfigFromFlags("", path)
+// For returns the client bundle for cluster id, building and caching it on first
+// access from the registry. Concurrent first-access is de-duplicated.
+func (s *Service) For(ctx context.Context, id cluster.ID) (*clientBundle, error) {
+	if v, ok := s.bundles.Load(id); ok {
+		return v.(*atomic.Pointer[clientBundle]).Load(), nil
+	}
+	info, err := s.registry.Get(ctx, id)
 	if err != nil {
-		return fmt.Errorf("kubeconfig %s: %w", path, err)
+		return nil, fmt.Errorf("registry.Get(%s): %w", id, err)
 	}
-	if err := s.installBundle(cfg); err != nil {
-		return err
+	b, err := buildClientBundle(*info)
+	if err != nil {
+		return nil, fmt.Errorf("build bundle(%s): %w", id, err)
 	}
-	s.invalidateCaches()
-	return nil
+	ptr := &atomic.Pointer[clientBundle]{}
+	ptr.Store(b)
+	actual, loaded := s.bundles.LoadOrStore(id, ptr)
+	if loaded {
+		b.Close() // another goroutine won the race
+	}
+	return actual.(*atomic.Pointer[clientBundle]).Load(), nil
 }
 
-// invalidateCaches clears state derived from the previous clientBundle.
+// Default returns the bundle for the registry's default cluster.
+func (s *Service) Default(ctx context.Context) (*clientBundle, error) {
+	id, err := s.registry.Default(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.For(ctx, id)
+}
+
+// ForCtx returns the bundle for the cluster carried in ctx, or the default
+// cluster when none is set.
+func (s *Service) ForCtx(ctx context.Context) (*clientBundle, error) {
+	if id, ok := cluster.FromContext(ctx); ok && id != "" {
+		return s.For(ctx, id)
+	}
+	return s.Default(ctx)
+}
+
+// Invalidate drops a cluster's cached bundle (e.g. after a kubeconfig rotation)
+// so the next access rebuilds it from the registry — no rollout required.
+func (s *Service) Invalidate(id cluster.ID) {
+	if v, ok := s.bundles.LoadAndDelete(id); ok {
+		v.(*atomic.Pointer[clientBundle]).Load().Close()
+	}
+	s.defaultBundle.Store(nil)
+	s.invalidateCaches()
+}
+
+// defaultClientBundle resolves (and caches) the default cluster's bundle for the
+// context-less accessors. Returns nil when nothing is configured yet.
+func (s *Service) defaultClientBundle() *clientBundle {
+	if b := s.defaultBundle.Load(); b != nil {
+		return b
+	}
+	b, err := s.Default(context.Background())
+	if err != nil {
+		return nil
+	}
+	s.defaultBundle.Store(b)
+	return b
+}
+
+// invalidateCaches clears state derived from a clientBundle.
 func (s *Service) invalidateCaches() {
 	s.apiResourcesMu.Lock()
 	s.apiResourcesCache = nil
@@ -175,74 +254,97 @@ func (s *Service) invalidateCaches() {
 	}
 }
 
-// bundle returns the currently active clientBundle, or nil if the kubeconfig
-// has not been loaded yet (docker-mode first boot before the watcher fires).
-func (s *Service) bundle() *clientBundle {
-	return s.active.Load()
-}
+// --- Context-less accessors (default cluster) ---
 
-// errNotLoaded is returned when the kubeconfig has not yet been loaded.
-var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
-
-// RESTConfig returns the underlying REST config (for WebSocket handlers, etc.)
+// RESTConfig returns the default cluster's REST config (WebSocket/exec handlers).
 func (s *Service) RESTConfig() *rest.Config {
-	b := s.bundle()
+	b := s.defaultClientBundle()
 	if b == nil {
 		return nil
 	}
 	return b.restConfig
 }
 
-// Clientset returns the kubernetes clientset.
+// Clientset returns the default cluster's kubernetes clientset.
 func (s *Service) Clientset() *kubernetes.Clientset {
-	b := s.bundle()
+	b := s.defaultClientBundle()
 	if b == nil {
 		return nil
 	}
 	return b.clientset
 }
 
-// Dynamic returns the dynamic client.
+// Dynamic returns the default cluster's dynamic client.
 func (s *Service) Dynamic() dynamic.Interface {
-	b := s.bundle()
+	b := s.defaultClientBundle()
 	if b == nil {
 		return nil
 	}
 	return b.dynamic
 }
 
-// Discovery returns the discovery client.
+// Discovery returns the default cluster's discovery client.
 func (s *Service) Discovery() discovery.DiscoveryInterface {
-	b := s.bundle()
+	b := s.defaultClientBundle()
 	if b == nil {
 		return nil
 	}
 	return b.discovery
 }
 
-// RestConfig returns the REST config for SPDY/exec connections.
-func (s *Service) RestConfig() *rest.Config {
-	return s.RESTConfig()
+// RestConfig returns the default cluster's REST config (SPDY/exec).
+func (s *Service) RestConfig() *rest.Config { return s.RESTConfig() }
+
+// --- Context-aware accessors (cluster from ctx) ---
+
+// ClientsetFor returns the clientset for the cluster carried in ctx.
+func (s *Service) ClientsetFor(ctx context.Context) (*kubernetes.Clientset, error) {
+	b, err := s.ForCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return b.clientset, nil
+}
+
+// DynamicFor returns the dynamic client for the cluster carried in ctx.
+func (s *Service) DynamicFor(ctx context.Context) (dynamic.Interface, error) {
+	b, err := s.ForCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return b.dynamic, nil
+}
+
+// DiscoveryFor returns the discovery client for the cluster carried in ctx.
+func (s *Service) DiscoveryFor(ctx context.Context) (discovery.DiscoveryInterface, error) {
+	b, err := s.ForCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return b.discovery, nil
+}
+
+// RESTConfigFor returns the REST config for the cluster carried in ctx.
+func (s *Service) RESTConfigFor(ctx context.Context) (*rest.Config, error) {
+	b, err := s.ForCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return b.restConfig, nil
 }
 
 // Cache returns the cache instance.
-func (s *Service) Cache() *cache.Cache {
-	return s.cache
-}
+func (s *Service) Cache() *cache.Cache { return s.cache }
 
-// KubeconfigPath returns the path that is watched for hot-reload.
-func (s *Service) KubeconfigPath() string {
-	return s.kubeconfigPath
-}
+// KubeconfigPath returns the legacy Helm kubeconfig path (see helmKubeconfigPath).
+func (s *Service) KubeconfigPath() string { return s.helmKubeconfigPath }
 
 // WatchEnabled reports whether hot-reload is configured for this service.
-func (s *Service) WatchEnabled() bool {
-	return s.watchEnabled
-}
+func (s *Service) WatchEnabled() bool { return s.watchEnabled }
 
-// HealthCheck pings the K8s API server.
+// HealthCheck pings the default cluster's K8s API server.
 func (s *Service) HealthCheck(ctx context.Context) error {
-	b := s.bundle()
+	b := s.defaultClientBundle()
 	if b == nil {
 		return errNotLoaded
 	}
@@ -357,9 +459,4 @@ func (s *Service) RawRequest(ctx context.Context, method, path string) ([]byte, 
 	var statusCode int
 	result.StatusCode(&statusCode)
 	return rawBody, statusCode, nil
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
