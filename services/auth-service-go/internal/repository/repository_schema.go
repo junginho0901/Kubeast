@@ -69,6 +69,33 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			permission VARCHAR NOT NULL,
 			UNIQUE(role_id, permission)
 		)`,
+		// Multi-cluster: registry of managed clusters. Supersedes the
+		// single-row cluster_setup table (which is left in place, unused).
+		// The first cluster is registered fresh via Setup; no migration.
+		`CREATE TABLE IF NOT EXISTS clusters (
+			id                     VARCHAR PRIMARY KEY,
+			display_name           VARCHAR NOT NULL,
+			mode                   VARCHAR NOT NULL,
+			kubeconfig_secret_name VARCHAR,
+			api_server_url         VARCHAR,
+			is_self_cluster        BOOLEAN NOT NULL DEFAULT FALSE,
+			health_status          VARCHAR DEFAULT 'unknown',
+			last_healthcheck_at    TIMESTAMP,
+			created_by             VARCHAR NOT NULL DEFAULT '',
+			created_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at             TIMESTAMP NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_clusters_self ON clusters(is_self_cluster)`,
+		// Multi-cluster RBAC: a user gets a role per cluster. No row for a
+		// (user, cluster) pair means no access to that cluster (deny-by-default).
+		// admin.* users bypass this and reach every cluster.
+		`CREATE TABLE IF NOT EXISTS user_cluster_roles (
+			user_id    VARCHAR NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+			cluster_id VARCHAR NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+			role_id    INT     NOT NULL REFERENCES roles(id),
+			PRIMARY KEY (user_id, cluster_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ucr_user ON user_cluster_roles(user_id)`,
 	}
 
 	for _, q := range queries {
