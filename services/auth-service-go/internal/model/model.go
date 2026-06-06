@@ -215,3 +215,42 @@ type ClusterSetupStatus struct {
 	ConnectionStatus  string  `json:"connection_status,omitempty"`
 	ConnectionMessage *string `json:"connection_message,omitempty"`
 }
+
+// --- Multi-cluster CRUD DTOs ---
+
+// RegisterClusterRequest is the payload for POST /api/v1/clusters.
+// Mode is "external" (kubeconfig required) or "self" (in-cluster ServiceAccount).
+type RegisterClusterRequest struct {
+	Mode         string  `json:"mode"`
+	DisplayName  string  `json:"display_name"`
+	Kubeconfig   *string `json:"kubeconfig,omitempty"`
+	APIServerURL *string `json:"api_server_url,omitempty"`
+}
+
+// UpdateClusterRequest is the payload for PATCH /api/v1/clusters/{id}.
+// The cluster ID is immutable; only display name and the display-only API
+// server URL can change. nil fields are left unchanged.
+type UpdateClusterRequest struct {
+	DisplayName  *string `json:"display_name,omitempty"`
+	APIServerURL *string `json:"api_server_url,omitempty"`
+}
+
+// ValidateClusterRequest is the payload for POST /api/v1/clusters/validate
+// (pre-registration connection test, no DB write).
+type ValidateClusterRequest struct {
+	Mode       string  `json:"mode"`
+	Kubeconfig *string `json:"kubeconfig,omitempty"`
+}
+
+// ClusterConnectionResult is returned by the validate / test endpoints.
+type ClusterConnectionResult struct {
+	Healthy       bool   `json:"healthy"`
+	ServerVersion string `json:"server_version,omitempty"`
+	Message       string `json:"message,omitempty"`
+}
+
+// ClusterSwitchRequest is the payload for POST /api/v1/audit/cluster-switch.
+type ClusterSwitchRequest struct {
+	PreviousCluster string `json:"previous_cluster"`
+	NewCluster      string `json:"new_cluster"`
+}
