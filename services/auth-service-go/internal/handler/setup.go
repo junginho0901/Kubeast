@@ -2,59 +2,79 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
-	"log/slog"
+	"errors"
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
-	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dockersetup"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/k8ssetup"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
-	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
-
-	"gopkg.in/yaml.v3"
 )
 
+// setupClusterDisplayName is the display name (and slug → id) given to the
+// first cluster registered through the initial Setup flow. Using "default"
+// keeps the single-cluster fallback (?cluster=default and the no-param default)
+// working unchanged. Admins can rename it later (PATCH); the id stays "default".
+const setupClusterDisplayName = "default"
+
+// SetupHandler drives the initial cluster registration. Since step 07 it shares
+// the same rollout-free registration path as the cluster CRUD API: it writes a
+// `clusters` row + a kubeconfig secret/file and k8s-service reads it lazily on
+// the first request — no ConfigMap patch, no deployment restart (00-COMMON §2-4).
 type SetupHandler struct {
-	repo *repository.Repository
-	cfg  config.Config
+	cfg      config.Config
+	registry *cluster.PostgresRegistry
+	secrets  cluster.SecretWriter
 }
 
-func NewSetupHandler(repo *repository.Repository, cfg config.Config) *SetupHandler {
-	return &SetupHandler{repo: repo, cfg: cfg}
+func NewSetupHandler(cfg config.Config, registry *cluster.PostgresRegistry, secrets cluster.SecretWriter) *SetupHandler {
+	return &SetupHandler{cfg: cfg, registry: registry, secrets: secrets}
 }
 
-// GetSetup handles GET /auth/setup
+// GetSetup handles GET /auth/setup. "Configured" now means at least one cluster
+// is registered (the cluster_setup single-row table is retired).
 func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
-	cs, err := h.repo.GetClusterSetup(r.Context())
-	if err != nil || cs == nil {
+	id, err := h.registry.Default(r.Context())
+	if errors.Is(err, cluster.ErrNotFound) {
 		response.JSON(w, http.StatusOK, model.ClusterSetupStatus{Configured: false})
 		return
 	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	status := "unknown"
-	var msg *string
+	meta, _ := h.registry.GetMeta(r.Context(), id)
+	mode := ""
+	if meta != nil {
+		mode = string(meta.Mode)
+	}
+
 	connStatus, connMsg := k8ssetup.CheckK8sServiceHealth(h.cfg.K8sServiceHealthURL, 2)
-	status = connStatus
+	var msg *string
 	if connMsg != "" {
 		msg = &connMsg
 	}
-
 	response.JSON(w, http.StatusOK, model.ClusterSetupStatus{
 		Configured:        true,
-		Mode:              cs.Mode,
-		SecretName:        cs.SecretName,
-		ConnectionStatus:  status,
+		Mode:              mode,
+		ConnectionStatus:  connStatus,
 		ConnectionMessage: msg,
 	})
 }
 
-// PostSetup handles POST /auth/setup
+// PostSetup handles POST /auth/setup — registers the first cluster.
+//
+// Rollout-free: the kubeconfig is stored as a Secret (k8s) or file (docker) and
+// the DB row is inserted. k8s-service picks it up on the next request; nothing
+// is restarted.
 func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
-	existing, _ := h.repo.GetClusterSetup(r.Context())
-	if existing != nil {
+	if _, err := h.registry.Default(r.Context()); err == nil {
 		response.Error(w, http.StatusConflict, "Already configured")
+		return
+	} else if !errors.Is(err, cluster.ErrNotFound) {
+		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -64,117 +84,58 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Mode != "in_cluster" && req.Mode != "external" {
-		response.Error(w, http.StatusBadRequest, "Invalid mode. Must be in_cluster or external")
-		return
-	}
-
-	var secretName *string
-
-	if req.Mode == "external" {
+	switch req.Mode {
+	case "external":
 		if req.Kubeconfig == nil || *req.Kubeconfig == "" {
 			response.Error(w, http.StatusBadRequest, "Kubeconfig required for external mode")
 			return
 		}
-
-		// Validate YAML
-		var parsed map[string]interface{}
-		if err := yaml.Unmarshal([]byte(*req.Kubeconfig), &parsed); err != nil {
-			response.Error(w, http.StatusBadRequest, "Invalid kubeconfig YAML")
+		if verr := validateKubeconfigYAML(*req.Kubeconfig); verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		if _, ok := parsed["clusters"]; !ok {
-			response.Error(w, http.StatusBadRequest, "Invalid kubeconfig: missing clusters field")
+		if _, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout); verr != nil {
+			response.Error(w, http.StatusBadRequest, "Connection failed: "+verr.Error())
 			return
 		}
-		if _, ok := parsed["users"]; !ok {
-			response.Error(w, http.StatusBadRequest, "Invalid kubeconfig: missing users field")
+		if _, err := h.registry.AddExternal(r.Context(), setupClusterDisplayName, *req.Kubeconfig, "", "setup", h.secrets); err != nil {
+			response.Error(w, http.StatusInternalServerError, "Failed to register cluster: "+err.Error())
 			return
 		}
 
-		// Validate connection
-		if err := k8ssetup.ValidateKubeconfigConnection([]byte(*req.Kubeconfig), 5); err != nil {
-			response.Error(w, http.StatusBadRequest, "Connection failed: "+err.Error())
+	case "in_cluster":
+		if _, err := h.registry.AddSelf(r.Context(), setupClusterDisplayName, "setup"); err != nil {
+			response.Error(w, http.StatusBadRequest, "Failed to register self cluster: "+err.Error())
 			return
 		}
 
-		if h.cfg.DeploymentMode == "docker" {
-			if err := dockersetup.WriteKubeconfigAtomic(h.cfg.DockerKubeconfigPath, []byte(*req.Kubeconfig)); err != nil {
-				slog.Error("write kubeconfig failed", "error", err)
-				response.Error(w, http.StatusInternalServerError, "Failed to write kubeconfig: "+err.Error())
-				return
-			}
-			slog.Info("kubeconfig written", "path", h.cfg.DockerKubeconfigPath)
-		} else {
-			// Upsert Secret
-			sName := h.cfg.SetupKubeconfigSecret
-			if err := k8ssetup.UpsertKubeconfigSecret(r.Context(), h.cfg.SetupNamespace, sName, *req.Kubeconfig); err != nil {
-				slog.Error("upsert kubeconfig secret failed", "error", err)
-				response.Error(w, http.StatusInternalServerError, "Failed to store kubeconfig: "+err.Error())
-				return
-			}
-			secretName = &sName
-		}
-	}
-
-	if h.cfg.DeploymentMode != "docker" {
-		// Patch ConfigMap
-		inCluster := "true"
-		if req.Mode == "external" {
-			inCluster = "false"
-		}
-		cmData := map[string]string{
-			"IN_CLUSTER":      inCluster,
-			"KUBECONFIG_PATH": "/app/kubeconfig.yaml",
-		}
-		if err := k8ssetup.PatchConfigMap(r.Context(), h.cfg.SetupNamespace, h.cfg.SetupConfigMapName, cmData); err != nil {
-			slog.Error("patch configmap failed", "error", err)
-			response.Error(w, http.StatusInternalServerError, "Failed to update config: "+err.Error())
-			return
-		}
-
-		// Restart deployments
-		for _, dep := range h.cfg.SetupRestartDeployments {
-			if err := k8ssetup.RestartDeployment(r.Context(), h.cfg.SetupNamespace, dep); err != nil {
-				slog.Error("restart deployment failed", "deployment", dep, "error", err)
-			}
-		}
-	}
-
-	// Save to DB
-	cs, err := h.repo.CreateClusterSetup(r.Context(), req.Mode, secretName)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+	default:
+		response.Error(w, http.StatusBadRequest, "Invalid mode. Must be in_cluster or external")
 		return
 	}
 
 	response.JSON(w, http.StatusOK, model.ClusterSetupStatus{
 		Configured:       true,
-		Mode:             cs.Mode,
-		SecretName:       cs.SecretName,
+		Mode:             req.Mode,
 		ConnectionStatus: "connected",
 	})
 }
 
-// RolloutStatus handles GET /auth/setup/rollout-status
+// RolloutStatus handles GET /auth/setup/rollout-status.
+//
+// Registration is rollout-free, so "ready" now just means k8s-service can reach
+// the freshly registered cluster (the UI's old "waiting for rollout" step
+// becomes a connection check — 00-COMMON §2-4).
 func (h *SetupHandler) RolloutStatus(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.DeploymentMode == "docker" {
-		s := dockersetup.GetStatus(r.Context(), h.cfg.DockerKubeconfigPath, h.cfg.K8sServiceHealthURL)
-		response.JSON(w, http.StatusOK, map[string]interface{}{
-			"ready": s.FileExists && s.K8sServiceReady,
-			"deployments": map[string]interface{}{
-				"kubeconfig-file": map[string]interface{}{
-					"ready":   s.FileExists,
-					"message": fmt.Sprintf("%d bytes", s.FileSize),
-				},
-				"k8s-service": map[string]interface{}{
-					"ready":   s.K8sServiceReady,
-					"message": s.Message,
-				},
+	connStatus, connMsg := k8ssetup.CheckK8sServiceHealth(h.cfg.K8sServiceHealthURL, 2)
+	ready := connStatus == "connected"
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"ready": ready,
+		"deployments": map[string]interface{}{
+			"k8s-service": map[string]interface{}{
+				"ready":   ready,
+				"message": connMsg,
 			},
-		})
-		return
-	}
-	result := k8ssetup.CheckRolloutStatus(r.Context(), h.cfg.SetupNamespace, h.cfg.SetupRestartDeployments)
-	response.JSON(w, http.StatusOK, result)
+		},
+	})
 }

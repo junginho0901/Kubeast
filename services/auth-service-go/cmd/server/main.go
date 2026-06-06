@@ -15,6 +15,8 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
@@ -22,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -90,10 +93,29 @@ func main() {
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
 	authMiddleware := security.AuthMiddleware(jwtMgr)
 
+	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
+	// files (docker) and read at request time, so registering a cluster never
+	// requires a rollout (00-COMMON §2-4). The store is both reader (registry
+	// Get) and writer (cluster CRUD / Setup).
+	var secretStore cluster.SecretStore
+	if cfg.DeploymentMode == "docker" {
+		secretStore = cluster.NewFilesystemSecretStore(cfg.KubeconfigDir)
+	} else if selfCfg, scErr := rest.InClusterConfig(); scErr == nil {
+		if selfClient, scErr := kubernetes.NewForConfig(selfCfg); scErr == nil {
+			secretStore = cluster.NewK8sSecretStore(selfClient, cfg.PodNamespace)
+		} else {
+			slog.Warn("cluster: self clientset for secret store failed", "err", scErr)
+		}
+	} else {
+		slog.Warn("cluster: not in-cluster, kubeconfig secret store disabled (registration unavailable)", "err", scErr)
+	}
+	registry := cluster.NewPostgresRegistry(pool, secretStore)
+
 	// Handlers
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
 	roleHandler := handler.NewRoleHandler(repo)
-	setupHandler := handler.NewSetupHandler(repo, cfg)
+	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore)
+	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
 	healthHandler := handler.NewHealthHandler(pool)
 
 	// Router
@@ -163,6 +185,23 @@ func main() {
 			r.Post("/admin/users/{user_id}/reset-password", authHandler.AdminResetPassword)
 			r.Delete("/admin/users/{user_id}", authHandler.AdminDeleteUser)
 		})
+	})
+
+	// Multi-cluster CRUD + system info + cluster-switch audit. These live at the
+	// top level (not under /api/v1/auth) and all require a valid token; the
+	// admin.clusters.* permission is enforced inside each cluster handler.
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware)
+
+		r.Get("/api/v1/clusters", clustersHandler.ListClusters)
+		r.Post("/api/v1/clusters", clustersHandler.RegisterCluster)
+		r.Post("/api/v1/clusters/validate", clustersHandler.ValidateCluster)
+		r.Delete("/api/v1/clusters/{id}", clustersHandler.DeleteCluster)
+		r.Patch("/api/v1/clusters/{id}", clustersHandler.UpdateCluster)
+		r.Post("/api/v1/clusters/{id}/test", clustersHandler.TestCluster)
+
+		r.Get("/api/v1/system/deployment-mode", setupHandler.DeploymentMode)
+		r.Post("/api/v1/audit/cluster-switch", authHandler.ClusterSwitch)
 	})
 
 	// Server
