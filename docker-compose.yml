@@ -55,6 +55,9 @@ services:
       - DEPLOYMENT_MODE=docker
       - DOCKER_KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
       - K8S_SERVICE_HEALTH_URL=http://k8s-service:8002/health
+      # Multi-cluster: per-cluster kubeconfig files live in the shared volume so
+      # k8s-service (mounts the same volume read-only) sees what auth writes.
+      - KUBECONFIG_DIR=/kubeconfig/clusters
     volumes:
       - auth_keys:/app/.keys
       - kubeconfig_data:/kubeconfig
@@ -109,6 +112,10 @@ services:
     environment:
       - KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
       - KUBECONFIG_WATCH=true
+      - DEPLOYMENT_MODE=docker
+      # Multi-cluster: read per-cluster kubeconfig files auth-service writes into
+      # the shared volume (must match auth-service's KUBECONFIG_DIR).
+      - KUBECONFIG_DIR=/kubeconfig/clusters
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
