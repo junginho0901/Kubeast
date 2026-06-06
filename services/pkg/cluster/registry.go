@@ -52,3 +52,7 @@ type Registry interface {
 
 // ErrNotFound is returned by Registry.Get for an unknown cluster ID.
 var ErrNotFound = errors.New("cluster: not found")
+
+// ErrAlreadyExists is returned when registering a cluster whose ID (the
+// slugified display name) is already taken.
+var ErrAlreadyExists = errors.New("cluster: already exists")
