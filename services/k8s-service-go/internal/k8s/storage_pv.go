@@ -14,7 +14,7 @@ import (
 
 // GetPVs lists all PVs.
 func (s *Service) GetPVs(ctx context.Context) ([]map[string]interface{}, error) {
-	pvList, err := s.Clientset().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	pvList, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pvs: %w", err)
 	}
@@ -23,7 +23,7 @@ func (s *Service) GetPVs(ctx context.Context) ([]map[string]interface{}, error) 
 
 // GetPV returns a single PV.
 func (s *Service) GetPV(ctx context.Context, name string) (map[string]interface{}, error) {
-	pv, err := s.Clientset().CoreV1().PersistentVolumes().Get(ctx, name, metav1.GetOptions{})
+	pv, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumes().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get pv %s: %w", name, err)
 	}
@@ -32,7 +32,7 @@ func (s *Service) GetPV(ctx context.Context, name string) (map[string]interface{
 
 // DescribePV returns detailed info about a PV.
 func (s *Service) DescribePV(ctx context.Context, name string) (map[string]interface{}, error) {
-	pv, err := s.Clientset().CoreV1().PersistentVolumes().Get(ctx, name, metav1.GetOptions{})
+	pv, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumes().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get pv %s: %w", name, err)
 	}
@@ -48,18 +48,18 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 	go func() {
 		defer wg.Done()
 		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
-			boundPVC, pvcErr = s.Clientset().CoreV1().PersistentVolumeClaims(pv.Spec.ClaimRef.Namespace).Get(ctx, pv.Spec.ClaimRef.Name, metav1.GetOptions{})
+			boundPVC, pvcErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(pv.Spec.ClaimRef.Namespace).Get(ctx, pv.Spec.ClaimRef.Name, metav1.GetOptions{})
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Name != "" {
-			pods, podsErr = s.Clientset().CoreV1().Pods(pv.Spec.ClaimRef.Namespace).List(ctx, metav1.ListOptions{})
+			pods, podsErr = s.clientsetCtx(ctx).CoreV1().Pods(pv.Spec.ClaimRef.Namespace).List(ctx, metav1.ListOptions{})
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PersistentVolume", name),
 		})
 	}()
@@ -148,7 +148,7 @@ func (s *Service) DescribePV(ctx context.Context, name string) (map[string]inter
 
 // DeletePV deletes a PV.
 func (s *Service) DeletePV(ctx context.Context, name string) error {
-	return s.Clientset().CoreV1().PersistentVolumes().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().PersistentVolumes().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatPVList(pvs []corev1.PersistentVolume) []map[string]interface{} {

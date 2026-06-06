@@ -14,7 +14,7 @@ import (
 
 // GetStatefulSets lists statefulsets in a namespace.
 func (s *Service) GetStatefulSets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list statefulsets: %w", err)
 	}
@@ -23,7 +23,7 @@ func (s *Service) GetStatefulSets(ctx context.Context, namespace string) ([]map[
 
 // GetAllStatefulSets lists statefulsets across all namespaces.
 func (s *Service) GetAllStatefulSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all statefulsets: %w", err)
 	}
@@ -40,11 +40,11 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		sts, stsErr = s.Clientset().AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		sts, stsErr = s.clientsetCtx(ctx).AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StatefulSet", name),
 		})
 	}()
@@ -173,5 +173,5 @@ func (s *Service) DescribeStatefulSet(ctx context.Context, namespace, name strin
 
 // DeleteStatefulSet deletes a statefulset.
 func (s *Service) DeleteStatefulSet(ctx context.Context, namespace, name string) error {
-	return s.Clientset().AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }

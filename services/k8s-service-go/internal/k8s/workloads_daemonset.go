@@ -14,7 +14,7 @@ import (
 
 // GetDaemonSets lists daemonsets in a namespace.
 func (s *Service) GetDaemonSets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list daemonsets: %w", err)
 	}
@@ -23,7 +23,7 @@ func (s *Service) GetDaemonSets(ctx context.Context, namespace string) ([]map[st
 
 // GetAllDaemonSets lists daemonsets across all namespaces.
 func (s *Service) GetAllDaemonSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().AppsV1().DaemonSets("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).AppsV1().DaemonSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all daemonsets: %w", err)
 	}
@@ -40,11 +40,11 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ds, dsErr = s.Clientset().AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		ds, dsErr = s.clientsetCtx(ctx).AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=DaemonSet", name),
 		})
 	}()
@@ -134,5 +134,5 @@ func (s *Service) DescribeDaemonSet(ctx context.Context, namespace, name string)
 
 // DeleteDaemonSet deletes a daemonset.
 func (s *Service) DeleteDaemonSet(ctx context.Context, namespace, name string) error {
-	return s.Clientset().AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }

@@ -39,11 +39,11 @@ func (s *Service) GetGPUDashboard(ctx context.Context) (map[string]interface{}, 
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		nodeList, nodeErr = s.Clientset().CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
+		nodeList, nodeErr = s.clientsetCtx(ctx).CoreV1().Nodes().List(dashCtx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		podList, podErr = s.Clientset().CoreV1().Pods("").List(dashCtx, metav1.ListOptions{})
+		podList, podErr = s.clientsetCtx(ctx).CoreV1().Pods("").List(dashCtx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
@@ -233,7 +233,7 @@ func getDevicePluginStatus(ctx context.Context, s *Service) map[string]interface
 	for _, c := range candidates {
 		// Short timeout per candidate so we don't block if the namespace doesn't exist
 		tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		ds, err := s.Clientset().AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
+		ds, err := s.clientsetCtx(ctx).AppsV1().DaemonSets(c.namespace).Get(tryCtx, c.name, metav1.GetOptions{})
 		cancel()
 		if err != nil {
 			continue
@@ -257,7 +257,7 @@ func getTimeSlicingConfig(ctx context.Context, s *Service) map[string]interface{
 	for _, ns := range namespaces {
 		for _, name := range names {
 			tryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-			cm, err := s.Clientset().CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})
+			cm, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(ns).Get(tryCtx, name, metav1.GetOptions{})
 			cancel()
 			if err != nil {
 				continue

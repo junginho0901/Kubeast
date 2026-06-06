@@ -12,7 +12,7 @@ import (
 
 // GetConfigMaps lists configmaps in a namespace.
 func (s *Service) GetConfigMaps(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	cmList, err := s.Clientset().CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+	cmList, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list configmaps: %w", err)
 	}
@@ -43,7 +43,7 @@ func (s *Service) GetConfigMaps(ctx context.Context, namespace string) ([]map[st
 
 // GetAllConfigMaps lists configmaps across all namespaces.
 func (s *Service) GetAllConfigMaps(ctx context.Context) ([]map[string]interface{}, error) {
-	cmList, err := s.Clientset().CoreV1().ConfigMaps("").List(ctx, metav1.ListOptions{})
+	cmList, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all configmaps: %w", err)
 	}
@@ -74,7 +74,7 @@ func (s *Service) GetAllConfigMaps(ctx context.Context) ([]map[string]interface{
 
 // DescribeConfigMap returns detailed info about a configmap.
 func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	cm, err := s.Clientset().CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	cm, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get configmap %s/%s: %w", namespace, name, err)
 	}
@@ -115,7 +115,7 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 	}
 
 	// Events
-	events, eventsErr := s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ConfigMap", name),
 	})
 	if eventsErr == nil {
@@ -128,7 +128,7 @@ func (s *Service) DescribeConfigMap(ctx context.Context, namespace, name string)
 
 // DeleteConfigMap deletes a configmap.
 func (s *Service) DeleteConfigMap(ctx context.Context, namespace, name string) error {
-	return s.Clientset().CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // GetConfigMapYAML returns a configmap as YAML.
@@ -140,7 +140,7 @@ func (s *Service) GetConfigMapYAML(ctx context.Context, namespace, name string) 
 		return cached, nil
 	}
 
-	cm, err := s.Clientset().CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	cm, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("get configmap %s/%s: %w", namespace, name, err)
 	}
@@ -158,7 +158,7 @@ func (s *Service) GetConfigMapYAML(ctx context.Context, namespace, name string) 
 
 // GetSecrets lists secrets in a namespace (data values masked).
 func (s *Service) GetSecrets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	secretList, err := s.Clientset().CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+	secretList, err := s.clientsetCtx(ctx).CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list secrets: %w", err)
 	}
@@ -185,7 +185,7 @@ func (s *Service) GetSecrets(ctx context.Context, namespace string) ([]map[strin
 
 // GetAllSecrets lists secrets across all namespaces (data values masked).
 func (s *Service) GetAllSecrets(ctx context.Context) ([]map[string]interface{}, error) {
-	secretList, err := s.Clientset().CoreV1().Secrets("").List(ctx, metav1.ListOptions{})
+	secretList, err := s.clientsetCtx(ctx).CoreV1().Secrets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all secrets: %w", err)
 	}
@@ -214,7 +214,7 @@ func (s *Service) GetAllSecrets(ctx context.Context) ([]map[string]interface{}, 
 // When canReveal is true (write/admin), base64-encoded data values are included.
 // When false (read), only key names and sizes are returned.
 func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, canReveal bool) (map[string]interface{}, error) {
-	secret, err := s.Clientset().CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	secret, err := s.clientsetCtx(ctx).CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get secret %s/%s: %w", namespace, name, err)
 	}
@@ -268,7 +268,7 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 	}
 
 	// Events
-	events, eventsErr := s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+	events, eventsErr := s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Secret", name),
 	})
 	if eventsErr == nil {
@@ -281,7 +281,7 @@ func (s *Service) DescribeSecret(ctx context.Context, namespace, name string, ca
 
 // DeleteSecret deletes a secret.
 func (s *Service) DeleteSecret(ctx context.Context, namespace, name string) error {
-	return s.Clientset().CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // GetSecretYAML returns a secret as YAML.

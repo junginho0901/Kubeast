@@ -12,7 +12,7 @@ import (
 
 // GetLimitRanges lists LimitRanges in a namespace.
 func (s *Service) GetLimitRanges(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).CoreV1().LimitRanges(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list limit ranges: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetLimitRanges(ctx context.Context, namespace string) ([]map[s
 
 // GetAllLimitRanges lists LimitRanges across all namespaces.
 func (s *Service) GetAllLimitRanges(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().CoreV1().LimitRanges("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).CoreV1().LimitRanges("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all limit ranges: %w", err)
 	}
@@ -38,11 +38,11 @@ func (s *Service) DescribeLimitRange(ctx context.Context, namespace, name string
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		lr, lrErr = s.Clientset().CoreV1().LimitRanges(namespace).Get(ctx, name, metav1.GetOptions{})
+		lr, lrErr = s.clientsetCtx(ctx).CoreV1().LimitRanges(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=LimitRange", name),
 		})
 	}()
@@ -83,7 +83,7 @@ func (s *Service) DescribeLimitRange(ctx context.Context, namespace, name string
 
 // DeleteLimitRange deletes a LimitRange.
 func (s *Service) DeleteLimitRange(ctx context.Context, namespace, name string) error {
-	return s.Clientset().CoreV1().LimitRanges(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().LimitRanges(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ListPodsViolatingLimitRange returns pods in the namespace whose container
@@ -93,11 +93,11 @@ func (s *Service) DeleteLimitRange(ctx context.Context, namespace, name string) 
 // violate a LimitRange, but pods created before the LimitRange existed (or
 // while it was disabled) can drift out of bounds.
 func (s *Service) ListPodsViolatingLimitRange(ctx context.Context, namespace, name string) ([]map[string]interface{}, error) {
-	lr, err := s.Clientset().CoreV1().LimitRanges(namespace).Get(ctx, name, metav1.GetOptions{})
+	lr, err := s.clientsetCtx(ctx).CoreV1().LimitRanges(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get limit range %s/%s: %w", namespace, name, err)
 	}
-	pods, err := s.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	pods, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
 	}

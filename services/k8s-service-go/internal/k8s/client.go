@@ -333,6 +333,62 @@ func (s *Service) RESTConfigFor(ctx context.Context) (*rest.Config, error) {
 	return b.restConfig, nil
 }
 
+// --- Internal context-aware accessors (value-or-nil) ---
+//
+// These mirror the context-less accessors but target the cluster carried in
+// ctx, returning nil when the cluster is unknown/unreachable. Service methods
+// already nil-check the result (errNotLoaded), so an unknown cluster degrades
+// to "not loaded" rather than panicking.
+
+// bundleForCtx returns the bundle for the cluster in ctx, or the cached default
+// bundle when none is set. Returns nil on any error so callers degrade to
+// errNotLoaded. Uses defaultClientBundle for the no-cluster case so it never
+// touches the registry when the default is already resolved.
+func (s *Service) bundleForCtx(ctx context.Context) *clientBundle {
+	if id, ok := cluster.FromContext(ctx); ok && id != "" {
+		b, err := s.For(ctx, id)
+		if err != nil {
+			return nil
+		}
+		return b
+	}
+	return s.defaultClientBundle()
+}
+
+func (s *Service) clientsetCtx(ctx context.Context) *kubernetes.Clientset {
+	if b := s.bundleForCtx(ctx); b != nil {
+		return b.clientset
+	}
+	return nil
+}
+
+func (s *Service) dynamicCtx(ctx context.Context) dynamic.Interface {
+	if b := s.bundleForCtx(ctx); b != nil {
+		return b.dynamic
+	}
+	return nil
+}
+
+func (s *Service) discoveryCtx(ctx context.Context) discovery.DiscoveryInterface {
+	if b := s.bundleForCtx(ctx); b != nil {
+		return b.discovery
+	}
+	return nil
+}
+
+func (s *Service) restConfigCtx(ctx context.Context) *rest.Config {
+	if b := s.bundleForCtx(ctx); b != nil {
+		return b.restConfig
+	}
+	return nil
+}
+
+// DynamicForCtx returns the dynamic client for the cluster carried in ctx
+// (value-or-nil), used by the WebSocket multiplexer's watch loop.
+func (s *Service) DynamicForCtx(ctx context.Context) dynamic.Interface {
+	return s.dynamicCtx(ctx)
+}
+
 // Cache returns the cache instance.
 func (s *Service) Cache() *cache.Cache { return s.cache }
 
@@ -356,7 +412,7 @@ func (s *Service) HealthCheck(ctx context.Context) error {
 
 // GetResource fetches a single resource by GVR.
 func (s *Service) GetResource(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) (*unstructured.Unstructured, error) {
-	dyn := s.Dynamic()
+	dyn := s.dynamicCtx(ctx)
 	if dyn == nil {
 		return nil, errNotLoaded
 	}
@@ -368,7 +424,7 @@ func (s *Service) GetResource(ctx context.Context, gvr schema.GroupVersionResour
 
 // ListResources lists resources by GVR.
 func (s *Service) ListResources(ctx context.Context, gvr schema.GroupVersionResource, namespace string, opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
-	dyn := s.Dynamic()
+	dyn := s.dynamicCtx(ctx)
 	if dyn == nil {
 		return nil, errNotLoaded
 	}
@@ -380,7 +436,7 @@ func (s *Service) ListResources(ctx context.Context, gvr schema.GroupVersionReso
 
 // DeleteResource deletes a resource by GVR.
 func (s *Service) DeleteResource(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) error {
-	dyn := s.Dynamic()
+	dyn := s.dynamicCtx(ctx)
 	if dyn == nil {
 		return errNotLoaded
 	}
@@ -392,7 +448,7 @@ func (s *Service) DeleteResource(ctx context.Context, gvr schema.GroupVersionRes
 
 // PatchResource applies a strategic merge patch.
 func (s *Service) PatchResource(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string, data []byte) (*unstructured.Unstructured, error) {
-	dyn := s.Dynamic()
+	dyn := s.dynamicCtx(ctx)
 	if dyn == nil {
 		return nil, errNotLoaded
 	}
@@ -405,7 +461,7 @@ func (s *Service) PatchResource(ctx context.Context, gvr schema.GroupVersionReso
 
 // CreateResource creates a resource from unstructured data.
 func (s *Service) CreateResource(ctx context.Context, gvr schema.GroupVersionResource, namespace string, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
-	dyn := s.Dynamic()
+	dyn := s.dynamicCtx(ctx)
 	if dyn == nil {
 		return nil, errNotLoaded
 	}
@@ -446,7 +502,7 @@ func (s *Service) GetResourceYAML(ctx context.Context, gvr schema.GroupVersionRe
 
 // RawRequest performs a raw HTTP request to the K8s API.
 func (s *Service) RawRequest(ctx context.Context, method, path string) ([]byte, int, error) {
-	cs := s.Clientset()
+	cs := s.clientsetCtx(ctx)
 	if cs == nil {
 		return nil, http.StatusServiceUnavailable, errNotLoaded
 	}

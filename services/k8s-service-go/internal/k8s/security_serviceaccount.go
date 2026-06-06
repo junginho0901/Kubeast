@@ -11,7 +11,7 @@ import (
 
 // GetServiceAccounts lists serviceaccounts in a namespace.
 func (s *Service) GetServiceAccounts(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list serviceaccounts: %w", err)
 	}
@@ -20,7 +20,7 @@ func (s *Service) GetServiceAccounts(ctx context.Context, namespace string) ([]m
 
 // GetAllServiceAccounts lists serviceaccounts across all namespaces.
 func (s *Service) GetAllServiceAccounts(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().CoreV1().ServiceAccounts("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all serviceaccounts: %w", err)
 	}
@@ -37,11 +37,11 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		sa, saErr = s.Clientset().CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
+		sa, saErr = s.clientsetCtx(ctx).CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ServiceAccount", name),
 		})
 	}()
@@ -64,7 +64,7 @@ func (s *Service) DescribeServiceAccount(ctx context.Context, namespace, name st
 
 // DeleteServiceAccount deletes a serviceaccount.
 func (s *Service) DeleteServiceAccount(ctx context.Context, namespace, name string) error {
-	return s.Clientset().CoreV1().ServiceAccounts(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().ServiceAccounts(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatServiceAccountList(items []corev1.ServiceAccount) []map[string]interface{} {

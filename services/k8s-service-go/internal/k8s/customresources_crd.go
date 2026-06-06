@@ -9,7 +9,7 @@ import (
 
 // GetCRDs lists all CustomResourceDefinitions.
 func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Dynamic().Resource(crdGVR).List(ctx, metav1.ListOptions{})
+	list, err := s.dynamicCtx(ctx).Resource(crdGVR).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list crds: %w", err)
 	}
@@ -63,7 +63,7 @@ func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error)
 
 // DescribeCRD returns detailed info about a CRD.
 func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]interface{}, error) {
-	item, err := s.Dynamic().Resource(crdGVR).Get(ctx, name, metav1.GetOptions{})
+	item, err := s.dynamicCtx(ctx).Resource(crdGVR).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get crd %s: %w", name, err)
 	}
@@ -176,5 +176,5 @@ func (s *Service) DescribeCRD(ctx context.Context, name string) (map[string]inte
 
 // DeleteCRD deletes a CustomResourceDefinition.
 func (s *Service) DeleteCRD(ctx context.Context, name string) error {
-	return s.Dynamic().Resource(crdGVR).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.dynamicCtx(ctx).Resource(crdGVR).Delete(ctx, name, metav1.DeleteOptions{})
 }

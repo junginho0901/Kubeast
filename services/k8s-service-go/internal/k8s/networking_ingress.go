@@ -15,7 +15,7 @@ import (
 
 // GetIngresses lists ingresses in a namespace.
 func (s *Service) GetIngresses(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list ingresses: %w", err)
 	}
@@ -24,7 +24,7 @@ func (s *Service) GetIngresses(ctx context.Context, namespace string) ([]map[str
 
 // GetAllIngresses lists ingresses across all namespaces.
 func (s *Service) GetAllIngresses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all ingresses: %w", err)
 	}
@@ -42,15 +42,15 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		ing, ingErr = s.Clientset().NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
+		ing, ingErr = s.clientsetCtx(ctx).NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		icList, icErr = s.Clientset().NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
+		icList, icErr = s.clientsetCtx(ctx).NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Ingress", name),
 		})
 	}()
@@ -89,14 +89,14 @@ func (s *Service) DescribeIngress(ctx context.Context, namespace, name string) (
 
 // DeleteIngress deletes an ingress.
 func (s *Service) DeleteIngress(ctx context.Context, namespace, name string) error {
-	return s.Clientset().NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ListIngressesByClass returns ingresses cluster-wide whose ingressClassName
 // matches the given class. Capped at 50 to bound the response when an
 // IngressClass is widely referenced.
 func (s *Service) ListIngressesByClass(ctx context.Context, className string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all ingresses: %w", err)
 	}
@@ -128,7 +128,7 @@ func (s *Service) ListIngressesByClass(ctx context.Context, className string) ([
 
 // GetIngressClasses lists all ingress classes.
 func (s *Service) GetIngressClasses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list ingress classes: %w", err)
 	}
@@ -141,7 +141,7 @@ func (s *Service) GetIngressClasses(ctx context.Context) ([]map[string]interface
 
 // DescribeIngressClass returns detailed info about an ingress class.
 func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[string]interface{}, error) {
-	ic, err := s.Clientset().NetworkingV1().IngressClasses().Get(ctx, name, metav1.GetOptions{})
+	ic, err := s.clientsetCtx(ctx).NetworkingV1().IngressClasses().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get ingress class %s: %w", name, err)
 	}
@@ -169,7 +169,7 @@ func (s *Service) DescribeIngressClass(ctx context.Context, name string) (map[st
 
 // DeleteIngressClass deletes an ingress class.
 func (s *Service) DeleteIngressClass(ctx context.Context, name string) error {
-	return s.Clientset().NetworkingV1().IngressClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).NetworkingV1().IngressClasses().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Formatting helpers ==========

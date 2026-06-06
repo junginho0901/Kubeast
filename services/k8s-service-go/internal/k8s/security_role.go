@@ -12,7 +12,7 @@ import (
 
 // GetRoles lists roles in a namespace.
 func (s *Service) GetRoles(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().RbacV1().Roles(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).RbacV1().Roles(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list roles: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetRoles(ctx context.Context, namespace string) ([]map[string]
 
 // GetAllRoles lists roles across all namespaces.
 func (s *Service) GetAllRoles(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().RbacV1().Roles("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).RbacV1().Roles("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all roles: %w", err)
 	}
@@ -38,11 +38,11 @@ func (s *Service) DescribeRole(ctx context.Context, namespace, name string) (map
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		role, roleErr = s.Clientset().RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+		role, roleErr = s.clientsetCtx(ctx).RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Role", name),
 		})
 	}()
@@ -65,7 +65,7 @@ func (s *Service) DescribeRole(ctx context.Context, namespace, name string) (map
 
 // DeleteRole deletes a role.
 func (s *Service) DeleteRole(ctx context.Context, namespace, name string) error {
-	return s.Clientset().RbacV1().Roles(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).RbacV1().Roles(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatRoleList(items []rbacv1.Role) []map[string]interface{} {

@@ -28,7 +28,7 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 		return s.apiResourcesCache, nil
 	}
 
-	_, lists, err := s.Discovery().ServerGroupsAndResources()
+	_, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
 	if err != nil {
 		return nil, fmt.Errorf("discover API resources: %w", err)
 	}
@@ -166,12 +166,12 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 	result := map[string]interface{}{}
 
 	// Server URL
-	if s.RestConfig() != nil {
-		result["server"] = s.RestConfig().Host
+	if rc := s.restConfigCtx(ctx); rc != nil {
+		result["server"] = rc.Host
 	}
 
 	// Cluster version
-	sv, err := s.Clientset().Discovery().ServerVersion()
+	sv, err := s.clientsetCtx(ctx).Discovery().ServerVersion()
 	if err == nil {
 		result["version"] = map[string]interface{}{
 			"major":       sv.Major,
@@ -186,7 +186,7 @@ func (s *Service) GetClusterConfig(ctx context.Context) (map[string]interface{},
 	}
 
 	// API groups
-	groups, err := s.Discovery().ServerGroups()
+	groups, err := s.discoveryCtx(ctx).ServerGroups()
 	if err == nil {
 		groupNames := make([]string, 0, len(groups.Groups))
 		for _, g := range groups.Groups {

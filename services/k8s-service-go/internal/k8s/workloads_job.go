@@ -14,7 +14,7 @@ import (
 
 // GetJobs lists jobs in a namespace.
 func (s *Service) GetJobs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
@@ -23,7 +23,7 @@ func (s *Service) GetJobs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllJobs lists jobs across all namespaces.
 func (s *Service) GetAllJobs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().BatchV1().Jobs("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).BatchV1().Jobs("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all jobs: %w", err)
 	}
@@ -40,11 +40,11 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		job, jobErr = s.Clientset().BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+		job, jobErr = s.clientsetCtx(ctx).BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Job", name),
 		})
 	}()
@@ -141,7 +141,7 @@ func (s *Service) DescribeJob(ctx context.Context, namespace, name string) (map[
 // DeleteJob deletes a job.
 func (s *Service) DeleteJob(ctx context.Context, namespace, name string) error {
 	propagation := metav1.DeletePropagationBackground
-	return s.Clientset().BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
+	return s.clientsetCtx(ctx).BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
 		PropagationPolicy: &propagation,
 	})
 }

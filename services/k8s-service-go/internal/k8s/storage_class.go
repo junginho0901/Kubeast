@@ -14,7 +14,7 @@ import (
 
 // GetStorageClasses lists all storage classes.
 func (s *Service) GetStorageClasses(ctx context.Context) ([]map[string]interface{}, error) {
-	scList, err := s.Clientset().StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
+	scList, err := s.clientsetCtx(ctx).StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list storage classes: %w", err)
 	}
@@ -34,19 +34,19 @@ func (s *Service) DescribeStorageClass(ctx context.Context, name string) (map[st
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		sc, scErr = s.Clientset().StorageV1().StorageClasses().Get(ctx, name, metav1.GetOptions{})
+		sc, scErr = s.clientsetCtx(ctx).StorageV1().StorageClasses().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		pvList, pvErr = s.Clientset().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+		pvList, pvErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		pvcList, pvcErr = s.Clientset().CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
+		pvcList, pvcErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StorageClass", name),
 		})
 	}()
@@ -176,7 +176,7 @@ func (s *Service) DescribeStorageClass(ctx context.Context, name string) (map[st
 
 // DeleteStorageClass deletes a storage class.
 func (s *Service) DeleteStorageClass(ctx context.Context, name string) error {
-	return s.Clientset().StorageV1().StorageClasses().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).StorageV1().StorageClasses().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatStorageClassList(scs []storagev1.StorageClass) []map[string]interface{} {

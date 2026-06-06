@@ -12,7 +12,7 @@ import (
 
 // GetClusterRoleBindings lists clusterrolebindings (cluster-scoped).
 func (s *Service) GetClusterRoleBindings(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list clusterrolebindings: %w", err)
 	}
@@ -29,11 +29,11 @@ func (s *Service) DescribeClusterRoleBinding(ctx context.Context, name string) (
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		crb, crbErr = s.Clientset().RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
+		crb, crbErr = s.clientsetCtx(ctx).RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ClusterRoleBinding", name),
 		})
 	}()
@@ -56,7 +56,7 @@ func (s *Service) DescribeClusterRoleBinding(ctx context.Context, name string) (
 
 // DeleteClusterRoleBinding deletes a clusterrolebinding.
 func (s *Service) DeleteClusterRoleBinding(ctx context.Context, name string) error {
-	return s.Clientset().RbacV1().ClusterRoleBindings().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).RbacV1().ClusterRoleBindings().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatClusterRoleBindingList(items []rbacv1.ClusterRoleBinding) []map[string]interface{} {

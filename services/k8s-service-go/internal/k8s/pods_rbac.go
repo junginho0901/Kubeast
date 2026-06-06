@@ -9,7 +9,7 @@ import (
 
 // GetPodRBAC returns RBAC info for a pod's service account.
 func (s *Service) GetPodRBAC(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	pod, err := s.Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+	pod, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get pod %s/%s: %w", namespace, name, err)
 	}
@@ -19,18 +19,18 @@ func (s *Service) GetPodRBAC(ctx context.Context, namespace, name string) (map[s
 		saName = "default"
 	}
 
-	sa, err := s.Clientset().CoreV1().ServiceAccounts(namespace).Get(ctx, saName, metav1.GetOptions{})
+	sa, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts(namespace).Get(ctx, saName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get service account %s: %w", saName, err)
 	}
 
 	// Find role bindings
-	roleBindings, err := s.Clientset().RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
+	roleBindings, err := s.clientsetCtx(ctx).RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list role bindings: %w", err)
 	}
 
-	clusterRoleBindings, err := s.Clientset().RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+	clusterRoleBindings, err := s.clientsetCtx(ctx).RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list cluster role bindings: %w", err)
 	}

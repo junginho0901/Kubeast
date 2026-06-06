@@ -41,9 +41,9 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace
 
 	var patched *unstructured.Unstructured
 	if ns != "" {
-		patched, err = s.Dynamic().Resource(gvr).Namespace(ns).Patch(ctx, name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
+		patched, err = s.dynamicCtx(ctx).Resource(gvr).Namespace(ns).Patch(ctx, name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
 	} else {
-		patched, err = s.Dynamic().Resource(gvr).Patch(ctx, name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
+		patched, err = s.dynamicCtx(ctx).Resource(gvr).Patch(ctx, name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{FieldManager: "k8s-service"})
 	}
 	if err != nil {
 		return nil, fmt.Errorf("patch %s %s: %w", resourceType, name, err)

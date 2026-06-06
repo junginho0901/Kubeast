@@ -12,7 +12,7 @@ import (
 
 // GetEndpointSlices lists endpoint slices in a namespace.
 func (s *Service) GetEndpointSlices(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list endpoint slices: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetEndpointSlices(ctx context.Context, namespace string) ([]ma
 
 // GetAllEndpointSlices lists endpoint slices across all namespaces.
 func (s *Service) GetAllEndpointSlices(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().DiscoveryV1().EndpointSlices("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all endpoint slices: %w", err)
 	}
@@ -30,7 +30,7 @@ func (s *Service) GetAllEndpointSlices(ctx context.Context) ([]map[string]interf
 
 // DescribeEndpointSlice returns detailed info about an endpoint slice.
 func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	es, err := s.Clientset().DiscoveryV1().EndpointSlices(namespace).Get(ctx, name, metav1.GetOptions{})
+	es, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get endpoint slice %s/%s: %w", namespace, name, err)
 	}
@@ -112,7 +112,7 @@ func (s *Service) DescribeEndpointSlice(ctx context.Context, namespace, name str
 
 // DeleteEndpointSlice deletes an endpoint slice.
 func (s *Service) DeleteEndpointSlice(ctx context.Context, namespace, name string) error {
-	return s.Clientset().DiscoveryV1().EndpointSlices(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Formatting helpers ==========

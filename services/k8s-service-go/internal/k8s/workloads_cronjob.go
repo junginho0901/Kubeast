@@ -16,7 +16,7 @@ import (
 
 // GetCronJobs lists cronjobs in a namespace.
 func (s *Service) GetCronJobs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list cronjobs: %w", err)
 	}
@@ -25,7 +25,7 @@ func (s *Service) GetCronJobs(ctx context.Context, namespace string) ([]map[stri
 
 // GetAllCronJobs lists cronjobs across all namespaces.
 func (s *Service) GetAllCronJobs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().BatchV1().CronJobs("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).BatchV1().CronJobs("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all cronjobs: %w", err)
 	}
@@ -42,11 +42,11 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		cj, cjErr = s.Clientset().BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+		cj, cjErr = s.clientsetCtx(ctx).BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=CronJob", name),
 		})
 	}()
@@ -118,7 +118,7 @@ func (s *Service) DescribeCronJob(ctx context.Context, namespace, name string) (
 // SuspendCronJob patches the suspend field of a cronjob.
 func (s *Service) SuspendCronJob(ctx context.Context, namespace, name string, suspend bool) error {
 	patch := fmt.Sprintf(`{"spec":{"suspend":%t}}`, suspend)
-	_, err := s.Clientset().BatchV1().CronJobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{})
+	_, err := s.clientsetCtx(ctx).BatchV1().CronJobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("patch cronjob %s/%s suspend: %w", namespace, name, err)
 	}
@@ -127,7 +127,7 @@ func (s *Service) SuspendCronJob(ctx context.Context, namespace, name string, su
 
 // TriggerCronJob creates a Job from a CronJob's jobTemplate.
 func (s *Service) TriggerCronJob(ctx context.Context, namespace, name string) (string, error) {
-	cj, err := s.Clientset().BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	cj, err := s.clientsetCtx(ctx).BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("get cronjob %s/%s: %w", namespace, name, err)
 	}
@@ -157,7 +157,7 @@ func (s *Service) TriggerCronJob(ctx context.Context, namespace, name string) (s
 		Spec: cj.Spec.JobTemplate.Spec,
 	}
 
-	created, err := s.Clientset().BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+	created, err := s.clientsetCtx(ctx).BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
 		return "", fmt.Errorf("create job from cronjob %s/%s: %w", namespace, name, err)
 	}
@@ -166,7 +166,7 @@ func (s *Service) TriggerCronJob(ctx context.Context, namespace, name string) (s
 
 // GetCronJobOwnedJobs lists Jobs owned by a CronJob via ownerReference.
 func (s *Service) GetCronJobOwnedJobs(ctx context.Context, namespace, name string) ([]map[string]interface{}, error) {
-	jobList, err := s.Clientset().BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
+	jobList, err := s.clientsetCtx(ctx).BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list jobs in %s: %w", namespace, err)
 	}
@@ -227,5 +227,5 @@ func (s *Service) GetCronJobOwnedJobs(ctx context.Context, namespace, name strin
 
 // DeleteCronJob deletes a cronjob.
 func (s *Service) DeleteCronJob(ctx context.Context, namespace, name string) error {
-	return s.Clientset().BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }

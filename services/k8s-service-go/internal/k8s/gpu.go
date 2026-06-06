@@ -45,7 +45,7 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 		Version:  "v1beta1",
 		Resource: "deviceclasses",
 	}
-	_, err := s.Dynamic().Resource(gvr).List(probeCtx, metav1.ListOptions{Limit: 1})
+	_, err := s.dynamicCtx(ctx).Resource(gvr).List(probeCtx, metav1.ListOptions{Limit: 1})
 	if err == nil {
 		s.draAPIVersionCache = "v1beta1"
 		slog.Info("DRA API version detected", "version", "v1beta1")
@@ -56,7 +56,7 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 	probeCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
 	gvr.Version = "v1alpha3"
-	_, err = s.Dynamic().Resource(gvr).List(probeCtx2, metav1.ListOptions{Limit: 1})
+	_, err = s.dynamicCtx(ctx).Resource(gvr).List(probeCtx2, metav1.ListOptions{Limit: 1})
 	if err == nil {
 		s.draAPIVersionCache = "v1alpha3"
 		slog.Info("DRA API version detected", "version", "v1alpha3")

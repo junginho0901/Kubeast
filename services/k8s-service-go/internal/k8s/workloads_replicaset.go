@@ -14,7 +14,7 @@ import (
 
 // GetReplicaSets lists replicasets in a namespace.
 func (s *Service) GetReplicaSets(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets: %w", err)
 	}
@@ -23,7 +23,7 @@ func (s *Service) GetReplicaSets(ctx context.Context, namespace string) ([]map[s
 
 // GetAllReplicaSets lists replicasets across all namespaces.
 func (s *Service) GetAllReplicaSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all replicasets: %w", err)
 	}
@@ -40,11 +40,11 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		rs, rsErr = s.Clientset().AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		rs, rsErr = s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ReplicaSet", name),
 		})
 	}()
@@ -130,5 +130,5 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 
 // DeleteReplicaSet deletes a replicaset.
 func (s *Service) DeleteReplicaSet(ctx context.Context, namespace, name string) error {
-	return s.Clientset().AppsV1().ReplicaSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }

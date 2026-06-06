@@ -18,7 +18,7 @@ func (s *Service) GetPodLogs(ctx context.Context, namespace, name, container str
 		opts.TailLines = &tailLines
 	}
 
-	req := s.Clientset().CoreV1().Pods(namespace).GetLogs(name, opts)
+	req := s.clientsetCtx(ctx).CoreV1().Pods(namespace).GetLogs(name, opts)
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		return "", fmt.Errorf("get pod logs %s/%s: %w", namespace, name, err)
@@ -45,7 +45,7 @@ func (s *Service) StreamPodLogs(ctx context.Context, namespace, name, container 
 		opts.TailLines = &tailLines
 	}
 
-	req := s.Clientset().CoreV1().Pods(namespace).GetLogs(name, opts)
+	req := s.clientsetCtx(ctx).CoreV1().Pods(namespace).GetLogs(name, opts)
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("stream pod logs %s/%s: %w", namespace, name, err)

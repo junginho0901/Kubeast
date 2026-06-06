@@ -12,7 +12,7 @@ import (
 
 // GetRoleBindings lists rolebindings in a namespace.
 func (s *Service) GetRoleBindings(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list rolebindings: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetRoleBindings(ctx context.Context, namespace string) ([]map[
 
 // GetAllRoleBindings lists rolebindings across all namespaces.
 func (s *Service) GetAllRoleBindings(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().RbacV1().RoleBindings("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).RbacV1().RoleBindings("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all rolebindings: %w", err)
 	}
@@ -38,11 +38,11 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		rb, rbErr = s.Clientset().RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
+		rb, rbErr = s.clientsetCtx(ctx).RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=RoleBinding", name),
 		})
 	}()
@@ -65,7 +65,7 @@ func (s *Service) DescribeRoleBinding(ctx context.Context, namespace, name strin
 
 // DeleteRoleBinding deletes a rolebinding.
 func (s *Service) DeleteRoleBinding(ctx context.Context, namespace, name string) error {
-	return s.Clientset().RbacV1().RoleBindings(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).RbacV1().RoleBindings(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatRoleBindingList(items []rbacv1.RoleBinding) []map[string]interface{} {

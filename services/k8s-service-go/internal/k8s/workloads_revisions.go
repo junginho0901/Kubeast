@@ -33,12 +33,12 @@ func (s *Service) GetRevisionHistory(ctx context.Context, namespace, name, kind 
 }
 
 func (s *Service) getDeploymentRevisionHistory(ctx context.Context, namespace, name string) ([]map[string]interface{}, error) {
-	deploy, err := s.Clientset().AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	deploy, err := s.clientsetCtx(ctx).AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get deployment %s/%s: %w", namespace, name, err)
 	}
 
-	rsList, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	rsList, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets in %s: %w", namespace, err)
 	}
@@ -99,7 +99,7 @@ func (s *Service) getDeploymentRevisionHistory(ctx context.Context, namespace, n
 }
 
 func (s *Service) getControllerRevisionHistory(ctx context.Context, namespace, name, kind string) ([]map[string]interface{}, error) {
-	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list controller revisions in %s: %w", namespace, err)
 	}
@@ -210,7 +210,7 @@ func (s *Service) RollbackWorkload(ctx context.Context, namespace, name, kind st
 }
 
 func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string, toRevision int64) error {
-	rsList, err := s.Clientset().AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	rsList, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list replicasets in %s: %w", namespace, err)
 	}
@@ -268,7 +268,7 @@ func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string
 		return fmt.Errorf("marshal rollback patch: %w", err)
 	}
 
-	_, err = s.Clientset().AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.clientsetCtx(ctx).AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback deployment %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}
@@ -276,7 +276,7 @@ func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string
 }
 
 func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string, toRevision int64) error {
-	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list controller revisions in %s: %w", namespace, err)
 	}
@@ -309,7 +309,7 @@ func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string,
 		return fmt.Errorf("build rollback patch for daemonset %s/%s: %w", namespace, name, err)
 	}
 
-	_, err = s.Clientset().AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.clientsetCtx(ctx).AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback daemonset %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}
@@ -317,7 +317,7 @@ func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string,
 }
 
 func (s *Service) rollbackStatefulSet(ctx context.Context, namespace, name string, toRevision int64) error {
-	crList, err := s.Clientset().AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
+	crList, err := s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list controller revisions in %s: %w", namespace, err)
 	}
@@ -350,7 +350,7 @@ func (s *Service) rollbackStatefulSet(ctx context.Context, namespace, name strin
 		return fmt.Errorf("build rollback patch for statefulset %s/%s: %w", namespace, name, err)
 	}
 
-	_, err = s.Clientset().AppsV1().StatefulSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.clientsetCtx(ctx).AppsV1().StatefulSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback statefulset %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}

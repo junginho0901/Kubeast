@@ -138,6 +138,8 @@ func main() {
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
 		})
+		// Resolve the target cluster from ?cluster= for every protected route.
+		r.Use(handler.ClusterMiddleware)
 
 		routes.Register(r, h, wsMux)
 	})

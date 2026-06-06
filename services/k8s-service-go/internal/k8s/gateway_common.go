@@ -33,7 +33,7 @@ func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
 		Version:  "v1",
 		Resource: "gateways",
 	}
-	_, err := s.Dynamic().Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
+	_, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
 	if err == nil {
 		s.gatewayAPIVersionCache = "v1"
 		slog.Info("gateway API version detected", "version", "v1")
@@ -42,7 +42,7 @@ func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
 
 	// Fall back to v1beta1
 	gvr.Version = "v1beta1"
-	_, err = s.Dynamic().Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
+	_, err = s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
 	if err == nil {
 		s.gatewayAPIVersionCache = "v1beta1"
 		slog.Info("gateway API version detected", "version", "v1beta1")
@@ -72,7 +72,7 @@ func (s *Service) gatewayPolicyGVR(ctx context.Context, resource string) schema.
 			Version:  v,
 			Resource: resource,
 		}
-		_, err := s.Dynamic().Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
+		_, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
 		if err == nil {
 			return gvr
 		}

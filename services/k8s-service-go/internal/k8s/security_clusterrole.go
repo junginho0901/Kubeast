@@ -12,7 +12,7 @@ import (
 
 // GetClusterRoles lists clusterroles (cluster-scoped).
 func (s *Service) GetClusterRoles(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list clusterroles: %w", err)
 	}
@@ -29,11 +29,11 @@ func (s *Service) DescribeClusterRole(ctx context.Context, name string) (map[str
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		cr, crErr = s.Clientset().RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
+		cr, crErr = s.clientsetCtx(ctx).RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=ClusterRole", name),
 		})
 	}()
@@ -56,7 +56,7 @@ func (s *Service) DescribeClusterRole(ctx context.Context, name string) (map[str
 
 // DeleteClusterRole deletes a clusterrole.
 func (s *Service) DeleteClusterRole(ctx context.Context, name string) error {
-	return s.Clientset().RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).RbacV1().ClusterRoles().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatClusterRoleList(items []rbacv1.ClusterRole) []map[string]interface{} {

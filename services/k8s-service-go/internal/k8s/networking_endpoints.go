@@ -12,7 +12,7 @@ import (
 
 // GetEndpoints lists endpoints in a namespace.
 func (s *Service) GetEndpoints(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().CoreV1().Endpoints(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list endpoints: %w", err)
 	}
@@ -25,7 +25,7 @@ func (s *Service) GetEndpoints(ctx context.Context, namespace string) ([]map[str
 
 // GetAllEndpoints lists endpoints across all namespaces.
 func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().CoreV1().Endpoints("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).CoreV1().Endpoints("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all endpoints: %w", err)
 	}
@@ -38,7 +38,7 @@ func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}
 
 // DescribeEndpoints returns detailed info about an endpoints resource.
 func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	ep, err := s.Clientset().CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
+	ep, err := s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get endpoints %s/%s: %w", namespace, name, err)
 	}
@@ -100,7 +100,7 @@ func (s *Service) DescribeEndpoints(ctx context.Context, namespace, name string)
 
 // DeleteEndpoints deletes an endpoints resource.
 func (s *Service) DeleteEndpoints(ctx context.Context, namespace, name string) error {
-	return s.Clientset().CoreV1().Endpoints(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Formatting helpers ==========

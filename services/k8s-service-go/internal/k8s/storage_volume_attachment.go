@@ -15,7 +15,7 @@ import (
 
 // GetVolumeAttachments lists all volume attachments.
 func (s *Service) GetVolumeAttachments(ctx context.Context) ([]map[string]interface{}, error) {
-	vaList, err := s.Clientset().StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
+	vaList, err := s.clientsetCtx(ctx).StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list volume attachments: %w", err)
 	}
@@ -29,7 +29,7 @@ func (s *Service) GetVolumeAttachments(ctx context.Context) ([]map[string]interf
 
 // DescribeVolumeAttachment returns detailed info about a volume attachment.
 func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (map[string]interface{}, error) {
-	va, err := s.Clientset().StorageV1().VolumeAttachments().Get(ctx, name, metav1.GetOptions{})
+	va, err := s.clientsetCtx(ctx).StorageV1().VolumeAttachments().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get volume attachment %s: %w", name, err)
 	}
@@ -49,12 +49,12 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 	go func() {
 		defer wg.Done()
 		if pvName != "" {
-			pv, pvErr = s.Clientset().CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
+			pv, pvErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events("").List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events("").List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=VolumeAttachment", name),
 		})
 	}()
@@ -140,7 +140,7 @@ func (s *Service) DescribeVolumeAttachment(ctx context.Context, name string) (ma
 
 // DeleteVolumeAttachment deletes a volume attachment.
 func (s *Service) DeleteVolumeAttachment(ctx context.Context, name string) error {
-	return s.Clientset().StorageV1().VolumeAttachments().Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).StorageV1().VolumeAttachments().Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatVolumeAttachment(va *storagev1.VolumeAttachment) map[string]interface{} {

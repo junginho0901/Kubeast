@@ -13,7 +13,7 @@ import (
 
 // GetPVCs lists PVCs in a namespace.
 func (s *Service) GetPVCs(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	pvcList, err := s.Clientset().CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
+	pvcList, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pvcs: %w", err)
 	}
@@ -22,7 +22,7 @@ func (s *Service) GetPVCs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllPVCs lists PVCs across all namespaces.
 func (s *Service) GetAllPVCs(ctx context.Context) ([]map[string]interface{}, error) {
-	pvcList, err := s.Clientset().CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
+	pvcList, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all pvcs: %w", err)
 	}
@@ -31,7 +31,7 @@ func (s *Service) GetAllPVCs(ctx context.Context) ([]map[string]interface{}, err
 
 // DescribePVC returns detailed info about a PVC.
 func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	pvc, err := s.Clientset().CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
+	pvc, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get pvc %s/%s: %w", namespace, name, err)
 	}
@@ -47,16 +47,16 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 	go func() {
 		defer wg.Done()
 		if pvc.Spec.VolumeName != "" {
-			boundPV, pvErr = s.Clientset().CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
+			boundPV, pvErr = s.clientsetCtx(ctx).CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		pods, podsErr = s.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		pods, podsErr = s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=PersistentVolumeClaim", name),
 		})
 	}()
@@ -178,7 +178,7 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 
 // DeletePVC deletes a PVC.
 func (s *Service) DeletePVC(ctx context.Context, namespace, name string) error {
-	return s.Clientset().CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 func formatPVCList(pvcs []corev1.PersistentVolumeClaim) []map[string]interface{} {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -64,6 +65,8 @@ const maxSubscriptions = 200
 type ClientProvider interface {
 	Clientset() *kubernetes.Clientset
 	Dynamic() dynamic.Interface
+	// DynamicForCtx targets the cluster carried in ctx (value-or-nil).
+	DynamicForCtx(ctx context.Context) dynamic.Interface
 }
 
 // Multiplexer handles multiplexed WebSocket watch connections.
@@ -185,6 +188,10 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 			subCtx, subCancel := context.WithCancel(ctx)
+			// Carry the target cluster so the watch hits the right cluster.
+			if req.ClusterID != "" {
+				subCtx = cluster.WithID(subCtx, cluster.ID(req.ClusterID))
+			}
 			m.subs[key] = &subscription{cancel: subCancel}
 			wsSubKeys = append(wsSubKeys, key)
 			m.mu.Unlock()
@@ -234,7 +241,7 @@ func (m *Multiplexer) runWatch(ctx context.Context, path, queryStr string, sendC
 			FieldSelector:   fieldSelector,
 		}
 
-		dyn := m.provider.Dynamic()
+		dyn := m.provider.DynamicForCtx(ctx)
 		if dyn == nil {
 			slog.Warn("watch skipped: kubeconfig not loaded", "resource", resource)
 			sendCh <- ResponseMessage{Type: "ERROR", Path: path, Query: queryStr, Error: map[string]string{"message": "kubeconfig not loaded"}}

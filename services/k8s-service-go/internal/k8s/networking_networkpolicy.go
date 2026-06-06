@@ -12,7 +12,7 @@ import (
 
 // GetNetworkPolicies lists network policies in a namespace.
 func (s *Service) GetNetworkPolicies(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().NetworkingV1().NetworkPolicies(namespace).List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list network policies: %w", err)
 	}
@@ -21,7 +21,7 @@ func (s *Service) GetNetworkPolicies(ctx context.Context, namespace string) ([]m
 
 // GetAllNetworkPolicies lists network policies across all namespaces.
 func (s *Service) GetAllNetworkPolicies(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.Clientset().NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
+	list, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all network policies: %w", err)
 	}
@@ -30,7 +30,7 @@ func (s *Service) GetAllNetworkPolicies(ctx context.Context) ([]map[string]inter
 
 // DescribeNetworkPolicy returns detailed info about a network policy.
 func (s *Service) DescribeNetworkPolicy(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	np, err := s.Clientset().NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+	np, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get network policy %s/%s: %w", namespace, name, err)
 	}
@@ -43,7 +43,7 @@ func (s *Service) DescribeNetworkPolicy(ctx context.Context, namespace, name str
 
 // DeleteNetworkPolicy deletes a network policy.
 func (s *Service) DeleteNetworkPolicy(ctx context.Context, namespace, name string) error {
-	return s.Clientset().NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	return s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // ========== Formatting helpers ==========

@@ -20,11 +20,11 @@ func (s *Service) DescribePod(ctx context.Context, namespace, name string) (map[
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pod, podErr = s.Clientset().CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		pod, podErr = s.clientsetCtx(ctx).CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		events, eventsErr = s.Clientset().CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		events, eventsErr = s.clientsetCtx(ctx).CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Pod", name),
 		})
 	}()

@@ -373,7 +373,7 @@ func podStatusString(pod *corev1.Pod) string {
 // / DescribeReplicaSet / DescribeStatefulSet to embed an owned_pods list in
 // the detail response so the UI can show + link to children.
 func (s *Service) listOwnedPods(ctx context.Context, namespace, ownerKind, ownerName string) ([]map[string]interface{}, error) {
-	pods, err := s.Clientset().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	pods, err := s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list pods in %s: %w", namespace, err)
 	}
