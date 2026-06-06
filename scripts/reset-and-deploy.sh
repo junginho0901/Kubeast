@@ -97,6 +97,10 @@ if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
     -- Auth service tables
     DELETE FROM auth_audit_logs;
     DELETE FROM auth_users;
+
+    -- Multi-cluster tables (user_cluster_roles FKs clusters/auth_users).
+    DELETE FROM user_cluster_roles;
+    DELETE FROM clusters;
     DELETE FROM cluster_setup;
   " 2>&1 || warn "Some tables may not exist (first run?)"
   ok "Database cleared"
@@ -104,8 +108,8 @@ if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
   # K8s에 남아있는 클러스터 관련 리소스 정리
   step "Cleaning up K8s cluster resources"
 
-  # 클러스터 등록 시 생성된 kubeconfig 시크릿 삭제 (k8s-kubeconfig, k8s-kubeconfig-<uuid>)
-  KUBE_SECRETS=$(kubectl get secrets -n "$NS" -o name 2>/dev/null | grep "k8s-kubeconfig" || true)
+  # 클러스터 kubeconfig 시크릿 삭제: 구형(k8s-kubeconfig*) + 멀티클러스터(cluster-kubeconfig-*)
+  KUBE_SECRETS=$(kubectl get secrets -n "$NS" -o name 2>/dev/null | grep -E "k8s-kubeconfig|cluster-kubeconfig" || true)
   if [[ -n "$KUBE_SECRETS" ]]; then
     echo "$KUBE_SECRETS" | xargs kubectl delete -n "$NS" 2>/dev/null || true
     ok "Deleted kubeconfig secrets: $(echo $KUBE_SECRETS | tr '\n' ' ')"
