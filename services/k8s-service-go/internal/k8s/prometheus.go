@@ -47,13 +47,26 @@ type promServiceInfo struct {
 	Port      int32
 }
 
-// Prometheus endpoint discovery cache.
-var (
-	promMu       sync.RWMutex
-	promSvc      *promServiceInfo
-	promProbed   bool
-	promProbedAt time.Time
-)
+// promCache holds Prometheus discovery state for a single cluster. Previously
+// these were package-level globals; keeping them as instance state stops one
+// cluster's discovered Prometheus location from leaking into another once the
+// Service manages more than one cluster.
+type promCache struct {
+	mu       sync.RWMutex
+	svc      *promServiceInfo
+	probed   bool
+	probedAt time.Time
+}
+
+// reset clears the cache so the next query re-discovers Prometheus (called when
+// a cluster's kubeconfig is reloaded).
+func (c *promCache) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.svc = nil
+	c.probed = false
+	c.probedAt = time.Time{}
+}
 
 const promCacheTTL = 10 * time.Minute
 
@@ -207,25 +220,26 @@ func (s *Service) PrometheusQueryRange(ctx context.Context, query string, start,
 
 // getPromService returns the cached Prometheus service info or triggers discovery.
 func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
-	promMu.RLock()
-	if promProbed && time.Since(promProbedAt) < promCacheTTL {
-		cached := promSvc
-		promMu.RUnlock()
+	c := s.prom
+	c.mu.RLock()
+	if c.probed && time.Since(c.probedAt) < promCacheTTL {
+		cached := c.svc
+		c.mu.RUnlock()
 		return cached
 	}
-	promMu.RUnlock()
+	c.mu.RUnlock()
 
-	promMu.Lock()
-	defer promMu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if promProbed && time.Since(promProbedAt) < promCacheTTL {
-		return promSvc
+	if c.probed && time.Since(c.probedAt) < promCacheTTL {
+		return c.svc
 	}
 
-	promProbed = true
-	promProbedAt = time.Now()
-	promSvc = s.discoverPrometheus(ctx)
-	return promSvc
+	c.probed = true
+	c.probedAt = time.Now()
+	c.svc = s.discoverPrometheus(ctx)
+	return c.svc
 }
 
 // discoverPrometheus scans the TARGET cluster for a Prometheus service.

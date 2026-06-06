@@ -45,6 +45,9 @@ type Service struct {
 
 	cache *cache.Cache
 
+	// Prometheus discovery cache (per Service instance; see prometheus.go).
+	prom *promCache
+
 	// Gateway API version cache
 	gatewayAPIVersionMu    sync.RWMutex
 	gatewayAPIVersionCache string
@@ -71,6 +74,7 @@ func NewService(kubeconfigPath string, inCluster bool, watchEnabled bool, c *cac
 		inCluster:      inCluster,
 		watchEnabled:   watchEnabled,
 		cache:          c,
+		prom:           &promCache{},
 	}
 
 	if inCluster {
@@ -160,6 +164,10 @@ func (s *Service) invalidateCaches() {
 	s.draAPIVersionMu.Lock()
 	s.draAPIVersionCache = ""
 	s.draAPIVersionMu.Unlock()
+
+	if s.prom != nil {
+		s.prom.reset()
+	}
 
 	if s.cache != nil {
 		// Best-effort: ignore errors from Redis flush.
