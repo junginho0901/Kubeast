@@ -195,3 +195,100 @@ test.describe('per-cluster JWT permission matrix (step 06)', () => {
     expect((perms as Record<string, string[]>)['*']).toContain('*')
   })
 })
+
+test.describe('per-cluster RBAC enforcement (step 08)', () => {
+  // Full deny-by-default → grant → enforce loop on a throwaway non-admin user.
+  // The user starts with the global "Read" role but NO per-cluster grant, so
+  // their JWT matrix is empty and every gated resource is refused. Granting a
+  // role on a cluster (admin.users.update) adds that cluster to the matrix on
+  // the user's next login, which the k8s handlers (requirePermissionForCluster)
+  // then honor. Self-cleaning.
+  let auth: Record<string, string>
+  let userId = ''
+  const email = `e2e-rbac-${Date.now()}@kubeast.local`
+  const password = 'rbac1234'
+
+  async function userToken(request: APIRequestContext): Promise<string> {
+    const res = await request.post('/api/v1/auth/login', { data: { email, password } })
+    expect(res.ok(), 'throwaway user login should succeed').toBeTruthy()
+    return (await res.json()).access_token
+  }
+
+  test.beforeAll(async ({ request }) => {
+    auth = { Authorization: `Bearer ${await login(request)}` }
+    const res = await request.post('/api/v1/auth/admin/users', {
+      headers: auth,
+      data: { name: 'E2E RBAC', email, password },
+      failOnStatusCode: false,
+    })
+    expect(res.status(), 'create throwaway user (defaults to Read role)').toBe(201)
+    userId = (await res.json()).id
+    expect(userId).toBeTruthy()
+  })
+
+  test.afterAll(async ({ request }) => {
+    if (!userId) return
+    await request.delete(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, {
+      headers: auth,
+      failOnStatusCode: false,
+    })
+    await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: auth, failOnStatusCode: false })
+  })
+
+  test('new non-admin token carries an empty matrix (no grants)', async ({ request }) => {
+    const perms = decodeJwtPayload(await userToken(request)).permissions as Record<string, string[]>
+    expect(perms['*']).toBeUndefined() // not a global admin
+    expect(perms['default']).toBeUndefined() // no per-cluster grant yet
+  })
+
+  test('deny-by-default: no grant → gated resource 403', async ({ request }) => {
+    const res = await request.get('/api/v1/helm/releases?cluster=default', {
+      headers: { Authorization: `Bearer ${await userToken(request)}` },
+      failOnStatusCode: false,
+    })
+    expect(res.status(), 'no cluster grant → forbidden').toBe(403)
+  })
+
+  test('grant → GET reflects it; re-login → enforcement allows; accessibleOnly lists it', async ({
+    request,
+  }) => {
+    const put = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, {
+      headers: auth,
+      data: { role: 'Read' },
+    })
+    expect(put.status()).toBe(200)
+
+    const get = await request.get(`/api/v1/auth/admin/users/${userId}/cluster-roles`, { headers: auth })
+    expect(await get.json()).toMatchObject({ default: 'Read' })
+
+    // Grants apply on the NEXT token issuance.
+    const perms = decodeJwtPayload(await userToken(request)).permissions as Record<string, string[]>
+    expect(perms['default']).toContain('resource.helm.read')
+
+    const userHdr = { Authorization: `Bearer ${await userToken(request)}` }
+    const allowed = await request.get('/api/v1/helm/releases?cluster=default', {
+      headers: userHdr,
+      failOnStatusCode: false,
+    })
+    expect(allowed.status(), 'granted cluster → allowed').toBe(200)
+
+    // accessibleOnly returns only the clusters the user can reach.
+    const acc = await request.get('/api/v1/clusters?accessibleOnly=true', { headers: userHdr })
+    const ids = (await acc.json()).items.map((c: { id: string }) => c.id)
+    expect(ids).toContain('default')
+  })
+
+  test('revoke → GET empty + repeat delete 404', async ({ request }) => {
+    const del = await request.delete(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, {
+      headers: auth,
+    })
+    expect(del.status()).toBe(204)
+    const get = await request.get(`/api/v1/auth/admin/users/${userId}/cluster-roles`, { headers: auth })
+    expect(await get.json()).toEqual({})
+    const again = await request.delete(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, {
+      headers: auth,
+      failOnStatusCode: false,
+    })
+    expect(again.status()).toBe(404)
+  })
+})
