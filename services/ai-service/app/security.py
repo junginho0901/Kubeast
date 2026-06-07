@@ -29,6 +29,27 @@ class TokenPayload:
         return False
 
 
+def _flatten_permissions(raw) -> tuple:
+    """Flatten the JWT permissions claim into a flat tuple of permission strings.
+
+    Since step 06 the claim is a per-cluster matrix ({"*": [...], "prod": [...]}).
+    AI chat is not cluster-scoped until step 14, so here we take the UNION of all
+    clusters' permissions — has_permission then means "granted in some cluster",
+    which preserves the pre-matrix behaviour for the AI tool gates and the admin
+    model-config check. The legacy flat-array form is still accepted so a token
+    issued during the transition does not break AI calls.
+    """
+    if isinstance(raw, dict):
+        out: list = []
+        for perms in raw.values():
+            if isinstance(perms, list):
+                out.extend(str(p) for p in perms if isinstance(p, str))
+        return tuple(out)
+    if isinstance(raw, list):
+        return tuple(str(p) for p in raw if isinstance(p, str))
+    return ()
+
+
 def decode_access_token(token: str) -> TokenPayload:
     try:
         signing_key = _jwk_client.get_signing_key_from_jwt(token).key
@@ -44,8 +65,7 @@ def decode_access_token(token: str) -> TokenPayload:
         email = str(payload.get("email") or "").strip()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        raw_perms = payload.get("permissions") or []
-        permissions = tuple(str(p) for p in raw_perms if isinstance(p, str))
+        permissions = _flatten_permissions(payload.get("permissions"))
         return TokenPayload(
             user_id=user_id,
             role=role or "read",
