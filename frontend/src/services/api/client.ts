@@ -5,6 +5,7 @@
 
 import axios from 'axios'
 import { getAccessToken, handleUnauthorized } from '../auth'
+import { getCurrentClusterID } from '../clusterRef'
 
 export const client = axios.create({
   baseURL: '/api/v1',
@@ -19,6 +20,15 @@ client.interceptors.request.use((config) => {
   const token = getAccessToken()
   if (token) {
     (config.headers as any).Authorization = `Bearer ${token}`
+  }
+  // Inject the selected cluster (step 09). An explicit cluster on the call wins;
+  // an empty selection omits it so the server uses its default cluster.
+  const cid = getCurrentClusterID()
+  if (cid) {
+    const params = (config.params ?? {}) as Record<string, unknown>
+    if (params.cluster === undefined) {
+      config.params = { ...params, cluster: cid }
+    }
   }
   return config
 })

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { watchMultiplexer } from './watchMultiplexer'
+import { getCurrentClusterID } from './clusterRef'
 
 type WatchEvent = {
   type?: string
@@ -54,7 +55,7 @@ export function useKubeWatchList(options: {
 
     const msg = {
       type: 'REQUEST' as const,
-      clusterId: 'default',
+      clusterId: getCurrentClusterID() || 'default',
       path: options.path,
       query,
     }
