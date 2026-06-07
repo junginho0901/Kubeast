@@ -94,8 +94,6 @@ func main() {
 		slog.Error("failed to initialize k8s service", "err", err)
 		os.Exit(1)
 	}
-	k8sSvc.SetHelmKubeconfigPath(cfg.KubeconfigPath)
-
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
 		JWKSURL:  cfg.AuthJWKSURL,

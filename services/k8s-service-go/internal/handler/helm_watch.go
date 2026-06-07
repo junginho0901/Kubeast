@@ -38,16 +38,17 @@ const helmWatchKeepaliveInterval = 30 * time.Second
 //     a ReleaseSummary and forwarded as SSE 'data:' frames.
 //
 // Why SSE instead of WebSocket:
-//  - This stream is single-direction (server → client). Client never sends
-//    a request after the initial GET.
-//  - Browser EventSource gives free automatic reconnect on idle timeout
-//    or transient network failure.
-//  - Replaces the WS-side ping/pong dance with a single SSE comment line.
+//   - This stream is single-direction (server → client). Client never sends
+//     a request after the initial GET.
+//   - Browser EventSource gives free automatic reconnect on idle timeout
+//     or transient network failure.
+//   - Replaces the WS-side ping/pong dance with a single SSE comment line.
 //
 // Path: GET /api/v1/helm/releases/stream?namespace=&cluster=default
 //
 //   - namespace empty → cluster-wide watch
-//   - cluster query is reserved for the multi-cluster transition; ignored today.
+//   - cluster query selects the target cluster (ClientsetFor(ctx), via
+//     ClusterMiddleware); absent → default cluster.
 func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
@@ -124,7 +125,10 @@ func (h *Handler) startSecretWatch(ctx context.Context, namespace string) (watch
 		TimeoutSeconds: &timeout,
 	}
 
-	cs := h.svc.Clientset()
+	cs, err := h.svc.ClientsetFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if cs == nil {
 		return nil, errKubeconfigNotLoaded
 	}

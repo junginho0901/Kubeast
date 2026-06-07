@@ -50,10 +50,6 @@ type Service struct {
 	bundles       sync.Map // map[cluster.ID]*atomic.Pointer[clientBundle]
 	defaultBundle atomic.Pointer[clientBundle]
 
-	// helmKubeconfigPath is the legacy env kubeconfig path, kept only for the
-	// Helm SDK until it becomes cluster-aware. Not used to build bundles.
-	helmKubeconfigPath string
-
 	watchEnabled bool
 
 	cache *cache.Cache
@@ -108,10 +104,6 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	}
 	return s, nil
 }
-
-// SetHelmKubeconfigPath records the legacy env kubeconfig path used by the Helm
-// SDK. (Helm becomes cluster-aware in a later change.)
-func (s *Service) SetHelmKubeconfigPath(p string) { s.helmKubeconfigPath = p }
 
 // buildClientBundle constructs a clientBundle from cluster.Info. The connection
 // mode is chosen by which field is set. No connection test is performed — the
@@ -391,9 +383,6 @@ func (s *Service) DynamicForCtx(ctx context.Context) dynamic.Interface {
 
 // Cache returns the cache instance.
 func (s *Service) Cache() *cache.Cache { return s.cache }
-
-// KubeconfigPath returns the legacy Helm kubeconfig path (see helmKubeconfigPath).
-func (s *Service) KubeconfigPath() string { return s.helmKubeconfigPath }
 
 // WatchEnabled reports whether hot-reload is configured for this service.
 func (s *Service) WatchEnabled() bool { return s.watchEnabled }

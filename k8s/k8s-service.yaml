@@ -38,15 +38,9 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
-          volumeMounts:
-            - name: kubeconfig
-              mountPath: /app/kubeconfig.yaml
-              subPath: kubeconfig.yaml
-      volumes:
-        - name: kubeconfig
-          secret:
-            secretName: k8s-kubeconfig
-            optional: true
+          # Helm is cluster-aware (step 04b): it reads the per-cluster
+          # kubeconfig from cluster-kubeconfig-<id> secrets at request time
+          # via the registry, so the legacy single k8s-kubeconfig mount is gone.
 ---
 apiVersion: v1
 kind: Service

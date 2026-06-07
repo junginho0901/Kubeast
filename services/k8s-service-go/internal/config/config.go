@@ -10,7 +10,6 @@ type Config struct {
 	AppName string
 
 	// Kubernetes
-	KubeconfigPath  string
 	InCluster       bool
 	KubeconfigWatch bool
 
@@ -46,7 +45,6 @@ func Load() Config {
 		Debug:   pkgconfig.GetEnvBool("DEBUG", false),
 		AppName: pkgconfig.GetEnv("APP_NAME", "k8s-service"),
 
-		KubeconfigPath:  pkgconfig.GetEnv("KUBECONFIG_PATH", ""),
 		InCluster:       pkgconfig.GetEnvBool("IN_CLUSTER", false),
 		KubeconfigWatch: pkgconfig.GetEnvBool("KUBECONFIG_WATCH", false),
 

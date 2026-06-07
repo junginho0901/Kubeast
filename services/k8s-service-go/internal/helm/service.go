@@ -18,7 +18,6 @@ import (
 	"sync"
 
 	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/kube"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
@@ -38,9 +37,10 @@ type Service struct {
 	cache *cache.Cache
 
 	// getterFactory is swapped out in tests to inject a fake
-	// genericclioptions.RESTClientGetter. In production it resolves
-	// from the active kubeconfig via helm.sh/helm/v3/pkg/kube.
-	getterFactory func(namespace string) genericclioptions.RESTClientGetter
+	// genericclioptions.RESTClientGetter. In production it resolves the
+	// per-cluster *rest.Config from ctx (the ?cluster= entry) and wraps it
+	// in a restConfigGetter — see defaultGetter.
+	getterFactory func(ctx context.Context, namespace string) (genericclioptions.RESTClientGetter, error)
 
 	mu sync.Mutex
 }
@@ -57,28 +57,25 @@ func NewService(k8sSvc *k8s.Service, c *cache.Cache) *Service {
 	return s
 }
 
-// defaultGetter derives a Helm REST getter from the active kubeconfig on
-// k8s.Service. Called on every action — do not cache between calls, the
-// kubeconfig hot-reload relies on re-reading the rest.Config each time.
-func (s *Service) defaultGetter(namespace string) genericclioptions.RESTClientGetter {
-	cfg := s.k8s.RESTConfig()
-	if cfg == nil {
-		return nil
+// defaultGetter derives a Helm REST getter from the per-cluster *rest.Config
+// resolved from ctx (the request's ?cluster= entry). Called on every action —
+// do not cache between calls; the bundle is rebuilt on kubeconfig rotation
+// (Service.Invalidate) and re-read here each time.
+func (s *Service) defaultGetter(ctx context.Context, namespace string) (genericclioptions.RESTClientGetter, error) {
+	cfg, err := s.k8s.RESTConfigFor(ctx)
+	if err != nil {
+		return nil, err
 	}
-	// kube.GetConfig builds a genericclioptions.ConfigFlags backed by the
-	// given kubeconfig path; the empty string falls back to in-cluster /
-	// KUBECONFIG / default path resolution as done by client-go.
-	return kube.GetConfig(s.k8s.KubeconfigPath(), "", namespace)
+	return &restConfigGetter{cfg: cfg, namespace: namespace}, nil
 }
 
 // actionConfig builds a fresh *action.Configuration for the given namespace.
 // Callers must not share the returned value across goroutines.
 func (s *Service) actionConfig(ctx context.Context, namespace string) (*action.Configuration, error) {
-	if s.k8s.RESTConfig() == nil {
-		return nil, fmt.Errorf("kubeconfig not loaded")
+	getter, err := s.getterFactory(ctx, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("helm getter: %w", err)
 	}
-
-	getter := s.getterFactory(namespace)
 	if getter == nil {
 		return nil, fmt.Errorf("kubeconfig not loaded")
 	}
