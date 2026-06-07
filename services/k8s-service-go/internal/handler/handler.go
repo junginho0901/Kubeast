@@ -12,6 +12,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -35,7 +36,10 @@ func New(svc *k8s.Service, cfg config.Config, auditStore audit.Writer) *Handler 
 	}
 }
 
-// requirePermission checks that the authenticated user has the given permission.
+// requirePermission checks that the authenticated user has the given GLOBAL
+// permission (the "*" matrix entry) — use it for cluster-agnostic admin.*
+// checks. Cluster-scoped resource handlers should use
+// requirePermissionForCluster instead.
 func (h *Handler) requirePermission(r *http.Request, perm string) error {
 	payload, ok := auth.FromContext(r.Context())
 	if !ok {
@@ -43,6 +47,24 @@ func (h *Handler) requirePermission(r *http.Request, perm string) error {
 	}
 	if !payload.HasPermission(perm) {
 		return fmt.Errorf("forbidden: requires %s permission", perm)
+	}
+	return nil
+}
+
+// requirePermissionForCluster checks that the authenticated user holds perm in
+// the cluster targeted by the request's ?cluster= parameter (honoring the
+// all-cluster "*" grant). When no cluster is set on the context the check falls
+// back to the global "*" entry only. Cluster-scoped handlers switch to this in
+// step 08; deny-by-default means a non-admin without a per-cluster grant is
+// refused (00-COMMON §2-3).
+func (h *Handler) requirePermissionForCluster(r *http.Request, perm string) error {
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		return fmt.Errorf("unauthorized")
+	}
+	cid, _ := cluster.FromContext(r.Context())
+	if !payload.HasPermissionForCluster(perm, string(cid)) {
+		return fmt.Errorf("forbidden: requires %s permission in cluster %q", perm, cid)
 	}
 	return nil
 }
