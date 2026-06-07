@@ -50,7 +50,7 @@ const helmWatchKeepaliveInterval = 30 * time.Second
 //   - cluster query selects the target cluster (ClientsetFor(ctx), via
 //     ClusterMiddleware); absent → default cluster.
 func (h *Handler) WatchHelmReleases(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}

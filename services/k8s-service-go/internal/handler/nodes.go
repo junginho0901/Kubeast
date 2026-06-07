@@ -70,7 +70,7 @@ func (h *Handler) GetNodeEvents(w http.ResponseWriter, r *http.Request) {
 
 // DeleteNode handles DELETE /api/v1/nodes/{name}.
 func (h *Handler) DeleteNode(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.node.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.node.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -87,7 +87,7 @@ func (h *Handler) DeleteNode(w http.ResponseWriter, r *http.Request) {
 
 // ApplyNodeYAML handles POST /api/v1/nodes/{name}/yaml/apply.
 func (h *Handler) ApplyNodeYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.node.edit"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.node.edit"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -114,7 +114,7 @@ func (h *Handler) ApplyNodeYAML(w http.ResponseWriter, r *http.Request) {
 
 // CordonNode handles POST /api/v1/nodes/{name}/cordon.
 func (h *Handler) CordonNode(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.node.cordon"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.node.cordon"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -131,7 +131,7 @@ func (h *Handler) CordonNode(w http.ResponseWriter, r *http.Request) {
 
 // UncordonNode handles POST /api/v1/nodes/{name}/uncordon.
 func (h *Handler) UncordonNode(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.node.cordon"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.node.cordon"); err != nil {
 		h.handleError(w, err)
 		return
 	}

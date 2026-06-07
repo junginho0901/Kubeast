@@ -61,7 +61,7 @@ func (h *Handler) GetCronJobYAML(w http.ResponseWriter, r *http.Request) {
 
 // SuspendCronJob handles PATCH /api/v1/namespaces/{namespace}/cronjobs/{name}/suspend.
 func (h *Handler) SuspendCronJob(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.cronjob.suspend"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.cronjob.suspend"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -92,7 +92,7 @@ func (h *Handler) SuspendCronJob(w http.ResponseWriter, r *http.Request) {
 
 // TriggerCronJob handles POST /api/v1/namespaces/{namespace}/cronjobs/{name}/trigger.
 func (h *Handler) TriggerCronJob(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.cronjob.trigger"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.cronjob.trigger"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -127,7 +127,7 @@ func (h *Handler) GetCronJobOwnedJobs(w http.ResponseWriter, r *http.Request) {
 
 // DeleteCronJob handles DELETE /api/v1/namespaces/{namespace}/cronjobs/{name}.
 func (h *Handler) DeleteCronJob(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.cronjob.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.cronjob.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

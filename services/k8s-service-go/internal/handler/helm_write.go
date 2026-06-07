@@ -24,7 +24,7 @@ import (
 
 // RollbackHelmRelease handles POST /api/v1/helm/releases/{namespace}/{name}/rollback.
 func (h *Handler) RollbackHelmRelease(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.rollback"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.rollback"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -71,7 +71,7 @@ func (h *Handler) RollbackHelmRelease(w http.ResponseWriter, r *http.Request) {
 // Runs the release's helm test hooks (usually Pod kind with the
 // helm.sh/hook=test annotation) and reports per-hook pass/fail.
 func (h *Handler) TestHelmRelease(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.test"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.test"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) TestHelmRelease(w http.ResponseWriter, r *http.Request) {
 // Chart version is preserved — only the user-supplied values map is
 // replaced. See docs/helm-plan.md Q5 for why chart upgrade is deferred.
 func (h *Handler) UpgradeHelmValues(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.upgrade"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.upgrade"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -149,7 +149,7 @@ func (h *Handler) UpgradeHelmValues(w http.ResponseWriter, r *http.Request) {
 // dryRun=false only after the user types the release name into the
 // confirm modal — this endpoint itself does not enforce that workflow.
 func (h *Handler) UninstallHelmRelease(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.uninstall"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.uninstall"); err != nil {
 		h.handleError(w, err)
 		return
 	}

@@ -33,7 +33,7 @@ var debugUpgrader = websocket.Upgrader{
 
 // NodeDebugShellWS handles WebSocket /api/v1/nodes/{name}/debug-shell/ws.
 func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.node.shell"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.node.shell"); err != nil {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

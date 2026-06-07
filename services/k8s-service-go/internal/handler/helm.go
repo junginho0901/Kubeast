@@ -21,7 +21,7 @@ import (
 
 // GetHelmReleases handles GET /api/v1/helm/releases.
 func (h *Handler) GetHelmReleases(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -37,7 +37,7 @@ func (h *Handler) GetHelmReleases(w http.ResponseWriter, r *http.Request) {
 
 // GetHelmRelease handles GET /api/v1/helm/releases/{namespace}/{name}.
 func (h *Handler) GetHelmRelease(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -54,7 +54,7 @@ func (h *Handler) GetHelmRelease(w http.ResponseWriter, r *http.Request) {
 // GetHelmReleaseSection handles GET /api/v1/helm/releases/{namespace}/{name}/{section}.
 // Returns one of manifest|values|notes|hooks as a YAML / plain string.
 func (h *Handler) GetHelmReleaseSection(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) GetHelmReleaseSection(w http.ResponseWriter, r *http.Request) 
 
 // GetHelmReleaseHistory handles GET /api/v1/helm/releases/{namespace}/{name}/history.
 func (h *Handler) GetHelmReleaseHistory(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -91,7 +91,7 @@ func (h *Handler) GetHelmReleaseHistory(w http.ResponseWriter, r *http.Request) 
 
 // GetHelmRevisionSection handles GET /api/v1/helm/releases/{namespace}/{name}/revisions/{revision}/{section}.
 func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -132,7 +132,7 @@ func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request)
 
 // DiffHelmRelease handles POST /api/v1/helm/releases/{namespace}/{name}/diff.
 func (h *Handler) DiffHelmRelease(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -158,7 +158,7 @@ func (h *Handler) DiffHelmRelease(w http.ResponseWriter, r *http.Request) {
 
 // GetHelmReleaseResources handles GET /api/v1/helm/releases/{namespace}/{name}/resources.
 func (h *Handler) GetHelmReleaseResources(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -174,7 +174,7 @@ func (h *Handler) GetHelmReleaseResources(w http.ResponseWriter, r *http.Request
 
 // GetHelmReleaseImages handles GET /api/v1/helm/releases/{namespace}/{name}/images.
 func (h *Handler) GetHelmReleaseImages(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.helm.read"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.helm.read"); err != nil {
 		h.handleError(w, err)
 		return
 	}
