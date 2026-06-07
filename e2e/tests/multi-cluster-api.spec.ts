@@ -133,3 +133,31 @@ test.describe('multi-cluster — cluster CRUD API (step 07)', () => {
     expect(res.status()).toBe(204)
   })
 })
+
+// Decodes a JWT payload segment without verifying the signature (test-only).
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const seg = token.split('.')[1]
+  const json = Buffer.from(seg.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+  return JSON.parse(json)
+}
+
+test.describe('per-cluster JWT permission matrix (step 06)', () => {
+  test('login token carries a permissions MAP (not the legacy array); admin holds "*"', async ({
+    request,
+  }) => {
+    const res = await request.post('/api/v1/auth/login', {
+      data: { email: EMAIL, password: PASSWORD },
+    })
+    expect(res.ok()).toBeTruthy()
+    const token = (await res.json()).access_token as string
+
+    const claims = decodeJwtPayload(token)
+    const perms = claims.permissions
+    // Per-cluster matrix form, never the old flat array.
+    expect(Array.isArray(perms)).toBe(false)
+    expect(typeof perms).toBe('object')
+    expect(perms).not.toBeNull()
+    // The e2e user is admin → global superuser → "*" entry grants everything.
+    expect((perms as Record<string, string[]>)['*']).toContain('*')
+  })
+})
