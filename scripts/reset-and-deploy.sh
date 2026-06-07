@@ -65,9 +65,12 @@ else
   kind create cluster --name "$KIND_NAME" --config "$ROOT/kind-config.yaml"
   ok "Kind cluster created"
 
-  # kubeconfig 저장
+  # kubeconfig 저장. repo-local .kubeconfig-kind 도 함께 갱신해 둔다 —
+  # rebuild-kind.sh 가 이 파일을 우선 사용하므로, 동기화 안 하면 reset 후
+  # rebuild 의 rollout 단계가 옛 클러스터 포트로 connection refused 가 난다.
   kind get kubeconfig --name "$KIND_NAME" > "$KUBECONFIG_PATH"
-  ok "Kubeconfig saved to $KUBECONFIG_PATH"
+  kind get kubeconfig --name "$KIND_NAME" > "$ROOT/.kubeconfig-kind"
+  ok "Kubeconfig saved to $KUBECONFIG_PATH (+ .kubeconfig-kind)"
 fi
 
 # 클러스터 접근 확인
