@@ -1,6 +1,9 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { isLoggedIn } from '@/services/auth'
+import { isLoggedIn, getAccessToken } from '@/services/auth'
+import { useCluster } from '@/contexts/ClusterContext'
+import { getTokenMatrix, hasPermission, type PermissionMatrix } from '@/utils/permissions'
 
 export function usePermission() {
   const { data: me } = useQuery({
@@ -10,16 +13,20 @@ export function usePermission() {
     retry: false,
     staleTime: 30000,
   })
+  const { currentCluster } = useCluster()
 
-  const perms: string[] = me?.role?.permissions ?? []
+  // Effective permissions are the per-cluster matrix carried in the JWT — the
+  // same thing the backend enforces — not the global role's flat list. Using
+  // the role list would show actions the backend then 403s for a non-admin
+  // without a per-cluster grant. Recompute when the token / identity changes.
+  const token = getAccessToken()
+  const matrix = useMemo<PermissionMatrix>(() => getTokenMatrix(), [token, me])
 
-  const has = (perm: string): boolean =>
-    perms.some(
-      (p) =>
-        p === '*' ||
-        p === perm ||
-        (p.endsWith('.*') && perm.startsWith(p.slice(0, -1)))
-    )
+  // has(perm, clusterID?) — clusterID defaults to the selected cluster, so the
+  // existing has(perm) call sites become cluster-aware automatically. A global
+  // admin (matrix["*"] = ["*"]) still passes everything.
+  const has = (perm: string, clusterID?: string): boolean =>
+    hasPermission(matrix, perm, clusterID ?? currentCluster)
 
-  return { has, permissions: perms, role: me?.role ?? null }
+  return { has, permissions: matrix, role: me?.role ?? null }
 }
