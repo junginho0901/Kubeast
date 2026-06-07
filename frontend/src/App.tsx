@@ -73,12 +73,14 @@ import CustomResourceInstances from './pages/custom-resources/CustomResourceInst
 import HelmReleasesPage from './pages/helm/Releases'
 import HelmReleaseDetailPage from './pages/helm/ReleaseDetail'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
+import { ClusterProvider } from './contexts/ClusterContext'
 
 function App() {
   return (
     <MonacoEditorLoaderInitializer>
       <BrowserRouter>
-        <Routes>
+        <ClusterProvider>
+          <Routes>
           <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
@@ -152,7 +154,8 @@ function App() {
             <Route path="admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
           </Route>
-        </Routes>
+          </Routes>
+        </ClusterProvider>
       </BrowserRouter>
     </MonacoEditorLoaderInitializer>
   )
