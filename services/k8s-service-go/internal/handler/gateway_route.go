@@ -59,7 +59,7 @@ func (h *Handler) DescribeHTTPRoute(w http.ResponseWriter, r *http.Request) {
 
 // DeleteHTTPRoute handles DELETE /api/v1/namespaces/{namespace}/httproutes/{name}.
 func (h *Handler) DeleteHTTPRoute(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.httproute.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.httproute.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -127,7 +127,7 @@ func (h *Handler) DescribeGRPCRoute(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGRPCRoute handles DELETE /api/v1/namespaces/{namespace}/grpcroutes/{name}.
 func (h *Handler) DeleteGRPCRoute(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.grpcroute.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.grpcroute.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

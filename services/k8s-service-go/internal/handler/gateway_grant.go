@@ -59,7 +59,7 @@ func (h *Handler) DescribeReferenceGrant(w http.ResponseWriter, r *http.Request)
 
 // DeleteReferenceGrant handles DELETE /api/v1/namespaces/{namespace}/referencegrants/{name}.
 func (h *Handler) DeleteReferenceGrant(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.referencegrant.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.referencegrant.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

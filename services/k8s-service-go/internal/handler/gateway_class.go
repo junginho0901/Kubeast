@@ -59,7 +59,7 @@ func (h *Handler) DescribeGateway(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGateway handles DELETE /api/v1/namespaces/{namespace}/gateways/{name}.
 func (h *Handler) DeleteGateway(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.gateway.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.gateway.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -110,7 +110,7 @@ func (h *Handler) DescribeGatewayClass(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGatewayClass handles DELETE /api/v1/gatewayclasses/{name}.
 func (h *Handler) DeleteGatewayClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.gatewayclass.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.gatewayclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

@@ -200,7 +200,7 @@ func (h *Handler) DescribeDeviceClass(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteDeviceClass(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.deviceclass.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.deviceclass.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -263,7 +263,7 @@ func (h *Handler) DescribeResourceClaim(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) DeleteResourceClaim(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.resourceclaim.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.resourceclaim.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -327,7 +327,7 @@ func (h *Handler) DescribeResourceClaimTemplate(w http.ResponseWriter, r *http.R
 }
 
 func (h *Handler) DeleteResourceClaimTemplate(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.resourceclaimtemplate.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.resourceclaimtemplate.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -375,7 +375,7 @@ func (h *Handler) DescribeResourceSlice(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) DeleteResourceSlice(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.resourceslice.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.resourceslice.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

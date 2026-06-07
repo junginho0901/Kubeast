@@ -59,7 +59,7 @@ func (h *Handler) DescribeBackendTLSPolicy(w http.ResponseWriter, r *http.Reques
 
 // DeleteBackendTLSPolicy handles DELETE /api/v1/namespaces/{namespace}/backendtlspolicies/{name}.
 func (h *Handler) DeleteBackendTLSPolicy(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.backendtlspolicy.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.backendtlspolicy.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -127,7 +127,7 @@ func (h *Handler) DescribeBackendTrafficPolicy(w http.ResponseWriter, r *http.Re
 
 // DeleteBackendTrafficPolicy handles DELETE /api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}.
 func (h *Handler) DeleteBackendTrafficPolicy(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.backendtrafficpolicy.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.backendtrafficpolicy.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

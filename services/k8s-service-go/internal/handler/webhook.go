@@ -45,7 +45,7 @@ func (h *Handler) GetMutatingWebhookConfigurationYAML(w http.ResponseWriter, r *
 
 // DeleteMutatingWebhookConfiguration handles DELETE /api/v1/mutatingwebhookconfigurations/{name}.
 func (h *Handler) DeleteMutatingWebhookConfiguration(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.mutatingwebhookconfiguration.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.mutatingwebhookconfiguration.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -98,7 +98,7 @@ func (h *Handler) GetValidatingWebhookConfigurationYAML(w http.ResponseWriter, r
 
 // DeleteValidatingWebhookConfiguration handles DELETE /api/v1/validatingwebhookconfigurations/{name}.
 func (h *Handler) DeleteValidatingWebhookConfiguration(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.validatingwebhookconfiguration.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.validatingwebhookconfiguration.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
