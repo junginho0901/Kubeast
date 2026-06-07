@@ -59,7 +59,7 @@ func (h *Handler) GetVPAYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteVPA handles DELETE /api/v1/namespaces/{namespace}/vpas/{name}.
 func (h *Handler) DeleteVPA(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.vpa.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.vpa.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

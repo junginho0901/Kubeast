@@ -43,7 +43,7 @@ func (h *Handler) GetWorkloadRevisions(w http.ResponseWriter, r *http.Request) {
 
 // RollbackWorkload handles POST /api/v1/namespaces/{namespace}/{kind}/{name}/rollback.
 func (h *Handler) RollbackWorkload(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.workload.rollback"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.workload.rollback"); err != nil {
 		h.handleError(w, err)
 		return
 	}

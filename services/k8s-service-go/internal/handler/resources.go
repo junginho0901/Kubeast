@@ -53,10 +53,10 @@ func (h *Handler) SearchResources(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var body struct {
-		ResourceType   string   `json:"resource_type"`
-		ResourceTypes  []string `json:"resource_types"`
-		Namespace      string   `json:"namespace"`
-		LabelSelector  string   `json:"label_selector"`
+		ResourceType  string   `json:"resource_type"`
+		ResourceTypes []string `json:"resource_types"`
+		Namespace     string   `json:"namespace"`
+		LabelSelector string   `json:"label_selector"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
@@ -183,7 +183,7 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 
 // ApplyResourceYAML handles POST /api/v1/resources/yaml/apply.
 func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.yaml.apply"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.yaml.apply"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -205,7 +205,7 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 
 	// Node YAML apply requires node.edit permission
 	if strings.EqualFold(body.ResourceType, "nodes") || strings.EqualFold(body.ResourceType, "node") {
-		if err := h.requirePermission(r, "resource.node.edit"); err != nil {
+		if err := h.requirePermissionForCluster(r, "resource.node.edit"); err != nil {
 			h.handleError(w, err)
 			return
 		}
@@ -227,7 +227,7 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 
 // CreateResourcesFromYAML handles POST /api/v1/resources/yaml/create.
 func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.yaml.apply"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.yaml.apply"); err != nil {
 		h.handleError(w, err)
 		return
 	}

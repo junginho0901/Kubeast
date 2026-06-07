@@ -59,7 +59,7 @@ func (h *Handler) GetStatefulSetYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteStatefulSet handles DELETE /api/v1/namespaces/{namespace}/statefulsets/{name}.
 func (h *Handler) DeleteStatefulSet(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.statefulset.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.statefulset.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

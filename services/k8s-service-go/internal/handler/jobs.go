@@ -59,7 +59,7 @@ func (h *Handler) GetJobYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteJob handles DELETE /api/v1/namespaces/{namespace}/jobs/{name}.
 func (h *Handler) DeleteJob(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.job.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.job.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

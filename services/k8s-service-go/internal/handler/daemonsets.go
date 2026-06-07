@@ -59,7 +59,7 @@ func (h *Handler) GetDaemonSetYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteDaemonSet handles DELETE /api/v1/namespaces/{namespace}/daemonsets/{name}.
 func (h *Handler) DeleteDaemonSet(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.daemonset.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.daemonset.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

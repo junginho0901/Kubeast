@@ -59,7 +59,7 @@ func (h *Handler) GetReplicaSetYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteReplicaSet handles DELETE /api/v1/namespaces/{namespace}/replicasets/{name}.
 func (h *Handler) DeleteReplicaSet(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.replicaset.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.replicaset.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}

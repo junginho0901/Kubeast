@@ -59,7 +59,7 @@ func (h *Handler) DescribeConfigMap(w http.ResponseWriter, r *http.Request) {
 
 // DeleteConfigMap handles DELETE /api/v1/namespaces/{namespace}/configmaps/{name}.
 func (h *Handler) DeleteConfigMap(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.configmap.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.configmap.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	canReveal := h.requirePermission(r, "resource.secret.reveal") == nil
+	canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
 	data, err := h.svc.DescribeSecret(ctx, namespace, name, canReveal)
 	// Meta-read audit: only when the caller actually had permission to see plaintext.
 	if canReveal {
@@ -122,7 +122,7 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	canReveal := h.requirePermission(r, "resource.secret.reveal") == nil
+	canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
 	data, err := h.svc.GetSecretYAML(ctx, namespace, name, canReveal)
 	if canReveal {
 		h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
@@ -137,7 +137,7 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSecret handles DELETE /api/v1/namespaces/{namespace}/secrets/{name}.
 func (h *Handler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermission(r, "resource.secret.delete"); err != nil {
+	if err := h.requirePermissionForCluster(r, "resource.secret.delete"); err != nil {
 		h.handleError(w, err)
 		return
 	}
