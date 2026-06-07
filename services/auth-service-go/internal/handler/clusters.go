@@ -35,18 +35,49 @@ func NewClustersHandler(registry *cluster.PostgresRegistry, secrets cluster.Secr
 	return &ClustersHandler{registry: registry, secrets: secrets, auditStore: auditStore, cfg: cfg}
 }
 
-// ListClusters handles GET /api/v1/clusters[?accessibleOnly=].
-// accessibleOnly filtering by per-cluster role is added in step 08; for now an
-// admin (admin.clusters.list) sees every registered cluster.
+// ListClusters handles GET /api/v1/clusters[?accessibleOnly=true].
+//
+//   - default (full registry view): requires admin.clusters.list.
+//   - ?accessibleOnly=true: open to any authenticated user, but returns only the
+//     clusters the caller holds a per-cluster grant on (the non-"*" keys of their
+//     JWT permission matrix). A global admin (admin.clusters.list / "*") sees all.
+//     Clusters the caller can't access are not listed at all (00-COMMON §2-3:
+//     non-exposure, not a data-level denial) — this powers the picker (step 11).
 func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requirePerm(w, r, auth.PermClustersList); !ok {
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	showAll := payload.HasPermission(auth.PermClustersList)
+	accessibleOnly := r.URL.Query().Get("accessibleOnly") == "true"
+	if !accessibleOnly && !showAll {
+		response.Error(w, http.StatusForbidden, "forbidden: requires "+auth.PermClustersList)
+		return
+	}
+
 	clusters, err := h.registry.ListMeta(r.Context())
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if !showAll {
+		accessible := make(map[string]struct{})
+		for cid := range payload.Perms {
+			if cid != "*" {
+				accessible[cid] = struct{}{}
+			}
+		}
+		filtered := make([]cluster.Meta, 0, len(clusters))
+		for _, m := range clusters {
+			if _, ok := accessible[string(m.ID)]; ok {
+				filtered = append(filtered, m)
+			}
+		}
+		clusters = filtered
+	}
+
 	response.JSON(w, http.StatusOK, map[string]interface{}{"items": clusters})
 }
 
