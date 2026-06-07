@@ -134,6 +134,40 @@ test.describe('multi-cluster — cluster CRUD API (step 07)', () => {
   })
 })
 
+test.describe('helm per-cluster (step 04b)', () => {
+  let auth: Record<string, string>
+
+  test.beforeAll(async ({ request }) => {
+    auth = { Authorization: `Bearer ${await login(request)}` }
+  })
+
+  // Before 04b the Helm SDK was pinned to the legacy /app/kubeconfig.yaml file
+  // path; with the multi-cluster reset flow that secret is gone, so helm 500'd
+  // ("cluster unreachable"). 04b routes the Helm getter through the per-cluster
+  // bundle (RESTConfigFor(ctx) → cluster-kubeconfig-<id>), so it now targets the
+  // registered cluster like every other resource. This is the regression guard.
+  test('GET /helm/releases?cluster=default — 200 (not the legacy 500)', async ({ request }) => {
+    const res = await request.get('/api/v1/helm/releases?cluster=default', {
+      headers: auth,
+      failOnStatusCode: false,
+    })
+    expect(res.status(), 'helm must reach the registered cluster, not a missing file').toBe(200)
+    expect(Array.isArray((await res.json()).items)).toBeTruthy()
+  })
+
+  test('helm release set is the same with and without ?cluster= (default fallback)', async ({
+    request,
+  }) => {
+    const withParam = await request.get('/api/v1/helm/releases?cluster=default', { headers: auth })
+    const noParam = await request.get('/api/v1/helm/releases', { headers: auth })
+    expect(withParam.status()).toBe(200)
+    expect(noParam.status()).toBe(200)
+    const names = (b: { items: { name: string }[] }) => b.items.map((r) => r.name).sort()
+    // Absent ?cluster= falls back to the default cluster → identical releases.
+    expect(names(await noParam.json())).toEqual(names(await withParam.json()))
+  })
+})
+
 // Decodes a JWT payload segment without verifying the signature (test-only).
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const seg = token.split('.')[1]
