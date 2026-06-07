@@ -17,24 +17,23 @@ import (
 
 // TokenPayload contains the validated JWT claims.
 type TokenPayload struct {
-	UserID      string
-	Email       string   // populated from "email" claim (for audit logs)
-	Role        string   // 하위호환 유지
-	Permissions []string // 신규: permission 기반 접근 제어
+	UserID string
+	Email  string           // populated from "email" claim (for audit logs)
+	Role   string           // 하위호환 유지
+	Perms  PermissionMatrix // per-cluster permission matrix (cluster id → perms, "*" = all)
 }
 
-// HasPermission checks if the payload has the given permission.
-// Supports wildcard matching: "*", "resource.*", "resource.pod.*"
+// HasPermission checks a GLOBAL permission (cluster-agnostic) — i.e. the "*"
+// entry only. Use it for admin.* checks that are not scoped to a cluster. For
+// cluster-scoped resource access use HasPermissionForCluster.
 func (p TokenPayload) HasPermission(perm string) bool {
-	for _, pp := range p.Permissions {
-		if pp == "*" || pp == perm {
-			return true
-		}
-		if strings.HasSuffix(pp, ".*") && strings.HasPrefix(perm, pp[:len(pp)-1]) {
-			return true
-		}
-	}
-	return false
+	return p.Perms.HasForCluster(perm, "*")
+}
+
+// HasPermissionForCluster checks whether perm is granted in clusterID (honoring
+// the all-cluster "*" entry).
+func (p TokenPayload) HasPermissionForCluster(perm, clusterID string) bool {
+	return p.Perms.HasForCluster(perm, clusterID)
 }
 
 type contextKey string
@@ -213,18 +212,15 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		role = "read"
 	}
 
-	var permissions []string
-	if permsRaw, ok := claims["permissions"]; ok {
-		if permsList, ok := permsRaw.([]interface{}); ok {
-			for _, p := range permsList {
-				if s, ok := p.(string); ok {
-					permissions = append(permissions, s)
-				}
-			}
-		}
+	// Per-cluster permission matrix. The legacy flat-array claim parses to nil,
+	// which we reject so a stale token forces a one-time re-login after the
+	// format switch (00-COMMON §2-3).
+	perms := ParsePermissions(claims["permissions"])
+	if perms == nil {
+		return TokenPayload{}, fmt.Errorf("invalid token: permissions claim must be a per-cluster map (re-login required)")
 	}
 
-	return TokenPayload{UserID: userID, Email: email, Role: role, Permissions: permissions}, nil
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms}, nil
 }
 
 // Middleware returns an HTTP middleware that validates JWT tokens.

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 const (
@@ -88,8 +90,14 @@ func NewJWTManager(keyDir, issuer, audience string, expiresMinutes int) (*JWTMan
 	}, nil
 }
 
-// CreateToken generates a signed JWT for a user.
-func (m *JWTManager) CreateToken(userID, email, roleName string, permissions []string) (string, error) {
+// CreateToken generates a signed JWT for a user. permissions is the per-cluster
+// permission matrix (cluster id → perms, "*" = all clusters); it marshals to a
+// JSON object claim. A non-nil empty matrix marshals to {} (a valid
+// deny-everything token), never null.
+func (m *JWTManager) CreateToken(userID, email, roleName string, permissions auth.PermissionMatrix) (string, error) {
+	if permissions == nil {
+		permissions = auth.PermissionMatrix{}
+	}
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub":         userID,

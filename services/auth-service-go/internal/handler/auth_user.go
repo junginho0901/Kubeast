@@ -129,7 +129,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, permissions)
+	// JWT carries a per-cluster permission matrix (step 06); the flat
+	// `permissions` list is kept only for the UserResponse the frontend reads.
+	matrix, err := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to build permissions")
+		return
+	}
+
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return

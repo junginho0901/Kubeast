@@ -55,18 +55,15 @@ func AuthMiddleware(jwtMgr *JWTManager) func(http.Handler) http.Handler {
 				role = "read"
 			}
 
-			var permissions []string
-			if permsRaw, ok := claims["permissions"]; ok {
-				if permsList, ok := permsRaw.([]interface{}); ok {
-					for _, p := range permsList {
-						if s, ok := p.(string); ok {
-							permissions = append(permissions, s)
-						}
-					}
-				}
+			// Per-cluster permission matrix. A legacy flat-array claim parses
+			// to nil → reject so the stale token forces a re-login.
+			perms := auth.ParsePermissions(claims["permissions"])
+			if perms == nil {
+				http.Error(w, `{"detail":"Invalid token"}`, http.StatusUnauthorized)
+				return
 			}
 
-			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Permissions: permissions}
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
