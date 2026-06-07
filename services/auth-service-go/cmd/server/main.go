@@ -184,6 +184,11 @@ func main() {
 			r.Patch("/admin/users/{user_id}", authHandler.AdminUpdateUser)
 			r.Post("/admin/users/{user_id}/reset-password", authHandler.AdminResetPassword)
 			r.Delete("/admin/users/{user_id}", authHandler.AdminDeleteUser)
+
+			// Per-cluster role grants (step 08) — admin.users.update.
+			r.Get("/admin/users/{user_id}/cluster-roles", authHandler.GetUserClusterRoles)
+			r.Put("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.SetUserClusterRole)
+			r.Delete("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.DeleteUserClusterRole)
 		})
 	})
 
