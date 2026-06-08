@@ -77,7 +77,8 @@
     "nodeShell": "Node Shell",
     "auditLogs": "Audit Logs",
     "organizations": "HQ / Team",
-    "helmReleases": "Releases"
+    "helmReleases": "Releases",
+    "clusters": "Clusters"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -1800,7 +1801,13 @@
       "createdAt": "Created",
       "labels": "Labels",
       "annotations": "Annotations",
-      "events": "Events",
+      "events": {
+        "type": "Type",
+        "reason": "Reason",
+        "message": "Message",
+        "lastSeen": "Last Seen",
+        "count": "Count"
+      },
       "tabs": {
         "info": "Info",
         "yaml": "YAML"
@@ -1821,13 +1828,6 @@
         "applyError": "Failed to apply YAML.",
         "refreshing": "Refreshing...",
         "unsaved": "You have unsaved YAML changes. Discard them?"
-      },
-      "events": {
-        "type": "Type",
-        "reason": "Reason",
-        "message": "Message",
-        "lastSeen": "Last Seen",
-        "count": "Count"
       },
       "conditions": "Conditions",
       "conditionsEmpty": "No conditions.",
@@ -2785,6 +2785,48 @@
         "What problems often come up here?",
         "How should an operator look at this screen?"
       ]
+    }
+  },
+  "cluster": {
+    "picker": {
+      "label": "Cluster",
+      "none": "No accessible cluster",
+      "select": "Select cluster"
+    },
+    "admin": {
+      "title": "Clusters",
+      "subtitle": "Register and manage the clusters this platform connects to.",
+      "register": "Register cluster",
+      "name": "Name",
+      "mode": "Mode",
+      "apiServer": "API server",
+      "health": "Health",
+      "createdBy": "Created by",
+      "actions": "Actions",
+      "empty": "No clusters registered yet.",
+      "test": "Test",
+      "delete": "Delete",
+      "unhealthy": "unhealthy"
+    },
+    "register": {
+      "title": "Register cluster",
+      "external": "External",
+      "self": "This cluster (self)",
+      "selfDockerDisabled": "Not available in docker mode",
+      "displayName": "Display name",
+      "upload": "Upload",
+      "apiServerOptional": "API server URL (optional)",
+      "test": "Test connection",
+      "testFailed": "Failed",
+      "selfWarning": "Registers the in-cluster ServiceAccount as a managed cluster — this may be a production cluster. Confirm the ServiceAccount permissions.",
+      "submit": "Register"
+    },
+    "delete": {
+      "title": "Delete cluster",
+      "confirm": "Remove",
+      "self": "removed from the multi-cluster view only.",
+      "external": "its stored kubeconfig is deleted too.",
+      "submit": "Delete"
     }
   }
 }
