@@ -65,7 +65,7 @@ import GenericInfo from './resource-detail/GenericInfo'
 export default function ResourceDetailDrawer() {
   const { t } = useTranslation()
   const { target, close, goBack, canGoBack } = useResourceDetail()
-  const isTopModal = useModalStackEntry(!!target)
+  const { isTop: isTopModal, zIndex } = useModalStackEntry(!!target)
   const [tab, setTab] = useState<TabId>('info')
   const [applyToast, setApplyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
@@ -263,14 +263,18 @@ export default function ResourceDetailDrawer() {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/30 z-[1100]"
+        className="fixed inset-0 bg-black/30"
+        style={{ zIndex }}
         onClick={() => {
           // 위에 중첩된 모달이 떠 있으면 backdrop 클릭은 그 모달이 먹어야 한다.
           if (!isTopModal()) return
           handleClose()
         }}
       />
-      <div className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 z-[1110] flex flex-col shadow-2xl">
+      <div
+        className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 flex flex-col shadow-2xl"
+        style={{ zIndex: zIndex + 1 }}
+      >
         <ResourceDetailHeader
           kind={kind}
           ns={ns}

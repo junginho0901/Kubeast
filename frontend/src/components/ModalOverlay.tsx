@@ -10,7 +10,7 @@ interface ModalOverlayProps {
 
 export function ModalOverlay({ children, onClose, closeOnOverlayClick = true }: ModalOverlayProps) {
   const mouseDownTargetRef = useRef<EventTarget | null>(null)
-  const isTop = useModalStackEntry(true)
+  const { isTop, zIndex } = useModalStackEntry(true)
 
   useEffect(() => {
     if (!onClose) return
@@ -23,7 +23,8 @@ export function ModalOverlay({ children, onClose, closeOnOverlayClick = true }: 
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1200] p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+      style={{ zIndex }}
       onMouseDown={(e) => { mouseDownTargetRef.current = e.target }}
       onClick={(e) => {
         if (!closeOnOverlayClick || !onClose) return
