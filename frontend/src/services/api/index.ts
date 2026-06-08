@@ -11,6 +11,7 @@ import { adminApi } from './admin'
 import { aiApi } from './ai'
 import { authApi } from './auth'
 import { clusterApi } from './cluster'
+import { clustersApi } from './clusters'
 import { configurationApi } from './configuration'
 import { customResourcesApi } from './custom_resources'
 import { gatewayApi } from './gateway'
@@ -45,7 +46,18 @@ export const api = {
   ...sessionsApi,
   ...modelConfigApi,
   helm: helmApi,
+  clusters: clustersApi,
 }
+
+// Multi-cluster registry API (also usable directly as `clustersApi`).
+export { clustersApi } from './clusters'
+export type {
+  ClusterMeta,
+  ClusterMode,
+  ConnectionResult,
+  DeploymentMode,
+  RegisterClusterInput,
+} from './clusters'
 
 // Re-export shared types — call sites do
 // `import { PodInfo } from '@/services/api'`.
