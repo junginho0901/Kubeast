@@ -50,8 +50,13 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   // navigation. Skips the initial mount.
   const prevClusterRef = useRef(currentCluster)
   useEffect(() => {
-    if (prevClusterRef.current === currentCluster) return
+    const prev = prevClusterRef.current
+    if (prev === currentCluster) return
     prevClusterRef.current = currentCluster
+    // Skip the initial population ('' → first cluster, e.g. the picker's
+    // auto-select): there is no prior cluster's cache to clear, and clearing
+    // here would needlessly refetch the just-loaded page on every fresh visit.
+    if (!prev) return
     queryClient.removeQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
   }, [currentCluster, queryClient])
 
