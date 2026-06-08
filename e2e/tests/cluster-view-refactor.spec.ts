@@ -94,8 +94,11 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
     const dropdown = page.getByRole('button', { name: /All namespaces|모든 네임스페이스/i })
     await dropdown.click()
 
-    // default option 클릭
-    const opt = page.locator('button').filter({ hasText: /^default$/ }).first()
+    // default option 클릭 (사이드바 ClusterPicker 버튼도 "default" 라벨을 가지므로 제외)
+    const opt = page
+      .locator('button:not([data-testid="cluster-picker"])')
+      .filter({ hasText: /^default$/ })
+      .first()
     if ((await opt.count()) === 0) {
       test.skip(true, 'default namespace 없음')
       return
