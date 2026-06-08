@@ -77,7 +77,8 @@
     "nodeShell": "노드 셸",
     "auditLogs": "감사 로그",
     "organizations": "본부 / 팀",
-    "helmReleases": "Releases"
+    "helmReleases": "Releases",
+    "clusters": "클러스터"
   },
   "layout": {
     "accountTitle": "설정",
@@ -1830,7 +1831,13 @@
       "labels": "라벨",
       "annotations": "어노테이션",
       "eventsTitle": "이벤트",
-      "events": "이벤트",
+      "events": {
+        "type": "유형",
+        "reason": "이유",
+        "message": "메시지",
+        "lastSeen": "최근",
+        "count": "횟수"
+      },
       "tabs": {
         "info": "정보",
         "yaml": "YAML"
@@ -1851,13 +1858,6 @@
         "applyError": "YAML 적용에 실패했습니다.",
         "refreshing": "새로고침 중...",
         "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
-      },
-      "events": {
-        "type": "유형",
-        "reason": "이유",
-        "message": "메시지",
-        "lastSeen": "최근",
-        "count": "횟수"
       },
       "conditions": "Conditions",
       "conditionsEmpty": "Conditions가 없습니다.",
@@ -3029,6 +3029,48 @@
         "여기서 자주 발생하는 문제가 뭐야?",
         "이 화면을 운영자 입장에서 어떻게 봐야 돼?"
       ]
+    }
+  },
+  "cluster": {
+    "picker": {
+      "label": "클러스터",
+      "none": "접근 가능한 클러스터 없음",
+      "select": "클러스터 선택"
+    },
+    "admin": {
+      "title": "클러스터",
+      "subtitle": "이 플랫폼이 연결하는 클러스터를 등록·관리합니다.",
+      "register": "클러스터 등록",
+      "name": "이름",
+      "mode": "모드",
+      "apiServer": "API 서버",
+      "health": "상태",
+      "createdBy": "등록자",
+      "actions": "작업",
+      "empty": "등록된 클러스터가 없습니다.",
+      "test": "테스트",
+      "delete": "삭제",
+      "unhealthy": "비정상"
+    },
+    "register": {
+      "title": "클러스터 등록",
+      "external": "외부",
+      "self": "이 클러스터(self)",
+      "selfDockerDisabled": "docker 모드에서는 사용할 수 없습니다",
+      "displayName": "표시 이름",
+      "upload": "업로드",
+      "apiServerOptional": "API 서버 URL (선택)",
+      "test": "연결 테스트",
+      "testFailed": "실패",
+      "selfWarning": "인-클러스터 ServiceAccount를 관리 클러스터로 등록합니다 — 운영 클러스터일 수 있으니 권한을 확인하세요.",
+      "submit": "등록"
+    },
+    "delete": {
+      "title": "클러스터 삭제",
+      "confirm": "삭제:",
+      "self": "멀티클러스터 화면에서만 제거됩니다.",
+      "external": "저장된 kubeconfig도 함께 삭제됩니다.",
+      "submit": "삭제"
     }
   }
 }
