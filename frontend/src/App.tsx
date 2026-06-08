@@ -19,6 +19,7 @@ import AdminUsers from './pages/AdminUsers'
 import AdminAIModels from './pages/AdminAIModels'
 import AdminAudit from './pages/AdminAudit'
 import AdminNodeShell from './pages/AdminNodeShell'
+import AdminClusters from './pages/admin/Clusters'
 import AdminOrganizations from './pages/AdminOrganizations'
 import AdminRoles from './pages/AdminRoles'
 import Account from './pages/Account'
@@ -147,6 +148,7 @@ function App() {
             <Route path="topology/:namespace" element={<Topology />} />
             <Route path="network/:namespace" element={<NetworkPage />} />
             <Route path="ai-chat" element={<AIChat />} />
+            <Route path="admin/clusters" element={<RequireAdmin><AdminClusters /></RequireAdmin>} />
             <Route path="admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
             <Route path="admin/ai-models" element={<RequireAdmin><AdminAIModels /></RequireAdmin>} />
             <Route path="admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
