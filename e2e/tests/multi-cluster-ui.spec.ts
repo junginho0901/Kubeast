@@ -45,3 +45,39 @@ test.describe('multi-cluster UI — cluster context (step 09)', () => {
     expect(new URL((await req).url()).searchParams.get('cluster')).toBe('default')
   })
 })
+
+test.describe('multi-cluster UI — picker + admin clusters (step 11)', () => {
+  test('admin clusters page + sidebar picker show the registered cluster', async ({ page }) => {
+    await page.goto('/admin/clusters')
+    await page.waitForLoadState('domcontentloaded')
+    const table = page.getByTestId('clusters-table')
+    await expect(table).toBeVisible({ timeout: 15000 })
+    await expect(table).toContainText('default')
+    // the sidebar picker reflects the selected cluster
+    await expect(page.getByTestId('cluster-picker')).toContainText('default')
+  })
+
+  test('register a self cluster via the dialog → appears → delete (self-cleaning)', async ({ page }) => {
+    const name = `e2e-ui-self-${Date.now()}`
+    const slug = name // Slugify keeps lowercase + digits + dashes unchanged
+
+    await page.goto('/admin/clusters')
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByTestId('register-cluster-btn').click()
+
+    // self tab is enabled in k8s deployment mode
+    const selfTab = page.getByTestId('register-tab-self')
+    await expect(selfTab).toBeEnabled()
+    await selfTab.click()
+    await page.getByTestId('register-name').fill(name)
+    await page.getByTestId('register-submit').click()
+
+    // rollout-free: the new cluster shows up in the table right away
+    await expect(page.getByTestId('clusters-table')).toContainText(name, { timeout: 15000 })
+
+    // delete it → gone
+    await page.getByTestId(`delete-cluster-${slug}`).click()
+    await page.getByTestId('delete-confirm').click()
+    await expect(page.getByTestId('clusters-table')).not.toContainText(name, { timeout: 15000 })
+  })
+})
