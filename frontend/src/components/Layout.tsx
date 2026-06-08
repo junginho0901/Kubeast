@@ -33,6 +33,7 @@ import ResourceDetailDrawer from './ResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
 import { PageContextProvider } from './PageContextProvider'
 import FloatingAIChat from './FloatingAIChat'
+import ClusterPicker from './ClusterPicker'
 
 type NavItem = {
   name: string
@@ -338,6 +339,8 @@ export default function Layout() {
               <p className="text-xs text-slate-400">K8s DevOps Platform</p>
             </div>
           </div>
+
+          <ClusterPicker />
 
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
             {navGroups
