@@ -8,10 +8,12 @@
 // Empty string = no explicit selection → axios omits ?cluster= → the server
 // falls back to its default cluster (step 05). The ClusterPicker UI is step 11.
 
-import { createContext, useContext, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { setCurrentClusterRef } from '@/services/clusterRef'
+import { isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
 
 const STORAGE_KEY = 'kubeast:current-cluster'
 
@@ -27,6 +29,7 @@ const ClusterContext = createContext<ClusterContextValue>({
 
 export function ClusterProvider({ children }: { children: ReactNode }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
 
   const fromUrl = searchParams.get('cluster') || ''
   const fromStorage =
@@ -39,6 +42,18 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCurrentClusterRef(currentCluster)
   }, [currentCluster])
+
+  // On an actual cluster change, drop the cluster-scoped query cache so the new
+  // cluster's data is fetched fresh (no cross-cluster bleed). Cluster-independent
+  // caches (identity, registry, sessions, …) are kept — see clusterQueryScope.
+  // The active page's queries refetch immediately; others refetch lazily on
+  // navigation. Skips the initial mount.
+  const prevClusterRef = useRef(currentCluster)
+  useEffect(() => {
+    if (prevClusterRef.current === currentCluster) return
+    prevClusterRef.current = currentCluster
+    queryClient.removeQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
+  }, [currentCluster, queryClient])
 
   const setCurrentCluster = (id: string) => {
     if (typeof window !== 'undefined') {
