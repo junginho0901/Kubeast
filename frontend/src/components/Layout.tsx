@@ -273,6 +273,7 @@ export default function Layout() {
       label: t('nav.admin'),
       adminOnly: true,
       items: [
+        { name: t('nav.clusters', { defaultValue: 'Clusters' }), href: '/admin/clusters', icon: Server },
         { name: t('nav.userManagement'), href: '/admin/users', icon: Shield },
         { name: t('nav.roleManagement'), href: '/admin/roles', icon: Key },
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
