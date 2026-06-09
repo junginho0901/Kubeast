@@ -7,6 +7,7 @@
 
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { Member, RoleWithDetails } from '@/services/api'
+import ClusterRoleMatrix from '@/pages/admin/ClusterRoleMatrix'
 import { Pencil, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import CustomDropdown from '@/components/CustomDropdown'
@@ -200,8 +201,14 @@ export function UserDetailModal({
               )}
             </div>
           </div>
+
+          <ClusterRoleMatrix
+            userID={u.id}
+            canEdit={canEditUsers}
+            userIsGlobalAdmin={permissions.some((p) => p === '*' || p.startsWith('admin.'))}
+          />
         </div>
-  
+
         {detailError && (
           <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
             {detailError}
