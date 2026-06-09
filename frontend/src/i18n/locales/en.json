@@ -2828,5 +2828,19 @@
       "external": "its stored kubeconfig is deleted too.",
       "submit": "Delete"
     }
+  },
+  "admin": {
+    "userClusterRoles": {
+      "title": "Cluster access",
+      "denyNote": "The user only sees clusters you grant a role on; ungranted clusters are denied. Changes apply after the user logs in again.",
+      "adminAll": "Global admin — reaches every cluster automatically.",
+      "none": "No access",
+      "noClusters": "No clusters registered."
+    }
+  },
+  "adminAudit": {
+    "filter": {
+      "cluster": "Cluster"
+    }
   }
 }
