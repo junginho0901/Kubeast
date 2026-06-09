@@ -1929,6 +1929,13 @@
       "new": "새 모델",
       "edit": "모델 편집",
       "empty": "등록된 모델이 없습니다."
+    },
+    "userClusterRoles": {
+      "title": "클러스터 접근",
+      "denyNote": "역할을 부여한 클러스터만 이 회원이 볼 수 있습니다. 부여 안 하면 접근 불가. 변경은 회원이 다시 로그인하면 적용됩니다.",
+      "adminAll": "전역 admin — 모든 클러스터에 자동 접근합니다.",
+      "none": "접근 없음",
+      "noClusters": "등록된 클러스터가 없습니다."
     }
   },
   "adminUsers": {
@@ -3071,6 +3078,11 @@
       "self": "멀티클러스터 화면에서만 제거됩니다.",
       "external": "저장된 kubeconfig도 함께 삭제됩니다.",
       "submit": "삭제"
+    }
+  },
+  "adminAudit": {
+    "filter": {
+      "cluster": "클러스터"
     }
   }
 }
