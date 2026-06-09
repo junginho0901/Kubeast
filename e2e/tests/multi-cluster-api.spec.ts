@@ -291,4 +291,37 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
     })
     expect(again.status()).toBe(404)
   })
+
+  // True per-cluster isolation (needs the 2nd 'self' cluster from auth.setup):
+  // a grant on one cluster does NOT leak to another.
+  test('isolation: granted default only → default 200 but self 403', async ({ request }) => {
+    await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, {
+      headers: auth,
+      data: { role: 'Read' },
+    })
+    const userHdr = { Authorization: `Bearer ${await userToken(request)}` }
+
+    const onDefault = await request.get('/api/v1/helm/releases?cluster=default', {
+      headers: userHdr,
+      failOnStatusCode: false,
+    })
+    expect(onDefault.status(), 'granted cluster → allowed').toBe(200)
+
+    const onSelf = await request.get('/api/v1/helm/releases?cluster=self', {
+      headers: userHdr,
+      failOnStatusCode: false,
+    })
+    expect(onSelf.status(), 'ungranted cluster → forbidden (no leak)').toBe(403)
+
+    const acc = await request.get('/api/v1/clusters?accessibleOnly=true', { headers: userHdr })
+    const ids = (await acc.json()).items.map((c: { id: string }) => c.id)
+    expect(ids).toContain('default')
+    expect(ids).not.toContain('self')
+
+    // cleanup the grant (afterAll also deletes the user)
+    await request.delete(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, {
+      headers: auth,
+      failOnStatusCode: false,
+    })
+  })
 })
