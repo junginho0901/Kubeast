@@ -63,8 +63,11 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		beforeID = &v
 	}
 
+	// Multi-cluster (step 13): scope sessions to the selected cluster (?cluster=,
+	// injected by the frontend axios). Empty → all clusters.
+	cluster := r.URL.Query().Get("cluster")
 	sessions, err := h.repo.ListSessionsWithMessageCounts(
-		r.Context(), payload.UserID, limit, offset, beforeUpdatedAt, beforeID,
+		r.Context(), payload.UserID, cluster, limit, offset, beforeUpdatedAt, beforeID,
 	)
 	if err != nil {
 		slog.Error("list sessions failed", "error", err)

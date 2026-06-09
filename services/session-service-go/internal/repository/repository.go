@@ -109,8 +109,8 @@ func (r *Repository) CreateSession(ctx context.Context, id, userID, clusterID, t
 func (r *Repository) GetSession(ctx context.Context, id string) (*model.Session, error) {
 	var s model.Session
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, user_id, title, created_at, updated_at FROM sessions WHERE id = $1`, id,
-	).Scan(&s.ID, &s.UserID, &s.Title, &s.CreatedAt, &s.UpdatedAt)
+		`SELECT id, user_id, COALESCE(cluster_id, ''), title, created_at, updated_at FROM sessions WHERE id = $1`, id,
+	).Scan(&s.ID, &s.UserID, &s.ClusterID, &s.Title, &s.CreatedAt, &s.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -124,6 +124,7 @@ func (r *Repository) GetSession(ctx context.Context, id string) (*model.Session,
 func (r *Repository) ListSessionsWithMessageCounts(
 	ctx context.Context,
 	userID string,
+	clusterID string,
 	limit, offset int,
 	beforeUpdatedAt *time.Time,
 	beforeID *string,
@@ -131,12 +132,20 @@ func (r *Repository) ListSessionsWithMessageCounts(
 	var args []interface{}
 	argIdx := 1
 
-	query := `SELECT s.id, s.user_id, s.title, s.created_at, s.updated_at, COUNT(m.id) as message_count
+	query := `SELECT s.id, s.user_id, COALESCE(s.cluster_id, '') AS cluster_id, s.title, s.created_at, s.updated_at, COUNT(m.id) as message_count
 		FROM sessions s
 		LEFT JOIN messages m ON m.session_id = s.id
 		WHERE s.user_id = $1`
 	args = append(args, userID)
 	argIdx++
+
+	// Cluster scope (step 13): list only this cluster's sessions. An empty
+	// clusterID (no ?cluster=) lists across clusters — legacy/agnostic callers.
+	if clusterID != "" {
+		query += fmt.Sprintf(` AND s.cluster_id = $%d`, argIdx)
+		args = append(args, clusterID)
+		argIdx++
+	}
 
 	if beforeUpdatedAt != nil {
 		if beforeID != nil {
@@ -170,7 +179,7 @@ func (r *Repository) ListSessionsWithMessageCounts(
 	var sessions []model.Session
 	for rows.Next() {
 		var s model.Session
-		if err := rows.Scan(&s.ID, &s.UserID, &s.Title, &s.CreatedAt, &s.UpdatedAt, &s.MessageCount); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserID, &s.ClusterID, &s.Title, &s.CreatedAt, &s.UpdatedAt, &s.MessageCount); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, s)
