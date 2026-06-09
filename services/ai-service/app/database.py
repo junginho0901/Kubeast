@@ -19,6 +19,7 @@ class Session(Base):
     
     id = Column(String, primary_key=True)
     user_id = Column(String, nullable=False, default="default")
+    cluster_id = Column(String, nullable=True)  # step 13: per-cluster scope
     title = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
