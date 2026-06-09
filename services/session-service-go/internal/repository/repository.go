@@ -64,8 +64,9 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 	return nil
 }
 
-// CreateSession creates a new session and its context.
-func (r *Repository) CreateSession(ctx context.Context, id, userID, title string) (*model.Session, error) {
+// CreateSession creates a new session and its context. clusterID scopes the
+// session to a cluster (step 13); empty is allowed (cluster-agnostic).
+func (r *Repository) CreateSession(ctx context.Context, id, userID, clusterID, title string) (*model.Session, error) {
 	now := time.Now().UTC()
 
 	tx, err := r.pool.Begin(ctx)
@@ -75,8 +76,8 @@ func (r *Repository) CreateSession(ctx context.Context, id, userID, title string
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO sessions (id, user_id, title, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)`,
-		id, userID, title, now, now,
+		`INSERT INTO sessions (id, user_id, cluster_id, title, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+		id, userID, clusterID, title, now, now,
 	)
 	if err != nil {
 		return nil, err
@@ -97,6 +98,7 @@ func (r *Repository) CreateSession(ctx context.Context, id, userID, title string
 	return &model.Session{
 		ID:        id,
 		UserID:    userID,
+		ClusterID: clusterID,
 		Title:     title,
 		CreatedAt: now,
 		UpdatedAt: now,

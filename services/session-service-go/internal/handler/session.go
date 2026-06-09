@@ -105,8 +105,9 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		title = "New Chat"
 	}
 
+	cluster := r.URL.Query().Get("cluster")
 	sessionID := uuid.New().String()
-	session, err := h.repo.CreateSession(r.Context(), sessionID, payload.UserID, title)
+	session, err := h.repo.CreateSession(r.Context(), sessionID, payload.UserID, cluster, title)
 	if err != nil {
 		slog.Error("create session failed", "error", err)
 		response.Error(w, http.StatusInternalServerError, err.Error())
