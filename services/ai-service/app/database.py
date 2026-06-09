@@ -107,6 +107,13 @@ class DatabaseService:
             await conn.run_sync(Base.metadata.create_all)
         # Migrate: add api_key column if missing (no Alembic)
         await self._ensure_api_key_column()
+        # Migrate: sessions.cluster_id (step 13). Shared table with
+        # session-service; both ensure the column (idempotent).
+        async with self.engine.begin() as conn:
+            from sqlalchemy import text
+            await conn.execute(text(
+                "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cluster_id VARCHAR"
+            ))
 
     async def _ensure_api_key_column(self):
         """Add api_key column to model_configs if it doesn't exist."""
