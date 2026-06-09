@@ -30,11 +30,14 @@ export default function ClusterPicker() {
     staleTime: 30_000,
   })
 
-  // Auto-select the first accessible cluster when nothing is selected yet, so
-  // resource pages have a target on first load.
+  // Auto-select a cluster when nothing is selected yet, so resource pages have a
+  // target on first load. Prefer the canonical default cluster (id "default",
+  // what the server falls back to) over registry order, so adding other clusters
+  // doesn't silently switch the user to one of them.
   useEffect(() => {
     if (!currentCluster && clusters.length > 0) {
-      setCurrentCluster(clusters[0].id)
+      const preferred = clusters.find((c) => c.id === 'default') ?? clusters[0]
+      setCurrentCluster(preferred.id)
     }
   }, [currentCluster, clusters, setCurrentCluster])
 
@@ -87,6 +90,7 @@ export default function ClusterPicker() {
             <button
               key={c.id}
               type="button"
+              data-testid={`cluster-option-${c.id}`}
               onClick={() => {
                 setCurrentCluster(c.id)
                 setOpen(false)
