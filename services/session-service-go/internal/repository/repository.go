@@ -47,8 +47,12 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			cache JSONB NOT NULL DEFAULT '{}',
 			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
+		// Multi-cluster (step 13): a session belongs to one cluster. Idempotent
+		// ALTER so it applies to the existing table; ai-service runs the same.
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cluster_id VARCHAR`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_user_cluster ON sessions(user_id, cluster_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)`,
 	}
 
