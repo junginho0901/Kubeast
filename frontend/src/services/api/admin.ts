@@ -66,6 +66,21 @@ export const adminApi = {
     await client.delete(`/auth/admin/users/${userId}`)
   },
 
+  // Per-cluster role grants (step 08/12). GET returns { clusterID: roleName }.
+  // Grants apply on the user's NEXT login (token re-issue).
+  getUserClusterRoles: async (userId: string): Promise<Record<string, string>> => {
+    const { data } = await client.get(`/auth/admin/users/${userId}/cluster-roles`)
+    return data && typeof data === 'object' ? data : {}
+  },
+
+  setUserClusterRole: async (userId: string, clusterId: string, role: string): Promise<void> => {
+    await client.put(`/auth/admin/users/${userId}/cluster-roles/${clusterId}`, { role })
+  },
+
+  removeUserClusterRole: async (userId: string, clusterId: string): Promise<void> => {
+    await client.delete(`/auth/admin/users/${userId}/cluster-roles/${clusterId}`)
+  },
+
   // Roles
   listRoles: async (): Promise<RoleWithDetails[]> => {
     const { data } = await client.get('/auth/roles')
