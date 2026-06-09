@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter } from '@/services/api'
+import { clustersApi } from '@/services/api/clusters'
 import { CheckCircle, ChevronDown, ChevronUp, Search } from 'lucide-react'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
@@ -106,6 +107,12 @@ export default function AdminAudit() {
     refetchOnMount: true,
   })
 
+  const { data: clusters = [] } = useQuery({
+    queryKey: ['clusters-all'],
+    queryFn: () => clustersApi.listClusters(false),
+    staleTime: 60_000,
+  })
+
   const total = data?.total ?? 0
   const items: AuditLogEntry[] = data?.items ?? []
   const limit = filter.limit ?? 50
@@ -185,6 +192,19 @@ export default function AdminAudit() {
                 value: s,
                 label: s || tr('adminAudit.filter.any', '전체'),
               }))}
+              minWidth="min-w-[140px]"
+            />
+          </label>
+
+          <label className="flex flex-col text-xs text-slate-300" data-testid="audit-cluster-filter">
+            {tr('adminAudit.filter.cluster', 'Cluster')}
+            <CustomDropdown
+              value={draft.cluster ?? ''}
+              onChange={(v) => setDraft({ ...draft, cluster: v || undefined })}
+              options={[
+                { value: '', label: tr('adminAudit.filter.any', '전체') },
+                ...clusters.map((c) => ({ value: c.id, label: c.display_name })),
+              ]}
               minWidth="min-w-[140px]"
             />
           </label>
