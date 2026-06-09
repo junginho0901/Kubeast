@@ -81,3 +81,27 @@ test.describe('multi-cluster UI — picker + admin clusters (step 11)', () => {
     await expect(page.getByTestId('clusters-table')).not.toContainText(name, { timeout: 15000 })
   })
 })
+
+// Requires a second cluster — auth.setup registers 'self' alongside 'default'.
+test.describe('multi-cluster UI — switching (2 clusters)', () => {
+  test('picker switches the active cluster and reflects it in ?cluster=', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('domcontentloaded')
+
+    const picker = page.getByTestId('cluster-picker')
+    // auto-selects the canonical default cluster even though 'self' also exists
+    await expect(picker).toContainText('default', { timeout: 15000 })
+
+    // switch to 'self'
+    await picker.click()
+    await page.getByTestId('cluster-option-self').click()
+    await expect(picker).toContainText('self')
+    await expect(page).toHaveURL(/[?&]cluster=self/)
+
+    // switch back to 'default'
+    await picker.click()
+    await page.getByTestId('cluster-option-default').click()
+    await expect(picker).toContainText('default')
+    await expect(page).toHaveURL(/[?&]cluster=default/)
+  })
+})
