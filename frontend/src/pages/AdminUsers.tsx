@@ -404,6 +404,7 @@ export default function AdminUsers() {
                   <td className="px-4 py-3">
                     <button
                       type="button"
+                      data-testid={`user-detail-${u.email ?? u.id}`}
                       onClick={() => openDetail(u)}
                       className="text-left text-slate-100 hover:text-primary-300 hover:underline focus:outline-none focus:ring-2 focus:ring-primary-600 rounded"
                       title={tr('adminUsers.viewDetail', 'View details')}
