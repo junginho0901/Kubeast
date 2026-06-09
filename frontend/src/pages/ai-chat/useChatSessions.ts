@@ -11,6 +11,7 @@ import type { InfiniteData } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 import type { Session } from '@/services/api'
+import { useCluster } from '@/contexts/ClusterContext'
 
 import { isTempSessionId } from './utils'
 
@@ -27,6 +28,7 @@ interface Args {
 
 export function useChatSessions({ pinnedSessions }: Args) {
   const queryClient = useQueryClient()
+  const { currentCluster } = useCluster()
 
   const {
     data: sessionsInfinite,
@@ -35,7 +37,9 @@ export function useChatSessions({ pinnedSessions }: Args) {
     fetchNextPage: fetchNextSessionsPage,
     hasNextPage: sessionsHasNextPage,
   } = useInfiniteQuery({
-    queryKey: ['sessions'],
+    // Per-cluster (step 13): switching clusters shows that cluster's sessions.
+    // axios injects ?cluster=; the 'sessions' prefix still matches invalidations.
+    queryKey: ['sessions', currentCluster],
     queryFn: ({ pageParam }) => api.getSessions({ limit: SESSIONS_PAGE_SIZE, ...(pageParam || {}) }),
     initialPageParam: {} as SessionsPageParam,
     getNextPageParam: (lastPage) => {
