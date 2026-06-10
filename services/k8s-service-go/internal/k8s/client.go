@@ -197,6 +197,20 @@ func (s *Service) ForCtx(ctx context.Context) (*clientBundle, error) {
 	return s.Default(ctx)
 }
 
+// ClusterKubeconfig returns the kubeconfig blob for cluster id, for tool-server's
+// runtime per-cluster kubectl (step 14). inCluster=true means the cluster is
+// reached via the in-cluster ServiceAccount and needs no kubeconfig file.
+func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob string, inCluster bool, err error) {
+	info, err := s.registry.Get(ctx, id)
+	if err != nil {
+		return "", false, err
+	}
+	if info.InCluster || info.IsSelfCluster {
+		return "", true, nil
+	}
+	return info.KubeconfigBlob, false, nil
+}
+
 // Invalidate drops a cluster's cached bundle (e.g. after a kubeconfig rotation)
 // so the next access rebuilds it from the registry — no rollout required.
 func (s *Service) Invalidate(id cluster.ID) {
