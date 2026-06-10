@@ -242,12 +242,16 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 	return c.svc
 }
 
-// discoverPrometheus scans the TARGET cluster for a Prometheus service.
+// discoverPrometheus scans the TARGET cluster for a Prometheus service. The
+// candidate namespaces are probed concurrently so a cluster WITHOUT Prometheus
+// costs one round-trip, not the sum of all of them (this runs at most once per
+// cluster per promCacheTTL, but a remote cluster makes even one slow). Hits are
+// written by index so the namespace preference order is still honoured.
 func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
-	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	// Common namespaces where Prometheus might live
+	// Common namespaces where Prometheus might live, in preference order.
 	namespaces := []string{
 		"monitoring",
 		"prometheus",
@@ -258,38 +262,49 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 		"default",
 	}
 
-	for _, ns := range namespaces {
-		svcList, err := s.clientsetCtx(ctx).CoreV1().Services(ns).List(probeCtx, metav1.ListOptions{})
-		if err != nil {
-			continue
-		}
-		for _, svc := range svcList.Items {
-			name := strings.ToLower(svc.Name)
-			if !strings.Contains(name, "prometheus") {
-				continue
-			}
-			for _, port := range svc.Spec.Ports {
-				if port.Port == 9090 {
-					info := &promServiceInfo{
-						Namespace: svc.Namespace,
-						Name:      svc.Name,
-						Port:      port.Port,
-					}
-					// Verify via K8s API proxy
-					if s.verifyPrometheusProxy(probeCtx, info) {
-						slog.Info("Prometheus discovered via K8s API proxy",
-							"namespace", info.Namespace,
-							"service", info.Name,
-							"port", info.Port,
-						)
-						return info
-					}
-				}
-			}
+	hits := make([]*promServiceInfo, len(namespaces))
+	var wg sync.WaitGroup
+	for i, ns := range namespaces {
+		wg.Add(1)
+		go func(i int, ns string) {
+			defer wg.Done()
+			hits[i] = s.probePrometheusNamespace(probeCtx, ns)
+		}(i, ns)
+	}
+	wg.Wait()
+
+	for _, info := range hits {
+		if info != nil {
+			slog.Info("Prometheus discovered via K8s API proxy",
+				"namespace", info.Namespace, "service", info.Name, "port", info.Port)
+			return info
 		}
 	}
 
 	slog.Warn("Prometheus not found in target cluster")
+	return nil
+}
+
+// probePrometheusNamespace returns the first verified Prometheus :9090 service in
+// ns, or nil (a missing namespace / RBAC denial / no match all map to nil).
+func (s *Service) probePrometheusNamespace(ctx context.Context, ns string) *promServiceInfo {
+	svcList, err := s.clientsetCtx(ctx).CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	for _, svc := range svcList.Items {
+		if !strings.Contains(strings.ToLower(svc.Name), "prometheus") {
+			continue
+		}
+		for _, port := range svc.Spec.Ports {
+			if port.Port == 9090 {
+				info := &promServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Port: port.Port}
+				if s.verifyPrometheusProxy(ctx, info) {
+					return info
+				}
+			}
+		}
+	}
 	return nil
 }
 
