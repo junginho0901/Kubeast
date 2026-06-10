@@ -1,4 +1,5 @@
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import { clusterHeaders } from '@/services/clusterRef'
 
 export type StreamingPhase = 'waiting' | 'tools' | 'answer'
 
@@ -427,4 +428,4 @@ export class ChatStreamManager {
   }
 }
 
-export const chatStreamManager = new ChatStreamManager()
+export const chatStreamManager = new ChatStreamManager({ extraHeaders: clusterHeaders })
