@@ -34,6 +34,7 @@ import PendingApproval from './PendingApproval'
 import { PageContextProvider } from './PageContextProvider'
 import FloatingAIChat from './FloatingAIChat'
 import ClusterPicker from './ClusterPicker'
+import ClusterSwitchProgress from './ClusterSwitchProgress'
 
 type NavItem = {
   name: string
@@ -442,6 +443,7 @@ export default function Layout() {
       </div>
 
       <div className="pl-64">
+        <ClusterSwitchProgress />
         <main className={`min-h-screen ${location.pathname === '/ai-chat' ? '' : 'p-8'}`}>
           <Outlet />
         </main>

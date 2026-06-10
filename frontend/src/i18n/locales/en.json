@@ -2788,6 +2788,7 @@
     }
   },
   "cluster": {
+    "switching": "Switching to {{cluster}}…",
     "picker": {
       "label": "Cluster",
       "none": "No accessible cluster",

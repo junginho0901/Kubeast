@@ -8,9 +8,9 @@
 // Empty string = no explicit selection → axios omits ?cluster= → the server
 // falls back to its default cluster (step 05). The ClusterPicker UI is step 11.
 
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 
 import { setCurrentClusterRef } from '@/services/clusterRef'
 import { isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
@@ -20,11 +20,15 @@ const STORAGE_KEY = 'kubeast:current-cluster'
 type ClusterContextValue = {
   currentCluster: string
   setCurrentCluster: (id: string) => void
+  // True from the moment the user switches clusters until the new cluster's
+  // cluster-scoped queries have settled — drives the global switch indicator.
+  isSwitching: boolean
 }
 
 const ClusterContext = createContext<ClusterContextValue>({
   currentCluster: '',
   setCurrentCluster: () => {},
+  isSwitching: false,
 })
 
 export function ClusterProvider({ children }: { children: ReactNode }) {
@@ -49,6 +53,8 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   // The active page's queries refetch immediately; others refetch lazily on
   // navigation. Skips the initial mount.
   const prevClusterRef = useRef(currentCluster)
+  const [isSwitching, setIsSwitching] = useState(false)
+  const switchStartRef = useRef(0)
   useEffect(() => {
     const prev = prevClusterRef.current
     if (prev === currentCluster) return
@@ -58,7 +64,26 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     // here would needlessly refetch the just-loaded page on every fresh visit.
     if (!prev) return
     queryClient.removeQueries({ predicate: (q) => isClusterScopedQueryKey(q.queryKey) })
+    // Drive the global switch indicator until the new cluster's queries settle.
+    switchStartRef.current = Date.now()
+    setIsSwitching(true)
   }, [currentCluster, queryClient])
+
+  // Hide the indicator once the new cluster's queries have drained — but keep it
+  // up for a minimum so a fast (cached / local) switch is perceptible instead of
+  // a flicker. While queries are in flight it stays visible; a switch on a page
+  // with no cluster-scoped data clears after the minimum, so it never sticks.
+  const clusterFetching = useIsFetching({
+    predicate: (q) => isClusterScopedQueryKey(q.queryKey),
+  })
+  useEffect(() => {
+    if (!isSwitching) return
+    if (clusterFetching > 0) return // stay visible while the refetch runs
+    const MIN_VISIBLE_MS = 700
+    const remaining = MIN_VISIBLE_MS - (Date.now() - switchStartRef.current)
+    const t = setTimeout(() => setIsSwitching(false), Math.max(0, remaining))
+    return () => clearTimeout(t)
+  }, [isSwitching, clusterFetching])
 
   const setCurrentCluster = (id: string) => {
     if (typeof window !== 'undefined') {
@@ -75,7 +100,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ClusterContext.Provider value={{ currentCluster, setCurrentCluster }}>
+    <ClusterContext.Provider value={{ currentCluster, setCurrentCluster, isSwitching }}>
       {children}
     </ClusterContext.Provider>
   )
