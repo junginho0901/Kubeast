@@ -366,6 +366,18 @@ func (s *Service) clientsetCtx(ctx context.Context) *kubernetes.Clientset {
 	return nil
 }
 
+// clusterCacheKey namespaces a (shared Redis) cache key by the ctx cluster, so
+// one cluster's cached value — overview totals, resource YAML, dependency graph
+// — is never served for another. Falls back to "default" when no cluster is in
+// ctx (the server's default-cluster fallback).
+func (s *Service) clusterCacheKey(ctx context.Context, key string) string {
+	prefix := "default"
+	if id, ok := cluster.FromContext(ctx); ok && id != "" {
+		prefix = string(id)
+	}
+	return prefix + "|" + key
+}
+
 func (s *Service) dynamicCtx(ctx context.Context) dynamic.Interface {
 	if b := s.bundleForCtx(ctx); b != nil {
 		return b.dynamic
@@ -474,7 +486,7 @@ func (s *Service) CreateResource(ctx context.Context, gvr schema.GroupVersionRes
 
 // GetResourceYAML returns a resource as YAML string with caching.
 func (s *Service) GetResourceYAML(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string, forceRefresh bool) (string, error) {
-	cacheKey := fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, namespace, name)
+	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, namespace, name))
 
 	if !forceRefresh {
 		var cached string

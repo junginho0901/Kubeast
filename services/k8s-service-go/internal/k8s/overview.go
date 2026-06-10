@@ -11,7 +11,7 @@ import (
 
 // GetClusterOverview returns a high-level summary of the cluster state (cached 30s).
 func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{}, error) {
-	cacheKey := "cluster_overview"
+	cacheKey := s.clusterCacheKey(ctx, "cluster_overview")
 	var cached map[string]interface{}
 	if s.cache.Get(ctx, cacheKey, &cached) {
 		return cached, nil

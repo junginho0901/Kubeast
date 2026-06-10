@@ -178,7 +178,7 @@ func (s *Service) GetGenericResourceYAML(ctx context.Context, resourceType, name
 		ns = ""
 	}
 
-	cacheKey := fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name)
+	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
 	if !forceRefresh {
 		var cached string
 		if s.cache.Get(ctx, cacheKey, &cached) {
