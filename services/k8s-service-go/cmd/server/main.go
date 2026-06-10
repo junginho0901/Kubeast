@@ -142,6 +142,17 @@ func main() {
 		routes.Register(r, h, wsMux)
 	})
 
+	// Internal-only (NOT routed via the gateway): tool-server fetches a cluster's
+	// kubeconfig at runtime so its kubectl targets the selected cluster (step 14).
+	// JWT-authed; per-cluster access is checked in the handler. No ClusterMiddleware
+	// — the cluster id comes from the path.
+	r.Group(func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
+		})
+		r.Get("/internal/clusters/{id}/kubeconfig", h.GetClusterKubeconfig)
+	})
+
 	// Create HTTP server
 	// WriteTimeout=0 to support long-lived WebSocket connections
 	srv := &http.Server{
