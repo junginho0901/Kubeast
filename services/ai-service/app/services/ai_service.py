@@ -77,6 +77,7 @@ class AIService:
         api_key: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         tls_verify: Optional[bool] = True,
+        cluster_name: Optional[str] = None,
     ):
         """프로바이더별 AsyncOpenAI 어댑터 기반 클라이언트 초기화"""
         resolved_api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
@@ -96,14 +97,15 @@ class AIService:
         self.model = resolved_model
         self.provider = resolved_provider  # public name used in streamed model_info
         self._provider_name = resolved_provider
+        self.cluster_name = cluster_name  # step 14: active cluster, threaded to tools
         self.user_role = self._resolve_user_role(authorization)
-        self.k8s_service = K8sServiceClient(authorization=authorization)
+        self.k8s_service = K8sServiceClient(authorization=authorization, cluster_name=cluster_name)
         tool_server_url = self._resolve_tool_server_url(self.user_role)
         self.tool_server = ToolServerClient(authorization=authorization, base_url=tool_server_url)
         self.tool_contexts: Dict[str, ToolContext] = {}  # {session_id: ToolContext}
         print(f"[AI Service] 초기화 완료 - provider: {resolved_provider}, 모델: {self.model}, role: {self.user_role}", flush=True)
 
-    def update_authorization(self, authorization: Optional[str] = None) -> None:
+    def update_authorization(self, authorization: Optional[str] = None, cluster_name: Optional[str] = None) -> None:
         """
         Update per-request authorization context without recreating the
         heavy LLM client.  This is called when the singleton AIService
@@ -111,8 +113,9 @@ class AIService:
         """
         new_role = self._resolve_user_role(authorization)  # also sets self._token_payload
         if new_role != self.user_role or True:
+            self.cluster_name = cluster_name  # step 14: per-request active cluster
             self.user_role = new_role
-            self.k8s_service = K8sServiceClient(authorization=authorization)
+            self.k8s_service = K8sServiceClient(authorization=authorization, cluster_name=cluster_name)
             tool_server_url = self._resolve_tool_server_url(self.user_role)
             self.tool_server = ToolServerClient(authorization=authorization, base_url=tool_server_url)
 
@@ -132,7 +135,13 @@ class AIService:
         return os.getenv("TOOL_SERVER_URL_READ")
 
     async def _call_tool_server(self, function_name: str, function_args: Dict) -> str:
-        return await self.tool_server.call_tool(function_name, function_args)
+        # Multi-cluster (step 14): thread the active cluster to tool-server so it
+        # runs kubectl against that cluster. A cluster the model put in the args
+        # (explicit cross-cluster call) wins; otherwise default to the active one.
+        args = function_args
+        if self.cluster_name and not args.get("cluster"):
+            args = {**function_args, "cluster": self.cluster_name}
+        return await self.tool_server.call_tool(function_name, args)
 
     def _role_allows_write(self) -> bool:
         return permissions.role_allows_write(self)
