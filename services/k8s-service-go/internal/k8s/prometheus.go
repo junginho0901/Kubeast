@@ -47,10 +47,10 @@ type promServiceInfo struct {
 	Port      int32
 }
 
-// promCache holds Prometheus discovery state for a single cluster. Previously
-// these were package-level globals; keeping them as instance state stops one
-// cluster's discovered Prometheus location from leaking into another once the
-// Service manages more than one cluster.
+// promCache holds Prometheus discovery state for a single cluster. One lives on
+// each clientBundle, so one cluster's discovered Prometheus location can never
+// leak into another (a real bug when the picker switches to a cluster without
+// Prometheus: the stale location 500s against the new cluster's API proxy).
 type promCache struct {
 	mu       sync.RWMutex
 	svc      *promServiceInfo
@@ -58,15 +58,9 @@ type promCache struct {
 	probedAt time.Time
 }
 
-// reset clears the cache so the next query re-discovers Prometheus (called when
-// a cluster's kubeconfig is reloaded).
-func (c *promCache) reset() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.svc = nil
-	c.probed = false
-	c.probedAt = time.Time{}
-}
+// A cluster's promCache lives on its clientBundle, so a kubeconfig rotation that
+// rebuilds the bundle (see Service.Invalidate) drops the cache automatically —
+// the next query re-discovers Prometheus in the fresh cluster.
 
 const promCacheTTL = 10 * time.Minute
 
@@ -218,9 +212,15 @@ func (s *Service) PrometheusQueryRange(ctx context.Context, query string, start,
 
 // ========== Internal ==========
 
-// getPromService returns the cached Prometheus service info or triggers discovery.
+// getPromService returns the cached Prometheus service info or triggers
+// discovery. The cache is per-cluster (on the ctx's clientBundle), so a
+// Prometheus discovered in one cluster is never reused against another.
 func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
-	c := s.prom
+	b := s.bundleForCtx(ctx)
+	if b == nil || b.prom == nil {
+		return nil
+	}
+	c := b.prom
 	c.mu.RLock()
 	if c.probed && time.Since(c.probedAt) < promCacheTTL {
 		cached := c.svc

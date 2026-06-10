@@ -35,6 +35,11 @@ type clientBundle struct {
 	dynamic    dynamic.Interface
 	discovery  discovery.DiscoveryInterface
 	restConfig *rest.Config
+
+	// prom caches this cluster's discovered Prometheus location. It lives on the
+	// bundle (not the Service) so one cluster's Prometheus never leaks into
+	// another, and a kubeconfig rotation that rebuilds the bundle re-discovers.
+	prom *promCache
 }
 
 // Close releases resources held by the bundle. There are no long-lived
@@ -53,9 +58,6 @@ type Service struct {
 	watchEnabled bool
 
 	cache *cache.Cache
-
-	// Prometheus discovery cache (per Service instance; see prometheus.go).
-	prom *promCache
 
 	// Gateway API version cache
 	gatewayAPIVersionMu    sync.RWMutex
@@ -81,7 +83,6 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 		registry:     registry,
 		watchEnabled: watchEnabled,
 		cache:        c,
-		prom:         &promCache{},
 	}
 
 	defaultID, err := registry.Default(ctx)
@@ -153,6 +154,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		dynamic:    dynClient,
 		discovery:  clientset.Discovery(),
 		restConfig: cfg,
+		prom:       &promCache{},
 	}, nil
 }
 
@@ -249,10 +251,6 @@ func (s *Service) invalidateCaches() {
 	s.draAPIVersionMu.Lock()
 	s.draAPIVersionCache = ""
 	s.draAPIVersionMu.Unlock()
-
-	if s.prom != nil {
-		s.prom.reset()
-	}
 
 	if s.cache != nil {
 		// Best-effort: ignore errors from Redis flush.
