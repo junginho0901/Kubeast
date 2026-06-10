@@ -12,12 +12,18 @@ K8S_SERVICE_URL = "http://k8s-service:8002/api/v1"
 class K8sServiceClient:
     """K8s Service HTTP 클라이언트"""
     
-    def __init__(self, authorization: Optional[str] = None):
+    def __init__(self, authorization: Optional[str] = None, cluster_name: Optional[str] = None):
         self.base_url = K8S_SERVICE_URL
         headers: Dict[str, str] = {}
         if authorization and authorization.strip():
             headers["Authorization"] = authorization.strip()
-        self.client = httpx.AsyncClient(base_url=self.base_url, timeout=30.0, headers=headers)
+        # Multi-cluster (step 14): a client-level param adds ?cluster= to every
+        # call so k8s-service (step 05) targets the selected cluster. httpx
+        # merges this with any per-request params.
+        params = {"cluster": cluster_name} if cluster_name else None
+        self.client = httpx.AsyncClient(
+            base_url=self.base_url, timeout=30.0, headers=headers, params=params
+        )
     
     async def get_namespaces(self) -> List[Dict]:
         """네임스페이스 목록 조회"""
