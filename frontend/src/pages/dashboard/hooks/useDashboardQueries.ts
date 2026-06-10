@@ -21,6 +21,7 @@ import {
   isMetricsDisabled,
   isMetricsUnavailableError,
 } from '@/services/api'
+import { useCluster } from '@/contexts/ClusterContext'
 
 import type { ResourceType } from '../types'
 
@@ -42,10 +43,17 @@ export function useDashboardQueries({
   storageActiveTab,
 }: Args) {
   const queryClient = useQueryClient()
+  const { currentCluster } = useCluster()
+  // Scope every dashboard query to the selected cluster. Without this the keys
+  // are shared across clusters: a switch shows the previous cluster's cached
+  // totals (and `placeholderData` queries keep them) until a background refetch.
+  // Appended as a suffix so existing prefix-based invalidate/removeQueries that
+  // reference e.g. ['all-pods'] still match. 'default' mirrors the server fallback.
+  const ck = currentCluster || 'default'
   const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
   const { data: overview, isLoading } = useQuery({
-    queryKey: ['cluster-overview'],
+    queryKey: ['cluster-overview', ck],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
     refetchInterval: 60000,
@@ -53,21 +61,21 @@ export function useDashboardQueries({
 
   // 네임스페이스 목록
   const { data: namespaces, isLoading: isLoadingNamespaces } = useQuery({
-    queryKey: ['namespaces'],
+    queryKey: ['namespaces', ck],
     queryFn: () => api.getNamespaces(),
     enabled: selectedResourceType === 'namespaces',
   })
 
   // 전체 Pod 목록
   const { data: allPods, isLoading: isLoadingPods } = useQuery({
-    queryKey: ['all-pods'],
+    queryKey: ['all-pods', ck],
     queryFn: () => api.getAllPods(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'pods' || selectedPodStatus !== null || isIssuesModalOpen,
   })
 
   // 전체 Services 목록 (모든 네임스페이스)
   const { data: allNamespaces, isLoading: isLoadingAllNamespaces } = useQuery({
-    queryKey: ['all-namespaces'],
+    queryKey: ['all-namespaces', ck],
     queryFn: () => api.getNamespaces(),
     enabled:
       selectedResourceType === 'services' ||
@@ -78,7 +86,7 @@ export function useDashboardQueries({
   })
 
   const { data: allServices, isLoading: isLoadingServices } = useQuery({
-    queryKey: ['all-services'],
+    queryKey: ['all-services', ck],
     queryFn: async () => {
       if (!allNamespaces || !Array.isArray(allNamespaces)) return []
       const services = await Promise.all(
@@ -91,7 +99,7 @@ export function useDashboardQueries({
 
   // 전체 Deployments 목록
   const { data: allDeployments, isLoading: isLoadingDeployments } = useQuery({
-    queryKey: ['all-deployments'],
+    queryKey: ['all-deployments', ck],
     queryFn: async () => {
       if (!allNamespaces || !Array.isArray(allNamespaces)) return []
       const deployments = await Promise.all(
@@ -104,14 +112,14 @@ export function useDashboardQueries({
 
   // 전체 PVC 목록
   const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
-    queryKey: ['all-pvcs'],
+    queryKey: ['all-pvcs', ck],
     queryFn: () => api.getPVCs(),
     enabled: selectedResourceType === 'pvcs' || isIssuesModalOpen || isStorageModalOpen,
   })
 
   // 전체 PV 목록 (스토리지 분석용)
   const { data: allPVs, isLoading: isLoadingPVs } = useQuery({
-    queryKey: ['all-pvs'],
+    queryKey: ['all-pvs', ck],
     queryFn: () => api.getPVs(),
     enabled: isStorageModalOpen,
   })
@@ -123,7 +131,7 @@ export function useDashboardQueries({
     isError: isStorageTopologyError,
     error: storageTopologyError,
   } = useQuery({
-    queryKey: ['storage-topology'],
+    queryKey: ['storage-topology', ck],
     queryFn: () => api.getStorageTopology(),
     enabled: isStorageModalOpen && storageActiveTab === 'topology',
     retry: false,
@@ -133,7 +141,7 @@ export function useDashboardQueries({
 
   // 노드 목록 (차트 표시용 - 항상 가져오기)
   const { data: nodes } = useQuery({
-    queryKey: ['nodes'],
+    queryKey: ['nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     staleTime: 30000,
     refetchInterval: 60000,
@@ -146,7 +154,7 @@ export function useDashboardQueries({
     isError: isTopResourcesError,
     error: topResourcesError,
   } = useQuery<TopResources>({
-    queryKey: ['top-resources'],
+    queryKey: ['top-resources', ck],
     queryFn: async () => {
       const result = await api.getTopResources(5, 3)
       // 백엔드에서 빈 배열을 반환한 경우(일시적 실패) 이전 데이터 유지를 위해
@@ -196,13 +204,13 @@ export function useDashboardQueries({
 
   useEffect(() => {
     if (metricsUnavailable) {
-      queryClient.cancelQueries({ queryKey: ['top-resources'] })
+      queryClient.cancelQueries({ queryKey: ['top-resources', ck] })
     }
-  }, [metricsUnavailable, queryClient])
+  }, [metricsUnavailable, queryClient, ck])
 
   // 노드 목록 (모달용)
   const { data: modalNodes, isLoading: isLoadingNodes } = useQuery({
-    queryKey: ['modal-nodes'],
+    queryKey: ['modal-nodes', ck],
     queryFn: () => api.getNodes(false), // 자동 갱신은 캐시 사용
     enabled: selectedResourceType === 'nodes',
   })

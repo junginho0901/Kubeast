@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures } from '@/services/api'
+import { useCluster } from '@/contexts/ClusterContext'
 
 /**
  * Fetch cluster-level feature flags (e.g. Prometheus enabled/disabled) once
@@ -40,8 +41,10 @@ export function usePrometheusQuery(
 ) {
   const features = useClusterFeatures()
   const promEnabled = features.data?.prometheus?.enabled !== false
+  // Scope to the selected cluster so metrics never bleed across a switch.
+  const { currentCluster } = useCluster()
   return useQuery<PrometheusQueryResponse>({
-    queryKey: ['prometheus', ...queryKey],
+    queryKey: ['prometheus', currentCluster || 'default', ...queryKey],
     queryFn: () => api.prometheusQuery(promql),
     refetchInterval: options?.refetchInterval ?? 30000,
     enabled: (options?.enabled ?? true) && promEnabled,
@@ -101,8 +104,9 @@ export function usePrometheusRangeQuery(
 ) {
   const features = useClusterFeatures()
   const promEnabled = features.data?.prometheus?.enabled !== false
+  const { currentCluster } = useCluster()
   return useQuery<PrometheusRangeResponse>({
-    queryKey: ['prometheus-range', ...queryKey, options?.step ?? 'step-default'],
+    queryKey: ['prometheus-range', currentCluster || 'default', ...queryKey, options?.step ?? 'step-default'],
     queryFn: () => api.prometheusQueryRange(promql, {
       start: options?.start,
       end: options?.end,
