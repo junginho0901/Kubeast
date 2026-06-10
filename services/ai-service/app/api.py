@@ -64,12 +64,12 @@ def _invalidate_caches():
     _cached_ai_service = None
 
 
-async def _build_ai_service(authorization: str):
+async def _build_ai_service(authorization: str, cluster_name: Optional[str] = None):
     """
     Return an AIService that reuses the LLM client if the active model
-    config hasn't changed.  Only *role / authorization* differs per user,
-    so the heavy LLM client is shared while role-dependent parts
-    (tool_server URL) are resolved per call.
+    config hasn't changed.  Only *role / authorization / cluster* differ per
+    user, so the heavy LLM client is shared while role-dependent parts
+    (tool_server URL) and the active cluster are resolved per call.
     """
     global _cached_ai_config_hash, _cached_ai_service
 
@@ -83,7 +83,7 @@ async def _build_ai_service(authorization: str):
 
     if _cached_ai_service is not None and config_hash == _cached_ai_config_hash:
         # Reuse existing LLM client, only update per-request fields
-        _cached_ai_service.update_authorization(authorization)
+        _cached_ai_service.update_authorization(authorization, cluster_name=cluster_name)
         return _cached_ai_service
 
     # Config changed or first call — create a new AIService
@@ -95,6 +95,7 @@ async def _build_ai_service(authorization: str):
         api_key=resolved.api_key,
         extra_headers=resolved.extra_headers,
         tls_verify=resolved.tls_verify,
+        cluster_name=cluster_name,
     )
     _cached_ai_service = service
     _cached_ai_config_hash = config_hash
@@ -127,13 +128,14 @@ async def session_chat(
     message: str,
     request: Request,
     authorization: str = Header(..., alias="Authorization"),
+    x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """
     세션 기반 AI 챗봇 (스트리밍)
     """
     from app.database import get_db_service
 
-    ai_service = await _build_ai_service(authorization)
+    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
     audit_actor, audit_http = _extract_audit_meta(request, authorization)
 
     try:
@@ -173,7 +175,9 @@ async def floating_session_chat(
     """
     from app.services.floating_ai_service import FloatingAIService
 
-    ai_service = await _build_ai_service(authorization)
+    # step 14: the underlying AIService is cluster-scoped too (tool calls), not
+    # just the floating prompt text.
+    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
     floating_service = FloatingAIService(ai_service=ai_service)
     audit_actor, audit_http = _extract_audit_meta(request, authorization)
 
