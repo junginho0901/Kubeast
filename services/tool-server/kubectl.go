@@ -23,8 +23,8 @@ func runKubectl(ctx context.Context, headers http.Header, args ...string) (strin
 	}
 
 	finalArgs := make([]string, 0, len(args)+4)
-	if kubeconfigPath != "" {
-		finalArgs = append(finalArgs, "--kubeconfig", kubeconfigPath)
+	if kc := kubeconfigForCtx(ctx); kc != "" {
+		finalArgs = append(finalArgs, "--kubeconfig", kc)
 	}
 	if token != "" {
 		finalArgs = append(finalArgs, "--token", token)
@@ -51,8 +51,8 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 	}
 
 	finalArgs := make([]string, 0, len(args)+4)
-	if kubeconfigPath != "" {
-		finalArgs = append(finalArgs, "--kubeconfig", kubeconfigPath)
+	if kc := kubeconfigForCtx(ctx); kc != "" {
+		finalArgs = append(finalArgs, "--kubeconfig", kc)
 	}
 	if token != "" {
 		finalArgs = append(finalArgs, "--token", token)
