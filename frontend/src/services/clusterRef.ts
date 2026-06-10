@@ -15,3 +15,9 @@ export function getCurrentClusterID(): string {
 export function setCurrentClusterRef(id: string): void {
   _id = id
 }
+
+// X-Cluster-Name header for the AI chat streams (custom fetch, not the axios
+// client) so ai-service scopes tool calls to the active cluster (step 14).
+export function clusterHeaders(): Record<string, string> {
+  return _id ? { 'X-Cluster-Name': _id } : {}
+}
