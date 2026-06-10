@@ -196,15 +196,10 @@ spec:
           env:
             - name: TOKEN_PASSTHROUGH
               value: "true"
-          volumeMounts:
-            - name: kubeconfig
-              mountPath: /app/kubeconfig.yaml
-              subPath: kubeconfig.yaml
-      volumes:
-        - name: kubeconfig
-          secret:
-            secretName: k8s-kubeconfig
-            optional: true
+            # step 14: tool-server fetches the selected cluster's kubeconfig from
+            # k8s-service at runtime (no mounted kubeconfig, rollout-free).
+            - name: K8S_SERVICE_URL
+              value: http://k8s-service:8002
 ---
 # --- Model Config Controller ---
 apiVersion: apps/v1
