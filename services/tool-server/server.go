@@ -75,6 +75,18 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	ctx, cancel := context.WithTimeout(r.Context(), defaultTimeout)
 	defer cancel()
 
+	// step 14: route this call to the selected cluster — resolve its kubeconfig
+	// and stash it in ctx for runKubectl. "cluster" is routing metadata, not a
+	// tool parameter, so drop it from the args passed to the handler.
+	clusterID, _ := req.Arguments["cluster"].(string)
+	delete(req.Arguments, "cluster")
+	kcPath, err := resolveClusterKubeconfig(ctx, clusterID, r.Header)
+	if err != nil {
+		respondJSON(w, http.StatusBadGateway, ToolCallResponse{Error: "cluster kubeconfig: " + err.Error()})
+		return
+	}
+	ctx = withKubeconfigPath(ctx, kcPath)
+
 	output, err := tool.Handler(ctx, req.Arguments, r.Header)
 	if err != nil {
 		status := http.StatusInternalServerError
