@@ -54,16 +54,18 @@ export const isMetricsUnavailableResponse = (error: any): boolean => {
   return status === 503 && detail === 'metrics_unavailable'
 }
 
-// Public flag — once any metrics call fails with metrics_unavailable
-// the UI flips this so subsequent panels can short-circuit instead of
-// re-issuing the same failing requests.
-let metricsDisabled = false
+// Per-cluster flag — once a metrics call fails with metrics_unavailable the UI
+// flips it so subsequent panels short-circuit instead of re-issuing the same
+// failing requests. Keyed by cluster so a cluster WITHOUT metrics-server doesn't
+// permanently disable metrics for one that HAS it (multi-cluster).
+const metricsDisabledClusters = new Set<string>()
+const metricsClusterKey = (): string => getCurrentClusterID() || 'default'
 
 export const disableMetrics = (): void => {
-  metricsDisabled = true
+  metricsDisabledClusters.add(metricsClusterKey())
 }
 
-export const isMetricsDisabled = (): boolean => metricsDisabled
+export const isMetricsDisabled = (): boolean => metricsDisabledClusters.has(metricsClusterKey())
 
 export const isMetricsUnavailableError = (err: any): boolean => {
   const status = err?.response?.status
