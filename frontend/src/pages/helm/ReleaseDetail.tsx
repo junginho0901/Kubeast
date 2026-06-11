@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useHelmWatchList, type HelmWatchEvent } from '@/services/useHelmWatchList'
+import { useCluster } from '@/contexts/ClusterContext'
 import OverviewTab from './tabs/OverviewTab'
 import ValuesTab from './tabs/ValuesTab'
 import ManifestTab from './tabs/ManifestTab'
@@ -27,6 +28,7 @@ export default function HelmReleaseDetailPage() {
   const [testOpen, setTestOpen] = useState(false)
 
   const queryClient = useQueryClient()
+  const { currentCluster } = useCluster()
 
   const detailQuery = useQuery({
     queryKey: ['helm-release', namespace, name],
@@ -60,7 +62,7 @@ export default function HelmReleaseDetailPage() {
   )
 
   useHelmWatchList({
-    cluster: 'default',
+    cluster: currentCluster || 'default',
     namespace: namespace || undefined,
     enabled: !!namespace && !!name,
     queryKey: null,
