@@ -59,18 +59,18 @@ type Service struct {
 
 	cache *cache.Cache
 
-	// Gateway API version cache
+	// These discovery caches are PER CLUSTER — Gateway/DRA CRD versions and the
+	// API-resource set differ between clusters, so they're keyed by cluster.ID to
+	// stop one cluster's discovery from being served for another.
 	gatewayAPIVersionMu    sync.RWMutex
-	gatewayAPIVersionCache string
+	gatewayAPIVersionCache map[cluster.ID]string
 
-	// DRA API version cache
 	draAPIVersionMu    sync.RWMutex
-	draAPIVersionCache string
+	draAPIVersionCache map[cluster.ID]string
 
-	// API resources cache
 	apiResourcesMu    sync.RWMutex
-	apiResourcesCache []metav1.APIResourceList
-	apiResourcesAt    time.Time
+	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
+	apiResourcesAt    map[cluster.ID]time.Time
 }
 
 var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
@@ -80,9 +80,13 @@ var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
 // at startup, the service still starts; bundles are built lazily on first use.
 func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache) (*Service, error) {
 	s := &Service{
-		registry:     registry,
-		watchEnabled: watchEnabled,
-		cache:        c,
+		registry:               registry,
+		watchEnabled:           watchEnabled,
+		cache:                  c,
+		gatewayAPIVersionCache: map[cluster.ID]string{},
+		draAPIVersionCache:     map[cluster.ID]string{},
+		apiResourcesCache:      map[cluster.ID][]metav1.APIResourceList{},
+		apiResourcesAt:         map[cluster.ID]time.Time{},
 	}
 
 	defaultID, err := registry.Default(ctx)
@@ -240,16 +244,16 @@ func (s *Service) defaultClientBundle() *clientBundle {
 // invalidateCaches clears state derived from a clientBundle.
 func (s *Service) invalidateCaches() {
 	s.apiResourcesMu.Lock()
-	s.apiResourcesCache = nil
-	s.apiResourcesAt = time.Time{}
+	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
+	s.apiResourcesAt = map[cluster.ID]time.Time{}
 	s.apiResourcesMu.Unlock()
 
 	s.gatewayAPIVersionMu.Lock()
-	s.gatewayAPIVersionCache = ""
+	s.gatewayAPIVersionCache = map[cluster.ID]string{}
 	s.gatewayAPIVersionMu.Unlock()
 
 	s.draAPIVersionMu.Lock()
-	s.draAPIVersionCache = ""
+	s.draAPIVersionCache = map[cluster.ID]string{}
 	s.draAPIVersionMu.Unlock()
 
 	if s.cache != nil {
@@ -371,11 +375,16 @@ func (s *Service) clientsetCtx(ctx context.Context) *kubernetes.Clientset {
 // — is never served for another. Falls back to "default" when no cluster is in
 // ctx (the server's default-cluster fallback).
 func (s *Service) clusterCacheKey(ctx context.Context, key string) string {
-	prefix := "default"
+	return string(ctxClusterID(ctx)) + "|" + key
+}
+
+// ctxClusterID is the cluster carried in ctx, or the default-cluster id when
+// none is set. Used to key the per-cluster in-memory discovery caches.
+func ctxClusterID(ctx context.Context) cluster.ID {
 	if id, ok := cluster.FromContext(ctx); ok && id != "" {
-		prefix = string(id)
+		return id
 	}
-	return prefix + "|" + key
+	return "default"
 }
 
 func (s *Service) dynamicCtx(ctx context.Context) dynamic.Interface {
@@ -523,7 +532,15 @@ func (s *Service) RawRequest(ctx context.Context, method, path string) ([]byte, 
 	result := req.Do(ctx)
 	rawBody, err := result.Raw()
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		// Surface the REAL HTTP status (e.g. 404 when the metrics.k8s.io API is
+		// absent) instead of a blanket 500, so callers can degrade gracefully.
+		// StatusCode stays 0 for transport-level errors → fall back to 500.
+		var sc int
+		result.StatusCode(&sc)
+		if sc == 0 {
+			sc = http.StatusInternalServerError
+		}
+		return rawBody, sc, err
 	}
 	var statusCode int
 	result.StatusCode(&statusCode)

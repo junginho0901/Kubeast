@@ -15,13 +15,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 // resolveDRAAPIVersion auto-detects whether the cluster uses v1beta1 or v1alpha3 for resource.k8s.io.
 // The result is cached for the lifetime of the process.
 func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
+	cid := ctxClusterID(ctx)
 	s.draAPIVersionMu.RLock()
-	cached := s.draAPIVersionCache
+	cached := s.draAPIVersionCache[cid]
 	s.draAPIVersionMu.RUnlock()
 	if cached != "" {
 		return cached
@@ -29,10 +32,13 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 
 	s.draAPIVersionMu.Lock()
 	defer s.draAPIVersionMu.Unlock()
+	if s.draAPIVersionCache == nil {
+		s.draAPIVersionCache = map[cluster.ID]string{}
+	}
 
 	// Double-check after acquiring write lock
-	if s.draAPIVersionCache != "" {
-		return s.draAPIVersionCache
+	if v := s.draAPIVersionCache[cid]; v != "" {
+		return v
 	}
 
 	// Use a short timeout so version probing doesn't block requests
@@ -47,8 +53,8 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 	}
 	_, err := s.dynamicCtx(ctx).Resource(gvr).List(probeCtx, metav1.ListOptions{Limit: 1})
 	if err == nil {
-		s.draAPIVersionCache = "v1beta1"
-		slog.Info("DRA API version detected", "version", "v1beta1")
+		s.draAPIVersionCache[cid] = "v1beta1"
+		slog.Info("DRA API version detected", "cluster", cid, "version", "v1beta1")
 		return "v1beta1"
 	}
 
@@ -58,14 +64,14 @@ func (s *Service) resolveDRAAPIVersion(ctx context.Context) string {
 	gvr.Version = "v1alpha3"
 	_, err = s.dynamicCtx(ctx).Resource(gvr).List(probeCtx2, metav1.ListOptions{Limit: 1})
 	if err == nil {
-		s.draAPIVersionCache = "v1alpha3"
-		slog.Info("DRA API version detected", "version", "v1alpha3")
+		s.draAPIVersionCache[cid] = "v1alpha3"
+		slog.Info("DRA API version detected", "cluster", cid, "version", "v1alpha3")
 		return "v1alpha3"
 	}
 
 	// Mark as unavailable so we don't probe again
-	s.draAPIVersionCache = "unavailable"
-	slog.Warn("DRA API not detected (cluster may be < v1.31)")
+	s.draAPIVersionCache[cid] = "unavailable"
+	slog.Warn("DRA API not detected (cluster may be < v1.31)", "cluster", cid)
 	return "unavailable"
 }
 

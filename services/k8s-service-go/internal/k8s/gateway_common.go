@@ -7,13 +7,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 // resolveGatewayAPIVersion auto-detects whether the cluster uses v1 or v1beta1 for gateway.networking.k8s.io.
 // The result is cached for the lifetime of the process.
 func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
+	cid := ctxClusterID(ctx)
 	s.gatewayAPIVersionMu.RLock()
-	cached := s.gatewayAPIVersionCache
+	cached := s.gatewayAPIVersionCache[cid]
 	s.gatewayAPIVersionMu.RUnlock()
 	if cached != "" {
 		return cached
@@ -21,10 +24,13 @@ func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
 
 	s.gatewayAPIVersionMu.Lock()
 	defer s.gatewayAPIVersionMu.Unlock()
+	if s.gatewayAPIVersionCache == nil {
+		s.gatewayAPIVersionCache = map[cluster.ID]string{}
+	}
 
 	// Double-check after acquiring write lock
-	if s.gatewayAPIVersionCache != "" {
-		return s.gatewayAPIVersionCache
+	if v := s.gatewayAPIVersionCache[cid]; v != "" {
+		return v
 	}
 
 	// Try v1 first
@@ -35,8 +41,8 @@ func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
 	}
 	_, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
 	if err == nil {
-		s.gatewayAPIVersionCache = "v1"
-		slog.Info("gateway API version detected", "version", "v1")
+		s.gatewayAPIVersionCache[cid] = "v1"
+		slog.Info("gateway API version detected", "cluster", cid, "version", "v1")
 		return "v1"
 	}
 
@@ -44,14 +50,14 @@ func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
 	gvr.Version = "v1beta1"
 	_, err = s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
 	if err == nil {
-		s.gatewayAPIVersionCache = "v1beta1"
-		slog.Info("gateway API version detected", "version", "v1beta1")
+		s.gatewayAPIVersionCache[cid] = "v1beta1"
+		slog.Info("gateway API version detected", "cluster", cid, "version", "v1beta1")
 		return "v1beta1"
 	}
 
 	// Default to v1
-	s.gatewayAPIVersionCache = "v1"
-	slog.Warn("gateway API not detected, defaulting to v1")
+	s.gatewayAPIVersionCache[cid] = "v1"
+	slog.Warn("gateway API not detected, defaulting to v1", "cluster", cid)
 	return "v1"
 }
 

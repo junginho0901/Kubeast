@@ -8,13 +8,15 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 // GetAPIResources returns all available API resources in the cluster, cached for 60 seconds.
 func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList, error) {
+	cid := ctxClusterID(ctx)
 	s.apiResourcesMu.RLock()
-	if s.apiResourcesCache != nil && time.Since(s.apiResourcesAt) < 60*time.Second {
-		cached := s.apiResourcesCache
+	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < 60*time.Second {
 		s.apiResourcesMu.RUnlock()
 		return cached, nil
 	}
@@ -22,10 +24,14 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 
 	s.apiResourcesMu.Lock()
 	defer s.apiResourcesMu.Unlock()
+	if s.apiResourcesCache == nil {
+		s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
+		s.apiResourcesAt = map[cluster.ID]time.Time{}
+	}
 
 	// Double-check after acquiring write lock
-	if s.apiResourcesCache != nil && time.Since(s.apiResourcesAt) < 60*time.Second {
-		return s.apiResourcesCache, nil
+	if cached := s.apiResourcesCache[cid]; cached != nil && time.Since(s.apiResourcesAt[cid]) < 60*time.Second {
+		return cached, nil
 	}
 
 	_, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
@@ -40,8 +46,8 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 		}
 	}
 
-	s.apiResourcesCache = result
-	s.apiResourcesAt = time.Now()
+	s.apiResourcesCache[cid] = result
+	s.apiResourcesAt[cid] = time.Now()
 	return result, nil
 }
 
