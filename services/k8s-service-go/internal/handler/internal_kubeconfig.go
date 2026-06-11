@@ -50,6 +50,27 @@ func (h *Handler) GetClusterKubeconfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// InvalidateCluster drops a cluster's cached client bundle + derived caches so
+// the next request rebuilds from the (just-rotated) kubeconfig — no rollout.
+// Internal-only (NOT gateway-routed); auth-service calls this after a kubeconfig
+// rotation, forwarding the admin's token. Gated like the kubeconfig read.
+//
+//	POST /internal/clusters/{id}/invalidate → 204
+func (h *Handler) InvalidateCluster(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if len(payload.Perms["*"]) == 0 && len(payload.Perms[id]) == 0 {
+		response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+id)
+		return
+	}
+	h.svc.Invalidate(cluster.ID(id))
+	w.WriteHeader(http.StatusNoContent)
+}
+
 var errForbiddenKubeconfig = forbiddenKubeconfigErr{}
 
 type forbiddenKubeconfigErr struct{}

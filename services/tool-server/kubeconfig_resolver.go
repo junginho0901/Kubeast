@@ -122,6 +122,23 @@ func resolveClusterKubeconfig(ctx context.Context, clusterID string, headers htt
 	return path, nil
 }
 
+// invalidateClusterKubeconfig drops the cached kubeconfig for clusterID so the
+// next tool call re-fetches it from k8s-service. Called after a kubeconfig
+// rotation so AI tool calls pick up the new credentials immediately instead of
+// waiting out the TTL.
+func invalidateClusterKubeconfig(clusterID string) {
+	if clusterID == "" {
+		clusterID = "default"
+	}
+	kcCacheMu.Lock()
+	c, ok := kcCache[clusterID]
+	delete(kcCache, clusterID)
+	kcCacheMu.Unlock()
+	if ok && c.path != "" {
+		_ = os.Remove(c.path)
+	}
+}
+
 func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.Header) (blob string, inCluster bool, err error) {
 	url := fmt.Sprintf("%s/internal/clusters/%s/kubeconfig", k8sServiceURL, clusterID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

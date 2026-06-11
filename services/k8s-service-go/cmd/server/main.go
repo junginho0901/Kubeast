@@ -151,6 +151,7 @@ func main() {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
 		})
 		r.Get("/internal/clusters/{id}/kubeconfig", h.GetClusterKubeconfig)
+		r.Post("/internal/clusters/{id}/invalidate", h.InvalidateCluster)
 	})
 
 	// Create HTTP server

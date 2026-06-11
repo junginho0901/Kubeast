@@ -36,6 +36,16 @@ func main() {
 	mux.HandleFunc("/tools/call", func(w http.ResponseWriter, r *http.Request) {
 		handleCall(w, r, toolRegistry)
 	})
+	// Internal: drop a cluster's cached kubeconfig (called by auth-service after a
+	// kubeconfig rotation). Cluster-network only; just a cache-bust, no K8s access.
+	mux.HandleFunc("/internal/invalidate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		invalidateClusterKubeconfig(r.URL.Query().Get("cluster"))
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	srv := &http.Server{
 		Addr:         ":" + port,
