@@ -50,7 +50,7 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace
 	}
 
 	// Invalidate cache
-	cacheKey := fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name)
+	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
 	s.cache.Delete(ctx, cacheKey)
 
 	return map[string]interface{}{

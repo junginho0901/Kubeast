@@ -327,7 +327,7 @@ func (s *Service) ApplyNamespaceYAML(ctx context.Context, name string, yamlStr s
 		return nil, fmt.Errorf("update namespace %s: %w", name, err)
 	}
 
-	s.cache.Delete(ctx, fmt.Sprintf("yaml|namespaces||%s", name))
+	s.cache.Delete(ctx, s.clusterCacheKey(ctx, fmt.Sprintf("yaml|namespaces||%s", name)))
 
 	return map[string]interface{}{
 		"name":        updated.Name,
