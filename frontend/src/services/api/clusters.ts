@@ -52,7 +52,10 @@ export const clustersApi = {
     await client.delete(`/clusters/${id}`)
   },
 
-  updateCluster: async (id: string, patch: { display_name?: string }): Promise<ClusterMeta> => {
+  updateCluster: async (
+    id: string,
+    patch: { display_name?: string; kubeconfig?: string },
+  ): Promise<ClusterMeta> => {
     const { data } = await client.patch(`/clusters/${id}`, patch)
     return data
   },

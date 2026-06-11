@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2, Activity, Loader2, Server } from 'lucide-react'
+import { Plus, Trash2, Activity, Loader2, Server, Pencil } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { clustersApi, type ClusterMeta, type ConnectionResult } from '@/services/api/clusters'
 import RegisterClusterDialog from './RegisterClusterDialog'
+import EditClusterDialog from './EditClusterDialog'
 
 function healthDotClass(status: string | undefined): string {
   if (status === 'healthy') return 'bg-green-500'
@@ -23,6 +24,7 @@ export default function AdminClusters() {
 
   const [registerOpen, setRegisterOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ClusterMeta | null>(null)
+  const [editTarget, setEditTarget] = useState<ClusterMeta | null>(null)
   const [testResults, setTestResults] = useState<Record<string, ConnectionResult>>({})
   const [testingId, setTestingId] = useState<string | null>(null)
 
@@ -141,6 +143,16 @@ export default function AdminClusters() {
                       </button>
                       <button
                         type="button"
+                        data-testid={`edit-cluster-${c.id}`}
+                        onClick={() => setEditTarget(c)}
+                        className="flex items-center gap-1 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40"
+                        title={tr('cluster.admin.edit', 'Edit')}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        {tr('cluster.admin.edit', 'Edit')}
+                      </button>
+                      <button
+                        type="button"
                         data-testid={`delete-cluster-${c.id}`}
                         onClick={() => setDeleteTarget(c)}
                         className="flex items-center gap-1 rounded-lg border border-red-900/60 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-900/20"
@@ -162,6 +174,17 @@ export default function AdminClusters() {
           onClose={() => setRegisterOpen(false)}
           onRegistered={() => {
             setRegisterOpen(false)
+            refresh()
+          }}
+        />
+      )}
+
+      {editTarget && (
+        <EditClusterDialog
+          cluster={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            setEditTarget(null)
             refresh()
           }}
         />
