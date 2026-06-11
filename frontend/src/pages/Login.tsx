@@ -143,7 +143,7 @@ export default function Login() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 2xl:p-5">
                 <div className="flex items-center gap-2 text-sm 2xl:text-base font-semibold text-white">
-                  <Layers className="h-4 w-4 text-slate-200" />
+                  <Layers className="h-4 w-4 text-primary-400" />
                   {tr('login.features.clusterView.title', 'Cluster view')}
                 </div>
                 <p className="mt-1 text-xs 2xl:text-sm text-slate-400">
