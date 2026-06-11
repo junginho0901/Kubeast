@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -54,6 +55,12 @@ func (s *Service) GetPodMetrics(ctx context.Context, namespace string) ([]map[st
 	}
 	rawBody, statusCode, err := s.RawRequest(ctx, "GET", path)
 	if err != nil {
+		// metrics-server not installed in this cluster → the metrics.k8s.io API
+		// group is unregistered (404). That's "no metrics", not a server error;
+		// return empty so callers degrade gracefully instead of surfacing a 500.
+		if statusCode == http.StatusNotFound {
+			return []map[string]interface{}{}, nil
+		}
 		return nil, fmt.Errorf("get pod metrics (status %d): %w", statusCode, err)
 	}
 
@@ -98,6 +105,9 @@ func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{},
 	path := "/apis/metrics.k8s.io/v1beta1/nodes"
 	rawBody, statusCode, err := s.RawRequest(ctx, "GET", path)
 	if err != nil {
+		if statusCode == http.StatusNotFound {
+			return []map[string]interface{}{}, nil
+		}
 		return nil, fmt.Errorf("get node metrics (status %d): %w", statusCode, err)
 	}
 
