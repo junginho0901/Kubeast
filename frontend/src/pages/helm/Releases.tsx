@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api, type HelmReleaseSummary } from '@/services/api'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useHelmWatchList } from '@/services/useHelmWatchList'
+import { useCluster } from '@/contexts/ClusterContext'
 import {
   sortReleases,
   type SortKey,
@@ -17,6 +18,8 @@ import ReleaseTable from './releases/ReleaseTable'
 
 export default function HelmReleasesPage() {
   const { t } = useTranslation()
+  const { currentCluster } = useCluster()
+  const cluster = currentCluster || 'default'
   const [namespace, setNamespace] = useState<string>('')
   const [q, setQ] = useState<string>('')
   const [sortKey, setSortKey] = useState<SortKey>(null)
@@ -27,20 +30,25 @@ export default function HelmReleasesPage() {
   // event-by-event, so refetchInterval is gone and staleTime is Infinity.
   // refetch() (used by the manual "Refresh" button) still does a full
   // list which is useful as a recovery hatch if the WS ever desyncs.
+  // Cluster is part of the key so a switch is a distinct query (no cross-cluster
+  // bleed) and the watch below writes events into the right cluster's cache.
   const queryKey = useMemo(
-    () => ['helm-releases', namespace] as const,
-    [namespace],
+    () => ['helm-releases', cluster, namespace] as const,
+    [cluster, namespace],
   )
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
-    placeholderData: keepPreviousData,
+    // keepPreviousData for smooth namespace-filter changes, but only within the
+    // same cluster so a switch never lingers on the prior cluster's releases.
+    placeholderData: (prev, prevQuery) =>
+      prevQuery && prevQuery.queryKey[1] === cluster ? prev : undefined,
     staleTime: Infinity,
   })
 
   useHelmWatchList({
-    cluster: 'default',
+    cluster,
     namespace: namespace || undefined,
     enabled: !isLoading,
     queryKey,
