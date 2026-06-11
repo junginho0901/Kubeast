@@ -43,6 +43,8 @@ type Config struct {
 	DeploymentMode       string
 	DockerKubeconfigPath string
 	K8sServiceHealthURL  string
+	K8sServiceURL        string
+	ToolServerURL        string
 
 	// Multi-cluster: per-cluster kubeconfig stores. These MUST match the values
 	// k8s-service reads from so both services agree on where kubeconfigs live.
@@ -85,6 +87,8 @@ func Load() Config {
 		DeploymentMode:       pkgconfig.GetEnv("DEPLOYMENT_MODE", "k8s"),
 		DockerKubeconfigPath: pkgconfig.GetEnv("DOCKER_KUBECONFIG_PATH", "/kubeconfig/kubeconfig.yaml"),
 		K8sServiceHealthURL:  pkgconfig.GetEnv("K8S_SERVICE_HEALTH_URL", "http://k8s-service:8002/health"),
+		K8sServiceURL:        pkgconfig.GetEnv("K8S_SERVICE_URL", "http://k8s-service:8002"),
+		ToolServerURL:        pkgconfig.GetEnv("TOOL_SERVER_URL", "http://tool-server:8086"),
 
 		PodNamespace:  pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
 		KubeconfigDir: pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),

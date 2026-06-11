@@ -94,11 +94,12 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		if _, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout); verr != nil {
+		_, setupUID, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout)
+		if verr != nil {
 			response.Error(w, http.StatusBadRequest, "Connection failed: "+verr.Error())
 			return
 		}
-		if _, err := h.registry.AddExternal(r.Context(), setupClusterDisplayName, *req.Kubeconfig, "", "setup", h.secrets); err != nil {
+		if _, err := h.registry.AddExternal(r.Context(), setupClusterDisplayName, *req.Kubeconfig, "", setupUID, "setup", h.secrets); err != nil {
 			response.Error(w, http.StatusInternalServerError, "Failed to register cluster: "+err.Error())
 			return
 		}

@@ -208,7 +208,7 @@ func (r *PostgresRegistry) GetMeta(ctx context.Context, id ID) (*Meta, error) {
 // failure the just-written secret is rolled back so a failed registration
 // leaves no orphan. No rollout is triggered — k8s-service reads the secret
 // lazily on the first ?cluster={id} request (00-COMMON §2-4).
-func (r *PostgresRegistry) AddExternal(ctx context.Context, displayName, kubeconfig, apiServerURL, createdBy string, writer SecretWriter) (*Meta, error) {
+func (r *PostgresRegistry) AddExternal(ctx context.Context, displayName, kubeconfig, apiServerURL, clusterUID, createdBy string, writer SecretWriter) (*Meta, error) {
 	id := ID(Slugify(displayName))
 	if id == "" {
 		return nil, fmt.Errorf("cluster: display name produces empty id: %q", displayName)
@@ -229,9 +229,9 @@ func (r *PostgresRegistry) AddExternal(ctx context.Context, displayName, kubecon
 		return nil, fmt.Errorf("store kubeconfig: %w", err)
 	}
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO clusters (id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster, created_by)
-		VALUES ($1, $2, $3, $4, $5, false, $6)`,
-		id, displayName, string(ModeExternal), secretName, nullIfEmpty(apiServerURL), createdBy)
+		INSERT INTO clusters (id, display_name, mode, kubeconfig_secret_name, api_server_url, cluster_uid, is_self_cluster, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, false, $7)`,
+		id, displayName, string(ModeExternal), secretName, nullIfEmpty(apiServerURL), nullIfEmpty(clusterUID), createdBy)
 	if err != nil {
 		// Roll back the secret so a failed registration leaves nothing behind.
 		if delErr := writer.DeleteKubeconfig(ctx, secretName); delErr != nil {
@@ -240,6 +240,25 @@ func (r *PostgresRegistry) AddExternal(ctx context.Context, displayName, kubecon
 		return nil, fmt.Errorf("insert cluster: %w", err)
 	}
 	return r.GetMeta(ctx, id)
+}
+
+// ClusterIDByUID returns the id of a registered cluster whose stored fingerprint
+// (kube-system namespace UID) matches uid, or ErrNotFound. Used to reject a
+// kubeconfig that points at an already-registered physical cluster.
+func (r *PostgresRegistry) ClusterIDByUID(ctx context.Context, uid string) (ID, error) {
+	if uid == "" {
+		return "", ErrNotFound
+	}
+	var id string
+	err := r.pool.QueryRow(ctx,
+		`SELECT id FROM clusters WHERE cluster_uid = $1 LIMIT 1`, uid).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	return ID(id), nil
 }
 
 // AddSelf registers the cluster kubeast itself runs in, using the in-cluster
@@ -309,6 +328,32 @@ func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, displayName, a
 		return nil, ErrNotFound
 	}
 	return r.GetMeta(ctx, id)
+}
+
+// ClusterUID returns a cluster's stored fingerprint (kube-system namespace UID),
+// or "" if none recorded yet (legacy rows / self clusters).
+func (r *PostgresRegistry) ClusterUID(ctx context.Context, id ID) (string, error) {
+	var uid *string
+	err := r.pool.QueryRow(ctx, `SELECT cluster_uid FROM clusters WHERE id = $1`, id).Scan(&uid)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	if uid == nil {
+		return "", nil
+	}
+	return *uid, nil
+}
+
+// SetClusterUID records a cluster's fingerprint (kube-system namespace UID),
+// e.g. backfilling a legacy row on its first kubeconfig rotation.
+func (r *PostgresRegistry) SetClusterUID(ctx context.Context, id ID, uid string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE clusters SET cluster_uid = $2, updated_at = NOW() WHERE id = $1`,
+		id, nullIfEmpty(uid))
+	return err
 }
 
 // UpdateHealth records the outcome of a connectivity check.

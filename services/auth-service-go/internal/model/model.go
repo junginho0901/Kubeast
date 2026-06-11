@@ -233,6 +233,9 @@ type RegisterClusterRequest struct {
 type UpdateClusterRequest struct {
 	DisplayName  *string `json:"display_name,omitempty"`
 	APIServerURL *string `json:"api_server_url,omitempty"`
+	// Kubeconfig, when set, rotates the external cluster's stored kubeconfig
+	// (credential renewal) — the id and all per-cluster RBAC grants are kept.
+	Kubeconfig *string `json:"kubeconfig,omitempty"`
 }
 
 // ValidateClusterRequest is the payload for POST /api/v1/clusters/validate

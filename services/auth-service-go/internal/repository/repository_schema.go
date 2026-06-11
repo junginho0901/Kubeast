@@ -78,6 +78,7 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			mode                   VARCHAR NOT NULL,
 			kubeconfig_secret_name VARCHAR,
 			api_server_url         VARCHAR,
+			cluster_uid            VARCHAR,
 			is_self_cluster        BOOLEAN NOT NULL DEFAULT FALSE,
 			health_status          VARCHAR DEFAULT 'unknown',
 			last_healthcheck_at    TIMESTAMP,
@@ -86,6 +87,10 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			updated_at             TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_clusters_self ON clusters(is_self_cluster)`,
+		// cluster_uid = kube-system namespace UID fingerprint (added after the
+		// table first shipped) — rejects duplicate physical-cluster registration.
+		`ALTER TABLE clusters ADD COLUMN IF NOT EXISTS cluster_uid VARCHAR`,
+		`CREATE INDEX IF NOT EXISTS idx_clusters_uid ON clusters(cluster_uid)`,
 		// Multi-cluster RBAC: a user gets a role per cluster. No row for a
 		// (user, cluster) pair means no access to that cluster (deny-by-default).
 		// admin.* users bypass this and reach every cluster.

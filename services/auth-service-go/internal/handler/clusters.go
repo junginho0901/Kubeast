@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -106,6 +108,7 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 		meta   *cluster.Meta
 		err    error
 		apiURL string
+		uid    string
 	)
 	switch req.Mode {
 	case "external":
@@ -117,14 +120,25 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		if _, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout); verr != nil {
-			response.Error(w, http.StatusBadRequest, "Connection test failed: "+verr.Error())
+		_, uid, err = validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "Connection test failed: "+err.Error())
 			return
+		}
+		// Reject a kubeconfig that points at a cluster we already manage (same
+		// physical cluster under a different name) — matched by the kube-system
+		// namespace UID fingerprint.
+		if uid != "" {
+			if existing, ferr := h.registry.ClusterIDByUID(r.Context(), uid); ferr == nil {
+				response.Error(w, http.StatusConflict,
+					fmt.Sprintf("This kubeconfig points to the same cluster already registered as '%s'.", existing))
+				return
+			}
 		}
 		if req.APIServerURL != nil {
 			apiURL = *req.APIServerURL
 		}
-		meta, err = h.registry.AddExternal(r.Context(), req.DisplayName, *req.Kubeconfig, apiURL, payload.Email, h.secrets)
+		meta, err = h.registry.AddExternal(r.Context(), req.DisplayName, *req.Kubeconfig, apiURL, uid, payload.Email, h.secrets)
 
 	case "self":
 		meta, err = h.registry.AddSelf(r.Context(), req.DisplayName, payload.Email)
@@ -145,6 +159,16 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 		h.audit(r, "admin.cluster.register", payload, cluster.Slugify(req.DisplayName), map[string]any{"mode": req.Mode, "display_name": req.DisplayName}, nil, err)
 		response.Error(w, status, err.Error())
 		return
+	}
+
+	// Seed health: both paths already proved connectivity at registration
+	// (external — the kubeconfig was validated above; self — the in-cluster SA is
+	// always reachable), so record "healthy" instead of leaving the schema
+	// default "unknown" until the first manual health check.
+	if uerr := h.registry.UpdateHealth(r.Context(), meta.ID, "healthy"); uerr != nil {
+		slog.Warn("cluster: seed health on register failed", "id", meta.ID, "err", uerr)
+	} else {
+		meta.HealthStatus = "healthy"
 	}
 
 	h.audit(r, "admin.cluster.register", payload, string(meta.ID),
@@ -194,6 +218,50 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 	}
 
 	before, _ := h.registry.GetMeta(r.Context(), id)
+
+	// Kubeconfig rotation (credential renewal). The id + RBAC grants are kept;
+	// only the stored secret is replaced. Guarded so it can't be re-pointed at a
+	// different physical cluster (kube-system UID must match the stored one).
+	if req.Kubeconfig != nil && *req.Kubeconfig != "" {
+		if before == nil {
+			response.Error(w, http.StatusNotFound, "Cluster not found")
+			return
+		}
+		if before.IsSelfCluster || before.Mode == cluster.ModeInCluster {
+			response.Error(w, http.StatusBadRequest, "self cluster has no kubeconfig to rotate")
+			return
+		}
+		if verr := validateKubeconfigYAML(*req.Kubeconfig); verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+		_, newUID, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout)
+		if verr != nil {
+			response.Error(w, http.StatusBadRequest, "Connection test failed: "+verr.Error())
+			return
+		}
+		storedUID, _ := h.registry.ClusterUID(r.Context(), id)
+		if storedUID != "" && newUID != "" && storedUID != newUID {
+			response.Error(w, http.StatusConflict,
+				"This kubeconfig points to a different cluster than the one registered. Delete and re-register instead.")
+			return
+		}
+		if _, werr := h.secrets.WriteKubeconfig(r.Context(), id, *req.Kubeconfig); werr != nil {
+			response.Error(w, http.StatusInternalServerError, "store kubeconfig: "+werr.Error())
+			return
+		}
+		if newUID != "" {
+			if uerr := h.registry.SetClusterUID(r.Context(), id, newUID); uerr != nil {
+				slog.Warn("cluster: set uid after rotation failed", "id", id, "err", uerr)
+			}
+		}
+		// Drop downstream caches so the new kubeconfig takes effect immediately:
+		// k8s-service's client bundle (UI) AND tool-server's kubeconfig cache (AI
+		// tool calls — otherwise it'd serve the old credentials for up to its TTL).
+		h.invalidateK8sBundle(r, id)
+		h.invalidateToolServer(r, id)
+	}
+
 	meta, err := h.registry.UpdateMeta(r.Context(), id, req.DisplayName, req.APIServerURL)
 	if errors.Is(err, cluster.ErrNotFound) {
 		response.Error(w, http.StatusNotFound, "Cluster not found")
@@ -206,6 +274,60 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 	}
 	h.audit(r, "admin.cluster.update", payload, string(id), before, meta, nil)
 	response.JSON(w, http.StatusOK, meta)
+}
+
+// invalidateK8sBundle tells k8s-service to drop its cached client bundle for id
+// (after a kubeconfig rotation) by calling its internal endpoint, forwarding the
+// admin's token. Best-effort: a failure leaves a stale bundle that self-heals on
+// the next connection error, so it never blocks the rotation response.
+func (h *ClustersHandler) invalidateK8sBundle(r *http.Request, id cluster.ID) {
+	base := strings.TrimRight(h.cfg.K8sServiceURL, "/")
+	if base == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/internal/clusters/%s/invalidate", base, id), nil)
+	if err != nil {
+		slog.Warn("cluster: build invalidate request failed", "id", id, "err", err)
+		return
+	}
+	if authz := r.Header.Get("Authorization"); authz != "" {
+		req.Header.Set("Authorization", authz)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("cluster: k8s-service invalidate call failed", "id", id, "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		slog.Warn("cluster: k8s-service invalidate non-204", "id", id, "status", resp.StatusCode)
+	}
+}
+
+// invalidateToolServer drops tool-server's cached kubeconfig for id so AI tool
+// calls use the rotated credentials immediately (not after its TTL). Best-effort.
+func (h *ClustersHandler) invalidateToolServer(r *http.Request, id cluster.ID) {
+	base := strings.TrimRight(h.cfg.ToolServerURL, "/")
+	if base == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/internal/invalidate?cluster=%s", base, id), nil)
+	if err != nil {
+		slog.Warn("cluster: build tool-server invalidate request failed", "id", id, "err", err)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("cluster: tool-server invalidate call failed", "id", id, "err", err)
+		return
+	}
+	defer resp.Body.Close()
 }
 
 // TestCluster handles POST /api/v1/clusters/{id}/test — re-validates a
@@ -279,7 +401,7 @@ func (h *ClustersHandler) checkInfo(info *cluster.Info) model.ClusterConnectionR
 	if info.KubeconfigBlob == "" {
 		return model.ClusterConnectionResult{Healthy: false, Message: "no kubeconfig available"}
 	}
-	ver, err := validateKubeconfig([]byte(info.KubeconfigBlob), clusterValidateTimeout)
+	ver, _, err := validateKubeconfig([]byte(info.KubeconfigBlob), clusterValidateTimeout)
 	if err != nil {
 		return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
 	}
