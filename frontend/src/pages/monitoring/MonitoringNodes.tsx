@@ -15,6 +15,7 @@ import {
   isMetricsUnavailableError,
 } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import type { NodeMetric } from './types'
@@ -52,9 +53,10 @@ export default function MonitoringNodes({
   onMetricsUnavailable,
 }: MonitoringNodesProps) {
   const { t } = useTranslation()
+  const { currentCluster } = useCluster()
 
   const { data: nodeMetrics, isLoading, error } = useQuery<NodeMetric[], Error>({
-    queryKey: ['node-metrics'],
+    queryKey: ['node-metrics', currentCluster],
     queryFn: api.getNodeMetrics,
     enabled: !metricsUnavailable && !isMetricsDisabled(),
     staleTime: 5000,
@@ -67,7 +69,8 @@ export default function MonitoringNodes({
       return failureCount < 2
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    placeholderData: (previousData) => previousData,
+    placeholderData: (prev, prevQuery) =>
+      prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
 
   useEffect(() => {
