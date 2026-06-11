@@ -1,4 +1,5 @@
 import type { PodInfo } from './api'
+import { getCurrentClusterID } from './clusterRef'
 
 export type PodWatchEvent = {
   type: string
@@ -17,6 +18,10 @@ type PodWatchOptions = {
 
 export function startPodWatch(options: PodWatchOptions): EventSource {
   const params = new URLSearchParams()
+  // EventSource bypasses the axios interceptor, so inject the selected cluster
+  // explicitly — otherwise the watch streams from the server's default cluster.
+  const cluster = getCurrentClusterID()
+  if (cluster) params.set('cluster', cluster)
   if (options.resourceVersion) params.set('resourceVersion', options.resourceVersion)
   if (options.timeoutSeconds) params.set('timeout_seconds', String(options.timeoutSeconds))
 
