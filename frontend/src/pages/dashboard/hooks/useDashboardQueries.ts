@@ -176,9 +176,12 @@ export function useDashboardQueries({
       if (metricsUnavailable || isMetricsDisabled()) return false
       return 5000
     },
-    placeholderData: (previousData) => {
-      // 이전 데이터가 있고 유효한 경우에만 유지
-      // 에러 발생 시에도 이전 데이터를 유지하여 깜빡임 방지
+    placeholderData: (previousData, previousQuery) => {
+      // Keep the prior frame to avoid flicker on the 5s refetch — but ONLY within
+      // the same cluster. The key's 2nd segment is the cluster; if it differs,
+      // this is a cluster switch and the previous cluster's top-N must NOT bleed
+      // onto the new one (which may not even run metrics-server).
+      if (previousQuery && previousQuery.queryKey?.[1] !== ck) return undefined
       if (previousData && (
         (previousData.top_pods && previousData.top_pods.length > 0) ||
         (previousData.top_nodes && previousData.top_nodes.length > 0)
