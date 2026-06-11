@@ -104,4 +104,8 @@ helm-dashboard/
 spot-gpu-lotto/
 test-results/
 argo-cd/
+
+# local multi-cluster test artifacts (credentials / build output — never commit)
 services/tool-server/tool-server
+test3-kubeconfig.yaml
+*-kubeconfig.yaml
