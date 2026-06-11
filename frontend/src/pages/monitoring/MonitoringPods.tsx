@@ -17,6 +17,7 @@ import {
   type PodInfo,
 } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useCluster } from '@/contexts/ClusterContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { NamespaceFilter } from './MonitoringFilters'
@@ -52,10 +53,11 @@ export default function MonitoringPods({
 }: MonitoringPodsProps) {
   const { t } = useTranslation()
   const [selectedNamespace, setSelectedNamespace] = useState<string>('')
+  const { currentCluster } = useCluster()
 
   // Pod 리소스 사용량 (네임스페이스 선택 시에만 활성화, 5초마다 자동 갱신)
   const { data: podMetrics, isLoading, error } = useQuery<PodMetric[], Error>({
-    queryKey: ['pod-metrics', selectedNamespace],
+    queryKey: ['pod-metrics', currentCluster, selectedNamespace],
     queryFn: () => api.getPodMetrics(selectedNamespace === 'all' ? undefined : selectedNamespace),
     staleTime: 5000,
     refetchInterval: () => {
@@ -68,12 +70,13 @@ export default function MonitoringPods({
       return failureCount < 2
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    placeholderData: (previousData) => previousData,
+    placeholderData: (prev, prevQuery) =>
+      prevQuery && prevQuery.queryKey[1] === currentCluster ? prev : undefined,
   })
 
   // Pod 상세 정보 (Limit/Request 포함) — 네임스페이스 선택 시에만 활성화
   const { data: allPods } = useQuery<PodInfo[], Error>({
-    queryKey: ['all-pods-detail'],
+    queryKey: ['all-pods-detail', currentCluster],
     queryFn: () => api.getAllPods(false),
     staleTime: 10000,
     refetchInterval: 10000,
