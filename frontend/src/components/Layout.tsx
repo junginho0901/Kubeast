@@ -35,6 +35,7 @@ import { PageContextProvider } from './PageContextProvider'
 import FloatingAIChat from './FloatingAIChat'
 import ClusterPicker from './ClusterPicker'
 import ClusterSwitchProgress from './ClusterSwitchProgress'
+import { useCluster } from '../contexts/ClusterContext'
 
 type NavItem = {
   name: string
@@ -59,6 +60,7 @@ type NavGroup = {
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { currentCluster } = useCluster()
   const queryClient = useQueryClient()
   const [clusterStatus, setClusterStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
 
@@ -445,7 +447,12 @@ export default function Layout() {
       <div className="pl-64">
         <ClusterSwitchProgress />
         <main className={`min-h-screen ${location.pathname === '/ai-chat' ? '' : 'p-8'}`}>
-          <Outlet />
+          {/* Remount page content on cluster switch so cluster-specific local UI
+              state (selected namespace, filters, open modals) never carries over
+              to a different cluster — its namespaces/resources differ. */}
+          <div key={currentCluster || 'default'} className="contents">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
