@@ -7,9 +7,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   ArrowUpCircle,
-  ChevronDown,
 } from 'lucide-react'
 import { api, TimelineEvent, RolloutRevision } from '@/services/api'
+import CustomDropdown from '@/components/CustomDropdown'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
 
@@ -159,18 +159,14 @@ export default function Timeline() {
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         {/* Namespace */}
-        <div className="relative">
-          <select
-            value={namespace}
-            onChange={(e) => { setSelectedNamespace(e.target.value); setShowCount(50) }}
-            className="appearance-none bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-sm rounded-md pl-3 pr-8 py-1.5 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
-          >
-            {namespaceOptions.map((ns: string) => (
-              <option key={ns} value={ns}>{ns}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-        </div>
+        <CustomDropdown
+          testId="timeline-namespace"
+          className="w-44"
+          options={namespaceOptions.map((ns: string) => ({ value: ns, label: ns }))}
+          value={namespace}
+          onChange={(v) => { setSelectedNamespace(v); setShowCount(50) }}
+          placeholder={t('timeline.namespace', 'Namespace')}
+        />
 
         {/* Time Range */}
         <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">

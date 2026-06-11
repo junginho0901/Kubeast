@@ -21,6 +21,8 @@ interface CustomDropdownProps {
   label?: string
   className?: string
   disabled?: boolean
+  /** Optional test id, applied to the trigger button */
+  testId?: string
 }
 
 /**
@@ -35,6 +37,7 @@ export default function CustomDropdown({
   label,
   className = '',
   disabled = false,
+  testId,
 }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -62,6 +65,7 @@ export default function CustomDropdown({
       {/* trigger — same style as ClusterView namespace selector */}
       <button
         type="button"
+        data-testid={testId}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed"
