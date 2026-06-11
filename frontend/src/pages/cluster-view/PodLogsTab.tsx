@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, X, ChevronDown, CheckCircle, Download } from 'lucide-react'
 import { api } from '@/services/api'
+import { getCurrentClusterID } from '@/services/clusterRef'
 
 interface PodLike {
   name: string
@@ -63,8 +64,12 @@ export function PodLogsTab({
     setIsStreamingLogs(true)
     setLogs('')
 
+    // EventSource bypasses the axios cluster interceptor — inject ?cluster=
+    // so logs stream from the selected cluster, not the server default.
+    const clusterId = getCurrentClusterID()
     const url = `/api/v1/cluster/namespaces/${pod.namespace}/pods/${pod.name}` +
-      `/logs/stream?container=${encodeURIComponent(selectedContainer)}&tail_lines=100`
+      `/logs/stream?container=${encodeURIComponent(selectedContainer)}&tail_lines=100` +
+      (clusterId ? `&cluster=${encodeURIComponent(clusterId)}` : '')
 
     const es = new EventSource(url, { withCredentials: true })
 

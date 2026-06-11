@@ -5,6 +5,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized, getAccessToken } from '@/services/auth'
+import { getCurrentClusterID } from '@/services/clusterRef'
 
 /*
  * FUTURE — exec session audit log persistence.
@@ -86,11 +87,13 @@ export default function PodExecTerminal({ podName, namespace, container, command
     }))
 
     const token = getAccessToken()
+    const clusterId = getCurrentClusterID()
     const wsUrl = buildWsUrl(
       `/api/v1/cluster/namespaces/${namespace}/pods/${podName}/exec/ws`,
       {
         container,
         command,
+        ...(clusterId ? { cluster: clusterId } : {}),
         ...(token ? { token } : {}),
       }
     )
