@@ -16,9 +16,9 @@ export default function ClusterSwitchProgress() {
 
   return (
     <>
-      {/* indeterminate top bar */}
+      {/* indeterminate top bar — a segment slides across the track */}
       <div className="fixed top-0 left-64 right-0 z-50 h-1 overflow-hidden bg-primary-900/40">
-        <div className="h-full w-1/3 animate-pulse rounded-r-full bg-primary-500" />
+        <div className="absolute top-0 h-full rounded-full bg-primary-500 animate-indeterminate-bar" />
       </div>
       {/* status pill (carries the testid — it has real dimensions) */}
       <div
