@@ -18,6 +18,16 @@ type Config struct {
 	PodNamespace   string // namespace holding per-cluster kubeconfig Secrets (k8s mode)
 	KubeconfigDir  string // directory holding per-cluster kubeconfig files (docker mode)
 
+	// Multi-cluster load / failure isolation (step 15). All have safe defaults
+	// and can be tuned/disabled via env (helm values). 0 disables where noted.
+	MaxClusters             int // LRU client-bundle pool size (memory bound)
+	HealthcheckIntervalSec  int // periodic cluster health probe; 0 = off
+	QueryCacheTTLSec        int // Prometheus query cache TTL; 0 = off (singleflight stays)
+	RateLimitQPS            int // per-cluster request rate; 0 = off
+	RateLimitBurst          int // per-cluster burst
+	BreakerConsecutiveFails int // open the per-cluster breaker after N fails; 0 = off
+	BreakerOpenSec          int // breaker open duration before half-open
+
 	// Auth
 	AuthJWKSURL    string
 	JWTIssuer      string
@@ -51,6 +61,14 @@ func Load() Config {
 		DeploymentMode: pkgconfig.GetEnv("DEPLOYMENT_MODE", "k8s"),
 		PodNamespace:   pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
 		KubeconfigDir:  pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),
+
+		MaxClusters:             pkgconfig.GetEnvInt("MC_MAX_CLUSTERS", 20),
+		HealthcheckIntervalSec:  pkgconfig.GetEnvInt("MC_HEALTHCHECK_INTERVAL_SEC", 60),
+		QueryCacheTTLSec:        pkgconfig.GetEnvInt("MC_QUERY_CACHE_TTL_SEC", 30),
+		RateLimitQPS:            pkgconfig.GetEnvInt("MC_RATE_LIMIT_QPS", 0),
+		RateLimitBurst:          pkgconfig.GetEnvInt("MC_RATE_LIMIT_BURST", 20),
+		BreakerConsecutiveFails: pkgconfig.GetEnvInt("MC_BREAKER_CONSECUTIVE_FAILS", 5),
+		BreakerOpenSec:          pkgconfig.GetEnvInt("MC_BREAKER_OPEN_SEC", 30),
 
 		AuthJWKSURL:    pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
 		JWTIssuer:      pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
