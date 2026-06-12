@@ -107,6 +107,23 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
+          # Multi-cluster load / failure-isolation knobs (step 15). All optional;
+          # code defaults apply when unset. rateLimitQPS=0 disables rate limiting.
+          env:
+            - name: MC_MAX_CLUSTERS
+              value: "{{ .Values.multicluster.maxClusters }}"
+            - name: MC_HEALTHCHECK_INTERVAL_SEC
+              value: "{{ .Values.multicluster.healthcheckIntervalSec }}"
+            - name: MC_QUERY_CACHE_TTL_SEC
+              value: "{{ .Values.multicluster.queryCacheTTLSec }}"
+            - name: MC_RATE_LIMIT_QPS
+              value: "{{ .Values.multicluster.rateLimitQPS }}"
+            - name: MC_RATE_LIMIT_BURST
+              value: "{{ .Values.multicluster.rateLimitBurst }}"
+            - name: MC_BREAKER_CONSECUTIVE_FAILS
+              value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
+            - name: MC_BREAKER_OPEN_SEC
+              value: "{{ .Values.multicluster.breakerOpenSec }}"
 ---
 # --- Session Service ---
 apiVersion: apps/v1
