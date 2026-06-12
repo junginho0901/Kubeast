@@ -116,9 +116,29 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusNotFound, msg)
 	case strings.Contains(msg, "already exists"):
 		response.Error(w, http.StatusConflict, msg)
+	case isClusterUnreachable(msg):
+		// A cluster we can't reach/build is temporarily unavailable, not an
+		// internal bug — 503 so clients (and fail-fast) treat it as transient.
+		response.Error(w, http.StatusServiceUnavailable, msg)
 	default:
 		response.Error(w, http.StatusInternalServerError, msg)
 	}
+}
+
+// isClusterUnreachable matches errors from an unreachable / unconfigured cluster
+// (build-bundle, registry resolution, dial/timeout) so handleError maps them to
+// 503 instead of a blanket 500.
+func isClusterUnreachable(msg string) bool {
+	for _, s := range []string{
+		"build bundle", "registry.Get", "kubeconfig not loaded",
+		"connection refused", "no such host", "i/o timeout",
+		"context deadline exceeded", "TLS handshake timeout",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // decodeJSON decodes the request body into the given target.
