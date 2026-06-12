@@ -13,6 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/singleflight"
+
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,9 +54,22 @@ func (b *clientBundle) Close() error { return nil }
 // accessors target the registry's default cluster; the *For(ctx) variants
 // target the cluster carried in the request context.
 type Service struct {
-	registry      cluster.Registry
-	bundles       sync.Map // map[cluster.ID]*atomic.Pointer[clientBundle]
+	registry cluster.Registry
+	// bundles is an LRU pool of per-cluster client bundles (step 15): with many
+	// clusters this bounds memory — the least-recently-used cluster is evicted
+	// (and Closed) instead of holding every bundle forever. Thread-safe.
+	bundles       *lru.Cache[cluster.ID, *clientBundle]
+	bundlesMu     sync.Mutex // guards lazy init of the pool
+	buildSF       singleflight.Group
+	maxClusters   int
 	defaultBundle atomic.Pointer[clientBundle]
+
+	// health tracks per-cluster reachability in memory for fail-fast (step 15).
+	health *clusterHealth
+	// promQ coalesces + caches Prometheus queries per cluster (step 15).
+	promQ *promQueryCache
+	// limiters holds per-cluster rate limiters + circuit breakers (step 15).
+	limiters *clusterLimiters
 
 	watchEnabled bool
 
@@ -75,14 +91,29 @@ type Service struct {
 
 var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
 
+// ServiceOptions carries the step-15 load / failure-isolation knobs. The zero
+// value is valid (sensible defaults / feature off where 0 means off).
+type ServiceOptions struct {
+	MaxClusters    int           // LRU bundle pool size
+	QueryCacheTTL  time.Duration // Prometheus query cache TTL; 0 = singleflight only
+	RateLimitQPS   int           // per-cluster request rate; 0 = off
+	RateLimitBurst int           // per-cluster burst
+	BreakerFails   int           // open breaker after N consecutive fails; 0 = off
+	BreakerOpen    time.Duration // breaker open duration before half-open
+}
+
 // NewService creates a K8s service backed by registry. Failure isolation: if no
 // clusters are registered yet (pre-Setup) or the default cluster is unreachable
 // at startup, the service still starts; bundles are built lazily on first use.
-func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache) (*Service, error) {
+func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache, opts ServiceOptions) (*Service, error) {
 	s := &Service{
 		registry:               registry,
 		watchEnabled:           watchEnabled,
 		cache:                  c,
+		maxClusters:            opts.MaxClusters,
+		health:                 newClusterHealth(opts.BreakerFails),
+		promQ:                  newPromQueryCache(opts.QueryCacheTTL),
+		limiters:               newClusterLimiters(opts.RateLimitQPS, opts.RateLimitBurst),
 		gatewayAPIVersionCache: map[cluster.ID]string{},
 		draAPIVersionCache:     map[cluster.ID]string{},
 		apiResourcesCache:      map[cluster.ID][]metav1.APIResourceList{},
@@ -162,27 +193,50 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	}, nil
 }
 
+// pool lazily builds the LRU client-bundle pool. Lazy so a zero-value Service
+// (used in unit tests) needs no constructor; the evict callback Closes the
+// bundle being dropped.
+func (s *Service) pool() *lru.Cache[cluster.ID, *clientBundle] {
+	s.bundlesMu.Lock()
+	defer s.bundlesMu.Unlock()
+	if s.bundles == nil {
+		max := s.maxClusters
+		if max <= 0 {
+			max = 20
+		}
+		s.bundles, _ = lru.NewWithEvict(max, func(_ cluster.ID, b *clientBundle) {
+			_ = b.Close()
+		})
+	}
+	return s.bundles
+}
+
 // For returns the client bundle for cluster id, building and caching it on first
-// access from the registry. Concurrent first-access is de-duplicated.
+// access from the registry. Concurrent first-access is de-duplicated via
+// singleflight so two requests don't each build a bundle.
 func (s *Service) For(ctx context.Context, id cluster.ID) (*clientBundle, error) {
-	if v, ok := s.bundles.Load(id); ok {
-		return v.(*atomic.Pointer[clientBundle]).Load(), nil
+	if b, ok := s.pool().Get(id); ok {
+		return b, nil
 	}
-	info, err := s.registry.Get(ctx, id)
+	v, err, _ := s.buildSF.Do(string(id), func() (interface{}, error) {
+		if b, ok := s.pool().Get(id); ok { // another goroutine just built it
+			return b, nil
+		}
+		info, err := s.registry.Get(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("registry.Get(%s): %w", id, err)
+		}
+		b, err := buildClientBundle(*info)
+		if err != nil {
+			return nil, fmt.Errorf("build bundle(%s): %w", id, err)
+		}
+		s.pool().Add(id, b)
+		return b, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("registry.Get(%s): %w", id, err)
+		return nil, err
 	}
-	b, err := buildClientBundle(*info)
-	if err != nil {
-		return nil, fmt.Errorf("build bundle(%s): %w", id, err)
-	}
-	ptr := &atomic.Pointer[clientBundle]{}
-	ptr.Store(b)
-	actual, loaded := s.bundles.LoadOrStore(id, ptr)
-	if loaded {
-		b.Close() // another goroutine won the race
-	}
-	return actual.(*atomic.Pointer[clientBundle]).Load(), nil
+	return v.(*clientBundle), nil
 }
 
 // Default returns the bundle for the registry's default cluster.
@@ -220,9 +274,7 @@ func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob st
 // Invalidate drops a cluster's cached bundle (e.g. after a kubeconfig rotation)
 // so the next access rebuilds it from the registry — no rollout required.
 func (s *Service) Invalidate(id cluster.ID) {
-	if v, ok := s.bundles.LoadAndDelete(id); ok {
-		v.(*atomic.Pointer[clientBundle]).Load().Close()
-	}
+	s.pool().Remove(id) // evict callback Closes the bundle
 	s.defaultBundle.Store(nil)
 	s.invalidateCaches()
 }
@@ -255,6 +307,8 @@ func (s *Service) invalidateCaches() {
 	s.draAPIVersionMu.Lock()
 	s.draAPIVersionCache = map[cluster.ID]string{}
 	s.draAPIVersionMu.Unlock()
+
+	s.promQ.clear()
 
 	if s.cache != nil {
 		// Best-effort: ignore errors from Redis flush.

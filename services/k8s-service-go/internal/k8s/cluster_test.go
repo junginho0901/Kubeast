@@ -63,7 +63,7 @@ func extCluster(id cluster.ID) cluster.Info {
 
 func newTestService(t *testing.T, reg cluster.Registry) *Service {
 	t.Helper()
-	s, err := NewService(context.Background(), reg, false, nil)
+	s, err := NewService(context.Background(), reg, false, nil, ServiceOptions{MaxClusters: 20})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
