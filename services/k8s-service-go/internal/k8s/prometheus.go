@@ -332,10 +332,19 @@ func (s *Service) verifyPrometheusProxy(ctx context.Context, info *promServiceIn
 	return true
 }
 
-// prometheusViaProxy queries Prometheus through the K8s API server service proxy.
-// We use restConfig + http.Client directly because the K8s RESTClient's AbsPath
-// does not handle query parameters correctly for service proxy URLs.
+// prometheusViaProxy coalesces + caches identical queries per cluster (step 15)
+// then delegates to the uncached proxy call.
 func (s *Service) prometheusViaProxy(ctx context.Context, info *promServiceInfo, promPath string) ([]map[string]interface{}, error) {
+	key := string(ctxClusterID(ctx)) + "|" + promPath
+	return s.promQ.do(key, func() ([]map[string]interface{}, error) {
+		return s.prometheusViaProxyUncached(ctx, info, promPath)
+	})
+}
+
+// prometheusViaProxyUncached queries Prometheus through the K8s API server service
+// proxy. We use restConfig + http.Client directly because the K8s RESTClient's
+// AbsPath does not handle query parameters correctly for service proxy URLs.
+func (s *Service) prometheusViaProxyUncached(ctx context.Context, info *promServiceInfo, promPath string) ([]map[string]interface{}, error) {
 	// Build the proxy base path (without query string)
 	proxyBase := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy",
 		info.Namespace, info.Name, info.Port)
