@@ -88,7 +88,14 @@ func main() {
 
 	// Init Kubernetes service (cluster-aware; starts even if unconfigured).
 	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	k8sSvc, err := k8s.NewService(startCtx, registry, cfg.KubeconfigWatch, redisCache)
+	k8sSvc, err := k8s.NewService(startCtx, registry, cfg.KubeconfigWatch, redisCache, k8s.ServiceOptions{
+		MaxClusters:    cfg.MaxClusters,
+		QueryCacheTTL:  time.Duration(cfg.QueryCacheTTLSec) * time.Second,
+		RateLimitQPS:   cfg.RateLimitQPS,
+		RateLimitBurst: cfg.RateLimitBurst,
+		BreakerFails:   cfg.BreakerConsecutiveFails,
+		BreakerOpen:    time.Duration(cfg.BreakerOpenSec) * time.Second,
+	})
 	startCancel()
 	if err != nil {
 		slog.Error("failed to initialize k8s service", "err", err)
@@ -100,6 +107,15 @@ func main() {
 		Issuer:   cfg.JWTIssuer,
 		Audience: cfg.JWTAudience,
 	})
+
+	// Periodic cluster health checker (step 15): keeps in-memory reachability +
+	// clusters.health_status fresh so fail-fast + the picker reflect down clusters.
+	if cfg.HealthcheckIntervalSec > 0 {
+		hcCtx, hcCancel := context.WithCancel(context.Background())
+		defer hcCancel()
+		hc := k8s.NewHealthChecker(k8sSvc, registry, time.Duration(cfg.HealthcheckIntervalSec)*time.Second)
+		go hc.Run(hcCtx)
+	}
 
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
@@ -136,8 +152,9 @@ func main() {
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
 		})
-		// Resolve the target cluster from ?cluster= for every protected route.
-		r.Use(handler.ClusterMiddleware)
+		// Resolve the target cluster from ?cluster= for every protected route
+		// (+ fail-fast for clusters the health checker has marked down).
+		r.Use(h.ClusterMiddleware)
 
 		routes.Register(r, h, wsMux)
 	})
