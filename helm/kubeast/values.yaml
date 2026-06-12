@@ -79,6 +79,19 @@ features:
   prometheus:
     enabled: false
 
+# --- Multi-cluster load / failure isolation (step 15) ---
+# Tunes the k8s-service per-cluster bundle pool, health checks, Prometheus query
+# cache, rate limit and circuit breaker. Safe defaults; rateLimitQPS=0 leaves
+# rate limiting off, healthcheckIntervalSec=0 disables the health checker.
+multicluster:
+  maxClusters: 20
+  healthcheckIntervalSec: 60
+  queryCacheTTLSec: 30
+  rateLimitQPS: 0
+  rateLimitBurst: 20
+  breakerConsecutiveFails: 5
+  breakerOpenSec: 30
+
 # --- Image overrides (usually not needed) ---
 images:
   frontend: jeonginho/kubeast-frontend
