@@ -85,6 +85,12 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 
 // DrainNodeStatus handles GET /api/v1/nodes/{name}/drain/status.
 func (h *Handler) DrainNodeStatus(w http.ResponseWriter, r *http.Request) {
+	// Gate the status read on the same per-cluster permission as starting a drain,
+	// so it isn't protected by the opaque drain_id alone.
+	if err := h.requirePermissionForCluster(r, "resource.node.drain"); err != nil {
+		h.handleError(w, err)
+		return
+	}
 	drainID := r.URL.Query().Get("drain_id")
 	if drainID == "" {
 		response.Error(w, http.StatusBadRequest, "drain_id is required")
