@@ -11,7 +11,6 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			id VARCHAR PRIMARY KEY,
 			name VARCHAR NOT NULL,
 			email VARCHAR NOT NULL UNIQUE,
-			hq VARCHAR,
 			team VARCHAR,
 			role VARCHAR NOT NULL DEFAULT 'read',
 			password_hash VARCHAR NOT NULL,
@@ -47,10 +46,12 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 			UNIQUE(type, name)
 		)`,
-		// Migration: add hq/team columns if missing
+		// Migration: ensure team column exists; drop the retired hq column and any
+		// leftover hq organizations (the org model collapsed to a single team tier).
 		`DO $$ BEGIN
-			ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS hq VARCHAR;
 			ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS team VARCHAR;
+			ALTER TABLE auth_users DROP COLUMN IF EXISTS hq;
+			DELETE FROM organizations WHERE type = 'hq';
 		EXCEPTION WHEN OTHERS THEN NULL;
 		END $$`,
 		// RBAC: roles table
