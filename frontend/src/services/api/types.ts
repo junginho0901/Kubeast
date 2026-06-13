@@ -1198,7 +1198,6 @@ export interface Member {
   id: string
   name: string
   email?: string
-  hq?: string
   team?: string
   role: AuthRoleInfo | null
   created_at: string
@@ -1212,7 +1211,7 @@ export interface AdminResetPasswordResponse extends Member {
 
 export interface Organization {
   id: number
-  type: 'hq' | 'team'
+  type: 'team'
   name: string
   created_at: string
 }
