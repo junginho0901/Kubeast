@@ -76,7 +76,7 @@
     "aiModels": "AI Models",
     "nodeShell": "Node Shell",
     "auditLogs": "Audit Logs",
-    "organizations": "HQ / Team",
+    "organizations": "Team",
     "helmReleases": "Releases",
     "clusters": "Clusters"
   },
@@ -1899,7 +1899,6 @@
     "table": {
       "name": "Name",
       "email": "Email",
-      "hq": "HQ",
       "team": "Team",
       "role": "Role",
       "password": "Password",
@@ -1961,14 +1960,11 @@
     "form": {
       "name": "Name",
       "namePlaceholder": "Jane Doe",
-      "hq": "HQ",
-      "hqPlaceholder": "e.g. Platform",
       "team": "Team",
       "teamPlaceholder": "e.g. DevOps",
       "email": "Email",
       "password": "Password",
       "passwordPlaceholder": "Initial password",
-      "selectHq": "Select HQ",
       "selectTeam": "Select Team",
       "role": "Role",
       "cancel": "Cancel",
@@ -2025,7 +2021,6 @@
       "subtitle": "Signed-in account information",
       "name": "Name",
       "email": "Email",
-      "hq": "HQ",
       "team": "Team",
       "role": "Role"
     },
@@ -2122,13 +2117,10 @@
       "registerSubtitle": "Create a new account and sign in.",
       "name": "Name",
       "namePlaceholder": "Jane Doe",
-      "hq": "HQ",
-      "hqPlaceholder": "e.g. Platform",
       "team": "Team",
       "teamPlaceholder": "e.g. DevOps",
       "email": "Email",
       "password": "Password",
-      "selectHq": "Select HQ",
       "selectTeam": "Select Team",
       "confirmPassword": "Confirm password",
       "processing": "Processing...",
@@ -2581,10 +2573,8 @@
     "closeSummary": "Close Summary"
   },
   "adminOrg": {
-    "title": "HQ / Team management",
-    "subtitle": "Manage the list of HQs and Teams that users can select during registration.",
-    "hqTitle": "HQ",
-    "hqSubtitle": "Headquarters / Divisions",
+    "title": "Team management",
+    "subtitle": "Manage the list of Teams that users can select during registration.",
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
     "inputPlaceholder": "Enter name...",
@@ -2594,7 +2584,6 @@
     "deleteConfirm": "Delete \"{{name}}\"?",
     "deleteTitle": "Delete",
     "viewMembers": "View members",
-    "hqMembers": "HQ members",
     "teamMembers": "Team members",
     "noMembers": "No members in this organization.",
     "close": "Close",
@@ -2602,7 +2591,6 @@
       "name": "Name",
       "email": "Email",
       "role": "Role",
-      "hq": "HQ",
       "team": "Team"
     }
   },
@@ -2614,7 +2602,6 @@
     "col": {
       "userName": "Name",
       "userEmail": "Email",
-      "userHq": "HQ",
       "userTeam": "Team"
     }
   },

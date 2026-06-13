@@ -76,7 +76,7 @@
     "aiModels": "AI 모델 설정",
     "nodeShell": "노드 셸",
     "auditLogs": "감사 로그",
-    "organizations": "본부 / 팀",
+    "organizations": "팀",
     "helmReleases": "Releases",
     "clusters": "클러스터"
   },
@@ -1946,7 +1946,6 @@
     "table": {
       "name": "이름",
       "email": "이메일",
-      "hq": "본부",
       "team": "팀",
       "role": "Role",
       "password": "비밀번호",
@@ -2008,14 +2007,11 @@
     "form": {
       "name": "이름",
       "namePlaceholder": "홍길동",
-      "hq": "본부",
-      "hqPlaceholder": "예: 플랫폼",
       "team": "팀",
       "teamPlaceholder": "예: DevOps",
       "email": "이메일",
       "password": "비밀번호",
       "passwordPlaceholder": "초기 비밀번호",
-      "selectHq": "본부 선택",
       "selectTeam": "팀 선택",
       "role": "역할",
       "cancel": "취소",
@@ -2072,7 +2068,6 @@
       "subtitle": "로그인된 계정 정보",
       "name": "이름",
       "email": "이메일",
-      "hq": "본부",
       "team": "팀",
       "role": "Role"
     },
@@ -2169,13 +2164,10 @@
       "registerSubtitle": "새 계정을 만들고 바로 로그인합니다.",
       "name": "이름",
       "namePlaceholder": "홍길동",
-      "hq": "본부",
-      "hqPlaceholder": "예: 플랫폼",
       "team": "팀",
       "teamPlaceholder": "예: DevOps",
       "email": "이메일",
       "password": "비밀번호",
-      "selectHq": "본부 선택",
       "selectTeam": "팀 선택",
       "confirmPassword": "비밀번호 확인",
       "processing": "처리 중...",
@@ -2633,10 +2625,8 @@
     "closeSummary": "요약 닫기"
   },
   "adminOrg": {
-    "title": "본부 / 팀 관리",
-    "subtitle": "회원가입 시 선택할 수 있는 본부와 팀 목록을 관리합니다.",
-    "hqTitle": "본부",
-    "hqSubtitle": "본부 / 사업부",
+    "title": "팀 관리",
+    "subtitle": "회원가입 시 선택할 수 있는 팀 목록을 관리합니다.",
     "teamTitle": "팀",
     "teamSubtitle": "팀 / 그룹",
     "inputPlaceholder": "이름 입력...",
@@ -2646,7 +2636,6 @@
     "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
     "deleteTitle": "삭제",
     "viewMembers": "소속 사용자 보기",
-    "hqMembers": "본부 소속 사용자",
     "teamMembers": "팀 소속 사용자",
     "noMembers": "소속된 사용자가 없습니다.",
     "close": "닫기",
@@ -2654,7 +2643,6 @@
       "name": "이름",
       "email": "이메일",
       "role": "Role",
-      "hq": "본부",
       "team": "팀"
     }
   },
@@ -2666,7 +2654,6 @@
     "col": {
       "userName": "이름",
       "userEmail": "이메일",
-      "userHq": "본부",
       "userTeam": "팀"
     }
   },
