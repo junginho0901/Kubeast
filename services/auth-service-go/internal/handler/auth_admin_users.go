@@ -103,12 +103,6 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		if u.HQ != nil && strings.TrimSpace(*u.HQ) != "" {
-			if ok, _ := h.repo.OrganizationExists(r.Context(), "hq", strings.TrimSpace(*u.HQ)); !ok {
-				bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Invalid HQ: " + *u.HQ})
-				continue
-			}
-		}
 		if u.Team != nil && strings.TrimSpace(*u.Team) != "" {
 			if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*u.Team)); !ok {
 				bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Invalid Team: " + *u.Team})
@@ -133,7 +127,6 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			ID:           uuid.New().String(),
 			Name:         u.Name,
 			Email:        u.Email,
-			HQ:           u.HQ,
 			Team:         u.Team,
 			RoleID:       roleID,
 			RoleName:     targetRole.Name,
@@ -197,13 +190,7 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate HQ/Team
-	if req.HQ != nil && strings.TrimSpace(*req.HQ) != "" {
-		if ok, _ := h.repo.OrganizationExists(r.Context(), "hq", strings.TrimSpace(*req.HQ)); !ok {
-			response.Error(w, http.StatusBadRequest, "Invalid HQ value")
-			return
-		}
-	}
+	// Validate Team
 	if req.Team != nil && strings.TrimSpace(*req.Team) != "" {
 		if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*req.Team)); !ok {
 			response.Error(w, http.StatusBadRequest, "Invalid Team value")
@@ -228,7 +215,6 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		ID:           uuid.New().String(),
 		Name:         req.Name,
 		Email:        req.Email,
-		HQ:           req.HQ,
 		Team:         req.Team,
 		RoleID:       roleID,
 		RoleName:     targetRole.Name,
@@ -318,18 +304,6 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		req.Name = &trimmed
 	}
 
-	// Validate HQ
-	if req.HQ != nil {
-		trimmed := strings.TrimSpace(*req.HQ)
-		if trimmed != "" {
-			if ok, _ := h.repo.OrganizationExists(r.Context(), "hq", trimmed); !ok {
-				response.Error(w, http.StatusBadRequest, "Invalid HQ value")
-				return
-			}
-		}
-		req.HQ = &trimmed
-	}
-
 	// Validate Team
 	if req.Team != nil {
 		trimmed := strings.TrimSpace(*req.Team)
@@ -354,9 +328,9 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		newRoleName = targetRole.Name
 	}
 
-	// Apply profile updates (name/hq/team)
-	if req.Name != nil || req.HQ != nil || req.Team != nil {
-		if err := h.repo.UpdateUserProfile(r.Context(), userID, req.Name, req.HQ, req.Team); err != nil {
+	// Apply profile updates (name/team)
+	if req.Name != nil || req.Team != nil {
+		if err := h.repo.UpdateUserProfile(r.Context(), userID, req.Name, req.Team); err != nil {
 			response.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -373,21 +347,16 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	// Audit
 	beforeMap := map[string]interface{}{
 		"name": target.Name,
-		"hq":   derefStr(target.HQ),
 		"team": derefStr(target.Team),
 		"role": oldRoleName,
 	}
 	afterMap := map[string]interface{}{
 		"name": target.Name,
-		"hq":   derefStr(target.HQ),
 		"team": derefStr(target.Team),
 		"role": oldRoleName,
 	}
 	if req.Name != nil {
 		afterMap["name"] = *req.Name
-	}
-	if req.HQ != nil {
-		afterMap["hq"] = *req.HQ
 	}
 	if req.Team != nil {
 		afterMap["team"] = *req.Team
@@ -403,7 +372,7 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		actorEmail = &actor.Email
 	}
 	action := "user.update"
-	if req.RoleID != nil && req.Name == nil && req.HQ == nil && req.Team == nil {
+	if req.RoleID != nil && req.Name == nil && req.Team == nil {
 		action = "user.role.update"
 	}
 	h.writeAuditLog(r, action, &payload.UserID, actorEmail, &userID, &target.Email, before, after)
