@@ -72,6 +72,13 @@ func (h *Handler) GetPodYAML(w http.ResponseWriter, r *http.Request) {
 // "Download" 버튼). logs 에 token / password 가 노출되기도 하니 누가 언제 어떤
 // container 의 몇 줄을 가져갔는지 기록. 자동 폴링 없으니 noise X.
 func (h *Handler) GetPodLogs(w http.ResponseWriter, r *http.Request) {
+	// Logs are a sensitive per-cluster read (may contain tokens/passwords) — gate
+	// on the same per-cluster permission as viewing pods so a user with no access
+	// to this cluster cannot read its logs.
+	if err := h.requirePermissionForCluster(r, "resource.pod.read"); err != nil {
+		h.handleError(w, err)
+		return
+	}
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
@@ -136,6 +143,12 @@ func (h *Handler) DeletePod(w http.ResponseWriter, r *http.Request) {
 // 안에 있어 stream cleanup 이 함수 종료까지 지연되며 inotify watcher 누적)
 // 도 정상 위치로 옮기며 해결.
 func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
+	// Same sensitive-read gate as GetPodLogs — checked before any SSE header is
+	// written so an unauthorized caller gets a plain 403, not a stream.
+	if err := h.requirePermissionForCluster(r, "resource.pod.read"); err != nil {
+		h.handleError(w, err)
+		return
+	}
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
 	container := queryParam(r, "container", "")
