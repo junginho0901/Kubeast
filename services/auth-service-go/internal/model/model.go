@@ -26,7 +26,6 @@ type User struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	Email        string    `json:"email"`
-	HQ           *string   `json:"hq"`
 	Team         *string   `json:"team"`
 	RoleID       int       `json:"role_id"`
 	RoleName     string    `json:"role_name"`
@@ -47,7 +46,6 @@ type UserResponse struct {
 	ID        string        `json:"id"`
 	Name      string        `json:"name"`
 	Email     string        `json:"email"`
-	HQ        *string       `json:"hq"`
 	Team      *string       `json:"team"`
 	Role      *RoleResponse `json:"role"`
 	CreatedAt time.Time     `json:"created_at"`
@@ -59,7 +57,6 @@ func (u *User) ToResponse() UserResponse {
 		ID:    u.ID,
 		Name:  u.Name,
 		Email: u.Email,
-		HQ:    u.HQ,
 		Team:  u.Team,
 		Role: &RoleResponse{
 			ID:   u.RoleID,
@@ -112,7 +109,7 @@ type ClusterSetup struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// Organization represents an organizations row (HQ or Team).
+// Organization represents an organizations row (Team).
 type Organization struct {
 	ID        int       `json:"id"`
 	Type      string    `json:"type"`
@@ -126,7 +123,6 @@ type RegisterRequest struct {
 	Name     string  `json:"name"`
 	Email    string  `json:"email"`
 	Password string  `json:"password"`
-	HQ       *string `json:"hq,omitempty"`
 	Team     *string `json:"team,omitempty"`
 }
 
@@ -148,7 +144,6 @@ type UpdateRoleRequest struct {
 // All fields are optional; only the provided ones are updated.
 type AdminUpdateUserRequest struct {
 	Name   *string `json:"name,omitempty"`
-	HQ     *string `json:"hq,omitempty"`
 	Team   *string `json:"team,omitempty"`
 	RoleID *int    `json:"role_id,omitempty"`
 }
@@ -158,7 +153,6 @@ type AdminCreateUserRequest struct {
 	Email    string  `json:"email"`
 	Password string  `json:"password"`
 	RoleID   int     `json:"role_id"`
-	HQ       *string `json:"hq,omitempty"`
 	Team     *string `json:"team,omitempty"`
 }
 
