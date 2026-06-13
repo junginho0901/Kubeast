@@ -34,6 +34,32 @@ def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dic
     }
     return actor, http
 
+
+async def _authorize_session_access(authorization: str, session_id: str) -> None:
+    """Verify the caller's JWT and that they own ``session_id`` (IDOR guard).
+
+    The chat endpoints read/append messages and load conversation context for the
+    session id taken straight from the URL. Without this check any authenticated
+    (or even malformed-token) caller could read or inject into another user's
+    session by guessing its id — ``_extract_audit_meta`` swallows bad tokens, so
+    the per-request audit actor cannot be trusted as the gate. Here a bad token is
+    a hard 401, and a session that is missing or owned by someone else is a 404
+    (same response for both, so existence isn't leaked).
+    """
+    from app.database import get_db_service
+
+    try:
+        token = authorization.split(" ", 1)[1] if " " in authorization else authorization
+        payload = decode_access_token(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    db = await get_db_service()
+    session = await db.get_session(session_id)
+    if session is None or session.user_id != payload.user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+
 router = APIRouter()
 
 
@@ -135,6 +161,7 @@ async def session_chat(
     """
     from app.database import get_db_service
 
+    await _authorize_session_access(authorization, session_id)
     ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
     audit_actor, audit_http = _extract_audit_meta(request, authorization)
 
@@ -175,6 +202,7 @@ async def floating_session_chat(
     """
     from app.services.floating_ai_service import FloatingAIService
 
+    await _authorize_session_access(authorization, session_id)
     # step 14: the underlying AIService is cluster-scoped too (tool calls), not
     # just the floating prompt text.
     ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
