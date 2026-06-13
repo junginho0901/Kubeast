@@ -276,6 +276,10 @@ func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob st
 func (s *Service) Invalidate(id cluster.ID) {
 	s.pool().Remove(id) // evict callback Closes the bundle
 	s.defaultBundle.Store(nil)
+	// Reset the breaker: invalidation (e.g. a kubeconfig rotation that fixes a
+	// down cluster) gives the cluster a fresh chance, so the next request is
+	// actually tried instead of fail-fast 503'd until the next health poll.
+	s.MarkClusterUp(id)
 	s.invalidateCaches()
 }
 
