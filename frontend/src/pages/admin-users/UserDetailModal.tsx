@@ -14,7 +14,6 @@ import CustomDropdown from '@/components/CustomDropdown'
 
 interface DetailDraft {
   name: string
-  hq: string
   team: string
   role_id: number
 }
@@ -33,7 +32,6 @@ interface Props {
   setDetailEditing: (v: boolean) => void
   detailError: string | null
   setDetailError: (v: string | null) => void
-  hqOptions: OrgOption[]
   teamOptions: OrgOption[]
   canEditUsers: boolean
   closeDetail: () => void
@@ -51,7 +49,6 @@ export function UserDetailModal({
   setDetailEditing,
   detailError,
   setDetailError,
-  hqOptions,
   teamOptions,
   canEditUsers,
   closeDetail,
@@ -127,21 +124,6 @@ export function UserDetailModal({
                 {tr('adminUsers.form.email', 'Email')}
               </label>
               <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-300">{u.email ?? '-'}</div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">
-                {tr('adminUsers.form.hq', 'HQ')}
-              </label>
-              {detailEditing ? (
-                <CustomDropdown
-                  placeholder={tr('adminUsers.form.selectHq', 'Select HQ')}
-                  options={hqOptions.map((o) => ({ value: o.name, label: o.name }))}
-                  value={detailDraft.hq}
-                  onChange={(v) => setDetailDraft((p) => ({ ...p, hq: v }))}
-                />
-              ) : (
-                <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.hq || '-'}</div>
-              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">
@@ -225,7 +207,6 @@ export function UserDetailModal({
                   setDetailError(null)
                   setDetailDraft({
                     name: u.name,
-                    hq: u.hq ?? '',
                     team: u.team ?? '',
                     role_id: u.role?.id ?? 0,
                   })
@@ -238,9 +219,8 @@ export function UserDetailModal({
                 type="button"
                 disabled={updateUserMutation.isPending || !detailDraft.name.trim()}
                 onClick={() => {
-                  const payload: { name?: string; hq?: string; team?: string; role_id?: number } = {}
+                  const payload: { name?: string; team?: string; role_id?: number } = {}
                   if (detailDraft.name.trim() !== u.name) payload.name = detailDraft.name.trim()
-                  if (detailDraft.hq !== (u.hq ?? '')) payload.hq = detailDraft.hq
                   if (detailDraft.team !== (u.team ?? '')) payload.team = detailDraft.team
                   if (detailDraft.role_id !== (u.role?.id ?? 0)) payload.role_id = detailDraft.role_id
                   if (Object.keys(payload).length === 0) {

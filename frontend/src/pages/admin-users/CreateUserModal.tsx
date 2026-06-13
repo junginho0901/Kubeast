@@ -14,7 +14,6 @@ interface NewUser {
   email: string
   password: string
   role_id: number
-  hq: string
   team: string
 }
 
@@ -26,7 +25,6 @@ interface Props {
   open: boolean
   newUser: NewUser
   onChangeNewUser: (updater: (prev: NewUser) => NewUser) => void
-  hqOptions: OrgOption[]
   teamOptions: OrgOption[]
   roles: RoleWithDetails[]
   mutation: UseMutationResult<any, any, void>
@@ -38,7 +36,6 @@ export function CreateUserModal({
   open,
   newUser,
   onChangeNewUser,
-  hqOptions,
   teamOptions,
   roles,
   mutation,
@@ -81,22 +78,13 @@ export function CreateUserModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <CustomDropdown
-              label={tr('adminUsers.form.hq', 'HQ')}
-              placeholder={tr('adminUsers.form.selectHq', 'Select HQ')}
-              options={hqOptions.map((o) => ({ value: o.name, label: o.name }))}
-              value={newUser.hq}
-              onChange={(v) => onChangeNewUser((p) => ({ ...p, hq: v }))}
-            />
-            <CustomDropdown
-              label={tr('adminUsers.form.team', 'Team')}
-              placeholder={tr('adminUsers.form.selectTeam', 'Select Team')}
-              options={teamOptions.map((o) => ({ value: o.name, label: o.name }))}
-              value={newUser.team}
-              onChange={(v) => onChangeNewUser((p) => ({ ...p, team: v }))}
-            />
-          </div>
+          <CustomDropdown
+            label={tr('adminUsers.form.team', 'Team')}
+            placeholder={tr('adminUsers.form.selectTeam', 'Select Team')}
+            options={teamOptions.map((o) => ({ value: o.name, label: o.name }))}
+            value={newUser.team}
+            onChange={(v) => onChangeNewUser((p) => ({ ...p, team: v }))}
+          />
 
           <div>
             <label className="block text-xs text-slate-400 mb-1">{tr('adminUsers.form.email', 'Email')}</label>

@@ -1,4 +1,4 @@
-// AdminUsers 의 5 useQuery (hq / team / roles / me / users) 묶음. AdminUsers.tsx
+// AdminUsers 의 4 useQuery (team / roles / me / users) 묶음. AdminUsers.tsx
 // 에서 추출 (Phase 3.4.a). 외부 reauthModalOpen 만 prop 으로 받음.
 
 import { useQuery } from '@tanstack/react-query'
@@ -12,11 +12,6 @@ interface Args {
 }
 
 export function useAdminUserData({ reauthModalOpen, limit, offset }: Args) {
-  const { data: hqOptions = [] } = useQuery({
-    queryKey: ['organizations', 'hq'],
-    queryFn: () => api.listOrganizations('hq'),
-    staleTime: 60000,
-  })
   const { data: teamOptions = [] } = useQuery({
     queryKey: ['organizations', 'team'],
     queryFn: () => api.listOrganizations('team'),
@@ -45,5 +40,5 @@ export function useAdminUserData({ reauthModalOpen, limit, offset }: Args) {
     enabled: !reauthModalOpen,
   })
 
-  return { hqOptions, teamOptions, roles, me, users, isLoading, isError }
+  return { teamOptions, roles, me, users, isLoading, isError }
 }

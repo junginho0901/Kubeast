@@ -22,7 +22,7 @@ export default function AdminUsers() {
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role_id: 0, hq: '', team: '' })
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role_id: 0, team: '' })
 
   // Pending modal
   const [pendingModalOpen, setPendingModalOpen] = useState(false)
@@ -34,7 +34,7 @@ export default function AdminUsers() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Sorting
-  type SortKey = 'name' | 'email' | 'hq' | 'team' | 'role' | null
+  type SortKey = 'name' | 'email' | 'team' | 'role' | null
   type SortDir = 'asc' | 'desc'
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -42,14 +42,14 @@ export default function AdminUsers() {
   // User detail modal
   const [detailUserId, setDetailUserId] = useState<string | null>(null)
   const [detailEditing, setDetailEditing] = useState(false)
-  const [detailDraft, setDetailDraft] = useState<{ name: string; hq: string; team: string; role_id: number }>({
-    name: '', hq: '', team: '', role_id: 0,
+  const [detailDraft, setDetailDraft] = useState<{ name: string; team: string; role_id: number }>({
+    name: '', team: '', role_id: 0,
   })
   const [detailError, setDetailError] = useState<string | null>(null)
   const { has: hasPerm } = usePermission()
   const canEditUsers = hasPerm('admin.users.update')
 
-  const { hqOptions, teamOptions, roles, me, users, isLoading, isError } = useAdminUserData({
+  const { teamOptions, roles, me, users, isLoading, isError } = useAdminUserData({
     reauthModalOpen,
     limit,
     offset,
@@ -111,18 +111,17 @@ export default function AdminUsers() {
       email: newUser.email,
       password: newUser.password,
       role_id: newUser.role_id,
-      hq: newUser.hq || undefined,
       team: newUser.team || undefined,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       setCreateModalOpen(false)
-      setNewUser({ name: '', email: '', password: '', role_id: 0, hq: '', team: '' })
+      setNewUser({ name: '', email: '', password: '', role_id: 0, team: '' })
     },
   })
 
   const bulkCreateMutation = useMutation({
-    mutationFn: (csvUsers: Array<{ name: string; email: string; password: string; role_id: number; hq?: string; team?: string }>) =>
+    mutationFn: (csvUsers: Array<{ name: string; email: string; password: string; role_id: number; team?: string }>) =>
       api.adminBulkCreateUsers(csvUsers),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -131,7 +130,7 @@ export default function AdminUsers() {
   })
 
   const updateUserMutation = useMutation({
-    mutationFn: ({ userId, payload }: { userId: string; payload: { name?: string; hq?: string; team?: string; role_id?: number } }) =>
+    mutationFn: ({ userId, payload }: { userId: string; payload: { name?: string; team?: string; role_id?: number } }) =>
       api.adminUpdateUser(userId, payload),
     onSuccess: (_data, vars) => {
       const newRoleName = vars.payload.role_id != null
@@ -159,7 +158,6 @@ export default function AdminUsers() {
     setDetailError(null)
     setDetailDraft({
       name: u.name,
-      hq: u.hq ?? '',
       team: u.team ?? '',
       role_id: u.role?.id ?? 0,
     })
@@ -195,7 +193,6 @@ export default function AdminUsers() {
       switch (sortKey) {
         case 'name': return (u.name ?? '').toLowerCase()
         case 'email': return (u.email ?? '').toLowerCase()
-        case 'hq': return (u.hq ?? '').toLowerCase()
         case 'team': return (u.team ?? '').toLowerCase()
         case 'role': return (u.role?.name ?? '').toLowerCase()
         default: return ''
@@ -246,15 +243,13 @@ export default function AdminUsers() {
 
   const downloadCsvTemplate = () => {
     const bom = '\uFEFF'
-    const hqNames = hqOptions.map((o) => o.name)
     const teamNames = teamOptions.map((o) => o.name)
     const comments = [
-      `# Available HQ: ${hqNames.length > 0 ? hqNames.join(', ') : '(none registered)'}`,
       `# Available Team: ${teamNames.length > 0 ? teamNames.join(', ') : '(none registered)'}`,
       `# role: ${roles.filter((r) => r.name !== 'pending').map((r) => r.name).join(', ') || 'read, write, admin'}`,
     ].join('\n')
-    const header = 'name,email,password,role,hq,team'
-    const example = `Hong Gildong,hong@example.com,1234,read,${hqNames[0] || 'HQ'},${teamNames[0] || 'Team'}`
+    const header = 'name,email,password,role,team'
+    const example = `Hong Gildong,hong@example.com,1234,read,${teamNames[0] || 'Team'}`
     const blob = new Blob([bom + comments + '\n' + header + '\n' + example + '\n'], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -283,8 +278,7 @@ export default function AdminUsers() {
           email: cols[1] || '',
           password: cols[2] || '',
           role_id: matchedRole?.id ?? 0,
-          hq: cols[4] || undefined,
-          team: cols[5] || undefined,
+          team: cols[4] || undefined,
         }
       }).filter((u) => u.name && u.email && u.password && u.role_id > 0)
 
@@ -372,9 +366,6 @@ export default function AdminUsers() {
               <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('email')}>
                 {tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('hq')}>
-                {tr('adminUsers.table.hq', 'HQ')}{renderSortIcon('hq')}
-              </th>
               <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('team')}>
                 {tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}
               </th>
@@ -418,7 +409,6 @@ export default function AdminUsers() {
                     )}
                   </td>
                   <td className="px-4 py-3">{u.email ?? '-'}</td>
-                  <td className="px-4 py-3 text-slate-400">{u.hq || '-'}</td>
                   <td className="px-4 py-3 text-slate-400">{u.team || '-'}</td>
                   <td className="px-4 py-3">
                     <div
@@ -552,7 +542,6 @@ export default function AdminUsers() {
         setDetailEditing={setDetailEditing}
         detailError={detailError}
         setDetailError={setDetailError}
-        hqOptions={hqOptions}
         teamOptions={teamOptions}
         canEditUsers={canEditUsers}
         closeDetail={closeDetail}
@@ -603,7 +592,6 @@ export default function AdminUsers() {
                         </th>
                         <th className="px-3 py-2.5">{tr('adminUsers.table.name', 'Name')}</th>
                         <th className="px-3 py-2.5">{tr('adminUsers.table.email', 'Email')}</th>
-                        <th className="px-3 py-2.5">{tr('adminUsers.form.hq', 'HQ')}</th>
                         <th className="px-3 py-2.5">{tr('adminUsers.form.team', 'Team')}</th>
                       </tr>
                     </thead>
@@ -627,7 +615,6 @@ export default function AdminUsers() {
                             </td>
                             <td className="px-3 py-2.5">{u.name}</td>
                             <td className="px-3 py-2.5 text-slate-400">{u.email ?? '-'}</td>
-                            <td className="px-3 py-2.5 text-slate-500">{u.hq ?? '-'}</td>
                             <td className="px-3 py-2.5 text-slate-500">{u.team ?? '-'}</td>
                           </tr>
                         )
@@ -769,13 +756,12 @@ export default function AdminUsers() {
         open={createModalOpen}
         newUser={newUser}
         onChangeNewUser={setNewUser}
-        hqOptions={hqOptions}
         teamOptions={teamOptions}
         roles={roles}
         mutation={createUserMutation}
         onClose={() => {
           setCreateModalOpen(false)
-          setNewUser({ name: '', email: '', password: '', role_id: 0, hq: '', team: '' })
+          setNewUser({ name: '', email: '', password: '', role_id: 0, team: '' })
         }}
         tr={tr}
       />
