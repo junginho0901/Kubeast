@@ -4,11 +4,13 @@
 # without needing more real K8s servers.
 #
 # How the networking works: kind puts every cluster's control-plane container on
-# the shared `kind` docker bridge. The kubeast pods reach external IPs through
-# their own node (which is on that bridge), so they CAN reach another kind
-# cluster's API at its container IP:6443. We just rewrite the kubeconfig server
-# from 127.0.0.1:<hostport> to <container-ip>:6443 (and skip TLS verify, since
-# the kind cert may not list that IP — fine for local dev).
+# the shared `kind` docker bridge. The kubeast pods reach it through their own
+# node (which is on that bridge). We use `kind get kubeconfig --internal`, whose
+# server is the CONTAINER NAME (https://<name>-control-plane:6443) rather than an
+# IP — docker's embedded DNS resolves that name to the container's CURRENT IP, so
+# the registration SURVIVES docker restarts that reshuffle bridge IPs. The kind
+# apiserver cert already lists the container name in its SANs, so TLS verifies
+# normally (no insecure-skip needed).
 #
 # Usage:
 #   scripts/add-kind-cluster.sh <name> [--token <admin-jwt>] [--gateway http://localhost:30080]
@@ -37,17 +39,12 @@ else
   echo "kind cluster '$NAME' already exists"
 fi
 
-# 2. Resolve its control-plane IP on the shared 'kind' docker network.
+# 2. Build an in-cluster-reachable kubeconfig. `--internal` points the server at
+#    the control-plane CONTAINER NAME, which docker DNS resolves to its current
+#    IP — stable across docker restarts, and TLS-verifiable against the kind cert.
 CP="${NAME}-control-plane"
-IP=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' "$CP")
-[ -n "$IP" ] || { echo "could not resolve $CP IP on the kind network" >&2; exit 1; }
-echo "control-plane $CP → $IP:6443"
-
-# 3. Build an in-cluster-reachable kubeconfig (server = container IP, skip TLS).
-KUBECONFIG_BLOB=$(kind get kubeconfig --name "$NAME" \
-  | sed -E "s#server: https://127\.0\.0\.1:[0-9]+#server: https://${IP}:6443#" \
-  | sed -E '/certificate-authority-data:/d' \
-  | sed -E "s#(server: https://${IP}:6443)#\1\n    insecure-skip-tls-verify: true#")
+echo "control-plane $CP → https://$CP:6443 (docker-DNS name, IP-reshuffle-proof)"
+KUBECONFIG_BLOB=$(kind get kubeconfig --internal --name "$NAME")
 
 # 4. Get an admin token if not supplied.
 if [ -z "$TOKEN" ]; then
