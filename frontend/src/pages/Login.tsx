@@ -37,11 +37,6 @@ export default function Login() {
   // Only redirect if setup is truly not configured (handled above).
   // Temporary k8s disconnections during rollout should not loop back to setup.
 
-  const { data: hqOptions = [] } = useQuery({
-    queryKey: ['organizations', 'hq'],
-    queryFn: () => api.listOrganizations('hq'),
-    staleTime: 60000,
-  })
   const { data: teamOptions = [] } = useQuery({
     queryKey: ['organizations', 'team'],
     queryFn: () => api.listOrganizations('team'),
@@ -50,7 +45,6 @@ export default function Login() {
 
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
-  const [hq, setHq] = useState('')
   const [team, setTeam] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -76,7 +70,7 @@ export default function Login() {
   })
 
   const registerMutation = useMutation({
-    mutationFn: () => api.register({ name, email, password, hq, team }),
+    mutationFn: () => api.register({ name, email, password, team }),
     onSuccess: () => {
       setRegistered(true)
     },
@@ -236,22 +230,13 @@ export default function Login() {
                 )}
 
                 {mode === 'register' && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <CustomDropdown
-                      label={tr('login.form.hq', 'HQ')}
-                      placeholder={tr('login.form.selectHq', 'Select HQ')}
-                      options={hqOptions.map((o) => ({ value: o.name, label: o.name }))}
-                      value={hq}
-                      onChange={setHq}
-                    />
-                    <CustomDropdown
-                      label={tr('login.form.team', 'Team')}
-                      placeholder={tr('login.form.selectTeam', 'Select Team')}
-                      options={teamOptions.map((o) => ({ value: o.name, label: o.name }))}
-                      value={team}
-                      onChange={setTeam}
-                    />
-                  </div>
+                  <CustomDropdown
+                    label={tr('login.form.team', 'Team')}
+                    placeholder={tr('login.form.selectTeam', 'Select Team')}
+                    options={teamOptions.map((o) => ({ value: o.name, label: o.name }))}
+                    value={team}
+                    onChange={setTeam}
+                  />
                 )}
 
                 <div>
