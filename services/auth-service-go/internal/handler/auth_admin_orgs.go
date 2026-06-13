@@ -14,11 +14,11 @@ import (
 
 // --- Organization endpoints ---
 
-// ListOrganizations handles GET /auth/organizations?type=hq|team (public, no admin required)
+// ListOrganizations handles GET /auth/organizations?type=team (public, no admin required)
 func (h *AuthHandler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 	orgType := r.URL.Query().Get("type")
-	if orgType != "hq" && orgType != "team" {
-		response.Error(w, http.StatusBadRequest, "type must be hq or team")
+	if orgType != "team" {
+		response.Error(w, http.StatusBadRequest, "type must be team")
 		return
 	}
 	orgs, err := h.repo.ListOrganizations(r.Context(), orgType)
@@ -45,8 +45,8 @@ func (h *AuthHandler) AdminCreateOrganization(w http.ResponseWriter, r *http.Req
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.Type != "hq" && req.Type != "team" {
-		response.Error(w, http.StatusBadRequest, "type must be hq or team")
+	if req.Type != "team" {
+		response.Error(w, http.StatusBadRequest, "type must be team")
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
