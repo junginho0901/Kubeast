@@ -13,9 +13,9 @@ import (
 
 func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO auth_users (id, name, email, hq, team, role_id, password_hash, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		u.ID, u.Name, u.Email, u.HQ, u.Team, u.RoleID, u.PasswordHash, u.CreatedAt, u.UpdatedAt,
+		`INSERT INTO auth_users (id, name, email, team, role_id, password_hash, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		u.ID, u.Name, u.Email, u.Team, u.RoleID, u.PasswordHash, u.CreatedAt, u.UpdatedAt,
 	)
 	return err
 }
@@ -23,9 +23,9 @@ func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT u.id, u.name, u.email, u.hq, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.email = $1`, email,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.HQ, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -35,9 +35,9 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.U
 func (r *Repository) GetUserByID(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT u.id, u.name, u.email, u.hq, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1`, id,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.HQ, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -46,7 +46,7 @@ func (r *Repository) GetUserByID(ctx context.Context, id string) (*model.User, e
 
 func (r *Repository) ListUsers(ctx context.Context, limit, offset int) ([]model.User, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT u.id, u.name, u.email, u.hq, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id
 		 ORDER BY u.created_at DESC, u.id DESC LIMIT $1 OFFSET $2`, limit, offset,
 	)
@@ -58,7 +58,7 @@ func (r *Repository) ListUsers(ctx context.Context, limit, offset int) ([]model.
 	var users []model.User
 	for rows.Next() {
 		var u model.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.HQ, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -77,24 +77,14 @@ func (r *Repository) UpdateUserRole(ctx context.Context, id string, roleID int) 
 	return err
 }
 
-// UpdateUserProfile updates name/hq/team fields. Nil arguments are skipped.
-func (r *Repository) UpdateUserProfile(ctx context.Context, id string, name *string, hq *string, team *string) error {
+// UpdateUserProfile updates name/team fields. Nil arguments are skipped.
+func (r *Repository) UpdateUserProfile(ctx context.Context, id string, name *string, team *string) error {
 	sets := []string{}
 	args := []interface{}{}
 	idx := 1
 	if name != nil {
 		sets = append(sets, fmt.Sprintf("name = $%d", idx))
 		args = append(args, *name)
-		idx++
-	}
-	if hq != nil {
-		sets = append(sets, fmt.Sprintf("hq = $%d", idx))
-		// empty string → NULL so the column is cleared cleanly
-		if *hq == "" {
-			args = append(args, nil)
-		} else {
-			args = append(args, *hq)
-		}
 		idx++
 	}
 	if team != nil {
