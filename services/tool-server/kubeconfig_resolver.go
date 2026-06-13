@@ -7,6 +7,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -90,8 +92,17 @@ func resolveClusterKubeconfig(ctx context.Context, clusterID string, headers htt
 		clusterID = "default"
 	}
 
+	// The cache key is scoped to (cluster, caller token) so the per-user
+	// authorization gate in k8s-service — the kubeconfig fetch returns 403 when
+	// the user has no access to this cluster — is re-evaluated for every distinct
+	// user at least once per TTL. Keying by clusterID alone let user B reuse a
+	// kubeconfig that user A's authorized fetch had cached, skipping B's 403 check
+	// (a per-cluster privilege escalation). Errors are never cached, so a user
+	// without access is rejected on every attempt.
+	key := kcCacheKey(clusterID, headers)
+
 	kcCacheMu.Lock()
-	if c, ok := kcCache[clusterID]; ok && time.Now().Before(c.expiry) {
+	if c, ok := kcCache[key]; ok && time.Now().Before(c.expiry) {
 		kcCacheMu.Unlock()
 		return c.path, nil
 	}
@@ -117,9 +128,23 @@ func resolveClusterKubeconfig(ctx context.Context, clusterID string, headers htt
 	}
 
 	kcCacheMu.Lock()
-	kcCache[clusterID] = cachedKubeconfig{path: path, expiry: time.Now().Add(kubeconfigTTL)}
+	kcCache[key] = cachedKubeconfig{path: path, expiry: time.Now().Add(kubeconfigTTL)}
 	kcCacheMu.Unlock()
 	return path, nil
+}
+
+// kcCacheKey scopes a cache entry to (cluster, caller). The kubeconfig blob is
+// identical across users (it is the cluster's own credentials), but caching it
+// under the cluster id alone would skip the per-user 403 gate for a second user
+// within the TTL; hashing the bearer token forces a fresh authorized fetch per
+// user. Tokenless/legacy calls fall back to the cluster id.
+func kcCacheKey(clusterID string, headers http.Header) string {
+	token := extractBearerToken(headers)
+	if token == "" {
+		return clusterID
+	}
+	sum := sha256.Sum256([]byte(token))
+	return clusterID + "|" + hex.EncodeToString(sum[:16])
 }
 
 // invalidateClusterKubeconfig drops the cached kubeconfig for clusterID so the
@@ -131,12 +156,15 @@ func invalidateClusterKubeconfig(clusterID string) {
 		clusterID = "default"
 	}
 	kcCacheMu.Lock()
-	c, ok := kcCache[clusterID]
-	delete(kcCache, clusterID)
-	kcCacheMu.Unlock()
-	if ok && c.path != "" {
-		_ = os.Remove(c.path)
+	for k := range kcCache { // drop every per-user entry for this cluster
+		if k == clusterID || strings.HasPrefix(k, clusterID+"|") {
+			delete(kcCache, k)
+		}
 	}
+	kcCacheMu.Unlock()
+	// The kubeconfig file is shared across users (named by cluster id), so remove
+	// it once by its deterministic path.
+	_ = os.Remove(filepath.Join(os.TempDir(), "tool-server-kubeconfig-"+sanitizeID(clusterID)))
 }
 
 func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.Header) (blob string, inCluster bool, err error) {
