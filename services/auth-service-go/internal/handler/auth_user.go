@@ -31,13 +31,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate HQ/Team against organizations if provided
-	if req.HQ != nil && strings.TrimSpace(*req.HQ) != "" {
-		if ok, _ := h.repo.OrganizationExists(r.Context(), "hq", strings.TrimSpace(*req.HQ)); !ok {
-			response.Error(w, http.StatusBadRequest, "Invalid HQ value")
-			return
-		}
-	}
+	// Validate Team against organizations if provided
 	if req.Team != nil && strings.TrimSpace(*req.Team) != "" {
 		if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*req.Team)); !ok {
 			response.Error(w, http.StatusBadRequest, "Invalid Team value")
@@ -68,7 +62,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		ID:           uuid.New().String(),
 		Name:         req.Name,
 		Email:        req.Email,
-		HQ:           req.HQ,
 		Team:         req.Team,
 		RoleID:       pendingRole.ID,
 		RoleName:     pendingRole.Name,
