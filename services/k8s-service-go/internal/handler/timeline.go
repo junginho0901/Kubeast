@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -15,7 +16,8 @@ func (h *Handler) GetNamespaceTimeline(w http.ResponseWriter, r *http.Request) {
 	hours := queryParamInt(r, "hours", 24)
 	limit := queryParamInt(r, "limit", 500)
 
-	cacheKey := "timeline|ns|" + namespace + "|" + r.URL.RawQuery
+	cid, _ := cluster.FromContext(ctx)
+	cacheKey := "timeline|ns|" + string(cid) + "|" + namespace + "|" + r.URL.RawQuery
 
 	var cached interface{}
 	if h.svc.Cache().Get(ctx, cacheKey, &cached) {
@@ -42,7 +44,8 @@ func (h *Handler) GetResourceTimeline(w http.ResponseWriter, r *http.Request) {
 	hours := queryParamInt(r, "hours", 24)
 	limit := queryParamInt(r, "limit", 500)
 
-	cacheKey := "timeline|res|" + namespace + "|" + kind + "|" + name + "|" + r.URL.RawQuery
+	cid, _ := cluster.FromContext(ctx)
+	cacheKey := "timeline|res|" + string(cid) + "|" + namespace + "|" + kind + "|" + name + "|" + r.URL.RawQuery
 
 	var cached interface{}
 	if h.svc.Cache().Get(ctx, cacheKey, &cached) {
