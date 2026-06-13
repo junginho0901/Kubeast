@@ -7,7 +7,7 @@ import { client } from './client'
 import type { AuthResponse, Member, Organization } from './types'
 
 export const authApi = {
-  register: async (request: { name: string; email: string; password: string; hq?: string; team?: string }): Promise<Member> => {
+  register: async (request: { name: string; email: string; password: string; team?: string }): Promise<Member> => {
     const { data } = await client.post('/auth/register', request)
     return data
   },
@@ -25,7 +25,7 @@ export const authApi = {
     await client.post('/auth/logout')
   },
 
-  listOrganizations: async (type: 'hq' | 'team'): Promise<Organization[]> => {
+  listOrganizations: async (type: 'team'): Promise<Organization[]> => {
     const { data } = await client.get('/auth/organizations', { params: { type } })
     return Array.isArray(data) ? data : []
   },

@@ -14,7 +14,7 @@ import type {
 } from './types'
 
 export const adminApi = {
-  adminCreateOrganization: async (type: 'hq' | 'team', name: string): Promise<Organization> => {
+  adminCreateOrganization: async (type: 'team', name: string): Promise<Organization> => {
     const { data } = await client.post('/auth/admin/organizations', { type, name })
     return data
   },
@@ -23,7 +23,7 @@ export const adminApi = {
     await client.delete(`/auth/admin/organizations/${id}`)
   },
 
-  adminCreateUser: async (request: { name: string; email: string; password: string; role_id: number; hq?: string; team?: string }): Promise<Member> => {
+  adminCreateUser: async (request: { name: string; email: string; password: string; role_id: number; team?: string }): Promise<Member> => {
     const { data } = await client.post('/auth/admin/users', request)
     return data
   },
@@ -33,7 +33,7 @@ export const adminApi = {
     return data
   },
 
-  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role_id: number; hq?: string; team?: string }>): Promise<{ created: Member[]; errors: Array<{ email: string; message: string }> }> => {
+  adminBulkCreateUsers: async (users: Array<{ name: string; email: string; password: string; role_id: number; team?: string }>): Promise<{ created: Member[]; errors: Array<{ email: string; message: string }> }> => {
     const { data } = await client.post('/auth/admin/users/bulk', { users })
     return data
   },
@@ -51,7 +51,7 @@ export const adminApi = {
 
   adminUpdateUser: async (
     userId: string,
-    payload: { name?: string; hq?: string; team?: string; role_id?: number },
+    payload: { name?: string; team?: string; role_id?: number },
   ): Promise<Member> => {
     const { data } = await client.patch(`/auth/admin/users/${userId}`, payload)
     return data
