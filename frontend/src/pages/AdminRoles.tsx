@@ -283,7 +283,6 @@ export default function AdminRoles() {
                     <tr className="text-left text-slate-300">
                       <th className="px-3 py-2.5">{tr('adminRoles.col.userName', 'Name')}</th>
                       <th className="px-3 py-2.5">{tr('adminRoles.col.userEmail', 'Email')}</th>
-                      <th className="px-3 py-2.5">{tr('adminRoles.col.userHq', 'HQ')}</th>
                       <th className="px-3 py-2.5">{tr('adminRoles.col.userTeam', 'Team')}</th>
                     </tr>
                   </thead>
@@ -292,7 +291,6 @@ export default function AdminRoles() {
                       <tr key={u.id} className="border-t border-slate-700 text-slate-200">
                         <td className="px-3 py-2.5">{u.name}</td>
                         <td className="px-3 py-2.5 text-slate-400">{u.email ?? '-'}</td>
-                        <td className="px-3 py-2.5 text-slate-500">{u.hq ?? '-'}</td>
                         <td className="px-3 py-2.5 text-slate-500">{u.team ?? '-'}</td>
                       </tr>
                     ))}

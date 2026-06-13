@@ -12,17 +12,11 @@ export default function AdminOrganizations() {
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
 
-  const [newHq, setNewHq] = useState('')
   const [newTeam, setNewTeam] = useState('')
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
 
   const { has: hasPerm } = usePermission()
   const canListUsers = hasPerm('admin.users.read')
-
-  const { data: hqs = [] } = useQuery({
-    queryKey: ['organizations', 'hq'],
-    queryFn: () => api.listOrganizations('hq'),
-  })
 
   const { data: teams = [] } = useQuery({
     queryKey: ['organizations', 'team'],
@@ -37,15 +31,14 @@ export default function AdminOrganizations() {
   })
 
   const orgMembers = selectedOrg
-    ? allUsers.filter((u) => (selectedOrg.type === 'hq' ? u.hq : u.team) === selectedOrg.name)
+    ? allUsers.filter((u) => u.team === selectedOrg.name)
     : []
 
   const createMutation = useMutation({
-    mutationFn: ({ type, name }: { type: 'hq' | 'team'; name: string }) => api.adminCreateOrganization(type, name),
+    mutationFn: ({ type, name }: { type: 'team'; name: string }) => api.adminCreateOrganization(type, name),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['organizations', vars.type] })
-      if (vars.type === 'hq') setNewHq('')
-      else setNewTeam('')
+      setNewTeam('')
     },
   })
 
@@ -60,7 +53,7 @@ export default function AdminOrganizations() {
     title: string,
     subtitle: string,
     items: Organization[],
-    type: 'hq' | 'team',
+    type: 'team',
     inputValue: string,
     setInputValue: (v: string) => void,
   ) => (
@@ -105,7 +98,7 @@ export default function AdminOrganizations() {
         )}
         {items.map((item) => {
           const memberCount = canListUsers
-            ? allUsers.filter((u) => (item.type === 'hq' ? u.hq : u.team) === item.name).length
+            ? allUsers.filter((u) => u.team === item.name).length
             : null
           return (
             <div
@@ -150,21 +143,13 @@ export default function AdminOrganizations() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">{tr('adminOrg.title', 'HQ / Team management')}</h1>
+        <h1 className="text-3xl font-bold text-white">{tr('adminOrg.title', 'Team management')}</h1>
         <p className="mt-2 text-slate-400">
-          {tr('adminOrg.subtitle', 'Manage the list of HQs and Teams that users can select during registration.')}
+          {tr('adminOrg.subtitle', 'Manage the list of Teams that users can select during registration.')}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {renderSection(
-          tr('adminOrg.hqTitle', 'HQ'),
-          tr('adminOrg.hqSubtitle', 'Headquarters / Divisions'),
-          hqs,
-          'hq',
-          newHq,
-          setNewHq,
-        )}
+      <div className="grid grid-cols-1 gap-6">
         {renderSection(
           tr('adminOrg.teamTitle', 'Team'),
           tr('adminOrg.teamSubtitle', 'Teams / Groups'),
@@ -191,9 +176,7 @@ export default function AdminOrganizations() {
                 <div>
                   <h2 className="text-lg font-semibold text-white">{selectedOrg.name}</h2>
                   <p className="text-sm text-slate-400">
-                    {selectedOrg.type === 'hq'
-                      ? tr('adminOrg.hqMembers', 'HQ members')
-                      : tr('adminOrg.teamMembers', 'Team members')}
+                    {tr('adminOrg.teamMembers', 'Team members')}
                     <span className="ml-2 text-slate-500">({orgMembers.length})</span>
                   </p>
                 </div>
@@ -219,11 +202,6 @@ export default function AdminOrganizations() {
                       <th className="px-3 py-2.5">{tr('adminOrg.col.name', 'Name')}</th>
                       <th className="px-3 py-2.5">{tr('adminOrg.col.email', 'Email')}</th>
                       <th className="px-3 py-2.5">{tr('adminOrg.col.role', 'Role')}</th>
-                      <th className="px-3 py-2.5">
-                        {selectedOrg.type === 'hq'
-                          ? tr('adminOrg.col.team', 'Team')
-                          : tr('adminOrg.col.hq', 'HQ')}
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -235,9 +213,6 @@ export default function AdminOrganizations() {
                           <span className="inline-block rounded bg-slate-700/60 px-2 py-0.5 text-[11px] text-slate-300">
                             {u.role?.name ?? '-'}
                           </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-500">
-                          {selectedOrg.type === 'hq' ? (u.team ?? '-') : (u.hq ?? '-')}
                         </td>
                       </tr>
                     ))}
