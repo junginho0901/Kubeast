@@ -117,8 +117,6 @@ export default function Account() {
             <div className="mt-1 text-sm text-white">{me?.name ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">{tr('account.profile.email', 'Email')}</div>
             <div className="mt-1 text-sm text-white">{me?.email ?? '-'}</div>
-            <div className="mt-3 text-xs text-slate-400">{tr('account.profile.hq', 'HQ')}</div>
-            <div className="mt-1 text-sm text-white">{me?.hq ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">{tr('account.profile.team', 'Team')}</div>
             <div className="mt-1 text-sm text-white">{me?.team ?? '-'}</div>
             <div className="mt-3 text-xs text-slate-400">{tr('account.profile.role', 'Role')}</div>
