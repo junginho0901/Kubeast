@@ -1949,8 +1949,8 @@
     },
     "bulk": {
       "selected": "{{count}} selected",
-      "approveRead": "Approve as READ",
-      "approveWrite": "Approve as WRITE",
+      "approveMember": "Approve as Member",
+      "approveAdmin": "Approve as Admin",
       "clearSelection": "Clear",
       "selectPending": "Select all pending users"
     },
@@ -2596,7 +2596,8 @@
   },
   "adminRoles": {
     "viewUsers": "View users with this role",
-    "usersWithRole": "Users with this role",
+    "usersWithRole": "Users with this global (account-level) role",
+    "usersWithRoleNote": "This counts the global role only. Per-cluster access (Read/Write on a cluster) is granted separately in cluster access.",
     "noUsers": "No users assigned to this role.",
     "closeUsers": "Close",
     "col": {
