@@ -121,6 +121,10 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 	}
 	seeds := []seedRole{
 		{"Pending", "승인 대기", nil},
+		// Member is the approved-but-no-global-access account level: cluster access
+		// comes entirely from per-cluster grants. (Read/Write/Admin below are the
+		// roles assignable per-cluster; only Admin is meaningful as a GLOBAL role.)
+		{"Member", "일반 사용자 (클러스터별 권한으로 접근)", nil},
 		{"Read", "읽기 전용", []string{
 			"menu.workloads", "menu.network", "menu.storage", "menu.security",
 			"menu.cluster", "menu.gateway", "menu.gpu", "menu.helm",
@@ -227,6 +231,17 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 			`ALTER TABLE auth_users DROP COLUMN role`); err != nil {
 			return fmt.Errorf("drop role column: %w", err)
 		}
+	}
+
+	// Collapse the global org model to account levels: a global Read/Write role is
+	// meaningless (only admin.*/"*" reaches the JWT matrix), so move any user still
+	// on global Read/Write to Member (approved; access comes from per-cluster
+	// grants, which are untouched). Idempotent — a no-op once migrated.
+	if _, err := tx.Exec(ctx,
+		`UPDATE auth_users SET role_id = (SELECT id FROM roles WHERE name = 'Member')
+		  WHERE role_id IN (SELECT id FROM roles WHERE name IN ('Read', 'Write'))`,
+	); err != nil {
+		return fmt.Errorf("collapse global read/write to member: %w", err)
 	}
 
 	return tx.Commit(ctx)
