@@ -4,6 +4,7 @@ import { ShieldCheck, Loader2 } from 'lucide-react'
 
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
+import CustomDropdown from '@/components/CustomDropdown'
 
 interface Props {
   userID: string
@@ -89,20 +90,21 @@ export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }
                     <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">self</span>
                   )}
                 </span>
-                <select
-                  data-testid={`cluster-role-${c.id}`}
+                {/* Pending/Member are account-level (no cluster perms), so only
+                    the access roles are offered per cluster. */}
+                <CustomDropdown
+                  testId={`cluster-role-${c.id}`}
                   value={current}
                   disabled={!canEdit || pending}
-                  onChange={(e) => onChange(c.id, e.target.value)}
-                  className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-white disabled:opacity-60"
-                >
-                  <option value="">{tr('admin.userClusterRoles.none', 'No access')}</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.name}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => onChange(c.id, v)}
+                  className="w-40 shrink-0"
+                  options={[
+                    { value: '', label: tr('admin.userClusterRoles.none', 'No access'), testId: `cluster-role-${c.id}-opt-none` },
+                    ...roles
+                      .filter((r) => !['Pending', 'Member'].includes(r.name))
+                      .map((r) => ({ value: r.name, label: r.name, testId: `cluster-role-${c.id}-opt-${r.name}` })),
+                  ]}
+                />
               </div>
             )
           })}

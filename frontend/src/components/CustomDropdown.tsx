@@ -10,6 +10,8 @@ export interface DropdownOption {
   hint?: string
   /** If true the option is rendered with dimmed style */
   disabled?: boolean
+  /** Optional test id, applied to this option's button */
+  testId?: string
 }
 
 interface CustomDropdownProps {
@@ -93,6 +95,7 @@ export default function CustomDropdown({
               <button
                 key={opt.value}
                 type="button"
+                data-testid={opt.testId}
                 onClick={() => {
                   if (!opt.disabled) {
                     onChange(opt.value)
