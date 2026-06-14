@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -25,6 +26,30 @@ import (
 func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c := r.URL.Query().Get("cluster")
+
+		// Per-cluster access gate. Ordinary read handlers (overview, lists, detail)
+		// do not each call requirePermissionForCluster, so without this baseline
+		// check any authenticated user could read a cluster's data just by hitting
+		// the endpoint. Gate the EFFECTIVE cluster: the explicit ?cluster=, or
+		// "default" — what the service falls back to when it's omitted (see
+		// ctxClusterID). Gating only the explicit case would let a user with no
+		// grant read the default cluster by simply leaving ?cluster= off. Require a
+		// per-cluster grant (Perms[id]) or the global admin entry (Perms["*"]);
+		// deny-by-default (00-COMMON §2-3).
+		effective := c
+		if effective == "" {
+			effective = "default"
+		}
+		payload, ok := auth.FromContext(r.Context())
+		if !ok {
+			response.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if len(payload.Perms["*"]) == 0 && len(payload.Perms[effective]) == 0 {
+			response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+effective)
+			return
+		}
+
 		if c == "" {
 			next.ServeHTTP(w, r)
 			return
