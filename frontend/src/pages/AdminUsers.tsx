@@ -246,7 +246,7 @@ export default function AdminUsers() {
     const teamNames = teamOptions.map((o) => o.name)
     const comments = [
       `# Available Team: ${teamNames.length > 0 ? teamNames.join(', ') : '(none registered)'}`,
-      `# role: ${roles.filter((r) => r.name !== 'pending').map((r) => r.name).join(', ') || 'read, write, admin'}`,
+      `# role (account level): ${roles.filter((r) => ['Admin', 'Member'].includes(r.name)).map((r) => r.name).join(', ') || 'Admin, Member'}`,
     ].join('\n')
     const header = 'name,email,password,role,team'
     const example = `Hong Gildong,hong@example.com,1234,read,${teamNames[0] || 'Team'}`
@@ -436,7 +436,12 @@ export default function AdminUsers() {
                           role="menu"
                           className="absolute right-0 mt-2 w-32 rounded-xl border border-slate-700 bg-slate-900 shadow-xl z-50 overflow-hidden"
                         >
-                          {roles.map((role) => {
+                          {/* Inline row dropdown sets the GLOBAL role → account
+                              level only (Admin/Member/Pending). Read/Write are
+                              granted per-cluster, not here. */}
+                          {roles
+                            .filter((r) => ['Admin', 'Member', 'Pending'].includes(r.name))
+                            .map((role) => {
                             const isSelected = currentRoleId === role.id
                             return (
                               <button
@@ -630,21 +635,24 @@ export default function AdminUsers() {
                     </span>
                   )}
                   <div className="flex-1" />
+                  {/* Approving a pending user sets the GLOBAL account level.
+                      Member = approved (access via per-cluster grants); Admin =
+                      global superuser. Cluster Read/Write is granted separately. */}
                   <button
                     type="button"
-                    onClick={() => handlePendingBulkApprove('read')}
+                    onClick={() => handlePendingBulkApprove('Member')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
                     className="rounded-lg bg-green-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-green-600 disabled:opacity-40"
                   >
-                    {tr('adminUsers.bulk.approveRead', 'Approve as READ')}
+                    {tr('adminUsers.bulk.approveMember', 'Approve as Member')}
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePendingBulkApprove('write')}
+                    onClick={() => handlePendingBulkApprove('Admin')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
                     className="rounded-lg bg-blue-600/80 px-4 py-2 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-40"
                   >
-                    {tr('adminUsers.bulk.approveWrite', 'Approve as WRITE')}
+                    {tr('adminUsers.bulk.approveAdmin', 'Approve as Admin')}
                   </button>
                 </div>
               </>

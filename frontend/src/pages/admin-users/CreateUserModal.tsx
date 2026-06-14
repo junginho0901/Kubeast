@@ -116,7 +116,10 @@ export function CreateUserModal({
               className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
             >
               <option value={0}>{tr('adminUsers.form.selectRole', 'Select role')}</option>
-              {roles.filter((r) => r.name !== 'pending').map((r) => (
+              {/* Global role = account level only. Admin (global superuser) or
+                  Member (access via per-cluster grants). Read/Write are granted
+                  per-cluster, not globally. */}
+              {roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => (
                 <option key={r.id} value={r.id}>{r.name.toUpperCase()}</option>
               ))}
             </select>
