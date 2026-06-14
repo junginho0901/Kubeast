@@ -189,6 +189,8 @@ func main() {
 			r.Get("/admin/users/{user_id}/cluster-roles", authHandler.GetUserClusterRoles)
 			r.Put("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.SetUserClusterRole)
 			r.Delete("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.DeleteUserClusterRole)
+			// Inverse view: the per-cluster access list (who has a grant on a cluster).
+			r.Get("/admin/clusters/{cluster_id}/user-roles", authHandler.GetClusterUserRoles)
 		})
 	})
 
