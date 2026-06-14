@@ -17,6 +17,15 @@ import { isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
 
 const STORAGE_KEY = 'kubeast:current-cluster'
 
+// Drop the persisted cluster selection. Called on login so a new user never
+// inherits the previous user's selected cluster (which they may not be able to
+// access).
+export function clearStoredCluster() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
 type ClusterContextValue = {
   currentCluster: string
   setCurrentCluster: (id: string) => void
