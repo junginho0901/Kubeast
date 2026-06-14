@@ -46,6 +46,22 @@ func (h *AuthHandler) GetUserClusterRoles(w http.ResponseWriter, r *http.Request
 	response.JSON(w, http.StatusOK, roles)
 }
 
+// GetClusterUserRoles returns the per-cluster access list for one cluster: every
+// user that has a grant on it and their role (the inverse of GetUserClusterRoles,
+// for the cluster-management "who has access" modal).
+func (h *AuthHandler) GetClusterUserRoles(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireClusterRoleAdmin(w, r); !ok {
+		return
+	}
+	clusterID := chi.URLParam(r, "cluster_id")
+	rows, err := h.repo.ListClusterUserRoles(r.Context(), clusterID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, rows)
+}
+
 // SetUserClusterRole grants (or re-grants) a role to the user on a cluster.
 func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request) {
 	payload, ok := h.requireClusterRoleAdmin(w, r)

@@ -31,6 +31,42 @@ func (r *Repository) ListUserClusterRoles(ctx context.Context, userID string) ([
 	return out, rows.Err()
 }
 
+// ClusterUserRole is one user's grant on a given cluster — the inverse view of
+// ListUserClusterRoleNames, for the per-cluster "who has access" UI.
+type ClusterUserRole struct {
+	UserID string `json:"user_id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Role   string `json:"role"`
+}
+
+// ListClusterUserRoles returns every user that has a per-cluster grant on
+// clusterID, with their granted role. Global admins are NOT listed here — they
+// reach every cluster via the "*" matrix entry without a per-cluster row.
+func (r *Repository) ListClusterUserRoles(ctx context.Context, clusterID string) ([]ClusterUserRole, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT u.id, u.name, u.email, ro.name
+		   FROM user_cluster_roles ucr
+		   JOIN auth_users u ON u.id = ucr.user_id
+		   JOIN roles ro ON ro.id = ucr.role_id
+		  WHERE ucr.cluster_id = $1
+		  ORDER BY u.email`, clusterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []ClusterUserRole{}
+	for rows.Next() {
+		var c ClusterUserRole
+		if err := rows.Scan(&c.UserID, &c.Name, &c.Email, &c.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // ListUserClusterRoleNames returns the user's per-cluster grants as a
 // clusterID → role-name map (for the GET cluster-roles API). No rows → empty map.
 func (r *Repository) ListUserClusterRoleNames(ctx context.Context, userID string) (map[string]string, error) {
