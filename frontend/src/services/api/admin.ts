@@ -13,6 +13,15 @@ import type {
   RoleWithDetails,
 } from './types'
 
+// One user's grant on a cluster — the per-cluster access list (inverse of
+// getUserClusterRoles).
+export interface ClusterUserRole {
+  user_id: string
+  name: string
+  email: string
+  role: string
+}
+
 export const adminApi = {
   adminCreateOrganization: async (type: 'team', name: string): Promise<Organization> => {
     const { data } = await client.post('/auth/admin/organizations', { type, name })
@@ -79,6 +88,13 @@ export const adminApi = {
 
   removeUserClusterRole: async (userId: string, clusterId: string): Promise<void> => {
     await client.delete(`/auth/admin/users/${userId}/cluster-roles/${clusterId}`)
+  },
+
+  // Per-cluster access list (inverse view): the users granted a role on a
+  // cluster. Global admins are not listed (they reach every cluster via "*").
+  getClusterUserRoles: async (clusterId: string): Promise<ClusterUserRole[]> => {
+    const { data } = await client.get(`/auth/admin/clusters/${clusterId}/user-roles`)
+    return Array.isArray(data) ? data : []
   },
 
   // Roles
