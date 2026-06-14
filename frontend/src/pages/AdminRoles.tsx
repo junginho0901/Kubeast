@@ -258,8 +258,14 @@ export default function AdminRoles() {
                 <div>
                   <h2 className="text-lg font-semibold text-white">{usersRole.name}</h2>
                   <p className="text-sm text-slate-400">
-                    {tr('adminRoles.usersWithRole', 'Users with this role')}
+                    {tr('adminRoles.usersWithRole', 'Users with this global (account-level) role')}
                     <span className="ml-2 text-slate-500">({roleMembers.length})</span>
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {tr(
+                      'adminRoles.usersWithRoleNote',
+                      'This counts the global role only. Per-cluster access (Read/Write on a cluster) is granted separately in cluster access.',
+                    )}
                   </p>
                 </div>
               </div>
