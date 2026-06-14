@@ -89,12 +89,13 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		// Validate role_id
+		// Validate role_id — default to the Member account level (no global
+		// access; cluster access comes from per-cluster grants).
 		roleID := u.RoleID
 		if roleID == 0 {
-			readRole, _ := h.repo.GetRoleByName(r.Context(), "Read")
-			if readRole != nil {
-				roleID = readRole.ID
+			memberRole, _ := h.repo.GetRoleByName(r.Context(), "Member")
+			if memberRole != nil {
+				roleID = memberRole.ID
 			}
 		}
 		targetRole, err := h.repo.GetRoleByID(r.Context(), roleID)
@@ -176,12 +177,13 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate role_id
+	// Validate role_id — default to the Member account level (no global access;
+	// cluster access comes from per-cluster grants).
 	roleID := req.RoleID
 	if roleID == 0 {
-		readRole, _ := h.repo.GetRoleByName(r.Context(), "Read")
-		if readRole != nil {
-			roleID = readRole.ID
+		memberRole, _ := h.repo.GetRoleByName(r.Context(), "Member")
+		if memberRole != nil {
+			roleID = memberRole.ID
 		}
 	}
 	targetRole, err := h.repo.GetRoleByID(r.Context(), roleID)
