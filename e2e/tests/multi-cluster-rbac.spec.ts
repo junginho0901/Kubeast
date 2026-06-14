@@ -39,8 +39,9 @@ test.describe('multi-cluster RBAC UI (step 12)', () => {
       await page.getByTestId(`user-detail-${email}`).click()
       await expect(page.getByTestId('cluster-role-matrix')).toBeVisible({ timeout: 10000 })
 
-      // grant the Read role on the default cluster
-      await page.getByTestId('cluster-role-default').selectOption('Read')
+      // grant the Read role on the default cluster (custom dropdown: open → pick)
+      await page.getByTestId('cluster-role-default').click()
+      await page.getByTestId('cluster-role-default-opt-Read').click()
 
       // the grant is persisted (GET cluster-roles → { default: "Read" })
       await expect
@@ -53,8 +54,9 @@ test.describe('multi-cluster RBAC UI (step 12)', () => {
         )
         .toBe('Read')
 
-      // revoke via the same select ("No access" = empty value)
-      await page.getByTestId('cluster-role-default').selectOption('')
+      // revoke via the same dropdown ("No access")
+      await page.getByTestId('cluster-role-default').click()
+      await page.getByTestId('cluster-role-default-opt-none').click()
       await expect
         .poll(
           async () => {
