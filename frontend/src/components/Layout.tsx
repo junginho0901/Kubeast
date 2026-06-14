@@ -27,6 +27,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 import { api } from '@/services/api'
+import { clustersApi } from '@/services/api/clusters'
 import { clearAccessToken } from '@/services/auth'
 import { ResourceDetailProvider } from './ResourceDetailContext'
 import ResourceDetailDrawer from './ResourceDetailDrawer'
@@ -36,6 +37,7 @@ import FloatingAIChat from './FloatingAIChat'
 import ClusterPicker from './ClusterPicker'
 import ClusterSwitchProgress from './ClusterSwitchProgress'
 import { useCluster } from '../contexts/ClusterContext'
+import { usePermission } from '@/hooks/usePermission'
 
 type NavItem = {
   name: string
@@ -75,6 +77,16 @@ export default function Layout() {
     staleTime: 30000,
   })
 
+  // The clusters this user can actually reach. A non-admin with no grants has
+  // none — we then show a "no accessible cluster" placeholder instead of the
+  // resource pages, so the pages never mount and never fire cluster requests
+  // that would all 403 (deny-by-default).
+  const { data: accessibleClusters = [], isLoading: isClustersLoading } = useQuery({
+    queryKey: ['clusters-accessible'],
+    queryFn: () => clustersApi.listClusters(true),
+    staleTime: 30_000,
+  })
+
   useEffect(() => {
     if (!isMeError) return
     clearAccessToken()
@@ -106,15 +118,18 @@ export default function Layout() {
   }
 
   const { t } = useTranslation()
-  const perms: string[] = me?.role?.permissions ?? []
-  const hasPermission = (perm: string): boolean =>
-    perms.some(
-      (p) =>
-        p === '*' ||
-        p === perm ||
-        (p.endsWith('.*') && perm.startsWith(p.slice(0, -1)))
-    )
-  const isAdmin = hasPermission('menu.admin')
+  // Menu/permission gating uses the JWT per-cluster matrix (what the backend
+  // actually enforces) scoped to the SELECTED cluster — not the global role's
+  // flat list, which would show menus/actions the backend then 403s for a user
+  // whose access is granted per-cluster. has(perm) defaults to the current
+  // cluster, so the menus reflect what you can actually do on the cluster you're
+  // viewing.
+  const { has: hasPermission, permissions: matrix } = usePermission()
+  // The admin section requires a GLOBAL admin permission, which lives only in
+  // the matrix "*" entry — per-cluster grants never carry admin.*.
+  const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
+  // A non-admin with zero accessible clusters can't view any resource page.
+  const noAccessibleCluster = !isAdmin && !isClustersLoading && accessibleClusters.length === 0
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
   const storageTabMatch = (tab: string, pathname: string, search: string) => {
@@ -301,7 +316,7 @@ export default function Layout() {
       }
     }
     return null
-  }, [isAdmin, location.pathname, location.search, navGroups])
+  }, [isAdmin, location.pathname, location.search, navGroups, currentCluster])
 
   useEffect(() => {
     if (!activeGroup) return
@@ -324,7 +339,10 @@ export default function Layout() {
     return <div className="min-h-screen bg-slate-900" />
   }
 
-  if (!hasPermission('menu.dashboard')) {
+  // Approved = a non-Pending global role. A Member with no per-cluster grants is
+  // still approved (they just see "no accessible cluster" until granted), so the
+  // gate is the account state, not menu visibility (which is now per-cluster).
+  if (!me.role || me.role.name === 'Pending') {
     return <PendingApproval />
   }
 
@@ -451,7 +469,27 @@ export default function Layout() {
               state (selected namespace, filters, open modals) never carries over
               to a different cluster — its namespaces/resources differ. */}
           <div key={currentCluster || 'default'} className="contents">
-            <Outlet />
+            {noAccessibleCluster ? (
+              <div
+                data-testid="no-accessible-cluster"
+                className="flex min-h-[60vh] flex-col items-center justify-center text-center px-6"
+              >
+                <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
+                  <Activity className="w-8 h-8 text-slate-500" />
+                </div>
+                <h2 className="text-lg font-semibold text-white">
+                  {t('cluster.noAccess.title', { defaultValue: 'No accessible cluster' })}
+                </h2>
+                <p className="mt-1 max-w-md text-sm text-slate-400">
+                  {t('cluster.noAccess.body', {
+                    defaultValue:
+                      'You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.',
+                  })}
+                </p>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>
