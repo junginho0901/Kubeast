@@ -30,16 +30,25 @@ export default function ClusterPicker() {
     staleTime: 30_000,
   })
 
-  // Auto-select a cluster when nothing is selected yet, so resource pages have a
-  // target on first load. Prefer the canonical default cluster (id "default",
-  // what the server falls back to) over registry order, so adding other clusters
-  // doesn't silently switch the user to one of them.
+  // Reconcile the selection with what THIS user can access. Besides the initial
+  // auto-select, this corrects a selection left over from a previous login: a
+  // cluster the current user can't access (or any stale id) must not stay
+  // selected, or the axios interceptor keeps sending ?cluster=<it> and the
+  // server now 403s every read. Prefer the canonical default (id "default", the
+  // server's fallback) over registry order. With no accessible cluster, clear
+  // the selection so no ?cluster= is sent at all.
   useEffect(() => {
-    if (!currentCluster && clusters.length > 0) {
-      const preferred = clusters.find((c) => c.id === 'default') ?? clusters[0]
-      setCurrentCluster(preferred.id)
+    if (isLoading) return
+    if (clusters.length === 0) {
+      if (currentCluster) setCurrentCluster('')
+      return
     }
-  }, [currentCluster, clusters, setCurrentCluster])
+    const accessible = clusters.some((c) => c.id === currentCluster)
+    if (!currentCluster || !accessible) {
+      const preferred = clusters.find((c) => c.id === 'default') ?? clusters[0]
+      if (preferred.id !== currentCluster) setCurrentCluster(preferred.id)
+    }
+  }, [currentCluster, clusters, isLoading, setCurrentCluster])
 
   // Close the dropdown on outside click.
   useEffect(() => {
