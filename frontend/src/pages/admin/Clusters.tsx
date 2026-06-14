@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2, Activity, Loader2, Server, Pencil } from 'lucide-react'
+import { Plus, Trash2, Activity, Loader2, Server, Pencil, Users } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { clustersApi, type ClusterMeta, type ConnectionResult } from '@/services/api/clusters'
 import RegisterClusterDialog from './RegisterClusterDialog'
 import EditClusterDialog from './EditClusterDialog'
+import ClusterAccessModal from './ClusterAccessModal'
 
 function healthDotClass(status: string | undefined): string {
   if (status === 'healthy') return 'bg-green-500'
@@ -25,6 +26,7 @@ export default function AdminClusters() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ClusterMeta | null>(null)
   const [editTarget, setEditTarget] = useState<ClusterMeta | null>(null)
+  const [accessTarget, setAccessTarget] = useState<ClusterMeta | null>(null)
   const [testResults, setTestResults] = useState<Record<string, ConnectionResult>>({})
   const [testingId, setTestingId] = useState<string | null>(null)
 
@@ -84,7 +86,10 @@ export default function AdminClusters() {
       </div>
 
       <div className="card overflow-hidden p-0">
-        <table data-testid="clusters-table" className="w-full text-sm">
+        {/* Horizontal scroll so the action buttons (Test/Access/Edit/Delete) are
+            never clipped on a narrow / portrait viewport. */}
+        <div className="overflow-x-auto">
+        <table data-testid="clusters-table" className="w-full text-sm min-w-[820px]">
           <thead className="bg-slate-900/40 text-slate-400">
             <tr>
               <th className="text-left px-4 py-3">{tr('cluster.admin.name', 'Name')}</th>
@@ -130,7 +135,7 @@ export default function AdminClusters() {
                   </td>
                   <td className="px-4 py-3 text-slate-400">{c.created_by || '—'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => runTest(c.id)}
@@ -140,6 +145,16 @@ export default function AdminClusters() {
                       >
                         {testingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
                         {tr('cluster.admin.test', 'Test')}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid={`access-cluster-${c.id}`}
+                        onClick={() => setAccessTarget(c)}
+                        className="flex items-center gap-1 rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40"
+                        title={tr('cluster.admin.access', 'Manage access')}
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        {tr('cluster.admin.access', 'Access')}
                       </button>
                       <button
                         type="button"
@@ -167,6 +182,7 @@ export default function AdminClusters() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {registerOpen && (
@@ -188,6 +204,10 @@ export default function AdminClusters() {
             refresh()
           }}
         />
+      )}
+
+      {accessTarget && (
+        <ClusterAccessModal cluster={accessTarget} onClose={() => setAccessTarget(null)} />
       )}
 
       {deleteTarget && (
