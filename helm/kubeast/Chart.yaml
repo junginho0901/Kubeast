@@ -1,6 +1,6 @@
 apiVersion: v2
 name: kubeast
-description: Kubest - K8s DevOps Assistant with AI Chat
+description: Kubeast - K8s operations platform with an AI assistant
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
