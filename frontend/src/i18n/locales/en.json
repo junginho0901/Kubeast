@@ -2853,6 +2853,27 @@
       "cluster": "Cluster"
     }
   },
+  "deviceClassesPage": {
+    "create": "Create DeviceClass",
+    "createTitle": "Create DeviceClass from YAML",
+    "matchCount": "{{count}} device classes matched.",
+    "noResults": "No device classes found.",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by device class name...",
+    "stats": {
+      "total": "Total",
+      "withConditions": "With Conditions"
+    },
+    "subtitle": "Manage DeviceClass resources for Dynamic Resource Allocation (DRA).",
+    "table": {
+      "age": "Age",
+      "conditions": "Conditions",
+      "name": "Name",
+      "selectors": "Selectors"
+    },
+    "title": "Device Classes"
+  },
   "gpuDashboardPage": {
     "empty": "No GPU resources detected in this cluster.",
     "error": "Failed to load GPU data. The cluster may be temporarily unreachable.",
@@ -2963,5 +2984,72 @@
       "status": "Status"
     },
     "title": "GPU Pods"
+  },
+  "resourceClaimTemplatesPage": {
+    "allNamespaces": "All Namespaces",
+    "create": "Create ResourceClaimTemplate",
+    "createTitle": "Create ResourceClaimTemplate from YAML",
+    "matchCount": "{{count}} ResourceClaimTemplates matched.",
+    "noResults": "No ResourceClaimTemplates found.",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by ResourceClaimTemplate name...",
+    "stats": {
+      "total": "Total"
+    },
+    "subtitle": "Manage DRA ResourceClaimTemplate resources.",
+    "table": {
+      "age": "Age",
+      "name": "Name",
+      "namespace": "Namespace",
+      "requests": "Requests"
+    },
+    "title": "Resource Claim Template"
+  },
+  "resourceClaimsPage": {
+    "allNamespaces": "All Namespaces",
+    "create": "Create ResourceClaim",
+    "createTitle": "Create ResourceClaim from YAML",
+    "matchCount": "{{count}} ResourceClaims matched.",
+    "noResults": "No ResourceClaims found.",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by ResourceClaim name...",
+    "stats": {
+      "allocated": "Allocated",
+      "pending": "Pending",
+      "reserved": "Reserved",
+      "total": "Total"
+    },
+    "subtitle": "Manage DRA ResourceClaim resources.",
+    "table": {
+      "age": "Age",
+      "name": "Name",
+      "namespace": "Namespace",
+      "requests": "Requests",
+      "status": "Status"
+    },
+    "title": "Resource Claim"
+  },
+  "resourceSlicesPage": {
+    "matchCount": "{{count}} resource slices matched.",
+    "noResults": "No resource slices found.",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by resource slice name, node, driver, or pool...",
+    "stats": {
+      "total": "Total",
+      "totalDevices": "Total Devices"
+    },
+    "subtitle": "View DRA ResourceSlice resources advertised by nodes.",
+    "table": {
+      "age": "Age",
+      "devices": "Devices",
+      "driver": "Driver",
+      "name": "Name",
+      "node": "Node",
+      "pool": "Pool"
+    },
+    "title": "Resource Slice"
   }
 }
