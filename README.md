@@ -1,18 +1,18 @@
 # Kubeast
 
-> 자연어 AI 어시스턴트 + 멀티클러스터 대시보드를 하나로 합친 Kubernetes 운영 플랫폼
+AI 어시스턴트를 내장한 멀티클러스터 Kubernetes 운영 플랫폼입니다. 웹 UI에서 여러
+클러스터의 리소스(Workloads, Network, Storage, RBAC, GPU, Helm 등)를 조회·관리하고,
+LLM 기반 채팅으로 리소스 조회·진단·변경을 수행할 수 있습니다.
 
-**Kubeast**는 "클러스터에 자연어로 말을 걸어 운영한다"는 발상에서 출발한 Kubernetes
-운영 플랫폼입니다. 풍부한 멀티클러스터 대시보드 위에 LLM 기반 AI 어시스턴트를 얹어,
-리소스 조회·진단·변경을 채팅으로 수행할 수 있고, 동시에 전통적인 GUI로
-Workloads / Network / Storage / RBAC / GPU / Helm 까지 한 화면에서 다룹니다.
+주요 특징:
 
-- 🤖 **AI가 일급 시민** — 단순 챗봇이 아니라, 화면 컨텍스트를 이해하고 화이트리스트
-  툴로 실제 클러스터를 조작하는 에이전트
-- 🌐 **멀티클러스터 + 클러스터별 RBAC** — 여러 클러스터를 한 UI에서, 사용자×클러스터
-  단위 권한(deny-by-default)으로 관리
-- 📋 **감사 로그 내장** — 모든 쓰기 작업과 민감 조회를 기록
-- 🚀 **한 줄 설치** — 공개 컨테이너 이미지(ghcr.io)로 K8s·Docker 어디든 즉시 배포
+- 다중 LLM(OpenAI · Anthropic · Gemini · Ollama) AI 어시스턴트, Tool calling 기반 클러스터 조작
+- 멀티클러스터 관리 및 사용자×클러스터 단위 RBAC
+- Helm 릴리스 관리 (rollback / upgrade / uninstall / test)
+- GPU & DRA 모니터링, Prometheus 메트릭, 토폴로지 시각화, Node Shell
+- 모든 쓰기/민감 작업에 대한 감사 로그
+- 공개 컨테이너 이미지(ghcr.io) 기반 한 줄 설치 (Kubernetes / Docker)
+- 한국어 · 영어 지원
 
 ---
 
@@ -25,7 +25,6 @@ Workloads / Network / Storage / RBAC / GPU / Helm 까지 한 화면에서 다룹
 - [설정 (values.yaml)](#설정-valuesyaml)
 - [디렉터리 구조](#디렉터리-구조)
 - [개발](#개발)
-- [문서](#문서)
 - [기술 스택](#기술-스택)
 
 ---
@@ -347,7 +346,6 @@ multicluster:
 ├── helm/kubeast/                    # Helm 차트 (정본 nginx.conf = files/nginx.conf)
 ├── k8s/                             # 원본 매니페스트 (참고용)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
-├── docs/                            # 기능 설계 문서
 ├── scripts/                         # 빌드/배포/개발 스크립트
 ├── install.sh                       # K8s 원라인 설치
 ├── install-docker.sh                # Docker 원라인 설치
@@ -399,22 +397,6 @@ pytest
 ```bash
 curl http://localhost:8000/health   # Gateway
 ```
-
-> ⚠️ 쓰기 성격의 Go 핸들러를 추가/수정할 때는 **감사 로그 기록이 필수**입니다.
-> 자세한 규칙은 [AGENTS.md](AGENTS.md) 참고.
-
----
-
-## 문서
-
-| 문서 | 내용 |
-| --- | --- |
-| [AGENTS.md](AGENTS.md) | 기여 규칙 (감사 로그 필수 규칙 등) |
-| [docs/multi_cluster.md](docs/multi_cluster.md) | 멀티클러스터 설계 |
-| [docs/audit-log-plan.md](docs/audit-log-plan.md) | 감사 로그 설계 / 액션 카탈로그 |
-| [docs/helm-plan.md](docs/helm-plan.md) | Helm 릴리스 관리 |
-| [docs/floating-ai-chat-plan.md](docs/floating-ai-chat-plan.md) | 플로팅 AI 위젯 |
-| [docs/prometheus-*.md](docs/) | 모니터링(시계열/이상감지/상관분석/GPU) |
 
 ---
 
