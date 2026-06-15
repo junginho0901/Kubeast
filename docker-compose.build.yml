@@ -1,0 +1,37 @@
+# Local build override — for contributors who want to build images from source
+# instead of pulling the published ghcr.io images.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# Plain `docker compose up -d` (without this file) pulls the published images,
+# which is what end users / install-docker.sh do.
+services:
+  auth-service:
+    build:
+      context: ./services
+      dockerfile: auth-service-go/Dockerfile
+
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+
+  k8s-service:
+    build:
+      context: ./services
+      dockerfile: k8s-service-go/Dockerfile
+
+  session-service:
+    build:
+      context: ./services
+      dockerfile: session-service-go/Dockerfile
+
+  tool-server:
+    build:
+      context: ./services/tool-server
+      dockerfile: Dockerfile
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile

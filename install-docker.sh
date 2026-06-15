@@ -179,7 +179,10 @@ echo -e "  Gateway port: ${CYAN}${PORT}${NC}"
 echo ""
 
 cd "$ROOT"
-$COMPOSE up -d --build 2>&1
+# Pull the published ghcr.io images (no local build needed). Contributors who
+# want to build from source: add  -f docker-compose.build.yml ... up -d --build
+$COMPOSE pull 2>&1 || warn "Some images could not be pulled yet; continuing."
+$COMPOSE up -d 2>&1
 
 # ─── Wait for services ───
 info "Waiting for services to be healthy..."

@@ -37,9 +37,7 @@ services:
 
   # Auth Service (Go)
   auth-service:
-    build:
-      context: ./services
-      dockerfile: auth-service-go/Dockerfile
+    image: ghcr.io/junginho0901/kubeast-auth-service:${KUBEAST_TAG:-v0.1.0}
     ports:
       - "8004:8004"
     env_file:
@@ -70,9 +68,7 @@ services:
 
   # AI Service
   ai-service:
-    build:
-      context: ./services/ai-service
-      dockerfile: Dockerfile
+    image: ghcr.io/junginho0901/kubeast-ai-service:${KUBEAST_TAG:-v0.1.0}
     ports:
       - "8001:8001"
     env_file:
@@ -102,9 +98,7 @@ services:
 
   # K8s Service (Go)
   k8s-service:
-    build:
-      context: ./services
-      dockerfile: k8s-service-go/Dockerfile
+    image: ghcr.io/junginho0901/kubeast-k8s-service:${KUBEAST_TAG:-v0.1.0}
     ports:
       - "8002:8002"
     env_file:
@@ -138,9 +132,7 @@ services:
 
   # Session Service (Go)
   session-service:
-    build:
-      context: ./services
-      dockerfile: session-service-go/Dockerfile
+    image: ghcr.io/junginho0901/kubeast-session-service:${KUBEAST_TAG:-v0.1.0}
     ports:
       - "8003:8003"
     env_file:
@@ -161,9 +153,7 @@ services:
 
   # Tool Server (K8s tool executor)
   tool-server:
-    build:
-      context: ./services/tool-server
-      dockerfile: Dockerfile
+    image: ghcr.io/junginho0901/kubeast-tool-server:${KUBEAST_TAG:-v0.1.0}
     ports:
       - "8086:8086"
     env_file:
@@ -190,7 +180,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./services/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Single source of truth (same file the Helm chart ships).
+      - ./helm/kubeast/files/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - msa-network
     depends_on:
@@ -203,17 +194,9 @@ services:
 
   # Frontend
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/junginho0901/kubeast-frontend:${KUBEAST_TAG:-v0.1.0}
     ports:
       - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
     networks:
       - msa-network
     restart: unless-stopped
