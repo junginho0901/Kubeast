@@ -93,14 +93,16 @@ multicluster:
   breakerOpenSec: 30
 
 # --- Image overrides (usually not needed) ---
+# Published to GitHub Container Registry as public packages (no pull rate limit,
+# no auth required for anonymous pull). Build & push with scripts/push-images.sh.
 images:
-  frontend: jeonginho/kubeast-frontend
-  authService: jeonginho/kubeast-auth-service
-  aiService: jeonginho/kubeast-ai-service
-  k8sService: jeonginho/kubeast-k8s-service
-  sessionService: jeonginho/kubeast-session-service
-  toolServer: jeonginho/kubeast-tool-server
-  modelConfigController: jeonginho/kubeast-model-config-controller-go
+  frontend: ghcr.io/junginho0901/kubeast-frontend
+  authService: ghcr.io/junginho0901/kubeast-auth-service
+  aiService: ghcr.io/junginho0901/kubeast-ai-service
+  k8sService: ghcr.io/junginho0901/kubeast-k8s-service
+  sessionService: ghcr.io/junginho0901/kubeast-session-service
+  toolServer: ghcr.io/junginho0901/kubeast-tool-server
+  modelConfigController: ghcr.io/junginho0901/kubeast-model-config-controller-go
   postgres: postgres:15-alpine
   redis: redis:7-alpine
   gateway: nginx:alpine

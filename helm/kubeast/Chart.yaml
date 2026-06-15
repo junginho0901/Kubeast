@@ -10,6 +10,8 @@ keywords:
   - ai
   - monitoring
   - dashboard
-home: https://github.com/JeongInho/kubeast
+home: https://github.com/junginho0901/Kubeast
+sources:
+  - https://github.com/junginho0901/Kubeast
 maintainers:
-  - name: JeongInho
+  - name: junginho0901

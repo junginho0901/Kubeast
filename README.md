@@ -11,7 +11,8 @@ Kubest는 자연어 기반 AI 어시스턴트와 풍부한 대시보드를 결�
 ## 빠른 시작
 
 이미 동작 중인 Kubernetes 클러스터에 한 줄로 설치할 수 있습니다.
-모든 컴포넌트 이미지는 Docker Hub에 푸시되어 있으므로 별도 빌드가 필요 없습니다.
+모든 컴포넌트 이미지는 GitHub Container Registry(ghcr.io)에 공개 패키지로 게시되어
+있으므로 별도 빌드가 필요 없습니다. (공개 패키지는 익명 pull rate limit이 없습니다.)
 
 ### 옵션 1. 설치 스크립트 (가장 간단)
 
@@ -162,17 +163,21 @@ helm uninstall kubeast -n kubeast
 
 ### 컨테이너 이미지
 
-모든 이미지는 Docker Hub에 게시되어 있습니다.
+모든 이미지는 GitHub Container Registry(ghcr.io)에 공개 패키지로 게시되어 있습니다.
 
 | 이미지 |
 | --- |
-| `jeonginho/kubeast-frontend` |
-| `jeonginho/kubeast-auth-service` |
-| `jeonginho/kubeast-ai-service` |
-| `jeonginho/kubeast-k8s-service` |
-| `jeonginho/kubeast-session-service` |
-| `jeonginho/kubeast-tool-server` |
-| `jeonginho/kubeast-model-config-controller-go` |
+| `ghcr.io/junginho0901/kubeast-frontend` |
+| `ghcr.io/junginho0901/kubeast-auth-service` |
+| `ghcr.io/junginho0901/kubeast-ai-service` |
+| `ghcr.io/junginho0901/kubeast-k8s-service` |
+| `ghcr.io/junginho0901/kubeast-session-service` |
+| `ghcr.io/junginho0901/kubeast-tool-server` |
+| `ghcr.io/junginho0901/kubeast-model-config-controller-go` |
+
+이미지는 `v*` 태그를 push하면 GitHub Actions(`.github/workflows/release.yaml`)가
+자동으로 빌드·게시합니다. 최초 게시 후 각 패키지의 visibility를 한 번 **Public**으로
+바꿔야 익명 설치가 동작합니다.
 
 ---
 

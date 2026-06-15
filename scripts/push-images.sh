@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
-# push-images.sh — 이미지 빌드 + Docker Hub push
+# push-images.sh — 이미지 빌드 + GitHub Container Registry (ghcr.io) push
+#
+# 사전 1회: write:packages 권한 PAT 로 ghcr 로그인
+#   echo $GHCR_PAT | docker login ghcr.io -u junginho0901 --password-stdin
+# 푸시 후: github.com 패키지 페이지에서 visibility 를 Public 으로 변경해야
+#          익명 pull (install.sh) 이 동작한다.
 #
 # Usage:
 #   ./scripts/push-images.sh                    # 전체 서비스, latest 태그
@@ -10,7 +15,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOCKER_USER="jeonginho"
+REGISTRY="${REGISTRY:-ghcr.io}"
+OWNER="${OWNER:-junginho0901}"
 TAG="${1:-latest}"
 shift 2>/dev/null || true
 
@@ -58,17 +64,19 @@ else
   SERVICES=("${ALL_SERVICES[@]}")
 fi
 
-# Check docker login
-docker info 2>/dev/null | grep -qi "username" || {
-  echo -e "${YELLOW}Not logged in to Docker Hub. Running docker login...${NC}"
-  docker login || fail "Docker login failed"
-}
+# Check ghcr login (a stored credential for the registry host must exist)
+if ! grep -q "$REGISTRY" ~/.docker/config.json 2>/dev/null; then
+  echo -e "${YELLOW}Not logged in to ${REGISTRY}.${NC}"
+  echo -e "  Run:  ${CYAN}echo \$GHCR_PAT | docker login ${REGISTRY} -u ${OWNER} --password-stdin${NC}"
+  echo -e "  (PAT needs the ${CYAN}write:packages${NC} scope.)"
+  fail "Login to ${REGISTRY} first."
+fi
 
 step "Building and pushing (tag: $TAG)"
 
 for entry in "${SERVICES[@]}"; do
   IFS=':' read -r name ctx dockerfile <<< "$entry"
-  img="${DOCKER_USER}/kubeast-${name}"
+  img="${REGISTRY}/${OWNER}/kubeast-${name}"
 
   echo -e "\n  ${YELLOW}[${name}]${NC}"
 
@@ -114,6 +122,9 @@ echo ""
 echo "  Images pushed:"
 for entry in "${SERVICES[@]}"; do
   name="${entry%%:*}"
-  echo "    ${DOCKER_USER}/kubeast-${name}:${TAG}"
+  echo "    ${REGISTRY}/${OWNER}/kubeast-${name}:${TAG}"
 done
+echo ""
+echo -e "  ${YELLOW}⚠ 첫 푸시 후: GitHub > Packages 에서 각 패키지 visibility 를 Public 으로 변경하세요.${NC}"
+echo -e "    (Public 이 아니면 install.sh 의 익명 pull 이 unauthorized 로 실패합니다.)"
 echo ""
