@@ -104,7 +104,16 @@ helm uninstall kubeast -n kubeast      # K8s
 
 ### 2. 관리자 비밀번호 확인
 
-초기 admin 비밀번호는 **설치 시 무작위 생성**됩니다(`admin.password`를 비워둔 경우).
+초기 admin 비밀번호는 **설치 시 무작위 생성**되며(`admin.password`를 비워둔 경우),
+**설치 스크립트가 끝날 때 화면에 출력**합니다.
+
+```text
+Default account:
+  ID:       admin
+  Password: KhHAm7GGGvXiT9ysnOiV     ← 설치 출력에서 바로 확인
+```
+
+출력을 놓쳤다면 언제든 다시 조회할 수 있습니다.
 
 ```bash
 # K8s / Helm
