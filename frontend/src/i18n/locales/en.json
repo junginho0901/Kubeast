@@ -128,7 +128,12 @@
       "statusConnected": "Connected",
       "statusError": "Connection error",
       "openExec": "Open terminal"
-    }
+    },
+    "create": "Create Pod",
+    "createTitle": "Create Pod from YAML",
+    "delete": "Delete Pod",
+    "deleteConfirm": "Are you sure you want to delete pod \"{{name}}\" in namespace \"{{namespace}}\"?",
+    "deleteTitle": "Delete Pod"
   },
   "deployments": {
     "title": "Deployments",
@@ -1283,7 +1288,8 @@
       "systemProxy": "Kube Proxy",
       "systemBootId": "Boot ID",
       "systemMachineId": "Machine ID",
-      "systemUuid": "System UUID"
+      "systemUuid": "System UUID",
+      "eventsTitle": "Events"
     },
     "pods": {
       "search": "Filter pods...",
@@ -1317,7 +1323,9 @@
       "statusConnecting": "Connecting...",
       "statusConnected": "Connected",
       "statusError": "Connection error"
-    }
+    },
+    "create": "Create Node",
+    "createTitle": "Create Node from YAML"
   },
   "aiChat": {
     "newChat": "New Chat",
@@ -1885,7 +1893,8 @@
         "restarts": "Restarts",
         "node": "Node",
         "age": "Age"
-      }
+      },
+      "eventsTitle": "Events"
     },
     "create": {
       "button": "Create Namespace",
@@ -2207,7 +2216,8 @@
       "test": "Test Connection",
       "skip": "Skip — use defaults",
       "save": "Save & Continue",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "noToolCalling": "This model does not support tool calling (Function Calling)."
     }
   },
   "resourceGraph": {
@@ -2269,7 +2279,11 @@
     "readonly": "Read-only",
     "editHint": "Edit YAML",
     "applied": "Applied",
-    "refreshing": "Refreshing..."
+    "refreshing": "Refreshing...",
+    "loadingData": "Loading data...",
+    "loadingHint": "This may take a while if there are many resources.",
+    "manual": "Manual",
+    "pageInfo": "Page {{current}} / {{total}}"
   },
   "serviceAccountsPage": {
     "title": "Service Accounts",
@@ -2846,6 +2860,14 @@
       "adminAll": "Global admin — reaches every cluster automatically.",
       "none": "No access",
       "noClusters": "No clusters registered."
+    },
+    "aiModels": {
+      "add": "Add Model",
+      "edit": "Edit Model",
+      "empty": "No models registered.",
+      "new": "New Model",
+      "subtitle": "Manage model connection settings used by the AI service.",
+      "title": "AI Model Settings"
     }
   },
   "adminAudit": {
