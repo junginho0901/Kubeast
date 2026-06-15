@@ -2852,5 +2852,116 @@
     "filter": {
       "cluster": "Cluster"
     }
+  },
+  "gpuDashboardPage": {
+    "empty": "No GPU resources detected in this cluster.",
+    "error": "Failed to load GPU data. The cluster may be temporarily unreachable.",
+    "modelDist": {
+      "empty": "No GPU models detected.",
+      "title": "GPU Models"
+    },
+    "nodeAllocation": {
+      "empty": "No GPU nodes available.",
+      "notReady": "Not Ready",
+      "ready": "Ready",
+      "title": "GPU Allocation by Node"
+    },
+    "podStatus": {
+      "empty": "No running GPU pods.",
+      "title": "Pod Status"
+    },
+    "realtime": {
+      "avgMemUtil": "Avg Memory Utilization",
+      "avgUtil": "Avg GPU Utilization",
+      "gpuCount": "Physical GPUs",
+      "memUsed": "Memory Used",
+      "title": "Real-time GPU Metrics"
+    },
+    "recentPods": {
+      "age": "Age",
+      "gpus": "GPUs",
+      "name": "Name",
+      "namespace": "Namespace",
+      "node": "Node",
+      "status": "Status",
+      "title": "Recent GPU Pods"
+    },
+    "retry": "Retry",
+    "status": {
+      "migDisabled": "MIG Disabled",
+      "migEnabled": "MIG Enabled",
+      "pluginDetail": "Plugin",
+      "pluginHealthy": "Device Plugin Healthy",
+      "pluginUnhealthy": "Device Plugin Unhealthy",
+      "ready": "Ready",
+      "timeSlicingDisabled": "Time-Slicing Disabled",
+      "timeSlicingEnabled": "Time-Slicing Enabled"
+    },
+    "subtitle": "Cluster-wide GPU resource overview",
+    "summary": {
+      "allocatable": "Allocatable",
+      "allocationRate": "Allocation Rate",
+      "capacity": "Total Capacity",
+      "used": "In Use"
+    },
+    "title": "GPU Dashboard",
+    "viewAll": "View All"
+  },
+  "gpuNodes": {
+    "allocatable": "Allocatable",
+    "capacity": "Capacity",
+    "metrics": "Metrics",
+    "modelDistribution": "GPU Model Distribution",
+    "noResults": "No GPU nodes found.",
+    "realtimeMetrics": "Real-time GPU Utilization",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search by node name, GPU model, or driver version...",
+    "stats": {
+      "allocatable": "Allocatable",
+      "capacity": "GPU Capacity",
+      "notReady": "Not Ready",
+      "ready": "Ready",
+      "total": "Total Nodes",
+      "used": "In Use"
+    },
+    "subtitle": "GPU node status, capacity, and model information.",
+    "table": {
+      "allocatable": "Allocatable",
+      "capacity": "Capacity",
+      "gpuMemory": "GPU Memory",
+      "gpuModel": "GPU Model",
+      "migStrategy": "MIG Strategy",
+      "name": "Name",
+      "status": "Status"
+    },
+    "title": "GPU Nodes"
+  },
+  "gpuPods": {
+    "metrics": "Metrics",
+    "noResults": "No GPU pods found.",
+    "nodeUsage": "GPU Usage by Node",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search by pod name, namespace, or node...",
+    "stats": {
+      "failed": "Failed",
+      "gpuRequested": "GPUs Requested",
+      "namespaces": "Namespaces",
+      "pending": "Pending",
+      "running": "Running",
+      "total": "Total Pods"
+    },
+    "statusDistribution": "Status Distribution",
+    "subtitle": "Pods using GPU resources in the cluster.",
+    "table": {
+      "age": "Age",
+      "gpuUtil": "GPU Utilization",
+      "gpus": "GPUs",
+      "memUtil": "Memory Utilization",
+      "name": "Name",
+      "namespace": "Namespace",
+      "node": "Node",
+      "status": "Status"
+    },
+    "title": "GPU Pods"
   }
 }
