@@ -56,14 +56,28 @@ CREATE TABLE IF NOT EXISTS model_configs (
   api_key_env TEXT,
   extra_headers JSONB NOT NULL DEFAULT '{}'::jsonb,
   tls_verify BOOLEAN NOT NULL DEFAULT TRUE,
+  ca_cert TEXT,
+  options JSONB,
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   is_default BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 `
-	_, err := r.db.Exec(ddl)
-	return err
+	if _, err := r.db.Exec(ddl); err != nil {
+		return err
+	}
+	// Migrate existing tables (CREATE TABLE IF NOT EXISTS won't add columns).
+	// Shared table with ai-service; both ensure columns (idempotent).
+	for _, stmt := range []string{
+		"ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS ca_cert TEXT",
+		"ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS options JSONB",
+	} {
+		if _, err := r.db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *ModelConfigReconciler) upsertModelConfig(ctx context.Context, data modelConfigData) (int64, error) {
@@ -78,16 +92,32 @@ func (r *ModelConfigReconciler) upsertModelConfig(ctx context.Context, data mode
 		return 0, err
 	}
 
+	// options: nil 이면 SQL NULL 로 저장 (JSONB), 값이 있으면 마샬링.
+	var optionsArg interface{}
+	if len(data.Options) > 0 {
+		optionsJSON, err := json.Marshal(data.Options)
+		if err != nil {
+			return 0, err
+		}
+		optionsArg = optionsJSON
+	}
+
+	// ca_cert: 빈 문자열이면 SQL NULL.
+	var caCertArg interface{}
+	if strings.TrimSpace(data.CACert) != "" {
+		caCertArg = data.CACert
+	}
+
 	query := `
 INSERT INTO model_configs (
   name, provider, model, base_url,
   api_key_secret_name, api_key_secret_key, api_key_env,
-  extra_headers, tls_verify, enabled, is_default,
+  extra_headers, tls_verify, ca_cert, options, enabled, is_default,
   created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4,
   $5, $6, $7,
-  $8, $9, $10, $11,
+  $8, $9, $10, $11, $12, $13,
   NOW(), NOW()
 ) ON CONFLICT (name) DO UPDATE SET
   provider = EXCLUDED.provider,
@@ -98,6 +128,8 @@ INSERT INTO model_configs (
   api_key_env = EXCLUDED.api_key_env,
   extra_headers = EXCLUDED.extra_headers,
   tls_verify = EXCLUDED.tls_verify,
+  ca_cert = EXCLUDED.ca_cert,
+  options = EXCLUDED.options,
   enabled = EXCLUDED.enabled,
   is_default = EXCLUDED.is_default,
   updated_at = NOW()
@@ -114,6 +146,8 @@ RETURNING id;
 		data.APIKeyEnv,
 		extraHeaders,
 		data.TLSVerify,
+		caCertArg,
+		optionsArg,
 		data.Enabled,
 		data.IsDefault,
 	).Scan(&id); err != nil {

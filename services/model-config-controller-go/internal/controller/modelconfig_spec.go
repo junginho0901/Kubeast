@@ -23,6 +23,8 @@ type modelConfigData struct {
 	APIKeyEnv    string
 	ExtraHeaders map[string]string
 	TLSVerify    bool
+	CACert       string
+	Options      map[string]string
 	Enabled      bool
 	IsDefault    bool
 }
@@ -74,6 +76,12 @@ func (r *ModelConfigReconciler) parseSpec(mc *v1alpha1.ModelConfig) (modelConfig
 		extraHeaders = map[string]string{}
 	}
 
+	// 생성 옵션: ollama.options 를 DB 로 동기화 (kagent parity).
+	var options map[string]string
+	if provider == "ollama" && spec.Ollama != nil && len(spec.Ollama.Options) > 0 {
+		options = spec.Ollama.Options
+	}
+
 	return modelConfigData{
 		Name:         mc.Name,
 		Provider:     provider,
@@ -84,6 +92,8 @@ func (r *ModelConfigReconciler) parseSpec(mc *v1alpha1.ModelConfig) (modelConfig
 		APIKeyEnv:    spec.APIKeyEnv,
 		ExtraHeaders: extraHeaders,
 		TLSVerify:    boolOrDefault(spec.TLSVerify, true),
+		CACert:       strings.TrimSpace(spec.CACert),
+		Options:      options,
 		Enabled:      boolOrDefault(spec.Enabled, true),
 		IsDefault:    boolOrDefault(spec.IsDefault, false),
 	}, nil
