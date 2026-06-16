@@ -19,6 +19,10 @@ export function useModelForm() {
   const [formShowApiKey, setFormShowApiKey] = useState(false)
   const [formEnabled, setFormEnabled] = useState(true)
   const [formIsDefault, setFormIsDefault] = useState(false)
+  // 로컬/셀프호스트 모델용 고급 설정
+  const [formCaCert, setFormCaCert] = useState('')          // 자체 서명 CA (PEM)
+  const [formOptions, setFormOptions] = useState('')        // 생성 옵션 (JSON 문자열)
+  const [formOptionsError, setFormOptionsError] = useState<string | null>(null)
 
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -77,6 +81,9 @@ export function useModelForm() {
     setFormShowApiKey(false)
     setFormEnabled(true)
     setFormIsDefault(false)
+    setFormCaCert('')
+    setFormOptions('')
+    setFormOptionsError(null)
     setTestResult(null)
     setRolloutStatus('idle')
     setRolloutMessage('')
@@ -96,6 +103,9 @@ export function useModelForm() {
     setFormShowApiKey(false)
     setFormEnabled(cfg.enabled)
     setFormIsDefault(cfg.is_default)
+    setFormCaCert(cfg.ca_cert || '')
+    setFormOptions(cfg.options ? JSON.stringify(cfg.options, null, 2) : '')
+    setFormOptionsError(null)
     setTestResult(null)
     setRolloutStatus('idle')
     setRolloutMessage('')
@@ -129,6 +139,30 @@ export function useModelForm() {
     }
     if (formApiKey.trim()) {
       payload.api_key = formApiKey.trim()
+    }
+    // 자체 서명 CA (PEM)
+    if (formCaCert.trim()) {
+      payload.ca_cert = formCaCert.trim()
+    } else if (editingId) {
+      payload.ca_cert = null  // 편집 중 비우면 제거
+    }
+    // 생성 옵션(JSON) — 파싱 검증
+    const optsRaw = formOptions.trim()
+    if (optsRaw) {
+      try {
+        const parsed = JSON.parse(optsRaw)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          setFormOptionsError('Options must be a JSON object, e.g. {"temperature": 0.7}')
+          return
+        }
+        payload.options = parsed
+        setFormOptionsError(null)
+      } catch {
+        setFormOptionsError('Invalid JSON')
+        return
+      }
+    } else if (editingId) {
+      payload.options = null  // 편집 중 비우면 제거
     }
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: payload })
@@ -192,6 +226,9 @@ export function useModelForm() {
     formShowApiKey, setFormShowApiKey,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
+    formCaCert, setFormCaCert,
+    formOptions, setFormOptions,
+    formOptionsError,
     testing,
     testResult,
     rolloutStatus,
