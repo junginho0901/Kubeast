@@ -33,6 +33,8 @@ type ModelConfigSpec struct {
 	APIKeyEnv         string                   `json:"apiKeyEnv,omitempty"`
 	ExtraHeaders      map[string]string        `json:"extraHeaders,omitempty"`
 	TLSVerify         *bool                    `json:"tlsVerify,omitempty"`
+	// CACert: 자체 서명 CA 인증서(PEM). 셀프호스트 HTTPS 엔드포인트용.
+	CACert            string                   `json:"caCert,omitempty"`
 	Enabled           *bool                    `json:"enabled,omitempty"`
 	IsDefault         *bool                    `json:"isDefault,omitempty"`
 	ModelInfo         *ModelInfo               `json:"modelInfo,omitempty"`
