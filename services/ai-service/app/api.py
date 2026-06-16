@@ -105,7 +105,11 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
     resolved = await resolve_model_config()
 
     # Compute a cheap identity hash for the resolved config
-    config_hash = f"{resolved.provider}|{resolved.model}|{resolved.base_url}|{resolved.api_key[:8] if resolved.api_key else ''}"
+    config_hash = (
+        f"{resolved.provider}|{resolved.model}|{resolved.base_url}|"
+        f"{resolved.api_key[:8] if resolved.api_key else ''}|"
+        f"{resolved.tls_verify}|{bool(resolved.ca_cert)}|{resolved.options}"
+    )
 
     if _cached_ai_service is not None and config_hash == _cached_ai_config_hash:
         # Reuse existing LLM client, only update per-request fields
@@ -121,6 +125,8 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
         api_key=resolved.api_key,
         extra_headers=resolved.extra_headers,
         tls_verify=resolved.tls_verify,
+        ca_cert=resolved.ca_cert,
+        options=resolved.options,
         cluster_name=cluster_name,
     )
     _cached_ai_service = service
