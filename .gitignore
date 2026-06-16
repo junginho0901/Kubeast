@@ -109,3 +109,5 @@ argo-cd/
 services/tool-server/tool-server
 test3-kubeconfig.yaml
 *-kubeconfig.yaml
+
+kagent/
