@@ -2,7 +2,7 @@
 AI 트러블슈팅 서비스
 """
 from openai import AsyncOpenAI
-from typing import Callable, List, Dict, Optional
+from typing import Callable, List, Dict, Optional, Any
 import httpx
 import re
 import json
@@ -77,6 +77,8 @@ class AIService:
         api_key: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         tls_verify: Optional[bool] = True,
+        ca_cert: Optional[str] = None,
+        options: Optional[Dict[str, Any]] = None,
         cluster_name: Optional[str] = None,
     ):
         """프로바이더별 AsyncOpenAI 어댑터 기반 클라이언트 초기화"""
@@ -93,6 +95,8 @@ class AIService:
             base_url=resolved_base_url,
             tls_verify=tls_verify if tls_verify is not None else True,
             default_headers=extra_headers,
+            ca_cert=ca_cert,
+            options=options,
         )
         self.model = resolved_model
         self.provider = resolved_provider  # public name used in streamed model_info
