@@ -65,6 +65,9 @@ spec:
                     type: string
                 tlsVerify:
                   type: boolean
+                caCert:
+                  type: string
+                  description: Self-signed CA certificate (PEM) for self-hosted HTTPS endpoints.
                 enabled:
                   type: boolean
                 isDefault:
