@@ -5,8 +5,8 @@ Resolves the active model config from DB and caches the result for
 `_CACHE_TTL` seconds so that repeated requests don't hit the database.
 """
 
-from dataclasses import dataclass
-from typing import Optional, Dict
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any
 import os
 import time
 import asyncio
@@ -23,6 +23,10 @@ _cache_lock = asyncio.Lock()
 _cached_resolved: Optional["ResolvedModelConfig"] = None
 _cached_at: float = 0.0  # time.monotonic() of last resolve
 
+# API 키가 필수인 클라우드 프로바이더. 그 외(ollama, 셀프호스트, OpenAI-호환
+# 로컬 게이트웨이 등)는 키 없이 동작할 수 있으므로 키 누락을 허용한다.
+_PROVIDERS_REQUIRING_KEY = frozenset({"openai", "anthropic", "google", "gemini", "azure"})
+
 
 @dataclass(frozen=True)
 class ResolvedModelConfig:
@@ -32,6 +36,8 @@ class ResolvedModelConfig:
     api_key: str
     extra_headers: Dict[str, str]
     tls_verify: bool
+    ca_cert: Optional[str] = None
+    options: Optional[Dict[str, Any]] = None
 
 
 def _resolve_api_key(config: ModelConfig) -> Optional[str]:
@@ -65,17 +71,21 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
             tls_verify=True,
         )
 
+    provider = (config.provider or "openai").strip().lower()
     api_key = _resolve_api_key(config) or settings.OPENAI_API_KEY
-    if not api_key:
-        raise ValueError("API key is missing for active model config")
+    # 로컬/셀프호스트(Ollama 등)는 키 없이 동작. 클라우드 프로바이더만 키 필수.
+    if not api_key and provider in _PROVIDERS_REQUIRING_KEY:
+        raise ValueError(f"API key is missing for active model config (provider={provider})")
 
     return ResolvedModelConfig(
         provider=config.provider,
         model=config.model,
         base_url=(config.base_url or "").strip() or None,
-        api_key=api_key,
+        api_key=api_key or "",
         extra_headers=config.extra_headers or {},
         tls_verify=True if config.tls_verify is None else bool(config.tls_verify),
+        ca_cert=(getattr(config, "ca_cert", None) or None),
+        options=(getattr(config, "options", None) or None),
     )
 
 
