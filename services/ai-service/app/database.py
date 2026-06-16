@@ -78,6 +78,11 @@ class ModelConfig(Base):
 
     extra_headers = Column(JSON, nullable=False, default=dict)
     tls_verify = Column(Boolean, nullable=False, default=True)
+    # 자체 서명 HTTPS 로컬 엔드포인트용 CA 인증서(PEM). 비어 있으면 시스템 CA 사용.
+    ca_cert = Column(String, nullable=True)
+    # 생성 옵션(temperature, top_p, seed, num_ctx ...) — 매 요청에 주입.
+    # 로컬/셀프호스트(Ollama 등) 모델 튜닝용. kagent 의 ollama.options 와 동일 목적.
+    options = Column(JSON, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
 
@@ -113,6 +118,16 @@ class DatabaseService:
             from sqlalchemy import text
             await conn.execute(text(
                 "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cluster_id VARCHAR"
+            ))
+        # Migrate: model_configs.ca_cert / options for local/self-hosted models.
+        # Shared table with model-config-controller; both ensure columns (idempotent).
+        async with self.engine.begin() as conn:
+            from sqlalchemy import text
+            await conn.execute(text(
+                "ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS ca_cert VARCHAR"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS options JSONB"
             ))
 
     async def _ensure_api_key_column(self):
