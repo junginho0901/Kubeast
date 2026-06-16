@@ -2863,9 +2863,14 @@
     },
     "aiModels": {
       "add": "Add Model",
+      "advanced": "Advanced (local / self-hosted)",
+      "caCert": "CA certificate (PEM)",
+      "caCertHint": "Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.",
       "edit": "Edit Model",
       "empty": "No models registered.",
       "new": "New Model",
+      "options": "Generation options (JSON)",
+      "optionsHint": "Standard params (temperature, top_p, seed, max_tokens) are sent to all providers. Provider-specific keys (e.g. num_ctx) are best-effort and may be ignored over OpenAI-compatible endpoints.",
       "subtitle": "Manage model connection settings used by the AI service.",
       "title": "AI Model Settings"
     }
