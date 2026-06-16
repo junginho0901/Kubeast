@@ -33,6 +33,9 @@ export default function ModelConfigForm({ form }: Props) {
     formShowApiKey, setFormShowApiKey,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
+    formCaCert, setFormCaCert,
+    formOptions, setFormOptions,
+    formOptionsError,
     testing,
     testResult,
     rolloutStatus,
@@ -192,6 +195,60 @@ export default function ModelConfigForm({ form }: Props) {
         }
         return null
       })()}
+
+      {/* Advanced — local / self-hosted models (options + CA cert) */}
+      {(currentProviderDef.needsApiKey === false ||
+        currentProviderDef.id === 'custom' ||
+        currentProviderDef.needsBaseUrl) && (
+        <details className="rounded-lg border border-slate-700/60 bg-slate-950/40 px-3 py-2" open={!!(formOptions || formCaCert)}>
+          <summary className="cursor-pointer text-xs font-semibold text-slate-400 select-none">
+            {tr('admin.aiModels.advanced', 'Advanced (local / self-hosted)')}
+          </summary>
+          <div className="mt-3 space-y-3">
+            {/* Generation options (JSON) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">
+                {tr('admin.aiModels.options', 'Generation options (JSON)')}
+              </label>
+              <textarea
+                value={formOptions}
+                onChange={(e) => setFormOptions(e.target.value)}
+                rows={4}
+                spellCheck={false}
+                placeholder={'{\n  "temperature": 0.7,\n  "top_p": 0.9,\n  "num_ctx": 8192\n}'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">
+                {tr('admin.aiModels.optionsHint',
+                  'Standard params (temperature, top_p, seed, max_tokens) are sent to all providers. Provider-specific keys (e.g. num_ctx) are best-effort and may be ignored over OpenAI-compatible endpoints.')}
+              </p>
+              {formOptionsError && (
+                <p className="mt-1 text-[10px] text-red-400 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> {formOptionsError}
+                </p>
+              )}
+            </div>
+            {/* CA certificate (PEM) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">
+                {tr('admin.aiModels.caCert', 'CA certificate (PEM)')}
+              </label>
+              <textarea
+                value={formCaCert}
+                onChange={(e) => setFormCaCert(e.target.value)}
+                rows={3}
+                spellCheck={false}
+                placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">
+                {tr('admin.aiModels.caCertHint',
+                  'Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.')}
+              </p>
+            </div>
+          </div>
+        </details>
+      )}
 
       <div className="flex items-center gap-6 text-xs">
         <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
