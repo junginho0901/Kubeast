@@ -10,6 +10,8 @@ export interface ModelConfigCreate {
   api_key_secret_key?: string
   extra_headers?: Record<string, string>
   tls_verify?: boolean
+  ca_cert?: string                    // self-signed CA (PEM) for self-hosted HTTPS
+  options?: Record<string, unknown>   // generation options (temperature, top_p, num_ctx ...)
   enabled?: boolean
   is_default?: boolean
 }
@@ -26,6 +28,8 @@ export interface ModelConfigResponse {
   api_key_secret_key: string | null
   extra_headers: Record<string, string>
   tls_verify: boolean
+  ca_cert: string | null
+  options: Record<string, unknown> | null
   enabled: boolean
   is_default: boolean
   created_at: string
