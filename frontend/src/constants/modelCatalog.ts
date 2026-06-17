@@ -73,10 +73,11 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     needsBaseUrl: false,
     defaultApiKeyEnv: 'ANTHROPIC_API_KEY',
     models: [
-      { name: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (recommended)', functionCalling: true },
-      { name: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', functionCalling: true },
-      { name: 'claude-opus-4-20250514', label: 'Claude Opus 4', functionCalling: true },
-      { name: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1', functionCalling: true },
+      { name: 'claude-opus-4-8', label: 'Claude Opus 4.8 (recommended)', functionCalling: true },
+      { name: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', functionCalling: true },
+      { name: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', functionCalling: true },
+      { name: 'claude-opus-4-7', label: 'Claude Opus 4.7', functionCalling: true },
+      { name: 'claude-fable-5', label: 'Claude Fable 5 (most capable)', functionCalling: true },
     ],
   },
   {
