@@ -5,7 +5,7 @@
     "workloads": "Workloads",
     "storage": "Storage",
     "network": "Network",
-    "gateway": "Gateway (Beta)",
+    "gateway": "Gateway (베타)",
     "security": "Security",
     "configuration": "Configuration",
     "customResources": "Custom Resources",
@@ -1437,7 +1437,9 @@
     "deleting": "삭제 중...",
     "prev": "이전",
     "next": "다음",
-    "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시"
+    "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시",
+    "selectNamespace": "네임스페이스를 선택하세요",
+    "refreshForce": "새로고침 (강제 갱신)"
   },
   "dashboard": {
     "optimization": {
@@ -2250,7 +2252,17 @@
     "legend": "범례",
     "sources": "소스",
     "issuesOnly": "이슈",
-    "noData": "리소스를 찾을 수 없습니다"
+    "noData": "리소스를 찾을 수 없습니다",
+    "emptyDesc1": "쿠버네티스 리소스 간의 관계를 그래프로 시각화합니다.",
+    "emptyDesc2": "Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,",
+    "emptyDesc3": "PVC → PV → StorageClass 등 다양한 관계를 한눈에 파악할 수 있습니다.",
+    "featureGroupingTitle": "그룹핑",
+    "featureGroupingDesc": "Namespace / Node /\nInstance 별 묶기",
+    "featureFilteringTitle": "필터링",
+    "featureFilteringDesc": "리소스 타입, 상태,\n엣지 타입별 필터",
+    "featureInteractionTitle": "인터랙션",
+    "featureInteractionDesc": "호버로 프리뷰,\n클릭으로 상세 보기",
+    "selectNamespaceHint": "왼쪽 상단 드롭다운에서 네임스페이스를 선택하세요"
   },
   "advancedSearch": {
     "title": "고급 검색",
@@ -3078,5 +3090,36 @@
     "filter": {
       "cluster": "클러스터"
     }
+  },
+  "topology": {
+    "title": "{{namespace}} 리소스 정의",
+    "subtitle": "모든 Kubernetes 리소스의 YAML 정의를 확인하세요",
+    "resourceTypes": "리소스 타입",
+    "noResources": "리소스가 없습니다",
+    "yamlContent": "YAML 내용",
+    "yamlRefreshTitle": "YAML 새로고침",
+    "yamlLoading": "YAML 로딩 중...",
+    "yamlLoadError": "YAML을 가져올 수 없습니다",
+    "resourceDeletedOrMissing": "리소스가 삭제되었거나 존재하지 않습니다.",
+    "refreshList": "목록 새로고침",
+    "selectResourceHint": "리소스를 선택하면 YAML 정의를 볼 수 있습니다"
+  },
+  "resources": {
+    "title": "{{namespace}} 리소스",
+    "subtitle": "네임스페이스의 모든 리소스를 확인하고 관리하세요",
+    "searchPlaceholder": "{{kind}} 이름 검색...",
+    "replicasetError": "ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
+    "fullSelectorTitle": "전체 selector: {{selector}}",
+    "gotoPodsTitle": "ReplicaSet selector로 Pod 목록을 필터링합니다",
+    "gotoPods": "Pods로 이동"
+  },
+  "network": {
+    "subtitle": "Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy 연결을 빠르게 확인합니다",
+    "searchPlaceholder": "Service 이름 검색...",
+    "noServices": "Service가 없습니다",
+    "selectServiceHint": "왼쪽에서 Service를 선택하세요",
+    "anomaliesDetected": "이상 징후 감지",
+    "selectorless": "selector가 없는 Service입니다. (Pod 매핑/NetworkPolicy 매핑은 제한됩니다)",
+    "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다"
   }
 }

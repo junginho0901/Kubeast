@@ -1437,7 +1437,9 @@
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
     "yamlError": "Failed to load YAML.",
-    "yamlUnsaved": "You have unsaved YAML changes. Discard them?"
+    "yamlUnsaved": "You have unsaved YAML changes. Discard them?",
+    "selectNamespace": "Select a namespace",
+    "refreshForce": "Refresh (force refresh)"
   },
   "dashboard": {
     "optimization": {
@@ -2228,7 +2230,17 @@
     "legend": "Legend",
     "sources": "Sources",
     "issuesOnly": "Issues",
-    "noData": "No resources found"
+    "noData": "No resources found",
+    "emptyDesc1": "Visualize relationships between Kubernetes resources as a graph.",
+    "emptyDesc2": "Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,",
+    "emptyDesc3": "PVC → PV → StorageClass, and more — see all relationships at a glance.",
+    "featureGroupingTitle": "Grouping",
+    "featureGroupingDesc": "Group by Namespace /\nNode / Instance",
+    "featureFilteringTitle": "Filtering",
+    "featureFilteringDesc": "Filter by resource type,\nstatus, and edge type",
+    "featureInteractionTitle": "Interaction",
+    "featureInteractionDesc": "Hover to preview,\nclick for details",
+    "selectNamespaceHint": "Select a namespace from the dropdown at the top left"
   },
   "advancedSearch": {
     "title": "Advanced Search",
@@ -3078,5 +3090,36 @@
       "pool": "Pool"
     },
     "title": "Resource Slice"
+  },
+  "topology": {
+    "title": "{{namespace}} Resource Definitions",
+    "subtitle": "View YAML definitions for all Kubernetes resources",
+    "resourceTypes": "Resource Types",
+    "noResources": "No resources",
+    "yamlContent": "YAML Content",
+    "yamlRefreshTitle": "Refresh YAML",
+    "yamlLoading": "Loading YAML...",
+    "yamlLoadError": "Failed to load YAML",
+    "resourceDeletedOrMissing": "The resource was deleted or does not exist.",
+    "refreshList": "Refresh list",
+    "selectResourceHint": "Select a resource to view its YAML definition"
+  },
+  "resources": {
+    "title": "{{namespace}} Resources",
+    "subtitle": "View and manage all resources in the namespace",
+    "searchPlaceholder": "Search {{kind}} by name...",
+    "replicasetError": "Failed to load ReplicaSets. (May be unavailable depending on cluster permissions/version)",
+    "fullSelectorTitle": "Full selector: {{selector}}",
+    "gotoPodsTitle": "Filter the Pod list by the ReplicaSet selector",
+    "gotoPods": "Go to Pods"
+  },
+  "network": {
+    "subtitle": "Quickly inspect Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy connections",
+    "searchPlaceholder": "Search Service by name...",
+    "noServices": "No services",
+    "selectServiceHint": "Select a Service on the left",
+    "anomaliesDetected": "Anomalies detected",
+    "selectorless": "This Service has no selector. (Pod / NetworkPolicy mapping is limited)",
+    "endpointsNotFound": "No Endpoints found for this Service name"
   }
 }
