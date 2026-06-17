@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -24,6 +25,7 @@ import { compactSelector } from './resources/podHelpers'
 import type { ResourceType } from './resources/types'
 
 export default function Resources() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { namespace } = useParams<{ namespace: string }>()
   const [activeTab, setActiveTab] = useState<ResourceType>('deployments')
@@ -225,13 +227,13 @@ export default function Resources() {
   }
 
   const searchPlaceholder: Record<ResourceType, string> = {
-    deployments: 'Deployment 이름 검색...',
-    replicasets: 'ReplicaSet 이름 검색...',
-    hpas: 'HPA 이름 검색...',
-    pdbs: 'PDB 이름 검색...',
-    services: 'Service 이름 검색...',
-    pods: 'Pod 이름 검색...',
-    pvcs: 'PVC 이름 검색...',
+    deployments: t('resources.searchPlaceholder', { kind: 'Deployment' }),
+    replicasets: t('resources.searchPlaceholder', { kind: 'ReplicaSet' }),
+    hpas: t('resources.searchPlaceholder', { kind: 'HPA' }),
+    pdbs: t('resources.searchPlaceholder', { kind: 'PDB' }),
+    services: t('resources.searchPlaceholder', { kind: 'Service' }),
+    pods: t('resources.searchPlaceholder', { kind: 'Pod' }),
+    pvcs: t('resources.searchPlaceholder', { kind: 'PVC' }),
   }
 
   return (
@@ -239,20 +241,20 @@ export default function Resources() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">
-            {namespace} 리소스
+            {t('resources.title', { namespace })}
           </h1>
           <p className="mt-2 text-slate-400">
-            네임스페이스의 모든 리소스를 확인하고 관리하세요
+            {t('resources.subtitle')}
           </p>
         </div>
-        <button 
+        <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          title="새로고침 (강제 갱신)"
+          title={t('common.refreshForce')}
           className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          새로고침
+          {t('common.refresh')}
         </button>
       </div>
 
@@ -312,7 +314,7 @@ export default function Resources() {
           ))}
           {filteredDeployments.length === 0 && (
             <div className="card">
-              <div className="text-slate-400">(없음)</div>
+              <div className="text-slate-400">{t('common.none')}</div>
             </div>
           )}
         </div>
@@ -323,7 +325,7 @@ export default function Resources() {
         <div className="space-y-4">
           {replicasetsError && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
-              ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
+              {t('resources.replicasetError')}
             </div>
           )}
           {filteredReplicaSets.map((rs: any) => (
@@ -341,7 +343,7 @@ export default function Resources() {
                     return (
                       <p
                         className="text-xs text-slate-500 mt-1 font-mono break-words"
-                        title={`전체 selector: ${fullText}`}
+                        title={t('resources.fullSelectorTitle', { selector: fullText })}
                       >
                         selector: {compactText}
                       </p>
@@ -365,9 +367,9 @@ export default function Resources() {
                     }}
                     disabled={!rs.selector || Object.keys(rs.selector).length === 0}
                     className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="ReplicaSet selector로 Pod 목록을 필터링합니다"
+                    title={t('resources.gotoPodsTitle')}
                   >
-                    Pods로 이동
+                    {t('resources.gotoPods')}
                   </button>
                 </div>
               </div>
@@ -389,7 +391,7 @@ export default function Resources() {
           ))}
           {filteredReplicaSets.length === 0 && (
             <div className="card">
-              <div className="text-slate-400">(없음)</div>
+              <div className="text-slate-400">{t('common.none')}</div>
             </div>
           )}
         </div>
@@ -447,7 +449,7 @@ export default function Resources() {
           ))}
           {filteredServices.length === 0 && (
             <div className="card">
-              <div className="text-slate-400">(없음)</div>
+              <div className="text-slate-400">{t('common.none')}</div>
             </div>
           )}
         </div>
@@ -501,7 +503,7 @@ export default function Resources() {
           ))}
           {filteredPVCs.length === 0 && (
             <div className="card">
-              <div className="text-slate-400">(없음)</div>
+              <div className="text-slate-400">{t('common.none')}</div>
             </div>
           )}
         </div>
