@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { FileCode, Package, Network as NetworkIcon, Database, Key, Box, Clock, Globe, FileBox, HardDrive } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -43,7 +44,23 @@ const resourceCategories: ResourceCategory[] = [
   { type: 'pvc', label: 'PVCs', icon: <Database className="w-4 h-4" />, endpoint: 'pvcs' },
 ]
 
+// Kind 매핑 (ResourceType → k8s Kind)
+const typeToKind: Record<ResourceType, string> = {
+  deployment: 'Deployment',
+  service: 'Service',
+  pod: 'Pod',
+  configmap: 'ConfigMap',
+  secret: 'Secret',
+  statefulset: 'StatefulSet',
+  daemonset: 'DaemonSet',
+  ingress: 'Ingress',
+  job: 'Job',
+  cronjob: 'CronJob',
+  pvc: 'PersistentVolumeClaim',
+}
+
 export default function Topology() {
+  const { t } = useTranslation()
   const { namespace } = useParams<{ namespace: string }>()
   const [selectedType, setSelectedType] = useState<ResourceType>('deployment')
   const [selectedResource, setSelectedResource] = useState<string | null>(null)
@@ -92,14 +109,14 @@ export default function Topology() {
           const errorData = await response.json().catch(() => ({}))
           // 콘솔에 일반 로그로만 출력
           console.log(`ℹ️ 리소스를 찾을 수 없습니다: ${selectedType}/${selectedResource} (${namespace})`)
-          throw new Error(errorData.detail || `리소스를 찾을 수 없습니다`)
+          throw new Error(errorData.detail || `Resource not found`)
         }
-        
+
         const data = await response.json()
         return data.yaml
       } catch (error) {
         // fetch 에러를 잡아서 일반 로그로만 출력
-        if (error instanceof Error && error.message !== '리소스를 찾을 수 없습니다') {
+        if (error instanceof Error && error.message !== 'Resource not found') {
           console.log(`ℹ️ YAML 조회 실패: ${selectedType}/${selectedResource}`)
         }
         throw error
@@ -110,21 +127,6 @@ export default function Topology() {
     gcTime: 0, // 캐시 비활성화 (항상 새로 가져오기)
     retry: false, // 에러 시 재시도하지 않음
   })
-
-  // Kind 매핑 (ResourceType → k8s Kind)
-  const typeToKind: Record<ResourceType, string> = {
-    deployment: 'Deployment',
-    service: 'Service',
-    pod: 'Pod',
-    configmap: 'ConfigMap',
-    secret: 'Secret',
-    statefulset: 'StatefulSet',
-    daemonset: 'DaemonSet',
-    ingress: 'Ingress',
-    job: 'Job',
-    cronjob: 'CronJob',
-    pvc: 'PersistentVolumeClaim',
-  }
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
@@ -162,7 +164,7 @@ export default function Topology() {
     return (
       <div className="text-center py-12">
         <FileCode className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-        <p className="text-slate-400">네임스페이스를 선택하세요</p>
+        <p className="text-slate-400">{t('common.selectNamespace')}</p>
       </div>
     )
   }
@@ -172,17 +174,17 @@ export default function Topology() {
       <div>
         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
           <FileCode className="w-8 h-8" />
-          {namespace} 리소스 정의
+          {t('topology.title', { namespace })}
         </h1>
         <p className="mt-2 text-slate-400">
-          모든 Kubernetes 리소스의 YAML 정의를 확인하세요
+          {t('topology.subtitle')}
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-220px)]">
         {/* 리소스 타입 선택 */}
         <div className="card h-full flex flex-col overflow-hidden">
-          <h2 className="text-lg font-semibold text-white mb-4">리소스 타입</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">{t('topology.resourceTypes')}</h2>
           <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
             {resourceCategories.map((category) => (
               <button
@@ -211,7 +213,7 @@ export default function Topology() {
           </h2>
           {resourcesLoading ? (
             <div className="flex-1 min-h-0 flex items-center justify-center text-slate-400">
-              로딩 중...
+              {t('common.loading')}
             </div>
           ) : (
             <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
@@ -233,7 +235,7 @@ export default function Topology() {
                   </button>
                 ))
               ) : (
-                <div className="text-slate-400 text-sm">리소스가 없습니다</div>
+                <div className="text-slate-400 text-sm">{t('topology.noResources')}</div>
               )}
             </div>
           )}
@@ -243,7 +245,7 @@ export default function Topology() {
         <div className="card lg:col-span-2 h-full flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white">
-              {selectedResource ? `${selectedResource} YAML` : 'YAML 내용'}
+              {selectedResource ? `${selectedResource} YAML` : t('topology.yamlContent')}
             </h2>
             {selectedResource && (
               <button
@@ -251,25 +253,25 @@ export default function Topology() {
                   refetchYaml()
                 }}
                 className="btn btn-secondary text-sm"
-                title="YAML 새로고침"
+                title={t('topology.yamlRefreshTitle')}
               >
-                새로고침
+                {t('common.refresh')}
               </button>
             )}
           </div>
           <div className="flex-1 min-h-0">
             {yamlLoading ? (
               <div className="flex items-center justify-center h-full text-slate-400">
-                YAML 로딩 중...
+                {t('topology.yamlLoading')}
               </div>
             ) : yamlError ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-6">
                 <div className="text-red-400 mb-4">
-                  ❌ YAML을 가져올 수 없습니다
+                  ❌ {t('topology.yamlLoadError')}
                 </div>
                 <p className="text-slate-400 text-sm mb-4">
-                  {(yamlError as Error).message.includes('not found') 
-                    ? '리소스가 삭제되었거나 존재하지 않습니다.'
+                  {(yamlError as Error).message.includes('not found')
+                    ? t('topology.resourceDeletedOrMissing')
                     : (yamlError as Error).message}
                 </p>
                 <button
@@ -279,7 +281,7 @@ export default function Topology() {
                   }}
                   className="btn btn-primary"
                 >
-                  목록 새로고침
+                  {t('topology.refreshList')}
                 </button>
               </div>
             ) : yaml ? (
@@ -300,7 +302,7 @@ export default function Topology() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 text-center">
                 <FileCode className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>리소스를 선택하면 YAML 정의를 볼 수 있습니다</p>
+                <p>{t('topology.selectResourceHint')}</p>
               </div>
             )}
           </div>
