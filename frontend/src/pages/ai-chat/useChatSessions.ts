@@ -91,7 +91,10 @@ export function useChatSessions({ pinnedSessions }: Args) {
   }
 
   const upsertSessionAtFront = (session: Session, optimisticId?: string | null) => {
-    queryClient.setQueryData<InfiniteData<Session[]>>(['sessions'], (old) => {
+    // 세션 목록 쿼리 키는 ['sessions', currentCluster] (per-cluster). setQueryData 는
+    // prefix 매칭을 하지 않으므로 ['sessions'] 로 쓰면 죽은 키에 들어가 사이드바가
+    // 갱신되지 않는다. setQueriesData 로 ['sessions', *] 전부(=활성 클러스터)에 반영.
+    queryClient.setQueriesData<InfiniteData<Session[]>>({ queryKey: ['sessions'] }, (old) => {
       const existing = getFlattenedSessions(old)
       const withoutDuplicates = existing.filter((s) => s.id !== session.id && (!optimisticId || s.id !== optimisticId))
       return buildSessionsInfiniteData([session, ...withoutDuplicates])
