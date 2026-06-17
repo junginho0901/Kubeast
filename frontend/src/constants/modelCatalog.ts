@@ -88,11 +88,11 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     needsBaseUrl: false,
     defaultApiKeyEnv: 'GEMINI_API_KEY',
     models: [
-      { name: 'gemini-2.0-flash', functionCalling: true },
-      { name: 'gemini-2.0-flash-lite', functionCalling: true },
-      { name: 'gemini-2.5-flash', functionCalling: true },
-      { name: 'gemini-2.5-flash-lite', functionCalling: true },
-      { name: 'gemini-2.5-pro', functionCalling: true },
+      { name: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', functionCalling: true },
+      { name: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', functionCalling: true },
+      { name: 'gemini-3-flash', label: 'Gemini 3 Flash', functionCalling: true },
+      { name: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', functionCalling: true },
+      { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (legacy)', functionCalling: true },
     ],
   },
   {
