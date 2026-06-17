@@ -111,11 +111,11 @@ class ProviderAdapter:
     사용 예:
         adapter = ProviderAdapter(
             provider="anthropic",
-            model="claude-sonnet-4-20250514",
+            model="claude-opus-4-8",
             api_key="sk-ant-...",
         )
         resp = await adapter.chat.completions.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-opus-4-8",
             messages=[...],
         )
     """

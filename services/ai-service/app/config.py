@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     
     # OpenAI
     OPENAI_API_KEY: str = ""  # 선택적으로 변경 (AI 기능 사용시 필요)
-    OPENAI_MODEL: str = "gpt-4-turbo-preview"
+    OPENAI_MODEL: str = "gpt-4o-mini"
     # OpenAI-compatible base URL (e.g. OpenRouter/local vLLM). Empty means default OpenAI endpoint.
     OPENAI_BASE_URL: str = ""
     OPENAI_OPTIMIZATION_MAX_TOKENS: int = 1800
