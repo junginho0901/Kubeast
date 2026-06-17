@@ -193,29 +193,29 @@ export default function ResourceGraph() {
               <div className="text-6xl mb-6 opacity-30">🔗</div>
               <h2 className="text-xl font-bold text-white mb-3">Resource Graph</h2>
               <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-                쿠버네티스 리소스 간의 관계를 그래프로 시각화합니다.<br />
-                Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,<br />
-                PVC → PV → StorageClass 등 다양한 관계를 한눈에 파악할 수 있습니다.
+                {t('resourceGraph.emptyDesc1')}<br />
+                {t('resourceGraph.emptyDesc2')}<br />
+                {t('resourceGraph.emptyDesc3')}
               </p>
               <div className="grid grid-cols-3 gap-3 mb-8 text-[11px]">
                 <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
                   <div className="text-lg mb-1">📊</div>
-                  <div className="text-slate-300 font-medium">그룹핑</div>
-                  <div className="text-slate-500 mt-1">Namespace / Node /<br/>Instance 별 묶기</div>
+                  <div className="text-slate-300 font-medium">{t('resourceGraph.featureGroupingTitle')}</div>
+                  <div className="text-slate-500 mt-1 whitespace-pre-line">{t('resourceGraph.featureGroupingDesc')}</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
                   <div className="text-lg mb-1">🔍</div>
-                  <div className="text-slate-300 font-medium">필터링</div>
-                  <div className="text-slate-500 mt-1">리소스 타입, 상태,<br/>엣지 타입별 필터</div>
+                  <div className="text-slate-300 font-medium">{t('resourceGraph.featureFilteringTitle')}</div>
+                  <div className="text-slate-500 mt-1 whitespace-pre-line">{t('resourceGraph.featureFilteringDesc')}</div>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
                   <div className="text-lg mb-1">👆</div>
-                  <div className="text-slate-300 font-medium">인터랙션</div>
-                  <div className="text-slate-500 mt-1">호버로 프리뷰,<br/>클릭으로 상세 보기</div>
+                  <div className="text-slate-300 font-medium">{t('resourceGraph.featureInteractionTitle')}</div>
+                  <div className="text-slate-500 mt-1 whitespace-pre-line">{t('resourceGraph.featureInteractionDesc')}</div>
                 </div>
               </div>
               <p className="text-sm text-slate-500">
-                왼쪽 상단 드롭다운에서 네임스페이스를 선택하세요
+                {t('resourceGraph.selectNamespaceHint')}
               </p>
             </div>
           </div>
