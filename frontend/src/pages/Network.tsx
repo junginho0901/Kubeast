@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type ServiceInfo } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -11,6 +12,7 @@ import { IngressSection } from './network-overview/IngressSection'
 import { NetworkPoliciesSection } from './network-overview/NetworkPoliciesSection'
 
 export default function NetworkPage() {
+  const { t } = useTranslation()
   const { namespace } = useParams<{ namespace: string }>()
   const queryClient = useQueryClient()
   const [selectedServiceName, setSelectedServiceName] = useState<string | null>(null)
@@ -155,7 +157,7 @@ export default function NetworkPage() {
     return (
       <div className="text-center py-12">
         <Network className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-        <p className="text-slate-400">네임스페이스를 선택하세요</p>
+        <p className="text-slate-400">{t('common.selectNamespace')}</p>
       </div>
     )
   }
@@ -169,7 +171,7 @@ export default function NetworkPage() {
             {namespace} Network
           </h1>
           <p className="mt-2 text-slate-400">
-            Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy 연결을 빠르게 확인합니다
+            {t('network.subtitle')}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -177,11 +179,11 @@ export default function NetworkPage() {
             type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            title="새로고침 (강제 갱신)"
+            title={t('common.refreshForce')}
             className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            새로고침
+            {t('common.refresh')}
           </button>
           <div className="text-right text-xs text-slate-400">
             <div>Services: {services?.length ?? 0}</div>
@@ -209,16 +211,16 @@ export default function NetworkPage() {
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Service 이름 검색..."
+              placeholder={t('network.searchPlaceholder')}
               className="w-full pl-9 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
             />
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
             {isLoadingServices ? (
-              <p className="text-sm text-slate-400">불러오는 중...</p>
+              <p className="text-sm text-slate-400">{t('common.loading')}</p>
             ) : filteredServices.length === 0 ? (
-              <p className="text-sm text-slate-400">Service가 없습니다</p>
+              <p className="text-sm text-slate-400">{t('network.noServices')}</p>
             ) : (
               filteredServices.map((svc) => {
                 const isActive = svc.name === selectedServiceName
@@ -239,7 +241,7 @@ export default function NetworkPage() {
                       {Object.keys(svc.selector || {}).length > 0 ? (
                         <>selector: {buildLabelSelector(svc.selector)}</>
                       ) : (
-                        <>selector: (없음)</>
+                        <>selector: {t('common.none')}</>
                       )}
                     </div>
                   </button>
@@ -253,7 +255,7 @@ export default function NetworkPage() {
         <div className="card lg:col-span-8 h-full overflow-hidden flex flex-col">
           {!selectedService ? (
             <div className="flex-1 flex items-center justify-center text-slate-400">
-              왼쪽에서 Service를 선택하세요
+              {t('network.selectServiceHint')}
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
@@ -276,7 +278,7 @@ export default function NetworkPage() {
                 <div className="rounded-lg border border-amber-700/60 bg-amber-950/10 p-4">
                   <div className="flex items-center gap-2 text-amber-200 font-semibold">
                     <AlertTriangle className="w-4 h-4" />
-                    이상 징후 감지 ({heuristics.length})
+                    {t('network.anomaliesDetected')} ({heuristics.length})
                   </div>
                   <div className="mt-3 space-y-2">
                     {heuristics.map((w, idx) => (
@@ -299,7 +301,7 @@ export default function NetworkPage() {
                   <div className="text-sm font-semibold text-white mb-2">Ports</div>
                   <div className="space-y-2 text-sm text-slate-200">
                     {(selectedService.ports || []).length === 0 ? (
-                      <div className="text-slate-400">(없음)</div>
+                      <div className="text-slate-400">{t('common.none')}</div>
                     ) : (
                       selectedService.ports.map((p, idx) => (
                         <div key={idx} className="flex items-center justify-between gap-3">
@@ -328,7 +330,7 @@ export default function NetworkPage() {
                     </pre>
                   ) : (
                     <div className="text-sm text-slate-400">
-                      selector가 없는 Service입니다. (Pod 매핑/NetworkPolicy 매핑은 제한됩니다)
+                      {t('network.selectorless')}
                     </div>
                   )}
                 </div>
@@ -346,14 +348,14 @@ export default function NetworkPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-sm text-slate-400">해당 Service 이름의 Endpoints를 찾지 못했습니다</div>
+                    <div className="text-sm text-slate-400">{t('network.endpointsNotFound')}</div>
                   )}
                 </div>
 
                 <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">
                   <div className="text-sm font-semibold text-white mb-2">EndpointSlices</div>
                   {related.endpointSlices.length === 0 ? (
-                    <div className="text-sm text-slate-400">(없음)</div>
+                    <div className="text-sm text-slate-400">{t('common.none')}</div>
                   ) : (
                     <div className="space-y-3">
                       {related.endpointSlices.map((s) => (
