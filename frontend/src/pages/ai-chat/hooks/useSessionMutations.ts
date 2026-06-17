@@ -30,7 +30,9 @@ export function useSessionMutations({
   const createSessionMutation = useMutation({
     mutationFn: ({ title }: { title: string; optimisticId: string }) => api.createSession(title || 'New Chat'),
     onMutate: async ({ title, optimisticId }: { title: string; optimisticId: string }) => {
-      const previousSessions = queryClient.getQueryData<InfiniteData<Session[]>>(['sessions'])
+      // per-cluster 키(['sessions', cluster]) 전부를 스냅샷 — 정확 키 매칭인 getQueryData(['sessions'])
+      // 는 죽은 키를 읽어 롤백이 동작하지 않는다.
+      const previousSessions = queryClient.getQueriesData<InfiniteData<Session[]>>({ queryKey: ['sessions'] })
       const nowIso = new Date().toISOString()
 
       const optimisticSession: Session = {
@@ -62,7 +64,9 @@ export function useSessionMutations({
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.previousSessions) {
-        queryClient.setQueryData(['sessions'], ctx.previousSessions)
+        for (const [key, data] of ctx.previousSessions) {
+          queryClient.setQueryData(key, data)
+        }
       }
       if (ctx?.optimisticId) {
         setPinnedSessions((prev) => {
