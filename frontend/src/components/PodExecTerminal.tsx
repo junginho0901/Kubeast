@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { handleUnauthorized, getAccessToken } from '@/services/auth'
+import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
 
 /*
@@ -86,7 +86,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       container,
     }))
 
-    const token = getAccessToken()
+    // Auth rides on the HttpOnly login cookie (same origin); never in the URL.
     const clusterId = getCurrentClusterID()
     const wsUrl = buildWsUrl(
       `/api/v1/cluster/namespaces/${namespace}/pods/${podName}/exec/ws`,
@@ -94,7 +94,6 @@ export default function PodExecTerminal({ podName, namespace, container, command
         container,
         command,
         ...(clusterId ? { cluster: clusterId } : {}),
-        ...(token ? { token } : {}),
       }
     )
     const ws = new WebSocket(wsUrl)

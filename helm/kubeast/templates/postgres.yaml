@@ -8,6 +8,8 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres
@@ -16,9 +18,16 @@ spec:
       labels:
         app: postgres
     spec:
+      automountServiceAccountToken: false
+      # postgres:15-alpine runs as uid 70; fsGroup lets the PVC be written.
+      # hostUsers stays default here: user namespaces need idmapped mounts for
+      # the volume, which not every CSI driver provides yet.
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 70 "fsGroup" 70 "skipHostUsers" true) | nindent 6 }}
       containers:
         - name: postgres
           image: {{ .Values.images.postgres }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "postgres") | nindent 10 }}
           ports:
             - containerPort: 5432
           env:
@@ -31,13 +40,33 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
               value: {{ .Values.postgresql.database | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresql.user | quote }}, "-d", {{ .Values.postgresql.database | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresql.user | quote }}, "-d", {{ .Values.postgresql.database | quote }}]
+            initialDelaySeconds: 30
+            periodSeconds: 30
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: kubeast-postgres-data
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -48,9 +77,12 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  {{- with .Values.postgresql.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
   resources:
     requests:
-      storage: 5Gi
+      storage: {{ .Values.postgresql.storage }}
 ---
 apiVersion: v1
 kind: Service

@@ -7,7 +7,7 @@ metadata:
     app: auth-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.authService }}
   selector:
     matchLabels:
       app: auth-service
@@ -17,10 +17,15 @@ spec:
         app: auth-service
     spec:
       serviceAccountName: auth-service
+      # fsGroup lets uid 65532 read the 0440 Secret-mounted signing key
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" 65532) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "auth-service") | nindent 6 }}
       containers:
         - name: auth-service
           image: "{{ .Values.images.authService }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "authService") | nindent 10 }}
           ports:
             - containerPort: 8004
           envFrom:
@@ -31,6 +36,7 @@ spec:
           volumeMounts:
             - name: auth-keys
               mountPath: /app/.keys
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
@@ -45,7 +51,9 @@ spec:
             periodSeconds: 30
       volumes:
         - name: auth-keys
-          emptyDir: {}
+          secret:
+            secretName: {{ .Values.auth.signingKey.existingSecret | default "kubeast-auth-keys" }}
+            defaultMode: 0440
 ---
 # --- AI Service ---
 apiVersion: apps/v1
@@ -56,7 +64,7 @@ metadata:
     app: ai-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.aiService }}
   selector:
     matchLabels:
       app: ai-service
@@ -65,10 +73,15 @@ spec:
       labels:
         app: ai-service
     spec:
+      automountServiceAccountToken: false
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "ai-service") | nindent 6 }}
       containers:
         - name: ai-service
           image: "{{ .Values.images.aiService }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "aiService") | nindent 10 }}
           ports:
             - containerPort: 8001
           envFrom:
@@ -76,6 +89,24 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ai/health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/ai/health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 # --- K8s Service ---
 apiVersion: apps/v1
@@ -86,7 +117,7 @@ metadata:
     app: k8s-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.k8sService }}
   selector:
     matchLabels:
       app: k8s-service
@@ -96,10 +127,14 @@ spec:
         app: k8s-service
     spec:
       serviceAccountName: k8s-service
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "k8s-service") | nindent 6 }}
       containers:
         - name: k8s-service
           image: "{{ .Values.images.k8sService }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "k8sService") | nindent 10 }}
           ports:
             - containerPort: 8002
           envFrom:
@@ -124,6 +159,18 @@ spec:
               value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 30
 ---
 # --- Session Service ---
 apiVersion: apps/v1
@@ -134,7 +181,7 @@ metadata:
     app: session-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.sessionService }}
   selector:
     matchLabels:
       app: session-service
@@ -143,10 +190,15 @@ spec:
       labels:
         app: session-service
     spec:
+      automountServiceAccountToken: false
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "session-service") | nindent 6 }}
       containers:
         - name: session-service
           image: "{{ .Values.images.sessionService }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "sessionService") | nindent 10 }}
           ports:
             - containerPort: 8003
           envFrom:
@@ -154,6 +206,18 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 30
 ---
 # --- Frontend ---
 apiVersion: apps/v1
@@ -164,7 +228,7 @@ metadata:
     app: frontend
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.frontend }}
   selector:
     matchLabels:
       app: frontend
@@ -173,12 +237,35 @@ spec:
       labels:
         app: frontend
     spec:
+      automountServiceAccountToken: false
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "frontend") | nindent 6 }}
       containers:
         - name: frontend
           image: "{{ .Values.images.frontend }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "frontend") | nindent 10 }}
           ports:
             - containerPort: 5173
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5173
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5173
+            initialDelaySeconds: 5
+            periodSeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 # --- Tool Server ---
 apiVersion: apps/v1
@@ -189,7 +276,7 @@ metadata:
     app: tool-server
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.toolServer }}
   selector:
     matchLabels:
       app: tool-server
@@ -199,10 +286,14 @@ spec:
         app: tool-server
     spec:
       serviceAccountName: tool-server
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "tool-server") | nindent 6 }}
       containers:
         - name: tool-server
           image: "{{ .Values.images.toolServer }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "toolServer") | nindent 10 }}
           ports:
             - containerPort: 8086
           envFrom:
@@ -217,6 +308,27 @@ spec:
             # k8s-service at runtime (no mounted kubeconfig, rollout-free).
             - name: K8S_SERVICE_URL
               value: http://k8s-service:8002
+            # kubectl discovery cache; root fs is read-only
+            - name: KUBECACHEDIR
+              value: /tmp/kube-cache
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 5
+            periodSeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 # --- Model Config Controller ---
 apiVersion: apps/v1
@@ -237,10 +349,13 @@ spec:
         app: model-config-controller-go
     spec:
       serviceAccountName: model-config-controller-go
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
       containers:
         - name: controller
           image: "{{ .Values.images.modelConfigController }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "modelConfigController") | nindent 10 }}
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
@@ -254,6 +369,8 @@ spec:
               value: "true"
             - name: METRICS_ADDR
               value: "0"
+            - name: HEALTH_PROBE_ADDR
+              value: ":8081"
             - name: MODEL_CONFIG_GROUP
               value: ai.kubeast.io
             - name: MODEL_CONFIG_VERSION
@@ -265,3 +382,15 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 30

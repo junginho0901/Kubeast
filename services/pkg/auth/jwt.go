@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -14,6 +15,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// ErrUnknownKid is returned when the token's kid is not in the JWKS.
+var ErrUnknownKid = errors.New("signing key not found")
+
+// jwksRefetchMinInterval bounds how often an unknown kid or a bad signature can
+// trigger a JWKS fetch, so a flood of garbage tokens cannot hammer auth-service.
+const jwksRefetchMinInterval = 10 * time.Second
 
 // TokenPayload contains the validated JWT claims.
 type TokenPayload struct {
@@ -65,6 +73,7 @@ type JWTValidator struct {
 	mu         sync.RWMutex
 	keys       map[string]*rsa.PublicKey
 	lastFetch  time.Time
+	fetchMu    sync.Mutex // serializes refetches
 	httpClient *http.Client
 }
 
@@ -146,48 +155,69 @@ func parseRSAPublicKey(nStr, eStr string) (*rsa.PublicKey, error) {
 	}, nil
 }
 
-func (v *JWTValidator) getKey(kid string) (*rsa.PublicKey, error) {
+// refetchKeys fetches the JWKS unless one was fetched less than
+// jwksRefetchMinInterval ago. Returns (fetched, error).
+func (v *JWTValidator) refetchKeys() (bool, error) {
+	v.fetchMu.Lock()
+	defer v.fetchMu.Unlock()
 	v.mu.RLock()
-	key, ok := v.keys[kid]
-	lastFetch := v.lastFetch
+	last := v.lastFetch
 	v.mu.RUnlock()
-
-	if ok {
-		return key, nil
+	if time.Since(last) < jwksRefetchMinInterval {
+		return false, nil
 	}
-
-	// Refetch if keys are stale (>5 min) or key not found
-	if time.Since(lastFetch) > 5*time.Minute || !ok {
-		if err := v.fetchKeys(); err != nil {
-			return nil, err
-		}
-		v.mu.RLock()
-		key, ok = v.keys[kid]
-		v.mu.RUnlock()
-		if !ok {
-			return nil, fmt.Errorf("signing key not found for kid: %s", kid)
-		}
-		return key, nil
-	}
-
-	return nil, fmt.Errorf("signing key not found for kid: %s", kid)
+	return true, v.fetchKeys()
 }
 
-// Validate validates a JWT token and returns the payload.
-func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
+func (v *JWTValidator) lookupKey(kid string) (*rsa.PublicKey, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	key, ok := v.keys[kid]
+	return key, ok
+}
+
+// getKey returns the public key for kid, refetching the JWKS (rate-limited)
+// when the kid is not cached — a rotated auth-service key has a new kid.
+func (v *JWTValidator) getKey(kid string) (*rsa.PublicKey, error) {
+	if key, ok := v.lookupKey(kid); ok {
+		return key, nil
+	}
+	if _, err := v.refetchKeys(); err != nil {
+		return nil, err
+	}
+	if key, ok := v.lookupKey(kid); ok {
+		return key, nil
+	}
+	return nil, fmt.Errorf("%w for kid: %s", ErrUnknownKid, kid)
+}
+
+func (v *JWTValidator) parse(tokenStr string) (*jwt.Token, error) {
 	parser := jwt.NewParser(
 		jwt.WithValidMethods([]string{"RS256"}),
 		jwt.WithIssuer(v.cfg.Issuer),
 		jwt.WithAudience(v.cfg.Audience),
 	)
-
-	token, err := parser.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+	return parser.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
 			return nil, fmt.Errorf("missing kid in token header")
 		}
 		return v.getKey(kid)
 	})
+}
+
+// Validate validates a JWT token and returns the payload.
+//
+// A signature failure on a cached kid triggers one rate-limited JWKS refetch
+// and a second parse: auth-service may have been restarted with a new key
+// while this process still caches the old one.
+func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
+	token, err := v.parse(tokenStr)
+	if err != nil && errors.Is(err, jwt.ErrTokenSignatureInvalid) {
+		if fetched, ferr := v.refetchKeys(); ferr == nil && fetched {
+			token, err = v.parse(tokenStr)
+		}
+	}
 	if err != nil {
 		return TokenPayload{}, fmt.Errorf("invalid token: %w", err)
 	}
@@ -245,17 +275,13 @@ func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler
 			}
 		}
 
-		// 2. Fallback to cookie (for WebSocket connections)
+		// 2. Fallback to cookie (browser WebSocket connections cannot set headers;
+		//    the HttpOnly cookie set at login is sent with the upgrade request).
+		//    A query-string token is not accepted: it ends up in access logs,
+		//    browser history and Referer headers.
 		if tokenStr == "" && cookieName != "" {
 			if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
 				tokenStr = c.Value
-			}
-		}
-
-		// 3. Fallback to query parameter (for WebSocket connections that can't set headers)
-		if tokenStr == "" {
-			if q := r.URL.Query().Get("token"); q != "" {
-				tokenStr = q
 			}
 		}
 

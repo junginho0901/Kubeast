@@ -1,0 +1,17 @@
+{{- if .Values.pdb.enabled }}
+{{- range $app := list "auth-service" "ai-service" "k8s-service" "session-service" "frontend" "tool-server" "gateway" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $app }}
+  labels:
+    app: {{ $app }}
+    {{- include "kubeast.labels" $ | nindent 4 }}
+spec:
+  minAvailable: {{ $.Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ $app }}
+{{- end }}
+{{- end }}

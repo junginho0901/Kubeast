@@ -28,6 +28,18 @@ import (
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
+func pingWithRetry(ctx context.Context, pool *pgxpool.Pool, attempts int, wait time.Duration) error {
+	var err error
+	for i := 1; i <= attempts; i++ {
+		if err = pool.Ping(ctx); err == nil {
+			return nil
+		}
+		slog.Warn("database not ready", "attempt", i, "error", err)
+		time.Sleep(wait)
+	}
+	return err
+}
+
 func main() {
 	cfg := config.Load()
 	pkglogger.Setup("auth-service", cfg.Debug)
@@ -51,7 +63,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := pool.Ping(ctx); err != nil {
+	// Postgres may still be starting in the same rollout: wait up to ~60s
+	// instead of exiting into CrashLoopBackOff.
+	if err := pingWithRetry(ctx, pool, 30, 2*time.Second); err != nil {
 		slog.Error("failed to ping database", "error", err)
 		os.Exit(1)
 	}

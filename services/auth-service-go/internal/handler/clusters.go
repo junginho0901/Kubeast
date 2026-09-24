@@ -196,6 +196,9 @@ func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.audit(r, "admin.cluster.delete", payload, string(id), before, map[string]any{"deleted": true}, nil)
+	// Drop k8s-service's cached client bundle so a re-registration under the
+	// same id is not served from the old kubeconfig.
+	h.invalidateK8sBundle(r, id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

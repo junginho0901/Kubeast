@@ -21,14 +21,14 @@ COPY session-service-go/ ./
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server ./cmd/server
 
-## Runtime stage
-FROM alpine:3.20
-
-RUN apk add --no-cache ca-certificates tzdata
+## Runtime stage — static binary, no shell/package manager, non-root uid 65532
+## (ca-certificates + tzdata are included in distroless/static).
+FROM gcr.io/distroless/static:nonroot
 
 WORKDIR /app
-COPY --from=builder /app/server .
+COPY --from=builder /app/server ./server
+USER 65532:65532
 
 EXPOSE 8003
 
-CMD ["./server"]
+ENTRYPOINT ["/app/server"]

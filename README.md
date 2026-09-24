@@ -288,6 +288,31 @@ admin:
   email: admin
   password: ""          # 비우면 자동 생성 (secret 으로 확인)
 
+# JWT 서명키 — 비우면 설치 시 생성해 Secret(kubeast-auth-keys)에 보관, upgrade 때 재사용.
+# 직접 관리하는 Secret(키 이름 jwt_private.pem)이 있으면 지정
+auth:
+  signingKey:
+    existingSecret: ""
+
+# 파드 보안 (Pod Security Standards restricted 기본). 사용자 네임스페이스를
+# 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true
+podSecurity:
+  enabled: true
+  hostUsers: false
+  readOnlyRootFilesystem: true
+
+# 가용성 — replicas 를 2 이상으로 올릴 때 pdb.enabled: true
+replicas:
+  gateway: 1
+pdb:
+  enabled: false
+topologySpread:
+  enabled: true
+resources:               # 컨테이너별 requests / memory limit (전체는 values.yaml)
+  aiService:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
 # AI 키 (Admin UI 에서도 등록 가능)
 ai:
   openaiApiKey: ""

@@ -129,24 +129,24 @@ echo ""
 
 if [[ "$SERVICE_TYPE" == "NodePort" ]]; then
   NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "localhost")
-  echo -e "  Open: ${BOLD}http://${NODE_IP}:${NODE_PORT}/setup${NC}"
+  echo -e "  Open: ${BOLD}http://${NODE_IP}:${NODE_PORT}${NC}  (admin 로그인 뒤 클러스터가 없으면 /setup 으로 이동)"
 elif [[ "$SERVICE_TYPE" == "LoadBalancer" ]]; then
   echo "  Waiting for LoadBalancer IP..."
   for i in $(seq 1 30); do
     LB_IP=$(kubectl get svc gateway -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
     LB_HOST=$(kubectl get svc gateway -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
     if [[ -n "$LB_IP" ]]; then
-      echo -e "  Open: ${BOLD}http://${LB_IP}:8000/setup${NC}"
+      echo -e "  Open: ${BOLD}http://${LB_IP}:8000${NC}"
       break
     elif [[ -n "$LB_HOST" ]]; then
-      echo -e "  Open: ${BOLD}http://${LB_HOST}:8000/setup${NC}"
+      echo -e "  Open: ${BOLD}http://${LB_HOST}:8000${NC}"
       break
     fi
     sleep 2
   done
 else
   echo -e "  Port-forward: ${BOLD}kubectl port-forward svc/gateway 8000:8000 -n ${NAMESPACE}${NC}"
-  echo -e "  Then open:    ${BOLD}http://localhost:8000/setup${NC}"
+  echo -e "  Then open:    ${BOLD}http://localhost:8000${NC}"
 fi
 
 echo ""

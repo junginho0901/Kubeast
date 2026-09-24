@@ -16,6 +16,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -25,7 +27,7 @@ import (
 )
 
 var debugUpgrader = websocket.Upgrader{
-	CheckOrigin:       func(r *http.Request) bool { return true },
+	CheckOrigin:       ws.CheckOrigin,
 	ReadBufferSize:    4096,
 	WriteBufferSize:   4096,
 	EnableCompression: false,
