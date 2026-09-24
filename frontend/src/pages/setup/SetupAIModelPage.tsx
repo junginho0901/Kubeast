@@ -76,8 +76,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
     setAiSaving(true)
     setAiError(null)
     try {
-      // Create model config in DB — Setup 전용 공개 API 사용 (로그인 전)
-      await api.createModelConfigSetup({
+      await api.createModelConfig({
         name: `${selectedProvider}-setup`,
         provider: selectedProvider,
         model: aiModel,
@@ -88,10 +87,9 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         is_default: true,
       })
 
-      // Navigate to login
       navigatingRef.current = true
       setTimeout(() => {
-        navigate('/login', { replace: true })
+        navigate('/', { replace: true })
       }, 400)
     } catch (e: any) {
       const detail = e?.response?.data?.detail
@@ -103,7 +101,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
 
   const handleSkipAi = () => {
     navigatingRef.current = true
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (

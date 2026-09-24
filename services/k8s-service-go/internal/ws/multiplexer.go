@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -77,6 +78,24 @@ type Multiplexer struct {
 	subs map[string]*subscription // key -> subscription
 }
 
+// effectiveClusterID mirrors the HTTP ClusterMiddleware: an empty clusterId
+// falls back to the registry default, so that is what must be authorized.
+func effectiveClusterID(id string) string {
+	if id == "" {
+		return string(cluster.Default)
+	}
+	return id
+}
+
+// canWatchCluster is the per-subscription authorization: a global admin
+// ("*" entry) or a per-cluster grant on the effective cluster (deny-by-default).
+func canWatchCluster(payload auth.TokenPayload, clusterID string) bool {
+	if len(payload.Perms["*"]) > 0 {
+		return true
+	}
+	return len(payload.Perms[effectiveClusterID(clusterID)]) > 0
+}
+
 // NewMultiplexer creates a new WebSocket multiplexer.
 func NewMultiplexer(p ClientProvider) *Multiplexer {
 	return &Multiplexer{
@@ -87,6 +106,10 @@ func NewMultiplexer(p ClientProvider) *Multiplexer {
 
 // HandleWebSocket handles the /wsMultiplexer endpoint.
 func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// The JWT middleware gated the connection on ?cluster=; every REQUEST
+	// message names its own clusterId, so each subscription is gated again.
+	payload, _ := auth.FromContext(r.Context())
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("ws upgrade failed", "err", err)
@@ -168,6 +191,16 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		switch req.Type {
 		case "REQUEST":
+			if !canWatchCluster(payload, req.ClusterID) {
+				sendCh <- ResponseMessage{
+					Type:  "ERROR",
+					Path:  req.Path,
+					Query: req.Query,
+					Error: map[string]string{"message": "forbidden: no access to cluster " + effectiveClusterID(req.ClusterID)},
+				}
+				continue
+			}
+
 			// Skip if already subscribed
 			m.mu.Lock()
 			if _, exists := m.subs[key]; exists {

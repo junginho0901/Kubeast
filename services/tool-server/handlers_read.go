@@ -11,12 +11,37 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 )
+
+// deniedResourceTypes are never read for the assistant: their payload is
+// credential material that would be sent to the LLM provider (OWASP LLM02).
+// The UI path gates the same data behind resource.secret.reveal + audit.
+var deniedResourceTypes = map[string]bool{"secret": true, "secrets": true}
+
+// checkResourceAllowed rejects a kubectl resource argument that names a denied
+// type in any of the forms kubectl accepts: "secrets", "secret/name",
+// "secrets.v1", "secrets.core", or a comma list containing one of those.
+func checkResourceAllowed(resourceType string) error {
+	for _, part := range strings.Split(strings.ToLower(resourceType), ",") {
+		part = strings.TrimSpace(part)
+		if i := strings.IndexAny(part, "./"); i > 0 {
+			part = part[:i]
+		}
+		if deniedResourceTypes[part] {
+			return wrapBadRequest(fmt.Sprintf("resource type %q is not available to the AI assistant", part))
+		}
+	}
+	return nil
+}
 
 func handleGetResources(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	resourceType := argString(args, "resource_type", "")
 	if resourceType == "" {
 		return "", wrapBadRequest("resource_type parameter is required")
+	}
+	if err := checkResourceAllowed(resourceType); err != nil {
+		return "", err
 	}
 	resourceName := argString(args, "resource_name", "")
 	namespace := argString(args, "namespace", "")
@@ -49,6 +74,9 @@ func handleGetResourceYAML(ctx context.Context, args map[string]interface{}, hea
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
 	}
+	if err := checkResourceAllowed(resourceType); err != nil {
+		return "", err
+	}
 
 	namespace := argString(args, "namespace", "")
 	cmdArgs := []string{"get", resourceType, resourceName, "-o", "yaml"}
@@ -64,6 +92,9 @@ func handleDescribeResource(ctx context.Context, args map[string]interface{}, he
 	resourceName := argString(args, "resource_name", "")
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	if err := checkResourceAllowed(resourceType); err != nil {
+		return "", err
 	}
 
 	namespace := argString(args, "namespace", "")

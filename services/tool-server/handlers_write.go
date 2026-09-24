@@ -30,17 +30,6 @@ func handleCreateResource(ctx context.Context, args map[string]interface{}, head
 	return runKubectlWithInput(ctx, headers, manifest, "create", "-f", "-")
 }
 
-func handleCreateResourceFromURL(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
-	url := argString(args, "url", "")
-	if url == "" {
-		url = argString(args, "manifest_url", "")
-	}
-	if url == "" {
-		return "", wrapBadRequest("url parameter is required")
-	}
-	return runKubectl(ctx, headers, "create", "-f", url)
-}
-
 func handleDeleteResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	resourceType := argString(args, "resource_type", "")
 	if resourceType == "" {

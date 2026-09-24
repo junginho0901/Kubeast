@@ -2190,7 +2190,7 @@
   "setup": {
     "badge": "초기 클러스터 설정",
     "title": "Kubernetes 클러스터 연결",
-    "subtitle": "로그인 전에 사용할 클러스터를 선택하세요.",
+    "subtitle": "관리할 클러스터를 선택하세요.",
     "option": {
       "incluster": {
         "title": "이 클러스터 사용",

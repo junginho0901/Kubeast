@@ -367,7 +367,7 @@ step "Waiting for ai-service DB initialization"
 echo -n "  Waiting for ai-service to initialize database..."
 RESTARTED_AI=0
 for i in $(seq 1 60); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/ai/config" 2>/dev/null || echo "000")
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/ai/health" 2>/dev/null || echo "000")
   if [[ "$HTTP_CODE" == "200" ]]; then
     ok "AI-service DB initialized (HTTP $HTTP_CODE)"
     break

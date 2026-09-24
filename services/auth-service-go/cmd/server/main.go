@@ -114,7 +114,7 @@ func main() {
 	// Handlers
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
 	roleHandler := handler.NewRoleHandler(repo)
-	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore)
+	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
 	healthHandler := handler.NewHealthHandler(pool)
 
@@ -153,10 +153,8 @@ func main() {
 		r.Get("/jwks.json", authHandler.JWKS)
 		r.Get("/.well-known/jwks.json", authHandler.JWKS)
 
-		// Setup endpoints (no auth)
-		r.Get("/setup", setupHandler.GetSetup)
-		r.Post("/setup", setupHandler.PostSetup)
-		r.Get("/setup/rollout-status", setupHandler.RolloutStatus)
+		// Setup: only "is a cluster registered yet" is public (login page routing).
+		r.Get("/setup", setupHandler.GetSetupPublic)
 
 		// Public (for registration form dropdowns)
 		r.Get("/organizations", authHandler.ListOrganizations)
@@ -165,6 +163,11 @@ func main() {
 		// Protected endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
+
+			// Setup wizard (admin.clusters.create, checked in the handler)
+			r.Get("/setup/status", setupHandler.GetSetup)
+			r.Post("/setup", setupHandler.PostSetup)
+			r.Get("/setup/rollout-status", setupHandler.RolloutStatus)
 
 			r.Get("/me", authHandler.Me)
 			r.Post("/change-password", authHandler.ChangePassword)

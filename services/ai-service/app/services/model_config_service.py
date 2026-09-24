@@ -77,10 +77,16 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     if not api_key and provider in _PROVIDERS_REQUIRING_KEY:
         raise ValueError(f"API key is missing for active model config (provider={provider})")
 
+    base_url = (config.base_url or "").strip().rstrip("/") or None
+    # Ollama serves the OpenAI-compatible API under /v1; the connection test
+    # already appends it, so the runtime client must resolve the same URL.
+    if provider == "ollama" and base_url and not base_url.endswith("/v1"):
+        base_url += "/v1"
+
     return ResolvedModelConfig(
         provider=config.provider,
         model=config.model,
-        base_url=(config.base_url or "").strip() or None,
+        base_url=base_url,
         api_key=api_key or "",
         extra_headers=config.extra_headers or {},
         tls_verify=True if config.tls_verify is None else bool(config.tls_verify),

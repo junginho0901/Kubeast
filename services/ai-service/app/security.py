@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 import jwt
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 
 AUTH_JWKS_URL = os.getenv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json")
@@ -93,3 +93,14 @@ async def require_auth(authorization: Optional[str] = Header(None, alias="Author
         raise HTTPException(status_code=401, detail="Invalid Authorization header")
 
     return decode_access_token(token)
+
+
+async def require_admin(payload: TokenPayload = Depends(require_auth)) -> TokenPayload:
+    """Admin gate for model-config administration (admin.ai_models.*)."""
+    if payload.permissions:
+        if not payload.has_permission("admin.ai_models.*"):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        return payload
+    if payload.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return payload

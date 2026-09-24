@@ -426,6 +426,12 @@ func validateKubeconfigYAML(kubeconfig string) error {
 
 // audit writes a best-effort cluster admin audit record (success or failure).
 func (h *ClustersHandler) audit(r *http.Request, action string, payload auth.TokenPayload, clusterID string, before, after interface{}, opErr error) {
+	writeClusterAudit(h.auditStore, r, action, payload, clusterID, before, after, opErr)
+}
+
+// writeClusterAudit is the shared body for cluster-scoped admin audit records
+// (cluster CRUD and the setup wizard). A failed write is logged, never returned.
+func writeClusterAudit(store audit.Store, r *http.Request, action string, payload auth.TokenPayload, clusterID string, before, after interface{}, opErr error) {
 	rec := audit.FromHTTPRequest(r)
 	rec.Service = audit.ServiceAdmin
 	rec.Action = action
@@ -444,7 +450,7 @@ func (h *ClustersHandler) audit(r *http.Request, action string, payload auth.Tok
 		rec.Result = audit.ResultFailure
 		rec.Error = opErr.Error()
 	}
-	if _, err := h.auditStore.Write(r.Context(), rec); err != nil {
+	if _, err := store.Write(r.Context(), rec); err != nil {
 		slog.Error("cluster audit write failed", "action", action, "err", err)
 	}
 }

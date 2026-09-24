@@ -46,7 +46,6 @@ def is_tool_allowed(service: "AIService", function_name: str) -> bool:
     write_tools = {
         "k8s_apply_manifest",
         "k8s_create_resource",
-        "k8s_create_resource_from_url",
         "k8s_delete_resource",
         "k8s_patch_resource",
         "k8s_annotate_resource",

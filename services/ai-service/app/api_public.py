@@ -1,88 +1,48 @@
 """
-Public (no-auth) endpoints for AI Service.
-These are registered WITHOUT the global require_auth dependency.
+Unauthenticated health plus the admin-only model connection test.
+
+`public_router` carries nothing but a liveness probe. Model registration is the
+authenticated POST /model-configs (app.api); the connection test lives on
+`admin_router` because it makes outbound HTTP calls to an operator-supplied URL.
 """
-from fastapi import APIRouter, HTTPException
+import ipaddress
+from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
+from app.security import require_admin
+
 public_router = APIRouter()
+admin_router = APIRouter(dependencies=[Depends(require_admin)])
 
 
-@public_router.post("/model-configs/setup")
-async def create_model_config_setup(request: dict = None):
-    """
-    Setup 전용 모델 등록 (upsert) — 인증 없이 호출 가능.
-    Setup 화면에서 로그인 전에 모델을 등록할 때 사용.
-    이미 같은 이름이 있으면 업데이트합니다.
-    """
-    from app.database import DatabaseService, ModelConfig
-    from sqlalchemy import select, update
+@public_router.get("/health")
+async def health():
+    return {"status": "healthy"}
 
-    body = request or {}
-    name = body.get("name", "")
-    provider = body.get("provider", "openai")
-    model = body.get("model", "")
-    api_key = body.get("api_key", "")
 
-    if not name or not model:
-        raise HTTPException(status_code=400, detail="name and model are required")
+# Hosts that must never be probed from the service: cloud instance metadata.
+_BLOCKED_HOSTS = frozenset({"metadata.google.internal", "metadata", "instance-data"})
+_BLOCKED_NETWORKS = (ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fd00:ec2::254/128"))
 
-    db = DatabaseService()
-    await db.init_db()
 
-    config_data = {
-        "provider": provider,
-        "model": model,
-        "base_url": body.get("base_url") or None,
-        "api_key": api_key or None,
-        "extra_headers": body.get("extra_headers") or {},
-        "tls_verify": body.get("tls_verify", True),
-        "enabled": body.get("enabled", True),
-        "is_default": body.get("is_default", True),
-    }
-
-    async with db.async_session() as session:
-        # 같은 이름이 있는지 확인
-        result = await session.execute(
-            select(ModelConfig).where(ModelConfig.name == name)
-        )
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            # 업데이트
-            for key, value in config_data.items():
-                setattr(existing, key, value)
-            if config_data.get("is_default"):
-                await session.execute(
-                    update(ModelConfig)
-                    .where(ModelConfig.id != existing.id)
-                    .values(is_default=False)
-                )
-            await session.commit()
-            await session.refresh(existing)
-            config = existing
-        else:
-            # 새로 생성
-            config = ModelConfig(name=name, **config_data)
-            session.add(config)
-            await session.flush()
-            if config.is_default:
-                await session.execute(
-                    update(ModelConfig)
-                    .where(ModelConfig.id != config.id)
-                    .values(is_default=False)
-                )
-            await session.commit()
-            await session.refresh(config)
-
-    return {
-        "id": config.id,
-        "name": config.name,
-        "provider": config.provider,
-        "model": config.model,
-        "is_default": config.is_default,
-        "enabled": config.enabled,
-    }
+def _validate_base_url(url: str) -> None:
+    """Reject non-http(s) schemes, credentials in the URL and metadata endpoints."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise HTTPException(status_code=400, detail="base_url must be an http(s) URL")
+    if parts.username or parts.password:
+        raise HTTPException(status_code=400, detail="base_url must not contain credentials")
+    host = parts.hostname.lower()
+    if host in _BLOCKED_HOSTS:
+        raise HTTPException(status_code=400, detail="base_url host is not allowed")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return
+    if any(ip in net for net in _BLOCKED_NETWORKS):
+        raise HTTPException(status_code=400, detail="base_url host is not allowed")
 
 
 async def _test_openai_compatible(
@@ -263,10 +223,10 @@ async def _test_ollama(
         raise
 
 
-@public_router.post("/model-configs/test")
+@admin_router.post("/model-configs/test")
 async def test_model_connection(request: dict = None):
     """
-    모델 연결 테스트 — Setup 화면에서 인증 없이 호출 가능.
+    모델 연결 테스트 (admin.ai_models.*).
     body: { provider, model, base_url?, api_key?, tls_verify?, azure_api_version? }
     """
     body = request or {}
@@ -278,6 +238,8 @@ async def test_model_connection(request: dict = None):
 
     if not model:
         raise HTTPException(status_code=400, detail="model is required")
+    if user_base_url:
+        _validate_base_url(user_base_url)
 
     # Ollama는 API 키 불필요
     if provider != "ollama" and not api_key:

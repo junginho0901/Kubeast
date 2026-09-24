@@ -898,6 +898,7 @@ async def session_chat_stream(
                                 'session_id': session_id,
                                 'tool': function_name,
                                 'iteration': iteration,
+                                'resource_type': target_type_arg,
                             },
                             request_ip=(audit_http or {}).get('ip'),
                             user_agent=(audit_http or {}).get('user_agent'),

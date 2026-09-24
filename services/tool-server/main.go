@@ -135,11 +135,6 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleCreateResource,
 	})
 	register(ToolDefinition{
-		Name:        "k8s_create_resource_from_url",
-		Description: "Create resources from manifest URL (kubectl create -f URL)",
-		Handler:     handleCreateResourceFromURL,
-	})
-	register(ToolDefinition{
 		Name:        "k8s_delete_resource",
 		Description: "Delete a Kubernetes resource (kubectl delete)",
 		Handler:     handleDeleteResource,

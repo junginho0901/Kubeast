@@ -2168,7 +2168,7 @@
   "setup": {
     "badge": "Initial cluster setup",
     "title": "Connect a Kubernetes cluster",
-    "subtitle": "Choose the cluster to manage before signing in.",
+    "subtitle": "Choose the cluster to manage.",
     "option": {
       "incluster": {
         "title": "Use this cluster",

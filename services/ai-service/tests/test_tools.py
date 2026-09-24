@@ -22,7 +22,6 @@ EXPECTED_READONLY_NAMES = {
 EXPECTED_WRITE_NAMES = {
     "k8s_apply_manifest",
     "k8s_create_resource",
-    "k8s_create_resource_from_url",
     "k8s_delete_resource",
     "k8s_patch_resource",
     "k8s_annotate_resource",
