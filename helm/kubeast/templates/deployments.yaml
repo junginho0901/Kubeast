@@ -89,6 +89,10 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: kubeast-secrets
+            {{- with .Values.ai.apiKeysSecret }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

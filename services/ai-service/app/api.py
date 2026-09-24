@@ -7,7 +7,16 @@ from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from app.models.ai import ChatRequest
 from app.models.floating_ai import FloatingChatRequest
+from pydantic import ValidationError
 from app.security import require_auth, decode_access_token
+
+
+def _validation_message(err: ValidationError) -> str:
+    errors = err.errors()
+    if not errors:
+        return "invalid request"
+    msg = str(errors[0].get("msg", "invalid request"))
+    return msg[len("Value error, "):] if msg.startswith("Value error, ") else msg
 
 
 def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dict]:
@@ -353,7 +362,10 @@ async def create_model_config(payload=Depends(require_auth), request: dict = Non
 
     _require_admin(payload)
 
-    data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
+    try:
+        data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=_validation_message(e))
     db = await get_db_service()
     try:
         config = await db.create_model_config(data)
@@ -374,7 +386,10 @@ async def update_model_config(config_id: int, payload=Depends(require_auth), req
 
     _require_admin(payload)
 
-    data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+    try:
+        data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=_validation_message(e))
     db = await get_db_service()
     config = await db.update_model_config(config_id, data)
     if not config:

@@ -41,10 +41,8 @@ class ResolvedModelConfig:
 
 
 def _resolve_api_key(config: ModelConfig) -> Optional[str]:
-    # 1) DB에 직접 저장된 키 우선
-    if getattr(config, 'api_key', None):
-        return config.api_key
-    # 2) 환경변수 이름으로 fallback
+    # Keys live only in ai-service's environment; the config names the variable.
+    # 1) 환경변수 이름
     if config.api_key_env:
         value = os.getenv(config.api_key_env)
         if value:

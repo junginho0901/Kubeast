@@ -313,11 +313,13 @@ resources:               # 컨테이너별 requests / memory limit (전체는 va
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 1Gi }
 
-# AI 키 (Admin UI 에서도 등록 가능)
+# AI 키 — ai-service 환경변수로만 주입되고 DB에는 저장되지 않음. 모델 설정(UI/CRD)은
+# 변수 이름(api_key_env)만 가리킴. ESO 등으로 만든 Secret이 있으면 apiKeysSecret에 지정
 ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
+  apiKeysSecret: ""
   model: "gpt-4o-mini"
 
 # 내장 PostgreSQL / Redis (false 면 외부 사용)

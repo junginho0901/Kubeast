@@ -24,10 +24,15 @@ auth:
     existingSecret: ""
 
 # --- AI Configuration ---
+# Provider keys reach ai-service only as environment variables; a model config
+# names the variable (api_key_env). Either fill the keys here (rendered into
+# kubeast-secrets) or point apiKeysSecret at a Secret you manage (e.g. via
+# ExternalSecrets) whose keys are the variable names.
 ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
+  apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrl: ""
 

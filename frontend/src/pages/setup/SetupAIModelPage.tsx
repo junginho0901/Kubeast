@@ -20,7 +20,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   const [selectedProvider, setSelectedProvider] = useState('openai')
   const [aiModel, setAiModel] = useState('gpt-4o-mini')
   const [aiCustomModel, setAiCustomModel] = useState(false) // true = free text input
-  const [aiApiKey, setAiApiKey] = useState('')
+  // Env var in ai-service that holds the provider key — the key itself is never stored
+  const [aiApiKeyEnv, setAiApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiTesting, setAiTesting] = useState(false)
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -34,6 +35,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       setAiModel(prov.models[0]?.name ?? '')
       setAiCustomModel(false)
       setAiBaseUrl(prov.defaultBaseUrl ?? '')
+      setAiApiKeyEnv(prov.defaultApiKeyEnv ?? '')
       setAiTestResult(null)
       setAiError(null)
     }
@@ -61,7 +63,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         provider: selectedProvider,
         model: aiModel,
         base_url: baseUrl,
-        api_key: aiApiKey || (currentProviderDef.needsApiKey ? '' : 'not-needed'),
+        api_key_env: currentProviderDef.needsApiKey ? aiApiKeyEnv.trim() || undefined : undefined,
         tls_verify: true,
       })
       setAiTestResult(result)
@@ -81,7 +83,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         provider: selectedProvider,
         model: aiModel,
         base_url: aiBaseUrl.trim() || undefined,
-        api_key: aiApiKey.trim() || undefined,
+        api_key_env: currentProviderDef.needsApiKey ? aiApiKeyEnv.trim() || undefined : undefined,
         tls_verify: true,
         enabled: true,
         is_default: true,
@@ -200,17 +202,18 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         {currentProviderDef.needsApiKey && (
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              {tr('setup.ai.apiKey', 'API Key')}
+              {tr('setup.ai.apiKey', 'API key env var')}
             </label>
             <input
-              type="password"
-              value={aiApiKey}
-              onChange={(e) => setAiApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              type="text"
+              value={aiApiKeyEnv}
+              onChange={(e) => setAiApiKeyEnv(e.target.value)}
+              placeholder="OPENAI_API_KEY"
+              spellCheck={false}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
             />
             <p className="mt-1 text-xs text-slate-500">
-              {tr('setup.ai.apiKeyHint', 'Your API key will be stored securely as a Kubernetes Secret.')}
+              {tr('setup.ai.apiKeyHint', 'Name of the ai-service environment variable that holds the key (Helm values ai.*ApiKey or a Secret via ai.apiKeysSecret). Keys are never stored in the database.')}
             </p>
           </div>
         )}

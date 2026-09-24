@@ -4,8 +4,7 @@ export interface ModelConfigCreate {
   provider: string
   model: string
   base_url?: string
-  api_key?: string                    // actual API key (stored in DB)
-  api_key_env?: string                // env var name (fallback)
+  api_key_env?: string                // ai-service env var holding the key (never stored)
   api_key_secret_name?: string
   api_key_secret_key?: string
   extra_headers?: Record<string, string>
@@ -22,7 +21,6 @@ export interface ModelConfigResponse {
   provider: string
   model: string
   base_url: string | null
-  api_key_set: boolean                // true if api_key is stored in DB
   api_key_env: string | null
   api_key_secret_name: string | null
   api_key_secret_key: string | null

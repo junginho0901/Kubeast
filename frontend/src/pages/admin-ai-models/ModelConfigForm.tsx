@@ -22,15 +22,13 @@ export default function ModelConfigForm({ form }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fb: string) => t(key, { defaultValue: fb })
   const {
-    configs,
     editingId,
     formName, setFormName,
     formProvider,
     formModel, setFormModel,
     formCustomModel, setFormCustomModel,
     formBaseUrl, setFormBaseUrl,
-    formApiKey, setFormApiKey,
-    formShowApiKey, setFormShowApiKey,
+    formApiKeyEnv, setFormApiKeyEnv,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
     formCaCert, setFormCaCert,
@@ -146,38 +144,21 @@ export default function ModelConfigForm({ form }: Props) {
           </div>
         )}
 
-        {/* API Key */}
+        {/* API key env var — the key itself is never stored */}
         {currentProviderDef.needsApiKey !== false && (
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-slate-400">API Key</label>
-              {formApiKey && (
-                <button
-                  type="button"
-                  onClick={() => setFormShowApiKey(!formShowApiKey)}
-                  className="text-[10px] text-slate-500 hover:text-primary-400 transition"
-                >
-                  {formShowApiKey ? 'Hide' : 'Show'}
-                </button>
-              )}
-            </div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">API key env var</label>
             <input
-              type={formShowApiKey ? 'text' : 'password'}
-              value={formApiKey}
-              onChange={(e) => setFormApiKey(e.target.value)}
-              placeholder={editingId ? '••••••••  (leave empty to keep current)' : 'sk-...'}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              type="text"
+              value={formApiKeyEnv}
+              onChange={(e) => setFormApiKeyEnv(e.target.value)}
+              placeholder="OPENAI_API_KEY"
+              spellCheck={false}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
             />
-            {editingId && (
-              <p className="mt-1 text-[10px] text-slate-500">
-                {(() => {
-                  const cfg = configs?.find((c) => c.id === editingId)
-                  return cfg?.api_key_set
-                    ? '✓ API key is stored. Leave empty to keep current key.'
-                    : '⚠ No API key stored. Enter a key to save it.'
-                })()}
-              </p>
-            )}
+            <p className="mt-1 text-[10px] text-slate-500">
+              Name of the environment variable in ai-service that holds the key (Helm values ai.*ApiKey or ai.apiKeysSecret). Keys are never stored in the database.
+            </p>
           </div>
         )}
       </div>

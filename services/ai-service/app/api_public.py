@@ -6,6 +6,7 @@ authenticated POST /model-configs (app.api); the connection test lives on
 `admin_router` because it makes outbound HTTP calls to an operator-supplied URL.
 """
 import ipaddress
+import os
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -227,10 +228,17 @@ async def _test_ollama(
 async def test_model_connection(request: dict = None):
     """
     모델 연결 테스트 (admin.ai_models.*).
-    body: { provider, model, base_url?, api_key?, tls_verify?, azure_api_version? }
+    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, azure_api_version? }
+    api_key_env names an environment variable of this service (how saved
+    configs reference keys); api_key is a literal for ad-hoc API use.
     """
     body = request or {}
-    api_key = body.get("api_key", "")
+    api_key = (body.get("api_key") or "").strip()
+    api_key_env = (body.get("api_key_env") or "").strip()
+    if not api_key and api_key_env:
+        api_key = (os.getenv(api_key_env) or "").strip()
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"environment variable {api_key_env} is not set in ai-service")
     model = body.get("model", "")
     provider = (body.get("provider") or "openai").strip().lower()
     tls_verify = body.get("tls_verify", True)
@@ -243,7 +251,7 @@ async def test_model_connection(request: dict = None):
 
     # Ollama는 API 키 불필요
     if provider != "ollama" and not api_key:
-        raise HTTPException(status_code=400, detail="api_key is required")
+        raise HTTPException(status_code=400, detail="api_key_env (or api_key) is required")
 
     try:
         if provider == "anthropic":

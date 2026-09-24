@@ -1,6 +1,21 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+
+
+# API keys are never stored in the database. ai-service reads the key from
+# its own environment (Helm values ai.*ApiKey / an ExternalSecret mounted as
+# env) and the config only names the variable.
+API_KEY_NOT_STORED = (
+    "api_key is not stored; provide the key to ai-service as an environment "
+    "variable and set api_key_env to its name"
+)
+
+
+def _reject_plaintext_key(values):
+    if isinstance(values, dict) and values.get("api_key"):
+        raise ValueError(API_KEY_NOT_STORED)
+    return values
 
 
 class ModelConfigCreate(BaseModel):
@@ -9,10 +24,9 @@ class ModelConfigCreate(BaseModel):
     model: str = Field(..., min_length=1)
     base_url: Optional[str] = None
 
-    api_key: Optional[str] = None          # actual API key (preferred)
-    api_key_env: Optional[str] = None      # env var name (fallback)
+    api_key_env: Optional[str] = None      # env var name holding the key
 
-    # Legacy — kept for backward compat
+    # Legacy — kept for backward compat (env var name as well)
     api_key_secret_name: Optional[str] = None
     api_key_secret_key: Optional[str] = None
 
@@ -25,6 +39,11 @@ class ModelConfigCreate(BaseModel):
     enabled: bool = True
     is_default: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def _no_plaintext_key(cls, values):
+        return _reject_plaintext_key(values)
+
 
 class ModelConfigUpdate(BaseModel):
     name: Optional[str] = None
@@ -32,7 +51,6 @@ class ModelConfigUpdate(BaseModel):
     model: Optional[str] = None
     base_url: Optional[str] = None
 
-    api_key: Optional[str] = None
     api_key_env: Optional[str] = None
 
     api_key_secret_name: Optional[str] = None
@@ -45,6 +63,11 @@ class ModelConfigUpdate(BaseModel):
     enabled: Optional[bool] = None
     is_default: Optional[bool] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _no_plaintext_key(cls, values):
+        return _reject_plaintext_key(values)
+
 
 class ModelConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -55,7 +78,6 @@ class ModelConfigResponse(BaseModel):
     model: str
     base_url: Optional[str]
 
-    api_key_set: bool = False               # True if api_key is stored in DB
     api_key_env: Optional[str]
 
     api_key_secret_name: Optional[str]
@@ -70,14 +92,3 @@ class ModelConfigResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
-
-    @classmethod
-    def model_validate(cls, obj, **kwargs):
-        """Override to compute api_key_set from the raw DB object."""
-        if hasattr(obj, 'api_key'):
-            # SQLAlchemy model object
-            raw_key = getattr(obj, 'api_key', None)
-            result = super().model_validate(obj, **kwargs)
-            result.api_key_set = bool(raw_key)
-            return result
-        return super().model_validate(obj, **kwargs)

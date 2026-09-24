@@ -42,7 +42,7 @@ export const modelConfigApi = {
     provider: string
     model: string
     base_url?: string
-    api_key?: string
+    api_key_env?: string
     tls_verify?: boolean
     azure_api_version?: string
   }): Promise<{ success: boolean; model?: string; message: string }> => {

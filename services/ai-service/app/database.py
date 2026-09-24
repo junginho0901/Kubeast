@@ -68,9 +68,8 @@ class ModelConfig(Base):
     model = Column(String, nullable=False)
     base_url = Column(String, nullable=True)
 
-    # API key — stored directly (encrypted at rest by DB) or resolved from env
-    api_key = Column(String, nullable=True)        # actual key (preferred)
-    api_key_env = Column(String, nullable=True)     # env var name (fallback)
+    # API key is never stored; this names the ai-service env var holding it
+    api_key_env = Column(String, nullable=True)
 
     # Legacy K8s Secret ref (kept for backward compat)
     api_key_secret_name = Column(String, nullable=True)
@@ -110,8 +109,8 @@ class DatabaseService:
         """데이터베이스 초기화"""
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        # Migrate: add api_key column if missing (no Alembic)
-        await self._ensure_api_key_column()
+        # Migrate: plaintext api_key column is gone (keys come from env)
+        await self._drop_api_key_column()
         # Migrate: sessions.cluster_id (step 13). Shared table with
         # session-service; both ensure the column (idempotent).
         async with self.engine.begin() as conn:
@@ -130,20 +129,30 @@ class DatabaseService:
                 "ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS options JSONB"
             ))
 
-    async def _ensure_api_key_column(self):
-        """Add api_key column to model_configs if it doesn't exist."""
+    async def _drop_api_key_column(self):
+        """Remove the plaintext api_key column left by older versions.
+
+        Configs that relied on it are listed so the operator can provide the
+        key as an environment variable and set api_key_env.
+        """
         from sqlalchemy import text, inspect as sa_inspect
         async with self.engine.begin() as conn:
             def _check(sync_conn):
                 inspector = sa_inspect(sync_conn)
                 columns = [c['name'] for c in inspector.get_columns('model_configs')]
                 return 'api_key' in columns
-            has_col = await conn.run_sync(_check)
-            if not has_col:
-                await conn.execute(text(
-                    "ALTER TABLE model_configs ADD COLUMN api_key VARCHAR"
-                ))
-                print("[DB] Added api_key column to model_configs", flush=True)
+            if not await conn.run_sync(_check):
+                return
+            rows = await conn.execute(text(
+                "SELECT name FROM model_configs WHERE api_key IS NOT NULL AND api_key <> '' "
+                "AND (api_key_env IS NULL OR api_key_env = '')"
+            ))
+            orphaned = [r[0] for r in rows.fetchall()]
+            await conn.execute(text("ALTER TABLE model_configs DROP COLUMN api_key"))
+            print("[DB] Dropped plaintext api_key column from model_configs", flush=True)
+            if orphaned:
+                print(f"[DB] WARNING model configs without api_key_env lost their stored key: {orphaned} "
+                      "— set the key as an ai-service env var and update api_key_env", flush=True)
     
     async def create_session(self, session_id: str, user_id: str = "default", title: str = "New Chat") -> Session:
         """새 세션 생성"""
@@ -407,7 +416,7 @@ class DatabaseService:
                 provider="openai",
                 model=settings.OPENAI_MODEL,
                 base_url=base_url,
-                api_key=api_key,
+                api_key_env="OPENAI_API_KEY",
                 extra_headers={},
                 tls_verify=True,
                 enabled=True,
