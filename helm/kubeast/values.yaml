@@ -22,6 +22,24 @@ admin:
 auth:
   signingKey:
     existingSecret: ""
+  # Access-token lifetime. The UI refreshes it silently while the user is
+  # active, so this is also the idle timeout.
+  tokenTTLMinutes: 60
+  # Self-service sign-up (POST /auth/register). Off: admins create accounts.
+  allowRegistration: false
+  # Demo read/write accounts (password = username). Never enable outside dev.
+  bootstrapDemoUsers: false
+  passwordMinLength: 12
+
+# --- Node shell (privileged debug pod on a node) ---
+# Off by default. When on, the pod runs in `namespace` (created with the
+# Pod Security "privileged" label) with an image from the allow list.
+nodeShell:
+  enabled: false
+  namespace: kubeast-node-shell
+  images:
+    - docker.io/library/busybox:latest
+  timeoutSeconds: 3600
 
 # --- AI Configuration ---
 # Provider keys reach ai-service only as environment variables; a model config

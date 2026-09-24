@@ -45,6 +45,13 @@ type Config struct {
 	// WebSocket
 	WSHeartbeatInterval int
 
+	// Node shell: privileged debug pod on a node. Off unless enabled; the pod
+	// always runs in NodeShellNamespace with an image from NodeShellImages.
+	NodeShellEnabled    bool
+	NodeShellNamespace  string
+	NodeShellImages     []string
+	NodeShellTimeoutSec int
+
 	// Postgres (shared audit log)
 	DatabaseURL string
 }
@@ -82,6 +89,11 @@ func Load() Config {
 		RedisDB:   pkgconfig.GetEnvInt("REDIS_DB", 0),
 
 		WSHeartbeatInterval: pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
+
+		NodeShellEnabled:    pkgconfig.GetEnvBool("NODE_SHELL_ENABLED", false),
+		NodeShellNamespace:  pkgconfig.GetEnv("NODE_SHELL_NAMESPACE", "kubeast-node-shell"),
+		NodeShellImages:     pkgconfig.GetEnvList("NODE_SHELL_IMAGES", "docker.io/library/busybox:latest"),
+		NodeShellTimeoutSec: pkgconfig.GetEnvInt("NODE_SHELL_TIMEOUT_SEC", 3600),
 
 		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubeast:password@localhost:5432/kubeast?sslmode=disable"),
 	}

@@ -33,6 +33,11 @@ type Config struct {
 	// Auth cookie
 	AuthCookieName string
 
+	// Account policy
+	AllowRegistration  bool // self-service POST /auth/register (off: 404)
+	BootstrapDemoUsers bool // create the read/write demo accounts at boot (dev only)
+	PasswordMinLength  int
+
 	// K8s setup
 	SetupNamespace          string
 	SetupKubeconfigSecret   string
@@ -61,7 +66,7 @@ func Load() Config {
 
 		JWTIssuer:         pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:       pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
-		JWTExpiresMinutes: pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 10080),
+		JWTExpiresMinutes: pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 60),
 		KeyDir:            pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
@@ -78,6 +83,10 @@ func Load() Config {
 		DefaultWritePassword: pkgconfig.GetEnv("DEFAULT_WRITE_PASSWORD", "write"),
 
 		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
+
+		AllowRegistration:  pkgconfig.GetEnvBool("ALLOW_REGISTRATION", false),
+		BootstrapDemoUsers: pkgconfig.GetEnvBool("BOOTSTRAP_DEMO_USERS", false),
+		PasswordMinLength:  pkgconfig.GetEnvInt("PASSWORD_MIN_LENGTH", 12),
 
 		SetupNamespace:          pkgconfig.GetEnv("SETUP_NAMESPACE", "kubeast"),
 		SetupKubeconfigSecret:   pkgconfig.GetEnv("SETUP_KUBECONFIG_SECRET", "k8s-kubeconfig"),

@@ -105,7 +105,7 @@ func main() {
 	slog.Info("JWT keys loaded")
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
-	authMiddleware := security.AuthMiddleware(jwtMgr)
+	authMiddleware := security.AuthMiddleware(jwtMgr, repo.GetTokenVersion)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never
@@ -184,6 +184,7 @@ func main() {
 			r.Get("/setup/rollout-status", setupHandler.RolloutStatus)
 
 			r.Get("/me", authHandler.Me)
+			r.Post("/refresh", authHandler.Refresh)
 			r.Post("/change-password", authHandler.ChangePassword)
 			r.Get("/permissions", roleHandler.ListPermissions)
 
@@ -258,12 +259,20 @@ func main() {
 }
 
 func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config.Config) {
+	if cfg.DefaultAdminPassword == "change-me-do-not-use-in-prod" {
+		slog.Warn("DEFAULT_ADMIN_PASSWORD is the built-in placeholder; set a strong value (the Helm chart generates one)")
+	}
 	users := []struct {
 		email, password, roleName, name string
 	}{
 		{cfg.DefaultAdminEmail, cfg.DefaultAdminPassword, "Admin", "admin"},
-		{cfg.DefaultReadEmail, cfg.DefaultReadPassword, "Read", "read"},
-		{cfg.DefaultWriteEmail, cfg.DefaultWritePassword, "Write", "write"},
+	}
+	// Demo read/write accounts exist only for local development.
+	if cfg.BootstrapDemoUsers {
+		users = append(users,
+			struct{ email, password, roleName, name string }{cfg.DefaultReadEmail, cfg.DefaultReadPassword, "Read", "read"},
+			struct{ email, password, roleName, name string }{cfg.DefaultWriteEmail, cfg.DefaultWritePassword, "Write", "write"},
+		)
 	}
 
 	for _, u := range users {

@@ -11,7 +11,10 @@ data:
 
   JWT_ISSUER: "kubeast-auth"
   JWT_AUDIENCE: "kubeast"
-  JWT_EXPIRES_MINUTES: "10080"
+  JWT_EXPIRES_MINUTES: "60"
+  # dev only: demo read/write accounts and the privileged node shell
+  BOOTSTRAP_DEMO_USERS: "true"
+  NODE_SHELL_ENABLED: "true"
 
   DEFAULT_ADMIN_EMAIL: "admin"
   KEY_DIR: "/app/.keys"

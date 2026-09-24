@@ -17,7 +17,7 @@ test.describe('ws multiplexer — per-subscription cluster gate (M1)', () => {
   test('a self-only user cannot subscribe to default over a self socket', async ({ browser, request }) => {
     const admin = { Authorization: `Bearer ${await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)}` }
     const email = `e2e-wsgate-${Date.now()}@kubeast.local`
-    const password = 'wsgate1234'
+    const password = 'e2e-ws-gate-throwaway'
     let userId = ''
     try {
       const created = await request.post('/api/v1/auth/admin/users', {

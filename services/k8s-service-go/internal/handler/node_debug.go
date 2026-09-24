@@ -40,15 +40,16 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.cfg.NodeShellEnabled {
+		http.Error(w, "node shell is disabled (NODE_SHELL_ENABLED)", http.StatusForbidden)
+		return
+	}
+
 	nodeName := chi.URLParam(r, "name")
-	namespace := r.URL.Query().Get("namespace")
-	if namespace == "" {
-		namespace = "default"
-	}
-	image := r.URL.Query().Get("image")
-	if image == "" {
-		image = "docker.io/library/busybox:latest"
-	}
+	// The debug pod always runs in the dedicated privileged namespace with an
+	// allow-listed image; the client's namespace/image choices are not trusted.
+	namespace := h.cfg.NodeShellNamespace
+	image, imageErr := nodeShellImage(h.cfg.NodeShellImages, r.URL.Query().Get("image"))
 
 	// Audit at connection time (per §11 Q2). We do not record session
 	// duration or individual commands — that's a v2 decision.
@@ -62,11 +63,25 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	if imageErr != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("\r\n"+imageErr.Error()+"\r\n"))
+		return
+	}
+
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	clientset := h.svc.Clientset()
-	restConfig := h.svc.RestConfig()
+	// Clients for the cluster selected on the request (not the default one).
+	clientset, err := h.svc.ClientsetFor(ctx)
+	if err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\ncluster client: %v\r\n", err)))
+		return
+	}
+	restConfig, err := h.svc.RESTConfigFor(ctx)
+	if err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\ncluster config: %v\r\n", err)))
+		return
+	}
 
 	// Create debug pod
 	podName := fmt.Sprintf("node-debugger-%s-%s", nodeName, rand.String(5))
@@ -81,11 +96,13 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		Spec: corev1.PodSpec{
-			NodeName:      nodeName,
-			HostPID:       true,
-			HostIPC:       true,
-			HostNetwork:   true,
-			RestartPolicy: corev1.RestartPolicyNever,
+			NodeName:                     nodeName,
+			HostPID:                      true,
+			HostIPC:                      true,
+			HostNetwork:                  true,
+			RestartPolicy:                corev1.RestartPolicyNever,
+			ActiveDeadlineSeconds:        int64p(int64(h.cfg.NodeShellTimeoutSec)),
+			AutomountServiceAccountToken: boolPtr(false),
 			Containers: []corev1.Container{
 				{
 					Name:    "debugger",
@@ -115,6 +132,10 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	if err := ensureNodeShellNamespace(ctx, clientset, namespace); err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\nfailed to prepare namespace %s: %v\r\n", namespace, err)))
+		return
+	}
 	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
 	if err != nil {
 		msg := fmt.Sprintf("failed to create debug pod: %v", err)

@@ -27,7 +27,7 @@ test.describe('multi-cluster RBAC UI (step 12)', () => {
       // throwaway non-admin user (defaults to the Read role)
       const created = await request.post('/api/v1/auth/admin/users', {
         headers: auth,
-        data: { name: 'E2E RBAC UI', email, password: 'rbac1234' },
+        data: { name: 'E2E RBAC UI', email, password: 'e2e-rbac-ui-throwaway' },
       })
       expect(created.status(), 'create throwaway user').toBe(201)
       userId = (await created.json()).id

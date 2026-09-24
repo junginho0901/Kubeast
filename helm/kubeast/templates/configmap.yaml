@@ -12,7 +12,14 @@ data:
   WS_HEARTBEAT_INTERVAL: "30"
   JWT_ISSUER: "kubeast-auth"
   JWT_AUDIENCE: "kubeast"
-  JWT_EXPIRES_MINUTES: "10080"
+  JWT_EXPIRES_MINUTES: {{ .Values.auth.tokenTTLMinutes | quote }}
+  ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
+  BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
+  PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}
+  NODE_SHELL_ENABLED: {{ .Values.nodeShell.enabled | quote }}
+  NODE_SHELL_NAMESPACE: {{ .Values.nodeShell.namespace | quote }}
+  NODE_SHELL_IMAGES: {{ join "," .Values.nodeShell.images | quote }}
+  NODE_SHELL_TIMEOUT_SEC: {{ .Values.nodeShell.timeoutSeconds | quote }}
   DEFAULT_ADMIN_EMAIL: {{ .Values.admin.email | quote }}
   KEY_DIR: "/app/.keys"
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}

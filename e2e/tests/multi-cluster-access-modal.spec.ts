@@ -20,7 +20,7 @@ test('cluster Access modal grants + revokes a per-cluster role', async ({ page, 
   try {
     const created = await request.post('/api/v1/auth/admin/users', {
       headers: auth,
-      data: { name: 'E2E Access Modal', email, password: 'access1234' },
+      data: { name: 'E2E Access Modal', email, password: 'e2e-access-modal-throwaway' },
     })
     expect(created.status(), 'create throwaway user').toBe(201)
     userId = (await created.json()).id

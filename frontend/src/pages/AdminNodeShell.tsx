@@ -77,6 +77,12 @@ export default function AdminNodeShell() {
               onChange={(e) => setNodeShellNamespace(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200"
             />
+            <p className="mt-1 text-[11px] text-slate-500">
+              {tr(
+                'account.nodeShell.namespaceHint',
+                'Informational only: the server always creates the shell pod in its configured privileged namespace (NODE_SHELL_NAMESPACE).',
+              )}
+            </p>
           </div>
 
           <div>
@@ -89,6 +95,12 @@ export default function AdminNodeShell() {
               onChange={(e) => setNodeShellImage(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200"
             />
+            <p className="mt-1 text-[11px] text-slate-500">
+              {tr(
+                'account.nodeShell.imageHint',
+                'Must be on the server allow list (Helm nodeShell.images / NODE_SHELL_IMAGES); the shell pod always runs in the dedicated privileged namespace.',
+              )}
+            </p>
           </div>
         </div>
       </div>

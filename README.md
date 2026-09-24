@@ -289,10 +289,21 @@ admin:
   password: ""          # 비우면 자동 생성 (secret 으로 확인)
 
 # JWT 서명키 — 비우면 설치 시 생성해 Secret(kubeast-auth-keys)에 보관, upgrade 때 재사용.
-# 직접 관리하는 Secret(키 이름 jwt_private.pem)이 있으면 지정
+# 직접 관리하는 Secret(키 이름 jwt_private.pem)이 있으면 지정.
+# 토큰 60분(활동 중이면 UI가 자동 갱신), 셀프 가입·데모 계정은 기본 off
 auth:
   signingKey:
     existingSecret: ""
+  tokenTTLMinutes: 60
+  allowRegistration: false
+  bootstrapDemoUsers: false
+  passwordMinLength: 12
+
+# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
+nodeShell:
+  enabled: false
+  images:
+    - docker.io/library/busybox:latest
 
 # 파드 보안 (Pod Security Standards restricted 기본). 사용자 네임스페이스를
 # 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true

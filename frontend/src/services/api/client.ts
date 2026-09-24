@@ -4,7 +4,7 @@
 // `client` rather than duplicating the axios setup.
 
 import axios from 'axios'
-import { getAccessToken, handleUnauthorized } from '../auth'
+import { getAccessToken, handleUnauthorized, refreshAccessTokenIfNeeded } from '../auth'
 import { getCurrentClusterID } from '../clusterRef'
 
 export const client = axios.create({
@@ -15,8 +15,12 @@ export const client = axios.create({
   timeout: 10000, // 10초 타임아웃 (백엔드 재시도 시간 고려)
 })
 
-client.interceptors.request.use((config) => {
+client.interceptors.request.use(async (config) => {
   config.headers = config.headers ?? {}
+  const url = String(config.url || '')
+  if (!url.startsWith('/auth/')) {
+    await refreshAccessTokenIfNeeded()
+  }
   const token = getAccessToken()
   if (token) {
     (config.headers as any).Authorization = `Bearer ${token}`

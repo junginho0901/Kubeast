@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -114,8 +115,9 @@ func JWKThumbprint(pub *rsa.PublicKey) string {
 // CreateToken generates a signed JWT for a user. permissions is the per-cluster
 // permission matrix (cluster id → perms, "*" = all clusters); it marshals to a
 // JSON object claim. A non-nil empty matrix marshals to {} (a valid
-// deny-everything token), never null.
-func (m *JWTManager) CreateToken(userID, email, roleName string, permissions auth.PermissionMatrix) (string, error) {
+// deny-everything token), never null. tokenVersion is the user's revocation
+// counter ("tv" claim): bumping it in the database invalidates the token.
+func (m *JWTManager) CreateToken(userID, email, roleName string, permissions auth.PermissionMatrix, tokenVersion int) (string, error) {
 	if permissions == nil {
 		permissions = auth.PermissionMatrix{}
 	}
@@ -125,6 +127,8 @@ func (m *JWTManager) CreateToken(userID, email, roleName string, permissions aut
 		"email":       email,
 		"role":        roleName,
 		"permissions": permissions,
+		"tv":          tokenVersion,
+		"jti":         uuid.NewString(), // unique per issue (login vs refresh in the same second)
 		"iss":         m.Issuer,
 		"aud":         m.Audience,
 		"iat":         now.Unix(),

@@ -23,9 +23,9 @@ func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.created_at, u.updated_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.email = $1`, email,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -35,13 +35,30 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.U
 func (r *Repository) GetUserByID(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.created_at, u.updated_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.created_at, u.updated_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1`, id,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	return &u, err
+}
+
+// GetTokenVersion returns the user's current token_version; an error (including
+// pgx.ErrNoRows for a deleted user) means no token is acceptable.
+func (r *Repository) GetTokenVersion(ctx context.Context, id string) (int, error) {
+	var v int
+	err := r.pool.QueryRow(ctx, `SELECT token_version FROM auth_users WHERE id = $1`, id).Scan(&v)
+	return v, err
+}
+
+// BumpTokenVersion invalidates every token issued to the user so far.
+func (r *Repository) BumpTokenVersion(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE auth_users SET token_version = token_version + 1, updated_at = $1 WHERE id = $2`,
+		time.Now().UTC(), id,
+	)
+	return err
 }
 
 func (r *Repository) ListUsers(ctx context.Context, limit, offset int) ([]model.User, error) {

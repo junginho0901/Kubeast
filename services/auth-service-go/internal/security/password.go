@@ -38,6 +38,52 @@ func HashPassword(password string, iterations int) (string, error) {
 // string of the requested length using crypto/rand. Used for admin
 // reset-password and bootstrap fallbacks where the plaintext is shown
 // to a human exactly once.
+// PasswordMaxLength bounds hashing cost; NIST SP 800-63B asks for at least 64.
+const PasswordMaxLength = 128
+
+// commonPasswords is a short blocklist of values no policy should accept, and
+// commonFragments are base words that make any password containing them weak
+// ("password1234", "Qwerty!2026"). Not a substitute for a breached-password
+// check, which needs an external source.
+var commonPasswords = map[string]struct{}{
+	"123456789": {}, "1234567890": {}, "admin123": {}, "administrator": {}, "welcome1": {}, "kubernetes": {},
+}
+
+var commonFragments = []string{"password", "passw0rd", "qwerty", "12345678", "letmein", "iloveyou", "changeme", "kubeast"}
+
+// ValidatePassword applies the NIST SP 800-63B style policy: a length window,
+// not the account identifier, not a well-known value. No composition rules.
+func ValidatePassword(password, email string, minLength int) error {
+	if minLength < 8 {
+		minLength = 8
+	}
+	if len(password) < minLength {
+		return fmt.Errorf("password must be at least %d characters", minLength)
+	}
+	if len(password) > PasswordMaxLength {
+		return fmt.Errorf("password must be at most %d characters", PasswordMaxLength)
+	}
+	lower := strings.ToLower(password)
+	if _, common := commonPasswords[lower]; common {
+		return fmt.Errorf("password is too common")
+	}
+	for _, frag := range commonFragments {
+		if strings.Contains(lower, frag) {
+			return fmt.Errorf("password must not contain %q", frag)
+		}
+	}
+	if e := strings.ToLower(strings.TrimSpace(email)); e != "" {
+		local := e
+		if at := strings.Index(e, "@"); at > 0 {
+			local = e[:at]
+		}
+		if lower == e || lower == local {
+			return fmt.Errorf("password must not be the account name")
+		}
+	}
+	return nil
+}
+
 func GenerateRandomPassword(length int) (string, error) {
 	if length <= 0 {
 		length = 16
@@ -84,4 +130,3 @@ func VerifyPassword(password, stored string) bool {
 	actual := pbkdf2.Key([]byte(password), salt, iterations, len(expected), sha256.New)
 	return hmac.Equal(actual, expected)
 }
-

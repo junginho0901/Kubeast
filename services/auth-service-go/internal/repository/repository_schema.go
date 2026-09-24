@@ -54,6 +54,9 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 			DELETE FROM organizations WHERE type = 'hq';
 		EXCEPTION WHEN OTHERS THEN NULL;
 		END $$`,
+		// Token revocation counter: bumped on role/password changes, carried in
+		// tokens as the "tv" claim and compared on every auth-service request.
+		`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`,
 		// RBAC: roles table
 		`CREATE TABLE IF NOT EXISTS roles (
 			id SERIAL PRIMARY KEY,
