@@ -10,12 +10,18 @@ RUN apk add --no-cache curl ca-certificates \
     && chmod +x kubectl \
     && /downloads/kubectl version --client
 
-FROM golang:1.21 as builder
+# Build context is services/ (shared pkg module is pulled in via replace),
+# same layout as the other Go services.
+FROM golang:1.22-alpine AS builder
 ARG TARGETARCH
-WORKDIR /src
-COPY go.mod ./
+WORKDIR /build/pkg
+COPY pkg/go.mod pkg/go.sum* ./
+COPY pkg/ ./
+WORKDIR /build/tool-server
+COPY tool-server/go.mod tool-server/go.sum* ./
+RUN sed -i 's|=> ../pkg|=> /build/pkg|' go.mod
 RUN go mod download
-COPY . .
+COPY tool-server/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o /out/tool-server .
 
 FROM gcr.io/distroless/static:nonroot

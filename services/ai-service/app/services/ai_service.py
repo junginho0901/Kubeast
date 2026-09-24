@@ -134,17 +134,17 @@ class AIService:
         # Permission-based: check if user has write/admin-level permissions
         if self.token and self.token.has_permission("*"):
             return os.getenv("TOOL_SERVER_URL_ADMIN")
-        if self.token and self.token.has_permission("ai.tool.*"):
+        if self.token and self.token.has_permission_for_cluster("ai.tool.*", permissions.effective_cluster(self)):
             return os.getenv("TOOL_SERVER_URL_WRITE")
         return os.getenv("TOOL_SERVER_URL_READ")
 
     async def _call_tool_server(self, function_name: str, function_args: Dict) -> str:
-        # Multi-cluster (step 14): thread the active cluster to tool-server so it
-        # runs kubectl against that cluster. A cluster the model put in the args
-        # (explicit cross-cluster call) wins; otherwise default to the active one.
-        args = function_args
-        if self.cluster_name and not args.get("cluster"):
-            args = {**function_args, "cluster": self.cluster_name}
+        # Every tool call is pinned to the request's active cluster; a cluster
+        # the model wrote into the args is discarded (and logged), so a prompt
+        # can never steer a tool at a cluster the user did not select.
+        args, discarded = permissions.scope_tool_args(function_args, permissions.effective_cluster(self))
+        if discarded:
+            print(f"[WARN] tool {function_name}: model-supplied cluster {discarded!r} ignored, using {args['cluster']!r}", flush=True)
         return await self.tool_server.call_tool(function_name, args)
 
     def _role_allows_write(self) -> bool:

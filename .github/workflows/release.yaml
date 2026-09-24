@@ -34,8 +34,8 @@ jobs:
             context: frontend
             dockerfile: ""
           - name: tool-server
-            context: services/tool-server
-            dockerfile: ""
+            context: services
+            dockerfile: tool-server/Dockerfile
           - name: model-config-controller-go
             context: services/model-config-controller-go
             dockerfile: ""

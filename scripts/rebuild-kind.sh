@@ -92,7 +92,7 @@ get_context() {
     k8s-service) echo "services" ;;
     session-service) echo "services" ;;
     frontend) echo "frontend" ;;
-    tool-server) echo "services/tool-server" ;;
+    tool-server) echo "services" ;;
     model-config-controller-go) echo "services/model-config-controller-go" ;;
     *) echo "" ;;
   esac
@@ -104,6 +104,7 @@ get_dockerfile() {
     auth-service) echo "auth-service-go/Dockerfile" ;;
     session-service) echo "session-service-go/Dockerfile" ;;
     k8s-service) echo "k8s-service-go/Dockerfile" ;;
+    tool-server) echo "tool-server/Dockerfile" ;;
     *) echo "" ;;
   esac
 }

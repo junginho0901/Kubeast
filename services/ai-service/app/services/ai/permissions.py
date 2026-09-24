@@ -1,14 +1,20 @@
 # 사용자 권한 / role 기반 tool 필터링. ai_service.py 에서 추출 (Phase 4.5.2).
 #
 # self.token / self.user_role / self._token_payload (instance attribute) 의존
-# 이라 service 첫 인자 패턴으로 추출.
+# 이라 service 첫 인자 패턴으로 추출. 모든 tool 권한은 요청의 활성 클러스터
+# (service.cluster_name, 없으면 DEFAULT_CLUSTER) 기준으로만 판단한다 — 다른
+# 클러스터에서 받은 권한은 여기서 아무 효력이 없다.
 
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from app.security import decode_access_token
+from app.security import DEFAULT_CLUSTER, decode_access_token
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
+
+
+def effective_cluster(service: "AIService") -> str:
+    return getattr(service, "cluster_name", None) or DEFAULT_CLUSTER
 
 
 def resolve_user_role(service: "AIService", authorization: Optional[str]) -> str:
@@ -29,7 +35,7 @@ def resolve_user_role(service: "AIService", authorization: Optional[str]) -> str
 
 def role_allows_write(service: "AIService") -> bool:
     if service.token:
-        return service.token.has_permission("resource.*.create")
+        return service.token.has_permission_for_cluster("resource.*.create", effective_cluster(service))
     return service.user_role in {"write", "admin"}
 
 
@@ -41,7 +47,7 @@ def role_allows_admin(service: "AIService") -> bool:
 
 def is_tool_allowed(service: "AIService", function_name: str) -> bool:
     if service.token:
-        return service.token.has_permission(f"ai.tool.{function_name}")
+        return service.token.has_permission_for_cluster(f"ai.tool.{function_name}", effective_cluster(service))
     # Fallback to legacy role-based checks
     write_tools = {
         "k8s_apply_manifest",
@@ -77,3 +83,18 @@ def filter_tools_by_role(service: "AIService", tools: List[Dict]) -> List[Dict]:
         if is_tool_allowed(service, name):
             filtered.append(tool)
     return filtered
+
+
+def scope_tool_args(function_args: Dict, cluster: str) -> Tuple[Dict, Optional[str]]:
+    """Pin a tool call to the request's active cluster.
+
+    The model never chooses the target cluster: whatever it put in `cluster`
+    is replaced by the active one. Returns the scoped args and the discarded
+    value (if any) so the caller can log the attempt.
+    """
+    args = dict(function_args or {})
+    supplied = args.get("cluster")
+    args["cluster"] = cluster
+    if isinstance(supplied, str) and supplied and supplied != cluster:
+        return args, supplied
+    return args, None

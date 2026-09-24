@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 type ToolHandler func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error)
@@ -21,6 +23,14 @@ var (
 	kubeconfigPath   = resolveKubeconfigPath()
 	tokenPassthrough = strings.EqualFold(os.Getenv("TOKEN_PASSTHROUGH"), "true")
 	defaultTimeout   = 60 * time.Second
+
+	// toolAuth validates the caller's JWT against auth-service's JWKS (same
+	// issuer/audience settings every other service uses).
+	toolAuth tokenValidator = auth.NewJWTValidator(auth.JWKSConfig{
+		JWKSURL:  envOrDefault("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
+		Issuer:   envOrDefault("JWT_ISSUER", "kubeast-auth"),
+		Audience: envOrDefault("JWT_AUDIENCE", "kubeast"),
+	})
 )
 
 func main() {
