@@ -62,7 +62,10 @@ else
 
   # Kind 클러스터 재생성
   step "Creating Kind cluster"
-  kind create cluster --name "$KIND_NAME" --config "$ROOT/kind-config.yaml"
+  KIND_CONFIG="$(mktemp)"
+  sed "s#__KUBEAST_ROOT__#${ROOT}#g" "$ROOT/kind-config.yaml" > "$KIND_CONFIG"
+  kind create cluster --name "$KIND_NAME" --config "$KIND_CONFIG"
+  rm -f "$KIND_CONFIG"
   ok "Kind cluster created"
 
   # kubeconfig 저장. repo-local .kubeconfig-kind 도 함께 갱신해 둔다 —
@@ -196,9 +199,9 @@ for entry in "${IMAGES[@]}"; do
   img="kubeast/${name}:${TAG}"
   echo -e "  Building ${YELLOW}${img}${NC} ..."
   if [[ -n "$dockerfile" ]]; then
-    docker build -t "$img" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx" 2>&1 | tail -1
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$img" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx" 2>&1 | tail -1
   else
-    docker build -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
   fi
   BUILT_IMAGES+=("$img")
   ok "$img"
@@ -215,7 +218,8 @@ ok "All images loaded"
 # 5. Kubernetes 리소스 배포
 # ═══════════════════════════════════════════════════
 step "Applying Kubernetes manifests"
-kubectl apply -k "$ROOT/k8s" 2>&1 | grep -E "^(namespace|configmap|secret|deployment|service|clusterrole)" || true
+kubectl kustomize --load-restrictor LoadRestrictionsNone "$ROOT/k8s" | kubectl apply -f - \
+  | grep -E "^(namespace|configmap|secret|deployment|service|clusterrole)" || fail "kubectl apply failed"
 ok "Base manifests applied"
 
 # local secret 덮어쓰기

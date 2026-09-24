@@ -7,5 +7,5 @@ nodes:
         hostPort: 30080
         protocol: TCP
     extraMounts:
-      - hostPath: /Users/okestro/AgentForCMP/.kind-data/postgres
+      - hostPath: __KUBEAST_ROOT__/.kind-data/postgres
         containerPath: /var/lib/kind-postgres

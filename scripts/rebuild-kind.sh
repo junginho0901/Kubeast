@@ -206,9 +206,9 @@ build_and_load() {
 
   echo "═══ Building ${image} ═══"
   if [[ -n "$dockerfile" ]]; then
-    docker build -t "$image" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx"
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$image" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx"
   else
-    docker build -t "$image" "$ROOT/$ctx"
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$image" "$ROOT/$ctx"
   fi
   echo "═══ Loading ${image} into kind (${KIND_CLUSTER_NAME}) ═══"
   kind load docker-image "$image" --name "$KIND_CLUSTER_NAME"
