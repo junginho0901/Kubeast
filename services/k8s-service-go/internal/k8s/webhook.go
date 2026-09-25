@@ -94,10 +94,10 @@ func formatMutatingWebhookConfigList(items []admissionregistrationv1.MutatingWeb
 
 func formatMutatingWebhookConfigSummary(mwc *admissionregistrationv1.MutatingWebhookConfiguration) map[string]interface{} {
 	return map[string]interface{}{
-		"name":          mwc.Name,
+		"name":           mwc.Name,
 		"webhooks_count": len(mwc.Webhooks),
-		"labels":        mwc.Labels,
-		"created_at":    toISO(&mwc.CreationTimestamp),
+		"labels":         mwc.Labels,
+		"created_at":     toISO(&mwc.CreationTimestamp),
 	}
 }
 
@@ -240,10 +240,10 @@ func formatValidatingWebhookConfigList(items []admissionregistrationv1.Validatin
 
 func formatValidatingWebhookConfigSummary(vwc *admissionregistrationv1.ValidatingWebhookConfiguration) map[string]interface{} {
 	return map[string]interface{}{
-		"name":          vwc.Name,
+		"name":           vwc.Name,
 		"webhooks_count": len(vwc.Webhooks),
-		"labels":        vwc.Labels,
-		"created_at":    toISO(&vwc.CreationTimestamp),
+		"labels":         vwc.Labels,
+		"created_at":     toISO(&vwc.CreationTimestamp),
 	}
 }
 

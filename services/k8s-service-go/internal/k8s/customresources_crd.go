@@ -48,13 +48,13 @@ func (s *Service) GetCRDs(ctx context.Context) ([]map[string]interface{}, error)
 		}
 
 		result = append(result, map[string]interface{}{
-			"name":       item.GetName(),
-			"group":      group,
-			"version":    version,
-			"scope":      scope,
-			"kind":       kind,
-			"created_at": createdAt,
-			"labels":     item.GetLabels(),
+			"name":        item.GetName(),
+			"group":       group,
+			"version":     version,
+			"scope":       scope,
+			"kind":        kind,
+			"created_at":  createdAt,
+			"labels":      item.GetLabels(),
 			"annotations": item.GetAnnotations(),
 		})
 	}

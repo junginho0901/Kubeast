@@ -1,6 +1,6 @@
-# PR gate: unit tests and type checks for every service. e2e (kind + LLM) stays
-# local — see README "E2E tests". eslint and gofmt are not gates yet
-# (pre-existing debt); they run in the "lint" job as informational output.
+# PR gate: unit tests, type checks and gofmt for every service. e2e (kind + LLM)
+# stays local — see README "E2E tests". eslint is informational until the
+# pre-existing lint debt is cleared.
 name: ci
 
 on:
@@ -90,19 +90,24 @@ jobs:
           helm template kubeast helm/kubeast --namespace kubeast --set pdb.enabled=true \
             | ./kubeconform -strict -summary -kubernetes-version 1.33.0 -ignore-missing-schemas
 
-  lint:
-    name: lint (informational — O4/O5 debt)
+  gofmt:
+    name: gofmt
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-      - name: gofmt
-        run: |
+      - run: |
           cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go)
-          if [ -n "$files" ]; then echo "$files"; exit 1; fi
+          if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
+
+  eslint:
+    name: eslint (informational — O5 debt)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "18"
