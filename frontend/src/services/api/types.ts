@@ -1204,6 +1204,12 @@ export interface Member {
   role: AuthRoleInfo | null
   created_at: string
   updated_at: string
+  // GET /auth/me only: the per-cluster permission matrix the session token
+  // carries ("*" = global), the cluster role names, and the token lifetime the
+  // client paces its refresh on. The browser cannot read the HttpOnly cookie.
+  permissions_matrix?: Record<string, string[]>
+  cluster_roles?: Record<string, string>
+  token_ttl_minutes?: number
 }
 
 // AdminResetPassword 응답: Member 필드 + 1회용 평문 비밀번호

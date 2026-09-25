@@ -37,15 +37,13 @@ setup('authenticate', async ({ page }) => {
   // Provision a second cluster so the multi-cluster switch / RBAC e2e has
   // something to switch to. 'self' = the in-cluster ServiceAccount (k8s mode),
   // distinct from the external 'default'. Idempotent — a 409 (already
-  // registered) is fine.
-  const token = await page.evaluate(() => localStorage.getItem('kubeast:access-token'))
-  if (token) {
-    await page.request.post('/api/v1/clusters', {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { mode: 'self', display_name: 'self' },
-      failOnStatusCode: false,
-    })
-  }
+  // registered) is fine. page.request shares the browser's session cookie;
+  // a cookie-authenticated write needs the CSRF header the app sends.
+  await page.request.post('/api/v1/clusters', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    data: { mode: 'self', display_name: 'self' },
+    failOnStatusCode: false,
+  })
 
   fs.mkdirSync(path.dirname(STORAGE_STATE), { recursive: true })
   await page.context().storageState({ path: STORAGE_STATE })

@@ -168,7 +168,9 @@ func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, r *http.Request, toke
 		MaxAge:   h.cfg.JWTExpiresMinutes * 60,
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		// Strict: the cookie never rides a cross-site request. Deep links still
+		// work — the first request only fetches the SPA's static HTML.
+		SameSite: http.SameSiteStrictMode,
 	})
 }
 
@@ -229,12 +231,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		h.writeAuditLog(r, "user.logout", &payload.UserID, &payload.Email, &payload.UserID, &payload.Email, nil, nil)
 	}
 
+	// Same attributes as setAuthCookie so the browser matches the cookie it holds.
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cfg.AuthCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteStrictMode,
 	})
 	response.JSON(w, http.StatusOK, map[string]bool{"success": true})
 }
@@ -259,7 +264,23 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	permissions, _ := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
-	response.JSON(w, http.StatusOK, user.ToResponseWithPermissions(permissions))
+	// The browser holds the token only as an HttpOnly cookie, so it cannot
+	// read the per-cluster matrix from the JWT; hand it over here (same
+	// buildPermissionMatrix the token is issued from).
+	matrix, _ := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
+	if matrix == nil {
+		matrix = auth.PermissionMatrix{}
+	}
+	clusterRoles, _ := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if clusterRoles == nil {
+		clusterRoles = map[string]string{}
+	}
+	response.JSON(w, http.StatusOK, struct {
+		model.UserResponse
+		PermissionsMatrix auth.PermissionMatrix `json:"permissions_matrix"`
+		ClusterRoles      map[string]string     `json:"cluster_roles"`
+		TokenTTLMinutes   int                   `json:"token_ttl_minutes"`
+	}{user.ToResponseWithPermissions(permissions), matrix, clusterRoles, h.cfg.JWTExpiresMinutes})
 }
 
 // ChangePassword handles POST /auth/change-password

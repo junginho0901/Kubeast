@@ -270,6 +270,29 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"])}, nil
 }
 
+// CSRFHeader must accompany cookie-authenticated requests that can change
+// state (anything but GET/HEAD/OPTIONS). A cross-site page cannot add a custom
+// header without a CORS preflight, so its forged request is refused even
+// though the browser attaches the session cookie (OWASP CSRF cheat sheet,
+// "custom request headers"). Bearer-authenticated calls (API clients) are not
+// subject to it.
+const (
+	CSRFHeader      = "X-Requested-With"
+	CSRFHeaderValue = "XMLHttpRequest"
+)
+
+// CSRFSafe reports whether a request authenticated by cookie may proceed.
+func CSRFSafe(r *http.Request, fromCookie bool) bool {
+	if !fromCookie {
+		return true
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	return r.Header.Get(CSRFHeader) == CSRFHeaderValue
+}
+
 // Middleware returns an HTTP middleware that validates JWT tokens.
 // It checks the Authorization header first, then falls back to a cookie
 // (needed for browser WebSocket connections which can't set custom headers).
@@ -292,18 +315,23 @@ func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler
 			}
 		}
 
-		// 2. Fallback to cookie (browser WebSocket connections cannot set headers;
-		//    the HttpOnly cookie set at login is sent with the upgrade request).
-		//    A query-string token is not accepted: it ends up in access logs,
-		//    browser history and Referer headers.
+		// 2. Fallback to cookie — the browser's session (HttpOnly cookie set at
+		//    login; also what WebSocket upgrades carry). A query-string token is
+		//    not accepted: it ends up in access logs, history and Referer.
+		fromCookie := false
 		if tokenStr == "" && cookieName != "" {
 			if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
 				tokenStr = c.Value
+				fromCookie = true
 			}
 		}
 
 		if tokenStr == "" {
 			http.Error(w, `{"detail":"Missing Authorization header"}`, http.StatusUnauthorized)
+			return
+		}
+		if !CSRFSafe(r, fromCookie) {
+			http.Error(w, `{"detail":"Missing X-Requested-With header"}`, http.StatusForbidden)
 			return
 		}
 

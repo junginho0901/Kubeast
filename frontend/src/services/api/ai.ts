@@ -2,7 +2,7 @@
 // suggestOptimizationStream uses raw fetch instead of axios so it can
 // consume the response body as a stream of SSE events.
 
-import { getAccessToken, handleUnauthorized } from '../auth'
+import { getAuthHeaders, handleUnauthorized } from '../auth'
 
 import { client } from './client'
 import type {
@@ -74,9 +74,7 @@ export const aiApi = {
   suggestOptimizationStream: async (namespace: string, handlers: OptimizationStreamHandlers = {}): Promise<void> => {
     const { onObserved, onContent, onUsage, onMeta, onError, onDone, signal } = handlers
 
-    const headers: Record<string, string> = { Accept: 'text/event-stream' }
-    const token = getAccessToken()
-    if (token) headers.Authorization = `Bearer ${token}`
+    const headers: Record<string, string> = { Accept: 'text/event-stream', ...getAuthHeaders() }
 
     const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}`, {
       method: 'GET',

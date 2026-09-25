@@ -5,7 +5,7 @@
 
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { clearAccessToken } from '@/services/auth'
+import { logoutSession } from '@/services/auth'
 import { ModalOverlay } from '@/components/ModalOverlay'
 
 interface Props {
@@ -39,7 +39,7 @@ export function ReauthModal({ open, tr }: Props) {
             type="button"
             autoFocus
             onClick={() => {
-              clearAccessToken()
+              void logoutSession()
               queryClient.clear()
               navigate('/login', { replace: true })
             }}

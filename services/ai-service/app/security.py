@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Optional
 
 import jwt
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
 
 AUTH_JWKS_URL = os.getenv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json")
@@ -117,7 +117,32 @@ def decode_access_token(token: str) -> TokenPayload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-async def require_auth(authorization: Optional[str] = Header(None, alias="Authorization")) -> TokenPayload:
+AUTH_COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME", "kubeast.token")
+CSRF_HEADER = "x-requested-with"
+CSRF_HEADER_VALUE = "XMLHttpRequest"
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def bearer_or_cookie(request: Request) -> str:
+    """The caller's credential as a "Bearer <token>" string.
+
+    API clients send the Authorization header. The browser holds the token only
+    as the HttpOnly session cookie; a cookie-authenticated request that can
+    change state must also carry X-Requested-With (CSRF — a cross-site page
+    cannot add that header without a CORS preflight). Bearer calls are exempt.
+    """
+    authorization = request.headers.get("authorization")
+    if authorization:
+        return authorization
+    token = request.cookies.get(AUTH_COOKIE_NAME, "")
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    if request.method.upper() not in _SAFE_METHODS and request.headers.get(CSRF_HEADER) != CSRF_HEADER_VALUE:
+        raise HTTPException(status_code=403, detail="Missing X-Requested-With header")
+    return f"Bearer {token}"
+
+
+async def require_auth(authorization: Optional[str] = Depends(bearer_or_cookie)) -> TokenPayload:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 

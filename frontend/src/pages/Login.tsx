@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
-import { clearRedirectAfterLogin, getRedirectAfterLogin, setAccessToken } from '@/services/auth'
+import { clearRedirectAfterLogin, getRedirectAfterLogin } from '@/services/auth'
 import { clearStoredCluster } from '@/contexts/ClusterContext'
 import { Activity, Layers, LayoutDashboard, Lock, MessageSquare, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -50,9 +50,13 @@ export default function Login() {
   }, [location.state])
 
   const loginMutation = useMutation({
-    mutationFn: () => api.login({ email, password }),
-    onSuccess: (res) => {
-      setAccessToken(res.access_token)
+    // Login sets the HttpOnly session cookie; the identity the app runs on
+    // (with the permission matrix) is then read back from GET /auth/me.
+    mutationFn: async () => {
+      await api.login({ email, password })
+      return api.me()
+    },
+    onSuccess: (me) => {
       clearRedirectAfterLogin()
       // Start the new user with a clean slate: drop the previous session's
       // cluster selection and every cached query so a different user never sees
@@ -60,7 +64,7 @@ export default function Login() {
       // permission-derived UI. Re-seed identity from this login's response.
       clearStoredCluster()
       queryClient.clear()
-      queryClient.setQueryData(['me'], res.member)
+      queryClient.setQueryData(['me'], me)
       const needsSetup = setupStatus && !setupStatus.configured && !isFetchingSetup
       navigate(needsSetup ? '/setup' : redirectTo, { replace: needsSetup })
     },
