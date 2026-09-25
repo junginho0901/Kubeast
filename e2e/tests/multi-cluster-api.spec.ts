@@ -7,9 +7,11 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // management *UI* arrives in step 11; this spec is API-level so the later JWT /
 // per-cluster-RBAC changes (steps 06/08) regress against the contract here.
 //
-// auth-service's middleware is Authorization-header only (no cookie fallback),
-// so we log in via the API and pass an explicit Bearer token rather than
-// relying on the shared storageState cookie.
+// This spec exercises the API-client path: it logs in via the API and passes
+// an explicit Bearer token (no CSRF header needed). The project's storageState
+// (the browser's session cookie, which the API accepts too) is dropped so the
+// "without a token" case really is unauthenticated.
+test.use({ storageState: { cookies: [], origins: [] } })
 //
 // The spec registers and deletes a throwaway "self" cluster; it is self-
 // cleaning (beforeAll + afterAll best-effort delete). Like the rest of the

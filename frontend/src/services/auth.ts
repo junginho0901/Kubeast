@@ -1,68 +1,46 @@
-const ACCESS_TOKEN_STORAGE_KEY = 'kubeast:access-token'
 const REDIRECT_AFTER_LOGIN_KEY = 'kubeast:redirect-after-login'
 
-let handlingUnauthorized = false
+// The session lives only in the HttpOnly cookie that POST /auth/login sets; the
+// page never sees the token, so a script injected into it cannot read one.
+// Every state-changing request the cookie authenticates must carry this header
+// — the backend refuses it otherwise, and a cross-site page cannot add a custom
+// header without a CORS preflight, which is what stops request forgery.
+export const CSRF_HEADER: Record<string, string> = { 'X-Requested-With': 'XMLHttpRequest' }
 
-export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY)
-  const value = (raw || '').trim()
-  return value || null
+export function getAuthHeaders(): Record<string, string> {
+  return { ...CSRF_HEADER }
 }
 
-export function setAccessToken(token: string) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token)
+// Ends the server session (the cookie is cleared by the response). Best-effort:
+// if the call fails the cookie simply expires with the token.
+export function logoutSession(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
+  return fetch('/api/v1/auth/logout', {
+    method: 'POST',
+    headers: CSRF_HEADER,
+    credentials: 'same-origin',
+    keepalive: true,
+  })
+    .then(() => undefined)
+    .catch(() => undefined)
 }
 
-export function clearAccessToken() {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY)
-}
-
-export function isLoggedIn(): boolean {
-  return !!getAccessToken()
-}
-
-// Expiry (epoch ms) from the token's exp claim, or null when unreadable.
-export function getTokenExpiry(token: string | null = getAccessToken()): number | null {
-  if (!token) return null
-  try {
-    const seg = token.split('.')[1]
-    if (!seg) return null
-    const b64 = seg.replace(/-/g, '+').replace(/_/g, '/')
-    const claims = JSON.parse(window.atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '=')))
-    return typeof claims.exp === 'number' ? claims.exp * 1000 : null
-  } catch {
-    return null
-  }
-}
-
-// Tokens are short-lived (auth.tokenTTLMinutes); while the user is active the
-// client re-issues one from POST /auth/refresh before it expires. The server
-// rebuilds the token from the database, so role changes and revocations
-// (token_version) take effect at the next refresh at the latest.
-const REFRESH_AHEAD_MS = 10 * 60 * 1000
+// Sliding session. The cookie carries a short-lived token (auth.tokenTTLMinutes);
+// while the user is active the client re-issues it from POST /auth/refresh at
+// half the TTL. An idle tab never refreshes, so the session ends at the TTL.
+// The server rebuilds the token from the database, so role changes and
+// revocations apply at the next refresh at the latest.
 let refreshInFlight: Promise<void> | null = null
 
-export function refreshAccessTokenIfNeeded(): Promise<void> {
-  const token = getAccessToken()
-  const exp = getTokenExpiry(token)
-  if (!token || exp === null || exp - Date.now() > REFRESH_AHEAD_MS) return Promise.resolve()
+export function refreshSession(): Promise<void> {
   if (refreshInFlight) return refreshInFlight
   refreshInFlight = fetch('/api/v1/auth/refresh', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: CSRF_HEADER,
     credentials: 'same-origin',
   })
-    .then(async (res) => {
-      if (res.status === 401) {
-        handleUnauthorized()
-        return
-      }
-      if (!res.ok) return // transient failure: keep using the current token until it expires
-      const data = await res.json()
-      if (data?.access_token) setAccessToken(data.access_token)
+    .then((res) => {
+      if (res.status === 401) handleUnauthorized()
     })
     .catch(() => undefined)
     .finally(() => {
@@ -71,9 +49,35 @@ export function refreshAccessTokenIfNeeded(): Promise<void> {
   return refreshInFlight
 }
 
-export function getAuthHeaders() {
-  const token = getAccessToken()
-  return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>)
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
+
+// Starts the refresh loop for a signed-in tab and returns the stop function.
+export function startSessionKeepalive(ttlMinutes: number): () => void {
+  if (typeof window === 'undefined') return () => undefined
+  const ttlMs = Math.max(1, ttlMinutes) * 60 * 1000
+  const refreshAfterMs = Math.max(60 * 1000, ttlMs / 2)
+  let lastActivity = Date.now()
+  let lastRefresh = Date.now()
+
+  const markActivity = () => {
+    lastActivity = Date.now()
+  }
+  const tick = () => {
+    if (document.visibilityState === 'hidden') return
+    if (lastActivity <= lastRefresh) return
+    if (Date.now() - lastRefresh < refreshAfterMs) return
+    lastRefresh = Date.now()
+    void refreshSession()
+  }
+
+  ACTIVITY_EVENTS.forEach((ev) => window.addEventListener(ev, markActivity, { passive: true }))
+  document.addEventListener('visibilitychange', tick)
+  const timer = window.setInterval(tick, 60 * 1000)
+  return () => {
+    window.clearInterval(timer)
+    document.removeEventListener('visibilitychange', tick)
+    ACTIVITY_EVENTS.forEach((ev) => window.removeEventListener(ev, markActivity))
+  }
 }
 
 export function getRedirectAfterLogin(): string | null {
@@ -95,20 +99,19 @@ export function clearRedirectAfterLogin() {
   }
 }
 
+let handlingUnauthorized = false
+
+// A request was refused with 401: the session is gone (expired, revoked, or
+// never existed). Drop the stale cookie, remember where the user was and go
+// to the login page.
 export function handleUnauthorized() {
   if (typeof window === 'undefined') return
+  if (window.location.pathname === '/login') return
   if (handlingUnauthorized) return
   handlingUnauthorized = true
 
-  // Best-effort: clear server-side HttpOnly cookie as well.
-  try {
-    const payload = new Blob([], { type: 'text/plain' })
-    navigator.sendBeacon('/api/v1/auth/logout', payload)
-  } catch {
-    // ignore
-  }
+  void logoutSession()
 
-  // Clear local token and redirect to login.
   try {
     const path = window.location.pathname + window.location.search
     window.sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, path)
@@ -116,9 +119,5 @@ export function handleUnauthorized() {
     // ignore
   }
 
-  clearAccessToken()
-
-  if (window.location.pathname !== '/login') {
-    window.location.assign('/login')
-  }
+  window.location.assign('/login')
 }

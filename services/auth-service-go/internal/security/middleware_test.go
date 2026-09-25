@@ -38,7 +38,7 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 		}
 		return current, nil
 	}
-	mw := AuthMiddleware(m, lookup)
+	mw := AuthMiddleware(m, lookup, "kubeast.token")
 
 	tok, err := m.CreateToken("u1", "u1@example.com", "admin", perms, nil, 3)
 	if err != nil {
@@ -64,10 +64,48 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_CookieSessionAndCSRF(t *testing.T) {
+	m := newTestManager(t)
+	tok, _ := m.CreateToken("u1", "u1@example.com", "read", auth.PermissionMatrix{"*": {}}, nil, 1)
+	mw := AuthMiddleware(m, nil, "kubeast.token")
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	do := func(method string, cookie, bearer, xrw bool) int {
+		req := httptest.NewRequest(method, "/api/v1/auth/me", nil)
+		if cookie {
+			req.AddCookie(&http.Cookie{Name: "kubeast.token", Value: tok})
+		}
+		if bearer {
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
+		if xrw {
+			req.Header.Set(auth.CSRFHeader, auth.CSRFHeaderValue)
+		}
+		rec := httptest.NewRecorder()
+		mw(ok).ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if got := do("GET", true, false, false); got != http.StatusOK {
+		t.Fatalf("cookie GET: %d", got)
+	}
+	if got := do("POST", true, false, false); got != http.StatusForbidden {
+		t.Fatalf("cookie POST without X-Requested-With must be 403, got %d", got)
+	}
+	if got := do("POST", true, false, true); got != http.StatusOK {
+		t.Fatalf("cookie POST with X-Requested-With: %d", got)
+	}
+	if got := do("POST", false, true, false); got != http.StatusOK {
+		t.Fatalf("bearer POST needs no CSRF header: %d", got)
+	}
+	if got := do("GET", false, false, false); got != http.StatusUnauthorized {
+		t.Fatalf("no credential: %d", got)
+	}
+}
+
 func TestAuthMiddleware_NoLookupKeepsOldBehaviour(t *testing.T) {
 	m := newTestManager(t)
 	tok, _ := m.CreateToken("u1", "u1@example.com", "read", auth.PermissionMatrix{"*": {}}, map[string]string{"prod": "Read"}, 9)
-	if code := callWithToken(t, AuthMiddleware(m, nil), tok); code != http.StatusOK {
+	if code := callWithToken(t, AuthMiddleware(m, nil, "kubeast.token"), tok); code != http.StatusOK {
 		t.Fatalf("without a lookup the tv claim is not checked, got %d", code)
 	}
 }

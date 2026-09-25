@@ -10,19 +10,10 @@ import { test, expect, type Page } from '@playwright/test'
 //   - 'default' (clarinet) HAS Prometheus  → available:true
 //   - 'self' (this kind cluster) has none   → available:false, 200 (not 500)
 
-async function accessToken(page: Page): Promise<string> {
-  const t = await page.evaluate(() => localStorage.getItem('kubeast:access-token'))
-  if (!t) throw new Error('no kubeast:access-token in localStorage — login state missing')
-  return t
-}
-
+// page.request carries the session cookie from the login storage state.
 async function promQuery(page: Page, cluster: string) {
   const q = encodeURIComponent('count(kube_pod_info)')
-  const res = await page.request.get(
-    `/api/v1/cluster/prometheus/query?query=${q}&cluster=${cluster}`,
-    { headers: { Authorization: `Bearer ${await accessToken(page)}` } },
-  )
-  return res
+  return page.request.get(`/api/v1/cluster/prometheus/query?query=${q}&cluster=${cluster}`)
 }
 
 test.describe('multi-cluster Prometheus isolation', () => {

@@ -17,24 +17,33 @@ type TokenVersionLookup func(ctx context.Context, userID string) (int, error)
 // This avoids the self-referencing JWKS issue where auth-service tries to fetch
 // its own JWKS endpoint before the server starts. When tokenVersion is set, the
 // token's "tv" claim must equal the stored counter, so a bump revokes it at once.
-func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup) func(http.Handler) http.Handler {
+// The token comes from the Authorization header (API clients) or, for the
+// browser, from the HttpOnly session cookie named cookieName; cookie-authenticated
+// state changes must carry the X-Requested-With header (CSRF).
+func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
+			tokenStr := ""
+			fromCookie := false
+			if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+					http.Error(w, `{"detail":"Invalid Authorization header"}`, http.StatusUnauthorized)
+					return
+				}
+				tokenStr = strings.TrimSpace(parts[1])
+			} else if cookieName != "" {
+				if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
+					tokenStr = c.Value
+					fromCookie = true
+				}
+			}
+			if tokenStr == "" {
 				http.Error(w, `{"detail":"Missing Authorization header"}`, http.StatusUnauthorized)
 				return
 			}
-
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-				http.Error(w, `{"detail":"Invalid Authorization header"}`, http.StatusUnauthorized)
-				return
-			}
-
-			tokenStr := strings.TrimSpace(parts[1])
-			if tokenStr == "" {
-				http.Error(w, `{"detail":"Invalid Authorization header"}`, http.StatusUnauthorized)
+			if !auth.CSRFSafe(r, fromCookie) {
+				http.Error(w, `{"detail":"Missing X-Requested-With header"}`, http.StatusForbidden)
 				return
 			}
 

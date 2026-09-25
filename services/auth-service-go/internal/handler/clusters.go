@@ -296,8 +296,12 @@ func (h *ClustersHandler) invalidateK8sBundle(r *http.Request, id cluster.ID) {
 		slog.Warn("cluster: build invalidate request failed", "id", id, "err", err)
 		return
 	}
+	// Forward the caller's credential: the Bearer header, or the browser's
+	// session cookie re-sent as Bearer (k8s-service internal routes take either).
 	if authz := r.Header.Get("Authorization"); authz != "" {
 		req.Header.Set("Authorization", authz)
+	} else if c, err := r.Cookie(h.cfg.AuthCookieName); err == nil && c.Value != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Value)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

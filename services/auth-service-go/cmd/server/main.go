@@ -105,7 +105,7 @@ func main() {
 	slog.Info("JWT keys loaded")
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
-	authMiddleware := security.AuthMiddleware(jwtMgr, repo.GetTokenVersion)
+	authMiddleware := security.AuthMiddleware(jwtMgr, repo.GetTokenVersion, cfg.AuthCookieName)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never

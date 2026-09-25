@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from app.models.ai import ChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
-from app.security import require_auth, decode_access_token
+from app.security import require_auth, decode_access_token, bearer_or_cookie
 
 
 def _validation_message(err: ValidationError) -> str:
@@ -144,7 +144,7 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, authorization: str = Header(..., alias="Authorization")):
+async def chat_stream(request: ChatRequest, authorization: str = Depends(bearer_or_cookie)):
     """
     AI 챗봇 스트리밍
     """
@@ -168,7 +168,7 @@ async def session_chat(
     session_id: str,
     message: str,
     request: Request,
-    authorization: str = Header(..., alias="Authorization"),
+    authorization: str = Depends(bearer_or_cookie),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """
@@ -248,7 +248,7 @@ async def _load_own_pending_approval(approval_id: str, payload):
 
 
 @router.get("/tool-approvals")
-async def list_tool_approvals(session_id: str, authorization: str = Header(..., alias="Authorization")):
+async def list_tool_approvals(session_id: str, authorization: str = Depends(bearer_or_cookie)):
     from app.database import get_db_service
 
     payload = _caller(authorization)
@@ -259,7 +259,7 @@ async def list_tool_approvals(session_id: str, authorization: str = Header(..., 
 
 
 @router.get("/tool-approvals/{approval_id}")
-async def get_tool_approval(approval_id: str, authorization: str = Header(..., alias="Authorization")):
+async def get_tool_approval(approval_id: str, authorization: str = Depends(bearer_or_cookie)):
     from app.database import get_db_service
 
     payload = _caller(authorization)
@@ -274,7 +274,7 @@ async def get_tool_approval(approval_id: str, authorization: str = Header(..., a
 async def reject_tool_approval(
     approval_id: str,
     request: Request,
-    authorization: str = Header(..., alias="Authorization"),
+    authorization: str = Depends(bearer_or_cookie),
 ):
     from datetime import datetime
     from app.services.audit_writer import write_audit
@@ -301,7 +301,7 @@ async def reject_tool_approval(
 async def approve_tool_approval(
     approval_id: str,
     request: Request,
-    authorization: str = Header(..., alias="Authorization"),
+    authorization: str = Depends(bearer_or_cookie),
 ):
     from datetime import datetime
     from app.services.audit_writer import write_audit
@@ -356,7 +356,7 @@ async def floating_session_chat(
     session_id: str,
     body: FloatingChatRequest,
     request: Request,
-    authorization: str = Header(..., alias="Authorization"),
+    authorization: str = Depends(bearer_or_cookie),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """플로팅 AI 위젯 전용 세션 채팅.
@@ -398,7 +398,7 @@ async def floating_session_chat(
 
 
 @router.post("/analyze-logs")
-async def analyze_logs(request: dict, authorization: str = Header(..., alias="Authorization")):
+async def analyze_logs(request: dict, authorization: str = Depends(bearer_or_cookie)):
     """로그 분석"""
     ai_service = await _build_ai_service(authorization)
     
@@ -412,7 +412,7 @@ async def analyze_logs(request: dict, authorization: str = Header(..., alias="Au
 
 
 @router.post("/troubleshoot")
-async def troubleshoot(request: dict, authorization: str = Header(..., alias="Authorization")):
+async def troubleshoot(request: dict, authorization: str = Depends(bearer_or_cookie)):
     """트러블슈팅"""
     ai_service = await _build_ai_service(authorization)
     
@@ -426,7 +426,7 @@ async def troubleshoot(request: dict, authorization: str = Header(..., alias="Au
 
 
 @router.post("/explain-resource")
-async def explain_resource(resource_type: str, resource_yaml: str, authorization: str = Header(..., alias="Authorization")):
+async def explain_resource(resource_type: str, resource_yaml: str, authorization: str = Depends(bearer_or_cookie)):
     """리소스 YAML 설명"""
     ai_service = await _build_ai_service(authorization)
     
@@ -438,7 +438,7 @@ async def explain_resource(resource_type: str, resource_yaml: str, authorization
 
 
 @router.post("/suggest-optimization")
-async def suggest_optimization(namespace: str, authorization: str = Header(..., alias="Authorization")):
+async def suggest_optimization(namespace: str, authorization: str = Depends(bearer_or_cookie)):
     """리소스 최적화 제안"""
     ai_service = await _build_ai_service(authorization)
     
@@ -449,7 +449,7 @@ async def suggest_optimization(namespace: str, authorization: str = Header(..., 
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/suggest-optimization/stream")
-async def suggest_optimization_stream(namespace: str, authorization: str = Header(..., alias="Authorization")):
+async def suggest_optimization_stream(namespace: str, authorization: str = Depends(bearer_or_cookie)):
     """리소스 최적화 제안 (SSE 스트리밍)"""
     ai_service = await _build_ai_service(authorization)
 

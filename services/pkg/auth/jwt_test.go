@@ -135,6 +135,45 @@ func TestValidate_RefetchIsRateLimited(t *testing.T) {
 	}
 }
 
+func TestMiddleware_CookieAuthNeedsCSRFHeaderForWrites(t *testing.T) {
+	s := newJWKSServer(t, "kid-a")
+	v := newValidator(s)
+	tok := sign(t, s.key, "kid-a")
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	mw := v.MiddlewareWithCookie("kubeast.token", ok)
+
+	do := func(method string, cookie, bearer, xrw bool) int {
+		req := httptest.NewRequest(method, "/api/v1/namespaces", nil)
+		if cookie {
+			req.AddCookie(&http.Cookie{Name: "kubeast.token", Value: tok})
+		}
+		if bearer {
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
+		if xrw {
+			req.Header.Set(CSRFHeader, CSRFHeaderValue)
+		}
+		rec := httptest.NewRecorder()
+		mw.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if got := do("GET", true, false, false); got != 200 {
+		t.Fatalf("cookie GET without header: %d", got)
+	}
+	if got := do("POST", true, false, false); got != 403 {
+		t.Fatalf("cookie POST without X-Requested-With must be 403, got %d", got)
+	}
+	if got := do("POST", true, false, true); got != 200 {
+		t.Fatalf("cookie POST with X-Requested-With: %d", got)
+	}
+	if got := do("DELETE", false, true, false); got != 200 {
+		t.Fatalf("bearer DELETE needs no CSRF header (API client): %d", got)
+	}
+	if got := do("POST", false, false, true); got != 401 {
+		t.Fatalf("no credential: %d", got)
+	}
+}
+
 func TestValidate_ForeignKeyStillRejectedAfterRefetch(t *testing.T) {
 	s := newJWKSServer(t, "kid-a")
 	v := newValidator(s)

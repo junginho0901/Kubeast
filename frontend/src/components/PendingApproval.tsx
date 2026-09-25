@@ -1,7 +1,7 @@
 import { Clock, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { clearAccessToken } from '@/services/auth'
+import { logoutSession } from '@/services/auth'
 import { useTranslation } from 'react-i18next'
 
 export default function PendingApproval() {
@@ -11,7 +11,7 @@ export default function PendingApproval() {
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
 
   const handleLogout = () => {
-    clearAccessToken()
+    void logoutSession()
     queryClient.clear()
     navigate('/login', { replace: true })
   }

@@ -4,27 +4,22 @@
 // `client` rather than duplicating the axios setup.
 
 import axios from 'axios'
-import { getAccessToken, handleUnauthorized, refreshAccessTokenIfNeeded } from '../auth'
+import { CSRF_HEADER, handleUnauthorized } from '../auth'
 import { getCurrentClusterID } from '../clusterRef'
 
+// Authentication is the HttpOnly session cookie (sent by the browser on every
+// same-origin call); the CSRF header goes on every request, see services/auth.
 export const client = axios.create({
   baseURL: '/api/v1',
   headers: {
     'Content-Type': 'application/json',
+    ...CSRF_HEADER,
   },
   timeout: 10000, // 10초 타임아웃 (백엔드 재시도 시간 고려)
 })
 
-client.interceptors.request.use(async (config) => {
+client.interceptors.request.use((config) => {
   config.headers = config.headers ?? {}
-  const url = String(config.url || '')
-  if (!url.startsWith('/auth/')) {
-    await refreshAccessTokenIfNeeded()
-  }
-  const token = getAccessToken()
-  if (token) {
-    (config.headers as any).Authorization = `Bearer ${token}`
-  }
   // Inject the selected cluster (step 09). An explicit cluster on the call wins;
   // an empty selection omits it so the server uses its default cluster.
   const cid = getCurrentClusterID()
@@ -42,7 +37,10 @@ client.interceptors.response.use(
   (error) => {
     const status = error?.response?.status
     const url = String(error?.config?.url || '')
-    const isAuthRequest = url.startsWith('/auth/login') || url.startsWith('/auth/register')
+    // /auth/me is the session probe: RequireAuth turns its 401 into an in-app
+    // redirect to /login, so it must not trigger the page reload below.
+    const isAuthRequest =
+      url.startsWith('/auth/login') || url.startsWith('/auth/register') || url.startsWith('/auth/me')
     if (status === 401 && !isAuthRequest) {
       handleUnauthorized()
     }

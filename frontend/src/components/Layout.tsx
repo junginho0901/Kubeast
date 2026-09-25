@@ -28,7 +28,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
-import { clearAccessToken } from '@/services/auth'
+import { logoutSession } from '@/services/auth'
 import { ResourceDetailProvider } from './ResourceDetailContext'
 import ResourceDetailDrawer from './ResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
@@ -89,7 +89,6 @@ export default function Layout() {
 
   useEffect(() => {
     if (!isMeError) return
-    clearAccessToken()
     queryClient.clear()
     navigate('/login')
   }, [isMeError, navigate, queryClient])
@@ -110,9 +109,8 @@ export default function Layout() {
   }, [])
 
   const handleLogout = () => {
-    // Best-effort: clear HttpOnly auth cookie (for WS/SSE auth) as well.
-    void api.logout().catch(() => {})
-    clearAccessToken()
+    // The session is the HttpOnly cookie; the logout response clears it.
+    void logoutSession()
     queryClient.clear()
     navigate('/login')
   }
