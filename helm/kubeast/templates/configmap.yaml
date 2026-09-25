@@ -41,6 +41,7 @@ data:
   TOOL_SERVER_URL_WRITE: "http://tool-server:8086"
   TOOL_SERVER_URL_ADMIN: "http://tool-server:8086"
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
+  AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}

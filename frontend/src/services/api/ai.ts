@@ -12,7 +12,38 @@ import type {
   OptimizationSuggestionsResponse,
 } from './types'
 
+export interface ToolApproval {
+  id: string
+  session_id: string
+  cluster: string
+  tool: string
+  args: Record<string, unknown>
+  status: 'pending' | 'approved' | 'executed' | 'failed' | 'rejected' | 'expired'
+  result: string | null
+  created_at: string | null
+  expires_at: string | null
+  decided_at: string | null
+}
+
 export const aiApi = {
+  // AI write-tool approvals (H2): the model's write call waits here until the user decides.
+  listToolApprovals: async (sessionId: string): Promise<ToolApproval[]> => {
+    const { data } = await client.get('/ai/tool-approvals', { params: { session_id: sessionId } })
+    return data
+  },
+  getToolApproval: async (id: string): Promise<ToolApproval> => {
+    const { data } = await client.get(`/ai/tool-approvals/${id}`)
+    return data
+  },
+  approveToolCall: async (id: string): Promise<ToolApproval> => {
+    const { data } = await client.post(`/ai/tool-approvals/${id}/approve`, null, { timeout: 90000 })
+    return data
+  },
+  rejectToolCall: async (id: string): Promise<ToolApproval> => {
+    const { data } = await client.post(`/ai/tool-approvals/${id}/reject`)
+    return data
+  },
+
   analyzeLogs: async (request: {
     logs: string
     namespace: string

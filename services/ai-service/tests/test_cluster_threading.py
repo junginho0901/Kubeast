@@ -22,7 +22,7 @@ async def test_call_tool_server_threads_active_cluster():
     captured = {}
 
     class FakeToolServer:
-        async def call_tool(self, name, args):
+        async def call_tool(self, name, args, headers=None):
             captured["name"] = name
             captured["args"] = args
             return "ok"
@@ -42,7 +42,7 @@ async def test_model_supplied_cluster_is_overridden():
     captured = {}
 
     class FakeToolServer:
-        async def call_tool(self, name, args):
+        async def call_tool(self, name, args, headers=None):
             captured["args"] = args
             return "ok"
 
@@ -58,7 +58,7 @@ async def test_default_cluster_when_none_selected():
     captured = {}
 
     class FakeToolServer:
-        async def call_tool(self, name, args):
+        async def call_tool(self, name, args, headers=None):
             captured["args"] = args
             return "ok"
 

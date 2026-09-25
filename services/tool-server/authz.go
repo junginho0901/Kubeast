@@ -6,7 +6,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -14,6 +16,34 @@ import (
 // defaultClusterID mirrors cluster.Default without importing pkg/cluster (that
 // package drags client-go and pgx into this binary).
 const defaultClusterID = "default"
+
+// approvalHeader carries the id of the user's approval for a write tool.
+// ai-service sets it only on the approve path (H2); the streaming path never
+// executes write tools, so a write call without it is refused outright.
+const approvalHeader = "X-Kubeast-Approval-Id"
+
+// writeTools change cluster state (same set as ai-service WRITE_TOOL_NAMES).
+var writeTools = map[string]struct{}{
+	"k8s_apply_manifest": {}, "k8s_create_resource": {}, "k8s_delete_resource": {}, "k8s_patch_resource": {},
+	"k8s_annotate_resource": {}, "k8s_remove_annotation": {}, "k8s_label_resource": {}, "k8s_remove_label": {},
+	"k8s_scale": {}, "k8s_rollout": {}, "k8s_execute_command": {},
+}
+
+func requiresApproval(tool string) bool {
+	_, ok := writeTools[tool]
+	return ok
+}
+
+// approvalGate rejects a write tool call that does not carry an approval id.
+func approvalGate(headers http.Header, tool string) (int, error) {
+	if !writeApprovalRequired || !requiresApproval(tool) {
+		return 0, nil
+	}
+	if strings.TrimSpace(headers.Get(approvalHeader)) == "" {
+		return http.StatusForbidden, fmt.Errorf("write tool %q requires an approved request (%s)", tool, approvalHeader)
+	}
+	return 0, nil
+}
 
 type tokenValidator interface {
 	Validate(token string) (auth.TokenPayload, error)

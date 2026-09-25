@@ -1349,6 +1349,21 @@
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
     "copyMessage": "Copy",
+    "approval": {
+      "title": "This action changes the cluster",
+      "cluster": "cluster",
+      "approve": "Approve and run",
+      "reject": "Reject",
+      "hint": "Runs as you, with the arguments shown above.",
+      "status": {
+        "pending": "awaiting approval",
+        "approved": "running",
+        "executed": "executed",
+        "failed": "failed",
+        "rejected": "rejected",
+        "expired": "expired"
+      }
+    },
     "copied": "Copied",
     "inputPlaceholder": "Type a message...",
     "stop": "Stop",

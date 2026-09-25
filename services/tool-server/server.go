@@ -90,6 +90,10 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
 		return
 	}
+	if status, err := approvalGate(r.Header, req.Name); err != nil {
+		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
+		return
+	}
 
 	kcPath, err := resolveClusterKubeconfig(ctx, clusterID, r.Header)
 	if err != nil {

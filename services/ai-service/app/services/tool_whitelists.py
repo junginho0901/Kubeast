@@ -26,6 +26,34 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
 )
 
 
+# Tools that change cluster state. They are never executed straight from the
+# model's tool call: the stream records an approval request and the user
+# approves or rejects it (H2, OWASP LLM06). Keep in sync with tool_dispatch.
+WRITE_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "k8s_apply_manifest",
+        "k8s_create_resource",
+        "k8s_delete_resource",
+        "k8s_patch_resource",
+        "k8s_annotate_resource",
+        "k8s_remove_annotation",
+        "k8s_label_resource",
+        "k8s_remove_label",
+        "k8s_scale",
+        "k8s_rollout",
+        "k8s_execute_command",
+    }
+)
+
+
+def write_approval_required() -> bool:
+    """AI_WRITE_APPROVAL (default on): write tools wait for the user's approval
+    instead of running straight from the model's call. Off is for local dev only."""
+    import os
+
+    return os.getenv("AI_WRITE_APPROVAL", "true").strip().lower() != "false"
+
+
 def readonly_tool_filter(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """AIService 의 전체 tool 목록에서 READONLY 만 통과시키는 필터.
 

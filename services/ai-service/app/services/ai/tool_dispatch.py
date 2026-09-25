@@ -46,20 +46,9 @@ async def execute_function_with_context(
             print(f"[DEBUG] Cache hit for {cache_key}")
             return tool_context.cache[cache_key]
 
-        write_tools = {
-            "k8s_apply_manifest",
-            "k8s_create_resource",
-            "k8s_delete_resource",
-            "k8s_patch_resource",
-            "k8s_annotate_resource",
-            "k8s_remove_annotation",
-            "k8s_label_resource",
-            "k8s_remove_label",
-            "k8s_scale",
-            "k8s_rollout",
-            "k8s_execute_command",
-        }
-        if function_name in write_tools:
+        from app.services.tool_whitelists import WRITE_TOOL_NAMES
+
+        if function_name in WRITE_TOOL_NAMES:
             return await service._call_tool_server(function_name, function_args)
 
         # 함수 실행

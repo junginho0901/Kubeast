@@ -42,6 +42,7 @@ data:
   TOOL_SERVER_URL_WRITE: "http://tool-server:8086"
   TOOL_SERVER_URL_ADMIN: "http://tool-server:8086"
   IMPERSONATION_ENABLED: "true"
+  AI_WRITE_APPROVAL: "true"
   TOOL_SERVER_USE_INCLUSTER: "false"
 
   VITE_API_URL: "http://localhost:30080"

@@ -25,7 +25,9 @@ var (
 	// TOKEN_PASSTHROUGH (kubectl --token with the Kubeast JWT) is gone: clusters
 	// never knew that token, so it either failed or was overridden.
 	impersonationEnabled = !strings.EqualFold(os.Getenv("IMPERSONATION_ENABLED"), "false")
-	defaultTimeout       = 60 * time.Second
+	// Write tools need the user's approval id (set by ai-service's approve path).
+	writeApprovalRequired = !strings.EqualFold(os.Getenv("AI_WRITE_APPROVAL"), "false")
+	defaultTimeout        = 60 * time.Second
 
 	// toolAuth validates the caller's JWT against auth-service's JWKS (same
 	// issuer/audience settings every other service uses).

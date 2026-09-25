@@ -63,6 +63,9 @@ ai:
   apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrl: ""
+  # AI tools that change a cluster (delete/scale/apply/...) are never run from
+  # the model's call directly: the user approves each one in the chat first.
+  writeApproval: true
 
 # --- PostgreSQL ---
 postgresql:

@@ -58,6 +58,25 @@ class SessionContext(Base):
     session = relationship("Session", back_populates="context")
 
 
+class ToolApproval(Base):
+    """AI 쓰기 툴 승인 요청 (H2). 모델이 고른 쓰기 툴은 여기 pending 으로 남고,
+    사용자가 승인해야 저장된 인자 그대로 실행된다."""
+    __tablename__ = "tool_approvals"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    user_id = Column(String, nullable=False)
+    user_email = Column(String, nullable=True)
+    cluster = Column(String, nullable=False)
+    tool = Column(String, nullable=False)
+    args = Column(JSON, nullable=False, default=dict)
+    status = Column(String, nullable=False, default="pending")  # pending|approved|executed|failed|rejected|expired
+    result = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    decided_at = Column(DateTime, nullable=True)
+
+
 class ModelConfig(Base):
     """모델 설정 (DB 기반)"""
     __tablename__ = "model_configs"
@@ -327,6 +346,72 @@ class DatabaseService:
                 .limit(1)
             )
             return result.scalar_one_or_none()
+
+    # ---- tool approvals (H2) ----
+
+    async def create_tool_approval(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        user_email: Optional[str],
+        cluster: str,
+        tool: str,
+        args: Dict[str, Any],
+        ttl_seconds: int = 600,
+    ) -> ToolApproval:
+        import uuid
+        from datetime import timedelta
+
+        async with self.async_session() as db:
+            row = ToolApproval(
+                id=uuid.uuid4().hex,
+                session_id=session_id,
+                user_id=user_id,
+                user_email=user_email,
+                cluster=cluster,
+                tool=tool,
+                args=args or {},
+                status="pending",
+                expires_at=datetime.utcnow() + timedelta(seconds=ttl_seconds),
+            )
+            db.add(row)
+            await db.commit()
+            await db.refresh(row)
+            return row
+
+    async def get_tool_approval(self, approval_id: str) -> Optional[ToolApproval]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(ToolApproval).where(ToolApproval.id == approval_id))
+            return result.scalar_one_or_none()
+
+    async def list_tool_approvals(self, session_id: str, user_id: str, pending_only: bool = True) -> List[ToolApproval]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            stmt = select(ToolApproval).where(
+                ToolApproval.session_id == session_id, ToolApproval.user_id == user_id
+            )
+            if pending_only:
+                stmt = stmt.where(ToolApproval.status == "pending")
+            result = await db.execute(stmt.order_by(ToolApproval.created_at))
+            return list(result.scalars().all())
+
+    async def update_tool_approval(self, approval_id: str, **fields: Any) -> Optional[ToolApproval]:
+        async with self.async_session() as db:
+            from sqlalchemy import select
+
+            result = await db.execute(select(ToolApproval).where(ToolApproval.id == approval_id))
+            row = result.scalar_one_or_none()
+            if row is None:
+                return None
+            for key, value in fields.items():
+                setattr(row, key, value)
+            await db.commit()
+            await db.refresh(row)
+            return row
 
     async def create_model_config(self, data: Dict[str, Any]) -> ModelConfig:
         async with self.async_session() as db:

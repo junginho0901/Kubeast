@@ -838,9 +838,46 @@ async def session_chat_stream(
 
                     yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
 
-                    function_response = await service._execute_function_with_context(
-                        function_name, function_args, tool_context
-                    )
+                    # H2: a tool that changes the cluster is not run from the
+                    # model's call. Record an approval request, tell the user
+                    # (SSE) and the model (tool result), and move on.
+                    pending_approval_id = None
+                    from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
+                    if function_name in WRITE_TOOL_NAMES and write_approval_required():
+                        from app.services.ai import permissions as _perm
+                        approval = await db.create_tool_approval(
+                            session_id=session_id,
+                            user_id=(audit_actor or {}).get('user_id') or session.user_id,
+                            user_email=(audit_actor or {}).get('email'),
+                            cluster=_perm.effective_cluster(service),
+                            tool=function_name,
+                            args=function_args if isinstance(function_args, dict) else {},
+                        )
+                        pending_approval_id = approval.id
+                        yield f"data: {json.dumps({'approval_required': approval.id, 'function': function_name, 'args': function_args, 'cluster': approval.cluster, 'expires_at': approval.expires_at.isoformat() + 'Z'}, ensure_ascii=False)}\n\n"
+                        if audit_actor:
+                            await write_audit(
+                                action='ai.tool.approval_requested',
+                                actor_user_id=audit_actor.get('user_id'),
+                                actor_email=audit_actor.get('email'),
+                                target_type='tool',
+                                target_id=function_name,
+                                namespace=function_args.get('namespace') if isinstance(function_args, dict) else None,
+                                after={'session_id': session_id, 'approval_id': approval.id, 'cluster': approval.cluster, 'tool': function_name},
+                                request_ip=(audit_http or {}).get('ip'),
+                                user_agent=(audit_http or {}).get('user_agent'),
+                                request_id=(audit_http or {}).get('request_id'),
+                                path=(audit_http or {}).get('path'),
+                            )
+                        function_response = json.dumps({
+                            "status": "pending_approval",
+                            "approval_id": approval.id,
+                            "message": "This action changes the cluster and is waiting for the user's approval in the chat. Do not call the tool again; tell the user it awaits their approval.",
+                        }, ensure_ascii=False)
+                    else:
+                        function_response = await service._execute_function_with_context(
+                            function_name, function_args, tool_context
+                        )
 
                     print(f"[DEBUG] Function response length: {len(str(function_response))}")
 
@@ -876,6 +913,8 @@ async def session_chat_stream(
                         'is_yaml': is_yaml,
                         'display': display_result,
                         'display_format': "kubectl" if display_result is not None else None,
+                        # set when the call is parked for approval (H2) — the UI renders the card from this
+                        'approval_id': pending_approval_id,
                     })
 
                     # audit: ai.tool.call (메타데이터만 — args/result 본문은 저장하지 않음)

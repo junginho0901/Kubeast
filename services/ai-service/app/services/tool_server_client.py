@@ -16,12 +16,17 @@ class ToolServerClient:
         resolved = (base_url or DEFAULT_TOOL_SERVER_URL).rstrip("/")
         self.client = httpx.AsyncClient(base_url=resolved, timeout=60.0, headers=headers)
 
-    async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> str:
+    async def call_tool(
+        self,
+        name: str,
+        arguments: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> str:
         payload = {
             "name": name,
             "arguments": arguments or {},
         }
-        response = await self.client.post("/tools/call", json=payload)
+        response = await self.client.post("/tools/call", json=payload, headers=headers or None)
         response.raise_for_status()
         data = response.json()
         if isinstance(data, dict) and data.get("error"):

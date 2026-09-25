@@ -138,14 +138,17 @@ class AIService:
             return os.getenv("TOOL_SERVER_URL_WRITE")
         return os.getenv("TOOL_SERVER_URL_READ")
 
-    async def _call_tool_server(self, function_name: str, function_args: Dict) -> str:
+    async def _call_tool_server(self, function_name: str, function_args: Dict, approval_id: Optional[str] = None) -> str:
         # Every tool call is pinned to the request's active cluster; a cluster
         # the model wrote into the args is discarded (and logged), so a prompt
         # can never steer a tool at a cluster the user did not select.
         args, discarded = permissions.scope_tool_args(function_args, permissions.effective_cluster(self))
         if discarded:
             print(f"[WARN] tool {function_name}: model-supplied cluster {discarded!r} ignored, using {args['cluster']!r}", flush=True)
-        return await self.tool_server.call_tool(function_name, args)
+        # A write tool reaches tool-server only through the approval endpoint,
+        # which passes the approval id; tool-server refuses write tools without it.
+        headers = {"X-Kubeast-Approval-Id": approval_id} if approval_id else None
+        return await self.tool_server.call_tool(function_name, args, headers=headers)
 
     def _role_allows_write(self) -> bool:
         return permissions.role_allows_write(self)
