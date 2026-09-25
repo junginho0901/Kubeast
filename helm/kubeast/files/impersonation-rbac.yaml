@@ -125,3 +125,21 @@ subjects:
   - kind: Group
     name: kubeast:admin
     apiGroup: rbac.authorization.k8s.io
+---
+# The credential Kubeast connects with on an external cluster. On EKS the
+# registered kubeconfig's IAM role is mapped to this group by its access
+# entry (kubernetesGroups); it needs nothing beyond impersonate.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeast-impersonator
+  labels:
+    app.kubernetes.io/part-of: kubeast
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeast-impersonator
+subjects:
+  - kind: Group
+    name: kubeast:impersonator
+    apiGroup: rbac.authorization.k8s.io
