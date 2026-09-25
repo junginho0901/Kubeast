@@ -4,6 +4,7 @@ metadata:
   name: k8s-service
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
+  {{- with include "kubeast.awsServiceAccountAnnotations" . }}{{ nindent 2 . }}{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -67,6 +68,7 @@ metadata:
   name: tool-server
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
+  {{- with include "kubeast.awsServiceAccountAnnotations" . }}{{ nindent 2 . }}{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

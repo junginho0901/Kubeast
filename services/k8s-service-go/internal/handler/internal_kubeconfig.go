@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -69,6 +73,71 @@ func (h *Handler) InvalidateCluster(w http.ResponseWriter, r *http.Request) {
 	}
 	h.svc.Invalidate(cluster.ID(id))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// clusterProbeTimeout bounds one connectivity probe (auth-service waits a
+// little longer than this on its side).
+const clusterProbeTimeout = 10 * time.Second
+
+// ValidateKubeconfig probes a kubeconfig that is not registered yet, on behalf
+// of auth-service (registration, rotation, the "test connection" button). The
+// credential plugin a kubeconfig may name runs here, where the pod's cloud
+// identity (IRSA) lives — auth-service holds neither the binary nor a role.
+//
+//	POST /internal/clusters/validate {"kubeconfig": "..."} → {"server_version": "...", "uid": "..."}
+//
+// Internal-only (NOT gateway-routed); the caller must hold a cluster
+// registration permission.
+func (h *Handler) ValidateKubeconfig(w http.ResponseWriter, r *http.Request) {
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if !payload.HasPermission(auth.PermClustersCreate) && !payload.HasPermission(auth.PermClustersUpdate) {
+		response.Error(w, http.StatusForbidden, "forbidden: cluster registration permission required")
+		return
+	}
+	var req struct {
+		Kubeconfig string `json:"kubeconfig"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Kubeconfig) == "" {
+		response.Error(w, http.StatusBadRequest, "kubeconfig required")
+		return
+	}
+	ver, uid, err := h.svc.ProbeKubeconfig(r.Context(), req.Kubeconfig, clusterProbeTimeout)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"server_version": ver, "uid": uid})
+}
+
+// ValidateCluster probes a registered cluster from its stored connection
+// details. Gated like the kubeconfig read.
+//
+//	POST /internal/clusters/{id}/validate → {"server_version": "...", "uid": "..."}
+func (h *Handler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if len(payload.Perms["*"]) == 0 && len(payload.Perms[id]) == 0 {
+		response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+id)
+		return
+	}
+	ver, uid, err := h.svc.ProbeCluster(r.Context(), cluster.ID(id), clusterProbeTimeout)
+	if errors.Is(err, cluster.ErrNotFound) {
+		response.Error(w, http.StatusNotFound, "cluster not found")
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"server_version": ver, "uid": uid})
 }
 
 var errForbiddenKubeconfig = forbiddenKubeconfigErr{}

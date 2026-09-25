@@ -169,6 +169,7 @@ spec:
               value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
+            {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
           readinessProbe:
             httpGet:
               path: /health
@@ -323,6 +324,7 @@ spec:
             # kubectl discovery cache; root fs is read-only
             - name: KUBECACHEDIR
               value: /tmp/kube-cache
+            {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

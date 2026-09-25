@@ -2867,6 +2867,7 @@
       "displayName": "Display name",
       "upload": "Upload",
       "apiServerOptional": "API server URL (optional)",
+      "execHint": "EKS: register an exec kubeconfig (aws-iam-authenticator) with no static credentials; only allow-listed plugins run.",
       "test": "Test connection",
       "testFailed": "Failed",
       "selfWarning": "Registers the in-cluster ServiceAccount as a managed cluster — this may be a production cluster. Confirm the ServiceAccount permissions.",

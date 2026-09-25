@@ -203,6 +203,18 @@ multicluster:
   rateLimitBurst: 20
   breakerConsecutiveFails: 5
   breakerOpenSec: 30
+  # Credential plugins a registered kubeconfig may run (exec.command base
+  # names). They execute inside the k8s-service and tool-server pods, so only
+  # known binaries are allowed; an empty list forbids exec plugins.
+  execCommands: [aws-iam-authenticator]
+
+# --- AWS (EKS clusters registered with an exec kubeconfig) ---
+# k8s-service and tool-server run aws-iam-authenticator with the credentials
+# the EKS pod identity webhook injects (IRSA). irsaRoleArn annotates their
+# ServiceAccounts with that role; region pins STS to the regional endpoint.
+aws:
+  irsaRoleArn: ""
+  region: ""
 
 # --- Image overrides (usually not needed) ---
 # Published to GitHub Container Registry as public packages (no pull rate limit,

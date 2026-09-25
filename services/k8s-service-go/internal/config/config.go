@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
 )
 
@@ -35,6 +36,9 @@ type Config struct {
 	AuthCookieName string
 	// Act as the signed-in user toward every cluster (Kubernetes impersonation).
 	ImpersonationEnabled bool
+	// Credential plugins a registered kubeconfig may run (exec.command base
+	// names). They execute inside this pod, so only known binaries are allowed.
+	KubeconfigExecCommands []string
 
 	// CORS
 	AllowedOrigins []string
@@ -85,6 +89,8 @@ func Load() Config {
 		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
 
 		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
+
+		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 

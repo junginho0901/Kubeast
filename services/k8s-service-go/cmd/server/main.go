@@ -96,6 +96,7 @@ func main() {
 		BreakerFails:   cfg.BreakerConsecutiveFails,
 		BreakerOpen:    time.Duration(cfg.BreakerOpenSec) * time.Second,
 		Impersonation:  cfg.ImpersonationEnabled,
+		ExecCommands:   cfg.KubeconfigExecCommands,
 	})
 	startCancel()
 	if err != nil {
@@ -170,6 +171,11 @@ func main() {
 		})
 		r.Get("/internal/clusters/{id}/kubeconfig", h.GetClusterKubeconfig)
 		r.Post("/internal/clusters/{id}/invalidate", h.InvalidateCluster)
+		// auth-service delegates connectivity probes here so a kubeconfig's
+		// credential plugin (aws-iam-authenticator) runs where the pod's cloud
+		// identity is.
+		r.Post("/internal/clusters/validate", h.ValidateKubeconfig)
+		r.Post("/internal/clusters/{id}/validate", h.ValidateCluster)
 	})
 
 	// Create HTTP server

@@ -94,3 +94,25 @@ resources:
   {{- toYaml $r | nindent 2 }}
 {{- end }}
 {{- end -}}
+
+{{/*
+EKS IAM authentication: the k8s-service and tool-server pods run
+aws-iam-authenticator with the credentials the EKS pod identity webhook injects
+for the annotated ServiceAccount (IRSA). Empty when aws.irsaRoleArn is unset.
+*/}}
+{{- define "kubeast.awsServiceAccountAnnotations" -}}
+{{- if .Values.aws.irsaRoleArn }}
+annotations:
+  eks.amazonaws.com/role-arn: {{ .Values.aws.irsaRoleArn | quote }}
+  eks.amazonaws.com/sts-regional-endpoints: "true"
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.awsEnv" -}}
+{{- if .Values.aws.region }}
+- name: AWS_REGION
+  value: {{ .Values.aws.region | quote }}
+- name: AWS_STS_REGIONAL_ENDPOINTS
+  value: "regional"
+{{- end }}
+{{- end -}}
