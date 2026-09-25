@@ -12,7 +12,14 @@ data:
   WS_HEARTBEAT_INTERVAL: "30"
   JWT_ISSUER: "kubeast-auth"
   JWT_AUDIENCE: "kubeast"
-  JWT_EXPIRES_MINUTES: "10080"
+  JWT_EXPIRES_MINUTES: {{ .Values.auth.tokenTTLMinutes | quote }}
+  ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
+  BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
+  PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}
+  NODE_SHELL_ENABLED: {{ .Values.nodeShell.enabled | quote }}
+  NODE_SHELL_NAMESPACE: {{ .Values.nodeShell.namespace | quote }}
+  NODE_SHELL_IMAGES: {{ join "," .Values.nodeShell.images | quote }}
+  NODE_SHELL_TIMEOUT_SEC: {{ .Values.nodeShell.timeoutSeconds | quote }}
   DEFAULT_ADMIN_EMAIL: {{ .Values.admin.email | quote }}
   KEY_DIR: "/app/.keys"
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}
@@ -33,7 +40,8 @@ data:
   TOOL_SERVER_URL_READ: "http://tool-server:8086"
   TOOL_SERVER_URL_WRITE: "http://tool-server:8086"
   TOOL_SERVER_URL_ADMIN: "http://tool-server:8086"
-  TOOL_SERVER_TOKEN_PASSTHROUGH: "true"
+  IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
+  AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}

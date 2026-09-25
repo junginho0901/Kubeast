@@ -48,6 +48,7 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		if err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID); err != nil {
 			continue
 		}
+		_ = h.repo.BumpTokenVersion(r.Context(), uid) // issued tokens carry the old role
 		u, _ := h.repo.GetUserByID(r.Context(), uid)
 		if u != nil {
 			updated = append(updated, u.ToResponse())
@@ -86,6 +87,10 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 	for _, u := range req.Users {
 		if u.Name == "" || !strings.Contains(u.Email, "@") || u.Password == "" {
 			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Missing required fields (name, email, password)"})
+			continue
+		}
+		if err := security.ValidatePassword(u.Password, u.Email, h.cfg.PasswordMinLength); err != nil {
+			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
 			continue
 		}
 
@@ -172,8 +177,8 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid email")
 		return
 	}
-	if req.Password == "" {
-		response.Error(w, http.StatusBadRequest, "Password required")
+	if err := security.ValidatePassword(req.Password, req.Email, h.cfg.PasswordMinLength); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -344,6 +349,7 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		_ = h.repo.BumpTokenVersion(r.Context(), userID) // issued tokens carry the old role
 	}
 
 	// Audit
@@ -405,7 +411,7 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tempPassword, err := security.GenerateRandomPassword(12)
+	tempPassword, err := security.GenerateRandomPassword(16)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to generate password")
 		return
@@ -421,6 +427,7 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	_ = h.repo.BumpTokenVersion(r.Context(), userID) // reset logs the user out everywhere
 
 	actor, _ := h.repo.GetUserByID(r.Context(), payload.UserID)
 	var actorEmail *string

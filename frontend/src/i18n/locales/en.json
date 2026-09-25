@@ -1349,6 +1349,21 @@
     "emptySubtitle": "Click a question below or type your own.",
     "resultZipDownload": "Download result ZIP",
     "copyMessage": "Copy",
+    "approval": {
+      "title": "This action changes the cluster",
+      "cluster": "cluster",
+      "approve": "Approve and run",
+      "reject": "Reject",
+      "hint": "Runs as you, with the arguments shown above.",
+      "status": {
+        "pending": "awaiting approval",
+        "approved": "running",
+        "executed": "executed",
+        "failed": "failed",
+        "rejected": "rejected",
+        "expired": "expired"
+      }
+    },
     "copied": "Copied",
     "inputPlaceholder": "Type a message...",
     "stop": "Stop",
@@ -2168,7 +2183,7 @@
   "setup": {
     "badge": "Initial cluster setup",
     "title": "Connect a Kubernetes cluster",
-    "subtitle": "Choose the cluster to manage before signing in.",
+    "subtitle": "Choose the cluster to manage.",
     "option": {
       "incluster": {
         "title": "Use this cluster",
@@ -2212,8 +2227,8 @@
       "title": "Configure AI Model",
       "subtitle": "Select an LLM provider for the AI assistant. You can change this later.",
       "model": "Model",
-      "apiKey": "API Key",
-      "apiKeyHint": "Your API key will be stored securely as a Kubernetes Secret.",
+      "apiKey": "API key env var",
+      "apiKeyHint": "Name of the ai-service environment variable that holds the key (Helm values ai.*ApiKey or a Secret via ai.apiKeysSecret). Keys are never stored in the database.",
       "baseUrl": "Base URL",
       "test": "Test Connection",
       "skip": "Skip — use defaults",

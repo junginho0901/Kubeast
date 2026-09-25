@@ -82,7 +82,7 @@ function App() {
       <BrowserRouter>
         <ClusterProvider>
           <Routes>
-          <Route path="/setup" element={<Setup />} />
+          <Route path="/setup" element={<RequireAuth><RequireAdmin><Setup /></RequireAdmin></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />

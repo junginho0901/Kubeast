@@ -206,7 +206,7 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
   let auth: Record<string, string>
   let userId = ''
   const email = `e2e-rbac-${Date.now()}@kubeast.local`
-  const password = 'rbac1234'
+  const password = 'e2e-rbac-api-throwaway'
 
   async function userToken(request: APIRequestContext): Promise<string> {
     const res = await request.post('/api/v1/auth/login', { data: { email, password } })

@@ -5,17 +5,22 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -75,7 +80,16 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	h.recordAuditWithPayload(r, "k8s.node.drain", "node", nodeName, "", nil,
 		nil, audit.MustJSON(map[string]interface{}{"drain_id": drainID}))
 
-	go h.runDrain(nodeName, drainID)
+	// The drain outlives the request: carry only the selected cluster id into
+	// the background context so the goroutine targets the same cluster.
+	bg := context.Background()
+	if id, ok := cluster.FromContext(r.Context()); ok {
+		bg = cluster.WithID(bg, id)
+	}
+	if p, ok := auth.FromContext(r.Context()); ok { // evictions are made as the user (impersonation)
+		bg = auth.WithPayload(bg, p)
+	}
+	go h.runDrain(bg, nodeName, drainID)
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"drain_id": drainID,
@@ -106,15 +120,21 @@ func (h *Handler) DrainNodeStatus(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, ds)
 }
 
-func (h *Handler) runDrain(nodeName, drainID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func (h *Handler) runDrain(parent context.Context, nodeName, drainID string) {
+	ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 	defer cancel()
-
-	clientset := h.svc.Clientset()
 
 	ds := getDrainStatus(drainID)
 	ds.Status = "draining"
 	setDrainStatus(ds)
+
+	clientset, err := h.svc.ClientsetFor(ctx)
+	if err != nil {
+		ds.Status = "error"
+		ds.Message = fmt.Sprintf("cluster client: %v", err)
+		setDrainStatus(ds)
+		return
+	}
 
 	// Step 1: Cordon
 	if err := h.svc.CordonNode(ctx, nodeName); err != nil {
@@ -135,30 +155,106 @@ func (h *Handler) runDrain(nodeName, drainID string) {
 		return
 	}
 
-	// Step 3: Filter and evict (same as Python: evict all, then mark success)
-	evicted := 0
-	for i := range podList.Items {
-		pod := &podList.Items[i]
-		if isDaemonSetPod(pod) {
+	// Step 3: evict through the Eviction API so PodDisruptionBudgets are
+	// honoured. A PDB answers 429: retry until the deadline, never force-delete.
+	// Pods still on the node at the end are reported and the node stays cordoned.
+	var candidates []corev1.Pod
+	for _, pod := range podList.Items {
+		if isDaemonSetPod(&pod) {
 			continue
 		}
 		if _, ok := pod.Annotations["kubernetes.io/config.mirror"]; ok {
 			continue
 		}
+		candidates = append(candidates, pod)
+	}
 
-		if err := evictPod(ctx, clientset, pod); err != nil {
-			slog.Warn("evict pod failed, force deleting", "pod", pod.Name, "ns", pod.Namespace, "err", err)
-			grace := int64(0)
-			_ = clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
-				GracePeriodSeconds: &grace,
-			})
-		}
-		evicted++
+	if blocked := evictAll(ctx, clientset, candidates); len(blocked) > 0 {
+		slog.Warn("drain incomplete", "node", nodeName, "blocked", len(blocked))
+		ds.Status = "error"
+		ds.Message = fmt.Sprintf("drain incomplete: %d of %d pods could not be evicted (node stays cordoned): %s",
+			len(blocked), len(candidates), strings.Join(blocked, "; "))
+		setDrainStatus(ds)
+		return
+	}
+	if err := waitForPodsGone(ctx, clientset, candidates); err != nil {
+		ds.Status = "error"
+		ds.Message = fmt.Sprintf("drain incomplete: %v (node stays cordoned)", err)
+		setDrainStatus(ds)
+		return
 	}
 
 	ds.Status = "success"
-	ds.Message = fmt.Sprintf("drain completed, %d pods evicted", evicted)
+	ds.Message = fmt.Sprintf("drain completed, %d pods evicted", len(candidates))
 	setDrainStatus(ds)
+}
+
+// evictRetryInterval is how long to wait before retrying an eviction a
+// PodDisruptionBudget rejected (kubectl drain uses 5s). A var so tests can shrink it.
+var evictRetryInterval = 5 * time.Second
+
+// evictAll evicts the pods concurrently (as kubectl drain does, so one pod
+// held by a PDB does not starve the others) and returns "ns/name: reason" for
+// the ones that could not be evicted before the deadline.
+func evictAll(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) []string {
+	var (
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+		blocked []string
+	)
+	for i := range pods {
+		wg.Add(1)
+		go func(pod *corev1.Pod) {
+			defer wg.Done()
+			if err := evictWithRetry(ctx, cs, pod); err != nil {
+				mu.Lock()
+				blocked = append(blocked, fmt.Sprintf("%s/%s: %v", pod.Namespace, pod.Name, err))
+				mu.Unlock()
+			}
+		}(&pods[i])
+	}
+	wg.Wait()
+	sort.Strings(blocked)
+	return blocked
+}
+
+func evictWithRetry(ctx context.Context, cs kubernetes.Interface, pod *corev1.Pod) error {
+	for {
+		err := evictPod(ctx, cs, pod)
+		switch {
+		case err == nil, apierrors.IsNotFound(err):
+			return nil
+		case apierrors.IsTooManyRequests(err): // blocked by a PodDisruptionBudget
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("blocked by PodDisruptionBudget until the drain deadline: %v", err)
+			case <-time.After(evictRetryInterval):
+			}
+		default:
+			return err
+		}
+	}
+}
+
+// waitForPodsGone waits until none of the evicted pods (by UID) exist any more.
+func waitForPodsGone(ctx context.Context, cs kubernetes.Interface, pods []corev1.Pod) error {
+	for {
+		remaining := 0
+		for i := range pods {
+			p, err := cs.CoreV1().Pods(pods[i].Namespace).Get(ctx, pods[i].Name, metav1.GetOptions{})
+			if err == nil && p.UID == pods[i].UID {
+				remaining++
+			}
+		}
+		if remaining == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for %d pods to terminate", remaining)
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
 func isDaemonSetPod(pod *corev1.Pod) bool {
@@ -170,7 +266,7 @@ func isDaemonSetPod(pod *corev1.Pod) bool {
 	return false
 }
 
-func evictPod(ctx context.Context, clientset *kubernetes.Clientset, pod *corev1.Pod) error {
+func evictPod(ctx context.Context, clientset kubernetes.Interface, pod *corev1.Pod) error {
 	eviction := &policyv1.Eviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pod.Name,

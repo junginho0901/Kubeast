@@ -128,12 +128,12 @@ func (s *Service) DescribeDeployment(ctx context.Context, namespace, name string
 	conditions := make([]map[string]interface{}, 0, len(dep.Status.Conditions))
 	for _, c := range dep.Status.Conditions {
 		conditions = append(conditions, map[string]interface{}{
-			"type":                   string(c.Type),
-			"status":                 string(c.Status),
-			"reason":                 c.Reason,
-			"message":                c.Message,
-			"last_transition_time":   toISO(&c.LastTransitionTime),
-			"last_update_time":       toISO(&c.LastUpdateTime),
+			"type":                 string(c.Type),
+			"status":               string(c.Status),
+			"reason":               c.Reason,
+			"message":              c.Message,
+			"last_transition_time": toISO(&c.LastTransitionTime),
+			"last_update_time":     toISO(&c.LastUpdateTime),
 		})
 	}
 	result["conditions"] = conditions

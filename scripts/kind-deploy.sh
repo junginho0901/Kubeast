@@ -8,7 +8,11 @@ KUBECONFIG_PATH="${KUBECONFIG_PATH:-$ROOT/.kubeconfig-kind}"
 export KUBECONFIG="$KUBECONFIG_PATH"
 
 if ! kind get clusters | grep -qx "$KIND_CLUSTER_NAME"; then
-  kind create cluster --name "$KIND_CLUSTER_NAME" --config "$ROOT/kind-config.yaml"
+  mkdir -p "$ROOT/.kind-data/postgres"
+  KIND_CONFIG="$(mktemp)"
+  sed "s#__KUBEAST_ROOT__#${ROOT}#g" "$ROOT/kind-config.yaml" > "$KIND_CONFIG"
+  kind create cluster --name "$KIND_CLUSTER_NAME" --config "$KIND_CONFIG"
+  rm -f "$KIND_CONFIG"
 fi
 
 declare -a IMAGES=(
@@ -24,11 +28,11 @@ declare -a IMAGES=(
 for item in "${IMAGES[@]}"; do
   image=$(echo "$item" | awk '{print $1}')
   context=$(echo "$item" | awk '{print $2}')
-  docker build -t "$image" "$ROOT/$context"
+  docker build ${DOCKER_BUILD_ARGS:-} -t "$image" "$ROOT/$context"
   kind load docker-image "$image" --name "$KIND_CLUSTER_NAME"
 done
 
-kubectl apply -k "$ROOT/k8s"
+kubectl kustomize --load-restrictor LoadRestrictionsNone "$ROOT/k8s" | kubectl apply -f -
 
 if [[ -f "$ROOT/k8s/secret.local.yaml" ]]; then
   kubectl -n kubeast apply -f "$ROOT/k8s/secret.local.yaml"

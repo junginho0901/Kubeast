@@ -22,7 +22,7 @@ async def test_call_tool_server_threads_active_cluster():
     captured = {}
 
     class FakeToolServer:
-        async def call_tool(self, name, args):
+        async def call_tool(self, name, args, headers=None):
             captured["name"] = name
             captured["args"] = args
             return "ok"
@@ -36,35 +36,36 @@ async def test_call_tool_server_threads_active_cluster():
 
 
 @pytest.mark.asyncio
-async def test_explicit_cluster_in_args_wins():
+async def test_model_supplied_cluster_is_overridden():
+    # C1: the model never picks the target cluster — the active one always wins.
     svc = _bare_service("prod")
     captured = {}
 
     class FakeToolServer:
-        async def call_tool(self, name, args):
+        async def call_tool(self, name, args, headers=None):
             captured["args"] = args
             return "ok"
 
     svc.tool_server = FakeToolServer()
 
     await svc._call_tool_server("x", {"cluster": "dev"})
-    assert captured["args"]["cluster"] == "dev"
+    assert captured["args"]["cluster"] == "prod"
 
 
 @pytest.mark.asyncio
-async def test_no_cluster_when_none_selected():
+async def test_default_cluster_when_none_selected():
     svc = _bare_service(None)
     captured = {}
 
     class FakeToolServer:
-        async def call_tool(self, name, args):
+        async def call_tool(self, name, args, headers=None):
             captured["args"] = args
             return "ok"
 
     svc.tool_server = FakeToolServer()
 
     await svc._call_tool_server("x", {"namespace": "ns"})
-    assert "cluster" not in captured["args"]
+    assert captured["args"]["cluster"] == "default"
 
 
 def test_k8s_client_sets_cluster_query_param():

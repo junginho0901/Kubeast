@@ -99,6 +99,9 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusInternalServerError, setErr.Error())
 		return
 	}
+	if err := h.repo.BumpTokenVersion(r.Context(), userID); err != nil { // tokens carry the old matrix
+		slog.Warn("cluster role: bump token version failed", "user", userID, "err", err)
+	}
 	response.JSON(w, http.StatusOK, map[string]string{"cluster_id": clusterID, "role": req.Role})
 }
 
@@ -122,6 +125,9 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 	if delErr != nil {
 		response.Error(w, http.StatusInternalServerError, delErr.Error())
 		return
+	}
+	if existed {
+		_ = h.repo.BumpTokenVersion(r.Context(), userID) // tokens carry the old matrix
 	}
 	if !existed {
 		response.Error(w, http.StatusNotFound, "No such grant")

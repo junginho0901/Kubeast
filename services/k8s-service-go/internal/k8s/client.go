@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -100,12 +101,20 @@ type ServiceOptions struct {
 	RateLimitBurst int           // per-cluster burst
 	BreakerFails   int           // open breaker after N consecutive fails; 0 = off
 	BreakerOpen    time.Duration // breaker open duration before half-open
+	// Impersonation makes every API call carry the signed-in user as
+	// Impersonate-User/-Group headers (Kubernetes user impersonation), so the
+	// cluster authorizes and audits the person instead of Kubeast's credential.
+	Impersonation bool
 }
+
+// impersonationEnabled is read by buildClientBundle (set once in NewService).
+var impersonationEnabled bool
 
 // NewService creates a K8s service backed by registry. Failure isolation: if no
 // clusters are registered yet (pre-Setup) or the default cluster is unreachable
 // at startup, the service still starts; bundles are built lazily on first use.
 func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache, opts ServiceOptions) (*Service, error) {
+	impersonationEnabled = opts.Impersonation
 	s := &Service{
 		registry:               registry,
 		watchEnabled:           watchEnabled,
@@ -176,6 +185,10 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 
 	cfg.QPS = 100
 	cfg.Burst = 200
+	if impersonationEnabled {
+		id := string(info.ID)
+		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
+	}
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)

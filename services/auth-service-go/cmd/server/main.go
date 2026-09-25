@@ -28,6 +28,18 @@ import (
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
+func pingWithRetry(ctx context.Context, pool *pgxpool.Pool, attempts int, wait time.Duration) error {
+	var err error
+	for i := 1; i <= attempts; i++ {
+		if err = pool.Ping(ctx); err == nil {
+			return nil
+		}
+		slog.Warn("database not ready", "attempt", i, "error", err)
+		time.Sleep(wait)
+	}
+	return err
+}
+
 func main() {
 	cfg := config.Load()
 	pkglogger.Setup("auth-service", cfg.Debug)
@@ -51,7 +63,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := pool.Ping(ctx); err != nil {
+	// Postgres may still be starting in the same rollout: wait up to ~60s
+	// instead of exiting into CrashLoopBackOff.
+	if err := pingWithRetry(ctx, pool, 30, 2*time.Second); err != nil {
 		slog.Error("failed to ping database", "error", err)
 		os.Exit(1)
 	}
@@ -91,7 +105,7 @@ func main() {
 	slog.Info("JWT keys loaded")
 
 	// Auth middleware (validates tokens using local public key, no JWKS fetch needed)
-	authMiddleware := security.AuthMiddleware(jwtMgr)
+	authMiddleware := security.AuthMiddleware(jwtMgr, repo.GetTokenVersion)
 
 	// Cluster registry: per-cluster kubeconfigs are stored as Secrets (k8s) or
 	// files (docker) and read at request time, so registering a cluster never
@@ -114,7 +128,7 @@ func main() {
 	// Handlers
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
 	roleHandler := handler.NewRoleHandler(repo)
-	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore)
+	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
 	healthHandler := handler.NewHealthHandler(pool)
 
@@ -153,10 +167,8 @@ func main() {
 		r.Get("/jwks.json", authHandler.JWKS)
 		r.Get("/.well-known/jwks.json", authHandler.JWKS)
 
-		// Setup endpoints (no auth)
-		r.Get("/setup", setupHandler.GetSetup)
-		r.Post("/setup", setupHandler.PostSetup)
-		r.Get("/setup/rollout-status", setupHandler.RolloutStatus)
+		// Setup: only "is a cluster registered yet" is public (login page routing).
+		r.Get("/setup", setupHandler.GetSetupPublic)
 
 		// Public (for registration form dropdowns)
 		r.Get("/organizations", authHandler.ListOrganizations)
@@ -166,7 +178,13 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
 
+			// Setup wizard (admin.clusters.create, checked in the handler)
+			r.Get("/setup/status", setupHandler.GetSetup)
+			r.Post("/setup", setupHandler.PostSetup)
+			r.Get("/setup/rollout-status", setupHandler.RolloutStatus)
+
 			r.Get("/me", authHandler.Me)
+			r.Post("/refresh", authHandler.Refresh)
 			r.Post("/change-password", authHandler.ChangePassword)
 			r.Get("/permissions", roleHandler.ListPermissions)
 
@@ -241,12 +259,20 @@ func main() {
 }
 
 func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config.Config) {
+	if cfg.DefaultAdminPassword == "change-me-do-not-use-in-prod" {
+		slog.Warn("DEFAULT_ADMIN_PASSWORD is the built-in placeholder; set a strong value (the Helm chart generates one)")
+	}
 	users := []struct {
 		email, password, roleName, name string
 	}{
 		{cfg.DefaultAdminEmail, cfg.DefaultAdminPassword, "Admin", "admin"},
-		{cfg.DefaultReadEmail, cfg.DefaultReadPassword, "Read", "read"},
-		{cfg.DefaultWriteEmail, cfg.DefaultWritePassword, "Write", "write"},
+	}
+	// Demo read/write accounts exist only for local development.
+	if cfg.BootstrapDemoUsers {
+		users = append(users,
+			struct{ email, password, roleName, name string }{cfg.DefaultReadEmail, cfg.DefaultReadPassword, "Read", "read"},
+			struct{ email, password, roleName, name string }{cfg.DefaultWriteEmail, cfg.DefaultWritePassword, "Write", "write"},
+		)
 	}
 
 	for _, u := range users {

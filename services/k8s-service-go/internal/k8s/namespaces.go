@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"gopkg.in/yaml.v3"
 )
 
 // GetNamespaces returns all namespaces.
@@ -150,7 +150,7 @@ func (s *Service) DescribeNamespace(ctx context.Context, name string) (map[strin
 	conditions := make([]map[string]interface{}, 0, len(ns.Status.Conditions))
 	for _, c := range ns.Status.Conditions {
 		conditions = append(conditions, map[string]interface{}{
-			"type":                  string(c.Type),
+			"type":                 string(c.Type),
 			"status":               string(c.Status),
 			"reason":               c.Reason,
 			"message":              c.Message,

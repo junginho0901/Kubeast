@@ -25,11 +25,6 @@ spec:
             - secretRef:
                 name: kubeast-secrets
           env:
-            - name: TOKEN_PASSTHROUGH
-              valueFrom:
-                configMapKeyRef:
-                  name: kubeast-config
-                  key: TOOL_SERVER_TOKEN_PASSTHROUGH
             # step 14: tool-server fetches the selected cluster's kubeconfig from
             # k8s-service at runtime (no mounted kubeconfig, rollout-free).
             - name: K8S_SERVICE_URL

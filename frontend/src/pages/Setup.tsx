@@ -20,8 +20,8 @@ export default function Setup() {
   const navigatingRef = useRef(false)
 
   const { data: status, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ['setup-status'],
-    queryFn: api.getSetupStatus,
+    queryKey: ['setup-status-full'],
+    queryFn: api.getSetupStatusFull,
   })
 
   const {

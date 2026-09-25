@@ -41,10 +41,8 @@ class ResolvedModelConfig:
 
 
 def _resolve_api_key(config: ModelConfig) -> Optional[str]:
-    # 1) DB에 직접 저장된 키 우선
-    if getattr(config, 'api_key', None):
-        return config.api_key
-    # 2) 환경변수 이름으로 fallback
+    # Keys live only in ai-service's environment; the config names the variable.
+    # 1) 환경변수 이름
     if config.api_key_env:
         value = os.getenv(config.api_key_env)
         if value:
@@ -77,10 +75,16 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     if not api_key and provider in _PROVIDERS_REQUIRING_KEY:
         raise ValueError(f"API key is missing for active model config (provider={provider})")
 
+    base_url = (config.base_url or "").strip().rstrip("/") or None
+    # Ollama serves the OpenAI-compatible API under /v1; the connection test
+    # already appends it, so the runtime client must resolve the same URL.
+    if provider == "ollama" and base_url and not base_url.endswith("/v1"):
+        base_url += "/v1"
+
     return ResolvedModelConfig(
         provider=config.provider,
         model=config.model,
-        base_url=(config.base_url or "").strip() or None,
+        base_url=base_url,
         api_key=api_key or "",
         extra_headers=config.extra_headers or {},
         tls_verify=True if config.tls_verify is None else bool(config.tls_verify),

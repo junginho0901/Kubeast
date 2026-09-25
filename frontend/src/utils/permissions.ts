@@ -12,13 +12,24 @@ import { getAccessToken } from '@/services/auth'
 // for a superuser, the "*" wildcard.
 export type PermissionMatrix = Record<string, string[]>
 
-// matchAny mirrors the backend matchAny: exact, full "*", and prefix globs
-// like "resource.*".
+// permMatches mirrors pkg/auth permMatches (Go) and ai-service security.py:
+// "*" grants everything; a "*" segment matches exactly one segment
+// ("resource.*.read" → "resource.pod.read"); a trailing "*" matches the rest
+// ("ai.tool.*" → "ai.tool.k8s_scale").
+export function permMatches(pattern: string, perm: string): boolean {
+  if (pattern === '*' || pattern === perm) return true
+  const ps = pattern.split('.')
+  const qs = perm.split('.')
+  for (let i = 0; i < ps.length; i++) {
+    if (ps[i] === '*' && i === ps.length - 1) return qs.length >= ps.length
+    if (i >= qs.length || (ps[i] !== '*' && ps[i] !== qs[i])) return false
+  }
+  return ps.length === qs.length
+}
+
 export function matchAny(perms: string[] | undefined, perm: string): boolean {
   if (!perms) return false
-  return perms.some(
-    (p) => p === '*' || p === perm || (p.endsWith('.*') && perm.startsWith(p.slice(0, -1))),
-  )
+  return perms.some((p) => permMatches(p, perm))
 }
 
 // hasPermission honors the all-cluster "*" entry always; the concrete cluster's

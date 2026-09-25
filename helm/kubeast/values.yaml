@@ -14,13 +14,58 @@ admin:
   email: admin
   password: ""
 
+# --- JWT signing key ---
+# auth-service reads /app/.keys/jwt_private.pem (RSA, PKCS#8 or PKCS#1 PEM).
+# Empty existingSecret = the chart generates one at install and keeps it across
+# upgrades. Set it to a Secret you manage (e.g. via ExternalSecrets) that holds
+# the key under `jwt_private.pem`.
+auth:
+  signingKey:
+    existingSecret: ""
+  # Access-token lifetime. The UI refreshes it silently while the user is
+  # active, so this is also the idle timeout.
+  tokenTTLMinutes: 60
+  # Self-service sign-up (POST /auth/register). Off: admins create accounts.
+  allowRegistration: false
+  # Demo read/write accounts (password = username). Never enable outside dev.
+  bootstrapDemoUsers: false
+  passwordMinLength: 12
+  # Kubernetes user impersonation: k8s-service and tool-server act toward every
+  # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
+  # so the cluster's RBAC decides and its audit log names the person. The
+  # Kubeast credential then only needs the "impersonate" verb.
+  # clusterRoles renders files/impersonation-rbac.yaml (group → view/edit/
+  # cluster-admin bindings) into this cluster; apply the same file to every
+  # external cluster you register.
+  impersonation:
+    enabled: true
+    clusterRoles: true
+
+# --- Node shell (privileged debug pod on a node) ---
+# Off by default. When on, the pod runs in `namespace` (created with the
+# Pod Security "privileged" label) with an image from the allow list.
+nodeShell:
+  enabled: false
+  namespace: kubeast-node-shell
+  images:
+    - docker.io/library/busybox:latest
+  timeoutSeconds: 3600
+
 # --- AI Configuration ---
+# Provider keys reach ai-service only as environment variables; a model config
+# names the variable (api_key_env). Either fill the keys here (rendered into
+# kubeast-secrets) or point apiKeysSecret at a Secret you manage (e.g. via
+# ExternalSecrets) whose keys are the variable names.
 ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
+  apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrl: ""
+  # AI tools that change a cluster (delete/scale/apply/...) are never run from
+  # the model's call directly: the user approves each one in the chat first.
+  writeApproval: true
 
 # --- PostgreSQL ---
 postgresql:
@@ -28,9 +73,76 @@ postgresql:
   user: kubeast
   password: kubeast
   database: kubeast
+  storage: 5Gi
+  storageClassName: ""   # "" = cluster default StorageClass
   # External postgres (when enabled=false):
   # externalHost: my-rds.amazonaws.com
   # externalPort: 5432
+
+# --- Pod security (Pod Security Standards "restricted") ---
+# Every workload runs as a fixed non-root uid matching its image USER
+# (Go services / tool-server / controller / ai-service 65532, frontend & gateway
+# 101 = nginx-unprivileged, postgres 70, redis 999), drops all capabilities,
+# forbids privilege escalation and uses the runtime seccomp profile.
+# hostUsers=false puts pods in a user namespace (Kubernetes >= 1.33); set it to
+# true on clusters without that support.
+podSecurity:
+  enabled: true
+  seccompProfile: RuntimeDefault
+  hostUsers: false
+  # Root filesystem read-only; every path a container writes is an emptyDir
+  # (auth keys, tool-server /tmp kubeconfig, nginx /tmp, postgres socket, redis /data).
+  readOnlyRootFilesystem: true
+
+# --- Availability ---
+replicas:
+  authService: 1
+  aiService: 1
+  k8sService: 1
+  sessionService: 1
+  frontend: 1
+  toolServer: 1
+  gateway: 1
+# PDB is off while replicas are 1 (a minAvailable PDB would block node drains).
+pdb:
+  enabled: false
+  minAvailable: 1
+# zone + hostname spread, soft (ScheduleAnyway)
+topologySpread:
+  enabled: true
+
+# --- Resources (requests always; memory limits so a leak is contained) ---
+resources:
+  authService:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+  aiService:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  k8sService:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  sessionService:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+  frontend:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  toolServer:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+  modelConfigController:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { memory: 128Mi }
+  gateway:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  postgres:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  redis:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
 
 # --- Redis ---
 redis:
@@ -105,4 +217,5 @@ images:
   modelConfigController: ghcr.io/junginho0901/kubeast-model-config-controller-go
   postgres: postgres:15-alpine
   redis: redis:7-alpine
-  gateway: nginx:alpine
+  # unprivileged nginx (uid 101, pid/temp under /tmp) — required for runAsNonRoot
+  gateway: nginxinc/nginx-unprivileged:1.27-alpine

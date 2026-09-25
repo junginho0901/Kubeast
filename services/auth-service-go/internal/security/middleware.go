@@ -9,10 +9,15 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
+// TokenVersionLookup returns the user's current revocation counter. An error
+// (unknown user) rejects the token.
+type TokenVersionLookup func(ctx context.Context, userID string) (int, error)
+
 // AuthMiddleware validates JWTs using the local JWTManager's public key directly.
 // This avoids the self-referencing JWKS issue where auth-service tries to fetch
-// its own JWKS endpoint before the server starts.
-func AuthMiddleware(jwtMgr *JWTManager) func(http.Handler) http.Handler {
+// its own JWKS endpoint before the server starts. When tokenVersion is set, the
+// token's "tv" claim must equal the stored counter, so a bump revokes it at once.
+func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -45,6 +50,15 @@ func AuthMiddleware(jwtMgr *JWTManager) func(http.Handler) http.Handler {
 				return
 			}
 
+			if tokenVersion != nil {
+				claimed, _ := claims["tv"].(float64) // JSON numbers decode as float64; missing claim = 0
+				current, err := tokenVersion(r.Context(), userID)
+				if err != nil || int(claimed) != current {
+					http.Error(w, `{"detail":"Token revoked"}`, http.StatusUnauthorized)
+					return
+				}
+			}
+
 			email := strings.TrimSpace(fmt.Sprintf("%v", claims["email"]))
 			if email == "<nil>" {
 				email = ""
@@ -63,7 +77,7 @@ func AuthMiddleware(jwtMgr *JWTManager) func(http.Handler) http.Handler {
 				return
 			}
 
-			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms}
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"])}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

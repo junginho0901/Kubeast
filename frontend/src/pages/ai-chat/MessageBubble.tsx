@@ -5,6 +5,7 @@ import rehypeRaw from 'rehype-raw'
 import type { TFunction } from 'i18next'
 import type { Message } from './types'
 import { truncateToolResultsInContent } from './messageContent'
+import { ApprovalCard } from './ApprovalCard'
 
 // 단일 메시지 말풍선 — user / assistant 아바타 + 콘텐츠 + (assistant 의 경우)
 // Copy / Download ZIP 버튼 + 답변 대기 중인 로딩 점. AIChat.tsx 의 ~115줄
@@ -100,6 +101,19 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
                     ? truncateToolResultsInContent(message.content)
                     : message.content}
                 </ReactMarkdown>
+                {message.role === 'assistant' &&
+                  (message.toolCalls || [])
+                    .filter((tc: any) => tc && tc.approval_id)
+                    .map((tc: any) => (
+                      <ApprovalCard
+                        key={String(tc.approval_id)}
+                        approvalId={String(tc.approval_id)}
+                        tool={String(tc.function || '')}
+                        args={tc.args}
+                        cluster={tc.cluster}
+                        initialStatus={tc.approval_status}
+                      />
+                    ))}
                 {hasToolCalls && isWaitingForAnswer && (
                   <div className="flex gap-2 items-center py-3 mt-4">
                     <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />

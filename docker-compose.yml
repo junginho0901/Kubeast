@@ -46,7 +46,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
-      - JWT_EXPIRES_MINUTES=${JWT_EXPIRES_MINUTES:-10080}
+      - JWT_EXPIRES_MINUTES=${JWT_EXPIRES_MINUTES:-60}
       - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-change-me-do-not-use-in-prod}
       - KEY_DIR=/app/.keys

@@ -20,7 +20,7 @@ metadata:
     app: gateway
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas.gateway }}
   selector:
     matchLabels:
       app: gateway
@@ -28,20 +28,43 @@ spec:
     metadata:
       labels:
         app: gateway
+      annotations:
+        checksum/nginx-config: {{ .Files.Get "files/nginx.conf" | sha256sum }}
     spec:
+      automountServiceAccountToken: false
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
+      {{- include "kubeast.topologySpread" (dict "root" $ "app" "gateway") | nindent 6 }}
       containers:
         - name: gateway
           image: {{ .Values.images.gateway }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "gateway") | nindent 10 }}
           ports:
             - containerPort: 8000
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 30
       volumes:
         - name: nginx-config
           configMap:
             name: gateway-nginx
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

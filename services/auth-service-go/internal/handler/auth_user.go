@@ -14,8 +14,13 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// Register handles POST /auth/register
+// Register handles POST /auth/register. Self-service sign-up is off unless
+// ALLOW_REGISTRATION is set; accounts are otherwise created by an admin.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.AllowRegistration {
+		response.Error(w, http.StatusNotFound, "Registration is disabled")
+		return
+	}
 	var req model.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
@@ -26,8 +31,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid email")
 		return
 	}
-	if req.Password == "" {
-		response.Error(w, http.StatusBadRequest, "Password required")
+	if err := security.ValidatePassword(req.Password, req.Email, h.cfg.PasswordMinLength); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -130,13 +135,31 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix)
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
+		return
+	}
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return
 	}
+	h.setAuthCookie(w, r, token)
 
-	// Set HttpOnly cookie
+	// successful login — actor + target 둘 다 같은 user (본인 로그인).
+	h.writeAuditLog(r, "user.login.success", &user.ID, &user.Email, &user.ID, &user.Email, nil, nil)
+
+	response.JSON(w, http.StatusOK, model.LoginResponse{
+		AccessToken: token,
+		TokenType:   "bearer",
+		User:        user.ToResponseWithPermissions(permissions),
+	})
+}
+
+// setAuthCookie stores the token in the HttpOnly session cookie (what browser
+// WebSocket upgrades authenticate with).
+func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, r *http.Request, token string) {
 	secure := r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cfg.AuthCookieName,
@@ -147,9 +170,46 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
 
-	// successful login — actor + target 둘 다 같은 user (본인 로그인).
-	h.writeAuditLog(r, "user.login.success", &user.ID, &user.Email, &user.ID, &user.Email, nil, nil)
+// Refresh handles POST /auth/refresh: re-issues a token for the caller from
+// the current database state (role, cluster grants, token_version), so a
+// change made after login takes effect without a password prompt and the
+// browser session slides as long as the user stays active. The current token
+// must still be valid (the auth middleware checks signature, expiry and tv).
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
+	if err != nil || user == nil {
+		response.Error(w, http.StatusUnauthorized, "User not found")
+		return
+	}
+	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load permissions")
+		return
+	}
+	matrix, err := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to build permissions")
+		return
+	}
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
+		return
+	}
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to create token")
+		return
+	}
+	h.setAuthCookie(w, r, token)
+	h.writeAuditLog(r, "user.token.refresh", &user.ID, &user.Email, &user.ID, &user.Email, nil, nil)
 
 	response.JSON(w, http.StatusOK, model.LoginResponse{
 		AccessToken: token,
@@ -220,14 +280,13 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Current password required")
 		return
 	}
-	if len(req.NewPassword) < 4 {
-		response.Error(w, http.StatusBadRequest, "New password must be at least 4 characters")
-		return
-	}
-
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
 	if err != nil || user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
+		return
+	}
+	if err := security.ValidatePassword(req.NewPassword, user.Email, h.cfg.PasswordMinLength); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -246,6 +305,9 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Other sessions of this user must log in again with the new password.
+	// The caller's own token is refreshed by the client right after.
+	_ = h.repo.BumpTokenVersion(r.Context(), user.ID)
 
 	// Audit log
 	h.writeAuditLog(r, "user.password.change", &payload.UserID, &user.Email, &user.ID, &user.Email, nil, nil)

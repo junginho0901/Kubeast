@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { handleUnauthorized, getAccessToken } from '@/services/auth'
+import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
 
 interface NodeShellTerminalProps {
@@ -57,13 +57,12 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
 
     term.writeln(t('nodes.shell.connectingTo', 'Connecting to {{node}}...', { node: nodeName }))
 
-    const token = getAccessToken()
+    // Auth rides on the HttpOnly login cookie (same origin); never in the URL.
     const clusterId = getCurrentClusterID()
     const wsUrl = buildWsUrl(`/api/v1/cluster/nodes/${nodeName}/debug-shell/ws`, {
       ...(namespace ? { namespace } : {}),
       ...(image ? { image } : {}),
       ...(clusterId ? { cluster: clusterId } : {}),
-      ...(token ? { token } : {}),
     })
     const ws = new WebSocket(wsUrl)
     ws.binaryType = 'arraybuffer'

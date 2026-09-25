@@ -185,9 +185,9 @@ func formatVPADetailFromUnstructured(obj *unstructured.Unstructured) map[string]
 			}
 			conditions = append(conditions, map[string]interface{}{
 				"type":                 mapStr(cm, "type"),
-				"status":              mapStr(cm, "status"),
-				"reason":              mapStr(cm, "reason"),
-				"message":             mapStr(cm, "message"),
+				"status":               mapStr(cm, "status"),
+				"reason":               mapStr(cm, "reason"),
+				"message":              mapStr(cm, "message"),
 				"last_transition_time": mapStr(cm, "lastTransitionTime"),
 			})
 		}

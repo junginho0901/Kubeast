@@ -387,4 +387,3 @@ func buildControllerRevisionPatch(cr *appsv1.ControllerRevision) ([]byte, error)
 
 	return json.Marshal(patch)
 }
-

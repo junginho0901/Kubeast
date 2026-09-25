@@ -36,11 +36,11 @@ func (s *Service) DescribeGateway(ctx context.Context, namespace, name string) (
 	}
 
 	result := map[string]interface{}{
-		"name":       obj.GetName(),
-		"namespace":  obj.GetNamespace(),
-		"labels":     obj.GetLabels(),
+		"name":        obj.GetName(),
+		"namespace":   obj.GetNamespace(),
+		"labels":      obj.GetLabels(),
 		"annotations": obj.GetAnnotations(),
-		"created_at": toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
+		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
 	}
 
 	spec := mapMap(obj.Object, "spec")

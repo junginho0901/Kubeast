@@ -16,11 +16,31 @@ spec:
       labels:
         app: redis
     spec:
+      automountServiceAccountToken: false
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 999) | nindent 6 }}
       containers:
         - name: redis
           image: {{ .Values.images.redis }}
+          {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
+          {{- include "kubeast.resources" (dict "root" $ "key" "redis") | nindent 10 }}
           ports:
             - containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

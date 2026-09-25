@@ -19,6 +19,9 @@ class _StubSettings:
     OPENAI_OPTIMIZATION_MAX_TOKENS = 900
     OPENAI_API_KEY = "test"
     OPENAI_MODEL = "gpt-4"
+    OPENAI_BASE_URL = ""
+    DEBUG = False
+    allowed_origins_list = ["http://localhost:5173"]
 
     def __getattr__(self, name):
         # 정의 안 된 settings.* 는 모두 None (or 0) — test 시 default fallback 작동

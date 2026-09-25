@@ -29,12 +29,6 @@ export const modelConfigApi = {
     return data
   },
 
-  /** Setup 전용 — 인증 없이 모델 등록 (로그인 전 Setup 화면에서 사용) */
-  createModelConfigSetup: async (payload: ModelConfigCreate): Promise<any> => {
-    const { data } = await client.post('/ai/model-configs/setup', payload)
-    return data
-  },
-
   updateModelConfig: async (id: number, payload: Partial<ModelConfigCreate>): Promise<ModelConfigResponse> => {
     const { data } = await client.patch(`/ai/model-configs/${id}`, payload)
     return data
@@ -48,7 +42,7 @@ export const modelConfigApi = {
     provider: string
     model: string
     base_url?: string
-    api_key?: string
+    api_key_env?: string
     tls_verify?: boolean
     azure_api_version?: string
   }): Promise<{ success: boolean; model?: string; message: string }> => {

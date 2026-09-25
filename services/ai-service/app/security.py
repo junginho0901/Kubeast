@@ -1,9 +1,9 @@
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Iterable, Mapping, Optional
 
 import jwt
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 
 AUTH_JWKS_URL = os.getenv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json")
@@ -12,42 +12,76 @@ JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "kubeast")
 
 _jwk_client = jwt.PyJWKClient(AUTH_JWKS_URL)
 
+# Cluster id the services fall back to when a request names none (mirrors
+# k8s-service ClusterMiddleware / tool-server resolveClusterKubeconfig).
+DEFAULT_CLUSTER = "default"
+
+
+def _perm_matches(pattern: str, perm: str) -> bool:
+    """Segment-wise match, same rules as pkg/auth permMatches (Go) and the
+    frontend: "*" grants everything, a "*" segment matches one segment
+    ("resource.*.read" → "resource.pod.read"), a trailing "*" matches the rest
+    ("ai.tool.*" → "ai.tool.k8s_scale")."""
+    if pattern == "*" or pattern == perm:
+        return True
+    ps, qs = pattern.split("."), perm.split(".")
+    for i, seg in enumerate(ps):
+        if seg == "*" and i == len(ps) - 1:
+            return len(qs) >= len(ps)
+        if i >= len(qs) or (seg != "*" and seg != qs[i]):
+            return False
+    return len(ps) == len(qs)
+
+
+def _match_any(perms: Iterable[str], perm: str) -> bool:
+    return any(_perm_matches(p, perm) for p in perms)
+
 
 @dataclass(frozen=True)
 class TokenPayload:
+    """Validated JWT claims.
+
+    `matrix` is the per-cluster permission matrix from the token
+    ({"*": [global admin perms], "<cluster id>": [perms in that cluster]}).
+    `permissions` is the global ("*") entry only — kept as a tuple so admin
+    checks and older call sites keep working. Cluster-scoped checks go through
+    has_permission_for_cluster; there is no cross-cluster union.
+    """
+
     user_id: str
     role: str
     email: str = ""
-    permissions: tuple = ()  # frozen dataclass needs immutable type
+    permissions: tuple = ()
+    matrix: Mapping[str, tuple] = field(default_factory=dict)
 
     def has_permission(self, perm: str) -> bool:
-        for p in self.permissions:
-            if p == "*" or p == perm:
-                return True
-            if p.endswith(".*") and perm.startswith(p[:-1]):
-                return True
-        return False
+        """Global check: the all-cluster ("*") entry only."""
+        return _match_any(self.permissions, perm)
+
+    def has_permission_for_cluster(self, perm: str, cluster_id: Optional[str]) -> bool:
+        """perm granted in cluster_id (or globally). Empty cluster_id = DEFAULT_CLUSTER."""
+        if self.has_permission(perm):
+            return True
+        cid = cluster_id or DEFAULT_CLUSTER
+        if cid == "*":
+            return False
+        return _match_any(self.matrix.get(cid, ()), perm)
 
 
-def _flatten_permissions(raw) -> tuple:
-    """Flatten the JWT permissions claim into a flat tuple of permission strings.
+def _parse_permission_matrix(raw) -> Optional[dict]:
+    """Parse the JWT permissions claim into {cluster_id: (perms...)}.
 
-    Since step 06 the claim is a per-cluster matrix ({"*": [...], "prod": [...]}).
-    AI chat is not cluster-scoped until step 14, so here we take the UNION of all
-    clusters' permissions — has_permission then means "granted in some cluster",
-    which preserves the pre-matrix behaviour for the AI tool gates and the admin
-    model-config check. The legacy flat-array form is still accepted so a token
-    issued during the transition does not break AI calls.
+    Only the per-cluster map form is accepted (auth-service issues nothing
+    else since step 06). A flat list, a missing claim or any other shape returns
+    None so the caller rejects the token — the same rule the Go services apply.
     """
-    if isinstance(raw, dict):
-        out: list = []
-        for perms in raw.values():
-            if isinstance(perms, list):
-                out.extend(str(p) for p in perms if isinstance(p, str))
-        return tuple(out)
-    if isinstance(raw, list):
-        return tuple(str(p) for p in raw if isinstance(p, str))
-    return ()
+    if not isinstance(raw, dict):
+        return None
+    out: dict = {}
+    for cid, perms in raw.items():
+        if isinstance(cid, str) and isinstance(perms, list):
+            out[cid] = tuple(p for p in perms if isinstance(p, str))
+    return out
 
 
 def decode_access_token(token: str) -> TokenPayload:
@@ -65,12 +99,15 @@ def decode_access_token(token: str) -> TokenPayload:
         email = str(payload.get("email") or "").strip()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        permissions = _flatten_permissions(payload.get("permissions"))
+        matrix = _parse_permission_matrix(payload.get("permissions"))
+        if matrix is None:
+            raise HTTPException(status_code=401, detail="Invalid token: permissions claim must be a per-cluster map")
         return TokenPayload(
             user_id=user_id,
             role=role or "read",
             email=email,
-            permissions=permissions,
+            permissions=matrix.get("*", ()),
+            matrix=matrix,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -93,3 +130,14 @@ async def require_auth(authorization: Optional[str] = Header(None, alias="Author
         raise HTTPException(status_code=401, detail="Invalid Authorization header")
 
     return decode_access_token(token)
+
+
+async def require_admin(payload: TokenPayload = Depends(require_auth)) -> TokenPayload:
+    """Admin gate for model-config administration (admin.ai_models.*)."""
+    if payload.permissions:
+        if not payload.has_permission("admin.ai_models.*"):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        return payload
+    if payload.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return payload

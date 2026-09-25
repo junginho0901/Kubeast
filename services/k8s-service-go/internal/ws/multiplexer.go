@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -22,7 +23,7 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: CheckOrigin,
 }
 
 // WebSocket keepalive parameters.
@@ -77,6 +78,24 @@ type Multiplexer struct {
 	subs map[string]*subscription // key -> subscription
 }
 
+// effectiveClusterID mirrors the HTTP ClusterMiddleware: an empty clusterId
+// falls back to the registry default, so that is what must be authorized.
+func effectiveClusterID(id string) string {
+	if id == "" {
+		return string(cluster.Default)
+	}
+	return id
+}
+
+// canWatchCluster is the per-subscription authorization: a global admin
+// ("*" entry) or a per-cluster grant on the effective cluster (deny-by-default).
+func canWatchCluster(payload auth.TokenPayload, clusterID string) bool {
+	if len(payload.Perms["*"]) > 0 {
+		return true
+	}
+	return len(payload.Perms[effectiveClusterID(clusterID)]) > 0
+}
+
 // NewMultiplexer creates a new WebSocket multiplexer.
 func NewMultiplexer(p ClientProvider) *Multiplexer {
 	return &Multiplexer{
@@ -87,6 +106,10 @@ func NewMultiplexer(p ClientProvider) *Multiplexer {
 
 // HandleWebSocket handles the /wsMultiplexer endpoint.
 func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// The JWT middleware gated the connection on ?cluster=; every REQUEST
+	// message names its own clusterId, so each subscription is gated again.
+	payload, _ := auth.FromContext(r.Context())
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("ws upgrade failed", "err", err)
@@ -168,6 +191,16 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		switch req.Type {
 		case "REQUEST":
+			if !canWatchCluster(payload, req.ClusterID) {
+				sendCh <- ResponseMessage{
+					Type:  "ERROR",
+					Path:  req.Path,
+					Query: req.Query,
+					Error: map[string]string{"message": "forbidden: no access to cluster " + effectiveClusterID(req.ClusterID)},
+				}
+				continue
+			}
+
 			// Skip if already subscribed
 			m.mu.Lock()
 			if _, exists := m.subs[key]; exists {
@@ -347,39 +380,38 @@ func parseQuery(queryStr string) map[string]string {
 
 func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 	gvrMap := map[string]schema.GroupVersionResource{
-		"pods":              {Group: "", Version: "v1", Resource: "pods"},
-		"services":          {Group: "", Version: "v1", Resource: "services"},
-		"nodes":             {Group: "", Version: "v1", Resource: "nodes"},
-		"namespaces":        {Group: "", Version: "v1", Resource: "namespaces"},
-		"events":            {Group: "", Version: "v1", Resource: "events"},
-		"persistentvolumeclaims": {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
-		"pvcs":              {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
-		"persistentvolumes": {Group: "", Version: "v1", Resource: "persistentvolumes"},
-		"pvs":               {Group: "", Version: "v1", Resource: "persistentvolumes"},
-		"configmaps":        {Group: "", Version: "v1", Resource: "configmaps"},
-		"secrets":           {Group: "", Version: "v1", Resource: "secrets"},
-		"endpoints":         {Group: "", Version: "v1", Resource: "endpoints"},
-		"deployments":       {Group: "apps", Version: "v1", Resource: "deployments"},
-		"statefulsets":      {Group: "apps", Version: "v1", Resource: "statefulsets"},
-		"daemonsets":        {Group: "apps", Version: "v1", Resource: "daemonsets"},
-		"replicasets":       {Group: "apps", Version: "v1", Resource: "replicasets"},
-		"ingresses":         {Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
-		"ingressclasses":    {Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"},
-		"networkpolicies":   {Group: "networking.k8s.io", Version: "v1", Resource: "networkpolicies"},
-		"endpointslices":    {Group: "discovery.k8s.io", Version: "v1", Resource: "endpointslices"},
-		"jobs":              {Group: "batch", Version: "v1", Resource: "jobs"},
-		"cronjobs":          {Group: "batch", Version: "v1", Resource: "cronjobs"},
-		"storageclasses":    {Group: "storage.k8s.io", Version: "v1", Resource: "storageclasses"},
-		"volumeattachments": {Group: "storage.k8s.io", Version: "v1", Resource: "volumeattachments"},
-		"gateways":          {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
-		"gatewayclasses":    {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
-		"httproutes":        {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
-		"serviceaccounts":   {Group: "", Version: "v1", Resource: "serviceaccounts"},
-		"roles":                      {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
-		"horizontalpodautoscalers":    {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},
-		"verticalpodautoscalers":      {Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
+		"pods":                     {Group: "", Version: "v1", Resource: "pods"},
+		"services":                 {Group: "", Version: "v1", Resource: "services"},
+		"nodes":                    {Group: "", Version: "v1", Resource: "nodes"},
+		"namespaces":               {Group: "", Version: "v1", Resource: "namespaces"},
+		"events":                   {Group: "", Version: "v1", Resource: "events"},
+		"persistentvolumeclaims":   {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
+		"pvcs":                     {Group: "", Version: "v1", Resource: "persistentvolumeclaims"},
+		"persistentvolumes":        {Group: "", Version: "v1", Resource: "persistentvolumes"},
+		"pvs":                      {Group: "", Version: "v1", Resource: "persistentvolumes"},
+		"configmaps":               {Group: "", Version: "v1", Resource: "configmaps"},
+		"secrets":                  {Group: "", Version: "v1", Resource: "secrets"},
+		"endpoints":                {Group: "", Version: "v1", Resource: "endpoints"},
+		"deployments":              {Group: "apps", Version: "v1", Resource: "deployments"},
+		"statefulsets":             {Group: "apps", Version: "v1", Resource: "statefulsets"},
+		"daemonsets":               {Group: "apps", Version: "v1", Resource: "daemonsets"},
+		"replicasets":              {Group: "apps", Version: "v1", Resource: "replicasets"},
+		"ingresses":                {Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
+		"ingressclasses":           {Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"},
+		"networkpolicies":          {Group: "networking.k8s.io", Version: "v1", Resource: "networkpolicies"},
+		"endpointslices":           {Group: "discovery.k8s.io", Version: "v1", Resource: "endpointslices"},
+		"jobs":                     {Group: "batch", Version: "v1", Resource: "jobs"},
+		"cronjobs":                 {Group: "batch", Version: "v1", Resource: "cronjobs"},
+		"storageclasses":           {Group: "storage.k8s.io", Version: "v1", Resource: "storageclasses"},
+		"volumeattachments":        {Group: "storage.k8s.io", Version: "v1", Resource: "volumeattachments"},
+		"gateways":                 {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
+		"gatewayclasses":           {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gatewayclasses"},
+		"httproutes":               {Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"},
+		"serviceaccounts":          {Group: "", Version: "v1", Resource: "serviceaccounts"},
+		"roles":                    {Group: "rbac.authorization.k8s.io", Version: "v1", Resource: "roles"},
+		"horizontalpodautoscalers": {Group: "autoscaling", Version: "v2", Resource: "horizontalpodautoscalers"},
+		"verticalpodautoscalers":   {Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok
 }
-

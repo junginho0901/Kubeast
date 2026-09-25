@@ -7,7 +7,7 @@ import (
 // Config holds all configuration for the session service.
 type Config struct {
 	// Server
-	Port int
+	Port  int
 	Debug bool
 
 	// Database

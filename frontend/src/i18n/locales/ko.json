@@ -1349,6 +1349,21 @@
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요",
     "resultZipDownload": "Result ZIP 다운로드",
     "copyMessage": "복사",
+    "approval": {
+      "title": "클러스터를 변경하는 작업입니다",
+      "cluster": "클러스터",
+      "approve": "승인하고 실행",
+      "reject": "거부",
+      "hint": "위에 보이는 인자 그대로, 본인 권한으로 실행됩니다.",
+      "status": {
+        "pending": "승인 대기",
+        "approved": "실행 중",
+        "executed": "실행됨",
+        "failed": "실패",
+        "rejected": "거부됨",
+        "expired": "만료"
+      }
+    },
     "copied": "복사됨",
     "inputPlaceholder": "메시지를 입력하세요...",
     "stop": "중단",
@@ -2190,7 +2205,7 @@
   "setup": {
     "badge": "초기 클러스터 설정",
     "title": "Kubernetes 클러스터 연결",
-    "subtitle": "로그인 전에 사용할 클러스터를 선택하세요.",
+    "subtitle": "관리할 클러스터를 선택하세요.",
     "option": {
       "incluster": {
         "title": "이 클러스터 사용",
@@ -2234,8 +2249,8 @@
       "title": "AI 모델 설정",
       "subtitle": "AI 어시스턴트에 사용할 LLM 프로바이더를 선택하세요. 나중에 변경할 수 있습니다.",
       "model": "모델",
-      "apiKey": "API Key",
-      "apiKeyHint": "API 키는 Kubernetes Secret으로 안전하게 저장됩니다.",
+      "apiKey": "API 키 환경변수 이름",
+      "apiKeyHint": "키를 담고 있는 ai-service 환경변수 이름입니다(Helm values ai.*ApiKey 또는 ai.apiKeysSecret로 주입). 키 자체는 DB에 저장되지 않습니다.",
       "baseUrl": "Base URL",
       "noToolCalling": "이 모델은 툴 호출(Function Calling)을 지원하지 않습니다.",
       "test": "연결 테스트",

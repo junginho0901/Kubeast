@@ -103,9 +103,9 @@ func (s *Service) DescribeHPA(ctx context.Context, namespace, name string) (map[
 	for _, c := range hpa.Status.Conditions {
 		conditions = append(conditions, map[string]interface{}{
 			"type":                 string(c.Type),
-			"status":              string(c.Status),
-			"reason":              c.Reason,
-			"message":             c.Message,
+			"status":               string(c.Status),
+			"reason":               c.Reason,
+			"message":              c.Message,
 			"last_transition_time": toISO(&c.LastTransitionTime),
 		})
 	}

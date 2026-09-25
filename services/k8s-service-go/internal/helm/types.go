@@ -142,7 +142,7 @@ type UpgradeResult struct {
 // release. Logs are included so the UI can show failure output without
 // a second round-trip.
 type TestResult struct {
-	Success bool            `json:"success"`
+	Success bool             `json:"success"`
 	Hooks   []TestHookResult `json:"hooks"`
 }
 

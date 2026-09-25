@@ -38,7 +38,7 @@ ALL_SERVICES=(
   "k8s-service:services:k8s-service-go/Dockerfile"
   "session-service:services:session-service-go/Dockerfile"
   "frontend:frontend"
-  "tool-server:services/tool-server"
+  "tool-server:services:tool-server/Dockerfile"
   "model-config-controller-go:services/model-config-controller-go"
 )
 

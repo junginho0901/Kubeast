@@ -178,20 +178,6 @@ K8S_WRITE_TOOLS: List[Dict] = [
     {
         "type": "function",
         "function": {
-            "name": "k8s_create_resource_from_url",
-            "description": "URL 매니페스트로 리소스 생성 (kubectl create -f URL).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "매니페스트 URL"},
-                },
-                "required": ["url"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "k8s_delete_resource",
             "description": "리소스 삭제 (kubectl delete).",
             "parameters": {

@@ -69,7 +69,7 @@ func (s *Service) DescribePDB(ctx context.Context, namespace, name string) (map[
 	conditions := make([]map[string]interface{}, 0, len(pdb.Status.Conditions))
 	for _, c := range pdb.Status.Conditions {
 		conditions = append(conditions, map[string]interface{}{
-			"type":                  string(c.Type),
+			"type":                 string(c.Type),
 			"status":               string(c.Status),
 			"reason":               c.Reason,
 			"message":              c.Message,

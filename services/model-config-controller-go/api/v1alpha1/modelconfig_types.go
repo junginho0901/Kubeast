@@ -26,13 +26,13 @@ var (
 )
 
 type ModelConfigSpec struct {
-	Provider          string                   `json:"provider,omitempty"`
-	Model             string                   `json:"model,omitempty"`
-	BaseURL           string                   `json:"baseURL,omitempty"`
-	APIKeySecretRef   *SecretKeyRef            `json:"apiKeySecretRef,omitempty"`
-	APIKeyEnv         string                   `json:"apiKeyEnv,omitempty"`
-	ExtraHeaders      map[string]string        `json:"extraHeaders,omitempty"`
-	TLSVerify         *bool                    `json:"tlsVerify,omitempty"`
+	Provider        string            `json:"provider,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	BaseURL         string            `json:"baseURL,omitempty"`
+	APIKeySecretRef *SecretKeyRef     `json:"apiKeySecretRef,omitempty"`
+	APIKeyEnv       string            `json:"apiKeyEnv,omitempty"`
+	ExtraHeaders    map[string]string `json:"extraHeaders,omitempty"`
+	TLSVerify       *bool             `json:"tlsVerify,omitempty"`
 	// CACert: 자체 서명 CA 인증서(PEM). 셀프호스트 HTTPS 엔드포인트용.
 	CACert            string                   `json:"caCert,omitempty"`
 	Enabled           *bool                    `json:"enabled,omitempty"`

@@ -27,7 +27,8 @@ kind load docker-image kubeast/model-config-controller-go:local --name kubeast
 
 ## 4) 적용
 ```bash
-kubectl apply -k k8s
+# nginx.conf 가 helm/kubeast/files/ 로의 심볼릭 링크라 kustomize 기본 load restrictor 에 걸린다.
+kubectl kustomize --load-restrictor LoadRestrictionsNone k8s | kubectl apply -f -
 ```
 
 ## 4-1) 외부 클러스터 연결 (선택)

@@ -330,6 +330,23 @@ export class ChatStreamManager {
               continue
             }
 
+            if (data.approval_required) {
+              // H2: the write tool was parked; attach the approval to the tool
+              // call so the message renders an approve/reject card.
+              const approvalId = String(data.approval_required)
+              const functionName = String(data.function || '')
+              let attached = false
+              const toolCalls = this.state.toolCalls.map((tc) => {
+                if (!attached && tc.function === functionName && !tc.approval_id) {
+                  attached = true
+                  return { ...tc, approval_id: approvalId, approval_status: 'pending', cluster: data.cluster, expires_at: data.expires_at }
+                }
+                return tc
+              })
+              this.setState({ toolCalls, streamingPhase: 'tools' })
+              continue
+            }
+
             if (data.function) {
               const toolCall = {
                 function: data.function,

@@ -62,7 +62,10 @@ else
 
   # Kind 클러스터 재생성
   step "Creating Kind cluster"
-  kind create cluster --name "$KIND_NAME" --config "$ROOT/kind-config.yaml"
+  KIND_CONFIG="$(mktemp)"
+  sed "s#__KUBEAST_ROOT__#${ROOT}#g" "$ROOT/kind-config.yaml" > "$KIND_CONFIG"
+  kind create cluster --name "$KIND_NAME" --config "$KIND_CONFIG"
+  rm -f "$KIND_CONFIG"
   ok "Kind cluster created"
 
   # kubeconfig 저장. repo-local .kubeconfig-kind 도 함께 갱신해 둔다 —
@@ -152,14 +155,14 @@ if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
       if [[ $i -eq 30 ]]; then
         warn "Auth-service DB initialization timeout (got HTTP $HTTP_CODE)"
         echo "    This may be normal if postgres was not fully reset."
-        echo "    Try accessing http://localhost:30080/setup manually."
+        echo "    Try accessing http://localhost:30080 manually."
         break
       fi
       echo -n "."
       sleep 2
     done
 
-    step "Done! Access http://localhost:30080/setup"
+    step "Done! Access http://localhost:30080 (login as admin; /setup opens when no cluster is registered)"
     echo ""
     # --db 모드는 secret 을 건드리지 않으므로 기존 값을 그대로 보여줌
     DB_ADMIN_PW=$(kubectl -n "$NS" get secret kubeast-secrets \
@@ -186,7 +189,7 @@ IMAGES=(
   "k8s-service:services:k8s-service-go/Dockerfile"
   "session-service:services:session-service-go/Dockerfile"
   "frontend:frontend"
-  "tool-server:services/tool-server"
+  "tool-server:services:tool-server/Dockerfile"
   "model-config-controller-go:services/model-config-controller-go"
 )
 
@@ -196,9 +199,9 @@ for entry in "${IMAGES[@]}"; do
   img="kubeast/${name}:${TAG}"
   echo -e "  Building ${YELLOW}${img}${NC} ..."
   if [[ -n "$dockerfile" ]]; then
-    docker build -t "$img" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx" 2>&1 | tail -1
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$img" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx" 2>&1 | tail -1
   else
-    docker build -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
   fi
   BUILT_IMAGES+=("$img")
   ok "$img"
@@ -215,7 +218,8 @@ ok "All images loaded"
 # 5. Kubernetes 리소스 배포
 # ═══════════════════════════════════════════════════
 step "Applying Kubernetes manifests"
-kubectl apply -k "$ROOT/k8s" 2>&1 | grep -E "^(namespace|configmap|secret|deployment|service|clusterrole)" || true
+kubectl kustomize --load-restrictor LoadRestrictionsNone "$ROOT/k8s" | kubectl apply -f - \
+  | grep -E "^(namespace|configmap|secret|deployment|service|clusterrole)" || fail "kubectl apply failed"
 ok "Base manifests applied"
 
 # local secret 덮어쓰기
@@ -363,7 +367,7 @@ step "Waiting for ai-service DB initialization"
 echo -n "  Waiting for ai-service to initialize database..."
 RESTARTED_AI=0
 for i in $(seq 1 60); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/ai/config" 2>/dev/null || echo "000")
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/ai/health" 2>/dev/null || echo "000")
   if [[ "$HTTP_CODE" == "200" ]]; then
     ok "AI-service DB initialized (HTTP $HTTP_CODE)"
     break
@@ -411,7 +415,7 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║         Deploy complete!                      ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 echo ""
-echo "  URL:  http://localhost:30080/setup"
+echo "  URL:  http://localhost:30080  (admin 로그인 뒤 클러스터가 없으면 /setup 으로 이동)"
 echo ""
 echo "  Accounts (created after first auth-service boot):"
 echo -e "    admin / ${YELLOW}${ADMIN_PW}${NC}   (admin) ← 랜덤 생성됨"

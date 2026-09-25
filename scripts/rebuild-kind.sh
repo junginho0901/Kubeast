@@ -92,7 +92,7 @@ get_context() {
     k8s-service) echo "services" ;;
     session-service) echo "services" ;;
     frontend) echo "frontend" ;;
-    tool-server) echo "services/tool-server" ;;
+    tool-server) echo "services" ;;
     model-config-controller-go) echo "services/model-config-controller-go" ;;
     *) echo "" ;;
   esac
@@ -104,6 +104,7 @@ get_dockerfile() {
     auth-service) echo "auth-service-go/Dockerfile" ;;
     session-service) echo "session-service-go/Dockerfile" ;;
     k8s-service) echo "k8s-service-go/Dockerfile" ;;
+    tool-server) echo "tool-server/Dockerfile" ;;
     *) echo "" ;;
   esac
 }
@@ -206,9 +207,9 @@ build_and_load() {
 
   echo "═══ Building ${image} ═══"
   if [[ -n "$dockerfile" ]]; then
-    docker build -t "$image" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx"
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$image" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx"
   else
-    docker build -t "$image" "$ROOT/$ctx"
+    docker build ${DOCKER_BUILD_ARGS:-} -t "$image" "$ROOT/$ctx"
   fi
   echo "═══ Loading ${image} into kind (${KIND_CLUSTER_NAME}) ═══"
   kind load docker-image "$image" --name "$KIND_CLUSTER_NAME"

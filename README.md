@@ -97,8 +97,8 @@ helm uninstall kubeast -n kubeast      # K8s
 
 ### 1. 접속
 
-- **NodePort**: `http://<노드IP>:30333/setup`
-- **포트포워드**: `kubectl -n kubeast port-forward svc/gateway 8000:8000` → `http://localhost:8000/setup`
+- **NodePort**: `http://<노드IP>:30333`
+- **포트포워드**: `kubectl -n kubeast port-forward svc/gateway 8000:8000` → `http://localhost:8000`
 - **Docker**: `http://localhost:8000`
 
 ### 2. 관리자 비밀번호 확인
@@ -125,14 +125,13 @@ grep DEFAULT_ADMIN_PASSWORD .env
 
 비밀번호를 직접 지정하려면 설치 시 `--set admin.password=<원하는비번>`.
 
-### 3. 클러스터 연결 (Connect your cluster)
+### 3. 로그인 후 클러스터 연결 (Connect your cluster)
 
-`/setup` 페이지에서 관리할 클러스터를 연결합니다.
+`admin` 계정으로 먼저 로그인합니다. 등록된 클러스터가 없으면 로그인 직후 `/setup` 마법사로 이동합니다
+(마법사와 그 API는 관리자 권한이 필요합니다). **로그인 후 즉시 비밀번호를 변경하세요.**
 
 - **In-cluster** — Kubeast가 떠 있는 그 클러스터를 ServiceAccount 권한으로 자동 연결
 - **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터)
-
-연결 후 `admin` 계정으로 로그인합니다. **로그인 후 즉시 비밀번호를 변경하세요.**
 
 ### 4. AI 활성화
 
@@ -289,11 +288,56 @@ admin:
   email: admin
   password: ""          # 비우면 자동 생성 (secret 으로 확인)
 
-# AI 키 (Admin UI 에서도 등록 가능)
+# JWT 서명키 — 비우면 설치 시 생성해 Secret(kubeast-auth-keys)에 보관, upgrade 때 재사용.
+# 직접 관리하는 Secret(키 이름 jwt_private.pem)이 있으면 지정.
+# 토큰 60분(활동 중이면 UI가 자동 갱신), 셀프 가입·데모 계정은 기본 off
+auth:
+  signingKey:
+    existingSecret: ""
+  tokenTTLMinutes: 60
+  allowRegistration: false
+  bootstrapDemoUsers: false
+  passwordMinLength: 12
+  # 클러스터에는 로그인한 사용자 본인(이메일)으로 impersonation — 클러스터 RBAC이
+  # 최종 판단, K8s audit에 사용자가 남음. 등록하는 모든 클러스터에 아래 RBAC 적용:
+  #   helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -
+  # (Kubeast 자격증명은 ClusterRole kubeast-impersonator 만 있으면 됨)
+  impersonation:
+    enabled: true
+    clusterRoles: true
+
+# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
+nodeShell:
+  enabled: false
+  images:
+    - docker.io/library/busybox:latest
+
+# 파드 보안 (Pod Security Standards restricted 기본). 사용자 네임스페이스를
+# 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true
+podSecurity:
+  enabled: true
+  hostUsers: false
+  readOnlyRootFilesystem: true
+
+# 가용성 — replicas 를 2 이상으로 올릴 때 pdb.enabled: true
+replicas:
+  gateway: 1
+pdb:
+  enabled: false
+topologySpread:
+  enabled: true
+resources:               # 컨테이너별 requests / memory limit (전체는 values.yaml)
+  aiService:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 1Gi }
+
+# AI 키 — ai-service 환경변수로만 주입되고 DB에는 저장되지 않음. 모델 설정(UI/CRD)은
+# 변수 이름(api_key_env)만 가리킴. ESO 등으로 만든 Secret이 있으면 apiKeysSecret에 지정
 ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
+  apiKeysSecret: ""
   model: "gpt-4o-mini"
 
 # 내장 PostgreSQL / Redis (false 면 외부 사용)

@@ -7,7 +7,16 @@ from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from app.models.ai import ChatRequest
 from app.models.floating_ai import FloatingChatRequest
+from pydantic import ValidationError
 from app.security import require_auth, decode_access_token
+
+
+def _validation_message(err: ValidationError) -> str:
+    errors = err.errors()
+    if not errors:
+        return "invalid request"
+    msg = str(errors[0].get("msg", "invalid request"))
+    return msg[len("Value error, "):] if msg.startswith("Value error, ") else msg
 
 
 def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dict]:
@@ -189,6 +198,159 @@ async def session_chat(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---- AI write-tool approvals (H2) ----
+#
+# The stream never executes a write tool. It records a pending approval and
+# the user decides here. Only the requesting user can decide, within the TTL,
+# and the tool runs with the arguments that were shown — never edited ones.
+
+APPROVAL_RESULT_MAX_CHARS = 4000
+
+
+def _approval_dict(a) -> dict:
+    return {
+        "id": a.id,
+        "session_id": a.session_id,
+        "cluster": a.cluster,
+        "tool": a.tool,
+        "args": a.args or {},
+        "status": a.status,
+        "result": a.result,
+        "created_at": a.created_at.isoformat() + "Z" if a.created_at else None,
+        "expires_at": a.expires_at.isoformat() + "Z" if a.expires_at else None,
+        "decided_at": a.decided_at.isoformat() + "Z" if a.decided_at else None,
+    }
+
+
+def _caller(authorization: str):
+    try:
+        token = authorization.split(" ", 1)[1] if " " in authorization else authorization
+        return decode_access_token(token)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+async def _load_own_pending_approval(approval_id: str, payload):
+    from datetime import datetime
+    from app.database import get_db_service
+
+    db = await get_db_service()
+    approval = await db.get_tool_approval(approval_id)
+    if approval is None or approval.user_id != payload.user_id:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    if approval.status == "pending" and approval.expires_at and approval.expires_at < datetime.utcnow():
+        approval = await db.update_tool_approval(approval.id, status="expired", decided_at=datetime.utcnow())
+    if approval.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Approval is {approval.status}")
+    return db, approval
+
+
+@router.get("/tool-approvals")
+async def list_tool_approvals(session_id: str, authorization: str = Header(..., alias="Authorization")):
+    from app.database import get_db_service
+
+    payload = _caller(authorization)
+    await _authorize_session_access(authorization, session_id)
+    db = await get_db_service()
+    rows = await db.list_tool_approvals(session_id, payload.user_id, pending_only=True)
+    return [_approval_dict(a) for a in rows]
+
+
+@router.get("/tool-approvals/{approval_id}")
+async def get_tool_approval(approval_id: str, authorization: str = Header(..., alias="Authorization")):
+    from app.database import get_db_service
+
+    payload = _caller(authorization)
+    db = await get_db_service()
+    approval = await db.get_tool_approval(approval_id)
+    if approval is None or approval.user_id != payload.user_id:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    return _approval_dict(approval)
+
+
+@router.post("/tool-approvals/{approval_id}/reject")
+async def reject_tool_approval(
+    approval_id: str,
+    request: Request,
+    authorization: str = Header(..., alias="Authorization"),
+):
+    from datetime import datetime
+    from app.services.audit_writer import write_audit
+
+    payload = _caller(authorization)
+    db, approval = await _load_own_pending_approval(approval_id, payload)
+    approval = await db.update_tool_approval(approval.id, status="rejected", decided_at=datetime.utcnow())
+    await db.add_message(
+        approval.session_id, "assistant",
+        f"❌ `{approval.tool}` on `{approval.cluster}` was rejected by the user; nothing was changed.",
+    )
+    actor, http = _extract_audit_meta(request, authorization)
+    await write_audit(
+        action="ai.tool.reject", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"),
+        target_type="tool", target_id=approval.tool,
+        after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster},
+        request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+    )
+    _invalidate_caches()
+    return _approval_dict(approval)
+
+
+@router.post("/tool-approvals/{approval_id}/approve")
+async def approve_tool_approval(
+    approval_id: str,
+    request: Request,
+    authorization: str = Header(..., alias="Authorization"),
+):
+    from datetime import datetime
+    from app.services.audit_writer import write_audit
+    from app.services.ai import formatters
+
+    payload = _caller(authorization)
+    db, approval = await _load_own_pending_approval(approval_id, payload)
+    approval = await db.update_tool_approval(approval.id, status="approved", decided_at=datetime.utcnow())
+    actor, http = _extract_audit_meta(request, authorization)
+    await write_audit(
+        action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"),
+        target_type="tool", target_id=approval.tool,
+        after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster},
+        request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+    )
+
+    # Run with the stored arguments as the approving user: tool-server re-checks
+    # ai.tool.<name> in the cluster (C1) and impersonates the user (C2).
+    ai_service = await _build_ai_service(authorization, cluster_name=approval.cluster)
+    args = dict(approval.args or {})
+    status, error = "executed", None
+    try:
+        response = await ai_service._call_tool_server(approval.tool, args, approval_id=approval.id)
+        formatted, _, _ = formatters._format_tool_result(approval.tool, args, response)
+    except Exception as e:  # tool-server error (403 from the cluster, kubectl failure, ...)
+        status, error = "failed", str(e)
+        formatted = f"error: {error}"
+    approval = await db.update_tool_approval(
+        approval.id, status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=datetime.utcnow(),
+    )
+    icon = "✅" if status == "executed" else "⚠️"
+    await db.add_message(
+        approval.session_id, "assistant",
+        f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n```\n{approval.result}\n```",
+        tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status}],
+    )
+    await write_audit(
+        action="ai.tool.call", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"),
+        target_type=args.get("resource_type") or "tool",
+        target_id=args.get("resource_name") or args.get("name") or approval.tool,
+        namespace=args.get("namespace"),
+        after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True},
+        request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+        result="success" if status == "executed" else "failure", error=error,
+    )
+    _invalidate_caches()
+    return _approval_dict(approval)
+
+
 @router.post("/sessions/{session_id}/floating-chat")
 async def floating_session_chat(
     session_id: str,
@@ -353,7 +515,10 @@ async def create_model_config(payload=Depends(require_auth), request: dict = Non
 
     _require_admin(payload)
 
-    data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
+    try:
+        data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=_validation_message(e))
     db = await get_db_service()
     try:
         config = await db.create_model_config(data)
@@ -374,7 +539,10 @@ async def update_model_config(config_id: int, payload=Depends(require_auth), req
 
     _require_admin(payload)
 
-    data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+    try:
+        data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=_validation_message(e))
     db = await get_db_service()
     config = await db.update_model_config(config_id, data)
     if not config:

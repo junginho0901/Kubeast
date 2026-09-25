@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"gopkg.in/yaml.v3"
 )
 
 // GetNodes lists all nodes.
@@ -59,12 +59,12 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	conditions := make([]map[string]interface{}, 0, len(node.Status.Conditions))
 	for _, c := range node.Status.Conditions {
 		conditions = append(conditions, map[string]interface{}{
-			"type":                   string(c.Type),
-			"status":                 string(c.Status),
-			"reason":                 c.Reason,
-			"message":                c.Message,
-			"last_heartbeat_time":    toISO(&c.LastHeartbeatTime),
-			"last_transition_time":   toISO(&c.LastTransitionTime),
+			"type":                 string(c.Type),
+			"status":               string(c.Status),
+			"reason":               c.Reason,
+			"message":              c.Message,
+			"last_heartbeat_time":  toISO(&c.LastHeartbeatTime),
+			"last_transition_time": toISO(&c.LastTransitionTime),
 		})
 	}
 	result["conditions"] = conditions
@@ -96,15 +96,15 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	// System info
 	result["system_info"] = map[string]interface{}{
 		"machine_id":                node.Status.NodeInfo.MachineID,
-		"system_uuid":              node.Status.NodeInfo.SystemUUID,
-		"boot_id":                  node.Status.NodeInfo.BootID,
-		"kernel_version":           node.Status.NodeInfo.KernelVersion,
-		"os_image":                 node.Status.NodeInfo.OSImage,
+		"system_uuid":               node.Status.NodeInfo.SystemUUID,
+		"boot_id":                   node.Status.NodeInfo.BootID,
+		"kernel_version":            node.Status.NodeInfo.KernelVersion,
+		"os_image":                  node.Status.NodeInfo.OSImage,
 		"container_runtime_version": node.Status.NodeInfo.ContainerRuntimeVersion,
-		"kubelet_version":          node.Status.NodeInfo.KubeletVersion,
-		"kube_proxy_version":       node.Status.NodeInfo.KubeProxyVersion,
-		"operating_system":         node.Status.NodeInfo.OperatingSystem,
-		"architecture":             node.Status.NodeInfo.Architecture,
+		"kubelet_version":           node.Status.NodeInfo.KubeletVersion,
+		"kube_proxy_version":        node.Status.NodeInfo.KubeProxyVersion,
+		"operating_system":          node.Status.NodeInfo.OperatingSystem,
+		"architecture":              node.Status.NodeInfo.Architecture,
 	}
 
 	// Images
@@ -122,8 +122,8 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 	volumesAttached := make([]map[string]interface{}, 0, len(node.Status.VolumesAttached))
 	for _, va := range node.Status.VolumesAttached {
 		volumesAttached = append(volumesAttached, map[string]interface{}{
-			"name":         string(va.Name),
-			"device_path":  va.DevicePath,
+			"name":        string(va.Name),
+			"device_path": va.DevicePath,
 		})
 	}
 	result["volumes_attached"] = volumesAttached

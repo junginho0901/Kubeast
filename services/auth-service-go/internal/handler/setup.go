@@ -8,6 +8,8 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/k8ssetup"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -23,18 +25,39 @@ const setupClusterDisplayName = "default"
 // `clusters` row + a kubeconfig secret/file and k8s-service reads it lazily on
 // the first request — no ConfigMap patch, no deployment restart (00-COMMON §2-4).
 type SetupHandler struct {
-	cfg      config.Config
-	registry *cluster.PostgresRegistry
-	secrets  cluster.SecretWriter
+	cfg        config.Config
+	registry   *cluster.PostgresRegistry
+	secrets    cluster.SecretWriter
+	auditStore audit.Store
 }
 
-func NewSetupHandler(cfg config.Config, registry *cluster.PostgresRegistry, secrets cluster.SecretWriter) *SetupHandler {
-	return &SetupHandler{cfg: cfg, registry: registry, secrets: secrets}
+func NewSetupHandler(cfg config.Config, registry *cluster.PostgresRegistry, secrets cluster.SecretWriter, auditStore audit.Store) *SetupHandler {
+	return &SetupHandler{cfg: cfg, registry: registry, secrets: secrets, auditStore: auditStore}
 }
 
-// GetSetup handles GET /auth/setup. "Configured" now means at least one cluster
-// is registered (the cluster_setup single-row table is retired).
+// GetSetupPublic handles the unauthenticated GET /auth/setup. It answers only
+// whether a cluster is registered yet, so the login page can route a fresh
+// install to the wizard. Mode and connection details are on the authenticated
+// GET /auth/setup/status.
+func (h *SetupHandler) GetSetupPublic(w http.ResponseWriter, r *http.Request) {
+	_, err := h.registry.Default(r.Context())
+	if errors.Is(err, cluster.ErrNotFound) {
+		response.JSON(w, http.StatusOK, model.ClusterSetupStatus{Configured: false})
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, model.ClusterSetupStatus{Configured: true})
+}
+
+// GetSetup handles GET /auth/setup/status (admin). "Configured" means at least
+// one cluster is registered (the cluster_setup single-row table is retired).
 func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requirePerm(w, r, auth.PermClustersCreate); !ok {
+		return
+	}
 	id, err := h.registry.Default(r.Context())
 	if errors.Is(err, cluster.ErrNotFound) {
 		response.JSON(w, http.StatusOK, model.ClusterSetupStatus{Configured: false})
@@ -70,6 +93,10 @@ func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
 // the DB row is inserted. k8s-service picks it up on the next request; nothing
 // is restarted.
 func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
+	payload, ok := requirePerm(w, r, auth.PermClustersCreate)
+	if !ok {
+		return
+	}
 	if _, err := h.registry.Default(r.Context()); err == nil {
 		response.Error(w, http.StatusConflict, "Already configured")
 		return
@@ -84,6 +111,7 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var regErr error
 	switch req.Mode {
 	case "external":
 		if req.Kubeconfig == nil || *req.Kubeconfig == "" {
@@ -99,19 +127,24 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, "Connection failed: "+verr.Error())
 			return
 		}
-		if _, err := h.registry.AddExternal(r.Context(), setupClusterDisplayName, *req.Kubeconfig, "", setupUID, "setup", h.secrets); err != nil {
-			response.Error(w, http.StatusInternalServerError, "Failed to register cluster: "+err.Error())
-			return
-		}
+		_, regErr = h.registry.AddExternal(r.Context(), setupClusterDisplayName, *req.Kubeconfig, "", setupUID, payload.Email, h.secrets)
 
 	case "in_cluster":
-		if _, err := h.registry.AddSelf(r.Context(), setupClusterDisplayName, "setup"); err != nil {
-			response.Error(w, http.StatusBadRequest, "Failed to register self cluster: "+err.Error())
-			return
-		}
+		_, regErr = h.registry.AddSelf(r.Context(), setupClusterDisplayName, payload.Email)
 
 	default:
 		response.Error(w, http.StatusBadRequest, "Invalid mode. Must be in_cluster or external")
+		return
+	}
+
+	writeClusterAudit(h.auditStore, r, "admin.cluster.register", payload, setupClusterDisplayName,
+		nil, map[string]any{"mode": req.Mode, "display_name": setupClusterDisplayName, "via": "setup"}, regErr)
+	if regErr != nil {
+		status := http.StatusInternalServerError
+		if req.Mode == "in_cluster" {
+			status = http.StatusBadRequest
+		}
+		response.Error(w, status, "Failed to register cluster: "+regErr.Error())
 		return
 	}
 

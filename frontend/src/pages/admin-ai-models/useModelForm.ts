@@ -15,8 +15,8 @@ export function useModelForm() {
   const [formModel, setFormModel] = useState('')
   const [formCustomModel, setFormCustomModel] = useState(false)
   const [formBaseUrl, setFormBaseUrl] = useState('')
-  const [formApiKey, setFormApiKey] = useState('')
-  const [formShowApiKey, setFormShowApiKey] = useState(false)
+  // Name of the ai-service env var that holds the provider key (keys are never stored)
+  const [formApiKeyEnv, setFormApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
   const [formEnabled, setFormEnabled] = useState(true)
   const [formIsDefault, setFormIsDefault] = useState(false)
   // 로컬/셀프호스트 모델용 고급 설정
@@ -77,8 +77,7 @@ export function useModelForm() {
     setFormModel('')
     setFormCustomModel(false)
     setFormBaseUrl('')
-    setFormApiKey('')
-    setFormShowApiKey(false)
+    setFormApiKeyEnv(PROVIDER_CATALOG[0].defaultApiKeyEnv)
     setFormEnabled(true)
     setFormIsDefault(false)
     setFormCaCert('')
@@ -99,8 +98,7 @@ export function useModelForm() {
     setFormModel(cfg.model)
     setFormCustomModel(!isKnown)
     setFormBaseUrl(cfg.base_url || '')
-    setFormApiKey('')
-    setFormShowApiKey(false)
+    setFormApiKeyEnv(cfg.api_key_env || provDef?.defaultApiKeyEnv || '')
     setFormEnabled(cfg.enabled)
     setFormIsDefault(cfg.is_default)
     setFormCaCert(cfg.ca_cert || '')
@@ -123,7 +121,7 @@ export function useModelForm() {
       setFormModel(prov.models[0]?.name ?? '')
       setFormCustomModel(false)
       setFormBaseUrl(prov.defaultBaseUrl ?? '')
-      setFormApiKey('')
+      setFormApiKeyEnv(prov.defaultApiKeyEnv ?? '')
       setTestResult(null)
     }
   }
@@ -137,8 +135,8 @@ export function useModelForm() {
       enabled: formEnabled,
       is_default: formIsDefault,
     }
-    if (formApiKey.trim()) {
-      payload.api_key = formApiKey.trim()
+    if (currentProviderDef.needsApiKey !== false) {
+      payload.api_key_env = formApiKeyEnv.trim() || null
     }
     // 자체 서명 CA (PEM)
     if (formCaCert.trim()) {
@@ -172,8 +170,8 @@ export function useModelForm() {
   }
 
   const handleTest = async () => {
-    if (!formApiKey.trim() && currentProviderDef.needsApiKey !== false) {
-      setTestResult({ success: false, message: 'Please enter an API key to test' })
+    if (!formApiKeyEnv.trim() && currentProviderDef.needsApiKey !== false) {
+      setTestResult({ success: false, message: 'Enter the name of the env var that holds the API key' })
       return
     }
     setTesting(true)
@@ -183,7 +181,7 @@ export function useModelForm() {
         provider: formProvider,
         model: formModel,
         base_url: formBaseUrl || undefined,
-        api_key: formApiKey.trim() || undefined,
+        api_key_env: formApiKeyEnv.trim() || undefined,
       })
       setTestResult(result)
     } catch (e: any) {
@@ -222,8 +220,7 @@ export function useModelForm() {
     formModel, setFormModel,
     formCustomModel, setFormCustomModel,
     formBaseUrl, setFormBaseUrl,
-    formApiKey, setFormApiKey,
-    formShowApiKey, setFormShowApiKey,
+    formApiKeyEnv, setFormApiKeyEnv,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
     formCaCert, setFormCaCert,

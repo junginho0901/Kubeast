@@ -28,7 +28,7 @@ for item in "${SERVICES[@]}"; do
   docker push "$image"
 done
 
-kubectl apply -k "$ROOT/k8s"
+kubectl kustomize --load-restrictor LoadRestrictionsNone "$ROOT/k8s" | kubectl apply -f -
 
 kubectl -n kubeast set image deploy/auth-service auth-service="$REGISTRY/auth-service:$TAG"
 kubectl -n kubeast set image deploy/ai-service ai-service="$REGISTRY/ai-service:$TAG"

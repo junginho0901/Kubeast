@@ -142,9 +142,9 @@ func TestMergeConditionsPreservesTransitionTime(t *testing.T) {
 	}
 	updates := []metav1.Condition{
 		{
-			Type:   "Synced",
-			Status: metav1.ConditionTrue,
-			Reason: "Synced",
+			Type:    "Synced",
+			Status:  metav1.ConditionTrue,
+			Reason:  "Synced",
 			Message: "ok",
 		},
 	}

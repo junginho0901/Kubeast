@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 type ToolHandler func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error)
@@ -18,9 +20,22 @@ type ToolDefinition struct {
 }
 
 var (
-	kubeconfigPath   = resolveKubeconfigPath()
-	tokenPassthrough = strings.EqualFold(os.Getenv("TOKEN_PASSTHROUGH"), "true")
-	defaultTimeout   = 60 * time.Second
+	kubeconfigPath = resolveKubeconfigPath()
+	// Act as the JWT's user toward the cluster (--as/--as-group). The former
+	// TOKEN_PASSTHROUGH (kubectl --token with the Kubeast JWT) is gone: clusters
+	// never knew that token, so it either failed or was overridden.
+	impersonationEnabled = !strings.EqualFold(os.Getenv("IMPERSONATION_ENABLED"), "false")
+	// Write tools need the user's approval id (set by ai-service's approve path).
+	writeApprovalRequired = !strings.EqualFold(os.Getenv("AI_WRITE_APPROVAL"), "false")
+	defaultTimeout        = 60 * time.Second
+
+	// toolAuth validates the caller's JWT against auth-service's JWKS (same
+	// issuer/audience settings every other service uses).
+	toolAuth tokenValidator = auth.NewJWTValidator(auth.JWKSConfig{
+		JWKSURL:  envOrDefault("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
+		Issuer:   envOrDefault("JWT_ISSUER", "kubeast-auth"),
+		Audience: envOrDefault("JWT_AUDIENCE", "kubeast"),
+	})
 )
 
 func main() {
@@ -60,7 +75,6 @@ func main() {
 		log.Fatalf("server error: %v", err)
 	}
 }
-
 
 func buildToolRegistry() map[string]ToolDefinition {
 	registry := map[string]ToolDefinition{}
@@ -135,11 +149,6 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleCreateResource,
 	})
 	register(ToolDefinition{
-		Name:        "k8s_create_resource_from_url",
-		Description: "Create resources from manifest URL (kubectl create -f URL)",
-		Handler:     handleCreateResourceFromURL,
-	})
-	register(ToolDefinition{
 		Name:        "k8s_delete_resource",
 		Description: "Delete a Kubernetes resource (kubectl delete)",
 		Handler:     handleDeleteResource,
@@ -187,4 +196,3 @@ func buildToolRegistry() map[string]ToolDefinition {
 
 	return registry
 }
-

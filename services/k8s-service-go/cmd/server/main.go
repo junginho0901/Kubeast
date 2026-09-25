@@ -95,6 +95,7 @@ func main() {
 		RateLimitBurst: cfg.RateLimitBurst,
 		BreakerFails:   cfg.BreakerConsecutiveFails,
 		BreakerOpen:    time.Duration(cfg.BreakerOpenSec) * time.Second,
+		Impersonation:  cfg.ImpersonationEnabled,
 	})
 	startCancel()
 	if err != nil {

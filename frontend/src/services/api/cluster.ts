@@ -192,9 +192,20 @@ export const clusterApi = {
     return data
   },
 
-  // Cluster Setup
-  getSetupStatus: async (): Promise<{ configured: boolean; mode?: string; secret_name?: string }> => {
+  // Cluster Setup — public: only whether a cluster is registered yet.
+  getSetupStatus: async (): Promise<{ configured: boolean }> => {
     const { data } = await client.get('/auth/setup')
+    return data
+  },
+
+  // Admin: mode + connection status for the wizard.
+  getSetupStatusFull: async (): Promise<{
+    configured: boolean
+    mode?: string
+    connection_status?: string
+    connection_message?: string | null
+  }> => {
+    const { data } = await client.get('/auth/setup/status')
     return data
   },
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
@@ -24,19 +24,8 @@ export default function Login() {
     staleTime: 0,
     refetchOnMount: 'always',
   })
-  // Health check removed from login — transient k8s failures during rollout
-  // should not redirect users back to /setup.
-
-  useEffect(() => {
-    // Avoid redirecting based on stale cached setup status while refetching.
-    if (setupStatus && !setupStatus.configured && !isFetchingSetup) {
-      navigate('/setup', { replace: true })
-    }
-  }, [setupStatus, isFetchingSetup, navigate])
-
-  // NOTE: Removed aggressive redirect to /setup on transient health failures.
-  // Only redirect if setup is truly not configured (handled above).
-  // Temporary k8s disconnections during rollout should not loop back to setup.
+  // A fresh install goes to the setup wizard only AFTER the bootstrap admin
+  // signs in (see loginMutation.onSuccess) — the wizard endpoints are admin-only.
 
   const { data: teamOptions = [] } = useQuery({
     queryKey: ['organizations', 'team'],
@@ -72,7 +61,8 @@ export default function Login() {
       clearStoredCluster()
       queryClient.clear()
       queryClient.setQueryData(['me'], res.member)
-      navigate(redirectTo)
+      const needsSetup = setupStatus && !setupStatus.configured && !isFetchingSetup
+      navigate(needsSetup ? '/setup' : redirectTo, { replace: needsSetup })
     },
   })
 

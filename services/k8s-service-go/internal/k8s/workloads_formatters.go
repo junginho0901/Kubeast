@@ -119,21 +119,21 @@ func formatDaemonSetDetail(ds *appsv1.DaemonSet) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"name":           ds.Name,
-		"namespace":      ds.Namespace,
-		"desired":        ds.Status.DesiredNumberScheduled,
-		"current":        ds.Status.CurrentNumberScheduled,
-		"ready":          ds.Status.NumberReady,
-		"updated":        ds.Status.UpdatedNumberScheduled,
-		"available":      ds.Status.NumberAvailable,
-		"misscheduled":   ds.Status.NumberMisscheduled,
-		"unavailable":    ds.Status.NumberUnavailable,
-		"node_selector":  ds.Spec.Template.Spec.NodeSelector,
-		"image":          image,
-		"images":         images,
-		"selector":       selector,
-		"status":         dsStatus,
-		"created_at":     toISO(&ds.CreationTimestamp),
+		"name":          ds.Name,
+		"namespace":     ds.Namespace,
+		"desired":       ds.Status.DesiredNumberScheduled,
+		"current":       ds.Status.CurrentNumberScheduled,
+		"ready":         ds.Status.NumberReady,
+		"updated":       ds.Status.UpdatedNumberScheduled,
+		"available":     ds.Status.NumberAvailable,
+		"misscheduled":  ds.Status.NumberMisscheduled,
+		"unavailable":   ds.Status.NumberUnavailable,
+		"node_selector": ds.Spec.Template.Spec.NodeSelector,
+		"image":         image,
+		"images":        images,
+		"selector":      selector,
+		"status":        dsStatus,
+		"created_at":    toISO(&ds.CreationTimestamp),
 	}
 }
 
@@ -313,14 +313,14 @@ func formatCronJobDetail(cj *batchv1.CronJob) map[string]interface{} {
 	}
 
 	result := map[string]interface{}{
-		"name":        cj.Name,
-		"namespace":   cj.Namespace,
-		"schedule":    cj.Spec.Schedule,
-		"suspend":     suspend,
-		"active":      len(cj.Status.Active),
-		"image":       image,
-		"images":      images,
-		"created_at":  toISO(&cj.CreationTimestamp),
+		"name":       cj.Name,
+		"namespace":  cj.Namespace,
+		"schedule":   cj.Spec.Schedule,
+		"suspend":    suspend,
+		"active":     len(cj.Status.Active),
+		"image":      image,
+		"images":     images,
+		"created_at": toISO(&cj.CreationTimestamp),
 	}
 
 	if cj.Status.LastScheduleTime != nil {
