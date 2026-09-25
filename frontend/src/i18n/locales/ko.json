@@ -3088,6 +3088,7 @@
       "displayName": "표시 이름",
       "upload": "업로드",
       "apiServerOptional": "API 서버 URL (선택)",
+      "execHint": "EKS는 exec(aws-iam-authenticator) kubeconfig로 등록합니다. 정적 자격증명은 넣지 않으며, 허용 목록의 플러그인만 실행됩니다.",
       "test": "연결 테스트",
       "testFailed": "실패",
       "selfWarning": "인-클러스터 ServiceAccount를 관리 클러스터로 등록합니다 — 운영 클러스터일 수 있으니 권한을 확인하세요.",

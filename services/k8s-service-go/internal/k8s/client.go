@@ -105,16 +105,24 @@ type ServiceOptions struct {
 	// Impersonate-User/-Group headers (Kubernetes user impersonation), so the
 	// cluster authorizes and audits the person instead of Kubeast's credential.
 	Impersonation bool
+	// ExecCommands is the allow-list of credential plugins a registered
+	// kubeconfig may run (cluster.CheckKubeconfigExec); they execute in this pod.
+	ExecCommands []string
 }
 
-// impersonationEnabled is read by buildClientBundle (set once in NewService).
-var impersonationEnabled bool
+// impersonationEnabled and execCommands are read by buildClientBundle (set once
+// in NewService).
+var (
+	impersonationEnabled bool
+	execCommands         []string
+)
 
 // NewService creates a K8s service backed by registry. Failure isolation: if no
 // clusters are registered yet (pre-Setup) or the default cluster is unreachable
 // at startup, the service still starts; bundles are built lazily on first use.
 func NewService(ctx context.Context, registry cluster.Registry, watchEnabled bool, c *cache.Cache, opts ServiceOptions) (*Service, error) {
 	impersonationEnabled = opts.Impersonation
+	execCommands = opts.ExecCommands
 	s := &Service{
 		registry:               registry,
 		watchEnabled:           watchEnabled,
@@ -165,6 +173,11 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 			return nil, fmt.Errorf("in-cluster config: %w", err)
 		}
 	case info.KubeconfigBlob != "":
+		// A credential plugin named by the kubeconfig runs in this pod: only
+		// allow-listed commands, and no static cloud keys.
+		if err := cluster.CheckKubeconfigExec(info.KubeconfigBlob, execCommands); err != nil {
+			return nil, fmt.Errorf("kubeconfig blob: %w", err)
+		}
 		cfg, err = clientcmd.RESTConfigFromKubeConfig([]byte(info.KubeconfigBlob))
 		if err != nil {
 			return nil, fmt.Errorf("kubeconfig blob: %w", err)
@@ -280,6 +293,11 @@ func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob st
 	}
 	if info.InCluster || info.IsSelfCluster {
 		return "", true, nil
+	}
+	// tool-server hands this blob to kubectl, which runs its credential plugin
+	// in that pod: apply the same allow-list before serving it.
+	if err := cluster.CheckKubeconfigExec(info.KubeconfigBlob, execCommands); err != nil {
+		return "", false, err
 	}
 	return info.KubeconfigBlob, false, nil
 }

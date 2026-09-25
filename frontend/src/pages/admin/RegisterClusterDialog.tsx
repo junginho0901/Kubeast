@@ -154,6 +154,12 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   placeholder="apiVersion: v1&#10;kind: Config&#10;..."
                   className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white"
                 />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {tr(
+                    'cluster.register.execHint',
+                    'EKS: register an exec kubeconfig (aws-iam-authenticator) with no static credentials; only allow-listed plugins run.',
+                  )}
+                </p>
               </div>
               <div>
                 <label className="block text-xs text-slate-400 mb-1">

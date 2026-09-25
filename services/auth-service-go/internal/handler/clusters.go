@@ -116,11 +116,11 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 			response.Error(w, http.StatusBadRequest, "kubeconfig required for external mode")
 			return
 		}
-		if verr := validateKubeconfigYAML(*req.Kubeconfig); verr != nil {
+		if verr := validateKubeconfigStatic(*req.Kubeconfig, h.cfg.KubeconfigExecCommands); verr != nil {
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, uid, err = validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout)
+		_, uid, err = probeKubeconfig(r, h.cfg, *req.Kubeconfig)
 		if err != nil {
 			response.Error(w, http.StatusBadRequest, "Connection test failed: "+err.Error())
 			return
@@ -234,11 +234,11 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 			response.Error(w, http.StatusBadRequest, "self cluster has no kubeconfig to rotate")
 			return
 		}
-		if verr := validateKubeconfigYAML(*req.Kubeconfig); verr != nil {
+		if verr := validateKubeconfigStatic(*req.Kubeconfig, h.cfg.KubeconfigExecCommands); verr != nil {
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, newUID, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout)
+		_, newUID, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
 		if verr != nil {
 			response.Error(w, http.StatusBadRequest, "Connection test failed: "+verr.Error())
 			return
@@ -296,13 +296,7 @@ func (h *ClustersHandler) invalidateK8sBundle(r *http.Request, id cluster.ID) {
 		slog.Warn("cluster: build invalidate request failed", "id", id, "err", err)
 		return
 	}
-	// Forward the caller's credential: the Bearer header, or the browser's
-	// session cookie re-sent as Bearer (k8s-service internal routes take either).
-	if authz := r.Header.Get("Authorization"); authz != "" {
-		req.Header.Set("Authorization", authz)
-	} else if c, err := r.Cookie(h.cfg.AuthCookieName); err == nil && c.Value != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Value)
-	}
+	forwardCallerCredential(r, req, h.cfg.AuthCookieName)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		slog.Warn("cluster: k8s-service invalidate call failed", "id", id, "err", err)
@@ -356,7 +350,7 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := h.checkInfo(info)
+	result := h.checkInfo(r, info)
 	status := "unreachable"
 	if result.Healthy {
 		status = "healthy"
@@ -381,34 +375,43 @@ func (h *ClustersHandler) ValidateCluster(w http.ResponseWriter, r *http.Request
 	}
 
 	if req.Mode == "self" {
-		response.JSON(w, http.StatusOK, h.checkInfo(&cluster.Info{Mode: cluster.ModeInCluster, InCluster: true}))
+		response.JSON(w, http.StatusOK, h.checkInfo(r, &cluster.Info{Mode: cluster.ModeInCluster, InCluster: true}))
 		return
 	}
 	if req.Kubeconfig == nil || *req.Kubeconfig == "" {
 		response.Error(w, http.StatusBadRequest, "kubeconfig required")
 		return
 	}
-	if verr := validateKubeconfigYAML(*req.Kubeconfig); verr != nil {
+	if verr := validateKubeconfigStatic(*req.Kubeconfig, h.cfg.KubeconfigExecCommands); verr != nil {
 		response.Error(w, http.StatusBadRequest, verr.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, h.checkInfo(&cluster.Info{Mode: cluster.ModeExternal, KubeconfigBlob: *req.Kubeconfig}))
+	response.JSON(w, http.StatusOK, h.checkInfo(r, &cluster.Info{Mode: cluster.ModeExternal, KubeconfigBlob: *req.Kubeconfig}))
 }
 
 // checkInfo runs a connectivity check against the resolved cluster connection.
 // Self/in-cluster validation only confirms kubeast is in-cluster (the
-// ServiceAccount is implicitly trusted); external clusters are dialed.
-func (h *ClustersHandler) checkInfo(info *cluster.Info) model.ClusterConnectionResult {
+// ServiceAccount is implicitly trusted); external clusters are dialed by
+// k8s-service (a registered cluster by id, a candidate kubeconfig by value).
+func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.ClusterConnectionResult {
 	if info.InCluster || info.Mode == cluster.ModeInCluster {
 		if h.cfg.DeploymentMode == "docker" {
 			return model.ClusterConnectionResult{Healthy: false, Message: "self cluster is only available in k8s mode"}
 		}
 		return model.ClusterConnectionResult{Healthy: true, Message: "in-cluster ServiceAccount"}
 	}
-	if info.KubeconfigBlob == "" {
+	var (
+		ver string
+		err error
+	)
+	switch {
+	case info.ID != "":
+		ver, _, err = probeCluster(r, h.cfg, info.ID)
+	case info.KubeconfigBlob != "":
+		ver, _, err = probeKubeconfig(r, h.cfg, info.KubeconfigBlob)
+	default:
 		return model.ClusterConnectionResult{Healthy: false, Message: "no kubeconfig available"}
 	}
-	ver, _, err := validateKubeconfig([]byte(info.KubeconfigBlob), clusterValidateTimeout)
 	if err != nil {
 		return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
 	}

@@ -118,11 +118,11 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, "Kubeconfig required for external mode")
 			return
 		}
-		if verr := validateKubeconfigYAML(*req.Kubeconfig); verr != nil {
+		if verr := validateKubeconfigStatic(*req.Kubeconfig, h.cfg.KubeconfigExecCommands); verr != nil {
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, setupUID, verr := validateKubeconfig([]byte(*req.Kubeconfig), clusterValidateTimeout)
+		_, setupUID, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
 		if verr != nil {
 			response.Error(w, http.StatusBadRequest, "Connection failed: "+verr.Error())
 			return

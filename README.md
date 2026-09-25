@@ -133,6 +133,21 @@ grep DEFAULT_ADMIN_PASSWORD .env
 - **In-cluster** — Kubeast가 떠 있는 그 클러스터를 ServiceAccount 권한으로 자동 연결
 - **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터)
 
+**EKS 클러스터**는 IAM으로 인증합니다. k8s-service·tool-server 이미지에 `aws-iam-authenticator`가 들어 있으므로 kubeconfig에는 정적 자격증명 대신 exec 플러그인을 적습니다. Kubeast 파드의 IRSA 롤(`values.yaml`의 `aws.irsaRoleArn`)이 `-r`의 대상 롤을 AssumeRole하고, 대상 클러스터의 access entry가 그 롤을 Kubernetes 그룹에 매핑합니다(그룹 권한은 `helm/kubeast/files/impersonation-rbac.yaml`).
+
+```yaml
+users:
+- name: kubeast
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: aws-iam-authenticator
+      args: ["token", "-i", "<cluster-name>", "-r", "arn:aws:iam::<account>:role/kubeast-target"]
+      interactiveMode: Never
+```
+
+등록되는 kubeconfig의 exec 명령은 허용 목록(`multicluster.execCommands`, 기본 `aws-iam-authenticator`)에 있어야 하고, `AWS_ACCESS_KEY_ID` 같은 정적 키 env는 거부됩니다.
+
 ### 4. AI 활성화
 
 **Admin > AI Models**에서 OpenAI / Anthropic / Gemini 등의 API 키를 등록하면
@@ -298,6 +313,11 @@ auth:
   allowRegistration: false
   bootstrapDemoUsers: false
   passwordMinLength: 12
+
+# EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
+aws:
+  irsaRoleArn: ""
+  region: ""
   # 클러스터에는 로그인한 사용자 본인(이메일)으로 impersonation — 클러스터 RBAC이
   # 최종 판단, K8s audit에 사용자가 남음. 등록하는 모든 클러스터에 아래 RBAC 적용:
   #   helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -
