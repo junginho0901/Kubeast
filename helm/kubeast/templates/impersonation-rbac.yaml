@@ -1,0 +1,5 @@
+{{- if .Values.auth.impersonation.clusterRoles }}
+# Single source of truth: helm/kubeast/files/impersonation-rbac.yaml
+# (also applied to external clusters and mirrored by k8s/impersonation-rbac.yaml).
+{{ .Files.Get "files/impersonation-rbac.yaml" }}
+{{- end }}

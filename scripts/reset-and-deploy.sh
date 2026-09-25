@@ -155,14 +155,14 @@ if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
       if [[ $i -eq 30 ]]; then
         warn "Auth-service DB initialization timeout (got HTTP $HTTP_CODE)"
         echo "    This may be normal if postgres was not fully reset."
-        echo "    Try accessing http://localhost:30080/setup manually."
+        echo "    Try accessing http://localhost:30080 manually."
         break
       fi
       echo -n "."
       sleep 2
     done
 
-    step "Done! Access http://localhost:30080/setup"
+    step "Done! Access http://localhost:30080 (login as admin; /setup opens when no cluster is registered)"
     echo ""
     # --db 모드는 secret 을 건드리지 않으므로 기존 값을 그대로 보여줌
     DB_ADMIN_PW=$(kubectl -n "$NS" get secret kubeast-secrets \
@@ -415,7 +415,7 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║         Deploy complete!                      ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 echo ""
-echo "  URL:  http://localhost:30080/setup"
+echo "  URL:  http://localhost:30080  (admin 로그인 뒤 클러스터가 없으면 /setup 으로 이동)"
 echo ""
 echo "  Accounts (created after first auth-service boot):"
 echo -e "    admin / ${YELLOW}${ADMIN_PW}${NC}   (admin) ← 랜덤 생성됨"

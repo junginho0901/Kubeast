@@ -54,12 +54,32 @@ func (m PermissionMatrix) HasForCluster(perm, clusterID string) bool {
 
 func matchAny(perms []string, perm string) bool {
 	for _, pp := range perms {
-		if pp == "*" || pp == perm {
-			return true
-		}
-		if strings.HasSuffix(pp, ".*") && strings.HasPrefix(perm, pp[:len(pp)-1]) {
+		if permMatches(pp, perm) {
 			return true
 		}
 	}
 	return false
+}
+
+// permMatches compares a granted pattern with a required permission key by
+// dot-separated segment: "*" alone grants everything; a "*" segment matches
+// exactly one segment ("resource.*.read" → "resource.pod.read"); a trailing
+// "*" matches the rest ("ai.tool.*" → "ai.tool.k8s_scale"). The seeded system
+// roles rely on the middle form, so it must be honoured by every validator
+// (Go here, ai-service security.py, frontend utils/permissions.ts).
+func permMatches(pattern, perm string) bool {
+	if pattern == "*" || pattern == perm {
+		return true
+	}
+	ps := strings.Split(pattern, ".")
+	qs := strings.Split(perm, ".")
+	for i, seg := range ps {
+		if seg == "*" && i == len(ps)-1 {
+			return len(qs) >= len(ps)
+		}
+		if i >= len(qs) || (seg != "*" && seg != qs[i]) {
+			return false
+		}
+	}
+	return len(ps) == len(qs)
 }

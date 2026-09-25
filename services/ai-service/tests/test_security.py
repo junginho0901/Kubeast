@@ -48,6 +48,21 @@ def test_empty_cluster_means_default_only():
     assert DEFAULT_CLUSTER == "default"
 
 
+def test_wildcard_segments_match_like_go_and_frontend():
+    # Same table as pkg/auth permissions_test.go / frontend permissions.test.ts
+    from app.security import _perm_matches
+
+    assert _perm_matches("*", "resource.pod.delete")
+    assert _perm_matches("resource.*.read", "resource.pod.read")
+    assert _perm_matches("resource.*.create", "resource.namespace.create")
+    assert not _perm_matches("resource.*.read", "resource.pod.logs")
+    assert not _perm_matches("resource.*.read", "resource.pod.read.extra")
+    assert _perm_matches("ai.tool.*", "ai.tool.k8s_scale")
+    assert not _perm_matches("ai.tool.*", "ai.tool")
+    assert _perm_matches("resource.*", "resource.pod.read")
+    assert not _perm_matches("admin.users.read", "admin.users.write")
+
+
 def test_star_cluster_id_is_not_a_wildcard_lookup():
     user = _payload({"alpha": ["*"]})
     assert not user.has_permission_for_cluster("ai.tool.x", "*")

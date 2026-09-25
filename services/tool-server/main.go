@@ -20,9 +20,12 @@ type ToolDefinition struct {
 }
 
 var (
-	kubeconfigPath   = resolveKubeconfigPath()
-	tokenPassthrough = strings.EqualFold(os.Getenv("TOKEN_PASSTHROUGH"), "true")
-	defaultTimeout   = 60 * time.Second
+	kubeconfigPath = resolveKubeconfigPath()
+	// Act as the JWT's user toward the cluster (--as/--as-group). The former
+	// TOKEN_PASSTHROUGH (kubectl --token with the Kubeast JWT) is gone: clusters
+	// never knew that token, so it either failed or was overridden.
+	impersonationEnabled = !strings.EqualFold(os.Getenv("IMPERSONATION_ENABLED"), "false")
+	defaultTimeout       = 60 * time.Second
 
 	// toolAuth validates the caller's JWT against auth-service's JWKS (same
 	// issuer/audience settings every other service uses).
@@ -70,7 +73,6 @@ func main() {
 		log.Fatalf("server error: %v", err)
 	}
 }
-
 
 func buildToolRegistry() map[string]ToolDefinition {
 	registry := map[string]ToolDefinition{}
@@ -192,4 +194,3 @@ func buildToolRegistry() map[string]ToolDefinition {
 
 	return registry
 }
-

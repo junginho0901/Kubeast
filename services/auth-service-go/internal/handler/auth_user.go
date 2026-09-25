@@ -135,7 +135,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, user.TokenVersion)
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
+		return
+	}
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return
@@ -193,7 +198,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "Failed to build permissions")
 		return
 	}
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, user.TokenVersion)
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
+		return
+	}
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return

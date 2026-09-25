@@ -77,7 +77,7 @@ func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup) func(ht
 				return
 			}
 
-			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms}
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"])}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

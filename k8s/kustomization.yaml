@@ -8,6 +8,7 @@ resources:
   - configmap.yaml
   - secret.yaml
   - rbac.yaml
+  - impersonation-rbac.yaml
   - postgres.yaml
   - redis.yaml
   - model-config-controller-go.yaml

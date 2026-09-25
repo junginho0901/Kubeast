@@ -56,6 +56,12 @@ if [ -z "$TOKEN" ]; then
 fi
 [ -n "$TOKEN" ] || { echo "no admin token — pass --token or set KUBEAST_EMAIL/PASSWORD" >&2; exit 1; }
 
+# 4b. Cluster-side RBAC for impersonation: kubeast acts as the signed-in user in
+#     groups kubeast:viewer/operator/admin, so those groups need bindings here.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+echo "═══ applying impersonation RBAC to '$NAME' ═══"
+kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f "$ROOT/helm/kubeast/files/impersonation-rbac.yaml"
+
 # 5. Register with kubeast as an external cluster.
 echo "═══ registering '$NAME' with kubeast ═══"
 BODY=$(jq -nc --arg n "$NAME" --arg kc "$KUBECONFIG_BLOB" \

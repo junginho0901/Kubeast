@@ -30,6 +30,16 @@ auth:
   # Demo read/write accounts (password = username). Never enable outside dev.
   bootstrapDemoUsers: false
   passwordMinLength: 12
+  # Kubernetes user impersonation: k8s-service and tool-server act toward every
+  # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
+  # so the cluster's RBAC decides and its audit log names the person. The
+  # Kubeast credential then only needs the "impersonate" verb.
+  # clusterRoles renders files/impersonation-rbac.yaml (group → view/edit/
+  # cluster-admin bindings) into this cluster; apply the same file to every
+  # external cluster you register.
+  impersonation:
+    enabled: true
+    clusterRoles: true
 
 # --- Node shell (privileged debug pod on a node) ---
 # Off by default. When on, the pod runs in `namespace` (created with the

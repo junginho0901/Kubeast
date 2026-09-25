@@ -15,6 +15,8 @@ spec:
     metadata:
       labels:
         app: auth-service
+      annotations:
+        checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: auth-service
       # fsGroup lets uid 65532 read the 0440 Secret-mounted signing key
@@ -72,6 +74,8 @@ spec:
     metadata:
       labels:
         app: ai-service
+      annotations:
+        checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       automountServiceAccountToken: false
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
@@ -129,6 +133,8 @@ spec:
     metadata:
       labels:
         app: k8s-service
+      annotations:
+        checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: k8s-service
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
@@ -193,6 +199,8 @@ spec:
     metadata:
       labels:
         app: session-service
+      annotations:
+        checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       automountServiceAccountToken: false
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
@@ -288,6 +296,8 @@ spec:
     metadata:
       labels:
         app: tool-server
+      annotations:
+        checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: tool-server
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
@@ -306,8 +316,6 @@ spec:
             - secretRef:
                 name: kubeast-secrets
           env:
-            - name: TOKEN_PASSTHROUGH
-              value: "true"
             # step 14: tool-server fetches the selected cluster's kubeconfig from
             # k8s-service at runtime (no mounted kubeconfig, rollout-free).
             - name: K8S_SERVICE_URL
@@ -351,6 +359,8 @@ spec:
     metadata:
       labels:
         app: model-config-controller-go
+      annotations:
+        checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: model-config-controller-go
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}

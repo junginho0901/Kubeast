@@ -298,6 +298,13 @@ auth:
   allowRegistration: false
   bootstrapDemoUsers: false
   passwordMinLength: 12
+  # 클러스터에는 로그인한 사용자 본인(이메일)으로 impersonation — 클러스터 RBAC이
+  # 최종 판단, K8s audit에 사용자가 남음. 등록하는 모든 클러스터에 아래 RBAC 적용:
+  #   helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -
+  # (Kubeast 자격증명은 ClusterRole kubeast-impersonator 만 있으면 됨)
+  impersonation:
+    enabled: true
+    clusterRoles: true
 
 # 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
 nodeShell:

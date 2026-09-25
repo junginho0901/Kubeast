@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -84,6 +85,9 @@ func (h *Handler) DrainNode(w http.ResponseWriter, r *http.Request) {
 	bg := context.Background()
 	if id, ok := cluster.FromContext(r.Context()); ok {
 		bg = cluster.WithID(bg, id)
+	}
+	if p, ok := auth.FromContext(r.Context()); ok { // evictions are made as the user (impersonation)
+		bg = auth.WithPayload(bg, p)
 	}
 	go h.runDrain(bg, nodeName, drainID)
 

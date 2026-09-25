@@ -77,6 +77,16 @@ topologySpreadConstraints:
 {{- end }}
 {{- end -}}
 
+{{/*
+Pods that read kubeast-config / kubeast-secrets through envFrom roll when either
+changes (Helm "automatically roll deployments" pattern). The Secret template's
+generated values (admin password, signing key) are reused across upgrades, so
+the checksum only moves when a value really changed.
+*/}}
+{{- define "kubeast.configChecksum" -}}
+{{ print (include (print $.Template.BasePath "/configmap.yaml") .) (include (print $.Template.BasePath "/secret.yaml") .) | sha256sum }}
+{{- end -}}
+
 {{- define "kubeast.resources" -}}
 {{- $r := index .root.Values.resources .key }}
 {{- if $r }}

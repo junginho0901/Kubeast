@@ -26,9 +26,26 @@ const jwksRefetchMinInterval = 10 * time.Second
 // TokenPayload contains the validated JWT claims.
 type TokenPayload struct {
 	UserID string
-	Email  string           // populated from "email" claim (for audit logs)
-	Role   string           // 하위호환 유지
-	Perms  PermissionMatrix // per-cluster permission matrix (cluster id → perms, "*" = all)
+	Email  string            // populated from "email" claim (for audit logs)
+	Role   string            // 하위호환 유지
+	Perms  PermissionMatrix  // per-cluster permission matrix (cluster id → perms, "*" = all)
+	Roles  map[string]string // "roles" claim: cluster id → role name, for impersonation groups
+}
+
+// ParseRoles converts the raw "roles" claim ({cluster: roleName}) into a map;
+// a missing or malformed claim yields nil (no cluster roles).
+func ParseRoles(raw any) map[string]string {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for cid, v := range m {
+		if s, ok := v.(string); ok && s != "" {
+			out[cid] = s
+		}
+	}
+	return out
 }
 
 // HasPermission checks a GLOBAL permission (cluster-agnostic) — i.e. the "*"
@@ -250,7 +267,7 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		return TokenPayload{}, fmt.Errorf("invalid token: permissions claim must be a per-cluster map (re-login required)")
 	}
 
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms}, nil
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"])}, nil
 }
 
 // Middleware returns an HTTP middleware that validates JWT tokens.

@@ -33,6 +33,8 @@ type Config struct {
 	JWTIssuer      string
 	JWTAudience    string
 	AuthCookieName string
+	// Act as the signed-in user toward every cluster (Kubernetes impersonation).
+	ImpersonationEnabled bool
 
 	// CORS
 	AllowedOrigins []string
@@ -81,6 +83,8 @@ func Load() Config {
 		JWTIssuer:      pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:    pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
+
+		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 

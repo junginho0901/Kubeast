@@ -17,13 +17,24 @@ _jwk_client = jwt.PyJWKClient(AUTH_JWKS_URL)
 DEFAULT_CLUSTER = "default"
 
 
+def _perm_matches(pattern: str, perm: str) -> bool:
+    """Segment-wise match, same rules as pkg/auth permMatches (Go) and the
+    frontend: "*" grants everything, a "*" segment matches one segment
+    ("resource.*.read" → "resource.pod.read"), a trailing "*" matches the rest
+    ("ai.tool.*" → "ai.tool.k8s_scale")."""
+    if pattern == "*" or pattern == perm:
+        return True
+    ps, qs = pattern.split("."), perm.split(".")
+    for i, seg in enumerate(ps):
+        if seg == "*" and i == len(ps) - 1:
+            return len(qs) >= len(ps)
+        if i >= len(qs) or (seg != "*" and seg != qs[i]):
+            return False
+    return len(ps) == len(qs)
+
+
 def _match_any(perms: Iterable[str], perm: str) -> bool:
-    for p in perms:
-        if p == "*" or p == perm:
-            return True
-        if p.endswith(".*") and perm.startswith(p[:-1]):
-            return True
-    return False
+    return any(_perm_matches(p, perm) for p in perms)
 
 
 @dataclass(frozen=True)

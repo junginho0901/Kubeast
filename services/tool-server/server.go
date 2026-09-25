@@ -12,6 +12,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 type ToolCallRequest struct {
@@ -83,7 +85,8 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 
 	// The caller must hold ai.tool.<name> in the routed cluster; ai-service's
 	// tool filtering is not trusted on its own.
-	if _, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID); err != nil {
+	payload, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID)
+	if err != nil {
 		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
 		return
 	}
@@ -93,7 +96,10 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		respondJSON(w, http.StatusBadGateway, ToolCallResponse{Error: "cluster kubeconfig: " + err.Error()})
 		return
 	}
+	// kubectl runs as the validated user in the routed cluster.
 	ctx = withKubeconfigPath(ctx, kcPath)
+	ctx = withClusterID(ctx, clusterID)
+	ctx = auth.WithPayload(ctx, payload)
 
 	output, err := tool.Handler(ctx, req.Arguments, r.Header)
 	if err != nil {

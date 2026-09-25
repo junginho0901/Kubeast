@@ -1,9 +1,8 @@
 // kubectl shell 호출. main.go 에서 추출 (Phase 3.6.d).
 //
-// kubectl 바이너리를 exec — kubeconfigPath / token (TOKEN_PASSTHROUGH) 을
-// 자동으로 끼워 넣는다. 모든 read/write handler 가 이 두 함수만 거쳐 kubectl
-// 을 호출. token 추출 (extractBearerToken) + kubeconfig 경로 결정
-// (resolveKubeconfigPath) 도 동거.
+// kubectl 바이너리를 exec — 요청 컨텍스트의 kubeconfig 경로와, JWT 에서 검증한
+// 사용자를 Kubernetes impersonation(--as / --as-group) 으로 끼워 넣는다. 모든
+// read/write handler 가 이 두 함수만 거쳐 kubectl 을 호출한다.
 
 package main
 
@@ -14,24 +13,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {
-	token, err := tokenForKubectl(headers)
-	if err != nil {
-		return "", err
-	}
-
-	finalArgs := make([]string, 0, len(args)+4)
-	if kc := kubeconfigForCtx(ctx); kc != "" {
-		finalArgs = append(finalArgs, "--kubeconfig", kc)
-	}
-	if token != "" {
-		finalArgs = append(finalArgs, "--token", token)
-	}
-	finalArgs = append(finalArgs, args...)
-
-	cmd := exec.CommandContext(ctx, "kubectl", finalArgs...)
+	cmd := exec.CommandContext(ctx, "kubectl", kubectlArgs(ctx, args)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		errText := strings.TrimSpace(string(output))
@@ -45,21 +32,7 @@ func runKubectl(ctx context.Context, headers http.Header, args ...string) (strin
 }
 
 func runKubectlWithInput(ctx context.Context, headers http.Header, input string, args ...string) (string, error) {
-	token, err := tokenForKubectl(headers)
-	if err != nil {
-		return "", err
-	}
-
-	finalArgs := make([]string, 0, len(args)+4)
-	if kc := kubeconfigForCtx(ctx); kc != "" {
-		finalArgs = append(finalArgs, "--kubeconfig", kc)
-	}
-	if token != "" {
-		finalArgs = append(finalArgs, "--token", token)
-	}
-	finalArgs = append(finalArgs, args...)
-
-	cmd := exec.CommandContext(ctx, "kubectl", finalArgs...)
+	cmd := exec.CommandContext(ctx, "kubectl", kubectlArgs(ctx, args)...)
 	cmd.Stdin = strings.NewReader(input)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -72,15 +45,21 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 	return string(output), nil
 }
 
-func tokenForKubectl(headers http.Header) (string, error) {
-	token := extractBearerToken(headers)
-	if tokenPassthrough && token == "" {
-		return "", wrapBadRequest("Bearer token required when TOKEN_PASSTHROUGH is true")
+// kubectlArgs prefixes the tool's arguments with the per-request kubeconfig and
+// the impersonated identity. The credential in the kubeconfig (or the pod's
+// ServiceAccount for in-cluster targets) only needs the "impersonate" verb;
+// the cluster authorizes and audits the user named in the JWT.
+func kubectlArgs(ctx context.Context, args []string) []string {
+	finalArgs := make([]string, 0, len(args)+8)
+	if kc := kubeconfigForCtx(ctx); kc != "" {
+		finalArgs = append(finalArgs, "--kubeconfig", kc)
 	}
-	if tokenPassthrough {
-		return token, nil
+	if impersonationEnabled {
+		if p, ok := auth.FromContext(ctx); ok {
+			finalArgs = append(finalArgs, auth.KubectlImpersonationArgs(p, clusterIDFromCtx(ctx))...)
+		}
 	}
-	return "", nil
+	return append(finalArgs, args...)
 }
 
 func extractBearerToken(headers http.Header) string {

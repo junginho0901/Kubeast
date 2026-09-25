@@ -21,7 +21,23 @@ import (
 
 type ctxKey int
 
-const kubeconfigCtxKey ctxKey = iota
+const (
+	kubeconfigCtxKey ctxKey = iota
+	clusterIDCtxKey
+)
+
+// withClusterID / clusterIDFromCtx carry the routed cluster id so kubectl can
+// pick the impersonation group for that cluster.
+func withClusterID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, clusterIDCtxKey, id)
+}
+
+func clusterIDFromCtx(ctx context.Context) string {
+	if v, ok := ctx.Value(clusterIDCtxKey).(string); ok && v != "" {
+		return v
+	}
+	return defaultClusterID
+}
 
 func withKubeconfigPath(ctx context.Context, path string) context.Context {
 	return context.WithValue(ctx, kubeconfigCtxKey, path)

@@ -2,6 +2,36 @@ package auth
 
 import "testing"
 
+// permMatches must agree with ai-service security.py and frontend
+// utils/permissions.ts (same table in their tests).
+func TestPermMatches(t *testing.T) {
+	cases := []struct {
+		pattern, perm string
+		want          bool
+	}{
+		{"*", "resource.pod.delete", true},
+		{"resource.pod.read", "resource.pod.read", true},
+		{"resource.*.read", "resource.pod.read", true}, // middle wildcard (seeded roles)
+		{"resource.*.create", "resource.namespace.create", true},
+		{"resource.*.read", "resource.pod.logs", false},
+		{"resource.*.read", "resource.pod.read.extra", false},
+		{"ai.tool.*", "ai.tool.k8s_scale", true}, // trailing wildcard = rest
+		{"ai.tool.*", "ai.tool", false},
+		{"menu.*", "menu.workloads", true},
+		{"resource.*", "resource.pod.read", true},
+		{"admin.users.read", "admin.users.write", false},
+	}
+	for _, c := range cases {
+		if got := permMatches(c.pattern, c.perm); got != c.want {
+			t.Errorf("permMatches(%q, %q) = %v, want %v", c.pattern, c.perm, got, c.want)
+		}
+	}
+	m := PermissionMatrix{"prod": {"resource.*.read"}, "alpha": {"resource.*.create"}}
+	if !m.HasForCluster("resource.pod.read", "prod") || m.HasForCluster("resource.namespace.create", "prod") {
+		t.Error("Write-style wildcard must grant in its own cluster only")
+	}
+}
+
 func TestParsePermissions_MapForm(t *testing.T) {
 	raw := map[string]any{
 		"*":    []any{"admin.users.read"},
@@ -50,13 +80,13 @@ func TestHasForCluster(t *testing.T) {
 		perm, cluster string
 		want          bool
 	}{
-		{"admin.users.read", "prod", true}, // global "*" entry applies everywhere
-		{"admin.users.read", "dev", true},  // ...even to a cluster with no row
+		{"admin.users.read", "prod", true},  // global "*" entry applies everywhere
+		{"admin.users.read", "dev", true},   // ...even to a cluster with no row
 		{"resource.pod.read", "prod", true}, // glob match in cluster
 		{"resource.pod.delete", "prod", true},
 		{"menu.workloads", "prod", true},
-		{"menu.workloads", "dev", false},   // not granted in dev → deny-by-default
-		{"resource.pod.read", "dev", false}, // no dev entry
+		{"menu.workloads", "dev", false},     // not granted in dev → deny-by-default
+		{"resource.pod.read", "dev", false},  // no dev entry
 		{"resource.svc.read", "prod", false}, // not in prod's globs
 	}
 	for _, c := range cases {
