@@ -34,7 +34,7 @@ case "${1:-}" in
       OIDC_REDIRECT_URL="$BASE_URL/api/v1/auth/oidc/callback" \
       OIDC_DISPLAY_NAME="Mock IdP" \
       OIDC_ALLOWED_DOMAINS=example.com \
-      OIDC_ROLE_MAPPING="kubeast-admins=Admin,kubeast-writers=Write,kubeast-readers=Read"
+      OIDC_ROLE_MAPPING="kubeast-admins=Admin,kubeast-users=Member"
     kubectl -n "$NS" rollout status deployment/auth-service --timeout=120s
     ;;
   down)

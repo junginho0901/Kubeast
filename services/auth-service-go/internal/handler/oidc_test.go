@@ -77,15 +77,18 @@ func TestDomainAllowed(t *testing.T) {
 }
 
 func TestMapRoleAndClusterGrants(t *testing.T) {
-	mapping := map[string]string{"kubeast-admins": "Admin", "kubeast-writers": "Write", "kubeast-readers": "Read", "dba": "DBA"}
-	if r := mapRole([]string{"kubeast-readers", "kubeast-writers"}, mapping); r != "Write" {
-		t.Fatalf("widest built-in role wins, got %q", r)
+	mapping := map[string]string{"kubeast-admins": "Admin", "engineering": "Member", "dba": "DBA"}
+	if r := mapRole([]string{"engineering", "kubeast-admins"}, mapping); r != "Admin" {
+		t.Fatalf("Admin outranks Member, got %q", r)
+	}
+	if r := mapRole([]string{"engineering", "dba"}, mapping); r != "DBA" {
+		t.Fatalf("a custom role (explicit permissions) outranks Member, got %q", r)
 	}
 	if r := mapRole([]string{"team-x"}, mapping); r != "" {
 		t.Fatalf("no mapping → empty, got %q", r)
 	}
-	if r := mapRole([]string{"dba"}, mapping); r != "DBA" {
-		t.Fatalf("custom role, got %q", r)
+	if r := mapRole([]string{"engineering"}, mapping); r != "Member" {
+		t.Fatalf("Member, got %q", r)
 	}
 	g := clusterGrants([]string{"kubeast:cluster:prod:Read", "kubeast:cluster:alpha:Write", "kubeast:cluster:alpha:Admin", "kubeast:cluster:bad", "other"}, "kubeast:cluster:")
 	if g["prod"] != "Read" || g["alpha"] != "Admin" || len(g) != 2 {

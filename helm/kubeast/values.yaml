@@ -37,8 +37,10 @@ auth:
   # Single sign-on through one OpenID Connect provider (Keycloak, Google, Okta,
   # Entra ID, ...): authorization code flow with PKCE, ID token verified via
   # discovery, callback = <public URL>/api/v1/auth/oidc/callback. Users are
-  # created on first sign-in (no password). Provider groups map to a Kubeast
-  # role (roleMapping) and to per-cluster grants (group
+  # created on first sign-in (no password). Account levels are Admin
+  # (everything), Member (approved; access comes from per-cluster grants) and
+  # Pending (waiting for an admin). Provider groups map to a level
+  # (roleMapping) and to per-cluster grants (group
   # "<clusterGroupPrefix><cluster-id>:<Read|Write|Admin>"); with syncRoles both
   # are re-applied on every sign-in. Unmapped users get defaultRole.
   oidc:
@@ -58,7 +60,9 @@ auth:
       groups: groups
     # Email domains allowed to sign in (empty = any). Google: your Workspace domain.
     allowedDomains: []
-    # "<provider group>=<Kubeast role>" entries, e.g. ["kubeast-admins=Admin", "sre=Write"].
+    # "<provider group>=<Admin|Member|custom role>" entries, e.g.
+    # ["kubeast-admins=Admin", "engineering=Member"]. Read/Write are per-cluster
+    # roles: grant them with clusterGroupPrefix groups, not here.
     roleMapping: []
     defaultRole: Pending
     syncRoles: true
