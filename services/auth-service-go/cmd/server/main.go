@@ -44,6 +44,10 @@ func main() {
 	cfg := config.Load()
 	pkglogger.Setup("auth-service", cfg.Debug)
 	slog.Info("starting auth-service", "port", cfg.Port)
+	if err := cfg.Validate(); err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Database
 	dbURL := cfg.DatabaseURLForPgx()

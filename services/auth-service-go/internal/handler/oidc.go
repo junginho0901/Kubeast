@@ -201,8 +201,9 @@ func domainAllowed(email string, allowed []string) bool {
 	return false
 }
 
-// rolePrecedence orders the built-in roles so a user in several mapped groups
-// gets the widest one; custom roles come after, alphabetically.
+// rolePrecedence orders roles so a user in several mapped groups gets the
+// widest one. Account levels: Admin > custom role > Member > Pending;
+// per-cluster grants: Admin > Write > Read. Ties break alphabetically.
 func rolePrecedence(name string) int {
 	switch name {
 	case "Admin":
@@ -211,6 +212,10 @@ func rolePrecedence(name string) int {
 		return 1
 	case "Read":
 		return 2
+	case "Member":
+		return 4
+	case "Pending":
+		return 5
 	}
 	return 3
 }

@@ -84,7 +84,9 @@ type OIDCConfig struct {
 	GroupsClaim  string
 	// AllowedDomains restricts sign-in to these email domains (empty = any).
 	AllowedDomains []string
-	// RoleMapping maps a group claim value to a Kubeast role name.
+	// RoleMapping maps a group claim value to an account level: Admin, Member
+	// (approved; access comes from per-cluster grants) or a custom role. Read
+	// and Write are per-cluster roles and are rejected here (Validate).
 	RoleMapping map[string]string
 	// DefaultRole is used when no group maps (Pending = an admin must approve).
 	DefaultRole string

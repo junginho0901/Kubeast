@@ -47,13 +47,13 @@ test.describe('OIDC sign-in', () => {
     await expect(page.getByTestId('sso-login')).toContainText('Mock IdP')
   })
 
-  test('first sign-in provisions the user with the mapped role and sets the session cookie', async ({ page }) => {
+  test('first sign-in provisions the user with the mapped account level and sets the session cookie', async ({ page }) => {
     const email = `alice-${Date.now()}@example.com`
     await signInWithMock(page, {
       email,
       email_verified: true,
       name: 'Alice',
-      groups: ['kubeast-readers', 'unrelated-team'],
+      groups: ['kubeast-users', 'unrelated-team'],
     })
     // Back in the app, signed in: the login form is gone and /auth/me answers.
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
@@ -62,7 +62,7 @@ test.describe('OIDC sign-in', () => {
     expect(status).toBe(200)
     expect(body.email).toBe(email)
     expect(body.name).toBe('Alice')
-    expect(body.role?.name).toBe('Read')
+    expect(body.role?.name).toBe('Member')
     expect(body.auth_source).toBe('oidc')
 
     const cookies = await page.context().cookies()
@@ -72,11 +72,11 @@ test.describe('OIDC sign-in', () => {
     expect(cookies.find((c) => c.name === 'kubeast.oidc')).toBeUndefined()
   })
 
-  test('groups drive the role on every sign-in (sync up, then down)', async ({ page }) => {
+  test('groups drive the account level on every sign-in (sync up, then down)', async ({ page }) => {
     const email = `bob-${Date.now()}@example.com`
-    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-readers'] })
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
-    expect((await me(page)).body.role?.name).toBe('Read')
+    expect((await me(page)).body.role?.name).toBe('Member')
 
     await page.context().clearCookies()
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-admins'] })
@@ -88,6 +88,34 @@ test.describe('OIDC sign-in', () => {
     await signInWithMock(page, { email, email_verified: true, groups: ['unrelated-team'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     expect((await me(page)).body.role?.name).toBe('Pending')
+  })
+
+  test('cluster groups grant and revoke a per-cluster role', async ({ page }) => {
+    const email = `erin-${Date.now()}@example.com`
+    const signIn = async (groups: string[]) => {
+      await page.context().clearCookies()
+      await signInWithMock(page, { email, email_verified: true, groups })
+      await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+      return (await me(page)).body
+    }
+    let body = await signIn(['kubeast-users', 'kubeast:cluster:default:Read'])
+    expect(body.role?.name).toBe('Member')
+    expect(body.cluster_roles?.default).toBe('Read')
+
+    // With a cluster to show, the app renders pages; a provisioned account has
+    // no password to change. (A Member without any grant only sees the
+    // "no accessible cluster" screen.)
+    await page.goto('/account')
+    await expect(page.getByText(/Signed-in account information|로그인된 계정 정보/)).toBeVisible()
+    await expect(page.getByRole('button', { name: /Change password|비밀번호 변경/ })).toHaveCount(0)
+
+    body = await signIn(['kubeast-users', 'kubeast:cluster:default:Write', 'kubeast:cluster:default:Read'])
+    expect(body.cluster_roles?.default).toBe('Write')
+
+    // The cluster group is gone at the provider: the grant goes with it.
+    body = await signIn(['kubeast-users'])
+    expect(body.role?.name).toBe('Member')
+    expect(body.cluster_roles?.default).toBeUndefined()
   })
 
   test('an email outside the allowed domains is refused', async ({ page }) => {
@@ -111,7 +139,7 @@ test.describe('OIDC sign-in', () => {
 
   test('a provisioned account cannot sign in with a password', async ({ page, request }) => {
     const email = `carol-${Date.now()}@example.com`
-    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-readers'] })
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     const res = await request.post('/api/v1/auth/login', { data: { email, password: '' } })
     expect(res.status()).toBe(401)
@@ -121,10 +149,10 @@ test.describe('OIDC sign-in', () => {
 
   test('audit rows: provision, role sync, and login success/failure name the OIDC path', async ({ page, request }) => {
     const email = `dave-${Date.now()}@example.com`
-    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-readers'] })
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     await page.context().clearCookies()
-    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-writers'] })
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-admins'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
 
     const token = await adminToken(request)
