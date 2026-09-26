@@ -42,7 +42,7 @@ spec:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: kubeast-secrets
+                name: {{ include "kubeast.secretsName" . }}
           volumeMounts:
             - name: auth-keys
               mountPath: /app/.keys
@@ -100,7 +100,7 @@ spec:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: kubeast-secrets
+                name: {{ include "kubeast.secretsName" . }}
             {{- with .Values.ai.apiKeysSecret }}
             - secretRef:
                 name: {{ . }}
@@ -159,7 +159,7 @@ spec:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: kubeast-secrets
+                name: {{ include "kubeast.secretsName" . }}
           # Multi-cluster load / failure-isolation knobs (step 15). All optional;
           # code defaults apply when unset. rateLimitQPS=0 disables rate limiting.
           env:
@@ -226,7 +226,7 @@ spec:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: kubeast-secrets
+                name: {{ include "kubeast.secretsName" . }}
           readinessProbe:
             httpGet:
               path: /health
@@ -323,7 +323,7 @@ spec:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: kubeast-secrets
+                name: {{ include "kubeast.secretsName" . }}
           env:
             # step 14: tool-server fetches the selected cluster's kubeconfig from
             # k8s-service at runtime (no mounted kubeconfig, rollout-free).
@@ -405,7 +405,7 @@ spec:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
-                name: kubeast-secrets
+                name: {{ include "kubeast.secretsName" . }}
           readinessProbe:
             httpGet:
               path: /readyz

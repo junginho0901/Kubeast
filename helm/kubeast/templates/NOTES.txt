@@ -23,7 +23,7 @@
   Password: 다음 명령으로 확인하세요
             (helm 이 자동 생성한 랜덤 비번입니다)
 
-    kubectl -n {{ .Release.Namespace }} get secret kubeast-secrets \
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "kubeast.secretsName" . }} \
       -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d ; echo
 
   ⚠ 로그인 후 즉시 비밀번호를 변경하세요.
