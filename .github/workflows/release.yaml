@@ -55,6 +55,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Multi-arch (x86 and Graviton/Apple Silicon nodes): QEMU for the foreign
+      # arch, buildx to assemble one manifest list per tag.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
       - name: Extract version
         id: version
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -64,6 +69,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile != '' && format('{0}/{1}', matrix.context, matrix.dockerfile) || format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:${{ steps.version.outputs.tag }}
@@ -90,6 +96,15 @@ jobs:
       - name: Package Helm chart
         run: |
           helm package helm/kubeast -d .helm-release
+
+      # OCI chart next to the images: helm install oci://ghcr.io/<owner>/charts/kubeast --version X.Y.Z
+      - name: Push Helm chart to ghcr.io
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push ".helm-release/kubeast-${TAG#v}.tgz" "oci://ghcr.io/${owner}/charts"
 
       - name: Upload chart artifact
         uses: actions/upload-artifact@v4
