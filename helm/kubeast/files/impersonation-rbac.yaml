@@ -8,7 +8,11 @@
 #   kubeast:viewer    ← Kubeast role Read   → view + cluster-scoped read
 #   kubeast:operator  ← Kubeast role Write  → edit + viewer
 #   kubeast:admin     ← Kubeast role Admin / global admin → cluster-admin
-# The Kubeast credential itself only needs kubeast-impersonator.
+# The Kubeast credential itself only needs kubeast-impersonator. The groups it
+# may impersonate are listed explicitly: an unrestricted rule would let the
+# credential impersonate system:masters and become cluster-admin anywhere.
+# A custom Kubeast role (group kubeast:role:<name>) that a cluster binds must
+# be added to resourceNames on that cluster as well.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -17,8 +21,12 @@ metadata:
     app.kubernetes.io/part-of: kubeast
 rules:
   - apiGroups: [""]
-    resources: ["users", "groups"]
+    resources: ["users"]
     verbs: ["impersonate"]
+  - apiGroups: [""]
+    resources: ["groups"]
+    verbs: ["impersonate"]
+    resourceNames: ["kubeast:authenticated", "kubeast:viewer", "kubeast:operator", "kubeast:admin"]
 ---
 # Read-only view of cluster-scoped objects the console shows (the built-in
 # "view" role is namespaced only).
