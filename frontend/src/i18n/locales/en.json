@@ -2128,6 +2128,7 @@
     "title": "Waiting for approval",
     "description": "Your account has been created. An administrator needs to approve your account before you can access the service.",
     "hint": "Please contact your administrator to get your account approved.",
+    "ssoHint": "You signed in with single sign-on. Once an administrator assigns your role, sign out and sign in again.",
     "logout": "Sign out"
   },
   "login": {

@@ -1,6 +1,7 @@
 import { Clock, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/services/api'
 import { logoutSession } from '@/services/auth'
 import { useTranslation } from 'react-i18next'
 
@@ -9,6 +10,9 @@ export default function PendingApproval() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  // Shared with RequireAuth (same key), so this is served from the cache.
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 30000, retry: false })
+  const viaSSO = me?.auth_source === 'oidc'
 
   const handleLogout = () => {
     void logoutSession()
@@ -37,7 +41,9 @@ export default function PendingApproval() {
 
         <div className="mt-6 rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3">
           <p className="text-xs text-slate-500">
-            {tr('pending.hint', 'Please contact your administrator to get your account approved.')}
+            {viaSSO
+              ? tr('pending.ssoHint', 'You signed in with single sign-on. Once an administrator assigns your role, sign out and sign in again.')
+              : tr('pending.hint', 'Please contact your administrator to get your account approved.')}
           </p>
         </div>
 

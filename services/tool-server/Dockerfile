@@ -25,7 +25,7 @@ RUN apk add --no-cache curl ca-certificates \
 
 # Build context is services/ (shared pkg module is pulled in via replace),
 # same layout as the other Go services.
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 ARG TARGETARCH
 WORKDIR /build/pkg
 COPY pkg/go.mod pkg/go.sum* ./

@@ -126,8 +126,10 @@ export default function Layout() {
   // The admin section requires a GLOBAL admin permission, which lives only in
   // the matrix "*" entry — per-cluster grants never carry admin.*.
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
-  // A non-admin with zero accessible clusters can't view any resource page.
-  const noAccessibleCluster = !isAdmin && !isClustersLoading && accessibleClusters.length === 0
+  // A non-admin with zero accessible clusters can't view any resource page;
+  // the account page (profile, language, sign-out) needs no cluster.
+  const noAccessibleCluster =
+    !isAdmin && !isClustersLoading && accessibleClusters.length === 0 && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
   const storageTabMatch = (tab: string, pathname: string, search: string) => {

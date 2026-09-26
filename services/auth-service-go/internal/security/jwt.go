@@ -177,6 +177,24 @@ func (m *JWTManager) ValidateToken(tokenStr string) (jwt.MapClaims, error) {
 	return claims, nil
 }
 
+// ClaimsIgnoringExpiry returns the claims of a token whose signature is ours,
+// even when it has expired. For audit only (who is logging out), never for
+// authorization: expiry, issuer and audience are not checked.
+func (m *JWTManager) ClaimsIgnoringExpiry(tokenStr string) (jwt.MapClaims, error) {
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{"RS256"}), jwt.WithoutClaimsValidation())
+	token, err := parser.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		return m.PublicKey, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid token")
+	}
+	return claims, nil
+}
+
 // JWKS returns the JWKS JSON response with the public key.
 func (m *JWTManager) JWKS() map[string]interface{} {
 	return map[string]interface{}{
