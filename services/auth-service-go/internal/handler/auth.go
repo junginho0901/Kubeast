@@ -12,8 +12,9 @@ type AuthHandler struct {
 	jwtMgr     *security.JWTManager
 	cfg        config.Config
 	auditStore audit.Store
+	oidc       *oidcClient
 }
 
 func NewAuthHandler(repo *repository.Repository, jwtMgr *security.JWTManager, cfg config.Config, auditStore audit.Store) *AuthHandler {
-	return &AuthHandler{repo: repo, jwtMgr: jwtMgr, cfg: cfg, auditStore: auditStore}
+	return &AuthHandler{repo: repo, jwtMgr: jwtMgr, cfg: cfg, auditStore: auditStore, oidc: newOIDCClient(cfg.OIDC)}
 }

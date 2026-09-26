@@ -16,6 +16,25 @@ data:
   ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
   BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
   PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}
+  PASSWORD_LOGIN: {{ .Values.auth.passwordLogin | quote }}
+  OIDC_ENABLED: {{ .Values.auth.oidc.enabled | quote }}
+  {{- with .Values.auth.oidc }}
+  {{- if .enabled }}
+  OIDC_DISPLAY_NAME: {{ .displayName | quote }}
+  OIDC_ISSUER_URL: {{ required "auth.oidc.issuerUrl is required when auth.oidc.enabled" .issuerUrl | quote }}
+  OIDC_CLIENT_ID: {{ required "auth.oidc.clientId is required when auth.oidc.enabled" .clientId | quote }}
+  OIDC_REDIRECT_URL: {{ required "auth.oidc.redirectUrl is required when auth.oidc.enabled" .redirectUrl | quote }}
+  OIDC_SCOPES: {{ join "," .scopes | quote }}
+  OIDC_EMAIL_CLAIM: {{ .claims.email | quote }}
+  OIDC_NAME_CLAIM: {{ .claims.name | quote }}
+  OIDC_GROUPS_CLAIM: {{ .claims.groups | quote }}
+  OIDC_ALLOWED_DOMAINS: {{ join "," .allowedDomains | quote }}
+  OIDC_ROLE_MAPPING: {{ join "," .roleMapping | quote }}
+  OIDC_DEFAULT_ROLE: {{ .defaultRole | quote }}
+  OIDC_SYNC_ROLES: {{ .syncRoles | quote }}
+  OIDC_CLUSTER_GROUP_PREFIX: {{ .clusterGroupPrefix | quote }}
+  {{- end }}
+  {{- end }}
   NODE_SHELL_ENABLED: {{ .Values.nodeShell.enabled | quote }}
   NODE_SHELL_NAMESPACE: {{ .Values.nodeShell.namespace | quote }}
   NODE_SHELL_IMAGES: {{ join "," .Values.nodeShell.images | quote }}

@@ -2134,7 +2134,16 @@
     "errors": {
       "passwordMismatch": "Passwords do not match.",
       "loginFailed": "Failed to sign in.",
-      "registerFailed": "Failed to create account."
+      "registerFailed": "Failed to create account.",
+      "ssoFailed": "Single sign-on failed. Please try again.",
+      "ssoDenied": "Sign-in was cancelled or refused by the identity provider.",
+      "ssoDomain": "This email domain is not allowed to sign in.",
+      "ssoEmailUnverified": "The identity provider has not verified this email address.",
+      "ssoNoEmail": "The identity provider did not return an email address."
+    },
+    "sso": {
+      "button": "Continue with {{name}}",
+      "or": "or sign in with a password"
     },
     "badge": "Operate Kubernetes faster",
     "features": {

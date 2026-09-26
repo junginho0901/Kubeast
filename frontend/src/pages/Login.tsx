@@ -1,14 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/services/api'
 import { clearRedirectAfterLogin, getRedirectAfterLogin } from '@/services/auth'
 import { clearStoredCluster } from '@/contexts/ClusterContext'
-import { Activity, Layers, LayoutDashboard, Lock, MessageSquare, UserPlus } from 'lucide-react'
+import { Activity, KeyRound, Layers, LayoutDashboard, Lock, MessageSquare, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
 
 type Mode = 'login' | 'register'
+
+// Error codes the OIDC callback sends back as /login?error=<code>. Anything
+// else is reported generically; details stay in the server log and audit row.
+const SSO_ERROR_KEYS: Record<string, [string, string]> = {
+  oidc_denied: ['login.errors.ssoDenied', 'Sign-in was cancelled or refused by the identity provider.'],
+  oidc_domain: ['login.errors.ssoDomain', 'This email domain is not allowed to sign in.'],
+  oidc_email_unverified: ['login.errors.ssoEmailUnverified', 'The identity provider has not verified this email address.'],
+  oidc_no_email: ['login.errors.ssoNoEmail', 'The identity provider did not return an email address.'],
+}
 
 export default function Login() {
   const navigate = useNavigate()
@@ -32,6 +41,20 @@ export default function Login() {
     queryFn: () => api.listOrganizations('team'),
     staleTime: 60000,
   })
+
+  // Single sign-on: shown when the server has an OpenID Connect provider
+  // configured. The password form can be turned off (or kept for the local
+  // admin only, which still renders the form).
+  const { data: oidc } = useQuery({
+    queryKey: ['oidc-config'],
+    queryFn: api.oidcConfig,
+    staleTime: 60000,
+    retry: false,
+  })
+  const ssoEnabled = oidc?.enabled === true
+  const passwordFormShown = (oidc?.password_login ?? 'on') !== 'off'
+  const [searchParams] = useSearchParams()
+  const ssoError = searchParams.get('error')
 
   const [mode, setMode] = useState<Mode>('login')
   const [name, setName] = useState('')
@@ -197,15 +220,17 @@ export default function Login() {
                   </h2>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setMode((m) => (m === 'login' ? 'register' : 'login'))}
-                  className="text-sm lg:text-base text-slate-300 hover:text-white"
-                >
-                  {mode === 'login'
-                    ? tr('login.form.switchToRegister', 'Create account')
-                    : tr('login.form.switchToLogin', 'Sign in')}
-                </button>
+                {passwordFormShown && (
+                  <button
+                    type="button"
+                    onClick={() => setMode((m) => (m === 'login' ? 'register' : 'login'))}
+                    className="text-sm lg:text-base text-slate-300 hover:text-white"
+                  >
+                    {mode === 'login'
+                      ? tr('login.form.switchToRegister', 'Create account')
+                      : tr('login.form.switchToLogin', 'Sign in')}
+                  </button>
+                )}
               </div>
 
               <p className="mt-2 text-sm lg:text-base text-slate-400">
@@ -214,6 +239,35 @@ export default function Login() {
                   : tr('login.form.registerSubtitle', 'Create a new account and sign in.')}
               </p>
 
+              {ssoEnabled && mode === 'login' && (
+                <div className="mt-5 space-y-3">
+                  {ssoError && (
+                    <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200" aria-live="polite" data-testid="sso-error">
+                      {SSO_ERROR_KEYS[ssoError]
+                        ? tr(SSO_ERROR_KEYS[ssoError][0], SSO_ERROR_KEYS[ssoError][1])
+                        : tr('login.errors.ssoFailed', 'Single sign-on failed. Please try again.')}
+                    </div>
+                  )}
+                  {/* A plain link: the server starts the redirect flow and sets the session cookie on return. */}
+                  <a
+                    href={`/api/v1/auth/oidc/login?next=${encodeURIComponent(redirectTo)}`}
+                    data-testid="sso-login"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 lg:py-3 text-sm lg:text-base font-medium text-white hover:bg-primary-500"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    {tr('login.sso.button', 'Continue with {{name}}', { name: oidc?.display_name || 'SSO' })}
+                  </a>
+                  {passwordFormShown && (
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <div className="h-px flex-1 bg-slate-800" />
+                      {tr('login.sso.or', 'or sign in with a password')}
+                      <div className="h-px flex-1 bg-slate-800" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {passwordFormShown && (
               <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
                 {mode === 'register' && (
                   <div>
@@ -316,6 +370,7 @@ export default function Login() {
                     : tr('login.form.submitRegister', 'Create account')}
               </button>
             </form>
+              )}
           </div>
             )}
 

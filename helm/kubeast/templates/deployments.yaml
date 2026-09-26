@@ -30,6 +30,14 @@ spec:
           {{- include "kubeast.resources" (dict "root" $ "key" "authService") | nindent 10 }}
           ports:
             - containerPort: 8004
+          {{- if and .Values.auth.oidc.enabled .Values.auth.oidc.existingSecret }}
+          env:
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.oidc.existingSecret }}
+                  key: client_secret
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: kubeast-config

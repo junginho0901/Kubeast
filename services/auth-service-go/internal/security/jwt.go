@@ -148,6 +148,14 @@ func (m *JWTManager) CreateToken(userID, email, roleName string, permissions aut
 }
 
 // ValidateToken validates a JWT and returns claims.
+// SharedSecret derives a symmetric key from the signing key so every replica
+// (they share the key Secret) can verify short-lived HMAC-signed state, such
+// as the OIDC login cookie, without extra configuration.
+func (m *JWTManager) SharedSecret() []byte {
+	sum := sha256.Sum256(x509.MarshalPKCS1PrivateKey(m.PrivateKey))
+	return sum[:]
+}
+
 func (m *JWTManager) ValidateToken(tokenStr string) (jwt.MapClaims, error) {
 	parser := jwt.NewParser(
 		jwt.WithValidMethods([]string{"RS256"}),

@@ -30,6 +30,39 @@ auth:
   # Demo read/write accounts (password = username). Never enable outside dev.
   bootstrapDemoUsers: false
   passwordMinLength: 12
+  # Password sign-in: "on" / "admin-only" (only admin.email, as the break-glass
+  # path when the identity provider is down) / "off". Quoted: YAML reads a bare
+  # on/off as a boolean.
+  passwordLogin: "on"
+  # Single sign-on through one OpenID Connect provider (Keycloak, Google, Okta,
+  # Entra ID, ...): authorization code flow with PKCE, ID token verified via
+  # discovery, callback = <public URL>/api/v1/auth/oidc/callback. Users are
+  # created on first sign-in (no password). Provider groups map to a Kubeast
+  # role (roleMapping) and to per-cluster grants (group
+  # "<clusterGroupPrefix><cluster-id>:<Read|Write|Admin>"); with syncRoles both
+  # are re-applied on every sign-in. Unmapped users get defaultRole.
+  oidc:
+    enabled: false
+    displayName: SSO
+    issuerUrl: ""
+    clientId: ""
+    # The client secret: either the value here or a Secret you manage holding
+    # key `client_secret`.
+    clientSecret: ""
+    existingSecret: ""
+    redirectUrl: ""
+    scopes: [openid, email, profile]
+    claims:
+      email: email
+      name: name
+      groups: groups
+    # Email domains allowed to sign in (empty = any). Google: your Workspace domain.
+    allowedDomains: []
+    # "<provider group>=<Kubeast role>" entries, e.g. ["kubeast-admins=Admin", "sre=Write"].
+    roleMapping: []
+    defaultRole: Pending
+    syncRoles: true
+    clusterGroupPrefix: "kubeast:cluster:"
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
   # so the cluster's RBAC decides and its audit log names the person. The

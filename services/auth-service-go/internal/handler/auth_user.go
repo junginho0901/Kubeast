@@ -101,6 +101,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// With OIDC in place the password form is the break-glass path only.
+	if !passwordLoginAllowed(h.cfg, req.Email) {
+		email := req.Email
+		reason := jsonRaw(map[string]interface{}{"reason": "password_login_disabled"})
+		h.writeAuditLog(r, "user.login.failed", nil, nil, nil, &email, nil, reason)
+		response.Error(w, http.StatusForbidden, "Password login is disabled; use single sign-on")
+		return
+	}
+
 	user, err := h.repo.GetUserByEmail(r.Context(), req.Email)
 	if err != nil || user == nil {
 		// failed login — user not found. actorID 없음 (인증 안 됐으니).

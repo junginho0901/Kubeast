@@ -84,9 +84,11 @@ test.describe('Dashboard refactor — UI verification', () => {
     await expect(modalTitle).toBeVisible({ timeout: 10000 })
 
     // useDashboardIssues 가 정상 동작했다면: total count badge 또는 'No issues' 둘 중 하나
+    // With zero issues both render (badge "0" and the empty text), so take the
+    // first match — strict mode rejects an `or` that resolves to two elements.
     const totalBadge = page.locator('.badge.badge-info').first()
     const empty = page.getByText(/No issues|문제\s*없음/i).first()
-    await expect(totalBadge.or(empty)).toBeVisible({ timeout: 5000 })
+    await expect(totalBadge.or(empty).first()).toBeVisible({ timeout: 5000 })
 
     // 'Include restart history' 토글이 보여야 함 — useDashboardIssues 가 prop 받는 증거
     const restartToggle = page.locator('text=/Restart history|재시작 기록/i').first()

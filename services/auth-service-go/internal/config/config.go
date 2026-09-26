@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
 )
@@ -38,6 +40,12 @@ type Config struct {
 	AllowRegistration  bool // self-service POST /auth/register (off: 404)
 	BootstrapDemoUsers bool // create the read/write demo accounts at boot (dev only)
 	PasswordMinLength  int
+	// PasswordLogin: "on" (default), "admin-only" (only DefaultAdminEmail may
+	// use a password — break-glass next to OIDC), "off".
+	PasswordLogin string
+
+	// OIDC login (one provider, chosen by configuration: Keycloak, Google, …).
+	OIDC OIDCConfig
 
 	// K8s setup
 	SetupNamespace          string
@@ -60,8 +68,73 @@ type Config struct {
 	KubeconfigDir string // directory holding per-cluster kubeconfig files (docker mode)
 }
 
+// OIDCConfig is the provider-agnostic OpenID Connect client configuration.
+// Any provider with discovery works; the claim names and the group→role map
+// absorb the differences between them (Keycloak sends "groups", Google sends
+// no groups but "hd").
+type OIDCConfig struct {
+	Enabled      bool
+	IssuerURL    string
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string   // public callback URL, must match the provider registration exactly
+	Scopes       []string // "openid" is always added
+	EmailClaim   string
+	NameClaim    string
+	GroupsClaim  string
+	// AllowedDomains restricts sign-in to these email domains (empty = any).
+	AllowedDomains []string
+	// RoleMapping maps a group claim value to a Kubeast role name.
+	RoleMapping map[string]string
+	// DefaultRole is used when no group maps (Pending = an admin must approve).
+	DefaultRole string
+	// SyncRoles re-applies the group→role mapping on every login.
+	SyncRoles bool
+	// ClusterGroupPrefix: groups "<prefix><cluster-id>:<Read|Write|Admin>" grant
+	// a per-cluster role.
+	ClusterGroupPrefix string
+	DisplayName        string
+}
+
+// parseRoleMapping reads "group=Role,group2=Role".
+func parseRoleMapping(s string) map[string]string {
+	out := map[string]string{}
+	for _, pair := range strings.Split(s, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		if k, v = strings.TrimSpace(k), strings.TrimSpace(v); k != "" && v != "" {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 func Load() Config {
 	return Config{
+		PasswordLogin: pkgconfig.GetEnv("PASSWORD_LOGIN", "on"),
+		OIDC: OIDCConfig{
+			Enabled:            pkgconfig.GetEnvBool("OIDC_ENABLED", false),
+			IssuerURL:          pkgconfig.GetEnv("OIDC_ISSUER_URL", ""),
+			ClientID:           pkgconfig.GetEnv("OIDC_CLIENT_ID", ""),
+			ClientSecret:       pkgconfig.GetEnv("OIDC_CLIENT_SECRET", ""),
+			RedirectURL:        pkgconfig.GetEnv("OIDC_REDIRECT_URL", ""),
+			Scopes:             pkgconfig.GetEnvList("OIDC_SCOPES", "openid,email,profile"),
+			EmailClaim:         pkgconfig.GetEnv("OIDC_EMAIL_CLAIM", "email"),
+			NameClaim:          pkgconfig.GetEnv("OIDC_NAME_CLAIM", "name"),
+			GroupsClaim:        pkgconfig.GetEnv("OIDC_GROUPS_CLAIM", "groups"),
+			AllowedDomains:     pkgconfig.GetEnvList("OIDC_ALLOWED_DOMAINS", ""),
+			RoleMapping:        parseRoleMapping(pkgconfig.GetEnv("OIDC_ROLE_MAPPING", "")),
+			DefaultRole:        pkgconfig.GetEnv("OIDC_DEFAULT_ROLE", "Pending"),
+			SyncRoles:          pkgconfig.GetEnvBool("OIDC_SYNC_ROLES", true),
+			ClusterGroupPrefix: pkgconfig.GetEnv("OIDC_CLUSTER_GROUP_PREFIX", "kubeast:cluster:"),
+			DisplayName:        pkgconfig.GetEnv("OIDC_DISPLAY_NAME", "SSO"),
+		},
 		Port:  pkgconfig.GetEnvInt("PORT", 8004),
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),
 
