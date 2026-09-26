@@ -8,6 +8,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/part-of: kubeast
 {{- end -}}
 
+{{- /* The Secret every service reads its credentials from. */ -}}
+{{- define "kubeast.secretsName" -}}
+{{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
+{{- end -}}
+
 {{- define "kubeast.databaseUrl" -}}
 {{- if .Values.postgresql.enabled -}}
 postgresql+asyncpg://{{ .Values.postgresql.user }}:{{ .Values.postgresql.password }}@postgres:5432/{{ .Values.postgresql.database }}

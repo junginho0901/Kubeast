@@ -14,6 +14,19 @@ admin:
   email: admin
   password: ""
 
+# --- Application secrets ---
+# Empty existingSecret = the chart renders kubeast-secrets from the values in
+# this file (the admin password is generated once and kept across upgrades by
+# looking the Secret up — which GitOps renderers such as Argo CD cannot do, so
+# every sync would rotate it). Set it to a Secret you manage (e.g. via
+# ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
+# DATABASE_URL_GO, DEFAULT_ADMIN_PASSWORD, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+# GEMINI_API_KEY (may be empty) and, with auth.oidc enabled and no
+# auth.oidc.existingSecret, OIDC_CLIENT_SECRET. Pair it with
+# auth.signingKey.existingSecret for a fully deterministic render.
+secrets:
+  existingSecret: ""
+
 # --- JWT signing key ---
 # auth-service reads /app/.keys/jwt_private.pem (RSA, PKCS#8 or PKCS#1 PEM).
 # Empty existingSecret = the chart generates one at install and keeps it across

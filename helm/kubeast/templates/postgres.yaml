@@ -36,7 +36,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: kubeast-secrets
+                  name: {{ include "kubeast.secretsName" . }}
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
               value: {{ .Values.postgresql.database | quote }}
