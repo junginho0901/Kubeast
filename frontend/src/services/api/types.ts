@@ -1210,6 +1210,17 @@ export interface Member {
   permissions_matrix?: Record<string, string[]>
   cluster_roles?: Record<string, string>
   token_ttl_minutes?: number
+  // How the account was created: 'password' (form/admin) or 'oidc' (single
+  // sign-on, no password).
+  auth_source?: 'password' | 'oidc'
+}
+
+// GET /auth/oidc/config — what the login page renders: the SSO button (when a
+// provider is configured) and whether the password form is shown.
+export interface OIDCLoginConfig {
+  enabled: boolean
+  display_name: string
+  password_login: 'on' | 'admin-only' | 'off'
 }
 
 // AdminResetPassword 응답: Member 필드 + 1회용 평문 비밀번호

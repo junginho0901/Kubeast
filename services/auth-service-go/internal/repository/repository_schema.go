@@ -57,6 +57,9 @@ func (r *Repository) InitSchema(ctx context.Context) error {
 		// Token revocation counter: bumped on role/password changes, carried in
 		// tokens as the "tv" claim and compared on every auth-service request.
 		`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`,
+		// How the account was created: 'password' (form/admin) or 'oidc' (single
+		// sign-on, provisioned on first login with an empty password_hash).
+		`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS auth_source VARCHAR NOT NULL DEFAULT 'password'`,
 		// RBAC: roles table
 		`CREATE TABLE IF NOT EXISTS roles (
 			id SERIAL PRIMARY KEY,

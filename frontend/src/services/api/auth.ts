@@ -4,9 +4,16 @@
 // endpoints live in admin.ts.
 
 import { client } from './client'
-import type { AuthResponse, Member, Organization } from './types'
+import type { AuthResponse, Member, OIDCLoginConfig, Organization } from './types'
 
 export const authApi = {
+  // Single sign-on is a server-side redirect flow: the page only needs to know
+  // whether to show the button. GET /auth/oidc/login is a plain link.
+  oidcConfig: async (): Promise<OIDCLoginConfig> => {
+    const { data } = await client.get('/auth/oidc/config')
+    return data
+  },
+
   register: async (request: { name: string; email: string; password: string; team?: string }): Promise<Member> => {
     const { data } = await client.post('/auth/register', request)
     return data

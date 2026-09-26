@@ -30,10 +30,16 @@ type User struct {
 	RoleID       int       `json:"role_id"`
 	RoleName     string    `json:"role_name"`
 	PasswordHash string    `json:"-"`
-	TokenVersion int       `json:"-"` // bumped to revoke issued tokens ("tv" claim)
+	TokenVersion int       `json:"-"`           // bumped to revoke issued tokens ("tv" claim)
+	AuthSource   string    `json:"auth_source"` // "password" or "oidc" (how the account was created)
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+const (
+	AuthSourcePassword = "password"
+	AuthSourceOIDC     = "oidc"
+)
 
 // RoleResponse is the role object embedded in API responses.
 type RoleResponse struct {
@@ -44,13 +50,14 @@ type RoleResponse struct {
 
 // UserResponse is the public API representation (no password hash).
 type UserResponse struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	Email     string        `json:"email"`
-	Team      *string       `json:"team"`
-	Role      *RoleResponse `json:"role"`
-	CreatedAt time.Time     `json:"created_at"`
-	UpdatedAt time.Time     `json:"updated_at"`
+	ID         string        `json:"id"`
+	Name       string        `json:"name"`
+	Email      string        `json:"email"`
+	Team       *string       `json:"team"`
+	Role       *RoleResponse `json:"role"`
+	AuthSource string        `json:"auth_source"`
+	CreatedAt  time.Time     `json:"created_at"`
+	UpdatedAt  time.Time     `json:"updated_at"`
 }
 
 func (u *User) ToResponse() UserResponse {
@@ -63,8 +70,9 @@ func (u *User) ToResponse() UserResponse {
 			ID:   u.RoleID,
 			Name: u.RoleName,
 		},
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
+		AuthSource: u.AuthSource,
+		CreatedAt:  u.CreatedAt,
+		UpdatedAt:  u.UpdatedAt,
 	}
 }
 

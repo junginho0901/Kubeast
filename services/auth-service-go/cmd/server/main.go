@@ -164,6 +164,11 @@ func main() {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 		r.Post("/logout", authHandler.Logout)
+		// OIDC login (provider chosen by configuration); the session it sets is
+		// the same cookie a password login sets.
+		r.Get("/oidc/config", authHandler.OIDCConfig)
+		r.Get("/oidc/login", authHandler.OIDCLogin)
+		r.Get("/oidc/callback", authHandler.OIDCCallback)
 		r.Get("/jwks.json", authHandler.JWKS)
 		r.Get("/.well-known/jwks.json", authHandler.JWKS)
 
