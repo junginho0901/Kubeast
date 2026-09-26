@@ -235,9 +235,16 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // audit 없이 진행 (silent logout). 세션 종료는 보안 사고 대응 timeline 의 마지막
 // 지점이라 누락 시 "user 가 언제까지 활동" 추적 어렵다.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// JWT 가 있으면 actor 정보 audit. middleware 가 r.Context 에 payload 채움.
-	if payload, ok := auth.FromContext(r.Context()); ok {
-		h.writeAuditLog(r, "user.logout", &payload.UserID, &payload.Email, &payload.UserID, &payload.Email, nil, nil)
+	// Public route (no auth middleware): the session may already be expired
+	// and logout must still succeed. The actor is read from the token the
+	// browser or client sends — signature checked, expiry ignored — so the
+	// audit row names who signed out.
+	if tokenStr := h.sessionToken(r); tokenStr != "" {
+		if claims, err := h.jwtMgr.ClaimsIgnoringExpiry(tokenStr); err == nil {
+			userID, _ := claims["sub"].(string)
+			email, _ := claims["email"].(string)
+			h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, nil)
+		}
 	}
 
 	// Same attributes as setAuthCookie so the browser matches the cookie it holds.
@@ -251,6 +258,18 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 	response.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// sessionToken returns the raw session token from the cookie or the
+// Authorization header ("" when neither is present).
+func (h *AuthHandler) sessionToken(r *http.Request) string {
+	if c, err := r.Cookie(h.cfg.AuthCookieName); err == nil && c.Value != "" {
+		return c.Value
+	}
+	if hdr := r.Header.Get("Authorization"); strings.HasPrefix(hdr, "Bearer ") {
+		return strings.TrimPrefix(hdr, "Bearer ")
+	}
+	return ""
 }
 
 // JWKS handles GET /auth/jwks.json and /auth/.well-known/jwks.json

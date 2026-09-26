@@ -1,6 +1,6 @@
 module github.com/junginho0901/kubeast/services/session-service-go
 
-go 1.22
+go 1.26.0
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0

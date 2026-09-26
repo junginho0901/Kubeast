@@ -18,7 +18,7 @@ RUN apk add --no-cache curl ca-certificates \
     && echo "${sha}  aws-iam-authenticator" | sha256sum -c - \
     && chmod +x aws-iam-authenticator
 
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 ARG TARGETARCH
 
 RUN apk add --no-cache git

@@ -467,7 +467,7 @@ curl http://localhost:8000/health   # Gateway
 ## 기술 스택
 
 **Backend**
-- Go 1.22 (auth · k8s · session · tool-server · controller)
+- Go 1.26 (auth · k8s · session · tool-server · controller · pkg)
 - Python 3.11 + FastAPI (ai-service)
 - PostgreSQL 15, Redis 7
 - controller-runtime (CRD operator)

@@ -1,6 +1,6 @@
 module github.com/junginho0901/kubeast/tool-server
 
-go 1.22
+go 1.26.0
 
 require github.com/junginho0901/kubeast/services/pkg v0.0.0
 

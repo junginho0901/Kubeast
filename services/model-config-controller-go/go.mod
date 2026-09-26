@@ -1,6 +1,6 @@
 module github.com/junginho0901/kubeast/model-config-controller-go
 
-go 1.21
+go 1.26.0
 
 require (
 	github.com/jackc/pgx/v4 v4.18.2
