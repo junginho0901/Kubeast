@@ -78,7 +78,8 @@
     "auditLogs": "Audit Logs",
     "organizations": "Team",
     "helmReleases": "Releases",
-    "clusters": "Clusters"
+    "clusters": "Clusters",
+    "aiUsage": "AI Usage"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -3147,5 +3148,30 @@
     "anomaliesDetected": "Anomalies detected",
     "selectorless": "This Service has no selector. (Pod / NetworkPolicy mapping is limited)",
     "endpointsNotFound": "No Endpoints found for this Service name"
+  },
+  "adminAIUsage": {
+    "title": "AI Usage",
+    "subtitle": "Aggregation of the ai.chat.complete audit record written per chat turn — requests, tokens, tool calls. No quota; see who used how much.",
+    "since": "From",
+    "until": "To",
+    "groupBy": "Group by",
+    "group": {
+      "user": "User",
+      "model": "Model",
+      "cluster": "Cluster"
+    },
+    "totals": "Total",
+    "requests": "requests",
+    "tokens": "tokens",
+    "promptTokens": "Prompt tokens",
+    "completionTokens": "Completion tokens",
+    "totalTokens": "Total tokens",
+    "toolCalls": "Tool calls",
+    "avgDuration": "Avg duration (s)",
+    "failures": "Failures",
+    "lastAt": "Last",
+    "empty": "No AI chat records in this period.",
+    "partialTokens": "{{n}} request(s) had no token usage from the provider and are not in the sum",
+    "note": "Token counts are collected only when the provider sends usage in the last stream chunk (OpenAI-compatible stream_options.include_usage). Raw rows: audit log filtered by action=ai.chat.complete, CSV export."
   }
 }

@@ -14,9 +14,11 @@
 # 형식 변경은 frontend 회귀.
 
 import json
+import time
 from typing import Callable, Optional, TYPE_CHECKING
 
 from app.services.ai import formatters
+from app.services.ai import usage as usage_acct
 
 from app.services.ai.prompts import SYSTEM_MESSAGE
 from app.services.ai.tools import K8S_READONLY_TOOLS
@@ -579,6 +581,58 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
     except Exception as e:
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
+async def _audit_chat_complete(
+    service: "AIService",
+    session_id: str,
+    audit_actor: Optional[dict],
+    audit_http: Optional[dict],
+    *,
+    turn_usage: dict,
+    tool_calls: int,
+    iterations: int,
+    started: float,
+    finish_reason: Optional[str],
+    message_length: int,
+    result: str = "success",
+    error: Optional[str] = None,
+) -> None:
+    """ai.chat.complete — one record per chat turn with the token usage summed
+    over every model call of the turn, tool-call count and duration. The
+    admin AI-usage view aggregates these; there is no hard limit."""
+    if not audit_actor:
+        return
+    from app.services.audit_writer import write_audit
+    from app.services.ai import permissions as _perm
+
+    cluster = _perm.effective_cluster(service)
+    await write_audit(
+        action="ai.chat.complete",
+        actor_user_id=audit_actor.get("user_id"),
+        actor_email=audit_actor.get("email"),
+        target_type="session",
+        target_id=session_id,
+        cluster=cluster,
+        after=usage_acct.chat_complete_payload(
+            session_id=session_id,
+            provider=getattr(service, "provider", None),
+            model=getattr(service, "model", None),
+            cluster=cluster,
+            usage=turn_usage,
+            tool_calls=tool_calls,
+            iterations=iterations,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            finish_reason=finish_reason,
+            message_length=message_length,
+        ),
+        request_ip=(audit_http or {}).get("ip"),
+        user_agent=(audit_http or {}).get("user_agent"),
+        request_id=(audit_http or {}).get("request_id"),
+        path=(audit_http or {}).get("path"),
+        result=result,
+        error=error,
+    )
+
+
 async def session_chat_stream(
     service: "AIService",
     session_id: str,
@@ -718,6 +772,12 @@ async def session_chat_stream(
             assistant_content = "이 요청은 admin 전용 작업이라 write 권한으로는 실행할 수 없습니다. 관리자에게 권한을 요청하세요."
             yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
         
+        # Per-turn usage accounting → ai.chat.complete audit (admin AI-usage view).
+        turn_started = time.monotonic()
+        turn_usage = usage_acct.new_turn_usage()
+        turn_tool_calls = 0
+        turn_finish_reason = None
+
         while iteration < max_iterations and not skip_llm:
             iteration += 1
             print(f"[DEBUG] Iteration {iteration}/{max_iterations}")
@@ -782,7 +842,8 @@ async def session_chat_stream(
                             if getattr(tc_delta.function, "arguments", None):
                                 collected_tool_calls[idx]["arguments"] += tc_delta.function.arguments
 
-                # usage 로그
+                # usage 로그 + 턴 합계
+                usage_acct.add_usage(turn_usage, stream_usage)
                 if stream_usage is not None:
                     print(
                         f"[TOKENS][session_chat iteration {iteration}] prompt={stream_usage.prompt_tokens}, "
@@ -808,6 +869,12 @@ async def session_chat_stream(
             except Exception as api_error:
                 print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
                 yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
+                await _audit_chat_complete(
+                    service, session_id, audit_actor, audit_http,
+                    turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
+                    started=turn_started, finish_reason=None, message_length=0,
+                    result="failure", error=str(api_error),
+                )
                 yield "data: [DONE]\n\n"
                 return
 
@@ -829,6 +896,7 @@ async def session_chat_stream(
                     "tool_calls": tc_list,
                 }
                 messages.append(assistant_msg)
+                turn_tool_calls += len(tc_list)
 
                 for tc_dict in tc_list:
                     function_name = tc_dict["function"]["name"]
@@ -962,6 +1030,7 @@ async def session_chat_stream(
                 assistant_content = stream_content
                 if assistant_content:
                     messages.append({"role": "assistant", "content": assistant_content})
+                turn_finish_reason = last_finish_reason
 
                 print(f"[DEBUG] Streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}")
 
@@ -994,6 +1063,8 @@ async def session_chat_stream(
                         continuation_text = ""
                         cont_finish_reason = None
                         async for chunk in cont_stream:
+                            if getattr(chunk, "usage", None) is not None:
+                                usage_acct.add_usage(turn_usage, chunk.usage)
                             if chunk.choices and getattr(chunk.choices[0], "delta", None):
                                 delta = chunk.choices[0].delta
                                 if delta.content:
@@ -1074,6 +1145,13 @@ async def session_chat_stream(
         # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
         await db.add_message(session_id, "assistant", full_message, tool_calls=tool_calls_log or None)
         print(f"[DEBUG] Message saved to DB")
+
+        await _audit_chat_complete(
+            service, session_id, audit_actor, audit_http,
+            turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
+            started=turn_started, finish_reason=turn_finish_reason,
+            message_length=len(assistant_content or ""),
+        )
         
         # Tool Context를 DB에 저장
         await db.update_context(

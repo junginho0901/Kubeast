@@ -205,6 +205,7 @@ func main() {
 			r.Post("/admin/organizations", authHandler.AdminCreateOrganization)
 			r.Delete("/admin/organizations/{id}", authHandler.AdminDeleteOrganization)
 			r.Get("/admin/audit-logs", authHandler.AdminListAuditLogs)
+			r.Get("/admin/ai-usage", authHandler.AdminAIUsage)
 			r.Post("/admin/users/bulk", authHandler.AdminBulkCreateUsers)
 			r.Patch("/admin/users/bulk-role", authHandler.AdminBulkUpdateRole)
 			r.Post("/admin/users", authHandler.AdminCreateUser)

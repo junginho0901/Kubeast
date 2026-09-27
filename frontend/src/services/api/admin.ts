@@ -6,6 +6,8 @@
 import { client } from './client'
 import type {
   AdminResetPasswordResponse,
+  AIUsageQuery,
+  AIUsageResponse,
   AuditLogFilter,
   AuditLogListResponse,
   Member,
@@ -128,6 +130,17 @@ export const adminApi = {
     return {
       total: data?.total ?? 0,
       items: Array.isArray(data?.items) ? data.items : [],
+    }
+  },
+
+  // AI usage — ai.chat.complete audit records aggregated per user/model/cluster.
+  adminAIUsage: async (params?: AIUsageQuery): Promise<AIUsageResponse> => {
+    const { data } = await client.get('/auth/admin/ai-usage', { params })
+    return {
+      since: data?.since ?? '',
+      until: data?.until ?? '',
+      group: data?.group ?? 'user',
+      rows: Array.isArray(data?.rows) ? data.rows : [],
     }
   },
 }

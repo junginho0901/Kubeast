@@ -78,7 +78,8 @@
     "auditLogs": "감사 로그",
     "organizations": "팀",
     "helmReleases": "Releases",
-    "clusters": "클러스터"
+    "clusters": "클러스터",
+    "aiUsage": "AI 사용량"
   },
   "layout": {
     "accountTitle": "설정",
@@ -3147,5 +3148,30 @@
     "anomaliesDetected": "이상 징후 감지",
     "selectorless": "selector가 없는 Service입니다. (Pod 매핑/NetworkPolicy 매핑은 제한됩니다)",
     "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다"
+  },
+  "adminAIUsage": {
+    "title": "AI 사용량",
+    "subtitle": "채팅 턴마다 남는 ai.chat.complete 감사 기록의 집계 — 요청·토큰·툴 호출. 한도는 없고, 누가 얼마나 썼는지 본다.",
+    "since": "시작일",
+    "until": "종료일",
+    "groupBy": "기준",
+    "group": {
+      "user": "사용자",
+      "model": "모델",
+      "cluster": "클러스터"
+    },
+    "totals": "합계",
+    "requests": "요청",
+    "tokens": "토큰",
+    "promptTokens": "입력 토큰",
+    "completionTokens": "출력 토큰",
+    "totalTokens": "합계 토큰",
+    "toolCalls": "툴 호출",
+    "avgDuration": "평균 소요(초)",
+    "failures": "실패",
+    "lastAt": "마지막",
+    "empty": "이 기간에 AI 채팅 기록이 없습니다.",
+    "partialTokens": "{{n}}건은 제공자가 토큰 수를 보내지 않아 합계에 없음",
+    "note": "토큰 수는 제공자가 스트림 마지막 청크에 usage를 보낼 때만 집계된다(OpenAI 호환 stream_options.include_usage). 원본 행은 감사 로그에서 action=ai.chat.complete 로 조회·CSV 내보내기."
   }
 }
