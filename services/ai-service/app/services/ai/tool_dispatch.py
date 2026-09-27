@@ -17,6 +17,8 @@
 
 from typing import TYPE_CHECKING, Dict
 
+from app.services.ai import resolvers
+
 if TYPE_CHECKING:
     from app.services.ai_service import AIService, ToolContext
 
@@ -70,7 +72,7 @@ async def execute_function_with_context(
             if not query_raw:
                 raise Exception("find_pods requires non-empty 'query'")
             namespace = function_args.get("namespace")
-            limit_int = service._coerce_limit(function_args.get("limit", 20))
+            limit_int = resolvers._coerce_limit(service, function_args.get("limit", 20))
             matches = await resolvers._find_pods(service, 
                 query_raw,
                 namespace=namespace if isinstance(namespace, str) else None,
@@ -85,7 +87,7 @@ async def execute_function_with_context(
             if not query_raw:
                 raise Exception("find_services requires non-empty 'query'")
             namespace = function_args.get("namespace")
-            limit_int = service._coerce_limit(function_args.get("limit", 20))
+            limit_int = resolvers._coerce_limit(service, function_args.get("limit", 20))
             matches = await resolvers._find_services(service, 
                 query_raw,
                 namespace=namespace if isinstance(namespace, str) else None,
@@ -98,7 +100,7 @@ async def execute_function_with_context(
             if not query_raw:
                 raise Exception("find_deployments requires non-empty 'query'")
             namespace = function_args.get("namespace")
-            limit_int = service._coerce_limit(function_args.get("limit", 20))
+            limit_int = resolvers._coerce_limit(service, function_args.get("limit", 20))
             matches = await resolvers._find_deployments(service, 
                 query_raw,
                 namespace=namespace if isinstance(namespace, str) else None,
@@ -307,7 +309,7 @@ async def execute_function_with_context(
             pod_name = function_args.get("pod_name", "")
             if isinstance(pod_name, str) and "/" in pod_name:
                 pod_name = pod_name.split("/")[-1]
-            tail_lines = service._coerce_limit(function_args.get("tail_lines", 50), default=50, max_value=2000)
+            tail_lines = resolvers._coerce_limit(service, function_args.get("tail_lines", 50), default=50, max_value=2000)
             requested_container = function_args.get("container")
 
             if not isinstance(namespace, str) or not namespace.strip():
@@ -448,27 +450,27 @@ async def _execute_function(service, function_name: str, function_args: dict):
             query_raw = str(function_args.get("query", "")).strip()
             if not query_raw:
                 raise Exception("find_pods requires non-empty 'query'")
-            limit_int = service._coerce_limit(function_args.get("limit", 20))
+            limit_int = resolvers._coerce_limit(service, function_args.get("limit", 20))
             namespace = function_args.get("namespace")
-            matches = await resolvers._find_pods(self, query_raw, namespace=namespace if isinstance(namespace, str) else None, limit=limit_int)
+            matches = await resolvers._find_pods(service, query_raw, namespace=namespace if isinstance(namespace, str) else None, limit=limit_int)
             return json.dumps(matches, ensure_ascii=False)
 
         elif function_name == "find_services":
             query_raw = str(function_args.get("query", "")).strip()
             if not query_raw:
                 raise Exception("find_services requires non-empty 'query'")
-            limit_int = service._coerce_limit(function_args.get("limit", 20))
+            limit_int = resolvers._coerce_limit(service, function_args.get("limit", 20))
             namespace = function_args.get("namespace")
-            matches = await resolvers._find_services(self, query_raw, namespace=namespace if isinstance(namespace, str) else None, limit=limit_int)
+            matches = await resolvers._find_services(service, query_raw, namespace=namespace if isinstance(namespace, str) else None, limit=limit_int)
             return json.dumps(matches, ensure_ascii=False)
 
         elif function_name == "find_deployments":
             query_raw = str(function_args.get("query", "")).strip()
             if not query_raw:
                 raise Exception("find_deployments requires non-empty 'query'")
-            limit_int = service._coerce_limit(function_args.get("limit", 20))
+            limit_int = resolvers._coerce_limit(service, function_args.get("limit", 20))
             namespace = function_args.get("namespace")
-            matches = await resolvers._find_deployments(self, query_raw, namespace=namespace if isinstance(namespace, str) else None, limit=limit_int)
+            matches = await resolvers._find_deployments(service, query_raw, namespace=namespace if isinstance(namespace, str) else None, limit=limit_int)
             return json.dumps(matches, ensure_ascii=False)
         
         elif function_name == "get_pods":
@@ -492,12 +494,12 @@ async def _execute_function(service, function_name: str, function_args: dict):
             requested_container = function_args.get("container")
 
             if not isinstance(namespace, str) or not namespace.strip():
-                matches = await resolvers._find_pods(self, str(pod_name), namespace=None, limit=20)
-                chosen = await resolvers._resolve_single(self, "pods", str(pod_name), matches)
+                matches = await resolvers._find_pods(service, str(pod_name), namespace=None, limit=20)
+                chosen = await resolvers._resolve_single(service, "pods", str(pod_name), matches)
                 namespace = str(chosen.get("namespace", ""))
                 pod_name = str(chosen.get("name", pod_name))
 
-            chosen_container, all_containers = await resolvers._pick_log_container(self, 
+            chosen_container, all_containers = await resolvers._pick_log_container(service,
                 namespace,
                 pod_name,
                 explicit_container=requested_container,
@@ -525,8 +527,8 @@ async def _execute_function(service, function_name: str, function_args: dict):
             namespace = function_args.get("namespace")
             name = function_args["name"]
             if not isinstance(namespace, str) or not namespace.strip():
-                matches = await resolvers._find_pods(self, str(name), namespace=None, limit=20)
-                chosen = await resolvers._resolve_single(self, "pods", str(name), matches)
+                matches = await resolvers._find_pods(service, str(name), namespace=None, limit=20)
+                chosen = await resolvers._resolve_single(service, "pods", str(name), matches)
                 namespace = str(chosen.get("namespace", ""))
                 name = str(chosen.get("name", name))
             result = await service.k8s_service.describe_pod(namespace, name)
@@ -536,8 +538,8 @@ async def _execute_function(service, function_name: str, function_args: dict):
             namespace = function_args.get("namespace")
             name = function_args["name"]
             if not isinstance(namespace, str) or not namespace.strip():
-                matches = await resolvers._find_deployments(self, str(name), namespace=None, limit=20)
-                chosen = await resolvers._resolve_single(self, "deployments", str(name), matches)
+                matches = await resolvers._find_deployments(service, str(name), namespace=None, limit=20)
+                chosen = await resolvers._resolve_single(service, "deployments", str(name), matches)
                 namespace = str(chosen.get("namespace", ""))
                 name = str(chosen.get("name", name))
             result = await service.k8s_service.describe_deployment(namespace, name)
@@ -547,8 +549,8 @@ async def _execute_function(service, function_name: str, function_args: dict):
             namespace = function_args.get("namespace")
             name = function_args["name"]
             if not isinstance(namespace, str) or not namespace.strip():
-                matches = await resolvers._find_services(self, str(name), namespace=None, limit=20)
-                chosen = await resolvers._resolve_single(self, "services", str(name), matches)
+                matches = await resolvers._find_services(service, str(name), namespace=None, limit=20)
+                chosen = await resolvers._resolve_single(service, "services", str(name), matches)
                 namespace = str(chosen.get("namespace", ""))
                 name = str(chosen.get("name", name))
             result = await service.k8s_service.describe_service(namespace, name)
@@ -604,7 +606,7 @@ async def _execute_function(service, function_name: str, function_args: dict):
 
             resolved = None
             if not resource_type or ns is None:
-                resolved = await resolvers._locate_resource_for_yaml(self, 
+                resolved = await resolvers._locate_resource_for_yaml(service,
                     resource_name=resource_name,
                     namespace=ns,
                     preferred_type=resource_type or None,
@@ -624,7 +626,7 @@ async def _execute_function(service, function_name: str, function_args: dict):
                 )
             except Exception:
                 if resolved is None:
-                    resolved = await resolvers._locate_resource_for_yaml(self, 
+                    resolved = await resolvers._locate_resource_for_yaml(service,
                         resource_name=resource_name,
                         namespace=ns,
                         preferred_type=resource_type or None,
@@ -658,16 +660,16 @@ async def _execute_function(service, function_name: str, function_args: dict):
             pod_name = function_args.get("pod_name", "")
             if isinstance(pod_name, str) and "/" in pod_name:
                 pod_name = pod_name.split("/")[-1]
-            tail_lines = service._coerce_limit(function_args.get("tail_lines", 50), default=50, max_value=2000)
+            tail_lines = resolvers._coerce_limit(service, function_args.get("tail_lines", 50), default=50, max_value=2000)
             requested_container = function_args.get("container")
 
             if not isinstance(namespace, str) or not namespace.strip():
-                matches = await resolvers._find_pods(self, str(pod_name), namespace=None, limit=20)
-                chosen = await resolvers._resolve_single(self, "pods", str(pod_name), matches)
+                matches = await resolvers._find_pods(service, str(pod_name), namespace=None, limit=20)
+                chosen = await resolvers._resolve_single(service, "pods", str(pod_name), matches)
                 namespace = str(chosen.get("namespace", ""))
                 pod_name = str(chosen.get("name", pod_name))
 
-            chosen_container, all_containers = await resolvers._pick_log_container(self, 
+            chosen_container, all_containers = await resolvers._pick_log_container(service,
                 namespace,
                 pod_name,
                 explicit_container=requested_container,

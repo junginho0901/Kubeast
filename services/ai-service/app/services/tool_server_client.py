@@ -15,6 +15,9 @@ class ToolServerClient:
             headers["Authorization"] = authorization.strip()
         resolved = (base_url or DEFAULT_TOOL_SERVER_URL).rstrip("/")
         self.client = httpx.AsyncClient(base_url=resolved, timeout=60.0, headers=headers)
+        # What tool-server masked in the last result ({count, kinds}) — copied
+        # into the ai.tool.call audit row. Calls on one stream are sequential.
+        self.last_redacted: Optional[Dict[str, Any]] = None
 
     async def call_tool(
         self,
@@ -29,8 +32,11 @@ class ToolServerClient:
         response = await self.client.post("/tools/call", json=payload, headers=headers or None)
         response.raise_for_status()
         data = response.json()
+        self.last_redacted = None
         if isinstance(data, dict) and data.get("error"):
             raise Exception(str(data.get("error")))
         if isinstance(data, dict):
+            redacted = data.get("redacted")
+            self.last_redacted = redacted if isinstance(redacted, dict) else None
             return str(data.get("content") or "")
         return ""

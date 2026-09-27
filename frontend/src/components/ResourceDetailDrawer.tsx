@@ -132,13 +132,16 @@ export default function ResourceDetailDrawer() {
       active_tab: tab,
       ...(link ? { _link: link } : {}),
     }
+    // A Secret's values never go to the model, even from a user who may reveal
+    // them on screen; the server strips them again (defense in depth).
+    const isSecret = kind.toLowerCase() === 'secret'
     if (tab === 'yaml') {
-      const yamlText = typeof yamlData?.yaml === 'string' ? yamlData.yaml : ''
+      const yamlText = isSecret ? '' : typeof yamlData?.yaml === 'string' ? yamlData.yaml : ''
       const truncated = yamlText.length > 4096 ? yamlText.slice(0, 4096) + '\n... (truncated) ...' : yamlText
       return {
         source: 'ResourceDetailDrawer' as const,
         summary: `${kind} ${name}${ns ? ` (${ns})` : ''} 상세 — YAML 탭`,
-        data: { ...base, yaml: truncated },
+        data: { ...base, yaml: isSecret ? '(secret data omitted)' : truncated },
       }
     }
     // info tab — effectiveRawJson 전체를 sanitize 후 통째로 포함.
@@ -155,7 +158,9 @@ export default function ResourceDetailDrawer() {
             : undefined,
         }
       : meta
-    const sanitizedRaw = rj ? { ...rj, metadata: sanitizedMeta } : undefined
+    const sanitizedRaw = rj
+      ? { ...rj, metadata: sanitizedMeta, ...(isSecret ? { data: undefined, stringData: undefined } : {}) }
+      : undefined
     return {
       source: 'ResourceDetailDrawer' as const,
       summary: `${kind} ${name}${ns ? ` (${ns})` : ''} 상세 — Info 탭`,

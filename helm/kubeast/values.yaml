@@ -116,6 +116,18 @@ ai:
   # AI tools that change a cluster (delete/scale/apply/...) are never run from
   # the model's call directly: the user approves each one in the chat first.
   writeApproval: true
+  # What leaves for the model is masked first: credentials by key name
+  # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
+  # JWTs, credentials in URLs, Authorization values) in tool results, log
+  # analysis, resource explanations and the floating widget's page snapshot.
+  # A Secret's data is always stripped regardless of this switch. The screen
+  # is not affected. pii adds e-mail / phone / resident-registration / card
+  # number masking; disable lists rule names to skip (key_name, private_key,
+  # url_credentials, authorization, jwt, aws_key, email, phone, rrn, card).
+  redaction:
+    enabled: true
+    pii: false
+    disable: []
 
 # --- PostgreSQL ---
 postgresql:

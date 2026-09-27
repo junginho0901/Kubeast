@@ -404,7 +404,13 @@ async def analyze_logs(request: dict, authorization: str = Depends(bearer_or_coo
     
     try:
         from app.ai import LogAnalysisRequest
+        from app.services.redact import redact_text
         req = LogAnalysisRequest(**request)
+        # The logs come straight from the browser: mask credentials (and PII when
+        # enabled) before they are put in front of the model.
+        req.logs, _ = redact_text(req.logs)
+        if req.context:
+            req.context, _ = redact_text(req.context)
         result = await ai_service.analyze_logs(req)
         return result
     except Exception as e:
@@ -429,8 +435,11 @@ async def troubleshoot(request: dict, authorization: str = Depends(bearer_or_coo
 async def explain_resource(resource_type: str, resource_yaml: str, authorization: str = Depends(bearer_or_cookie)):
     """리소스 YAML 설명"""
     ai_service = await _build_ai_service(authorization)
-    
+
     try:
+        from app.services.redact import redact_text
+        # YAML comes from the browser (possibly a revealed Secret): strip and mask first.
+        resource_yaml, _ = redact_text(resource_yaml)
         explanation = await ai_service.explain_resource(resource_type, resource_yaml)
         return {"explanation": explanation}
     except Exception as e:
