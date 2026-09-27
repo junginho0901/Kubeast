@@ -1,0 +1,66 @@
+suite: configmap — audit, migrations and redaction switches
+templates:
+  - configmap.yaml
+tests:
+  - it: renders the defaults (audit stdout on, migrations at startup, redaction on without PII)
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.AUDIT_STDOUT
+          value: "true"
+      - equal:
+          path: data.MIGRATIONS_MODE
+          value: startup
+      - equal:
+          path: data.REDACTION_ENABLED
+          value: "true"
+      - equal:
+          path: data.REDACTION_PII
+          value: "false"
+      - equal:
+          path: data.REDACTION_DISABLE
+          value: ""
+      - notExists:
+          path: data.TOOL_SERVER_URL_READ
+      - notExists:
+          path: data.TOOL_SERVER_URL_WRITE
+      - notExists:
+          path: data.TOOL_SERVER_URL_ADMIN
+
+  - it: audit.stdout=false turns the stdout mirror off
+    set:
+      audit.stdout: false
+    asserts:
+      - equal:
+          path: data.AUDIT_STDOUT
+          value: "false"
+
+  - it: migrations.mode=job is handed to the services
+    set:
+      migrations.mode: job
+    asserts:
+      - equal:
+          path: data.MIGRATIONS_MODE
+          value: job
+
+  - it: redaction switches and the disable list are rendered as env values
+    set:
+      ai.redaction.enabled: false
+      ai.redaction.pii: true
+      ai.redaction.disable:
+        - aws-keys
+        - jwt
+    asserts:
+      - equal:
+          path: data.REDACTION_ENABLED
+          value: "false"
+      - equal:
+          path: data.REDACTION_PII
+          value: "true"
+      - equal:
+          path: data.REDACTION_DISABLE
+          value: aws-keys,jwt

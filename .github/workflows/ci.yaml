@@ -43,6 +43,37 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go test ./...
 
+  # The real migrations against PostgreSQL (services/pkg/dbmigrate/*_postgres_test.go):
+  # empty database to Required, idempotent re-run, legacy role column conversion.
+  # The tests skip themselves when DBMIGRATE_TEST_DATABASE_URL is unset, so the
+  # plain go matrix above stays server-free.
+  dbmigrate:
+    name: dbmigrate (postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/pkg/go.mod
+          cache-dependency-path: services/pkg/go.sum
+      - name: test
+        working-directory: services/pkg
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./dbmigrate/... -run Postgres -v -count=1
+
   python:
     name: ai-service (pytest)
     runs-on: ubuntu-latest
@@ -79,12 +110,20 @@ jobs:
       - run: npx vitest run
 
   helm:
-    name: helm lint + kubeconform
+    name: helm lint + unittest + kubeconform
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
       - run: helm lint helm/kubeast
+      # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
+      # defaults, migrations hook Job, PVC retention, replica guards, secrets.
+      - name: helm unittest
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false --version 1.1.2
+          helm unittest helm/kubeast
       - name: kubeconform
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz

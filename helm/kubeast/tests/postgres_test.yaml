@@ -1,0 +1,85 @@
+suite: postgres — PVC retention and external claim
+templates:
+  - postgres.yaml
+tests:
+  - it: renders Deployment, PVC and Service by default
+    asserts:
+      - hasDocuments:
+          count: 3
+
+  - it: keeps the data PVC on uninstall (helm.sh/resource-policy keep) by default
+    documentSelector:
+      path: kind
+      value: PersistentVolumeClaim
+    asserts:
+      - equal:
+          path: metadata.name
+          value: kubeast-postgres-data
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+      - equal:
+          path: spec.resources.requests.storage
+          value: 5Gi
+
+  - it: mounts the chart-managed PVC in the Deployment by default
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: kubeast-postgres-data
+
+  - it: existingClaim skips the PVC and mounts the given claim
+    set:
+      postgresql.persistence.existingClaim: company-postgres-data
+    asserts:
+      - hasDocuments:
+          count: 2
+      - matchRegex:
+          path: kind
+          pattern: ^(Deployment|Service)$
+  - it: existingClaim is what the Deployment mounts
+    set:
+      postgresql.persistence.existingClaim: company-postgres-data
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: company-postgres-data
+
+  - it: an empty resourcePolicy and no annotations render a PVC without annotations
+    set:
+      postgresql.persistence.resourcePolicy: ""
+      postgresql.persistence.annotations: {}
+    documentSelector:
+      path: kind
+      value: PersistentVolumeClaim
+    asserts:
+      - notExists:
+          path: metadata.annotations
+
+  - it: extra PVC annotations are passed through next to the keep policy
+    set:
+      postgresql.persistence.annotations:
+        backup.example.com/plan: daily
+    documentSelector:
+      path: kind
+      value: PersistentVolumeClaim
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+      - equal:
+          path: metadata.annotations["backup.example.com/plan"]
+          value: daily
+
+  - it: renders nothing when the in-cluster database is disabled
+    set:
+      postgresql.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
