@@ -131,7 +131,9 @@ class AIService:
         return getattr(self, "_token_payload", None)
 
     def _resolve_tool_server_url(self, role: str) -> Optional[str]:
-        # Permission-based: check if user has write/admin-level permissions
+        # One tool-server by default: None here makes the client fall back to
+        # TOOL_SERVER_URL. The per-role variables stay as an optional override
+        # for a deployment that runs separate tool-servers per permission tier.
         if self.token and self.token.has_permission("*"):
             return os.getenv("TOOL_SERVER_URL_ADMIN")
         if self.token and self.token.has_permission_for_cluster("ai.tool.*", permissions.effective_cluster(self)):

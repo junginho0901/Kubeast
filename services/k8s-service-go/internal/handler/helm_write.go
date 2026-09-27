@@ -148,6 +148,13 @@ func (h *Handler) UpgradeHelmValues(w http.ResponseWriter, r *http.Request) {
 // The UI is expected to call with dryRun=true first, then re-POST with
 // dryRun=false only after the user types the release name into the
 // confirm modal — this endpoint itself does not enforce that workflow.
+// uninstallConfirmed enforces the "type the release name" confirmation on the
+// server: a real uninstall must carry ?confirm=<release name>. Dry runs are
+// read-only previews and need no confirmation.
+func uninstallConfirmed(confirm, name string, dryRun bool) bool {
+	return dryRun || (name != "" && confirm == name)
+}
+
 func (h *Handler) UninstallHelmRelease(w http.ResponseWriter, r *http.Request) {
 	if err := h.requirePermissionForCluster(r, "resource.helm.uninstall"); err != nil {
 		h.handleError(w, err)
@@ -157,6 +164,10 @@ func (h *Handler) UninstallHelmRelease(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	keepHistory := queryParamBool(r, "keepHistory", false)
 	dryRun := queryParamBool(r, "dryRun", false)
+	if !uninstallConfirmed(r.URL.Query().Get("confirm"), name, dryRun) {
+		response.Error(w, http.StatusBadRequest, "confirm must equal the release name")
+		return
+	}
 
 	result, err := h.helmSvc.Uninstall(r.Context(), ns, name, keepHistory, dryRun)
 

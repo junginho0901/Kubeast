@@ -1,5 +1,4 @@
 # Docs
-docs/
 MIGRATION.md
 
 # Python
@@ -93,7 +92,6 @@ tools/
 headlamp/
 .litellm-build/
 
-docs/
 .prompts/
 .claude/
 k8sgpt/

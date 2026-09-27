@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -106,22 +108,44 @@ func queryParamBool(r *http.Request, key string, defaultVal bool) bool {
 
 // handleError sends an appropriate error response based on the error message.
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
+	response.Error(w, statusForError(err), err.Error())
+}
+
+// statusForError maps an error to an HTTP status. Kubernetes API errors are
+// classified by their status reason (wrapped errors included); the message
+// checks below only apply to errors that carry no status, such as helm or
+// registry failures.
+func statusForError(err error) int {
+	switch {
+	case apierrors.IsUnauthorized(err):
+		return http.StatusUnauthorized
+	case apierrors.IsForbidden(err):
+		return http.StatusForbidden
+	case apierrors.IsNotFound(err):
+		return http.StatusNotFound
+	case apierrors.IsAlreadyExists(err), apierrors.IsConflict(err):
+		return http.StatusConflict
+	case apierrors.IsBadRequest(err), apierrors.IsInvalid(err):
+		return http.StatusBadRequest
+	case apierrors.IsTimeout(err), apierrors.IsServerTimeout(err), apierrors.IsServiceUnavailable(err):
+		return http.StatusServiceUnavailable
+	}
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "unauthorized"):
-		response.Error(w, http.StatusUnauthorized, msg)
+		return http.StatusUnauthorized
 	case strings.Contains(msg, "forbidden"):
-		response.Error(w, http.StatusForbidden, msg)
+		return http.StatusForbidden
 	case strings.Contains(msg, "not found"):
-		response.Error(w, http.StatusNotFound, msg)
+		return http.StatusNotFound
 	case strings.Contains(msg, "already exists"):
-		response.Error(w, http.StatusConflict, msg)
+		return http.StatusConflict
 	case isClusterUnreachable(msg):
 		// A cluster we can't reach/build is temporarily unavailable, not an
 		// internal bug — 503 so clients (and fail-fast) treat it as transient.
-		response.Error(w, http.StatusServiceUnavailable, msg)
+		return http.StatusServiceUnavailable
 	default:
-		response.Error(w, http.StatusInternalServerError, msg)
+		return http.StatusInternalServerError
 	}
 }
 

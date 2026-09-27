@@ -133,6 +133,9 @@ metadata:
     app: k8s-service
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
+  {{- if gt (int .Values.replicas.k8sService) 1 }}
+  {{- fail "replicas.k8sService must be 1: node drain progress and per-cluster client caches live in process memory" }}
+  {{- end }}
   replicas: {{ .Values.replicas.k8sService }}
   selector:
     matchLabels:
@@ -297,6 +300,9 @@ metadata:
     app: tool-server
     {{- include "kubeast.labels" . | nindent 4 }}
 spec:
+  {{- if gt (int .Values.replicas.toolServer) 1 }}
+  {{- fail "replicas.toolServer must be 1: the per-cluster kubeconfig cache and its invalidation endpoint are per process" }}
+  {{- end }}
   replicas: {{ .Values.replicas.toolServer }}
   selector:
     matchLabels:

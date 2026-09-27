@@ -2,20 +2,24 @@
 #
 # Kubest Installer
 #
-# Usage:
-#   curl -sSL https://raw.githubusercontent.com/junginho0901/Kubeast/main/install.sh | bash
+# Usage — download a tagged copy, read it, then run it (do not pipe an
+# unreviewed script into bash):
+#   curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.3.0/install.sh
+#   less install.sh
+#   bash install.sh
 #
-#   # Or with options:
-#   curl -sSL ... | bash -s -- --node-port 30080
-#   curl -sSL ... | bash -s -- --load-balancer
-#   curl -sSL ... | bash -s -- --namespace my-ns
+#   # Options:
+#   bash install.sh --node-port 30080
+#   bash install.sh --load-balancer
+#   bash install.sh --namespace my-ns
+#   bash install.sh --version 0.3.0
 #
 set -euo pipefail
 
 # Defaults
 NAMESPACE="kubeast"
 RELEASE_NAME="kubeast"
-CHART_VERSION="0.1.0"
+CHART_VERSION="0.3.0"
 SERVICE_TYPE="NodePort"
 NODE_PORT="30333"
 REPO_URL="https://github.com/junginho0901/Kubeast"
@@ -44,7 +48,7 @@ while [[ $# -gt 0 ]]; do
     --help|-h)
       echo "Kubest Installer"
       echo ""
-      echo "Usage: curl -sSL <url>/install.sh | bash -s -- [OPTIONS]"
+      echo "Usage: bash install.sh [OPTIONS]   (download a tagged install.sh and read it first)"
       echo ""
       echo "Options:"
       echo "  --namespace <ns>     Namespace (default: kubeast)"

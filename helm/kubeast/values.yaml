@@ -164,6 +164,9 @@ podSecurity:
   readOnlyRootFilesystem: true
 
 # --- Availability ---
+# k8sService and toolServer must stay at 1: node drain progress and per-cluster
+# client/kubeconfig caches live in process memory, so a second replica would
+# answer with stale or missing state. The chart refuses to render otherwise.
 replicas:
   authService: 1
   aiService: 1

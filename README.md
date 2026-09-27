@@ -34,23 +34,30 @@ LLM 기반 채팅으로 리소스 조회·진단·변경을 수행할 수 있습
 모든 컴포넌트 이미지는 **GitHub Container Registry(ghcr.io)에 공개 패키지**로 게시되어
 있어 별도 빌드 없이 바로 설치됩니다. (공개 패키지는 익명 pull rate limit이 없습니다.)
 
-### 옵션 1. 설치 스크립트 (이미 동작 중인 K8s 클러스터에 한 줄)
+### 옵션 1. 설치 스크립트 (이미 동작 중인 K8s 클러스터)
+
+태그가 붙은 스크립트를 내려받아 내용을 확인한 뒤 실행합니다(검토하지 않은 스크립트를 `curl | bash`로 바로 실행하지 않습니다).
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/junginho0901/Kubeast/main/install.sh | bash
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.3.0/install.sh
+less install.sh
+bash install.sh
 ```
 
 옵션:
 
 ```bash
 # NodePort 변경 (기본 30333)
-curl -sSL .../install.sh | bash -s -- --node-port 30333
+bash install.sh --node-port 30333
 
 # LoadBalancer (클라우드 환경)
-curl -sSL .../install.sh | bash -s -- --load-balancer
+bash install.sh --load-balancer
 
 # 네임스페이스 지정
-curl -sSL .../install.sh | bash -s -- --namespace my-ns
+bash install.sh --namespace my-ns
+
+# 차트 버전 지정
+bash install.sh --version 0.3.0
 ```
 
 > 사전 요구: `kubectl`, `helm`, 그리고 접근 가능한 Kubernetes 클러스터.
