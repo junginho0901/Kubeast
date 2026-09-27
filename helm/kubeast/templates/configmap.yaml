@@ -65,6 +65,7 @@ data:
   REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
+  AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}

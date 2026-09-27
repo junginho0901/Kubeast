@@ -130,6 +130,10 @@ ai:
     disable: []
 
 # --- PostgreSQL ---
+audit:
+  # Also write every audit record to the service log as one JSON line (event: audit) for the cluster log pipeline.
+  stdout: true
+
 postgresql:
   enabled: true          # Set false to use external postgres
   user: kubeast

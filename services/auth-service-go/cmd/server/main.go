@@ -83,12 +83,13 @@ func main() {
 	slog.Info("database schema initialized")
 
 	// Shared audit store (applies v1.1 column/index migration on startup).
-	auditStore := audit.NewPostgresStore(pool, audit.ServiceAuth)
-	if err := auditStore.EnsureSchema(ctx); err != nil {
+	pgAudit := audit.NewPostgresStore(pool, audit.ServiceAuth)
+	if err := pgAudit.EnsureSchema(ctx); err != nil {
 		slog.Error("failed to migrate audit schema", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("audit schema ensured")
+	slog.Info("audit schema ensured", "stdout", audit.StdoutEnabled())
+	auditStore := audit.WithStdout(pgAudit, audit.StdoutEnabled())
 
 	// Seed system roles and migrate auth_users.role → role_id
 	if err := repo.SeedSystemRoles(ctx); err != nil {
