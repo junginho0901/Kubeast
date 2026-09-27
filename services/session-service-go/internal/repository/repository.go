@@ -22,47 +22,8 @@ func New(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-// InitSchema creates tables if they don't exist.
-func (r *Repository) InitSchema(ctx context.Context) error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS sessions (
-			id VARCHAR PRIMARY KEY,
-			user_id VARCHAR NOT NULL DEFAULT 'default',
-			title VARCHAR NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-		)`,
-		`CREATE TABLE IF NOT EXISTS messages (
-			id SERIAL PRIMARY KEY,
-			session_id VARCHAR NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-			role VARCHAR NOT NULL,
-			content TEXT NOT NULL,
-			tool_calls JSONB,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW()
-		)`,
-		`CREATE TABLE IF NOT EXISTS session_contexts (
-			id SERIAL PRIMARY KEY,
-			session_id VARCHAR NOT NULL UNIQUE REFERENCES sessions(id) ON DELETE CASCADE,
-			state JSONB NOT NULL DEFAULT '{}',
-			cache JSONB NOT NULL DEFAULT '{}',
-			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-		)`,
-		// Multi-cluster (step 13): a session belongs to one cluster. Idempotent
-		// ALTER so it applies to the existing table; ai-service runs the same.
-		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cluster_id VARCHAR`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_sessions_user_cluster ON sessions(user_id, cluster_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)`,
-	}
-
-	for _, q := range queries {
-		if _, err := r.pool.Exec(ctx, q); err != nil {
-			return fmt.Errorf("init schema: %w", err)
-		}
-	}
-	return nil
-}
+// The sessions/messages/session_contexts schema is defined by the versioned
+// migrations in services/pkg/dbmigrate (owned by auth-service).
 
 // CreateSession creates a new session and its context. clusterID scopes the
 // session to a cluster (step 13); empty is allowed (cluster-agnostic).

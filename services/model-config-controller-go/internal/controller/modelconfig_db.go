@@ -14,6 +14,48 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+// requiredSchemaVersion is the goose version (services/pkg/dbmigrate.Required)
+// this build needs. The controller module is built on its own, so the check is
+// inlined here instead of importing the shared package.
+const requiredSchemaVersion int64 = 2
+
+func schemaVersion(db *sql.DB) (int64, error) {
+	var exists bool
+	if err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'goose_db_version')`,
+	).Scan(&exists); err != nil {
+		return 0, err
+	}
+	if !exists {
+		return 0, nil
+	}
+	var v sql.NullInt64
+	err := db.QueryRow(`SELECT version_id FROM goose_db_version WHERE is_applied ORDER BY id DESC LIMIT 1`).Scan(&v)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return v.Int64, err
+}
+
+// waitForSchema polls until the database is at least at the required version
+// or the timeout passes.
+func waitForSchema(db *sql.DB, required int64, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		v, err := schemaVersion(db)
+		if err == nil && v >= required {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				return fmt.Errorf("schema version check: %w", err)
+			}
+			return fmt.Errorf("schema version %d required, database is at %d — run the auth-service migrations first", required, v)
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
 func (r *ModelConfigReconciler) ensureDB() error {
 	r.dbOnce.Do(func() {
 		url := strings.TrimSpace(os.Getenv("DATABASE_URL"))
@@ -28,7 +70,9 @@ func (r *ModelConfigReconciler) ensureDB() error {
 			return
 		}
 		r.db = db
-		r.dbErr = r.ensureTable()
+		// The model_configs table is owned by auth-service's migrations
+		// (services/pkg/dbmigrate); wait for the version this build needs.
+		r.dbErr = waitForSchema(db, requiredSchemaVersion, 60*time.Second)
 	})
 	if r.db == nil && r.dbErr == nil {
 		r.dbErr = fmt.Errorf("database not initialized")
@@ -41,43 +85,6 @@ func normalizeDBURL(url string) string {
 		return strings.Replace(url, "postgresql+asyncpg://", "postgresql://", 1)
 	}
 	return url
-}
-
-func (r *ModelConfigReconciler) ensureTable() error {
-	ddl := `
-CREATE TABLE IF NOT EXISTS model_configs (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  provider TEXT NOT NULL,
-  model TEXT NOT NULL,
-  base_url TEXT,
-  api_key_secret_name TEXT,
-  api_key_secret_key TEXT,
-  api_key_env TEXT,
-  extra_headers JSONB NOT NULL DEFAULT '{}'::jsonb,
-  tls_verify BOOLEAN NOT NULL DEFAULT TRUE,
-  ca_cert TEXT,
-  options JSONB,
-  enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  is_default BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-`
-	if _, err := r.db.Exec(ddl); err != nil {
-		return err
-	}
-	// Migrate existing tables (CREATE TABLE IF NOT EXISTS won't add columns).
-	// Shared table with ai-service; both ensure columns (idempotent).
-	for _, stmt := range []string{
-		"ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS ca_cert TEXT",
-		"ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS options JSONB",
-	} {
-		if _, err := r.db.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (r *ModelConfigReconciler) upsertModelConfig(ctx context.Context, data modelConfigData) (int64, error) {

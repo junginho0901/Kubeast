@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
@@ -68,13 +69,13 @@ func main() {
 	}
 	slog.Info("connected to database")
 
-	// Initialize schema
-	repo := repository.New(pool)
-	if err := repo.InitSchema(ctx); err != nil {
-		slog.Error("failed to initialize schema", "error", err)
+	// The schema is owned by auth-service (services/pkg/dbmigrate); wait for the
+	// version this build needs instead of running DDL here.
+	if err := dbmigrate.WaitFor(ctx, pool, dbmigrate.Required, 60*time.Second); err != nil {
+		slog.Error("database schema not ready", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("database schema initialized")
+	repo := repository.New(pool)
 
 	// Setup JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{

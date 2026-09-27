@@ -12,6 +12,11 @@ type Config struct {
 	Debug bool
 
 	DatabaseURL string
+	// Schema migrations (services/pkg/dbmigrate): "startup" applies pending
+	// migrations at boot, "job" only waits for the required version because a
+	// hook Job ran them. MigrateOnly runs them and exits (the Job's entrypoint).
+	MigrationsMode string
+	MigrateOnly    bool
 
 	// JWT
 	JWTIssuer         string
@@ -141,6 +146,9 @@ func Load() Config {
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),
 
 		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubeast:password@localhost:5432/kubeast?sslmode=disable"),
+
+		MigrationsMode: pkgconfig.GetEnv("MIGRATIONS_MODE", "startup"),
+		MigrateOnly:    pkgconfig.GetEnvBool("MIGRATE_ONLY", false),
 
 		JWTIssuer:         pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:       pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),

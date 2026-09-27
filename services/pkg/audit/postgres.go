@@ -30,35 +30,8 @@ func NewPostgresStore(pool *pgxpool.Pool, defaultService string) *PostgresStore 
 	}
 }
 
-// EnsureSchema adds the v1.1 columns and indexes to an existing
-// auth_audit_logs table. Safe to run repeatedly.
-//
-// Columns added: service, cluster, namespace, target_type, result, error.
-// Indexes added: created_at DESC, action, actor_user_id, service.
-func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
-	stmts := []string{
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS service     VARCHAR`,
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS cluster     VARCHAR`,
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS namespace   VARCHAR`,
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR`,
-		// Generic target identifier for non-user resources (pod/deployment/
-		// release/...). target_user_id stays dedicated to auth-domain rows.
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS target_id   VARCHAR`,
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS result      VARCHAR NOT NULL DEFAULT 'success'`,
-		`ALTER TABLE auth_audit_logs ADD COLUMN IF NOT EXISTS error       TEXT`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_created_at ON auth_audit_logs (created_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_action     ON auth_audit_logs (action)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_actor      ON auth_audit_logs (actor_user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_service    ON auth_audit_logs (service)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_target_id  ON auth_audit_logs (target_id)`,
-	}
-	for _, q := range stmts {
-		if _, err := s.pool.Exec(ctx, q); err != nil {
-			return fmt.Errorf("audit schema: %q: %w", q, err)
-		}
-	}
-	return nil
-}
+// The auth_audit_logs schema lives in services/pkg/dbmigrate (baseline
+// migration); this store assumes the table is at the required version.
 
 // Write inserts a Record and returns the assigned id.
 func (s *PostgresStore) Write(ctx context.Context, rec Record) (int64, error) {

@@ -25,6 +25,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -75,21 +76,38 @@ func main() {
 	}
 	slog.Info("connected to database")
 
-	repo := repository.New(pool)
-	if err := repo.InitSchema(ctx); err != nil {
-		slog.Error("failed to initialize schema", "error", err)
-		os.Exit(1)
+	// Schema: auth-service owns the migrations (services/pkg/dbmigrate).
+	// MIGRATE_ONLY=true runs them and exits (the chart's hook Job). Otherwise
+	// MIGRATIONS_MODE=startup applies pending migrations here, and =job only
+	// waits for the version this build needs because a Job already ran them.
+	if cfg.MigrateOnly {
+		v, err := dbmigrate.Up(ctx, pool)
+		if err != nil {
+			slog.Error("migrations failed", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("migrations applied", "version", v)
+		return
 	}
-	slog.Info("database schema initialized")
+	if cfg.MigrationsMode == "job" {
+		if err := dbmigrate.WaitFor(ctx, pool, dbmigrate.Required, 60*time.Second); err != nil {
+			slog.Error("database schema not ready", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		v, err := dbmigrate.Up(ctx, pool)
+		if err != nil {
+			slog.Error("migrations failed", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("database schema at version", "version", v)
+	}
 
-	// Shared audit store (applies v1.1 column/index migration on startup).
+	repo := repository.New(pool)
+	// Shared audit store; its table comes from the migrations above.
 	pgAudit := audit.NewPostgresStore(pool, audit.ServiceAuth)
-	if err := pgAudit.EnsureSchema(ctx); err != nil {
-		slog.Error("failed to migrate audit schema", "error", err)
-		os.Exit(1)
-	}
-	slog.Info("audit schema ensured", "stdout", audit.StdoutEnabled())
 	auditStore := audit.WithStdout(pgAudit, audit.StdoutEnabled())
+	slog.Info("audit writer ready", "stdout", audit.StdoutEnabled())
 
 	// Seed system roles and migrate auth_users.role → role_id
 	if err := repo.SeedSystemRoles(ctx); err != nil {

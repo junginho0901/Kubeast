@@ -108,6 +108,51 @@ class ModelConfig(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+# Schema version this build needs — the newest file in
+# services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
+REQUIRED_SCHEMA_VERSION = 2
+
+
+async def read_schema_version(engine) -> int:
+    """Applied goose version, 0 when the version table does not exist yet."""
+    from sqlalchemy import text
+
+    async with engine.connect() as conn:
+        exists = (await conn.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'goose_db_version')"
+        ))).scalar()
+        if not exists:
+            return 0
+        row = (await conn.execute(text(
+            "SELECT version_id FROM goose_db_version WHERE is_applied ORDER BY id DESC LIMIT 1"
+        ))).scalar()
+        return int(row or 0)
+
+
+async def wait_for_schema(engine, required: int, timeout_seconds: float = 60.0, poll_seconds: float = 2.0) -> int:
+    """Block until the database is at least at `required`; raise after the timeout."""
+    import asyncio
+    import time
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            version = await read_schema_version(engine)
+            error = None
+        except Exception as exc:  # DB may still be starting
+            version, error = 0, exc
+        if error is None and version >= required:
+            return version
+        if time.monotonic() >= deadline:
+            if error is not None:
+                raise RuntimeError(f"schema version check failed: {error}") from error
+            raise RuntimeError(
+                f"schema version {required} required, database is at {version} — run the auth-service migrations first"
+            )
+        print(f"[DB] waiting for schema version {required} (current {version}, err={error})", flush=True)
+        await asyncio.sleep(poll_seconds)
+
+
 class DatabaseService:
     """데이터베이스 서비스"""
     
@@ -125,53 +170,18 @@ class DatabaseService:
         )
     
     async def init_db(self):
-        """데이터베이스 초기화"""
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        # Migrate: plaintext api_key column is gone (keys come from env)
-        await self._drop_api_key_column()
-        # Migrate: sessions.cluster_id (step 13). Shared table with
-        # session-service; both ensure the column (idempotent).
-        async with self.engine.begin() as conn:
-            from sqlalchemy import text
-            await conn.execute(text(
-                "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cluster_id VARCHAR"
-            ))
-        # Migrate: model_configs.ca_cert / options for local/self-hosted models.
-        # Shared table with model-config-controller; both ensure columns (idempotent).
-        async with self.engine.begin() as conn:
-            from sqlalchemy import text
-            await conn.execute(text(
-                "ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS ca_cert VARCHAR"
-            ))
-            await conn.execute(text(
-                "ALTER TABLE model_configs ADD COLUMN IF NOT EXISTS options JSONB"
-            ))
+        """Make sure the schema this build needs is present.
 
-    async def _drop_api_key_column(self):
-        """Remove the plaintext api_key column left by older versions.
-
-        Configs that relied on it are listed so the operator can provide the
-        key as an environment variable and set api_key_env.
+        Postgres: the schema is owned by auth-service (services/pkg/dbmigrate,
+        goose); no DDL runs here — wait for the required version and fail with
+        a clear message if it does not arrive. sqlite (local dev, tests): the
+        ORM models create the tables.
         """
-        from sqlalchemy import text, inspect as sa_inspect
-        async with self.engine.begin() as conn:
-            def _check(sync_conn):
-                inspector = sa_inspect(sync_conn)
-                columns = [c['name'] for c in inspector.get_columns('model_configs')]
-                return 'api_key' in columns
-            if not await conn.run_sync(_check):
-                return
-            rows = await conn.execute(text(
-                "SELECT name FROM model_configs WHERE api_key IS NOT NULL AND api_key <> '' "
-                "AND (api_key_env IS NULL OR api_key_env = '')"
-            ))
-            orphaned = [r[0] for r in rows.fetchall()]
-            await conn.execute(text("ALTER TABLE model_configs DROP COLUMN api_key"))
-            print("[DB] Dropped plaintext api_key column from model_configs", flush=True)
-            if orphaned:
-                print(f"[DB] WARNING model configs without api_key_env lost their stored key: {orphaned} "
-                      "— set the key as an ai-service env var and update api_key_env", flush=True)
+        if "postgresql" not in str(self.database_url):
+            async with self.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            return
+        await wait_for_schema(self.engine, REQUIRED_SCHEMA_VERSION)
     
     async def create_session(self, session_id: str, user_id: str = "default", title: str = "New Chat") -> Session:
         """새 세션 생성"""
