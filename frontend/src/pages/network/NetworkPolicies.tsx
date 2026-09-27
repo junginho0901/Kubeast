@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api, type NetworkPolicyInfo } from '@/services/api'
@@ -27,8 +27,7 @@ type SummaryCard = [label: string, value: number, boxClass: string, labelClass: 
 export default function NetworkPolicies() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
-  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
-    t(key, { defaultValue: fallback, ...options })
+  const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')

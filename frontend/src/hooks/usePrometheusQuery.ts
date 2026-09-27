@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, type PrometheusQueryResponse, type PrometheusRangeResponse, type ClusterFeatures } from '@/services/api'
 import { useCluster } from '@/contexts/ClusterContext'
 
@@ -65,12 +65,24 @@ export function usePrometheusQueries(
   queries: { name: string; promql: string }[],
   options?: { enabled?: boolean; refetchInterval?: number },
 ) {
-  // We query all metrics in a single batch by joining with `or`
-  // But Prometheus `or` merges metrics, which doesn't work for different metric names.
-  // Instead, we use individual queries with shared enabled/interval.
-  const results = queries.map((q) =>
-    usePrometheusQuery([...queryKey, q.name], q.promql, options),
-  )
+  // Prometheus `or` merges series, which doesn't work across metric names, so
+  // each PromQL is its own query. useQueries keeps the hook count constant
+  // (a hook per array element would break the Rules of Hooks).
+  const features = useClusterFeatures()
+  const promEnabled = features.data?.prometheus?.enabled !== false
+  const { currentCluster } = useCluster()
+  const results = useQueries({
+    queries: queries.map((q) => ({
+      queryKey: ['prometheus', currentCluster || 'default', ...queryKey, q.name],
+      queryFn: () => api.prometheusQuery(q.promql),
+      refetchInterval: options?.refetchInterval ?? 30000,
+      enabled: (options?.enabled ?? true) && promEnabled,
+      retry: 1,
+      retryDelay: 2000,
+      staleTime: 10000,
+      placeholderData: promEnabled ? undefined : ({ available: false, results: [] } as PrometheusQueryResponse),
+    })),
+  })
 
   const data: Record<string, PrometheusQueryResponse | undefined> = {}
   let isLoading = false

@@ -1,4 +1,5 @@
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { fmtRel, fmtTs } from '../detailFormat'
 
 interface Props {
   name: string

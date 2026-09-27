@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext } from 'react'
 import type { Session } from '@/services/api'
 import type { Message } from './types'
 
@@ -10,7 +10,7 @@ import type { Message } from './types'
 // 그대로 노출. value 객체 자체는 매 render 마다 새로 만들어지지만 (메모이제이션
 // 안 함) AIChat 페이지 안에서만 쓰이고 consumer 수가 적어 부담 적음.
 
-interface AIChatContextValue {
+export interface AIChatContextValue {
   selectedSessionId: string | null
   setSelectedSessionId: React.Dispatch<React.SetStateAction<string | null>>
   viewSessionId: string | null
@@ -34,37 +34,7 @@ interface AIChatContextValue {
   messagesEndRef: React.RefObject<HTMLDivElement>
 }
 
-const AIChatContext = createContext<AIChatContextValue | null>(null)
-
-export function AIChatProvider({ children }: { children: ReactNode }) {
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
-  const [viewSessionId, setViewSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [stoppedSessionId, setStoppedSessionId] = useState<string | null>(null)
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
-  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set())
-  const [lastLoadedSessionId, setLastLoadedSessionId] = useState<string | null>(null)
-  const [pendingFinalSyncSessionId, setPendingFinalSyncSessionId] = useState<string | null>(null)
-  const [pinnedSessions, setPinnedSessions] = useState<Record<string, Session>>({})
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  const value: AIChatContextValue = {
-    selectedSessionId, setSelectedSessionId,
-    viewSessionId, setViewSessionId,
-    messages, setMessages,
-    input, setInput,
-    stoppedSessionId, setStoppedSessionId,
-    isMultiSelectMode, setIsMultiSelectMode,
-    selectedSessionIds, setSelectedSessionIds,
-    lastLoadedSessionId, setLastLoadedSessionId,
-    pendingFinalSyncSessionId, setPendingFinalSyncSessionId,
-    pinnedSessions, setPinnedSessions,
-    messagesEndRef,
-  }
-
-  return <AIChatContext.Provider value={value}>{children}</AIChatContext.Provider>
-}
+export const AIChatContext = createContext<AIChatContextValue | null>(null)
 
 export function useAIChat(): AIChatContextValue {
   const ctx = useContext(AIChatContext)

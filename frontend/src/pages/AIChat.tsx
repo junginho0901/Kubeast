@@ -1,4 +1,4 @@
-import { AIChatProvider } from './ai-chat/AIChatContext'
+import { AIChatProvider } from './ai-chat/AIChatProvider'
 import { AIChatBody } from './ai-chat/AIChatBody'
 
 // 페이지 root: state Provider 만 wrap. 실제 로직은 AIChatBody.

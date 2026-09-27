@@ -1,9 +1,6 @@
 import { useEffect, useId, useMemo, useRef } from 'react'
 
-import {
-  usePageContext,
-  type VisibleDataLayer,
-} from '@/components/PageContextProvider'
+import { usePageContext, type VisibleDataLayer } from '@/components/PageContext'
 import { equalLayer } from '@/utils/aiContext/equalLayer'
 import { throttle } from '@/utils/aiContext/throttle'
 import { enforceTokenBudget } from '@/utils/aiContext/tokenBudget'

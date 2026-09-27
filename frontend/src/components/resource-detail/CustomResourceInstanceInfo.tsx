@@ -3,16 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { JSONPath } from 'jsonpath-plus'
 import { api } from '@/services/api'
-import {
-  InfoSection,
-  InfoRow,
-  KeyValueTags,
-  ConditionsTable,
-  EventsTable,
-  fmtRel,
-  fmtTs,
-  usePagination,
-} from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 

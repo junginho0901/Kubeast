@@ -1,4 +1,5 @@
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
@@ -20,7 +21,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
   const classSource = String(rawJson?.class_source ?? '-')
   const classController = String(rawJson?.class_controller ?? '-')
   const classDefaultRaw = rawJson?.class_is_default
-  const classIsDefault = classDefaultRaw == null ? '-' : Boolean(classDefaultRaw) ? 'Yes' : 'No'
+  const classIsDefault = classDefaultRaw == null ? '-' : classDefaultRaw ? 'Yes' : 'No'
   const lbIngress = ((status.loadBalancer as any)?.ingress ?? []) as any[]
   const lbAddresses = lbIngress.map((a: any) => a?.ip || a?.hostname).filter(Boolean)
   const lbPortStatuses = lbIngress.flatMap((a: any) => {

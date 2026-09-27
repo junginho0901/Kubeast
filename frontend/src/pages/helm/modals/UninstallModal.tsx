@@ -52,11 +52,11 @@ export default function UninstallModal({
   })
 
   // Re-run dry-run whenever keepHistory flips so the preview stays
-  // accurate to the chosen option.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // accurate to the chosen option (`mutate` is referentially stable).
+  const { mutate: runDryRun } = dryRunMutation
   useEffect(() => {
-    dryRunMutation.mutate()
-  }, [keepHistory])
+    runDryRun()
+  }, [keepHistory, runDryRun])
 
   const resources: HelmReleaseResource[] = preview?.resources ?? []
   const loading = dryRunMutation.isPending

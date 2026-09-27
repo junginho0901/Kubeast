@@ -6,7 +6,8 @@
 // 이 모두 부모 (drawer) 가 관리하기 때문. 구조만 분리하는 thin presentational.
 
 import { ArrowLeft, X, Info, FileCode, Trash2 } from 'lucide-react'
-import { TabId, HelmReleaseBadge, kindIcon } from './utils'
+import { TabId, kindIcon } from './utils'
+import { HelmReleaseBadge } from './HelmReleaseBadge'
 
 interface Props {
   kind: string

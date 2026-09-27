@@ -192,6 +192,12 @@ export default function ResourceDetailDrawer() {
     close()
     resetDrawerState()
   }
+  // The keydown effect reads the latest handler through a ref, so the listener
+  // is not re-registered on every render.
+  const handleCloseRef = useRef(handleClose)
+  useEffect(() => {
+    handleCloseRef.current = handleClose
+  })
 
   const handleTabChange = (next: TabId) => {
     if (tab === next) return
@@ -199,13 +205,14 @@ export default function ResourceDetailDrawer() {
     setTab(next)
   }
 
+  const hasTarget = !!target
   useEffect(() => {
-    if (!target) return
+    if (!hasTarget) return
     const el = contentScrollRef.current
     if (!el) return
     el.scrollTop = 0
     el.scrollLeft = 0
-  }, [target?.kind, target?.namespace, target?.name, tab])
+  }, [hasTarget, target?.kind, target?.namespace, target?.name, tab])
 
   useEffect(() => {
     if (!target) return
@@ -214,7 +221,7 @@ export default function ResourceDetailDrawer() {
         // 위에 중첩된 모달(예: Delete 확인)이 떠 있으면 그 모달이 처리해야 한다.
         if (!isTopModal()) return
         e.stopPropagation()
-        handleClose()
+        handleCloseRef.current()
       }
     }
     window.addEventListener('keydown', onKeyDown)

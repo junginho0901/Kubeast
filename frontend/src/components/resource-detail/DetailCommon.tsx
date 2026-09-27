@@ -1,60 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { fmtRel } from './detailFormat'
 
 /* ── Shared UI primitives for resource detail views ── */
-
-// Paginate a list inline. Returns the current page slice + a navigation node
-// that hides itself when the list fits in one page. Matches NamespaceInfo's
-// existing pager UX so all detail-modal inner tables look consistent.
-export function usePagination<T>(items: T[], pageSize = 10): {
-  items: T[]
-  page: number
-  totalPages: number
-  total: number
-  nav: ReactNode
-} {
-  const [page, setPage] = useState(1)
-  const total = Array.isArray(items) ? items.length : 0
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
-
-  const paged = useMemo(() => {
-    if (!Array.isArray(items)) return [] as T[]
-    const start = (page - 1) * pageSize
-    return items.slice(start, start + pageSize)
-  }, [items, page, pageSize])
-
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1
-  const end = Math.min(page * pageSize, total)
-  const nav = total <= pageSize ? null : (
-    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800 mt-2">
-      <span>{start}-{end} / {total}</span>
-      <div className="flex gap-1">
-        <button
-          type="button"
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page <= 1}
-          className="px-2 py-0.5 rounded border border-slate-700 disabled:opacity-40"
-        >
-          Prev
-        </button>
-        <button
-          type="button"
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={page >= totalPages}
-          className="px-2 py-0.5 rounded border border-slate-700 disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
-
-  return { items: paged, page, totalPages, total, nav }
-}
 
 export function InfoSection({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
   return (
@@ -199,38 +146,4 @@ export function UsageCard({ label, value, percent, color }: { label: string; val
       </div>
     </div>
   )
-}
-
-/* ── Time formatting helpers ── */
-
-export function fmtRel(iso?: string | null): string {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  const ms = Date.now() - d.getTime()
-  if (!Number.isFinite(ms) || ms < 0) return '-'
-  const m = Math.floor(ms / 60000)
-  const h = Math.floor(m / 60)
-  const days = Math.floor(h / 24)
-  if (days >= 30) return `${Math.floor(days / 30)}mo`
-  if (days > 0) return `${days}d`
-  if (h > 0) return `${h}h`
-  return `${m}m`
-}
-
-export function fmtTs(iso?: string | null): string {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  return d.toLocaleString()
-}
-
-export function fmtPodAge(iso?: string | null): string {
-  if (!iso) return '-'
-  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
 }

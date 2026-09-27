@@ -32,7 +32,7 @@ export function AdaptiveTableFillerRows({
       {Array.from({ length: count }).map((_, i) => (
         <tr key={`adaptive-filler-${i}`}>
           {Array.from({ length: columnCount }).map((_, j) => (
-            // 첫 td 에 nbsp( ) 한 칸을 둬서 빈 행이라도 데이터 행과 같은 높이가 되도록.
+            // 첫 td 에 nbsp(U+00A0) 한 칸을 둬서 빈 행이라도 데이터 행과 같은 높이가 되도록.
             // 같은 tr 안의 다른 td 들은 자동으로 같은 행 높이를 따라감.
             <td key={j} className={cellClassName}>
               {j === 0 ? '\u00A0' : ''}

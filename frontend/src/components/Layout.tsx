@@ -29,7 +29,7 @@ import {
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
-import { ResourceDetailProvider } from './ResourceDetailContext'
+import { ResourceDetailProvider } from './ResourceDetailProvider'
 import ResourceDetailDrawer from './ResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
 import { PageContextProvider } from './PageContextProvider'
@@ -316,7 +316,7 @@ export default function Layout() {
       }
     }
     return null
-  }, [isAdmin, location.pathname, location.search, navGroups, currentCluster])
+  }, [isAdmin, location.pathname, location.search, navGroups, hasPermission])
 
   useEffect(() => {
     if (!activeGroup) return

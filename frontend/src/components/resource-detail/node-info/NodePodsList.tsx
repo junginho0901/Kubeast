@@ -1,4 +1,5 @@
-import { InfoSection, fmtPodAge } from '../DetailCommon'
+import { InfoSection } from '../DetailCommon'
+import { fmtPodAge } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 
 interface NodePodsListProps {

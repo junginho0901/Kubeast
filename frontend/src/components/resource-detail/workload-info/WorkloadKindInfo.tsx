@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Pause, Play, Zap } from 'lucide-react'
-import { InfoSection, InfoRow, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow } from '../DetailCommon'
+import { fmtRel, fmtTs } from '../detailFormat'
 
 interface Props {
   isJob: boolean

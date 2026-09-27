@@ -1,4 +1,4 @@
-import type { PageContextSnapshot } from '@/components/PageContextProvider'
+import type { PageContextSnapshot } from '@/components/PageContext'
 import { ChatStreamManager } from './chatStreamManager'
 import { clusterHeaders } from './clusterRef'
 

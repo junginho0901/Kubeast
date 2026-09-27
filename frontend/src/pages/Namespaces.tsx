@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -22,8 +22,7 @@ export default function Namespaces() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
-  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
-    t(key, { defaultValue: fallback, ...options })
+  const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)

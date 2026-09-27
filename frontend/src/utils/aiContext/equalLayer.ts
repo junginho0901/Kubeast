@@ -1,4 +1,4 @@
-import type { VisibleDataLayer } from '@/components/PageContextProvider'
+import type { VisibleDataLayer } from '@/components/PageContext'
 
 /**
  * 두 VisibleDataLayer 가 의미적으로 동일한지 비교.

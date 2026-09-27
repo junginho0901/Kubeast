@@ -1,4 +1,5 @@
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { fmtRel, fmtTs } from '../detailFormat'
 
 export default function HPADetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>

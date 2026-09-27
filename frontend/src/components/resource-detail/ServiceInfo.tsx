@@ -5,7 +5,9 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, fmtRel, fmtTs, usePagination } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -112,7 +114,10 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
   const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
   const status = (rawJson?.status ?? {}) as Record<string, unknown>
 
-  const selectorForWatch = (describe?.selector ?? (spec?.selector as Record<string, string> | undefined) ?? {})
+  const selectorForWatch = useMemo(
+    () => (describe?.selector ?? (spec?.selector as Record<string, string> | undefined) ?? {}) as Record<string, string>,
+    [describe?.selector, spec?.selector],
+  )
   const selectorStr = useMemo(
     () => Object.entries(selectorForWatch).map(([k, v]) => `${k}=${v}`).join(','),
     [selectorForWatch],

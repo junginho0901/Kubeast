@@ -200,7 +200,7 @@ export function DashboardBody() {
     if (!namespaceNames.includes(optimizationNamespace)) {
       setOptimizationNamespace(namespaceNames.includes('default') ? 'default' : namespaceNames[0])
     }
-  }, [isOptimizationModalOpen, allNamespaces, optimizationNamespace])
+  }, [isOptimizationModalOpen, allNamespaces, optimizationNamespace, setOptimizationNamespace])
 
   const handleNodeClick = (node: any) => {
     openDetail({ kind: 'Node', name: node.name })
@@ -229,7 +229,7 @@ export function DashboardBody() {
     return () => {
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [selectedResourceType, isIssuesModalOpen, isStorageModalOpen])
+  }, [selectedResourceType, isIssuesModalOpen, isStorageModalOpen, closeIssuesModal, closeStorageModal, closeResourceModal])
 
   // 선택된 리소스 타입에 해당하는 stat 정보 가져오기
   const getSelectedStat = () => {

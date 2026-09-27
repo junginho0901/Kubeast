@@ -1,4 +1,4 @@
-import type { PageContextSnapshot } from '@/components/PageContextProvider'
+import type { PageContextSnapshot } from '@/components/PageContext'
 
 /**
  * 프론트 camelCase 스냅샷을 백엔드 Pydantic snake_case 스키마로 직렬화.

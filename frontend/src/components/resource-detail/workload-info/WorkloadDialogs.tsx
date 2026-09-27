@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
-import { fmtRel } from '../DetailCommon'
+import { fmtRel } from '../detailFormat'
 
 interface TriggerToast {
   type: 'success' | 'error'

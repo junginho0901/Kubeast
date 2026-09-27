@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -17,8 +17,7 @@ import { GPUPodsCharts } from './gpupods/GPUPodsCharts'
 
 export default function GPUPods() {
   const { t } = useTranslation()
-  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
-    t(key, { defaultValue: fallback, ...options })
+  const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
   const { open: openDetail } = useResourceDetail()
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,7 +63,7 @@ export default function GPUPods() {
     return map
   }, [metrics])
 
-  const pods = data?.gpu_pods ?? []
+  const pods = useMemo(() => data?.gpu_pods ?? [], [data?.gpu_pods])
 
   const filteredPods = useMemo(() => {
     if (!searchQuery.trim()) return pods

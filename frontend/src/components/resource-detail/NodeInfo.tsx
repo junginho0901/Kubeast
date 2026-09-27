@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, fmtRel, fmtTs, SummaryBadge, usePagination } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, SummaryBadge } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useNodeData } from './node-info/useNodeData'
 import NodeActions from './node-info/NodeActions'
 import NodeGpuInfo from './node-info/NodeGpuInfo'
@@ -214,8 +216,9 @@ export default function NodeInfo({ name }: Props) {
 // Node 가 cache 한 컨테이너 이미지 목록. size desc 정렬 후 page 10 cap.
 // "Node 의 디스크가 왜 차지" 디버깅에 유용.
 function NodeImages({ images }: { images: any }) {
-  if (!Array.isArray(images) || images.length === 0) return null
-  const sorted = [...images].sort((a, b) => (b?.size ?? 0) - (a?.size ?? 0))
+  // Hooks run unconditionally; the empty case returns after them.
+  const list: any[] = Array.isArray(images) ? images : []
+  const sorted = [...list].sort((a, b) => (b?.size ?? 0) - (a?.size ?? 0))
   const fmtSize = (n: number) => {
     if (!Number.isFinite(n) || n <= 0) return '-'
     const units = ['B', 'KiB', 'MiB', 'GiB']
@@ -224,6 +227,7 @@ function NodeImages({ images }: { images: any }) {
     return `${v.toFixed(1)} ${units[i]}`
   }
   const { items: paged, nav, total } = usePagination(sorted, 10)
+  if (list.length === 0) return null
   return (
     <InfoSection title={`Images (${total})`}>
       <div className="overflow-x-auto">

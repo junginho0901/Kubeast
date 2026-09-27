@@ -1,4 +1,5 @@
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, fmtRel, fmtTs } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {

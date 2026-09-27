@@ -1,15 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import {
-  InfoSection,
-  InfoRow,
-  KeyValueTags,
-  EventsTable,
-  fmtRel,
-  fmtTs,
-  usePagination,
-} from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useReverseRoleBindings } from './role-info/useReverseRoleBindings'

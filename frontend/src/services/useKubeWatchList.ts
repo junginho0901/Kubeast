@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { watchMultiplexer } from './watchMultiplexer'
 import { getCurrentClusterID } from './clusterRef'
@@ -50,6 +50,18 @@ export function useKubeWatchList(options: {
   const queryClient = useQueryClient()
   const query = options.query ?? 'watch=1'
 
+  // 콜백과 queryKey 는 ref 로 읽는다 — identity 가 render 마다 바뀌어도 watch 를
+  // 끊지 않고, queryKey 는 contents(queryKeyDep)가 바뀔 때만 재구독.
+  const applyEventRef = useRef(options.applyEvent)
+  const onEventRef = useRef(options.onEvent)
+  const queryKeyRef = useRef(options.queryKey)
+  useEffect(() => {
+    applyEventRef.current = options.applyEvent
+    onEventRef.current = options.onEvent
+    queryKeyRef.current = options.queryKey
+  })
+  const queryKeyDep = JSON.stringify(options.queryKey)
+
   useEffect(() => {
     if (!options.enabled) return
 
@@ -63,7 +75,7 @@ export function useKubeWatchList(options: {
     const handle = (message: any) => {
       if (message?.type !== 'DATA') return
       const event = message?.data as WatchEvent
-      queryClient.setQueryData(options.queryKey, (prev: any[] | undefined) => {
+      queryClient.setQueryData(queryKeyRef.current, (prev: any[] | undefined) => {
         // list 가 도착하기 전 (prev=undefined) 의 watch event 는 무시.
         // K8s watch with resourceVersion="" 는 LIST 의 모든 item 을 ADDED
         // event 로 stream 하는데, list 응답보다 일부 event 가 먼저 도착하면
@@ -71,9 +83,9 @@ export function useKubeWatchList(options: {
         // 응답을 race 로 덮어쓰거나 partial render 발생. list 가 정상적으로
         // 도착하면 그 시점부터의 watch event 만 apply 해야 정합성 유지.
         if (prev === undefined) return undefined
-        return (options.applyEvent ?? applyWatchEvent)(prev, event)
+        return (applyEventRef.current ?? applyWatchEvent)(prev, event)
       })
-      options.onEvent?.(event)
+      onEventRef.current?.(event)
     }
 
     let cleanup: (() => void) | undefined
@@ -84,12 +96,5 @@ export function useKubeWatchList(options: {
     return () => {
       cleanup?.()
     }
-  }, [
-    options.enabled,
-    options.path,
-    query,
-    options.applyEvent,
-    options.onEvent,
-    JSON.stringify(options.queryKey),
-  ])
+  }, [options.enabled, options.path, query, queryClient, queryKeyDep])
 }

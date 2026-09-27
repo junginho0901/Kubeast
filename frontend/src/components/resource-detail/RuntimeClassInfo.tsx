@@ -1,16 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import {
-  InfoSection,
-  InfoRow,
-  InfoGrid,
-  SummaryBadge,
-  StatusBadge,
-  KeyValueTags,
-  EventsTable,
-  fmtRel,
-  usePagination,
-} from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { fmtRel } from './detailFormat'
+import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'

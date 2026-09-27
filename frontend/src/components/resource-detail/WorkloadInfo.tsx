@@ -1,13 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import {
-  InfoSection,
-  InfoRow,
-  KeyValueTags,
-  ConditionsTable,
-  EventsTable,
-  fmtRel,
-  fmtTs,
-} from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { boolText, formatToleration } from './workload-info/workloadInfoFormatters'
 import { useWorkloadData } from './workload-info/useWorkloadData'
@@ -216,9 +209,10 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
                 <div className="font-medium text-white">{vct.name || '-'}</div>
                 <div>StorageClass: {vct.storage_class_name || vct.spec?.storageClassName || '-'}</div>
                 <div>
-                  Access Modes: {Array.isArray(vct.access_modes || vct.spec?.accessModes)
-                    ? (vct.access_modes || vct.spec?.accessModes).join(', ')
-                    : '-'}
+                  Access Modes: {(() => {
+                    const modes = vct.access_modes || vct.spec?.accessModes
+                    return Array.isArray(modes) ? modes.join(', ') : '-'
+                  })()}
                 </div>
                 <div>
                   Requests: {(() => {

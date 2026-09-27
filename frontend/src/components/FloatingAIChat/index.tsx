@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { usePageContext } from '../PageContextProvider'
+import { usePageContext } from '../PageContext'
 import { ChatPanel } from './ChatPanel'
 import { ToggleButton } from './ToggleButton'
 

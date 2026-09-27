@@ -46,7 +46,6 @@ export function useChatHandlers({
   setViewSessionId,
   setStoppedSessionId,
   setPendingFinalSyncSessionId,
-  pinnedSessions: _pinnedSessions,
   setPinnedSessions,
   setMessages,
   isMultiSelectMode,
