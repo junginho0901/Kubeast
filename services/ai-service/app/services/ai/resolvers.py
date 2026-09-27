@@ -96,14 +96,14 @@ def _normalize_for_search(service, text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(text).lower()).strip()
 
 def _query_tokens(service, query: str) -> List[str]:
-    normalized = service._normalize_for_search(query)
+    normalized = _normalize_for_search(service, query)
     return [t for t in normalized.split() if t]
 
 def _all_tokens_in_text(service, query: str, text: str) -> bool:
-    tokens = service._query_tokens(query)
+    tokens = _query_tokens(service, query)
     if not tokens:
         return False
-    hay = service._normalize_for_search(text)
+    hay = _normalize_for_search(service, text)
     return all(t in hay for t in tokens)
 
 def _extract_items_from_payload(service, payload: object) -> List[Dict]:
@@ -126,7 +126,7 @@ async def _find_resource_matches(
         all_namespaces=namespace is None,
         output="json",
     )
-    items = service._extract_items_from_payload(payload)
+    items = _extract_items_from_payload(service, payload)
 
     matches: List[Dict] = []
     for item in items:
@@ -136,7 +136,7 @@ async def _find_resource_matches(
         name = str(meta.get("name", ""))
         if not name:
             continue
-        if not service._all_tokens_in_text(query, name):
+        if not _all_tokens_in_text(service, query, name):
             continue
         matches.append(
             {
@@ -173,9 +173,9 @@ async def _locate_resource_for_yaml(
 
     # 1) If namespace is provided, try that namespace first (for preferred type)
     if namespace and preferred_type:
-        matches = await service._find_resource_matches(preferred_type, resource_name, namespace=namespace, limit=20)
+        matches = await _find_resource_matches(service, preferred_type, resource_name, namespace=namespace, limit=20)
         if matches:
-            chosen = await service._resolve_single(preferred_type, resource_name, matches)
+            chosen = await _resolve_single(service, preferred_type, resource_name, matches)
             return {
                 "resource_type": preferred_type,
                 "resource_name": chosen.get("name", resource_name),
@@ -185,12 +185,12 @@ async def _locate_resource_for_yaml(
     # 2) Search across namespaces by type
     for rtype in search_types:
         try:
-            matches = await service._find_resource_matches(rtype, resource_name, namespace=None, limit=20)
+            matches = await _find_resource_matches(service, rtype, resource_name, namespace=None, limit=20)
         except Exception:
             continue
         if not matches:
             continue
-        chosen = await service._resolve_single(rtype, resource_name, matches)
+        chosen = await _resolve_single(service, rtype, resource_name, matches)
         return {
             "resource_type": rtype,
             "resource_name": chosen.get("name", resource_name),
@@ -203,7 +203,7 @@ def _query_in_mapping(service, query: str, mapping: object) -> bool:
     if not isinstance(mapping, dict):
         return False
     for k, v in mapping.items():
-        if service._all_tokens_in_text(query, f"{k} {v}"):
+        if _all_tokens_in_text(service, query, f"{k} {v}"):
             return True
     return False
 
@@ -219,9 +219,9 @@ async def _find_pods(service, query_raw: str, namespace: Optional[str] = None, l
 
     def _matches(p: Dict) -> bool:
         name = str(p.get("name", ""))
-        if service._all_tokens_in_text(query, name):
+        if _all_tokens_in_text(service, query, name):
             return True
-        return service._query_in_mapping(query, p.get("labels") or {})
+        return _query_in_mapping(service, query, p.get("labels") or {})
 
     matches = [p for p in pods if isinstance(p, dict) and _matches(p)]
 
@@ -278,9 +278,9 @@ async def _find_services(service, query_raw: str, namespace: Optional[str] = Non
                 break
 
     def _matches(s: Dict) -> bool:
-        if service._all_tokens_in_text(query, str(s.get("name", ""))):
+        if _all_tokens_in_text(service, query, str(s.get("name", ""))):
             return True
-        return service._query_in_mapping(query, s.get("selector") or {})
+        return _query_in_mapping(service, query, s.get("selector") or {})
 
     matches = [s for s in svc_dicts if isinstance(s, dict) and _matches(s)]
     matches.sort(key=lambda s: (str(s.get("namespace", "")), str(s.get("name", ""))))
@@ -314,11 +314,11 @@ async def _find_deployments(service, query_raw: str, namespace: Optional[str] = 
                 break
 
     def _matches(d: Dict) -> bool:
-        if service._all_tokens_in_text(query, str(d.get("name", ""))):
+        if _all_tokens_in_text(service, query, str(d.get("name", ""))):
             return True
-        if service._query_in_mapping(query, d.get("labels") or {}):
+        if _query_in_mapping(service, query, d.get("labels") or {}):
             return True
-        if service._query_in_mapping(query, d.get("selector") or {}):
+        if _query_in_mapping(service, query, d.get("selector") or {}):
             return True
         return False
 
