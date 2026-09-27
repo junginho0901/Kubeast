@@ -26,6 +26,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -61,12 +62,16 @@ func main() {
 		slog.Warn("audit: Postgres unreachable at boot, using slog writer", "error", err)
 		auditStore = audit.NewSlogStore(audit.ServiceK8s)
 	} else {
-		store := audit.NewPostgresStore(pgPool, audit.ServiceK8s)
-		if err := store.EnsureSchema(bootCtx); err != nil {
-			slog.Warn("audit: schema migration failed, using slog writer", "error", err)
+		// The schema is owned by auth-service (services/pkg/dbmigrate); the audit
+		// table must be at the version this build expects.
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), 70*time.Second)
+		err := dbmigrate.WaitFor(waitCtx, pgPool, dbmigrate.Required, 60*time.Second)
+		waitCancel()
+		if err != nil {
+			slog.Warn("audit: database schema not ready, using slog writer", "error", err)
 			auditStore = audit.NewSlogStore(audit.ServiceK8s)
 		} else {
-			auditStore = audit.WithStdout(store, audit.StdoutEnabled())
+			auditStore = audit.WithStdout(audit.NewPostgresStore(pgPool, audit.ServiceK8s), audit.StdoutEnabled())
 			slog.Info("audit: Postgres writer ready", "stdout", audit.StdoutEnabled())
 		}
 	}

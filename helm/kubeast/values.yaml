@@ -134,6 +134,17 @@ audit:
   # Also write every audit record to the service log as one JSON line (event: audit) for the cluster log pipeline.
   stdout: true
 
+# --- Schema migrations ---
+# auth-service owns the database schema (versioned SQL, services/pkg/dbmigrate).
+# startup: auth-service applies pending migrations when it boots (kind, docker,
+#          single-replica installs). The other services wait for the version they need.
+# job:     a pre-install/pre-upgrade hook Job runs them first (Argo CD runs it as a
+#          PreSync hook) and auth-service only waits. The Job needs the database and
+#          kubeast-secrets to exist already, i.e. an external database
+#          (postgresql.enabled=false) or an upgrade of an existing release.
+migrations:
+  mode: startup
+
 postgresql:
   enabled: true          # Set false to use external postgres
   user: kubeast

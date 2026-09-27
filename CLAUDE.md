@@ -28,6 +28,7 @@ Requests enter through an NGINX **gateway** (`:8000`) that routes to backend ser
 Go services are **separate modules** (not a go.work workspace). Shared code lives in `services/pkg` (module `github.com/junginho0901/kubeast/services/pkg`) and is wired into each service via a `replace ... => ../pkg` directive in its `go.mod`. `services/pkg` provides:
 - `audit/` — the shared audit-log API (see below)
 - `auth/` — JWT verification (`jwt.go`)
+- `dbmigrate/` — the database schema as versioned SQL migrations (goose, embedded). auth-service applies them at boot (`MIGRATIONS_MODE=startup`) or a chart hook Job does (`job`); every other service only waits for `dbmigrate.Required`. New schema changes go in a new `migrations/NNNNN_*.sql` file plus a `Required` bump — never in service start-up code.
 - `config/`, `logger/`, `response/` — config loading, slog setup, HTTP response helpers
 
 A Go service follows a `cmd/server/main.go` → `internal/routes` (route registration) → `internal/handler` (one file per resource kind, e.g. `pods.go`, `deployments.go`, `helm*.go`) → `internal/k8s` (client logic) layering. The `k8s-service` also has `internal/ws` (WebSocket logs/exec), `internal/helm`, and `internal/cache`.
