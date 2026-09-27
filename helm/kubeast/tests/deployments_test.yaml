@@ -1,0 +1,50 @@
+suite: deployments — replica guards for the single-process services
+# deployments.yaml includes configmap.yaml and secret.yaml for its checksum
+# annotation, so they must be rendered alongside; every assertion targets
+# deployments.yaml.
+templates:
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: renders the seven service Deployments with one replica each by default
+    asserts:
+      - hasDocuments:
+          count: 7
+        template: deployments.yaml
+      - isKind:
+          of: Deployment
+        template: deployments.yaml
+      - equal:
+          path: spec.replicas
+          value: 1
+        template: deployments.yaml
+
+  - it: refuses replicas.k8sService above 1 (drain progress and client caches are in process memory)
+    set:
+      replicas.k8sService: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: replicas.k8sService must be 1
+        template: deployments.yaml
+
+  - it: refuses replicas.toolServer above 1 (per-process kubeconfig cache)
+    set:
+      replicas.toolServer: 3
+    asserts:
+      - failedTemplate:
+          errorPattern: replicas.toolServer must be 1
+        template: deployments.yaml
+
+  - it: still lets stateless services scale
+    set:
+      replicas.authService: 2
+      replicas.frontend: 3
+    documentSelector:
+      path: metadata.name
+      value: auth-service
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+        template: deployments.yaml

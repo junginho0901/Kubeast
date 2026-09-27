@@ -1,0 +1,58 @@
+suite: migrate-job — schema migration hook Job
+templates:
+  - migrate-job.yaml
+tests:
+  - it: is not rendered in the default startup mode (auth-service migrates at boot)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: migrations.mode=job renders a pre-install/pre-upgrade hook Job running auth-service with MIGRATE_ONLY
+    set:
+      migrations.mode: job
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Job
+      - equal:
+          path: metadata.name
+          value: kubeast-migrate
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-install,pre-upgrade
+      - equal:
+          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          value: before-hook-creation,hook-succeeded
+      - equal:
+          path: spec.template.spec.restartPolicy
+          value: OnFailure
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/junginho0901/kubeast-auth-service:v0.1.0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MIGRATE_ONLY
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            configMapRef:
+              name: kubeast-config
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: kubeast-secrets
+
+  - it: reads credentials from secrets.existingSecret when one is given
+    set:
+      migrations.mode: job
+      secrets.existingSecret: company-kubeast
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef:
+              name: company-kubeast
