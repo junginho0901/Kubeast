@@ -137,6 +137,13 @@ postgresql:
   database: kubeast
   storage: 5Gi
   storageClassName: ""   # "" = cluster default StorageClass
+  persistence:
+    # "keep" leaves the PVC (and its volume) behind on helm uninstall/upgrade; "" lets Helm delete it.
+    resourcePolicy: keep
+    # Use a PVC you created instead of the chart's own.
+    existingClaim: ""
+    # Extra annotations on the chart's PVC, e.g. argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    annotations: {}
   # External postgres (when enabled=false):
   # externalHost: my-rds.amazonaws.com
   # externalPort: 5432
