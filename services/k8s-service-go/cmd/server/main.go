@@ -66,8 +66,8 @@ func main() {
 			slog.Warn("audit: schema migration failed, using slog writer", "error", err)
 			auditStore = audit.NewSlogStore(audit.ServiceK8s)
 		} else {
-			auditStore = store
-			slog.Info("audit: Postgres writer ready")
+			auditStore = audit.WithStdout(store, audit.StdoutEnabled())
+			slog.Info("audit: Postgres writer ready", "stdout", audit.StdoutEnabled())
 		}
 	}
 

@@ -31,24 +31,9 @@ func (s *SlogStore) Write(ctx context.Context, rec Record) (int64, error) {
 	}
 	id := s.counter.Add(1)
 
-	attrs := []any{
-		"audit_id", id,
-		"service", rec.Service,
-		"action", rec.Action,
-		"result", rec.Result,
-		"actor", rec.ActorEmail,
-		"target_type", rec.TargetType,
-		"target", rec.TargetID,
-		"namespace", rec.Namespace,
-		"cluster", rec.Cluster,
-		"path", rec.Path,
-		"ip", rec.RequestIP,
-		"request_id", rec.RequestID,
-	}
-	if rec.Result == ResultFailure && rec.Error != "" {
-		attrs = append(attrs, "error", rec.Error)
-	}
-	slog.InfoContext(ctx, "audit", attrs...)
+	// Same line shape as StdoutTee (recordAttrs) so the log pipeline treats
+	// both paths alike.
+	slog.InfoContext(ctx, "audit", "event", "audit", slog.Group("audit", recordAttrs(rec, id)...))
 	return id, nil
 }
 
