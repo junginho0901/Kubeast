@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext } from 'react'
 import type { ResourceType } from './types'
 
 // Dashboard 전용 modal / filter state container.
@@ -12,7 +12,7 @@ import type { ResourceType } from './types'
 // useOptimizationStream / useDashboardRefresh 결과 + aiSnapshot 등은 다음
 // 단계에서 추가.
 
-interface DashboardContextValue {
+export interface DashboardContextValue {
   // 리소스 모달 (Stats Grid 카드 클릭 시)
   selectedResourceType: ResourceType | null
   setSelectedResourceType: (t: ResourceType | null) => void
@@ -47,74 +47,7 @@ interface DashboardContextValue {
   closeStorageModal: () => void
 }
 
-const DashboardContext = createContext<DashboardContextValue | null>(null)
-
-export function DashboardProvider({ children }: { children: ReactNode }) {
-  const [selectedResourceType, setSelectedResourceType] = useState<ResourceType | null>(null)
-  const [modalSearchQuery, setModalSearchQuery] = useState<string>('')
-  const [selectedPodStatus, setSelectedPodStatus] = useState<string | null>(null)
-  const [selectedNodeStatus, setSelectedNodeStatus] = useState<string | null>(null)
-
-  const [isIssuesModalOpen, setIsIssuesModalOpen] = useState(false)
-  const [issuesSearchQuery, setIssuesSearchQuery] = useState<string>('')
-  const [includeRestartHistory, setIncludeRestartHistory] = useState(false)
-
-  const [isStorageModalOpen, setIsStorageModalOpen] = useState(false)
-  const [storageActiveTab, setStorageActiveTab] = useState<'pvcs' | 'pvs' | 'topology'>('pvcs')
-  const [storageSearchQuery, setStorageSearchQuery] = useState<string>('')
-  const [storageNamespaceFilter, setStorageNamespaceFilter] = useState<string>('all')
-  const [isStorageNamespaceDropdownOpen, setIsStorageNamespaceDropdownOpen] = useState(false)
-
-  const closeResourceModal = () => {
-    setSelectedResourceType(null)
-    setSelectedPodStatus(null)
-    setSelectedNodeStatus(null)
-    setModalSearchQuery('')
-  }
-  const closeIssuesModal = () => {
-    setIsIssuesModalOpen(false)
-    setIssuesSearchQuery('')
-    setIncludeRestartHistory(false)
-  }
-  const closeStorageModal = () => {
-    setIsStorageModalOpen(false)
-    setStorageSearchQuery('')
-    setStorageNamespaceFilter('all')
-    setIsStorageNamespaceDropdownOpen(false)
-  }
-
-  const value: DashboardContextValue = {
-    selectedResourceType,
-    setSelectedResourceType,
-    modalSearchQuery,
-    setModalSearchQuery,
-    selectedPodStatus,
-    setSelectedPodStatus,
-    selectedNodeStatus,
-    setSelectedNodeStatus,
-    closeResourceModal,
-    isIssuesModalOpen,
-    setIsIssuesModalOpen,
-    issuesSearchQuery,
-    setIssuesSearchQuery,
-    includeRestartHistory,
-    setIncludeRestartHistory,
-    closeIssuesModal,
-    isStorageModalOpen,
-    setIsStorageModalOpen,
-    storageActiveTab,
-    setStorageActiveTab,
-    storageSearchQuery,
-    setStorageSearchQuery,
-    storageNamespaceFilter,
-    setStorageNamespaceFilter,
-    isStorageNamespaceDropdownOpen,
-    setIsStorageNamespaceDropdownOpen,
-    closeStorageModal,
-  }
-
-  return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>
-}
+export const DashboardContext = createContext<DashboardContextValue | null>(null)
 
 export function useDashboard(): DashboardContextValue {
   const ctx = useContext(DashboardContext)

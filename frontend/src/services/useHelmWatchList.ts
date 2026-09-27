@@ -99,11 +99,14 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
   // Stringify queryKey — array identity 가 매 render 마다 다르지만 contents 만 중요.
   const queryKeyDep = JSON.stringify(queryKey)
 
-  // onEvent 를 ref 로 받아 prop 변경이 stream 을 끊지 않게.
+  // onEvent·queryKey 를 ref 로 받아 prop 변경이 stream 을 끊지 않게
+  // (queryKey 는 contents 가 바뀔 때만 queryKeyDep 으로 재연결).
   const onEventRef = useRef(options.onEvent)
+  const queryKeyRef = useRef(queryKey)
   useEffect(() => {
     onEventRef.current = options.onEvent
-  }, [options.onEvent])
+    queryKeyRef.current = queryKey
+  }, [options.onEvent, queryKey])
 
   useEffect(() => {
     if (!enabled) return
@@ -114,8 +117,9 @@ export function useHelmWatchList(options: UseHelmWatchListOptions): void {
     es.onmessage = (raw: MessageEvent) => {
       try {
         const msg = JSON.parse(raw.data) as HelmWatchEvent
-        if (queryKey !== null) {
-          queryClient.setQueryData(queryKey, (prev: HelmReleaseSummary[] | undefined) =>
+        const key = queryKeyRef.current
+        if (key !== null) {
+          queryClient.setQueryData(key, (prev: HelmReleaseSummary[] | undefined) =>
             applyHelmWatchEvent(prev, msg),
           )
         }

@@ -41,8 +41,8 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
   const [selectedRevision, setSelectedRevision] = useState<number | null>(null)
 
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>
-  const spec = (rawJson?.spec ?? {}) as Record<string, unknown>
-  const status = (rawJson?.status ?? {}) as Record<string, unknown>
+  const spec = useMemo(() => (rawJson?.spec ?? {}) as Record<string, unknown>, [rawJson?.spec])
+  const status = useMemo(() => (rawJson?.status ?? {}) as Record<string, unknown>, [rawJson?.status])
 
   const isJob = kind === 'Job'
   const isCronJob = kind === 'CronJob'

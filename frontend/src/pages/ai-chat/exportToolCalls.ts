@@ -217,7 +217,7 @@ export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurre
       const isYaml = !!tc.is_yaml
       const isLog = functionName === 'get_pod_logs' || functionName === 'k8s_get_pod_logs'
 
-      let content =
+      const content =
         typeof tc.result === 'string'
           ? String(tc.result)
           : JSON.stringify(tc.result ?? null, null, 2)

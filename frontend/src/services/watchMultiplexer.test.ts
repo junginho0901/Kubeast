@@ -87,7 +87,7 @@ class MockWebSocket {
   }
 }
 
-;(globalThis as any).WebSocket = MockWebSocket
+(globalThis as any).WebSocket = MockWebSocket
 
 // import.meta.env 는 vitest 의 vite 환경에서 자동 주입되지만, env value 가
 // 비어있으면 watchMultiplexer 가 window.location 으로 fallback. test 에서는

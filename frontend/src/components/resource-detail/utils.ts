@@ -1,4 +1,4 @@
-// ResourceDetailDrawer 의 유틸 + 상수 + 작은 sub-component (HelmReleaseBadge).
+// ResourceDetailDrawer 의 유틸 + 상수.
 // ResourceDetailDrawer.tsx 에서 추출 (Phase 3.3.a).
 //
 // 모두 순수 / 표현 컴포넌트라 instance state 없음. drawer 본체에서 import.
@@ -6,11 +6,8 @@
 // 분류:
 // - 상수: WORKLOAD_KINDS / NETWORK_KINDS / CONFIG_STORAGE_KINDS / SELF_LOADING_KINDS / UNRESOLVABLE_KINDS
 // - 매핑: kindToPlural (Kind → API 복수형) / kindIcon (Kind → 이모지)
-// - Helm: extractHelmRelease / HelmReleaseBadge (drawer 헤더에 Helm release 배지)
+// - Helm: extractHelmRelease (배지 컴포넌트는 HelmReleaseBadge.tsx)
 // - Secret: decodeSecretYaml / encodeSecretYaml (data ↔ stringData base64 변환)
-
-import { Link } from 'react-router-dom'
-import { Package, ArrowUpRight } from 'lucide-react'
 
 export type TabId = 'info' | 'yaml'
 
@@ -40,29 +37,6 @@ export function extractHelmRelease(
   return { namespace: ns, name }
 }
 
-// HelmReleaseBadge surfaces the owning Helm release on any resource
-// that was installed via Helm. Placed in the drawer header so users
-// can jump from "why is this pod here?" to the Helm detail page in
-// one click.
-export function HelmReleaseBadge({ rawJson }: { rawJson: Record<string, unknown> | null | undefined }) {
-  const rel = extractHelmRelease(rawJson)
-  if (!rel) return null
-  const to = `/helm/releases/${encodeURIComponent(rel.namespace)}/${encodeURIComponent(rel.name)}`
-  return (
-    <Link
-      to={to}
-      className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 text-xs text-primary-200 hover:bg-primary-500/20"
-      title={`Helm release ${rel.namespace}/${rel.name}`}
-    >
-      <Package className="w-3 h-3" />
-      <span className="font-medium">{rel.name}</span>
-      <span className="text-primary-400/80">·</span>
-      <span className="text-primary-300/90">{rel.namespace}</span>
-      <ArrowUpRight className="w-3 h-3" />
-    </Link>
-  )
-}
-
 export function decodeSecretYaml(yaml: string): string {
   const lines = yaml.split('\n')
   const result: string[] = []
@@ -84,7 +58,12 @@ export function decodeSecretYaml(yaml: string): string {
           const trimmed = value.trim()
           try {
             const decoded = atob(trimmed)
-            if (!/[\x00-\x08\x0E-\x1F]/.test(decoded)) {
+            // Binary payloads (control characters other than \t \n \v \f \r) stay base64.
+            const hasControlChar = Array.from(decoded).some((c) => {
+              const code = c.charCodeAt(0)
+              return code <= 0x08 || (code >= 0x0e && code <= 0x1f)
+            })
+            if (!hasControlChar) {
               const needsQuote = decoded.includes(':') || decoded.includes('#') || decoded.includes('\n') || decoded.includes('"') || decoded.includes("'") || decoded.startsWith(' ') || decoded.endsWith(' ')
               result.push(`${indent}${key}: ${needsQuote ? JSON.stringify(decoded) : decoded}`)
               continue

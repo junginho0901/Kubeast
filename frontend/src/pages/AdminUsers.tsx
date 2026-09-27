@@ -184,7 +184,7 @@ export default function AdminUsers() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [openRoleDropdownUserId])
 
-  const rows: Member[] = Array.isArray(users) ? users : []
+  const rows: Member[] = useMemo(() => (Array.isArray(users) ? users : []), [users])
 
   const sortedRows = useMemo(() => {
     if (!sortKey) return rows

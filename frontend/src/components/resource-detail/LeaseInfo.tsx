@@ -1,14 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import {
-  InfoSection,
-  InfoRow,
-  InfoGrid,
-  SummaryBadge,
-  KeyValueTags,
-  EventsTable,
-  fmtRel,
-} from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {

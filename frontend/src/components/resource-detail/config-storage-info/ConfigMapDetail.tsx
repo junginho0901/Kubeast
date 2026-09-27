@@ -1,4 +1,5 @@
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { fmtRel, fmtTs } from '../detailFormat'
 
 export default function ConfigMapDetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
   const meta = (rawJson?.metadata ?? {}) as Record<string, unknown>

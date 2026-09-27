@@ -43,11 +43,12 @@ export default function TestResultModal({
 
   // Trigger on mount. Running helm test is itself a side-effect (spawns
   // test pods in the cluster), so we do it only when the user opens
-  // the modal — never on background refetch.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // the modal — never on background refetch. react-query's `mutate` is
+  // referentially stable, so this runs once per mount.
+  const { mutate: runTest } = runMutation
   useEffect(() => {
-    runMutation.mutate()
-  }, [])
+    runTest()
+  }, [runTest])
 
   const running = runMutation.isPending
 

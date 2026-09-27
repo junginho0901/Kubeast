@@ -54,7 +54,7 @@ export default function HelmReleasesPage() {
     queryKey,
   })
 
-  const items: HelmReleaseSummary[] = data ?? []
+  const items: HelmReleaseSummary[] = useMemo(() => data ?? [], [data])
 
   // Client-side name filtering only — the server already narrows by
   // namespace which is the big cardinality reducer. Keeping the text

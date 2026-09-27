@@ -7,16 +7,9 @@ import type { PodInfo, ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import {
-  InfoSection,
-  InfoRow,
-  KeyValueTags,
-  EventsTable,
-  StatusBadge,
-  fmtRel,
-  fmtTs,
-  usePagination,
-} from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -135,9 +128,18 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
   const annotations = (describe?.annotations as Record<string, string> | undefined) ?? (meta.annotations as Record<string, string> | undefined) ?? {}
   const createdAt = (describe?.created_at as string | undefined) ?? (meta.creationTimestamp as string | undefined)
   const secretType = (describe?.type as string | undefined) ?? (rawJson?.type as string | undefined) ?? '-'
-  const dataKeys = Array.isArray(describe?.data_keys) ? describe.data_keys as string[] : []
-  const dataSizes = (describe?.data_sizes as Record<string, number> | undefined) ?? {}
-  const dataValues = (describe?.data_values as Record<string, string> | undefined) ?? {}
+  const dataKeys = useMemo(
+    () => (Array.isArray(describe?.data_keys) ? (describe.data_keys as string[]) : []),
+    [describe?.data_keys],
+  )
+  const dataSizes = useMemo(
+    () => (describe?.data_sizes as Record<string, number> | undefined) ?? {},
+    [describe?.data_sizes],
+  )
+  const dataValues = useMemo(
+    () => (describe?.data_values as Record<string, string> | undefined) ?? {},
+    [describe?.data_values],
+  )
   const canReveal = describe?.can_reveal === true
   const immutable = describe?.immutable as boolean | undefined
   const ownerRefs = Array.isArray(describe?.owner_references) ? describe.owner_references as Array<{ kind: string; name: string; uid: string }> : []

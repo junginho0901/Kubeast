@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
@@ -18,8 +18,7 @@ interface UseGPUNodesDataParams {
 
 export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: UseGPUNodesDataParams) {
   const { t } = useTranslation()
-  const tr = (key: string, fallback: string, options?: Record<string, any>) =>
-    t(key, { defaultValue: fallback, ...options })
+  const tr = useCallback((key: string, fallback: string, options?: Record<string, any>) => t(key, { defaultValue: fallback, ...options }), [t])
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -52,7 +51,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
     return map
   }, [metrics])
 
-  const nodes = data?.gpu_nodes ?? []
+  const nodes = useMemo(() => data?.gpu_nodes ?? [], [data?.gpu_nodes])
 
   const filteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return nodes

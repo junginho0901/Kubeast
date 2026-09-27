@@ -104,9 +104,7 @@ jobs:
           if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
 
   eslint:
-    # Report-only until the pre-existing lint debt (O5) is cleared: the job
-    # stays green and surfaces the count as a workflow warning.
-    name: eslint (report-only — O5 debt)
+    name: eslint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,4 +115,4 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: |
           cd frontend && npm ci
-          if npm run lint; then echo "eslint clean"; else echo "::warning title=eslint::pre-existing lint errors (O5 debt) — not a gate yet"; fi
+          npm run lint

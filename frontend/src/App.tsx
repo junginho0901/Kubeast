@@ -74,7 +74,7 @@ import CustomResourceInstances from './pages/custom-resources/CustomResourceInst
 import HelmReleasesPage from './pages/helm/Releases'
 import HelmReleaseDetailPage from './pages/helm/ReleaseDetail'
 import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
-import { ClusterProvider } from './contexts/ClusterContext'
+import { ClusterProvider } from './contexts/ClusterProvider'
 
 function App() {
   return (

@@ -9,7 +9,7 @@ import {
   toMounts,
   toPorts,
 } from './podInfoFormatters'
-import { fmtTs } from '../DetailCommon'
+import { fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 
 interface Props {

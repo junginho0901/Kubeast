@@ -1,15 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import {
-  InfoSection,
-  InfoRow,
-  InfoGrid,
-  SummaryBadge,
-  KeyValueTags,
-  ConditionsTable,
-  EventsTable,
-  fmtRel,
-} from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
+import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'

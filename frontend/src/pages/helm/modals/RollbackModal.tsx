@@ -55,12 +55,12 @@ export default function RollbackModal({
     },
   })
 
-  // Fire the dry-run exactly once per mount. dryRunMutation is stable
-  // across renders from react-query; the empty dep array is intentional.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Fire the dry-run once per mount: react-query's `mutate` is referentially
+  // stable, so depending on it does not re-run the effect.
+  const { mutate: runDryRun } = dryRunMutation
   useEffect(() => {
-    dryRunMutation.mutate()
-  }, [])
+    runDryRun()
+  }, [runDryRun])
 
   const diff = preview?.diff ?? ''
   const noChange = preview !== null && diff.trim() === ''

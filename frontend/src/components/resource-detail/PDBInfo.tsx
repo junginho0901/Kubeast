@@ -5,18 +5,9 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import {
-  InfoSection,
-  InfoRow,
-  InfoGrid,
-  SummaryBadge,
-  KeyValueTags,
-  ConditionsTable,
-  EventsTable,
-  StatusBadge,
-  fmtRel,
-  usePagination,
-} from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, StatusBadge } from './DetailCommon'
+import { fmtRel } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -36,7 +27,10 @@ export default function PDBInfo({ name, namespace }: Props) {
 
   useResourceDetailOverlay({ kind: 'PodDisruptionBudget', name, namespace, describe: desc })
 
-  const selectorMap = (desc?.selector as Record<string, string> | undefined) ?? {}
+  const selectorMap = useMemo(
+    () => (desc?.selector as Record<string, string> | undefined) ?? {},
+    [desc?.selector],
+  )
   const selectorStr = useMemo(
     () => Object.entries(selectorMap).map(([k, v]) => `${k}=${v}`).join(','),
     [selectorMap],

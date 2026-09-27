@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, StatusBadge, fmtRel, usePagination } from '../DetailCommon'
+import { InfoSection, StatusBadge } from '../DetailCommon'
+import { fmtRel } from '../detailFormat'
+import { usePagination } from '../usePagination'
 import { ResourceLink } from '../ResourceLink'
 import { useOwnedWatchedResources } from './useOwnedWatchedResources'
 

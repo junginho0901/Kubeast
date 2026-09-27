@@ -61,6 +61,12 @@ export default function PodExecTerminal({ podName, namespace, container, command
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  // The socket effect reads translations through a ref so a language change
+  // does not tear the session down.
+  const tRef = useRef(t)
+  useEffect(() => {
+    tRef.current = t
+  }, [t])
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
 
   useEffect(() => {
@@ -80,7 +86,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       fit.fit()
     }
 
-    term.writeln(t('pods.exec.connectingTo', {
+    term.writeln(tRef.current('pods.exec.connectingTo', {
       defaultValue: 'Connecting to {{pod}}/{{container}}...',
       pod: podName,
       container,
@@ -104,7 +110,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
 
     ws.onopen = () => {
       setStatus('connected')
-      term.writeln(t('pods.exec.connected', { defaultValue: 'Connected.' }))
+      term.writeln(tRef.current('pods.exec.connected', { defaultValue: 'Connected.' }))
       term.focus()
     }
 
@@ -127,14 +133,14 @@ export default function PodExecTerminal({ podName, namespace, container, command
 
     ws.onerror = () => {
       setStatus('error')
-      term.writeln(t('pods.exec.connectionError', { defaultValue: 'Connection error.' }))
+      term.writeln(tRef.current('pods.exec.connectionError', { defaultValue: 'Connection error.' }))
     }
 
     ws.onclose = (event) => {
       if (event.code === 1008) {
         handleUnauthorized()
       }
-      term.writeln(t('pods.exec.disconnected', { defaultValue: 'Disconnected.' }))
+      term.writeln(tRef.current('pods.exec.disconnected', { defaultValue: 'Disconnected.' }))
     }
 
     const disposable = term.onData((data) => {
@@ -155,7 +161,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         try {
           ws.send('exit\r')
-        } catch {}
+        } catch { /* socket already closing */ }
         ws.close()
       }
       term.dispose()
@@ -189,7 +195,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 wsRef.current.send('exit\r')
               }
-            } catch {}
+            } catch { /* socket already closing */ }
             onClose()
           }}
         >

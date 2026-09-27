@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, fmtRel, fmtTs, usePagination } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {

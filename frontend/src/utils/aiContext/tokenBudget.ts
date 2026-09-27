@@ -1,4 +1,4 @@
-import type { VisibleDataLayer } from '@/components/PageContextProvider'
+import type { VisibleDataLayer } from '@/components/PageContext'
 
 const MAX_BYTES = 8192 // 레이어당 8KB (모달 raw 데이터 + overlay 수용)
 const MAX_SUMMARY_LEN = 300

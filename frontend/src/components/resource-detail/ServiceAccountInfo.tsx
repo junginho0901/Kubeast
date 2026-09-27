@@ -5,16 +5,9 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import {
-  InfoSection,
-  InfoRow,
-  KeyValueTags,
-  EventsTable,
-  StatusBadge,
-  fmtRel,
-  fmtTs,
-  usePagination,
-} from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge } from './DetailCommon'
+import { fmtRel, fmtTs } from './detailFormat'
+import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { useEffectivePermissions } from './service-account-info/useEffectivePermissions'

@@ -1,5 +1,3 @@
-import type { PrometheusQueryResponse } from '@/services/api'
-
 /**
  * A horizontal metric bar with label, value text, and color-coded progress bar.
  */
@@ -95,29 +93,6 @@ export function PrometheusSection({
       {children}
     </div>
   )
-}
-
-/**
- * Extract a single value from a Prometheus query response, optionally filtering by a label.
- */
-export function extractValue(
-  resp: PrometheusQueryResponse | undefined,
-  filter?: { label: string; value: string },
-): number | null {
-  if (!resp?.available || !resp.results?.length) return null
-  if (filter) {
-    const match = resp.results.find((r) => r.metric?.[filter.label] === filter.value)
-    return match ? match.value : null
-  }
-  return resp.results[0]?.value ?? null
-}
-
-/**
- * Sum all values from a Prometheus query response.
- */
-export function sumValues(resp: PrometheusQueryResponse | undefined): number | null {
-  if (!resp?.available || !resp.results?.length) return null
-  return resp.results.reduce((sum, r) => sum + r.value, 0)
 }
 
 /**

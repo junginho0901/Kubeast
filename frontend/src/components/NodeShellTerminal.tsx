@@ -36,6 +36,12 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  // The socket effect reads translations through a ref so a language change
+  // does not tear the shell down.
+  const tRef = useRef(t)
+  useEffect(() => {
+    tRef.current = t
+  }, [t])
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
 
   useEffect(() => {
@@ -55,7 +61,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       fit.fit()
     }
 
-    term.writeln(t('nodes.shell.connectingTo', 'Connecting to {{node}}...', { node: nodeName }))
+    term.writeln(tRef.current('nodes.shell.connectingTo', 'Connecting to {{node}}...', { node: nodeName }))
 
     // Auth rides on the HttpOnly login cookie (same origin); never in the URL.
     const clusterId = getCurrentClusterID()
@@ -72,7 +78,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
 
     ws.onopen = () => {
       setStatus('connected')
-      term.writeln(t('nodes.shell.connected', 'Connected.'))
+      term.writeln(tRef.current('nodes.shell.connected', 'Connected.'))
       term.focus()
     }
 
@@ -95,14 +101,14 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
 
     ws.onerror = () => {
       setStatus('error')
-      term.writeln(t('nodes.shell.connectionError', 'Connection error.'))
+      term.writeln(tRef.current('nodes.shell.connectionError', 'Connection error.'))
     }
 
     ws.onclose = (event) => {
       if (event.code === 1008) {
         handleUnauthorized()
       }
-      term.writeln(t('nodes.shell.disconnected', 'Disconnected.'))
+      term.writeln(tRef.current('nodes.shell.disconnected', 'Disconnected.'))
     }
 
     const disposable = term.onData((data) => {
@@ -123,12 +129,12 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         try {
           ws.send('exit\r')
-        } catch {}
+        } catch { /* socket already closing */ }
         ws.close()
       }
       term.dispose()
     }
-  }, [nodeName])
+  }, [nodeName, namespace, image])
 
   return (
     <div className="flex h-full flex-col">
@@ -153,7 +159,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 wsRef.current.send('exit\r')
               }
-            } catch {}
+            } catch { /* socket already closing */ }
             onClose()
           }}
         >

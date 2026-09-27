@@ -9,7 +9,7 @@ import type {
 } from '@/services/chatStreamManager'
 import { api } from '@/services/api'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
-import type { PageContextSnapshot } from '@/components/PageContextProvider'
+import type { PageContextSnapshot } from '@/components/PageContext'
 import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot'
 
 import { MessageList, type DisplayMessage } from './MessageList'
