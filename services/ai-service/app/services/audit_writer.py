@@ -13,7 +13,7 @@ Action keys:
 - ai.chat.complete  — chat turn finished (token usage, tool calls, duration in `after`)
 - ai.tool.call      — LLM invoked a readonly tool
 
-Schema columns are listed in services/pkg/audit/postgres.go EnsureSchema.
+Schema columns come from services/pkg/dbmigrate/migrations (auth_audit_logs).
 """
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ async def write_audit(
             "actor_email": actor_email or None,
             "target_type": target_type or None,
             "target_id": target_id or None,
-            "cluster": DEFAULT_CLUSTER,
+            "cluster": cluster or DEFAULT_CLUSTER,
             "namespace": namespace or None,
             "path": path or None,
             "request_ip": request_ip or None,

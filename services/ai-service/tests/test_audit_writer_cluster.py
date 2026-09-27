@@ -61,3 +61,14 @@ async def test_cluster_column_defaults_when_unset_or_empty(captured):
     await audit_writer.write_audit(action="ai.chat.send")
     await audit_writer.write_audit(action="ai.chat.send", cluster="")
     assert [c["cluster"] for c in captured] == [audit_writer.DEFAULT_CLUSTER] * 2
+
+
+async def test_stdout_mirror_carries_the_same_cluster(captured, monkeypatch, capsys):
+    import json
+
+    monkeypatch.setenv("AUDIT_STDOUT", "true")
+    await audit_writer.write_audit(action="ai.chat.complete", cluster="prod-a")
+    lines = [json.loads(l) for l in capsys.readouterr().out.splitlines() if l.strip()]
+    assert len(lines) == 1
+    assert lines[0]["event"] == "audit"
+    assert lines[0]["audit"]["cluster"] == "prod-a" == captured[0]["cluster"]
