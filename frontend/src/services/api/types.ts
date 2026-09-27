@@ -1277,6 +1277,35 @@ export interface AuditLogListResponse {
   items: AuditLogEntry[]
 }
 
+// Admin AI usage — ai.chat.complete audit records aggregated per user/model/cluster.
+export type AIUsageGroup = 'user' | 'model' | 'cluster'
+
+export interface AIUsageQuery {
+  since?: string // RFC3339
+  until?: string // RFC3339
+  group?: AIUsageGroup
+}
+
+export interface AIUsageRow {
+  key: string
+  requests: number
+  failures: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  token_requests: number
+  tool_calls: number
+  avg_duration_ms: number
+  last_at: string
+}
+
+export interface AIUsageResponse {
+  since: string
+  until: string
+  group: AIUsageGroup
+  rows: AIUsageRow[]
+}
+
 export interface AuthResponse {
   access_token: string
   token_type: string

@@ -297,6 +297,7 @@ export default function Layout() {
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
         { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
+        { name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: Activity },
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
       ],
     },

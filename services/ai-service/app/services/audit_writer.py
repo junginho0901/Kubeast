@@ -9,10 +9,11 @@ and LLM responses are stored in the `messages` table, NOT audit, to avoid
 duplicating sensitive content.
 
 Action keys:
-- ai.chat.send    — chat session received a user message (start of stream)
-- ai.tool.call    — LLM invoked a readonly tool
+- ai.chat.send      — chat session received a user message (start of stream)
+- ai.chat.complete  — chat turn finished (token usage, tool calls, duration in `after`)
+- ai.tool.call      — LLM invoked a readonly tool
 
-Schema columns are listed in services/pkg/audit/postgres.go EnsureSchema.
+Schema columns come from services/pkg/dbmigrate/migrations (auth_audit_logs).
 """
 from __future__ import annotations
 
@@ -91,13 +92,15 @@ async def write_audit(
     user_agent: Optional[str] = None,
     request_id: Optional[str] = None,
     path: Optional[str] = None,
+    cluster: Optional[str] = None,
     result: str = "success",
     error: Optional[str] = None,
 ) -> None:
     """Insert a single audit record. Failures are logged and swallowed.
 
     Postgres-only — when DATABASE_URL points to sqlite (local dev) the table
-    doesn't exist and we skip silently.
+    doesn't exist and we skip silently. `cluster` is the cluster the request
+    acted on; callers that do not know it leave it unset (DEFAULT_CLUSTER).
     """
     _emit_stdout(
         {
@@ -109,7 +112,7 @@ async def write_audit(
             "actor_email": actor_email or None,
             "target_type": target_type or None,
             "target_id": target_id or None,
-            "cluster": DEFAULT_CLUSTER,
+            "cluster": cluster or DEFAULT_CLUSTER,
             "namespace": namespace or None,
             "path": path or None,
             "request_ip": request_ip or None,
@@ -142,7 +145,7 @@ async def write_audit(
                     "user_agent": user_agent or None,
                     "request_id": request_id or None,
                     "path": path or None,
-                    "cluster": DEFAULT_CLUSTER,
+                    "cluster": cluster or DEFAULT_CLUSTER,
                     "namespace": namespace or None,
                     "result": result,
                     "error": error or None,

@@ -18,6 +18,7 @@ import Setup from './pages/Setup'
 import AdminUsers from './pages/AdminUsers'
 import AdminAIModels from './pages/AdminAIModels'
 import AdminAudit from './pages/AdminAudit'
+import AdminAIUsage from './pages/AdminAIUsage'
 import AdminNodeShell from './pages/AdminNodeShell'
 import AdminClusters from './pages/admin/Clusters'
 import AdminOrganizations from './pages/AdminOrganizations'
@@ -152,6 +153,7 @@ function App() {
             <Route path="admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
             <Route path="admin/ai-models" element={<RequireAdmin><AdminAIModels /></RequireAdmin>} />
             <Route path="admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
+            <Route path="admin/ai-usage" element={<RequireAdmin><AdminAIUsage /></RequireAdmin>} />
             <Route path="admin/node-shell" element={<RequireAdmin><AdminNodeShell /></RequireAdmin>} />
             <Route path="admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
