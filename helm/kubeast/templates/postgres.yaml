@@ -62,11 +62,12 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: kubeast-postgres-data
+            claimName: {{ .Values.postgresql.persistence.existingClaim | default "kubeast-postgres-data" }}
         - name: run
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+{{- if not .Values.postgresql.persistence.existingClaim }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -74,6 +75,15 @@ metadata:
   name: kubeast-postgres-data
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
+  {{- if or .Values.postgresql.persistence.resourcePolicy .Values.postgresql.persistence.annotations }}
+  annotations:
+    {{- with .Values.postgresql.persistence.resourcePolicy }}
+    helm.sh/resource-policy: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.postgresql.persistence.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
 spec:
   accessModes:
     - ReadWriteOnce
@@ -83,6 +93,7 @@ spec:
   resources:
     requests:
       storage: {{ .Values.postgresql.storage }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
