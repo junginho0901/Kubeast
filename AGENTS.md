@@ -5,8 +5,6 @@
 
 관련 계획서:
 - [docs/audit-log-plan.md](docs/audit-log-plan.md)
-- [docs/helm-plan.md](docs/helm-plan.md)
-- [docs/multi_cluster.md](docs/multi_cluster.md)
 
 ---
 

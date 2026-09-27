@@ -213,6 +213,8 @@ export const helmApi = {
         params: {
           ...(opts.keepHistory !== undefined ? { keepHistory: opts.keepHistory } : {}),
           ...(opts.dryRun !== undefined ? { dryRun: opts.dryRun } : {}),
+          // The server refuses a real uninstall unless the release name is echoed back.
+          ...(opts.dryRun ? {} : { confirm: name }),
         },
       },
     )
