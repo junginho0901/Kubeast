@@ -14,6 +14,7 @@ import (
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
 type ToolCallRequest struct {
@@ -24,7 +25,14 @@ type ToolCallRequest struct {
 type ToolCallResponse struct {
 	Content string `json:"content,omitempty"`
 	Error   string `json:"error,omitempty"`
+	// Redacted says what was masked in Content before it leaves for the model
+	// (services/pkg/redact); ai-service copies it into the audit row.
+	Redacted *redact.Stats `json:"redacted,omitempty"`
 }
+
+// redactOpts is read once from the environment (REDACTION_ENABLED, REDACTION_PII,
+// REDACTION_DISABLE). Secret objects are stripped regardless of these.
+var redactOpts = redact.FromEnv()
 
 type ToolInfo struct {
 	Name        string `json:"name"`
@@ -115,5 +123,16 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ToolCallResponse{Content: output})
+	// Everything a tool returns is bound for the model: mask credentials
+	// (and Secret data) here, once, for every tool.
+	content, stats := redactToolOutput(output)
+	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: stats})
+}
+
+func redactToolOutput(output string) (string, *redact.Stats) {
+	content, stats := redact.Text(output, redactOpts)
+	if stats.Count == 0 {
+		return content, nil
+	}
+	return content, &stats
 }

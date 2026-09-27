@@ -62,6 +62,9 @@ data:
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
+  REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
+  REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
+  REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}

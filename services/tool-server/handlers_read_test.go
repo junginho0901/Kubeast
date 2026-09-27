@@ -1,40 +1,33 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"net/http"
+	"strings"
 	"testing"
 )
 
-func TestCheckResourceAllowed(t *testing.T) {
-	denied := []string{"secret", "secrets", "Secrets", "secret/db-pass", "secrets.v1", "secrets.core", "pods,secrets", " secrets "}
-	for _, rt := range denied {
-		if err := checkResourceAllowed(rt); err == nil {
-			t.Errorf("%q should be denied", rt)
-		} else if !errors.Is(err, errBadRequest) {
-			t.Errorf("%q: expected bad-request error, got %v", rt, err)
-		}
+// Every tool result leaves through redactToolOutput: a Secret document keeps
+// its shape but loses its values, and credentials elsewhere are masked.
+func TestRedactToolOutput_SecretAndCredentials(t *testing.T) {
+	secret := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db\n  namespace: default\ndata:\n  password: aHVudGVyMg==\ntype: Opaque\n"
+	out, stats := redactToolOutput(secret)
+	if strings.Contains(out, "aHVudGVyMg==") || !strings.Contains(out, "password: <REDACTED:secret>") || !strings.Contains(out, "name: db") {
+		t.Fatalf("secret values must be stripped, shape kept:\n%s", out)
 	}
-	allowed := []string{"pods", "configmaps", "deployments.apps", "pod/web-1", "secretproviderclasses", "all"}
-	for _, rt := range allowed {
-		if err := checkResourceAllowed(rt); err != nil {
-			t.Errorf("%q should be allowed: %v", rt, err)
-		}
+	if stats == nil || stats.Kinds["secret"] != 1 {
+		t.Fatalf("stats: %+v", stats)
 	}
-}
 
-// The three read handlers must refuse before ever invoking kubectl.
-func TestReadHandlersRefuseSecrets(t *testing.T) {
-	args := map[string]interface{}{"resource_type": "secrets", "resource_name": "db", "namespace": "default"}
-	for name, h := range map[string]ToolHandler{
-		"get":      handleGetResources,
-		"yaml":     handleGetResourceYAML,
-		"describe": handleDescribeResource,
-	} {
-		out, err := h(context.Background(), args, http.Header{})
-		if err == nil || out != "" {
-			t.Errorf("%s: expected refusal, got out=%q err=%v", name, out, err)
-		}
+	cm := "kind: ConfigMap\ndata:\n  DB_PASSWORD: hunter2\n  LOG_LEVEL: info\n"
+	out, stats = redactToolOutput(cm)
+	if strings.Contains(out, "hunter2") || !strings.Contains(out, "LOG_LEVEL: info") {
+		t.Fatalf("configmap credential must be masked, other keys kept:\n%s", out)
+	}
+	if stats == nil || stats.Kinds["key_name"] != 1 {
+		t.Fatalf("stats: %+v", stats)
+	}
+
+	out, stats = redactToolOutput("NAME   READY   STATUS\nweb-1  1/1     Running\n")
+	if out != "NAME   READY   STATUS\nweb-1  1/1     Running\n" || stats != nil {
+		t.Fatalf("plain output must pass through untouched")
 	}
 }

@@ -144,16 +144,20 @@ def build_context_prompt(
         lines.append(f"- 클러스터: {effective_cluster}")
     lines.append(f"- 스냅샷 시각: {ctx.snapshot_at}")
 
+    # The snapshot is whatever the browser had on screen — a detail drawer sends
+    # the resource's YAML/raw JSON, possibly a revealed Secret. Mask before the
+    # text is put in front of the model (server-side, the browser is not trusted).
+    from app.services.redact import redact_object
+
     if ctx.base:
         lines.append("")
         lines.append("[베이스 페이지 데이터]")
         lines.append(f"요약: {ctx.base.summary}")
         if ctx.base.data:
+            data, _ = redact_object(dict(ctx.base.data))
             lines.append(
                 "데이터: "
-                + json.dumps(
-                    ctx.base.data, ensure_ascii=False, separators=(",", ":")
-                )
+                + json.dumps(data, ensure_ascii=False, separators=(",", ":"))
             )
 
     if ctx.overlays:
@@ -162,11 +166,10 @@ def build_context_prompt(
         for i, overlay in enumerate(ctx.overlays):
             lines.append(f"{i + 1}. [{overlay.source}] {overlay.summary}")
             if overlay.data:
+                data, _ = redact_object(dict(overlay.data))
                 lines.append(
                     "   데이터: "
-                    + json.dumps(
-                        overlay.data, ensure_ascii=False, separators=(",", ":")
-                    )
+                    + json.dumps(data, ensure_ascii=False, separators=(",", ":"))
                 )
 
     if ctx.context_changed:
