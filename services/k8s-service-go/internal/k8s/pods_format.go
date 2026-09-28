@@ -252,17 +252,18 @@ func formatPodDetail(p *corev1.Pod) map[string]interface{} {
 		out["runtime_class_name"] = *p.Spec.RuntimeClassName
 	}
 
-	// DRA ResourceClaim refs — Pod.spec.resourceClaims[].source 가 명시한
-	// 직접 RC 이름 또는 RCTemplate 이름. 둘 다 별도 키로 노출. K8s 1.30+ shape.
+	// DRA ResourceClaim refs — Pod.spec.resourceClaims[] 가 명시한 직접 RC
+	// 이름 또는 RCTemplate 이름. 둘 다 별도 키로 노출. K8s 1.31+ shape
+	// (resourceClaimName / resourceClaimTemplateName 가 항목에 바로 있음).
 	if len(p.Spec.ResourceClaims) > 0 {
 		claimNames := make([]string, 0)
 		templateNames := make([]string, 0)
 		for _, rc := range p.Spec.ResourceClaims {
-			if rc.Source.ResourceClaimName != nil && *rc.Source.ResourceClaimName != "" {
-				claimNames = append(claimNames, *rc.Source.ResourceClaimName)
+			if rc.ResourceClaimName != nil && *rc.ResourceClaimName != "" {
+				claimNames = append(claimNames, *rc.ResourceClaimName)
 			}
-			if rc.Source.ResourceClaimTemplateName != nil && *rc.Source.ResourceClaimTemplateName != "" {
-				templateNames = append(templateNames, *rc.Source.ResourceClaimTemplateName)
+			if rc.ResourceClaimTemplateName != nil && *rc.ResourceClaimTemplateName != "" {
+				templateNames = append(templateNames, *rc.ResourceClaimTemplateName)
 			}
 		}
 		if len(claimNames) > 0 {

@@ -5,9 +5,15 @@ on:
     tags:
       - 'v*'
 
+# Each image is scanned (trivy: fixed CRITICAL/HIGH fail the release), gets an
+# SBOM and a build-provenance attestation (GitHub artifact attestations,
+# Sigstore), and is signed keyless with cosign. See docs/supply-chain.md for
+# how to verify.
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
 
 env:
   REGISTRY: ghcr.io
@@ -65,6 +71,7 @@ jobs:
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
@@ -74,6 +81,50 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:${{ steps.version.outputs.tag }}
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:latest
+
+      # Supply chain: everything below refers to the pushed manifest list by
+      # digest, so it covers both architectures.
+      - name: Vulnerability gate (trivy)
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          scan-type: image
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: SBOM (syft, SPDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom-${{ matrix.name }}.spdx.json
+          push-to-registry: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign image (cosign keyless, GitHub OIDC)
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
 
   helm-package:
     runs-on: ubuntu-latest
