@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
-import Editor from '@monaco-editor/react'
+import Editor from '@/components/monaco/CodeEditor'
 
 type Labels = {
   title: string

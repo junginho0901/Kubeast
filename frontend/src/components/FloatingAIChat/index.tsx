@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 
 import { usePageContext } from '../PageContext'
-import { ChatPanel } from './ChatPanel'
+// The panel carries the markdown renderer; fetch it when first opened.
+const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
 import { ToggleButton } from './ToggleButton'
 
 const ANIM_MS = 200
@@ -77,16 +78,18 @@ export default function FloatingAIChat() {
     <>
       <ToggleButton onClick={() => setIsOpen(true)} visible={toggleVisible} />
       {panelMounted && (
-        <ChatPanel
-          onClose={() => setIsOpen(false)}
-          getSnapshot={getSnapshot}
-          consumeContextChanged={consumeContextChanged}
-          currentPageTitle={pageTitle}
-          currentPageType={pageType}
-          visible={panelVisible}
-          sessionId={sessionId}
-          onSessionIdChange={handleSessionIdChange}
-        />
+        <Suspense fallback={null}>
+          <ChatPanel
+            onClose={() => setIsOpen(false)}
+            getSnapshot={getSnapshot}
+            consumeContextChanged={consumeContextChanged}
+            currentPageTitle={pageTitle}
+            currentPageType={pageType}
+            visible={panelVisible}
+            sessionId={sessionId}
+            onSessionIdChange={handleSessionIdChange}
+          />
+        </Suspense>
       )}
     </>
   )

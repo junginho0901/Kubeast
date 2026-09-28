@@ -1,4 +1,4 @@
-import Editor from '@monaco-editor/react'
+import Editor from '@/components/monaco/CodeEditor'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { api, type HelmSection } from '@/services/api'
