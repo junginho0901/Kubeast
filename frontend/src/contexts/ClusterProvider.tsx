@@ -22,7 +22,14 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   setCurrentClusterRef(currentCluster)
   useEffect(() => {
     setCurrentClusterRef(currentCluster)
-  }, [currentCluster])
+    // A cluster chosen through the URL (?cluster=, deep link) is remembered
+    // like one chosen in the picker, so an in-app navigation that drops the
+    // query (release detail, drawers) stays on that cluster instead of falling
+    // back to the stored or default one.
+    if (fromUrl && fromUrl !== fromStorage && typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_KEY, fromUrl)
+    }
+  }, [currentCluster, fromUrl, fromStorage])
 
   // On an actual cluster change, drop the cluster-scoped query cache so the new
   // cluster's data is fetched fresh (no cross-cluster bleed). Cluster-independent
