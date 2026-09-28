@@ -13,6 +13,7 @@
 # (useOptimizationStream / chatStreamManager) 와 정확히 매칭되어야 한다 —
 # 형식 변경은 frontend 회귀.
 
+import asyncio
 import json
 import time
 from typing import Callable, Optional, TYPE_CHECKING
@@ -581,6 +582,23 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
     except Exception as e:
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
+# Tasks started from cancellation paths; the loop only holds weak references,
+# so keep them here until they finish.
+_background_tasks: set = set()
+
+
+def _spawn(coro) -> None:
+    """Run coro on the loop without awaiting it (used when the turn is cancelled:
+    the task is being cancelled or the generator finalised, so awaiting is unsafe)."""
+    try:
+        task = asyncio.get_running_loop().create_task(coro)
+    except RuntimeError:  # no running loop (finaliser at shutdown)
+        coro.close()
+        return
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 async def _audit_chat_complete(
     service: "AIService",
     session_id: str,
@@ -661,8 +679,19 @@ async def session_chat_stream(
     """
     from app.database import get_db_service
     from app.services.audit_writer import write_audit
+    from app.services.ai import permissions as _perm
     # ai_service.py 에 정의된 클래스들 — 함수 안 lazy import 로 순환 회피
     from app.services.ai_service import TTLCache, ToolContext
+
+    # Turn accounting lives outside the try so a cancellation (stop button,
+    # client gone) at any point can still be recorded as ai.chat.complete.
+    turn_started = time.monotonic()
+    turn_usage = usage_acct.new_turn_usage()
+    turn_tool_calls = 0
+    turn_finish_reason = None
+    iteration = 0
+    turn_active = False     # ai.chat.send written: a turn exists to account for
+    turn_completed = False  # ai.chat.complete written: never write it twice
 
     try:
         db = await get_db_service()
@@ -684,6 +713,7 @@ async def session_chat_stream(
                 actor_email=audit_actor.get('email'),
                 target_type='session',
                 target_id=session_id,
+                cluster=_perm.effective_cluster(service),
                 after={
                     'session_id': session_id,
                     'message_length': len(message or ''),
@@ -693,6 +723,7 @@ async def session_chat_stream(
                 request_id=(audit_http or {}).get('request_id'),
                 path=(audit_http or {}).get('path'),
             )
+            turn_active = True
 
         # 대화 히스토리 가져오기
         messages_history = await db.get_messages(session_id)
@@ -875,6 +906,7 @@ async def session_chat_stream(
                     started=turn_started, finish_reason=None, message_length=0,
                     result="failure", error=str(api_error),
                 )
+                turn_completed = True
                 yield "data: [DONE]\n\n"
                 return
 
@@ -931,6 +963,7 @@ async def session_chat_stream(
                                 target_type='tool',
                                 target_id=function_name,
                                 namespace=function_args.get('namespace') if isinstance(function_args, dict) else None,
+                                cluster=approval.cluster,
                                 after={'session_id': session_id, 'approval_id': approval.id, 'cluster': approval.cluster, 'tool': function_name},
                                 request_ip=(audit_http or {}).get('ip'),
                                 user_agent=(audit_http or {}).get('user_agent'),
@@ -1001,6 +1034,7 @@ async def session_chat_stream(
                             target_type=target_type_arg or 'tool',
                             target_id=target_id_arg or function_name,
                             namespace=ns_arg,
+                            cluster=_perm.effective_cluster(service),
                             after={
                                 'session_id': session_id,
                                 'tool': function_name,
@@ -1152,6 +1186,7 @@ async def session_chat_stream(
             started=turn_started, finish_reason=turn_finish_reason,
             message_length=len(assistant_content or ""),
         )
+        turn_completed = True
         
         # Tool Context를 DB에 저장
         await db.update_context(
@@ -1169,6 +1204,19 @@ async def session_chat_stream(
         
         yield "data: [DONE]\n\n"
     
+    except (asyncio.CancelledError, GeneratorExit):
+        # The client pressed stop or went away (Starlette cancels the streaming
+        # task / finalises the generator). The model has already spent tokens,
+        # so the turn is still accounted for; nothing may be awaited or yielded
+        # here, the write is handed to the loop and the cancellation re-raised.
+        if turn_active and not turn_completed and audit_actor:
+            turn_completed = True
+            _spawn(_audit_chat_complete(
+                service, session_id, audit_actor, audit_http,
+                turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
+                started=turn_started, finish_reason="cancelled", message_length=0,
+            ))
+        raise
     except Exception as e:
         print(f"[ERROR] Session chat error: {e}")
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
