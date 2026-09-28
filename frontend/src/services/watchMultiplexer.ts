@@ -1,3 +1,5 @@
+import { getCurrentClusterID } from './clusterRef'
+
 type ClientMessage = {
   type: 'REQUEST' | 'CLOSE'
   clusterId: string
@@ -110,7 +112,12 @@ class WebSocketMultiplexer {
       return this.connecting
     }
 
-    const wsUrl = `${getWsBase()}/api/v1/cluster/wsMultiplexer`
+    // The handshake is gated on ?cluster= like every REST call (k8s-service
+    // ClusterMiddleware); without it the server checks the default cluster,
+    // which a user with a grant on another cluster only cannot open. Each
+    // REQUEST message still names its own clusterId and is gated again.
+    const cid = getCurrentClusterID()
+    const wsUrl = `${getWsBase()}/api/v1/cluster/wsMultiplexer${cid ? `?cluster=${encodeURIComponent(cid)}` : ''}`
     const socket = new WebSocket(wsUrl)
     this.socket = socket
 
