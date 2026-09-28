@@ -85,7 +85,7 @@ jobs:
       # Supply chain: everything below refers to the pushed manifest list by
       # digest, so it covers both architectures.
       - name: Vulnerability gate (trivy)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
           scan-type: image
