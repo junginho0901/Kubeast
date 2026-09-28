@@ -22,6 +22,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/retention"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -108,6 +109,19 @@ func main() {
 	pgAudit := audit.NewPostgresStore(pool, audit.ServiceAuth)
 	auditStore := audit.WithStdout(pgAudit, audit.StdoutEnabled())
 	slog.Info("audit writer ready", "stdout", audit.StdoutEnabled())
+
+	// Data retention: delete audit / chat rows past their window, once now and
+	// then daily; every run is audited as admin.retention.purge. Off unless a
+	// window is set (RETENTION_AUDIT_DAYS / RETENTION_CHAT_DAYS).
+	retentionCfg := retention.Config{AuditDays: cfg.RetentionAuditDays, ChatDays: cfg.RetentionChatDays}
+	if err := retentionCfg.Validate(); err != nil {
+		slog.Error("invalid retention configuration", "error", err)
+		os.Exit(1)
+	}
+	if retentionCfg.Enabled() {
+		slog.Info("retention enabled", "audit_days", retentionCfg.AuditDays, "chat_days", retentionCfg.ChatDays)
+		go retention.Run(ctx, retention.Purger{Pool: pool, Cfg: retentionCfg, Audit: auditStore}, 24*time.Hour)
+	}
 
 	// Seed system roles and migrate auth_users.role → role_id
 	if err := repo.SeedSystemRoles(ctx); err != nil {

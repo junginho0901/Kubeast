@@ -30,6 +30,24 @@ tests:
           path: data.TOOL_SERVER_URL_WRITE
       - notExists:
           path: data.TOOL_SERVER_URL_ADMIN
+      - equal:
+          path: data.RETENTION_AUDIT_DAYS
+          value: "0"
+      - equal:
+          path: data.RETENTION_CHAT_DAYS
+          value: "0"
+
+  - it: retention days are handed to auth-service as env values
+    set:
+      retention.auditDays: 365
+      retention.chatDays: 180
+    asserts:
+      - equal:
+          path: data.RETENTION_AUDIT_DAYS
+          value: "365"
+      - equal:
+          path: data.RETENTION_CHAT_DAYS
+          value: "180"
 
   - it: audit.stdout=false turns the stdout mirror off
     set:

@@ -114,7 +114,27 @@ boot (`MIGRATIONS_MODE=startup`) or the hook Job does on the next upgrade.
 
 ## Retention
 
-Nothing is purged automatically yet. Decide and enforce per deployment: the
-audit log is compliance evidence (keep at least as long as your access-log
-policy requires); chat sessions and messages are convenience data and can be
-purged earlier.
+Off by default: nothing is deleted unless you set a window. auth-service (the
+schema owner) purges once at boot and then every 24 hours, in batches of 5000
+rows, and records every run as the audit action `admin.retention.purge`
+(actor `system`, with the windows, cutoffs and deleted counts in `after`).
+PostgreSQL's autovacuum reuses the freed space; the files do not shrink.
+
+| values | env | deletes |
+|---|---|---|
+| `retention.auditDays` | `RETENTION_AUDIT_DAYS` | `auth_audit_logs` rows older than N days. The stdout copy of each record (see `audit.stdout`) stays in your log pipeline under its own retention, so the database is not the only copy. |
+| `retention.chatDays` | `RETENTION_CHAT_DAYS` | AI chat sessions whose last activity (`sessions.updated_at`) is older than N days, with their messages and contexts, and tool approval requests older than N days (their decisions are already audit records). |
+
+Example — access-log retention of one year and six months for chat:
+
+```yaml
+retention:
+  auditDays: 365
+  chatDays: 180
+```
+
+Pick the audit window from your regulatory baseline (for example, Korea's
+personal-information safety standard requires access records to be kept for
+at least one year, two years for some processors). With more than one
+auth-service replica every replica runs the purge; the deletes are idempotent,
+you only get one audit record per replica per day.

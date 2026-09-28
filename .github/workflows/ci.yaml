@@ -73,6 +73,12 @@ jobs:
         env:
           DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
         run: go test ./dbmigrate/... -run Postgres -v -count=1
+      # auth-service's retention purge against the real schema (same server).
+      - name: retention
+        working-directory: services/auth-service-go
+        env:
+          DBMIGRATE_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./internal/retention/... -run Postgres -v -count=1
 
   python:
     name: ai-service (pytest)

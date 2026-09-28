@@ -64,6 +64,8 @@ data:
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}
   MIGRATIONS_MODE: {{ .Values.migrations.mode | quote }}
+  RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}
+  RETENTION_CHAT_DAYS: {{ .Values.retention.chatDays | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}

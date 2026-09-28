@@ -18,6 +18,12 @@ type Config struct {
 	MigrationsMode string
 	MigrateOnly    bool
 
+	// Data retention in days (0 = keep forever): audit log rows, and AI chat
+	// sessions with their messages and tool approvals. auth-service purges
+	// once at boot and then daily (internal/retention).
+	RetentionAuditDays int
+	RetentionChatDays  int
+
 	// JWT
 	JWTIssuer         string
 	JWTAudience       string
@@ -149,6 +155,9 @@ func Load() Config {
 
 		MigrationsMode: pkgconfig.GetEnv("MIGRATIONS_MODE", "startup"),
 		MigrateOnly:    pkgconfig.GetEnvBool("MIGRATE_ONLY", false),
+
+		RetentionAuditDays: pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
+		RetentionChatDays:  pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
 
 		JWTIssuer:         pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:       pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
