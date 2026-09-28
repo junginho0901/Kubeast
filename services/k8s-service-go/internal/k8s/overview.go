@@ -9,8 +9,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GetClusterOverview returns a high-level summary of the cluster state (cached 30s).
+// GetClusterOverview returns a high-level summary of the cluster state, computed
+// from the cluster's informer stores (informer_cache.go). Until those have
+// synced, or when they cannot run, it lists the cluster (cached 30s).
 func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{}, error) {
+	if b := s.bundleForCtx(ctx); b != nil {
+		if ci := b.overviewInformers(); ci != nil && ci.waitSynced(ctx, overviewSyncWait) {
+			ov := ci.overview()
+			ov["cluster_version"] = ci.serverVersion(b.discovery)
+			return ov, nil
+		}
+	}
 	cacheKey := s.clusterCacheKey(ctx, "cluster_overview")
 	var cached map[string]interface{}
 	if s.cache.Get(ctx, cacheKey, &cached) {

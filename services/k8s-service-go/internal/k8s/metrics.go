@@ -116,19 +116,7 @@ func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{},
 		return nil, fmt.Errorf("parse node metrics: %w", err)
 	}
 
-	// Fetch node capacity for percentage calculation
-	nodeCapacity := make(map[string]struct{ cpuNano, memBytes int64 })
-	nodes, listErr := s.clientsetCtx(ctx).CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if listErr == nil {
-		for _, n := range nodes.Items {
-			cpuQ := n.Status.Capacity.Cpu()
-			memQ := n.Status.Capacity.Memory()
-			nodeCapacity[n.Name] = struct{ cpuNano, memBytes int64 }{
-				cpuNano:  cpuQ.MilliValue() * 1000000, // milliCPU -> nanoCPU
-				memBytes: memQ.Value(),
-			}
-		}
-	}
+	capacities := s.nodeCapacities(ctx)
 
 	result := make([]map[string]interface{}, 0, len(resp.Items))
 	for _, item := range resp.Items {
@@ -146,7 +134,7 @@ func (s *Service) GetNodeMetrics(ctx context.Context) ([]map[string]interface{},
 		}
 
 		// Calculate percentages if capacity is available
-		if cap, ok := nodeCapacity[item.Metadata.Name]; ok {
+		if cap, ok := capacities[item.Metadata.Name]; ok {
 			if cap.cpuNano > 0 {
 				cpuPct := float64(usageCPUNano) / float64(cap.cpuNano) * 100
 				entry["cpu_percent"] = fmt.Sprintf("%.0f%%", cpuPct)
@@ -217,17 +205,7 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 	if nodeErr == nil {
 		var nodeResp nodeMetricsResponse
 		if err := json.Unmarshal(nodeBody, &nodeResp); err == nil {
-			// Fetch node capacity
-			nodeCapacity := make(map[string]struct{ cpuNano, memBytes int64 })
-			nodeList, listErr := s.clientsetCtx(ctx).CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-			if listErr == nil {
-				for _, n := range nodeList.Items {
-					nodeCapacity[n.Name] = struct{ cpuNano, memBytes int64 }{
-						cpuNano:  n.Status.Capacity.Cpu().MilliValue() * 1000000,
-						memBytes: n.Status.Capacity.Memory().Value(),
-					}
-				}
-			}
+			capacities := s.nodeCapacities(ctx)
 
 			nodes := make([]map[string]interface{}, 0, len(nodeResp.Items))
 			for _, item := range nodeResp.Items {
@@ -239,7 +217,7 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 					"memory":    fmt.Sprintf("%dMi", memBytes/(1<<20)),
 					"timestamp": item.Timestamp,
 				}
-				if cap, ok := nodeCapacity[item.Metadata.Name]; ok {
+				if cap, ok := capacities[item.Metadata.Name]; ok {
 					if cap.cpuNano > 0 {
 						entry["cpu_percent"] = fmt.Sprintf("%.0f%%", float64(cpuNano)/float64(cap.cpuNano)*100)
 					}
@@ -267,6 +245,31 @@ func (s *Service) GetTopResources(ctx context.Context, podLimit, nodeLimit int) 
 	}
 
 	return result, nil
+}
+
+// nodeCapacity is a node's CPU (nanocores) and memory (bytes) capacity.
+type nodeCapacity struct{ cpuNano, memBytes int64 }
+
+// nodeCapacities reads node capacity from the cluster's informer store when it
+// is running, otherwise lists nodes. Errors yield an empty map (no percentages).
+func (s *Service) nodeCapacities(ctx context.Context) map[string]nodeCapacity {
+	if b := s.bundleForCtx(ctx); b != nil {
+		if ci := b.syncedInformers(); ci != nil {
+			return ci.nodeCapacities()
+		}
+	}
+	out := map[string]nodeCapacity{}
+	nodes, err := s.clientsetCtx(ctx).CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return out
+	}
+	for _, n := range nodes.Items {
+		out[n.Name] = nodeCapacity{
+			cpuNano:  n.Status.Capacity.Cpu().MilliValue() * 1000000,
+			memBytes: n.Status.Capacity.Memory().Value(),
+		}
+	}
+	return out
 }
 
 // cpuToNanoCores converts a Kubernetes CPU quantity string to nanocores for sorting.
