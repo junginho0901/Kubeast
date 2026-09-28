@@ -44,11 +44,26 @@ type clientBundle struct {
 	// bundle (not the Service) so one cluster's Prometheus never leaks into
 	// another, and a kubeconfig rotation that rebuilds the bundle re-discovers.
 	prom *promCache
+
+	// cacheClient is the identity the overview informers watch as; inf is the
+	// running set, if any (informer_cache.go). id names the cluster in logs.
+	id          cluster.ID
+	cacheClient kubernetes.Interface
+	infMu       sync.Mutex
+	inf         *clusterInformers
+	infFailedAt time.Time
 }
 
-// Close releases resources held by the bundle. There are no long-lived
-// informers yet; this is the cleanup hook for LRU eviction (load handling).
-func (b *clientBundle) Close() error { return nil }
+// Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
+func (b *clientBundle) Close() error {
+	b.infMu.Lock()
+	defer b.infMu.Unlock()
+	if b.inf != nil {
+		b.inf.stopNow()
+		b.inf = nil
+	}
+	return nil
+}
 
 // Service is the core Kubernetes service. It resolves a clientBundle per cluster
 // from a cluster.Registry, building each lazily on first use. Context-less
@@ -198,9 +213,14 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 
 	cfg.QPS = 100
 	cfg.Burst = 200
+	// The overview informers run outside any user request: with impersonation
+	// on they act as a fixed viewer identity instead of the per-request user
+	// the wrapped transport adds.
+	cacheCfg := rest.CopyConfig(cfg)
 	if impersonationEnabled {
 		id := string(info.ID)
 		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
+		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
@@ -210,12 +230,18 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
+	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create cache clientset: %w", err)
+	}
 	return &clientBundle{
-		clientset:  clientset,
-		dynamic:    dynClient,
-		discovery:  clientset.Discovery(),
-		restConfig: cfg,
-		prom:       &promCache{},
+		clientset:   clientset,
+		dynamic:     dynClient,
+		discovery:   clientset.Discovery(),
+		restConfig:  cfg,
+		prom:        &promCache{},
+		id:          info.ID,
+		cacheClient: cacheClient,
 	}, nil
 }
 

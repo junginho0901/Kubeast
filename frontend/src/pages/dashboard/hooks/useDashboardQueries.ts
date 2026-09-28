@@ -55,8 +55,9 @@ export function useDashboardQueries({
   const { data: overview, isLoading } = useQuery({
     queryKey: ['cluster-overview', ck],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
-    staleTime: 30000,
-    refetchInterval: 60000,
+    // k8s-service answers from its informer store (no API listing per poll).
+    staleTime: 10000,
+    refetchInterval: 15000,
   })
 
   // 네임스페이스 목록
