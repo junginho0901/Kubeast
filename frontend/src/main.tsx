@@ -9,6 +9,12 @@ window.addEventListener('unhandledrejection', (e) => {
   if (e.reason?.type === 'cancelation') e.preventDefault()
 })
 
+// Route chunks are hashed; a tab opened before a deploy may reference chunks
+// that no longer exist. Reload to pick up the new index.html.
+window.addEventListener('vite:preloadError', () => {
+  window.location.reload()
+})
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

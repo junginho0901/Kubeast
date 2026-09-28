@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor from '@/components/monaco/CodeEditor'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { api } from '@/services/api'
 

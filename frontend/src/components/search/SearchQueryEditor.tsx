@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
-import MonacoEditor, { useMonaco } from '@monaco-editor/react'
-import type { Monaco } from '@monaco-editor/react'
+import MonacoEditor, { type Monaco } from '@/components/monaco/CodeEditor'
 import { generateGlobalVarDeclarations } from './inferTypes'
 
 interface Props {
@@ -28,7 +27,9 @@ export default function SearchQueryEditor({
 }: Props) {
   const { t } = useTranslation()
   const [focused, setFocused] = useState(false)
-  const monaco = useMonaco()
+  // Set from onMount: monaco is loaded lazily with the editor, so there is no
+  // instance to read before it mounts.
+  const [monaco, setMonaco] = useState<Monaco | null>(null)
 
   const typeDefinition = useMemo(() => {
     if (items.length === 0) return ''
@@ -82,7 +83,8 @@ export default function SearchQueryEditor({
             value={value}
             beforeMount={handleEditorWillMount}
             onChange={v => onChange(v ?? '')}
-            onMount={editor => {
+            onMount={(editor, m) => {
+              setMonaco(m)
               editor.onDidContentSizeChange(size => {
                 const node = editor.getDomNode()
                 if (node) node.style.height = size.contentHeight + 'px'

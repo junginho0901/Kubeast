@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { useMemo, useState, useEffect, type ComponentType } from 'react'
+import { useMemo, useState, useEffect, Suspense, type ComponentType } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -30,12 +30,13 @@ import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
 import { ResourceDetailProvider } from './ResourceDetailProvider'
-import ResourceDetailDrawer from './ResourceDetailDrawer'
+import ResourceDetailDrawer from './LazyResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
 import { PageContextProvider } from './PageContextProvider'
 import FloatingAIChat from './FloatingAIChat'
 import ClusterPicker from './ClusterPicker'
 import ClusterSwitchProgress from './ClusterSwitchProgress'
+import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 
@@ -489,7 +490,9 @@ export default function Layout() {
                 </p>
               </div>
             ) : (
-              <Outlet />
+              <Suspense fallback={<RouteFallback />}>
+                <Outlet />
+              </Suspense>
             )}
           </div>
         </main>

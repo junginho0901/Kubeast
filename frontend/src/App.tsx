@@ -1,87 +1,91 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
-import Dashboard from './pages/Dashboard'
-import Namespaces from './pages/Namespaces'
-import Resources from './pages/Resources'
-import Topology from './pages/Topology'
-import ResourceGraph from './pages/ResourceGraph'
-import Timeline from './pages/Timeline'
-import NetworkPage from './pages/Network'
-import AIChat from './pages/AIChat'
-import ClusterView from './pages/ClusterView'
-import Monitoring from './pages/Monitoring'
-import Storage from './pages/Storage'
+import RouteFallback from './components/RouteFallback'
 import Login from './pages/Login'
-import Setup from './pages/Setup'
-import AdminUsers from './pages/AdminUsers'
-import AdminAIModels from './pages/AdminAIModels'
-import AdminAudit from './pages/AdminAudit'
-import AdminAIUsage from './pages/AdminAIUsage'
-import AdminNodeShell from './pages/AdminNodeShell'
-import AdminClusters from './pages/admin/Clusters'
-import AdminOrganizations from './pages/AdminOrganizations'
-import AdminRoles from './pages/AdminRoles'
-import Account from './pages/Account'
-import HPAs from './pages/workloads/HPAs'
-import VPAs from './pages/workloads/VPAs'
-import PDBs from './pages/workloads/PDBs'
-import AdvancedSearch from './pages/AdvancedSearch'
-import Pods from './pages/workloads/Pods'
-import Deployments from './pages/workloads/Deployments'
-import StatefulSets from './pages/workloads/StatefulSets'
-import DaemonSets from './pages/workloads/DaemonSets'
-import Jobs from './pages/workloads/Jobs'
-import ReplicaSets from './pages/workloads/ReplicaSets'
-import CronJobs from './pages/workloads/CronJobs'
-import ClusterNodes from './pages/ClusterNodes'
-import Services from './pages/network/Services'
-import Endpoints from './pages/network/Endpoints'
-import EndpointSlices from './pages/network/EndpointSlices'
-import Ingresses from './pages/network/Ingresses'
-import IngressClasses from './pages/network/IngressClasses'
-import NetworkPolicies from './pages/network/NetworkPolicies'
-import Gateways from './pages/gateway/Gateways'
-import GatewayClasses from './pages/gateway/GatewayClasses'
-import HTTPRoutes from './pages/gateway/HTTPRoutes'
-import GRPCRoutes from './pages/gateway/GRPCRoutes'
-import ReferenceGrants from './pages/gateway/ReferenceGrants'
-import BackendTLSPolicies from './pages/gateway/BackendTLSPolicies'
-import BackendTrafficPolicies from './pages/gateway/BackendTrafficPolicies'
-import GPUDashboard from './pages/gpu/GPUDashboard'
-import GPUNodes from './pages/gpu/GPUNodes'
-import GPUPods from './pages/gpu/GPUPods'
-import DeviceClasses from './pages/gpu/DeviceClasses'
-import ResourceClaims from './pages/gpu/ResourceClaims'
-import ResourceClaimTemplates from './pages/gpu/ResourceClaimTemplates'
-import ResourceSlices from './pages/gpu/ResourceSlices'
-import ServiceAccounts from './pages/security/ServiceAccounts'
-import Roles from './pages/security/Roles'
-import RoleBindings from './pages/security/RoleBindings'
-import ClusterRoles from './pages/security/ClusterRoles'
-import ClusterRoleBindings from './pages/security/ClusterRoleBindings'
-import ConfigMaps from './pages/configuration/ConfigMaps'
-import Secrets from './pages/configuration/Secrets'
-import PriorityClasses from './pages/cluster/PriorityClasses'
-import RuntimeClasses from './pages/cluster/RuntimeClasses'
-import Leases from './pages/cluster/Leases'
-import ResourceQuotas from './pages/cluster/ResourceQuotas'
-import LimitRanges from './pages/cluster/LimitRanges'
-import MutatingWebhookConfigurations from './pages/cluster/MutatingWebhookConfigurations'
-import ValidatingWebhookConfigurations from './pages/cluster/ValidatingWebhookConfigurations'
-import CustomResourceDefinitions from './pages/custom-resources/CustomResourceDefinitions'
-import CustomResourceInstances from './pages/custom-resources/CustomResourceInstances'
-import HelmReleasesPage from './pages/helm/Releases'
-import HelmReleaseDetailPage from './pages/helm/ReleaseDetail'
-import { MonacoEditorLoaderInitializer } from './components/monaco/MonacoEditorLoaderInitializer'
 import { ClusterProvider } from './contexts/ClusterProvider'
+
+// Every page is its own chunk, fetched on first navigation. Login stays in the
+// entry chunk because it is the first screen.
+const Setup = lazy(() => import('./pages/Setup'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Namespaces = lazy(() => import('./pages/Namespaces'))
+const Resources = lazy(() => import('./pages/Resources'))
+const Topology = lazy(() => import('./pages/Topology'))
+const ResourceGraph = lazy(() => import('./pages/ResourceGraph'))
+const Timeline = lazy(() => import('./pages/Timeline'))
+const NetworkPage = lazy(() => import('./pages/Network'))
+const AIChat = lazy(() => import('./pages/AIChat'))
+const ClusterView = lazy(() => import('./pages/ClusterView'))
+const Monitoring = lazy(() => import('./pages/Monitoring'))
+const Storage = lazy(() => import('./pages/Storage'))
+const AdminUsers = lazy(() => import('./pages/AdminUsers'))
+const AdminAIModels = lazy(() => import('./pages/AdminAIModels'))
+const AdminAudit = lazy(() => import('./pages/AdminAudit'))
+const AdminAIUsage = lazy(() => import('./pages/AdminAIUsage'))
+const AdminNodeShell = lazy(() => import('./pages/AdminNodeShell'))
+const AdminClusters = lazy(() => import('./pages/admin/Clusters'))
+const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations'))
+const AdminRoles = lazy(() => import('./pages/AdminRoles'))
+const Account = lazy(() => import('./pages/Account'))
+const HPAs = lazy(() => import('./pages/workloads/HPAs'))
+const VPAs = lazy(() => import('./pages/workloads/VPAs'))
+const PDBs = lazy(() => import('./pages/workloads/PDBs'))
+const AdvancedSearch = lazy(() => import('./pages/AdvancedSearch'))
+const Pods = lazy(() => import('./pages/workloads/Pods'))
+const Deployments = lazy(() => import('./pages/workloads/Deployments'))
+const StatefulSets = lazy(() => import('./pages/workloads/StatefulSets'))
+const DaemonSets = lazy(() => import('./pages/workloads/DaemonSets'))
+const Jobs = lazy(() => import('./pages/workloads/Jobs'))
+const ReplicaSets = lazy(() => import('./pages/workloads/ReplicaSets'))
+const CronJobs = lazy(() => import('./pages/workloads/CronJobs'))
+const ClusterNodes = lazy(() => import('./pages/ClusterNodes'))
+const Services = lazy(() => import('./pages/network/Services'))
+const Endpoints = lazy(() => import('./pages/network/Endpoints'))
+const EndpointSlices = lazy(() => import('./pages/network/EndpointSlices'))
+const Ingresses = lazy(() => import('./pages/network/Ingresses'))
+const IngressClasses = lazy(() => import('./pages/network/IngressClasses'))
+const NetworkPolicies = lazy(() => import('./pages/network/NetworkPolicies'))
+const Gateways = lazy(() => import('./pages/gateway/Gateways'))
+const GatewayClasses = lazy(() => import('./pages/gateway/GatewayClasses'))
+const HTTPRoutes = lazy(() => import('./pages/gateway/HTTPRoutes'))
+const GRPCRoutes = lazy(() => import('./pages/gateway/GRPCRoutes'))
+const ReferenceGrants = lazy(() => import('./pages/gateway/ReferenceGrants'))
+const BackendTLSPolicies = lazy(() => import('./pages/gateway/BackendTLSPolicies'))
+const BackendTrafficPolicies = lazy(() => import('./pages/gateway/BackendTrafficPolicies'))
+const GPUDashboard = lazy(() => import('./pages/gpu/GPUDashboard'))
+const GPUNodes = lazy(() => import('./pages/gpu/GPUNodes'))
+const GPUPods = lazy(() => import('./pages/gpu/GPUPods'))
+const DeviceClasses = lazy(() => import('./pages/gpu/DeviceClasses'))
+const ResourceClaims = lazy(() => import('./pages/gpu/ResourceClaims'))
+const ResourceClaimTemplates = lazy(() => import('./pages/gpu/ResourceClaimTemplates'))
+const ResourceSlices = lazy(() => import('./pages/gpu/ResourceSlices'))
+const ServiceAccounts = lazy(() => import('./pages/security/ServiceAccounts'))
+const Roles = lazy(() => import('./pages/security/Roles'))
+const RoleBindings = lazy(() => import('./pages/security/RoleBindings'))
+const ClusterRoles = lazy(() => import('./pages/security/ClusterRoles'))
+const ClusterRoleBindings = lazy(() => import('./pages/security/ClusterRoleBindings'))
+const ConfigMaps = lazy(() => import('./pages/configuration/ConfigMaps'))
+const Secrets = lazy(() => import('./pages/configuration/Secrets'))
+const PriorityClasses = lazy(() => import('./pages/cluster/PriorityClasses'))
+const RuntimeClasses = lazy(() => import('./pages/cluster/RuntimeClasses'))
+const Leases = lazy(() => import('./pages/cluster/Leases'))
+const ResourceQuotas = lazy(() => import('./pages/cluster/ResourceQuotas'))
+const LimitRanges = lazy(() => import('./pages/cluster/LimitRanges'))
+const MutatingWebhookConfigurations = lazy(() => import('./pages/cluster/MutatingWebhookConfigurations'))
+const ValidatingWebhookConfigurations = lazy(() => import('./pages/cluster/ValidatingWebhookConfigurations'))
+const CustomResourceDefinitions = lazy(() => import('./pages/custom-resources/CustomResourceDefinitions'))
+const CustomResourceInstances = lazy(() => import('./pages/custom-resources/CustomResourceInstances'))
+const HelmReleasesPage = lazy(() => import('./pages/helm/Releases'))
+const HelmReleaseDetailPage = lazy(() => import('./pages/helm/ReleaseDetail'))
 
 function App() {
   return (
-    <MonacoEditorLoaderInitializer>
-      <BrowserRouter>
-        <ClusterProvider>
+    <BrowserRouter>
+      <ClusterProvider>
+        <Suspense fallback={<RouteFallback />}>
           <Routes>
           <Route path="/setup" element={<RequireAuth><RequireAdmin><Setup /></RequireAdmin></RequireAuth>} />
           <Route path="/login" element={<Login />} />
@@ -159,9 +163,9 @@ function App() {
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
           </Route>
           </Routes>
-        </ClusterProvider>
-      </BrowserRouter>
-    </MonacoEditorLoaderInitializer>
+        </Suspense>
+      </ClusterProvider>
+    </BrowserRouter>
   )
 }
 

@@ -4,7 +4,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# Bundling monaco-editor exceeds Node's default heap.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 # ---- serve stage ----
 # nginx-unprivileged: uid 101, pid/temp under /tmp, non-privileged port.

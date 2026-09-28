@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor from '@/components/monaco/CodeEditor'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
