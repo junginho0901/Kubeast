@@ -48,3 +48,52 @@ tests:
           path: spec.replicas
           value: 2
         template: deployments.yaml
+
+  - it: has no database CA volume unless postgresql.sslRootCert is set
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - notExists:
+          path: spec.template.spec.volumes
+        template: deployments.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].volumeMounts
+        template: deployments.yaml
+
+  - it: mounts the database CA Secret into the database clients when sslRootCert is set
+    set:
+      postgresql.sslRootCert.secretName: rds-ca
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: db-ca
+            mountPath: /etc/kubeast/db-ca
+            readOnly: true
+        template: deployments.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: db-ca
+            secret:
+              secretName: rds-ca
+        template: deployments.yaml
+
+  - it: keeps the CA out of pods that do not talk to the database
+    set:
+      postgresql.sslRootCert.secretName: rds-ca
+    documentSelector:
+      path: metadata.name
+      value: frontend
+    asserts:
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: db-ca
+            secret:
+              secretName: rds-ca
+        template: deployments.yaml

@@ -56,3 +56,21 @@ tests:
           content:
             secretRef:
               name: company-kubeast
+
+  - it: mounts the database CA when sslRootCert is set so the migration connects like the services
+    set:
+      migrations.mode: job
+      postgresql.sslRootCert.secretName: rds-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: db-ca
+            mountPath: /etc/kubeast/db-ca
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: db-ca
+            secret:
+              secretName: rds-ca

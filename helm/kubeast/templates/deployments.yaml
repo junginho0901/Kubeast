@@ -47,6 +47,7 @@ spec:
             - name: auth-keys
               mountPath: /app/.keys
               readOnly: true
+            {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -64,6 +65,7 @@ spec:
           secret:
             secretName: {{ .Values.auth.signingKey.existingSecret | default "kubeast-auth-keys" }}
             defaultMode: 0440
+        {{- include "kubeast.dbCAVolume" . | nindent 8 }}
 ---
 # --- AI Service ---
 apiVersion: apps/v1
@@ -108,6 +110,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /api/v1/ai/health
@@ -123,6 +126,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "kubeast.dbCAVolume" . | nindent 8 }}
 ---
 # --- K8s Service ---
 apiVersion: apps/v1
@@ -181,6 +185,7 @@ spec:
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
+          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -193,6 +198,7 @@ spec:
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
+      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
 ---
 # --- Session Service ---
 apiVersion: apps/v1
@@ -230,6 +236,7 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
+          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -242,6 +249,7 @@ spec:
               port: 8003
             initialDelaySeconds: 10
             periodSeconds: 30
+      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
 ---
 # --- Frontend ---
 apiVersion: apps/v1
@@ -412,6 +420,7 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
+          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /readyz
@@ -424,3 +433,4 @@ spec:
               port: 8081
             initialDelaySeconds: 10
             periodSeconds: 30
+      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
