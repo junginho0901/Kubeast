@@ -134,6 +134,17 @@ audit:
   # Also write every audit record to the service log as one JSON line (event: audit) for the cluster log pipeline.
   stdout: true
 
+# --- Data retention ---
+# Days to keep rows before auth-service deletes them (once at boot, then daily;
+# each run is itself audited as admin.retention.purge). 0 keeps everything.
+# auditDays: auth_audit_logs — compliance evidence; the stdout copy in the
+#            cluster log pipeline has its own retention.
+# chatDays:  AI chat sessions (with their messages and contexts) and tool
+#            approval requests, by last activity.
+retention:
+  auditDays: 0
+  chatDays: 0
+
 # --- Schema migrations ---
 # auth-service owns the database schema (versioned SQL, services/pkg/dbmigrate).
 # startup: auth-service applies pending migrations when it boots (kind, docker,

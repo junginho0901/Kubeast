@@ -64,6 +64,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `admin.organizations.create` / `.delete` | 조직 |
 | `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트 |
 | `admin.audit.read` / `admin.audit.export` | 감사 로그 조회·CSV |
+| `admin.retention.purge` | 보존 기간(`RETENTION_AUDIT_DAYS`·`RETENTION_CHAT_DAYS`)이 지난 감사·채팅 행 삭제 — auth-service의 일일 작업, actor `system`. `after`에 기간·기준 시각·삭제 행 수(감사·세션·툴 승인); 실패면 `failure` |
 | `ai.tool.helm_execute` | AI 승인 경로의 Helm 쓰기 실행 |
 
 **k8s-service (`k8s` / `helm`)**
