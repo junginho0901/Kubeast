@@ -288,7 +288,7 @@ async def reject_tool_approval(
     )
     actor, http = _extract_audit_meta(request, authorization)
     await write_audit(
-        action="ai.tool.reject", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"),
+        action="ai.tool.reject", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type="tool", target_id=approval.tool,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
@@ -312,7 +312,7 @@ async def approve_tool_approval(
     approval = await db.update_tool_approval(approval.id, status="approved", decided_at=datetime.utcnow())
     actor, http = _extract_audit_meta(request, authorization)
     await write_audit(
-        action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"),
+        action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type="tool", target_id=approval.tool,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
@@ -339,7 +339,7 @@ async def approve_tool_approval(
         tool_calls=[{"function": approval.tool, "args": args, "result": approval.result, "approval_id": approval.id, "approval_status": status}],
     )
     await write_audit(
-        action="ai.tool.call", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"),
+        action="ai.tool.call", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=args.get("resource_type") or "tool",
         target_id=args.get("resource_name") or args.get("name") or approval.tool,
         namespace=args.get("namespace"),
