@@ -162,7 +162,14 @@ class DatabaseService:
             database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./kubeast.db")
         
         self.database_url = database_url
-        self.engine = create_async_engine(database_url, echo=False)
+        # sslmode / sslrootcert are libpq parameters (shared URL with the Go
+        # services); asyncpg needs them as an `ssl` connect argument instead.
+        engine_url, connect_args = database_url, {}
+        if "postgresql" in database_url:
+            from app.db_ssl import split_ssl_params
+
+            engine_url, connect_args = split_ssl_params(database_url)
+        self.engine = create_async_engine(engine_url, echo=False, connect_args=connect_args)
         self.async_session = async_sessionmaker(
             self.engine,
             class_=AsyncSession,

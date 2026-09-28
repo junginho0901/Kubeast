@@ -13,20 +13,61 @@ app.kubernetes.io/part-of: kubeast
 {{ .Values.secrets.existingSecret | default "kubeast-secrets" }}
 {{- end -}}
 
+{{/*
+DATABASE_URL — the one URL every service reads. The Go services (pgx) and the
+ai-service (asyncpg, via app/db_ssl.py) both take libpq's sslmode / sslrootcert
+from it; with postgresql.sslMode unset the drivers use their default (prefer).
+*/}}
 {{- define "kubeast.databaseUrl" -}}
-{{- if .Values.postgresql.enabled -}}
-postgresql+asyncpg://{{ .Values.postgresql.user }}:{{ .Values.postgresql.password }}@postgres:5432/{{ .Values.postgresql.database }}
-{{- else -}}
-postgresql+asyncpg://{{ .Values.postgresql.user }}:{{ .Values.postgresql.password }}@{{ .Values.postgresql.externalHost }}:{{ .Values.postgresql.externalPort | default 5432 }}/{{ .Values.postgresql.database }}
+{{- $p := .Values.postgresql -}}
+{{- $host := ternary "postgres" ($p.externalHost | default "") $p.enabled -}}
+{{- $port := ternary 5432 ($p.externalPort | default 5432) $p.enabled -}}
+postgresql+asyncpg://{{ $p.user }}:{{ $p.password }}@{{ $host }}:{{ $port }}/{{ $p.database }}
+{{- if $p.sslMode -}}
+?sslmode={{ $p.sslMode }}
+{{- if $p.sslRootCert.secretName -}}
+&sslrootcert={{ include "kubeast.dbCAPath" . }}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "kubeast.databaseUrlGo" -}}
-{{- if .Values.postgresql.enabled -}}
-postgres://{{ .Values.postgresql.user }}:{{ .Values.postgresql.password }}@postgres:5432/{{ .Values.postgresql.database }}?sslmode=disable
-{{- else -}}
-postgres://{{ .Values.postgresql.user }}:{{ .Values.postgresql.password }}@{{ .Values.postgresql.externalHost }}:{{ .Values.postgresql.externalPort | default 5432 }}/{{ .Values.postgresql.database }}?sslmode=disable
+{{/*
+Server CA for TLS verification of the database (postgresql.sslRootCert):
+mounted read-only from a Secret into every database client pod.
+*/}}
+{{- define "kubeast.dbCAPath" -}}
+/etc/kubeast/db-ca/{{ .Values.postgresql.sslRootCert.key | default "ca.crt" }}
 {{- end -}}
+
+{{- define "kubeast.dbCAVolumeMount" -}}
+{{- if .Values.postgresql.sslRootCert.secretName }}
+- name: db-ca
+  mountPath: /etc/kubeast/db-ca
+  readOnly: true
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.dbCAVolume" -}}
+{{- if .Values.postgresql.sslRootCert.secretName }}
+- name: db-ca
+  secret:
+    secretName: {{ .Values.postgresql.sslRootCert.secretName }}
+{{- end }}
+{{- end -}}
+
+{{/* Same, with the volumeMounts: / volumes: keys, for pods that have none otherwise. */}}
+{{- define "kubeast.dbCAVolumeMountsBlock" -}}
+{{- if .Values.postgresql.sslRootCert.secretName }}
+volumeMounts:
+  {{- include "kubeast.dbCAVolumeMount" . | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.dbCAVolumesBlock" -}}
+{{- if .Values.postgresql.sslRootCert.secretName }}
+volumes:
+  {{- include "kubeast.dbCAVolume" . | nindent 2 }}
+{{- end }}
 {{- end -}}
 
 {{/*

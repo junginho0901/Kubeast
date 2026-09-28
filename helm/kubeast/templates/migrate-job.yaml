@@ -37,4 +37,6 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
+          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
+      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
 {{- end }}
