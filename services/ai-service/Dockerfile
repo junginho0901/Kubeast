@@ -8,10 +8,18 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Current packaging tools in the venv: the base image's pip/setuptools/wheel
+# carry known vulnerabilities (trivy) and would ship inside the image.
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y pip setuptools wheel
 
 # ---- runtime stage: no compiler, non-root uid 65532 ----
 FROM python:3.11-slim
+
+# No packaging tools at runtime: the base image's pip/setuptools/wheel (and the
+# libraries they vendor) are not needed by the app and show up in image scans.
+RUN python -m pip uninstall -y pip setuptools wheel
 
 RUN groupadd -g 65532 app \
     && useradd -u 65532 -g 65532 -r -s /usr/sbin/nologin -d /app app
