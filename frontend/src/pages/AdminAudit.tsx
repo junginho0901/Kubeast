@@ -138,6 +138,23 @@ export default function AdminAudit() {
     setExpandedId(null)
   }
 
+  // CSV of everything matching the applied filter (not just this page). A
+  // same-origin link download carries the session cookie; the server names
+  // the file.
+  const exportCsv = () => {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(filter)) {
+      if (k === 'limit' || k === 'offset' || v === undefined || v === '') continue
+      params.set(k, String(v))
+    }
+    const a = document.createElement('a')
+    a.href = `/api/v1/auth/admin/audit-logs/export?${params.toString()}`
+    a.download = ''
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
   const resultBadge = (result: string) => {
     const isSuccess = result === 'success'
     return (
@@ -171,13 +188,22 @@ export default function AdminAudit() {
             {tr('adminAudit.subtitle', '모든 쓰기 작업과 민감 열람 내역')}
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
-        >
-          {isFetching ? tr('adminAudit.refreshing', '불러오는 중...') : tr('adminAudit.refresh', '새로고침')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCsv}
+            data-testid="audit-export-csv"
+            className="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
+          >
+            {tr('adminAudit.exportCsv', 'CSV 내보내기')}
+          </button>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+          >
+            {isFetching ? tr('adminAudit.refreshing', '불러오는 중...') : tr('adminAudit.refresh', '새로고침')}
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
