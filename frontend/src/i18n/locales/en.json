@@ -87,7 +87,8 @@
     "logout": "Log out",
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
-    "clusterDisconnected": "Cluster disconnected"
+    "clusterDisconnected": "Cluster disconnected",
+    "noAccessibleCluster": "No accessible cluster"
   },
   "pods": {
     "title": "Pods",
@@ -2484,6 +2485,7 @@
     "create": "Create Secret",
     "createTitle": "Create Secret from YAML",
     "noResults": "No secrets found.",
+    "forbidden": "You do not have permission to view Secrets in this cluster.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2915,6 +2917,7 @@
     }
   },
   "adminAudit": {
+    "exportCsv": "Export CSV",
     "filter": {
       "cluster": "Cluster"
     }

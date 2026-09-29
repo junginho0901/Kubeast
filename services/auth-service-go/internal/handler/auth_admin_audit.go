@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -29,28 +28,7 @@ func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	q := r.URL.Query()
-	filter := audit.Filter{
-		Service:    q.Get("service"),
-		Action:     q.Get("action"),
-		ActorEmail: q.Get("actor_email"),
-		TargetID:   q.Get("target_id"),
-		Cluster:    q.Get("cluster"),
-		Namespace:  q.Get("namespace"),
-		Result:     q.Get("result"),
-		Limit:      queryInt(r, "limit", 100),
-		Offset:     queryInt(r, "offset", 0),
-	}
-	if s := q.Get("since"); s != "" {
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.Since = t
-		}
-	}
-	if s := q.Get("until"); s != "" {
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.Until = t
-		}
-	}
+	filter := auditFilterFromQuery(r)
 
 	entries, total, err := h.auditStore.List(r.Context(), filter)
 	if err != nil {

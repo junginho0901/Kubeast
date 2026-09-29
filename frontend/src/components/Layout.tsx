@@ -442,8 +442,13 @@ export default function Layout() {
             </button>
 
             <div className="-mx-6 mt-4 border-t border-slate-700" />
-            <div className="mt-3 flex items-center gap-2 text-sm text-slate-400">
-              {clusterStatus === 'checking' ? (
+            <div className="mt-3 flex items-center gap-2 text-sm text-slate-400" data-testid="cluster-status">
+              {noAccessibleCluster ? (
+                <>
+                  <div className="w-2 h-2 bg-slate-500 rounded-full"></div>
+                  <span>{t('layout.noAccessibleCluster', { defaultValue: 'No accessible cluster' })}</span>
+                </>
+              ) : clusterStatus === 'checking' ? (
                 <>
                   <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
                   <span>{t('layout.clusterChecking')}</span>
@@ -489,6 +494,10 @@ export default function Layout() {
                   })}
                 </p>
               </div>
+            ) : !isAdmin && isClustersLoading ? (
+              // Until the accessible-cluster list is known, a non-admin's
+              // page would mount and fire cluster requests that all 403.
+              <RouteFallback />
             ) : (
               <Suspense fallback={<RouteFallback />}>
                 <Outlet />

@@ -36,7 +36,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 
 - **DB**: `auth_audit_logs`(모든 서비스 공용, auth-service가 스키마 관리). Go는 `audit.PostgresStore`, Python은 `audit_writer.py`가 같은 컬럼에 INSERT.
 - **stdout**: 서비스 로거(JSON)로 한 줄. `{"time":…,"level":"INFO","msg":"audit","event":"audit","audit":{id,service,action,result,error,actor_user_id,actor_email,target_type,target_id,target_email,cluster,namespace,path,request_ip,user_agent,request_id,before,after}}`. 최상위 `event: "audit"`이 로그 파이프라인의 라우팅 키. `AUDIT_STDOUT=false`(차트 `audit.stdout`)로 끈다. DB 쓰기가 실패해도 줄은 남고 `store_error`가 붙는다.
-- **조회·내보내기**: `GET /api/v1/auth/admin/audit-logs`(필터·페이지), CSV export. 둘 다 감사 대상(`admin.audit.read`, `admin.audit.export`).
+- **조회·내보내기**: `GET /api/v1/auth/admin/audit-logs`(필터·페이지), `GET /api/v1/auth/admin/audit-logs/export`(같은 필터, CSV UTF-8 BOM, 최대 50,000행). 둘 다 감사 대상(`admin.audit.read`, `admin.audit.export`).
 
 ## 5. 카탈로그
 

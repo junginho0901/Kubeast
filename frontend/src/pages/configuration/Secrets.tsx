@@ -106,7 +106,7 @@ export default function Secrets() {
     staleTime: 30000,
   })
 
-  const { data: secrets, isLoading } = useQuery({
+  const { data: secrets, isLoading, error: secretsError } = useQuery({
     queryKey: ['configuration', 'secrets', selectedNamespace],
     queryFn: () =>
       selectedNamespace === 'all'
@@ -115,6 +115,10 @@ export default function Secrets() {
   })
   const { has } = usePermission()
   const canCreate = has('resource.secret.create')
+  // The cluster's RBAC decides: a viewer (kubeast:viewer) may list most kinds
+  // but not Secrets, which the list endpoint reports as 403.
+  const secretsForbidden =
+    (secretsError as { response?: { status?: number } } | null)?.response?.status === 403
 
   useKubeWatchList({
     enabled: true,
@@ -403,7 +407,13 @@ stringData:
               {sortedItems.length === 0 && !isLoading && (
                 <tr>
                   <td colSpan={showNamespaceColumn ? 5 : 4} className="py-6 px-4 text-center text-slate-400">
-                    {tr('secretsPage.noResults', 'No secrets found.')}
+                    {secretsForbidden ? (
+                      <span data-testid="secrets-forbidden">
+                        {tr('secretsPage.forbidden', 'You do not have permission to view Secrets in this cluster.')}
+                      </span>
+                    ) : (
+                      tr('secretsPage.noResults', 'No secrets found.')
+                    )}
                   </td>
                 </tr>
               )}

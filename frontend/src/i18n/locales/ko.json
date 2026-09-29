@@ -87,7 +87,8 @@
     "logout": "로그아웃",
     "clusterChecking": "연결 확인 중...",
     "clusterConnected": "클러스터 연결됨",
-    "clusterDisconnected": "클러스터 연결 안 됨"
+    "clusterDisconnected": "클러스터 연결 안 됨",
+    "noAccessibleCluster": "접근 가능한 클러스터 없음"
   },
   "pods": {
     "title": "파드",
@@ -2506,6 +2507,7 @@
     "create": "시크릿 생성",
     "createTitle": "YAML로 시크릿 생성",
     "noResults": "시크릿이 없습니다.",
+    "forbidden": "이 클러스터에서 Secret을 조회할 권한이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -3114,6 +3116,7 @@
     }
   },
   "adminAudit": {
+    "exportCsv": "CSV 내보내기",
     "filter": {
       "cluster": "클러스터"
     }
