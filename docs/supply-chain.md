@@ -5,11 +5,16 @@ images to ghcr.io and, per image, by digest:
 
 | Step | What it produces | Fails the release when |
 |---|---|---|
+| architecture check | one line per platform variant with the `file` description of the image's main binary | a variant's binary is not built for its platform (the arm64 variant carrying an x86-64 binary, as v0.3.0/v0.4.0 did for two images) |
 | trivy (`aquasecurity/trivy-action`) | vulnerability report in the job log | a **fixed** CRITICAL or HIGH vulnerability is found (`ignore-unfixed`: findings without an upstream fix are reported but do not block) |
 | syft (`anchore/sbom-action`) | SBOM in SPDX JSON, also a workflow artifact `sbom-<service>.spdx.json` | SBOM generation error |
 | `actions/attest-sbom` | SBOM attestation pushed to the registry next to the image (Sigstore, GitHub OIDC identity) | attestation error |
 | `actions/attest-build-provenance` | SLSA build-provenance attestation (which workflow, commit and runner built the image) pushed to the registry | attestation error |
 | cosign keyless (`cosign sign --yes IMAGE@DIGEST`) | signature in the registry, entry in the Rekor transparency log | signing error |
+
+The Helm chart (`oci://ghcr.io/<owner>/charts/kubeast`) gets the same
+build-provenance attestation and keyless signature on its OCI digest after
+`helm push`.
 
 The repository is public, so GitHub's attestations and the Sigstore public
 instance cost nothing and there is no key to keep: the signing identity is the
@@ -35,6 +40,18 @@ gh attestation verify oci://$IMG -R junginho0901/Kubeast --predicate-type https:
   | jq '.[0].verificationResult.statement.predicate' > sbom.spdx.json
 ```
 
+## Verifying the chart
+
+```bash
+CHART=ghcr.io/junginho0901/charts/kubeast:0.4.2
+
+gh attestation verify oci://$CHART -R junginho0901/Kubeast
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/junginho0901/Kubeast/\.github/workflows/release\.yaml@refs/tags/v' \
+  $CHART
+```
+
 `gh attestation verify` also accepts `--format json` for the full statement,
 and both commands work offline against a digest pinned in your values
 (`global.imageTag` may be a digest-pinned tag once the chart supports it).
@@ -48,7 +65,5 @@ policy-controller. That is a cluster-side setting and is not part of the chart.
 
 ## Not covered yet
 
-- The Helm chart pushed to `oci://ghcr.io/<owner>/charts` is not signed or
-  attested yet.
 - Scanning runs at release time only; there is no scheduled rescan of already
   published images.
