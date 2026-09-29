@@ -1,22 +1,24 @@
 ARG KUBECTL_VERSION=1.35.9
 ARG AWS_IAM_AUTHENTICATOR_VERSION=0.7.20
-ARG TARGETARCH=amd64
 
-# kubectl release binary (pinned). The EKS IAM credential plugin it runs for
-# `exec: aws-iam-authenticator` kubeconfigs is built from source in the Go
-# stage below.
-FROM cgr.dev/chainguard/wolfi-base:latest AS tools
+# kubectl release binary (pinned) for the target architecture, fetched on the
+# build host and checked against the published sha256. The EKS IAM credential
+# plugin it runs for `exec: aws-iam-authenticator` kubeconfigs is built from
+# source in the Go stage below.
+FROM --platform=$BUILDPLATFORM cgr.dev/chainguard/wolfi-base:latest AS tools
 ARG KUBECTL_VERSION
 ARG TARGETARCH
 WORKDIR /downloads
 RUN apk add --no-cache curl ca-certificates \
     && curl -Lo kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
-    && chmod +x kubectl \
-    && /downloads/kubectl version --client
+    && curl -Lo kubectl.sha256 "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl.sha256" \
+    && echo "$(cat kubectl.sha256)  kubectl" | sha256sum -c - \
+    && chmod +x kubectl
 
 # Build context is services/ (shared pkg module is pulled in via replace),
-# same layout as the other Go services.
-FROM golang:1.26-alpine AS builder
+# same layout as the other Go services. Runs on the build host and
+# cross-compiles for the target.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETARCH
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 RUN apk add --no-cache git

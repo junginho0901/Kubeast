@@ -1,7 +1,7 @@
 ARG AWS_IAM_AUTHENTICATOR_VERSION=0.7.20
-ARG TARGETARCH=amd64
 
-FROM golang:1.26-alpine AS builder
+# Build stage runs on the build host and cross-compiles for the target.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETARCH
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 

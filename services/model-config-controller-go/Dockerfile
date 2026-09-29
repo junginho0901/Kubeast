@@ -1,4 +1,5 @@
-FROM golang:1.26-alpine AS builder
+# Build stage runs on the build host and cross-compiles for the target.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETARCH
 WORKDIR /src
 COPY go.mod ./

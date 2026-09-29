@@ -1,5 +1,6 @@
-## Build stage
-FROM golang:1.26-alpine AS builder
+## Build stage — runs on the build host and cross-compiles for the target.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+ARG TARGETARCH
 
 RUN apk add --no-cache git
 
@@ -19,7 +20,7 @@ RUN go mod download
 
 COPY session-service-go/ ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/server ./cmd/server
 
 ## Runtime stage — static binary, no shell/package manager, non-root uid 65532
 ## (ca-certificates + tzdata are included in distroless/static).
