@@ -27,28 +27,37 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # binary: an executable in the image whose ELF architecture must match
+        # each platform variant (architecture check below).
         include:
           - name: auth-service
             context: services
             dockerfile: auth-service-go/Dockerfile
+            binary: /app/server
           - name: ai-service
             context: services/ai-service
             dockerfile: ""
+            binary: /opt/venv/bin/python3
           - name: k8s-service
             context: services
             dockerfile: k8s-service-go/Dockerfile
+            binary: /app/server
           - name: session-service
             context: services
             dockerfile: session-service-go/Dockerfile
+            binary: /app/server
           - name: frontend
             context: frontend
             dockerfile: ""
+            binary: /usr/sbin/nginx
           - name: tool-server
             context: services
             dockerfile: tool-server/Dockerfile
+            binary: /tool-server
           - name: model-config-controller-go
             context: services/model-config-controller-go
             dockerfile: ""
+            binary: /controller
 
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +94,29 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:${{ steps.version.outputs.tag }}
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:latest
+
+      # Each platform variant must carry a binary of its own architecture: the
+      # v0.3.0/v0.4.0 arm64 variants of two images shipped x86-64 binaries and
+      # passed every other gate. Runs before anything is attested or signed.
+      - name: Architecture check
+        if: github.event_name == 'push'
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          BINARY: ${{ matrix.binary }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            variant=$(docker buildx imagetools inspect "${IMAGE}@${DIGEST}" --format '{{json .Manifest}}' \
+              | jq -r --arg a "$arch" '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest')
+            id=$(docker create --platform "linux/${arch}" "${IMAGE}@${variant}")
+            docker cp -L "${id}:${BINARY}" "./bin-${arch}"
+            docker rm "${id}" > /dev/null
+            case "$arch" in amd64) want=x86-64 ;; arm64) want=aarch64 ;; esac
+            desc=$(file -b "./bin-${arch}")
+            echo "${arch} ${variant}: ${desc}"
+            case "$desc" in *"$want"*) ;; *) echo "::error::${IMAGE} ${arch} variant: ${BINARY} is ${desc}"; exit 1 ;; esac
+          done
 
       # Supply chain: everything below refers to the pushed manifest list by
       # digest, so it covers both architectures.
@@ -143,6 +175,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lowercase owner
+        id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      # cosign and the attestation push read the registry credential from the
+      # docker config; helm keeps its own.
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract version
         id: version
         run: echo "tag=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
@@ -161,12 +206,32 @@ jobs:
 
       # OCI chart next to the images: helm install oci://ghcr.io/<owner>/charts/kubeast --version X.Y.Z
       - name: Push Helm chart to ghcr.io
+        id: push
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          OWNER: ${{ steps.owner.outputs.name }}
         run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm push ".helm-release/kubeast-${TAG#v}.tgz" "oci://ghcr.io/${owner}/charts"
+          out=$(helm push ".helm-release/kubeast-${TAG#v}.tgz" "oci://ghcr.io/${OWNER}/charts" 2>&1)
+          echo "$out"
+          echo "digest=$(echo "$out" | sed -n 's/^Digest: //p')" >> "$GITHUB_OUTPUT"
+
+      # The chart gets the same evidence as the images: provenance attestation
+      # and a keyless signature on the OCI artifact by digest.
+      - name: Attest chart build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/charts/kubeast
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign chart (cosign keyless, GitHub OIDC)
+        run: cosign sign --yes "${CHART}@${DIGEST}"
+        env:
+          CHART: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/charts/kubeast
+          DIGEST: ${{ steps.push.outputs.digest }}
 
       - name: Upload chart artifact
         uses: actions/upload-artifact@v4
