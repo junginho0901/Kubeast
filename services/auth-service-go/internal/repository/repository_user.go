@@ -26,9 +26,11 @@ func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at,
+		        u.failed_logins, u.last_failed_login, u.locked_until
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.email = $1`, email,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
+		&u.FailedLogins, &u.LastFailedLogin, &u.LockedUntil)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -60,6 +62,24 @@ func (r *Repository) BumpTokenVersion(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE auth_users SET token_version = token_version + 1, updated_at = $1 WHERE id = $2`,
 		time.Now().UTC(), id,
+	)
+	return err
+}
+
+// SaveLoginFailure stores the lockout state after a password failure
+// (handler.lockoutState decides it). lockedUntil nil = not locked.
+func (r *Repository) SaveLoginFailure(ctx context.Context, id string, failures int, lastFailure time.Time, lockedUntil *time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE auth_users SET failed_logins = $1, last_failed_login = $2, locked_until = $3 WHERE id = $4`,
+		failures, lastFailure.UTC(), lockedUntil, id,
+	)
+	return err
+}
+
+// ResetLoginFailures clears the lockout state after a successful login.
+func (r *Repository) ResetLoginFailures(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE auth_users SET failed_logins = 0, last_failed_login = NULL, locked_until = NULL WHERE id = $1`, id,
 	)
 	return err
 }

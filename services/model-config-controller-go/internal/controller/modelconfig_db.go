@@ -17,7 +17,7 @@ import (
 // requiredSchemaVersion is the goose version (services/pkg/dbmigrate.Required)
 // this build needs. The controller module is built on its own, so the check is
 // inlined here instead of importing the shared package.
-const requiredSchemaVersion int64 = 2
+const requiredSchemaVersion int64 = 3
 
 func schemaVersion(db *sql.DB) (int64, error) {
 	var exists bool

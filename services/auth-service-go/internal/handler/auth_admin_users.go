@@ -427,7 +427,8 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = h.repo.BumpTokenVersion(r.Context(), userID) // reset logs the user out everywhere
+	_ = h.repo.BumpTokenVersion(r.Context(), userID)   // reset logs the user out everywhere
+	_ = h.repo.ResetLoginFailures(r.Context(), userID) // and lifts a login lockout (H13)
 
 	actor, _ := h.repo.GetUserByID(r.Context(), payload.UserID)
 	var actorEmail *string

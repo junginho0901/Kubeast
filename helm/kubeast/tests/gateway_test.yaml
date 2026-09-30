@@ -26,6 +26,19 @@ tests:
         template: gateway.yaml
         documentIndex: 0
 
+  - it: throttles the sign-in endpoints per client address
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'limit_req_zone \$binary_remote_addr zone=auth_signin:1m rate=10r/s;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location ~ \^/api/v1/auth/\(login\|register\|oidc/login\)\$ \{\s+limit_req zone=auth_signin burst=20 nodelay;\s+limit_req_status 429;'
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: marks cookies Secure by default
     asserts:
       - equal:

@@ -28,7 +28,11 @@ type Config struct {
 	JWTIssuer         string
 	JWTAudience       string
 	JWTExpiresMinutes int
-	KeyDir            string
+	// Password login lockout: LoginMaxFailures failures within
+	// LoginLockoutMinutes lock the account for LoginLockoutMinutes.
+	LoginMaxFailures    int
+	LoginLockoutMinutes int
+	KeyDir              string
 
 	// CORS
 	AllowedOrigins []string
@@ -162,10 +166,12 @@ func Load() Config {
 		RetentionAuditDays: pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
 		RetentionChatDays:  pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
 
-		JWTIssuer:         pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
-		JWTAudience:       pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
-		JWTExpiresMinutes: pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 60),
-		KeyDir:            pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
+		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
+		JWTExpiresMinutes:   pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 60),
+		LoginMaxFailures:    pkgconfig.GetEnvInt("LOGIN_MAX_FAILURES", 5),
+		LoginLockoutMinutes: pkgconfig.GetEnvInt("LOGIN_LOCKOUT_MINUTES", 15),
+		KeyDir:              pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 
