@@ -36,7 +36,7 @@ var (
 	// kubectl matches kinds case-insensitively ("Pod"), so case is free here.
 	resourceTypeSegFmt = `[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?(\.[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?)*`
 	resourceTypeRe     = regexp.MustCompile(`^` + resourceTypeSegFmt + `(,` + resourceTypeSegFmt + `)*$`)
-	timeoutRe      = regexp.MustCompile(`^[0-9]+(ms|s|m|h)$`)
+	timeoutRe          = regexp.MustCompile(`^[0-9]+(ms|s|m|h)$`)
 
 	rolloutActions = map[string]bool{"restart": true, "undo": true, "pause": true, "resume": true, "status": true, "history": true}
 	patchTypes     = map[string]bool{"json": true, "merge": true, "strategic": true}
