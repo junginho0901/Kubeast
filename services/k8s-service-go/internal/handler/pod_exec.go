@@ -2,22 +2,14 @@ package handler
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
-	"os"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
-	"k8s.io/client-go/transport"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 )
@@ -59,130 +51,25 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	restConfig := h.svc.RestConfig()
-
-	// Build K8s API WebSocket URL for exec
-	host := restConfig.Host
-	wsBase := strings.Replace(strings.Replace(host, "https://", "wss://", 1), "http://", "ws://", 1)
-	execPath := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/exec", namespace, podName)
-	qp := url.Values{
-		"command": {command},
-		"stdin":   {"1"},
-		"stdout":  {"1"},
-		"stderr":  {"1"},
-		"tty":     {"1"},
-	}
-	if container != "" {
-		qp.Set("container", container)
-	}
-	k8sURL := fmt.Sprintf("%s%s?%s", wsBase, execPath, qp.Encode())
-
-	// TLS config from client-go transport
-	transportConfig, err := restConfig.TransportConfig()
+	// The exec runs on the request's cluster as the signed-in user: the
+	// executor builds its transport from this config, identity included.
+	cfg, err := h.svc.UserRESTConfigFor(ctx)
 	if err != nil {
-		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("transport config error: %v\r\n", err)))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("cluster config: %v\r\n", err)))
 		return
 	}
-	tlsConfig, err := transport.TLSConfigFor(transportConfig)
+	cs, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
-		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("TLS config error: %v\r\n", err)))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("cluster client: %v\r\n", err)))
 		return
 	}
-	if tlsConfig == nil {
-		tlsConfig = &tls.Config{} //nolint:gosec
-	}
-	if tlsConfig.ServerName == "" && !tlsConfig.InsecureSkipVerify {
-		if u, err := url.Parse(restConfig.Host); err == nil {
-			tlsConfig.ServerName = u.Hostname()
-		}
-	}
-
-	// Auth headers
-	k8sHeaders := http.Header{}
-	if restConfig.BearerToken != "" {
-		k8sHeaders.Set("Authorization", "Bearer "+restConfig.BearerToken)
-	} else if restConfig.BearerTokenFile != "" {
-		if tokenBytes, err := os.ReadFile(restConfig.BearerTokenFile); err == nil {
-			k8sHeaders.Set("Authorization", "Bearer "+strings.TrimSpace(string(tokenBytes)))
-		}
-	}
-
-	// Dial K8s API with TCP_NODELAY
-	dialer := websocket.Dialer{
-		TLSClientConfig:  tlsConfig,
-		HandshakeTimeout: 15 * time.Second,
-		Subprotocols:     []string{"v4.channel.k8s.io", "v3.channel.k8s.io", "v2.channel.k8s.io", "channel.k8s.io"},
-		ReadBufferSize:   4096,
-		WriteBufferSize:  4096,
-		NetDialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			d := net.Dialer{}
-			c, err := d.DialContext(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			if tc, ok := c.(*net.TCPConn); ok {
-				_ = tc.SetNoDelay(true)
-			}
-			return c, nil
-		},
-	}
-
-	k8sWS, _, err := dialer.DialContext(ctx, k8sURL, k8sHeaders)
-	if err != nil {
-		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
-		slog.Error(msg)
-		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
-		return
-	}
-	defer k8sWS.Close()
 
 	slog.Info("pod exec attached", "pod", podName, "namespace", namespace, "container", container)
-
-	// Trigger initial prompt
-	_ = k8sWS.WriteMessage(websocket.BinaryMessage, []byte{0, '\r'})
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// K8s -> Browser
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		for {
-			msgType, data, err := k8sWS.ReadMessage()
-			if err != nil {
-				if !isExpectedClose(err) {
-					slog.Debug("pod exec k8s ws read error", "err", err)
-				}
-				return
-			}
-			if err := conn.WriteMessage(msgType, data); err != nil {
-				return
-			}
-		}
-	}()
-
-	// Browser -> K8s
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		for {
-			_, data, err := conn.ReadMessage()
-			if err != nil {
-				_ = k8sWS.WriteMessage(websocket.BinaryMessage, []byte{0, 'e', 'x', 'i', 't', '\r'})
-				return
-			}
-			if len(data) > 0 {
-				msg := make([]byte, len(data)+1)
-				msg[0] = 0
-				copy(msg[1:], data)
-				if err := k8sWS.WriteMessage(websocket.BinaryMessage, msg); err != nil {
-					return
-				}
-			}
-		}
-	}()
-
-	wg.Wait()
+	if err := streamShell(ctx, conn, cfg, execURL(cs, namespace, podName, container, command)); err != nil {
+		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
+		slog.Error(msg)
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
+		return
+	}
 	slog.Info("pod exec ended", "pod", podName, "namespace", namespace)
 }
