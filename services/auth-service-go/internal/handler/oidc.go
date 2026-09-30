@@ -318,7 +318,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/api/v1/auth/oidc",
 		MaxAge:   int(oidcStateTTL.Seconds()),
 		HttpOnly: true,
-		Secure:   r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, oauthCfg.AuthCodeURL(st.State, oidc.Nonce(st.Nonce), oauth2.S256ChallengeOption(st.Verifier)), http.StatusFound)

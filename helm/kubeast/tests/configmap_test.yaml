@@ -22,6 +22,9 @@ tests:
           path: data.REDACTION_PII
           value: "false"
       - equal:
+          path: data.COOKIE_SECURE
+          value: "true"
+      - equal:
           path: data.REDACTION_DISABLE
           value: ""
       - notExists:

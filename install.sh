@@ -118,6 +118,7 @@ helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
   --namespace "$NAMESPACE" --create-namespace \
   --set gateway.service.type="$SERVICE_TYPE" \
   --set gateway.service.nodePort="$NODE_PORT" \
+  --set auth.cookieSecure=false \
   --wait --timeout 5m \
   2>&1
 

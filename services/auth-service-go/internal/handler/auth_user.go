@@ -169,14 +169,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // setAuthCookie stores the token in the HttpOnly session cookie (what browser
 // WebSocket upgrades authenticate with).
 func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, r *http.Request, token string) {
-	secure := r.Header.Get("X-Forwarded-Proto") == "https"
+	// Secure comes from configuration, not from X-Forwarded-Proto: a proxy in
+	// between rewrites that header, and the deployment knows whether it is
+	// reached over TLS.
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cfg.AuthCookieName,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   h.cfg.JWTExpiresMinutes * 60,
 		HttpOnly: true,
-		Secure:   secure,
+		Secure:   h.cfg.CookieSecure,
 		// Strict: the cookie never rides a cross-site request. Deep links still
 		// work — the first request only fetches the SPA's static HTML.
 		SameSite: http.SameSiteStrictMode,
@@ -254,7 +256,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
 	response.JSON(w, http.StatusOK, map[string]bool{"success": true})
