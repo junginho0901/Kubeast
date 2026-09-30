@@ -111,17 +111,16 @@ class AIService:
 
     def update_authorization(self, authorization: Optional[str] = None, cluster_name: Optional[str] = None) -> None:
         """
-        Update per-request authorization context without recreating the
-        heavy LLM client.  This is called when the singleton AIService
-        is reused across different users.
+        Set the per-request fields (token, role, cluster, service clients) on
+        this instance without touching the LLM client. api._build_ai_service
+        calls it on a shallow copy of the cached service, never on the shared
+        instance itself, so concurrent requests cannot see each other's user.
         """
-        new_role = self._resolve_user_role(authorization)  # also sets self._token_payload
-        if new_role != self.user_role or True:
-            self.cluster_name = cluster_name  # step 14: per-request active cluster
-            self.user_role = new_role
-            self.k8s_service = K8sServiceClient(authorization=authorization, cluster_name=cluster_name)
-            tool_server_url = self._resolve_tool_server_url(self.user_role)
-            self.tool_server = ToolServerClient(authorization=authorization, base_url=tool_server_url)
+        self.user_role = self._resolve_user_role(authorization)  # also sets self._token_payload
+        self.cluster_name = cluster_name  # step 14: per-request active cluster
+        self.k8s_service = K8sServiceClient(authorization=authorization, cluster_name=cluster_name)
+        tool_server_url = self._resolve_tool_server_url(self.user_role)
+        self.tool_server = ToolServerClient(authorization=authorization, base_url=tool_server_url)
 
     def _resolve_user_role(self, authorization: Optional[str]) -> str:
         return permissions.resolve_user_role(self, authorization)

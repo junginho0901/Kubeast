@@ -3,7 +3,8 @@ Tool server HTTP client (kubectl-based tools)
 """
 import os
 from typing import Optional, Dict, Any
-import httpx
+
+from app.services.http_shared import ScopedClient
 
 DEFAULT_TOOL_SERVER_URL = os.getenv("TOOL_SERVER_URL", "http://tool-server:8086").rstrip("/")
 
@@ -14,7 +15,9 @@ class ToolServerClient:
         if authorization and authorization.strip():
             headers["Authorization"] = authorization.strip()
         resolved = (base_url or DEFAULT_TOOL_SERVER_URL).rstrip("/")
-        self.client = httpx.AsyncClient(base_url=resolved, timeout=60.0, headers=headers)
+        # Shared connection pool per tool-server URL; this instance only carries
+        # the user's Authorization header.
+        self.client = ScopedClient(resolved, timeout=60.0, headers=headers)
         # What tool-server masked in the last result ({count, kinds}) — copied
         # into the ai.tool.call audit row. Calls on one stream are sequential.
         self.last_redacted: Optional[Dict[str, Any]] = None
