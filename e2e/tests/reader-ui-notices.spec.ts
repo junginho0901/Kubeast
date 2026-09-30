@@ -49,6 +49,26 @@ test.describe('non-admin UI notices', () => {
     }
   })
 
+  // Helm keeps releases in Secrets, so the same viewer gets 403 on the release
+  // list once the Helm calls run as the user.
+  test('a viewer sees a permission notice on the Helm releases page', async ({ browser, request }) => {
+    const admin = await adminHeaders(request)
+    const user = await createUser(request, admin, 'viewer-helm')
+    try {
+      const grant = await request.put(`/api/v1/auth/admin/users/${user.id}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })
+      expect(grant.status()).toBe(200)
+      const { ctx, page } = await userPage(browser, user.email, user.password)
+      const list = await ctx.request.get('/api/v1/helm/releases?cluster=self')
+      expect(list.status(), 'viewer helm list').toBe(403)
+      await page.goto('/helm/releases?cluster=self')
+      await expect(page.getByTestId('helm-forbidden')).toBeVisible({ timeout: 20000 })
+      await expect(page.getByTestId('helm-forbidden')).toContainText('permission')
+      await ctx.close()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })
+    }
+  })
+
   test('a user with no cluster grant gets the notice and no cluster requests', async ({ browser, request }) => {
     const admin = await adminHeaders(request)
     const user = await createUser(request, admin, 'nogrant')
