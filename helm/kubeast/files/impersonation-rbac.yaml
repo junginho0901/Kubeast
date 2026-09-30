@@ -10,9 +10,11 @@
 #                       a viewer gets a permission notice on Secrets and Helm)
 #   kubeast:operator  ← Kubeast role Write  → edit + viewer
 #   kubeast:admin     ← Kubeast role Admin / global admin → cluster-admin
-# The Kubeast credential itself only needs kubeast-impersonator. The groups it
-# may impersonate are listed explicitly: an unrestricted rule would let the
-# credential impersonate system:masters and become cluster-admin anywhere.
+# The Kubeast credential itself only needs kubeast-impersonator — on the
+# cluster Kubeast runs in, the chart binds its two service accounts to it too
+# (templates/rbac.yaml). The groups it may impersonate are listed explicitly:
+# an unrestricted rule would let the credential impersonate system:masters and
+# become cluster-admin anywhere.
 # The dashboard overview cache (k8s-service informer_cache.go) watches as user
 # kubeast:cache in kubeast:viewer, so it needs nothing beyond these bindings.
 # A custom Kubeast role (group kubeast:role:<name>) that a cluster binds must
