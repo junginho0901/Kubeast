@@ -5,6 +5,56 @@ metadata:
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
   {{- with include "kubeast.awsServiceAccountAnnotations" . }}{{ nindent 2 . }}{{- end }}
+{{- if .Values.auth.impersonation.enabled }}
+---
+# With impersonation on, every request to this cluster runs as the signed-in
+# user; the two service accounts only impersonate (ClusterRole
+# kubeast-impersonator, files/impersonation-rbac.yaml) and k8s-service reads the
+# registered clusters' kubeconfig Secrets in its own namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-kubeast-impersonator
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeast-impersonator
+subjects:
+  - kind: ServiceAccount
+    name: k8s-service
+    namespace: {{ include "kubeast.namespace" . }}
+  - kind: ServiceAccount
+    name: tool-server
+    namespace: {{ include "kubeast.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: k8s-service-registry
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: k8s-service-registry
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: k8s-service
+    namespace: {{ include "kubeast.namespace" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: k8s-service-registry
+{{- else }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -20,6 +70,7 @@ subjects:
   - kind: ServiceAccount
     name: k8s-service
     namespace: {{ include "kubeast.namespace" . }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -69,6 +120,7 @@ metadata:
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
   {{- with include "kubeast.awsServiceAccountAnnotations" . }}{{ nindent 2 . }}{{- end }}
+{{- if not .Values.auth.impersonation.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -95,3 +147,4 @@ subjects:
   - kind: ServiceAccount
     name: tool-server
     namespace: {{ include "kubeast.namespace" . }}
+{{- end }}

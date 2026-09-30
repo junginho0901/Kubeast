@@ -1,0 +1,88 @@
+suite: rbac — service accounts hold impersonate-only rights when impersonation is on
+templates:
+  - rbac.yaml
+tests:
+  - it: binds k8s-service and tool-server to kubeast-impersonator and nothing cluster-wide beyond it (default values)
+    asserts:
+      - isKind:
+          of: ClusterRoleBinding
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-kubeast-impersonator
+        documentIndex: 1
+      - equal:
+          path: roleRef.name
+          value: kubeast-impersonator
+        documentIndex: 1
+      - equal:
+          path: subjects[0].name
+          value: k8s-service
+        documentIndex: 1
+      - equal:
+          path: subjects[1].name
+          value: tool-server
+        documentIndex: 1
+      - isKind:
+          of: Role
+        documentIndex: 2
+      - equal:
+          path: metadata.name
+          value: k8s-service-registry
+        documentIndex: 2
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: ["secrets"]
+              verbs: ["get"]
+        documentIndex: 2
+      - isKind:
+          of: RoleBinding
+        documentIndex: 3
+      - equal:
+          path: subjects[0].name
+          value: k8s-service
+        documentIndex: 3
+
+  - it: renders no cluster-admin binding and no wildcard ClusterRole when impersonation is on
+    asserts:
+      - notMatchRegex:
+          path: roleRef.name
+          pattern: cluster-admin
+        documentIndex: 1
+      - notMatchRegex:
+          path: roleRef.name
+          pattern: cluster-admin
+        documentIndex: 3
+      - hasDocuments:
+          count: 8
+
+  - it: keeps the legacy cluster-admin and wildcard bindings when impersonation is off
+    set:
+      auth.impersonation.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 8
+      - isKind:
+          of: ClusterRoleBinding
+        documentIndex: 1
+      - equal:
+          path: roleRef.name
+          value: cluster-admin
+        documentIndex: 1
+      - equal:
+          path: subjects[0].name
+          value: k8s-service
+        documentIndex: 1
+      - isKind:
+          of: ClusterRole
+        documentIndex: 6
+      - equal:
+          path: rules[0].verbs
+          value: ["*"]
+        documentIndex: 6
+      - equal:
+          path: roleRef.name
+          value: RELEASE-NAME-tool-server
+        documentIndex: 7
