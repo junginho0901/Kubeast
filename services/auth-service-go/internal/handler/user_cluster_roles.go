@@ -91,6 +91,13 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusBadRequest, "Unknown role: "+req.Role)
 		return
 	}
+	// Ceiling: the grantor must hold everything the role gives on this cluster.
+	if missing := missingPermissions(payload, role.Permissions, clusterID); len(missing) > 0 {
+		err := ceilingError(missing)
+		h.auditClusterRole(r, "user.cluster_role.set", payload, userID, target.Email, clusterID, map[string]any{"role": req.Role}, err)
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 
 	setErr := h.repo.SetUserClusterRole(r.Context(), userID, clusterID, role.ID)
 	h.auditClusterRole(r, "user.cluster_role.set", payload, userID, target.Email, clusterID,
