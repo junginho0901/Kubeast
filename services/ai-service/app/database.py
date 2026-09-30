@@ -430,6 +430,25 @@ class DatabaseService:
             await db.refresh(row)
             return row
 
+    async def transition_tool_approval(self, approval_id: str, from_status: str, **fields: Any) -> Optional[ToolApproval]:
+        """Move an approval out of `from_status` in one statement. Two callers
+        racing on the same approval cannot both win: the UPDATE matches only
+        while the row still has `from_status`, and the caller whose rowcount
+        is 0 gets None."""
+        async with self.async_session() as db:
+            from sqlalchemy import select, update
+
+            result = await db.execute(
+                update(ToolApproval)
+                .where(ToolApproval.id == approval_id, ToolApproval.status == from_status)
+                .values(**fields)
+            )
+            if result.rowcount != 1:
+                await db.rollback()
+                return None
+            await db.commit()
+            return (await db.execute(select(ToolApproval).where(ToolApproval.id == approval_id))).scalar_one_or_none()
+
     async def create_model_config(self, data: Dict[str, Any]) -> ModelConfig:
         async with self.async_session() as db:
             from sqlalchemy import select, update

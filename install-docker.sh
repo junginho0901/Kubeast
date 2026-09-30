@@ -107,6 +107,7 @@ else
   # Generate random passwords
   POSTGRES_PW=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 20)
   ADMIN_PW=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 20)
+  APPROVAL_SECRET=$(openssl rand -hex 32)
 
   # Preserve existing OPENAI_API_KEY if .env already exists
   EXISTING_API_KEY=""
@@ -138,6 +139,8 @@ JWT_EXPIRES_MINUTES=10080
 DEFAULT_ADMIN_EMAIL=admin
 DEFAULT_ADMIN_PASSWORD=${ADMIN_PW}
 KEY_DIR=/app/.keys
+# Shared by ai-service and tool-server to sign/verify AI write-tool approvals
+AI_APPROVAL_SECRET=${APPROVAL_SECRET}
 
 # Database
 POSTGRES_USER=kubeast

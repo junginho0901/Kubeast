@@ -85,6 +85,7 @@ services:
       - K8S_SERVICE_URL=http://k8s-service:8002
       - SESSION_SERVICE_URL=http://session-service:8003
       - TOOL_SERVER_URL=http://tool-server:8086
+      - AI_APPROVAL_SECRET=${AI_APPROVAL_SECRET:-}
     networks:
       - msa-network
     depends_on:
@@ -162,6 +163,7 @@ services:
       - KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
       - TOOL_SERVER_KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
       - TOOL_SERVER_USE_INCLUSTER=false
+      - AI_APPROVAL_SECRET=${AI_APPROVAL_SECRET:-}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}

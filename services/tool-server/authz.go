@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -35,15 +37,32 @@ func requiresApproval(tool string) bool {
 }
 
 // approvalGate rejects a write tool call that does not carry an approval id.
-func approvalGate(headers http.Header, tool string) (int, error) {
+func approvalGate(headers http.Header, tool, clusterID string, payload auth.TokenPayload, args map[string]interface{}) (int, error) {
 	if !writeApprovalRequired || !requiresApproval(tool) {
 		return 0, nil
 	}
-	if strings.TrimSpace(headers.Get(approvalHeader)) == "" {
-		return http.StatusForbidden, fmt.Errorf("write tool %q requires an approved request (%s)", tool, approvalHeader)
+	id := strings.TrimSpace(headers.Get(approvalHeader))
+	token := strings.TrimSpace(headers.Get(approvalTokenHeader))
+	if id == "" || token == "" {
+		return http.StatusForbidden, fmt.Errorf("write tool %q requires an approved request (%s, %s)", tool, approvalHeader, approvalTokenHeader)
+	}
+	if clusterID == "" {
+		clusterID = defaultClusterID
+	}
+	// The token binds the approval to the user, cluster, tool and arguments
+	// of this very call; the id alone proves nothing.
+	if err := verifyApprovalToken(approvalSecret, token, id, payload.UserID, clusterID, tool, args, time.Now()); err != nil {
+		if approvalSecret == "" {
+			return http.StatusServiceUnavailable, err
+		}
+		return http.StatusForbidden, err
 	}
 	return 0, nil
 }
+
+// approvalSecret is shared with ai-service (AI_APPROVAL_SECRET). Without it a
+// write tool cannot be verified and is refused rather than waved through.
+var approvalSecret = strings.TrimSpace(os.Getenv(approvalSecretEnv))
 
 type tokenValidator interface {
 	Validate(token string) (auth.TokenPayload, error)

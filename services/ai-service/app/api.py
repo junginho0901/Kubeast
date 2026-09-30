@@ -244,7 +244,7 @@ async def _load_own_pending_approval(approval_id: str, payload):
     if approval is None or approval.user_id != payload.user_id:
         raise HTTPException(status_code=404, detail="Approval not found")
     if approval.status == "pending" and approval.expires_at and approval.expires_at < datetime.utcnow():
-        approval = await db.update_tool_approval(approval.id, status="expired", decided_at=datetime.utcnow())
+        approval = await db.transition_tool_approval(approval.id, "pending", status="expired", decided_at=datetime.utcnow()) or await db.get_tool_approval(approval.id)
     if approval.status != "pending":
         raise HTTPException(status_code=409, detail=f"Approval is {approval.status}")
     return db, approval
@@ -284,7 +284,9 @@ async def reject_tool_approval(
 
     payload = _caller(authorization)
     db, approval = await _load_own_pending_approval(approval_id, payload)
-    approval = await db.update_tool_approval(approval.id, status="rejected", decided_at=datetime.utcnow())
+    approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=datetime.utcnow())
+    if approval is None:
+        raise HTTPException(status_code=409, detail="Approval is no longer pending")
     await db.add_message(
         approval.session_id, "assistant",
         f"❌ `{approval.tool}` on `{approval.cluster}` was rejected by the user; nothing was changed.",
@@ -310,9 +312,20 @@ async def approve_tool_approval(
     from app.services.audit_writer import write_audit
     from app.services.ai import formatters
 
+    from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
     payload = _caller(authorization)
     db, approval = await _load_own_pending_approval(approval_id, payload)
-    approval = await db.update_tool_approval(approval.id, status="approved", decided_at=datetime.utcnow())
+    # The token binds the run to this approval's user, cluster, tool and
+    # stored arguments; without the shared secret nothing can be approved.
+    try:
+        approval_token = sign_approval(approval.id, approval.user_id, approval.cluster, approval.tool, approval.args or {})
+    except ApprovalTokenUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    # One statement moves pending → approved; a second click, or two clicks
+    # racing, finds the row no longer pending and stops here.
+    approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=datetime.utcnow())
+    if approval is None:
+        raise HTTPException(status_code=409, detail="Approval is no longer pending")
     actor, http = _extract_audit_meta(request, authorization)
     await write_audit(
         action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
@@ -327,14 +340,14 @@ async def approve_tool_approval(
     args = dict(approval.args or {})
     status, error = "executed", None
     try:
-        response = await ai_service._call_tool_server(approval.tool, args, approval_id=approval.id)
+        response = await ai_service._call_tool_server(approval.tool, args, approval_id=approval.id, approval_token=approval_token)
         formatted, _, _ = formatters._format_tool_result(approval.tool, args, response)
     except Exception as e:  # tool-server error (403 from the cluster, kubectl failure, ...)
         status, error = "failed", str(e)
         formatted = f"error: {error}"
-    approval = await db.update_tool_approval(
-        approval.id, status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=datetime.utcnow(),
-    )
+    approval = await db.transition_tool_approval(
+        approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=datetime.utcnow(),
+    ) or approval
     icon = "✅" if status == "executed" else "⚠️"
     await db.add_message(
         approval.session_id, "assistant",
