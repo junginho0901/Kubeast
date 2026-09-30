@@ -16,6 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 var debugUpgrader = websocket.Upgrader{
@@ -138,10 +140,19 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The cleanup outlives the request (ctx is cancelled by then) but still
+	// acts as the user who created the pod, like the drain goroutine.
+	cleanupCtx := context.Background()
+	if id, ok := cluster.FromContext(ctx); ok {
+		cleanupCtx = cluster.WithID(cleanupCtx, id)
+	}
+	if p, ok := auth.FromContext(ctx); ok {
+		cleanupCtx = auth.WithPayload(cleanupCtx, p)
+	}
 	defer func() {
 		grace := int64(0)
 		bg := metav1.DeletePropagationBackground
-		_ = clientset.CoreV1().Pods(namespace).Delete(context.Background(), podName, metav1.DeleteOptions{
+		_ = clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
 			GracePeriodSeconds: &grace,
 			PropagationPolicy:  &bg,
 		})
