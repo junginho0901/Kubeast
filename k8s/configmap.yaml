@@ -40,6 +40,9 @@ data:
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: "true"
   AI_WRITE_APPROVAL: "true"
+  # dev kind is reached over plain http (NodePort 30080): a Secure cookie would
+  # be dropped by the browser on any address but localhost.
+  COOKIE_SECURE: "false"
   TOOL_SERVER_USE_INCLUSTER: "false"
 
   VITE_API_URL: "http://localhost:30080"

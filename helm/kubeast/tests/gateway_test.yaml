@@ -1,0 +1,43 @@
+suite: gateway — nginx sends HSTS and forwards the client's scheme; cookies follow auth.cookieSecure
+templates:
+  - gateway.yaml
+  - configmap.yaml
+tests:
+  - it: ships an nginx.conf with HSTS on every response and X-Forwarded-Proto from the proxy in front
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'map \$http_x_forwarded_proto \$forwarded_proto'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'proxy_set_header X-Forwarded-Proto \$forwarded_proto;'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'X-Forwarded-Proto \$scheme'
+        template: gateway.yaml
+        documentIndex: 0
+
+  - it: marks cookies Secure by default
+    asserts:
+      - equal:
+          path: data.COOKIE_SECURE
+          value: "true"
+        template: configmap.yaml
+
+  - it: honours auth.cookieSecure=false for plain-http installs
+    set:
+      auth.cookieSecure: false
+    asserts:
+      - equal:
+          path: data.COOKIE_SECURE
+          value: "false"
+        template: configmap.yaml

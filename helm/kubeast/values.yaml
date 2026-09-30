@@ -44,6 +44,11 @@ auth:
   # Demo read/write accounts (password = username). Never enable outside dev.
   bootstrapDemoUsers: false
   passwordMinLength: 12
+  # Session and OIDC state cookies carry the Secure attribute (browsers send
+  # them only over HTTPS). Keep true behind TLS; set false only when Kubeast
+  # is reached over plain http on an address other than localhost (browsers
+  # would otherwise drop the cookie and sign-in silently fails).
+  cookieSecure: true
   # Password sign-in: "on" / "admin-only" (only admin.email, as the break-glass
   # path when the identity provider is down) / "off". Quoted: YAML reads a bare
   # on/off as a boolean.

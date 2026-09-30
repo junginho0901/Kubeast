@@ -1,0 +1,44 @@
+suite: ingress — optional TLS termination in front of the gateway
+templates:
+  - ingress.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders an Ingress to the gateway with TLS when enabled
+    set:
+      ingress.enabled: true
+      ingress.className: nginx
+      ingress.host: kubeast.example.com
+      ingress.tls: true
+      ingress.tlsSecretName: kubeast-tls
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+      - equal:
+          path: spec.tls[0].secretName
+          value: kubeast-tls
+      - equal:
+          path: spec.rules[0].host
+          value: kubeast.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: gateway
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.port.number
+          value: 8000
+
+  - it: refuses TLS without a certificate Secret
+    set:
+      ingress.enabled: true
+      ingress.tls: true
+    asserts:
+      - failedTemplate:
+          errorPattern: ingress.tlsSecretName is required

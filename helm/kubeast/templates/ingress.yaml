@@ -1,0 +1,36 @@
+{{- if .Values.ingress.enabled }}
+# TLS termination in front of the gateway. With ingress.tls the browser gets
+# the Secure session cookie and HSTS over HTTPS; the gateway forwards the
+# client's scheme to the services as X-Forwarded-Proto.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ required "ingress.tlsSecretName is required when ingress.tls is true" .Values.ingress.tlsSecretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8000
+{{- end }}

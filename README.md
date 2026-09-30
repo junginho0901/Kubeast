@@ -320,6 +320,9 @@ auth:
   allowRegistration: false
   bootstrapDemoUsers: false
   passwordMinLength: 12
+  # 세션 쿠키 Secure(HTTPS에서만 전송). TLS 뒤(Ingress·Gateway API)면 true 유지,
+  # localhost 아닌 주소를 plain http로 쓸 때만 false (아니면 로그인 쿠키가 버려짐)
+  cookieSecure: true
 
 # EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
 aws:

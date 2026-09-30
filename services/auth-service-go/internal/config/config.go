@@ -46,6 +46,9 @@ type Config struct {
 
 	// Auth cookie
 	AuthCookieName string
+	// CookieSecure marks the session and OIDC state cookies Secure (sent only
+	// over HTTPS). Set from COOKIE_SECURE; defaults to true unless DEBUG.
+	CookieSecure bool
 
 	// Account policy
 	AllowRegistration  bool // self-service POST /auth/register (off: 404)
@@ -178,6 +181,7 @@ func Load() Config {
 		DefaultWritePassword: pkgconfig.GetEnv("DEFAULT_WRITE_PASSWORD", "write"),
 
 		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
+		CookieSecure:   pkgconfig.GetEnvBool("COOKIE_SECURE", !pkgconfig.GetEnvBool("DEBUG", true)),
 
 		AllowRegistration:  pkgconfig.GetEnvBool("ALLOW_REGISTRATION", false),
 		BootstrapDemoUsers: pkgconfig.GetEnvBool("BOOTSTRAP_DEMO_USERS", false),
