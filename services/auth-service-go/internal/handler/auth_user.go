@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -122,12 +123,48 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !security.VerifyPassword(req.Password, user.PasswordHash) {
-		// failed login — password mismatch. user 존재는 확인됨 → actor 자리에 기록.
-		reason := jsonRaw(map[string]interface{}{"reason": "password_mismatch"})
+	// H13: a locked account refuses the password without checking it. The
+	// response is the same generic 401 as a wrong password so the lock state
+	// is not observable from outside; the audit row carries the reason.
+	now := time.Now().UTC()
+	state := lockoutState{Failures: user.FailedLogins}
+	if user.LastFailedLogin != nil {
+		state.LastFailure = *user.LastFailedLogin
+	}
+	if user.LockedUntil != nil {
+		state.LockedUntil = *user.LockedUntil
+	}
+	if state.isLocked(now) {
+		reason := jsonRaw(map[string]interface{}{"reason": "locked", "locked_until": state.LockedUntil.Format(time.RFC3339)})
 		h.writeAuditLog(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
 		return
+	}
+	if !security.VerifyPassword(req.Password, user.PasswordHash) {
+		// failed login — password mismatch. user 존재는 확인됨 → actor 자리에 기록.
+		window := time.Duration(h.cfg.LoginLockoutMinutes) * time.Minute
+		next, locked := state.afterFailure(now, h.cfg.LoginMaxFailures, window)
+		var lockedUntil *time.Time
+		if !next.LockedUntil.IsZero() {
+			t := next.LockedUntil
+			lockedUntil = &t
+		}
+		if err := h.repo.SaveLoginFailure(r.Context(), user.ID, next.Failures, next.LastFailure, lockedUntil); err != nil {
+			slog.Error("login lockout: save failure state", "err", err)
+		}
+		reason := jsonRaw(map[string]interface{}{"reason": "password_mismatch", "failures": next.Failures})
+		h.writeAuditLog(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		if locked {
+			after := jsonRaw(map[string]interface{}{"failures": next.Failures, "locked_until": next.LockedUntil.Format(time.RFC3339)})
+			h.writeAuditLog(r, "user.login.locked", &user.ID, &user.Email, &user.ID, &user.Email, nil, after)
+		}
+		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+	if state.Failures > 0 || !state.LockedUntil.IsZero() {
+		if err := h.repo.ResetLoginFailures(r.Context(), user.ID); err != nil {
+			slog.Error("login lockout: reset", "err", err)
+		}
 	}
 
 	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)

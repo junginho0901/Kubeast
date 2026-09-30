@@ -64,4 +64,4 @@ async def test_wait_for_schema_times_out_with_versions_in_message():
 
 def test_required_version_matches_go_migrations():
     # Keep in step with services/pkg/dbmigrate.Required.
-    assert database.REQUIRED_SCHEMA_VERSION == 2
+    assert database.REQUIRED_SCHEMA_VERSION == 3

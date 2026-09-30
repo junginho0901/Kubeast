@@ -52,7 +52,8 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 
 | 액션 | 뜻 |
 |---|---|
-| `user.login.success` / `user.login.failed` | 로그인 성공·실패(비밀번호, OIDC) |
+| `user.login.success` / `user.login.failed` | 로그인 성공·실패(비밀번호, OIDC). 실패 `after.reason` = `user_not_found` / `password_mismatch` / `password_login_disabled` / `locked`(잠금 중 시도) |
+| `user.login.locked` | 비밀번호 실패가 `LOGIN_MAX_FAILURES`(기본 5)회에 닿아 계정이 `LOGIN_LOCKOUT_MINUTES`(기본 15)분 잠김. `after` = `{failures, locked_until}`. 응답은 잠금 여부와 무관하게 `Invalid credentials` 401 |
 | `user.logout` | 로그아웃(토큰 서명만 검증, 만료 무시하고 actor 기록) |
 | `user.token.refresh` | 액세스 토큰 갱신 |
 | `user.password.change` / `user.password.reset` | 비밀번호 변경·재설정 |

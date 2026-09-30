@@ -23,17 +23,22 @@ type RoleWithPermissions struct {
 
 // User represents an auth_users row.
 type User struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Email        string    `json:"email"`
-	Team         *string   `json:"team"`
-	RoleID       int       `json:"role_id"`
-	RoleName     string    `json:"role_name"`
-	PasswordHash string    `json:"-"`
-	TokenVersion int       `json:"-"`           // bumped to revoke issued tokens ("tv" claim)
-	AuthSource   string    `json:"auth_source"` // "password" or "oidc" (how the account was created)
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Email        string  `json:"email"`
+	Team         *string `json:"team"`
+	RoleID       int     `json:"role_id"`
+	RoleName     string  `json:"role_name"`
+	PasswordHash string  `json:"-"`
+	TokenVersion int     `json:"-"` // bumped to revoke issued tokens ("tv" claim)
+	// Login lockout (H13): password failures in the current window, when the
+	// last one happened, and until when the account refuses password logins.
+	FailedLogins    int        `json:"-"`
+	LastFailedLogin *time.Time `json:"-"`
+	LockedUntil     *time.Time `json:"-"`
+	AuthSource      string     `json:"auth_source"` // "password" or "oidc" (how the account was created)
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 const (
