@@ -1,6 +1,7 @@
 """
 AI Service API 라우터
 """
+import copy
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
@@ -120,26 +121,28 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
         f"{resolved.tls_verify}|{bool(resolved.ca_cert)}|{resolved.options}"
     )
 
-    if _cached_ai_service is not None and config_hash == _cached_ai_config_hash:
-        # Reuse existing LLM client, only update per-request fields
-        _cached_ai_service.update_authorization(authorization, cluster_name=cluster_name)
-        return _cached_ai_service
+    if _cached_ai_service is None or config_hash != _cached_ai_config_hash:
+        # Config changed or first call — build the LLM client once. The cached
+        # instance carries no user: every request gets its own view below.
+        _cached_ai_service = AIService(
+            provider=resolved.provider,
+            model=resolved.model,
+            base_url=resolved.base_url,
+            api_key=resolved.api_key,
+            extra_headers=resolved.extra_headers,
+            tls_verify=resolved.tls_verify,
+            ca_cert=resolved.ca_cert,
+            options=resolved.options,
+        )
+        _cached_ai_config_hash = config_hash
 
-    # Config changed or first call — create a new AIService
-    service = AIService(
-        authorization=authorization,
-        provider=resolved.provider,
-        model=resolved.model,
-        base_url=resolved.base_url,
-        api_key=resolved.api_key,
-        extra_headers=resolved.extra_headers,
-        tls_verify=resolved.tls_verify,
-        ca_cert=resolved.ca_cert,
-        options=resolved.options,
-        cluster_name=cluster_name,
-    )
-    _cached_ai_service = service
-    _cached_ai_config_hash = config_hash
+    # A request-scoped view: the LLM client, model and per-session tool
+    # contexts are shared by reference; the user's token, role, cluster and
+    # service clients live only on this copy. Mutating the shared instance
+    # here would let a request that is still streaming pick up the next
+    # request's user and cluster.
+    service = copy.copy(_cached_ai_service)
+    service.update_authorization(authorization, cluster_name=cluster_name)
     return service
 
 
