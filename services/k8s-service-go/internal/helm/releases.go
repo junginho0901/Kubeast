@@ -2,13 +2,17 @@ package helm
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/release"
 
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -16,6 +20,20 @@ import (
 // mutations happen at human timescales (install/upgrade minutes apart),
 // so 30s is a good trade between freshness and API pressure.
 const listCacheTTL = 30 * time.Second
+
+// listCacheKey scopes the cached list by cluster and by the identity the list
+// was read as: the cluster decides what a user may see, so one user's list
+// must never be served to another. The identity is hashed so the key carries
+// no user data.
+func listCacheKey(ctx context.Context, clusterID, namespace, status string) string {
+	actor := ""
+	if p, ok := auth.FromContext(ctx); ok {
+		user, groups := p.Impersonation(clusterID)
+		sum := sha256.Sum256([]byte(user + "|" + strings.Join(groups, ",")))
+		actor = hex.EncodeToString(sum[:8])
+	}
+	return fmt.Sprintf("helm|releases|%s|%s|%s|%s", clusterID, actor, namespace, status)
+}
 
 // ListReleases returns every release known to Helm in the cluster, or in
 // the given namespace when non-empty. Results come from Helm's Secret
@@ -32,7 +50,7 @@ func (s *Service) ListReleases(ctx context.Context, namespace, status string) ([
 	if id, ok := cluster.FromContext(ctx); ok && id != "" {
 		clusterID = string(id)
 	}
-	cacheKey := fmt.Sprintf("helm|releases|%s|%s|%s", clusterID, namespace, status)
+	cacheKey := listCacheKey(ctx, clusterID, namespace, status)
 	if s.cache != nil {
 		var cached []ReleaseSummary
 		if s.cache.Get(ctx, cacheKey, &cached) {

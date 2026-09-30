@@ -6,6 +6,8 @@
 # in these groups, so the cluster's RBAC is the final authority and its audit
 # log names the person:
 #   kubeast:viewer    ← Kubeast role Read   → view + cluster-scoped read
+#                       ("view" excludes Secrets, where Helm keeps releases:
+#                       a viewer gets a permission notice on Secrets and Helm)
 #   kubeast:operator  ← Kubeast role Write  → edit + viewer
 #   kubeast:admin     ← Kubeast role Admin / global admin → cluster-admin
 # The Kubeast credential itself only needs kubeast-impersonator. The groups it

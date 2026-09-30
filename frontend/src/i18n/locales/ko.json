@@ -2909,6 +2909,7 @@
     "allNamespaces": "전체 네임스페이스",
     "searchPlaceholder": "Release 이름 검색...",
     "matchCount": "{{count}}개의 Release가 검색되었습니다.",
+    "forbidden": "이 클러스터에서 Helm Release를 조회할 권한이 없습니다.",
     "stats": {
       "total": "전체",
       "deployed": "배포됨",

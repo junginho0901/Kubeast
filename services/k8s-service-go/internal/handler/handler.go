@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -117,7 +118,7 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 // registry failures.
 func statusForError(err error) int {
 	switch {
-	case apierrors.IsUnauthorized(err):
+	case errors.Is(err, k8s.ErrNoUser), apierrors.IsUnauthorized(err):
 		return http.StatusUnauthorized
 	case apierrors.IsForbidden(err):
 		return http.StatusForbidden

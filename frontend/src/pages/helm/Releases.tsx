@@ -37,7 +37,7 @@ export default function HelmReleasesPage() {
     [cluster, namespace],
   )
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey,
     queryFn: () => api.helm.listReleases(namespace ? { namespace } : undefined),
     // keepPreviousData for smooth namespace-filter changes, but only within the
@@ -47,10 +47,15 @@ export default function HelmReleasesPage() {
     staleTime: Infinity,
   })
 
+  // Helm keeps releases in Secrets, so a user whose cluster role cannot read
+  // Secrets (a viewer) gets 403 from the list: say so instead of "no releases".
+  const helmForbidden =
+    (error as { response?: { status?: number } } | null)?.response?.status === 403
+
   useHelmWatchList({
     cluster,
     namespace: namespace || undefined,
-    enabled: !isLoading,
+    enabled: !isLoading && !helmForbidden,
     queryKey,
   })
 
@@ -197,6 +202,13 @@ export default function HelmReleasesPage() {
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-slate-400 flex-1">
           <Loader2 className="w-5 h-5 animate-spin" />
+        </div>
+      ) : helmForbidden ? (
+        <div
+          data-testid="helm-forbidden"
+          className="flex items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center text-slate-400"
+        >
+          {t('helmReleases.forbidden')}
         </div>
       ) : (
         <ReleaseTable

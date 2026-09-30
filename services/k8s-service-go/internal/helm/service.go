@@ -61,8 +61,12 @@ func NewService(k8sSvc *k8s.Service, c *cache.Cache) *Service {
 // resolved from ctx (the request's ?cluster= entry). Called on every action —
 // do not cache between calls; the bundle is rebuilt on kubeconfig rotation
 // (Service.Invalidate) and re-read here each time.
+//
+// The SDK issues its API calls with its own context, so the config must carry
+// the signed-in user itself (UserRESTConfigFor) for the calls to be
+// authorized as that user rather than as the service account.
 func (s *Service) defaultGetter(ctx context.Context, namespace string) (genericclioptions.RESTClientGetter, error) {
-	cfg, err := s.k8s.RESTConfigFor(ctx)
+	cfg, err := s.k8s.UserRESTConfigFor(ctx)
 	if err != nil {
 		return nil, err
 	}

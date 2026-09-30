@@ -243,8 +243,11 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
     expect(perms['default']).toBeUndefined() // no per-cluster grant yet
   })
 
+  // The probe is the namespace list: a Read grant maps to the cluster's viewer
+  // group, which can list namespaces but not the Secrets Helm keeps its releases
+  // in, so the Helm list is a cluster-RBAC 403 for a viewer regardless of the grant.
   test('deny-by-default: no grant → gated resource 403', async ({ request }) => {
-    const res = await request.get('/api/v1/helm/releases?cluster=default', {
+    const res = await request.get('/api/v1/namespaces?cluster=default', {
       headers: { Authorization: `Bearer ${await userToken(request)}` },
       failOnStatusCode: false,
     })
@@ -268,7 +271,7 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
     expect(perms['default']).toContain('resource.helm.read')
 
     const userHdr = { Authorization: `Bearer ${await userToken(request)}` }
-    const allowed = await request.get('/api/v1/helm/releases?cluster=default', {
+    const allowed = await request.get('/api/v1/namespaces?cluster=default', {
       headers: userHdr,
       failOnStatusCode: false,
     })
@@ -303,13 +306,13 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
     })
     const userHdr = { Authorization: `Bearer ${await userToken(request)}` }
 
-    const onDefault = await request.get('/api/v1/helm/releases?cluster=default', {
+    const onDefault = await request.get('/api/v1/namespaces?cluster=default', {
       headers: userHdr,
       failOnStatusCode: false,
     })
     expect(onDefault.status(), 'granted cluster → allowed').toBe(200)
 
-    const onSelf = await request.get('/api/v1/helm/releases?cluster=self', {
+    const onSelf = await request.get('/api/v1/namespaces?cluster=self', {
       headers: userHdr,
       failOnStatusCode: false,
     })

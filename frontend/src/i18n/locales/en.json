@@ -2688,6 +2688,7 @@
     "allNamespaces": "All namespaces",
     "searchPlaceholder": "Search release name...",
     "matchCount": "{{count}} release(s) match.",
+    "forbidden": "You do not have permission to view Helm releases in this cluster.",
     "stats": {
       "total": "Total",
       "deployed": "Deployed",

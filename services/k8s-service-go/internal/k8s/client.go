@@ -456,6 +456,34 @@ func (s *Service) RESTConfigFor(ctx context.Context) (*rest.Config, error) {
 	return b.restConfig, nil
 }
 
+// ErrNoUser is returned by UserRESTConfigFor when impersonation is on but ctx
+// carries no signed-in user: nothing may then act as the service account.
+var ErrNoUser = errors.New("no signed-in user in context")
+
+// UserRESTConfigFor returns a REST config that acts as the user in ctx even
+// for requests issued outside ctx. The per-request round tripper impersonates
+// only when the request's own context carries the user; a library that calls
+// the API with its own context (the Helm SDK) would otherwise go out as the
+// service account. The identity is pinned on a copy of the cluster config, the
+// same way the overview cache pins its fixed identity.
+func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
+	b, err := s.ForCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !impersonationEnabled {
+		return b.restConfig, nil
+	}
+	p, ok := auth.FromContext(ctx)
+	if !ok {
+		return nil, ErrNoUser
+	}
+	user, groups := p.Impersonation(string(b.id))
+	cfg := rest.CopyConfig(b.restConfig)
+	cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
+	return cfg, nil
+}
+
 // --- Internal context-aware accessors (value-or-nil) ---
 //
 // These mirror the context-less accessors but target the cluster carried in
