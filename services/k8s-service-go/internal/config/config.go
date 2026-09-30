@@ -30,10 +30,13 @@ type Config struct {
 	BreakerOpenSec          int // breaker open duration before half-open
 
 	// Auth
-	AuthJWKSURL    string
-	JWTIssuer      string
-	JWTAudience    string
-	AuthCookieName string
+	AuthJWKSURL string
+	// AuthTokenVersionURL is auth-service's token-version lookup; the JWT
+	// validator asks it so revoked tokens stop working before they expire.
+	AuthTokenVersionURL string
+	JWTIssuer           string
+	JWTAudience         string
+	AuthCookieName      string
 	// Act as the signed-in user toward every cluster (Kubernetes impersonation).
 	ImpersonationEnabled bool
 	// Credential plugins a registered kubeconfig may run (exec.command base
@@ -83,10 +86,11 @@ func Load() Config {
 		BreakerConsecutiveFails: pkgconfig.GetEnvInt("MC_BREAKER_CONSECUTIVE_FAILS", 5),
 		BreakerOpenSec:          pkgconfig.GetEnvInt("MC_BREAKER_OPEN_SEC", 30),
 
-		AuthJWKSURL:    pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
-		JWTIssuer:      pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
-		JWTAudience:    pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
-		AuthCookieName: pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
+		AuthJWKSURL:         pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
+		AuthTokenVersionURL: pkgconfig.GetEnv("AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"),
+		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
+		AuthCookieName:      pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
 
 		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
 

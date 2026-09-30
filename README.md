@@ -316,7 +316,7 @@ admin:
 auth:
   signingKey:
     existingSecret: ""
-  tokenTTLMinutes: 60
+  tokenTTLMinutes: 15
   allowRegistration: false
   bootstrapDemoUsers: false
   passwordMinLength: 12

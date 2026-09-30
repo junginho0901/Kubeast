@@ -173,7 +173,7 @@ spec:
                 operator: In
                 # gateway: 외부 진입, k8s-service / session-service: JWKS endpoint 조회,
                 # auth-service-go 의 setup handler 가 k8s-service health 조회
-                values: [gateway, k8s-service, session-service, ai-service]
+                values: [gateway, k8s-service, session-service, ai-service, tool-server]
   egress:
 {{- if .Values.postgresql.enabled }}
     - to:

@@ -38,7 +38,7 @@ auth:
     existingSecret: ""
   # Access-token lifetime. The UI refreshes it silently while the user is
   # active, so this is also the idle timeout.
-  tokenTTLMinutes: 60
+  tokenTTLMinutes: 15
   # Self-service sign-up (POST /auth/register). Off: admins create accounts.
   allowRegistration: false
   # Demo read/write accounts (password = username). Never enable outside dev.

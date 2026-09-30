@@ -168,7 +168,7 @@ func Load() Config {
 
 		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
-		JWTExpiresMinutes:   pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 60),
+		JWTExpiresMinutes:   pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 15),
 		LoginMaxFailures:    pkgconfig.GetEnvInt("LOGIN_MAX_FAILURES", 5),
 		LoginLockoutMinutes: pkgconfig.GetEnvInt("LOGIN_LOCKOUT_MINUTES", 15),
 		KeyDir:              pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),

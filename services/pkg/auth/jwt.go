@@ -30,6 +30,9 @@ type TokenPayload struct {
 	Role   string            // 하위호환 유지
 	Perms  PermissionMatrix  // per-cluster permission matrix (cluster id → perms, "*" = all)
 	Roles  map[string]string // "roles" claim: cluster id → role name, for impersonation groups
+	// TokenVersion is the "tv" claim: the user's token_version when the token
+	// was issued. auth-service bumps the stored version to revoke tokens.
+	TokenVersion int
 }
 
 // ParseRoles converts the raw "roles" claim ({cluster: roleName}) into a map;
@@ -82,6 +85,15 @@ type JWKSConfig struct {
 	JWKSURL  string
 	Issuer   string
 	Audience string
+	// TokenVersionURL is auth-service's token-version lookup
+	// (…/internal/token-version); "<url>/<sub>" answers {"tv": n} for the
+	// bearer's own subject. Empty disables the check (token_version.go).
+	TokenVersionURL string
+	// TokenVersionCacheTTL is how long a fetched version is trusted without
+	// asking again (default 30s); TokenVersionStaleTTL is how long a cached
+	// version still counts when auth-service cannot be reached (default 5m).
+	TokenVersionCacheTTL time.Duration
+	TokenVersionStaleTTL time.Duration
 }
 
 // JWTValidator validates JWTs using JWKS public keys.
@@ -92,14 +104,24 @@ type JWTValidator struct {
 	lastFetch  time.Time
 	fetchMu    sync.Mutex // serializes refetches
 	httpClient *http.Client
+
+	tvMu sync.Mutex
+	tv   map[string]tokenVersionEntry // per subject (token_version.go)
 }
 
 // NewJWTValidator creates a new validator.
 func NewJWTValidator(cfg JWKSConfig) *JWTValidator {
+	if cfg.TokenVersionCacheTTL <= 0 {
+		cfg.TokenVersionCacheTTL = 30 * time.Second
+	}
+	if cfg.TokenVersionStaleTTL <= 0 {
+		cfg.TokenVersionStaleTTL = 5 * time.Minute
+	}
 	return &JWTValidator{
 		cfg:        cfg,
 		keys:       make(map[string]*rsa.PublicKey),
 		httpClient: &http.Client{Timeout: 10 * time.Second},
+		tv:         make(map[string]tokenVersionEntry),
 	}
 }
 
@@ -267,7 +289,18 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		return TokenPayload{}, fmt.Errorf("invalid token: permissions claim must be a per-cluster map (re-login required)")
 	}
 
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"])}, nil
+	// "tv" is the user's token_version at issue time (auth-service bumps it to
+	// revoke every issued token). Missing = 0, like auth-service reads it.
+	claimedTV := 0
+	if f, ok := claims["tv"].(float64); ok {
+		claimedTV = int(f)
+	}
+	if v.cfg.TokenVersionURL != "" {
+		if err := v.checkTokenVersion(tokenStr, userID, claimedTV); err != nil {
+			return TokenPayload{}, err
+		}
+	}
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), TokenVersion: claimedTV}, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change
