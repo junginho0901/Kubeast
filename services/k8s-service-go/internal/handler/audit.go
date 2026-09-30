@@ -6,6 +6,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
 // recordAudit writes a k8s-service audit entry. It is best-effort —
@@ -60,6 +61,9 @@ func (h *Handler) recordAuditAs(
 	rec.Action = action
 	rec.ActorUserID = payload.UserID
 	rec.ActorEmail = payload.Email
+	if id, ok := cluster.FromContext(r.Context()); ok { // which cluster the object lives in
+		rec.Cluster = string(id)
+	}
 	rec.TargetID = targetID
 	rec.TargetType = targetType
 	rec.Namespace = namespace

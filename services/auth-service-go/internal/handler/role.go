@@ -9,16 +9,27 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 type RoleHandler struct {
-	repo *repository.Repository
+	repo       *repository.Repository
+	auditStore audit.Store
 }
 
-func NewRoleHandler(repo *repository.Repository) *RoleHandler {
-	return &RoleHandler{repo: repo}
+func NewRoleHandler(repo *repository.Repository, auditStore audit.Store) *RoleHandler {
+	return &RoleHandler{repo: repo, auditStore: auditStore}
+}
+
+// roleState is the audited shape of a role: what changes when permissions
+// are granted or taken away.
+func roleState(name, description string, permissions []string) map[string]any {
+	if permissions == nil {
+		permissions = []string{}
+	}
+	return map[string]any{"name": name, "description": description, "permissions": permissions}
 }
 
 // ListRoles handles GET /auth/roles (public, for dropdowns)
@@ -56,6 +67,11 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	role, err := h.repo.CreateRole(r.Context(), req.Name, req.Description, req.Permissions)
+	ev := auditEvent{action: "admin.roles.create", targetType: "role", after: roleState(req.Name, req.Description, req.Permissions), err: err}
+	if role != nil {
+		ev.targetID = strconv.Itoa(role.ID)
+	}
+	writeAudit(h.auditStore, r, payload, ev)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -97,6 +113,11 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	role, err := h.repo.UpdateRole(r.Context(), id, name, req.Description, req.Permissions)
+	writeAudit(h.auditStore, r, payload, auditEvent{
+		action: "admin.roles.update", targetType: "role", targetID: strconv.Itoa(id),
+		before: roleState(existing.Name, existing.Description, existing.Permissions),
+		after:  roleState(name, req.Description, req.Permissions), err: err,
+	})
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -128,7 +149,12 @@ func (h *RoleHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.DeleteRole(r.Context(), id); err != nil {
+	err = h.repo.DeleteRole(r.Context(), id)
+	writeAudit(h.auditStore, r, payload, auditEvent{
+		action: "admin.roles.delete", targetType: "role", targetID: strconv.Itoa(id),
+		before: roleState(existing.Name, existing.Description, existing.Permissions), err: err,
+	})
+	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
