@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
@@ -94,7 +95,7 @@ func main() {
 
 	// Global middleware
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
+	r.Use(audit.RealIP) // gateway-set X-Real-IP only (not chi's: it also trusts client-settable headers)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
 

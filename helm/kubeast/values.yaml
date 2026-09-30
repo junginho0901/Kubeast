@@ -267,6 +267,12 @@ gateway:
     nodePort: 30333       # Change for your environment
     # type: ClusterIP     # Use with ingress
     # type: LoadBalancer   # Cloud environments
+  # Address ranges of the proxies in front of the gateway (Ingress controller
+  # pods, a load balancer). The audit log records the client address the
+  # gateway saw; with proxies listed here it is taken from the
+  # X-Forwarded-For they append instead. Empty = the peer is the client.
+  trustedProxies: []
+  #  - 10.0.0.0/8
 
 # --- Ingress (optional) ---
 ingress:

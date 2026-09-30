@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -9,25 +10,30 @@ import (
 // FromHTTPRequest extracts the HTTP context (IP, user-agent, request-id, path)
 // into a new Record. Callers fill in Service, Action, Actor, Target, etc.
 //
-// IP resolution order: X-Forwarded-For (first hop) → X-Real-IP → RemoteAddr.
-// Gateway nginx is configured to populate the first two — see k8s/nginx.conf.
+// The client address is what the gateway saw: nginx sets X-Real-IP from its
+// own peer (after ngx_http_realip_module walks the proxies it was told to
+// trust, see gateway.trustedProxies). X-Forwarded-For is never read — any
+// client can put anything there and the gateway only appends to it.
+// Without X-Real-IP (a direct in-cluster call) the peer address is used.
 func FromHTTPRequest(r *http.Request) Record {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip != "" {
-		if i := strings.IndexByte(ip, ','); i > 0 {
-			ip = ip[:i]
-		}
-	} else if real := r.Header.Get("X-Real-IP"); real != "" {
-		ip = real
-	} else {
-		ip = r.RemoteAddr
-	}
 	return Record{
-		RequestIP: strings.TrimSpace(ip),
+		RequestIP: ClientIP(r),
 		UserAgent: r.Header.Get("User-Agent"),
 		RequestID: r.Header.Get("X-Request-ID"),
 		Path:      r.URL.Path,
 	}
+}
+
+// ClientIP is the address the gateway attributed the request to (X-Real-IP),
+// else the peer address without its port.
+func ClientIP(r *http.Request) string {
+	if real := strings.TrimSpace(r.Header.Get("X-Real-IP")); real != "" {
+		return real
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // sensitiveKeys lists JSON field names whose values must be redacted
