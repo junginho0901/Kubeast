@@ -45,6 +45,14 @@ def role_allows_admin(service: "AIService") -> bool:
     return service.user_role == "admin"
 
 
+def may_request_approval(service: "AIService", offered_tools: List[Dict], function_name: str) -> bool:
+    """A write tool gets an approval card only if the model was offered it in
+    this turn (a read-only widget offers none) and the user may run it. The
+    model naming a tool it was not given is not a request the user should see."""
+    offered = {t.get("function", {}).get("name") for t in (offered_tools or [])}
+    return function_name in offered and is_tool_allowed(service, function_name)
+
+
 def is_tool_allowed(service: "AIService", function_name: str) -> bool:
     if service.token:
         return service.token.has_permission_for_cluster(f"ai.tool.{function_name}", effective_cluster(service))

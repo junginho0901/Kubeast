@@ -943,8 +943,16 @@ async def session_chat_stream(
                     # (SSE) and the model (tool result), and move on.
                     pending_approval_id = None
                     from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
-                    if function_name in WRITE_TOOL_NAMES and write_approval_required():
-                        from app.services.ai import permissions as _perm
+                    from app.services.ai import permissions as _perm
+                    if function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
+                        # Not offered this turn (read-only widget) or not
+                        # permitted for this user: no approval card, and the
+                        # model is told so instead of running anything.
+                        function_response = json.dumps({
+                            "status": "not_permitted",
+                            "message": f"{function_name} is not available in this conversation.",
+                        }, ensure_ascii=False)
+                    elif function_name in WRITE_TOOL_NAMES and write_approval_required():
                         approval = await db.create_tool_approval(
                             session_id=session_id,
                             user_id=(audit_actor or {}).get('user_id') or session.user_id,

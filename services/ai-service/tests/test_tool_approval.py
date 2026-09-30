@@ -34,6 +34,11 @@ class _FakeDB:
             setattr(self.approval, k, v)
         return self.approval
 
+    async def transition_tool_approval(self, approval_id, from_status, **fields):
+        if not self.approval or self.approval.id != approval_id or self.approval.status != from_status:
+            return None
+        return await self.update_tool_approval(approval_id, **fields)
+
 
 def _approval(**over):
     base = dict(

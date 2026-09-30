@@ -20,7 +20,8 @@ admin:
 # looking the Secret up — which GitOps renderers such as Argo CD cannot do, so
 # every sync would rotate it). Set it to a Secret you manage (e.g. via
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
-# DEFAULT_ADMIN_PASSWORD, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+# DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
+# tool-server to sign write-tool approvals), OPENAI_API_KEY, ANTHROPIC_API_KEY,
 # GEMINI_API_KEY (may be empty) and, with auth.oidc enabled and no
 # auth.oidc.existingSecret, OIDC_CLIENT_SECRET. Pair it with
 # auth.signingKey.existingSecret for a fully deterministic render.
