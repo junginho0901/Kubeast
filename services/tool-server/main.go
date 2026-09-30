@@ -32,9 +32,10 @@ var (
 	// toolAuth validates the caller's JWT against auth-service's JWKS (same
 	// issuer/audience settings every other service uses).
 	toolAuth tokenValidator = auth.NewJWTValidator(auth.JWKSConfig{
-		JWKSURL:  envOrDefault("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
-		Issuer:   envOrDefault("JWT_ISSUER", "kubeast-auth"),
-		Audience: envOrDefault("JWT_AUDIENCE", "kubeast"),
+		JWKSURL:         envOrDefault("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
+		Issuer:          envOrDefault("JWT_ISSUER", "kubeast-auth"),
+		Audience:        envOrDefault("JWT_AUDIENCE", "kubeast"),
+		TokenVersionURL: envOrDefault("AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"),
 	})
 )
 

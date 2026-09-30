@@ -55,6 +55,7 @@ data:
   SETUP_CONFIGMAP_NAME: "kubeast-config"
   SETUP_RESTART_DEPLOYMENTS: "k8s-service,tool-server"
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
+  AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}

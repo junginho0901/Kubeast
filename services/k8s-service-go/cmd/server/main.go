@@ -110,9 +110,10 @@ func main() {
 	}
 	// Init JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
-		JWKSURL:  cfg.AuthJWKSURL,
-		Issuer:   cfg.JWTIssuer,
-		Audience: cfg.JWTAudience,
+		JWKSURL:         cfg.AuthJWKSURL,
+		Issuer:          cfg.JWTIssuer,
+		Audience:        cfg.JWTAudience,
+		TokenVersionURL: cfg.AuthTokenVersionURL,
 	})
 
 	// Periodic cluster health checker (step 15): keeps in-memory reachability +

@@ -79,9 +79,10 @@ func main() {
 
 	// Setup JWT validator
 	jwtValidator := auth.NewJWTValidator(auth.JWKSConfig{
-		JWKSURL:  cfg.AuthJWKSURL,
-		Issuer:   cfg.JWTIssuer,
-		Audience: cfg.JWTAudience,
+		JWKSURL:         cfg.AuthJWKSURL,
+		Issuer:          cfg.JWTIssuer,
+		Audience:        cfg.JWTAudience,
+		TokenVersionURL: cfg.AuthTokenVersionURL,
 	})
 
 	// Setup handlers

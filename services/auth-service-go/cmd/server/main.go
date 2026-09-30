@@ -208,6 +208,9 @@ func main() {
 		r.Get("/oidc/callback", authHandler.OIDCCallback)
 		r.Get("/jwks.json", authHandler.JWKS)
 		r.Get("/.well-known/jwks.json", authHandler.JWKS)
+		// Service-to-service: the other services' validators ask for the
+		// bearer's current token_version (not routed by the gateway).
+		r.Get("/internal/token-version/{userID}", authHandler.TokenVersion)
 
 		// Setup: only "is a cluster registered yet" is public (login page routing).
 		r.Get("/setup", setupHandler.GetSetupPublic)

@@ -15,8 +15,11 @@ type Config struct {
 
 	// Auth / JWT
 	AuthJWKSURL string
-	JWTIssuer   string
-	JWTAudience string
+	// AuthTokenVersionURL is auth-service's token-version lookup; the JWT
+	// validator asks it so revoked tokens stop working before they expire.
+	AuthTokenVersionURL string
+	JWTIssuer           string
+	JWTAudience         string
 
 	// CORS
 	AllowedOrigins []string
@@ -30,9 +33,10 @@ func Load() Config {
 
 		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubeast:password@localhost:5432/kubeast?sslmode=disable"),
 
-		AuthJWKSURL: pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
-		JWTIssuer:   pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
-		JWTAudience: pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
+		AuthJWKSURL:         pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
+		AuthTokenVersionURL: pkgconfig.GetEnv("AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"),
+		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 	}

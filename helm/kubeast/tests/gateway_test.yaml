@@ -39,6 +39,14 @@ tests:
         template: gateway.yaml
         documentIndex: 0
 
+  - it: keeps the service-to-service auth routes off the gateway
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location \^~ /api/v1/auth/internal/ \{\s+return 404;'
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: marks cookies Secure by default
     asserts:
       - equal:

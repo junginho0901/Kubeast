@@ -37,12 +37,16 @@ data:
   SETUP_CONFIGMAP_NAME: "kubeast-config"
   SETUP_RESTART_DEPLOYMENTS: "k8s-service,tool-server"
   AUTH_JWKS_URL: "http://auth-service:8004/api/v1/auth/jwks.json"
+  AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: "true"
   AI_WRITE_APPROVAL: "true"
   # dev kind is reached over plain http (NodePort 30080): a Secure cookie would
   # be dropped by the browser on any address but localhost.
   COOKIE_SECURE: "false"
+  # The e2e suite reuses one login for its whole run (~11 min); keep the dev
+  # token at the old 60 minutes (production default is 15).
+  JWT_EXPIRES_MINUTES: "60"
   TOOL_SERVER_USE_INCLUSTER: "false"
 
   VITE_API_URL: "http://localhost:30080"
