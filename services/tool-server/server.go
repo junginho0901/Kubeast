@@ -91,6 +91,13 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	clusterID, _ := req.Arguments["cluster"].(string)
 	delete(req.Arguments, "cluster")
 
+	// The arguments are the model's: refuse anything that kubectl would read
+	// as a flag instead of a name (argcheck.go) before touching the cluster.
+	if err := validateToolArgs(req.Arguments); err != nil {
+		respondJSON(w, http.StatusBadRequest, ToolCallResponse{Error: err.Error()})
+		return
+	}
+
 	// The caller must hold ai.tool.<name> in the routed cluster; ai-service's
 	// tool filtering is not trusted on its own.
 	payload, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID)
