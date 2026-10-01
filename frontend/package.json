@@ -37,7 +37,7 @@
     "react-flow-renderer": "^10.3.17",
     "react-i18next": "^17.0.15",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^6.30.6",
+    "react-router-dom": "^7.18.4",
     "react-syntax-highlighter": "^16.1.0",
     "recharts": "^2.10.3",
     "rehype-raw": "^7.0.0",
