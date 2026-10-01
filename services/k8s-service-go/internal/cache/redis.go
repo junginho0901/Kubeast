@@ -26,13 +26,17 @@ type memEntry struct {
 	expires time.Time
 }
 
-func New(host string, port, db int) *Cache {
+// New connects to Redis at host:port (password empty = no AUTH, the local
+// docker/kind setups) and falls back to the in-memory cache when it is not
+// reachable.
+func New(host string, port, db int, password string) *Cache {
 	c := &Cache{
 		mem: make(map[string]memEntry),
 	}
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:        fmt.Sprintf("%s:%d", host, port),
+		Password:    password,
 		DB:          db,
 		DialTimeout: 5 * time.Second,
 		ReadTimeout: 5 * time.Second,

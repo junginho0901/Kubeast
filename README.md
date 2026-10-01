@@ -376,10 +376,13 @@ ai:
 postgresql:
   enabled: true
   user: kubeast
-  password: kubeast
+  password: ""          # 비우면 설치 때 생성·업그레이드에도 유지 (secret 으로 확인). 외부 DB(enabled: false)면 필수
   database: kubeast
 redis:
   enabled: true
+  password: ""          # requirepass — 비우면 생성 (REDIS_PASSWORD)
+networkPolicy:
+  enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만. NetworkPolicy를 강제하지 않는 CNI(kindnet 등)에선 무해
 
 # Gateway 노출 방식
 gateway:

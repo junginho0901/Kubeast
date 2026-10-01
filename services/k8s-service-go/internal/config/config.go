@@ -47,9 +47,10 @@ type Config struct {
 	AllowedOrigins []string
 
 	// Redis
-	RedisHost string
-	RedisPort int
-	RedisDB   int
+	RedisHost     string
+	RedisPort     int
+	RedisDB       int
+	RedisPassword string // requirepass (REDIS_PASSWORD); empty = no AUTH
 
 	// WebSocket
 	WSHeartbeatInterval int
@@ -98,9 +99,10 @@ func Load() Config {
 
 		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 
-		RedisHost: pkgconfig.GetEnv("REDIS_HOST", "localhost"),
-		RedisPort: pkgconfig.GetEnvInt("REDIS_PORT", 6379),
-		RedisDB:   pkgconfig.GetEnvInt("REDIS_DB", 0),
+		RedisHost:     pkgconfig.GetEnv("REDIS_HOST", "localhost"),
+		RedisPort:     pkgconfig.GetEnvInt("REDIS_PORT", 6379),
+		RedisDB:       pkgconfig.GetEnvInt("REDIS_DB", 0),
+		RedisPassword: pkgconfig.GetEnv("REDIS_PASSWORD", ""),
 
 		WSHeartbeatInterval: pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
 

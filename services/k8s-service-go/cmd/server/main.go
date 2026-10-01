@@ -40,7 +40,7 @@ func main() {
 	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug)
 
 	// Init Redis cache
-	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB)
+	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
 
 	// Init shared Postgres pool (audit log) with a short timeout so that
 	// a misconfigured DB does not block k8s-service start-up indefinitely.
