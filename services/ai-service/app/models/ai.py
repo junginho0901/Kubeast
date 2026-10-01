@@ -73,6 +73,11 @@ class ChatRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
+class SessionChatRequest(BaseModel):
+    """세션 챗 요청 — message 는 body 로(쿼리에 두면 접근 로그에 남는다)"""
+    message: str
+
+
 class ChatResponse(BaseModel):
     """챗 응답"""
     message: str

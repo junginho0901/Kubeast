@@ -20,6 +20,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 
 from app.services.ai import formatters
 from app.services.ai import usage as usage_acct
+from app.services.ai.debug_dump import dump, log, safe_error
 
 from app.services.ai.prompts import SYSTEM_MESSAGE
 from app.services.ai.tools import K8S_READONLY_TOOLS
@@ -294,7 +295,7 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
         messages.append({"role": msg.role, "content": msg.content})
     
     # 디버그: 메시지 개수 출력
-    print(f"[DEBUG] Total messages: {len(messages)}, User messages: {len([m for m in messages if m['role'] == 'user'])}")
+    log.debug("[DEBUG] Total messages: %d, User messages: %d", len(messages), len([m for m in messages if m['role'] == 'user']))
     
     # Function definitions
     tools = [
@@ -369,29 +370,25 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                 "total_tokens": response.usage.total_tokens if response.usage else None
             } if response.usage else None
         }
-        print(f"[OPENAI RESPONSE][chat_stream first] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+        dump("[OPENAI RESPONSE][chat_stream first]", response_dict)
 
         # 토큰 사용량 로그 (첫 번째 호출)
         usage = getattr(response, "usage", None)
         if usage is not None:
-            print(
-                f"[TOKENS][chat_stream first] prompt={usage.prompt_tokens}, "
-                f"completion={usage.completion_tokens}, total={usage.total_tokens}",
-                flush=True,
-            )
+            log.debug("[TOKENS][chat_stream first] prompt=%s, completion=%s, total=%s", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
         
         response_message = response.choices[0].message
         
         # Function calling이 있으면 실행
         if response_message.tool_calls:
-            print(f"[DEBUG] Tool calls detected: {len(response_message.tool_calls)}")
+            log.debug("[DEBUG] Tool calls detected: %d", len(response_message.tool_calls))
             messages.append(response_message)
             
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 
-                print(f"[DEBUG] Calling function: {function_name} with args: {function_args}")
+                dump(f"[DUMP] Calling function {function_name} with args", function_args)
                 
                 # 함수 실행 중임을 알림
                 yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
@@ -399,7 +396,7 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                 # 함수 실행
                 function_response = await service._execute_function(function_name, function_args)
                 
-                print(f"[DEBUG] Function response length: {len(str(function_response))}")
+                log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
                 formatted_result, _, _ = formatters._format_tool_result(
                     function_name,
@@ -415,7 +412,7 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                     "content": tool_message_content
                 })
             
-            print(f"[DEBUG] Starting second GPT call for analysis with {len(messages)} messages")
+            log.debug("[DEBUG] Starting second GPT call for analysis with %d messages", len(messages))
             
             # 함수 결과를 바탕으로 스트리밍 응답
             try:
@@ -439,7 +436,7 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                     stream=True,
                 )
             
-            print(f"[DEBUG] Second GPT call started, streaming...")
+            log.debug("[DEBUG] Second GPT call started, streaming...")
             
             # 스트리밍 청크 전체 수집 및 로그
             full_stream_content = ""
@@ -473,11 +470,7 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                     yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
 
             if stream_usage is not None:
-                print(
-                    f"[TOKENS][chat_stream second stream] prompt={stream_usage.prompt_tokens}, "
-                    f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
-                    flush=True,
-                )
+                log.debug("[TOKENS][chat_stream second stream] prompt=%s, completion=%s, total=%s", stream_usage.prompt_tokens, stream_usage.completion_tokens, stream_usage.total_tokens)
                 yield (
                     "data: "
                     + json.dumps(
@@ -495,11 +488,11 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                 )
             
             # 스트리밍 완료 후 전체 로그 출력
-            print(f"[OPENAI RESPONSE][chat_stream second - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(full_stream_content)}", flush=True)
-            print(f"[OPENAI RESPONSE][chat_stream second - full_content] {json.dumps({'content': full_stream_content}, ensure_ascii=False)}", flush=True)
-            print(f"[OPENAI RESPONSE][chat_stream second - chunks] {json.dumps(stream_chunks, ensure_ascii=False, indent=2)}", flush=True)
+            log.debug("[OPENAI RESPONSE][chat_stream second - streaming] total_chunks=%d, full_content_length=%d", len(stream_chunks), len(full_stream_content))
+            dump("[OPENAI RESPONSE][chat_stream second - full_content]", {"content": full_stream_content})
+            dump("[OPENAI RESPONSE][chat_stream second - chunks]", stream_chunks)
             
-            print(f"[DEBUG] Streaming completed")
+            log.debug("[DEBUG] Streaming completed")
         else:
             # Function calling 없이 바로 스트리밍
             try:
@@ -551,11 +544,7 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                     yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
 
             if stream_usage is not None:
-                print(
-                    f"[TOKENS][chat_stream stream] prompt={stream_usage.prompt_tokens}, "
-                    f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
-                    flush=True,
-                )
+                log.debug("[TOKENS][chat_stream stream] prompt=%s, completion=%s, total=%s", stream_usage.prompt_tokens, stream_usage.completion_tokens, stream_usage.total_tokens)
                 yield (
                     "data: "
                     + json.dumps(
@@ -573,9 +562,9 @@ async def chat_stream(service: "AIService", request: "ChatRequest"):
                 )
             
             # 스트리밍 완료 후 전체 로그 출력
-            print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - streaming] total_chunks={len(stream_chunks)}, full_content_length={len(full_stream_content)}", flush=True)
-            print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - full_content] {json.dumps({'content': full_stream_content}, ensure_ascii=False)}", flush=True)
-            print(f"[OPENAI RESPONSE][chat_stream no_tool_calls - chunks] {json.dumps(stream_chunks, ensure_ascii=False, indent=2)}", flush=True)
+            log.debug("[OPENAI RESPONSE][chat_stream no_tool_calls - streaming] total_chunks=%d, full_content_length=%d", len(stream_chunks), len(full_stream_content))
+            dump("[OPENAI RESPONSE][chat_stream no_tool_calls - full_content]", {"content": full_stream_content})
+            dump("[OPENAI RESPONSE][chat_stream no_tool_calls - chunks]", stream_chunks)
         
         yield "data: [DONE]\n\n"
     
@@ -774,7 +763,7 @@ async def session_chat_stream(
         
         tool_context = service.tool_contexts[session_id]
         
-        print(f"[DEBUG] Session {session_id}: {len(messages)} messages, context state keys: {list(tool_context.state.keys())}")
+        log.debug("[DEBUG] Session %s: %d messages, context state keys: %s", session_id, len(messages), list(tool_context.state.keys()))
         
         # Function definitions
         tools = service._get_tools_definition()
@@ -811,11 +800,11 @@ async def session_chat_stream(
 
         while iteration < max_iterations and not skip_llm:
             iteration += 1
-            print(f"[DEBUG] Iteration {iteration}/{max_iterations}")
+            log.debug("[DEBUG] Iteration %s/%s", iteration, max_iterations)
             
             # GPT 호출 (Function Calling)
-            print(f"[AI Service] Session Chat API 호출 (Iteration {iteration}) - 요청 모델: {service.model}", flush=True)
-            print(f"[DEBUG] Messages count: {len(messages)}, Tools count: {len(tools)}", flush=True)
+            log.debug("[AI Service] Session Chat API 호출 (Iteration %s) - 요청 모델: %s", iteration, service.model)
+            log.debug("[DEBUG] Messages count: %d, Tools count: %d", len(messages), len(tools))
             
             try:
                 _fc_kwargs = dict(
@@ -830,7 +819,7 @@ async def session_chat_stream(
                 try:
                     stream = await service.client.chat.completions.create(**_fc_kwargs, tool_choice="auto", stream_options={"include_usage": True})
                 except Exception as tc_err:
-                    print(f"[WARN] tool_choice='auto' streaming failed ({tc_err}), retrying without it", flush=True)
+                    log.warning("tool_choice='auto' streaming failed (%s), retrying without it", safe_error(tc_err))
                     stream = await service.client.chat.completions.create(**_fc_kwargs)
 
                 # --- streaming delta 수집 ---
@@ -876,11 +865,7 @@ async def session_chat_stream(
                 # usage 로그 + 턴 합계
                 usage_acct.add_usage(turn_usage, stream_usage)
                 if stream_usage is not None:
-                    print(
-                        f"[TOKENS][session_chat iteration {iteration}] prompt={stream_usage.prompt_tokens}, "
-                        f"completion={stream_usage.completion_tokens}, total={stream_usage.total_tokens}",
-                        flush=True,
-                    )
+                    log.debug("[TOKENS][session_chat iteration %s] prompt=%s, completion=%s, total=%s", iteration, stream_usage.prompt_tokens, stream_usage.completion_tokens, stream_usage.total_tokens)
                     yield (
                         "data: "
                         + json.dumps(
@@ -898,7 +883,7 @@ async def session_chat_stream(
                     )
 
             except Exception as api_error:
-                print(f"[ERROR] OpenAI API call failed: {api_error}", flush=True)
+                log.error("OpenAI API call failed: %s", safe_error(api_error))
                 yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
                 await _audit_chat_complete(
                     service, session_id, audit_actor, audit_http,
@@ -912,7 +897,7 @@ async def session_chat_stream(
 
             # --- tool call이 있으면 실행 후 다음 iteration ---
             if collected_tool_calls:
-                print(f"[DEBUG] Tool calls detected: {len(collected_tool_calls)}")
+                log.debug("[DEBUG] Tool calls detected: %d", len(collected_tool_calls))
                 # assistant message를 dict로 구성 (OpenAI API 호환)
                 tc_list = []
                 for idx in sorted(collected_tool_calls.keys()):
@@ -934,7 +919,7 @@ async def session_chat_stream(
                     function_name = tc_dict["function"]["name"]
                     function_args = json.loads(tc_dict["function"]["arguments"])
 
-                    print(f"[DEBUG] Calling function: {function_name} with args: {function_args}")
+                    dump(f"[DUMP] Calling function {function_name} with args", function_args)
 
                     yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
 
@@ -988,7 +973,7 @@ async def session_chat_stream(
                             function_name, function_args, tool_context
                         )
 
-                    print(f"[DEBUG] Function response length: {len(str(function_response))}")
+                    log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
                     formatted_result, is_json, is_yaml = formatters._format_tool_result(
                         function_name, function_args, function_response,
@@ -1074,13 +1059,13 @@ async def session_chat_stream(
                     messages.append({"role": "assistant", "content": assistant_content})
                 turn_finish_reason = last_finish_reason
 
-                print(f"[DEBUG] Streaming completed. finish_reason={last_finish_reason}, length={len(assistant_content)}")
+                log.debug("[DEBUG] Streaming completed. finish_reason=%s, length=%d", last_finish_reason, len(assistant_content))
 
                 # 길이 제한으로 잘렸다면 이어서 최대 3회까지 추가 스트리밍
                 if last_finish_reason == "length":
                     max_continuations = 3
                     for continuation_index in range(1, max_continuations + 1):
-                        print(f"[DEBUG] Continuation {continuation_index}/{max_continuations}")
+                        log.debug("[DEBUG] Continuation %s/%s", continuation_index, max_continuations)
                         messages.append({
                             "role": "user",
                             "content": (
@@ -1125,11 +1110,11 @@ async def session_chat_stream(
         
         # Max iterations 도달
         if iteration >= max_iterations and not assistant_content:
-            print(f"[WARNING] Max iterations ({max_iterations}) reached without final response")
+            log.warning("Max iterations (%s) reached without final response", max_iterations)
             assistant_content = "죄송합니다. 정보 수집 중 최대 반복 횟수에 도달했습니다. 더 구체적인 질문으로 다시 시도해주세요."
             yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
         
-        print(f"[DEBUG] Preparing to save message. assistant_content length: {len(assistant_content)}, tool_calls: {len(tool_calls_log)}")
+        log.debug("[DEBUG] Preparing to save message. assistant_content length: %d, tool_calls: %d", len(assistant_content), len(tool_calls_log))
         
         # Tool call 정보를 포함한 전체 메시지 생성 (KAgent 스타일)
         full_message = ""
@@ -1181,12 +1166,12 @@ async def session_chat_stream(
 """
         full_message += assistant_content
         
-        print(f"[DEBUG] Full message length: {len(full_message)}")
-        print(f"[DEBUG] Full message preview: {full_message[:200]}...")
+        log.debug("[DEBUG] Full message length: %d", len(full_message))
+        dump("[DUMP] Full message preview", full_message[:200])
         
         # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
         await db.add_message(session_id, "assistant", full_message, tool_calls=tool_calls_log or None)
-        print(f"[DEBUG] Message saved to DB")
+        log.debug("[DEBUG] Message saved to DB")
 
         await _audit_chat_complete(
             service, session_id, audit_actor, audit_http,
@@ -1226,5 +1211,5 @@ async def session_chat_stream(
             ))
         raise
     except Exception as e:
-        print(f"[ERROR] Session chat error: {e}")
+        log.error("Session chat error: %s", safe_error(e))
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"

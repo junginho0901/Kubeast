@@ -78,8 +78,9 @@ export interface ChatStreamManagerOptions {
    */
   endpoint?: string
   /**
-   * `true` 면 message 를 JSON body 로 전송 (`POST /floating-chat` 같은 신규 엔드포인트).
-   * `false` (기본) 면 기존 방식대로 `?message=...` 쿼리 파라미터로 전송.
+   * `true` 면 message 를 JSON body 로 전송. `false` 면 `?message=...` 쿼리 파라미터 —
+   * 그 경우 사용자가 쓴 문장이 게이트웨이·서버 접근 로그와 브라우저 기록에 남으므로
+   * 두 매니저 모두 `true` 로 만든다.
    */
   bodyJson?: boolean
   /**
@@ -445,4 +446,4 @@ export class ChatStreamManager {
   }
 }
 
-export const chatStreamManager = new ChatStreamManager({ extraHeaders: clusterHeaders })
+export const chatStreamManager = new ChatStreamManager({ extraHeaders: clusterHeaders, bodyJson: true })

@@ -27,6 +27,9 @@ tests:
       - equal:
           path: data.REDACTION_DISABLE
           value: ""
+      - equal:
+          path: data.AI_DEBUG_DUMP
+          value: "false"
       - notExists:
           path: data.TOOL_SERVER_URL_READ
       - notExists:
@@ -75,6 +78,7 @@ tests:
       ai.redaction.disable:
         - aws-keys
         - jwt
+      ai.debugDump: true
     asserts:
       - equal:
           path: data.REDACTION_ENABLED
@@ -85,3 +89,6 @@ tests:
       - equal:
           path: data.REDACTION_DISABLE
           value: aws-keys,jwt
+      - equal:
+          path: data.AI_DEBUG_DUMP
+          value: "true"

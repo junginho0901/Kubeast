@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
-from app.models.ai import ChatRequest
+from app.models.ai import ChatRequest, SessionChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
 from app.security import require_auth, decode_access_token, bearer_or_cookie
@@ -170,15 +170,25 @@ async def chat_stream(request: ChatRequest, authorization: str = Depends(bearer_
 @router.post("/sessions/{session_id}/chat")
 async def session_chat(
     session_id: str,
-    message: str,
     request: Request,
+    body: Optional[SessionChatRequest] = None,
+    message: Optional[str] = None,
     authorization: str = Depends(bearer_or_cookie),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """
     세션 기반 AI 챗봇 (스트리밍)
+
+    message 는 JSON body(`{"message": …}`)로 받는다. 쿼리 파라미터 `?message=` 도
+    아직 받지만 — 그 경우 사용자가 쓴 문장이 게이트웨이·uvicorn 접근 로그에 그대로
+    남으므로 — 프론트는 body 를 쓴다.
     """
     from app.database import get_db_service
+
+    if body is not None and body.message:
+        message = body.message
+    if not message or not message.strip():
+        raise HTTPException(status_code=422, detail="message required")
 
     await _authorize_session_access(authorization, session_id)
     ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)

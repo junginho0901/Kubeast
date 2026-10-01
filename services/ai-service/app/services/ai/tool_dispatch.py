@@ -18,6 +18,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import resolvers
+from app.services.ai.debug_dump import dump, log, safe_error
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService, ToolContext
@@ -35,7 +36,7 @@ async def execute_function_with_context(
     import json
     
     try:
-        print(f"[DEBUG] Executing {function_name} with context, state keys: {list(tool_context.state.keys())}")
+        log.debug("[DEBUG] Executing %s with context, state keys: %s", function_name, list(tool_context.state.keys()))
         if not service._is_tool_allowed(function_name):
             return json.dumps(
                 {"error": f"권한 없음: '{function_name}'는 {service.user_role} 역할에서 사용할 수 없습니다."},
@@ -45,7 +46,7 @@ async def execute_function_with_context(
         # 캐시 확인
         cache_key = f"{function_name}_{json.dumps(function_args, sort_keys=True)}"
         if cache_key in tool_context.cache:
-            print(f"[DEBUG] Cache hit for {cache_key}")
+            log.debug("[DEBUG] Cache hit for %s", cache_key)
             return tool_context.cache[cache_key]
 
         from app.services.tool_whitelists import WRITE_TOOL_NAMES
@@ -420,12 +421,12 @@ async def execute_function_with_context(
         # 캐시에 저장 (5분 TTL)
         tool_context.cache[cache_key] = result
         
-        print(f"[DEBUG] Function result cached: {cache_key}")
+        log.debug("[DEBUG] Function result cached: %s", cache_key)
         return result
     
     except Exception as e:
         error_msg = f"Error in {function_name}: {str(e)}"
-        print(f"[DEBUG] {error_msg}")
+        log.warning("%s", safe_error(error_msg))
         return json.dumps({"error": error_msg}, ensure_ascii=False)
 
 async def _execute_function(service, function_name: str, function_args: dict):
@@ -433,7 +434,7 @@ async def _execute_function(service, function_name: str, function_args: dict):
     import json
     
     try:
-        print(f"[DEBUG] Executing function: {function_name} with args: {function_args}")
+        dump(f"[DUMP] Executing function {function_name} with args", function_args)
         if not service._is_tool_allowed(function_name):
             return json.dumps(
                 {"error": f"권한 없음: '{function_name}'는 {service.user_role} 역할에서 사용할 수 없습니다."},
@@ -443,7 +444,7 @@ async def _execute_function(service, function_name: str, function_args: dict):
         if function_name == "get_namespaces":
             namespaces = await service.k8s_service.get_namespaces()
             result = json.dumps(namespaces, ensure_ascii=False)
-            print(f"[DEBUG] get_namespaces result: {result[:200]}")
+            dump("[DUMP] get_namespaces result", result)
             return result
 
         elif function_name == "find_pods":
@@ -476,7 +477,7 @@ async def _execute_function(service, function_name: str, function_args: dict):
         elif function_name == "get_pods":
             pods = await service.k8s_service.get_pods(function_args["namespace"])
             result = json.dumps(pods, ensure_ascii=False)
-            print(f"[DEBUG] get_pods result: {result[:200]}")
+            dump("[DUMP] get_pods result", result)
             return result
         
         elif function_name == "get_deployments":
@@ -740,5 +741,5 @@ async def _execute_function(service, function_name: str, function_args: dict):
     
     except Exception as e:
         error_msg = f"Error in {function_name}: {str(e)}"
-        print(f"[DEBUG] {error_msg}")
+        log.warning("%s", safe_error(error_msg))
         return json.dumps({"error": error_msg}, ensure_ascii=False)
