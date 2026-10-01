@@ -34,8 +34,9 @@ def _extract_audit_meta(request: Request, authorization: str) -> tuple[dict, dic
         pass
 
     headers = request.headers
-    fwd = headers.get("x-forwarded-for", "")
-    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
+    # The client address the gateway attributed the request to (X-Real-IP).
+    # X-Forwarded-For is not read: a client can put anything there.
+    ip = headers.get("x-real-ip", "").strip() or (request.client.host if request.client else "")
     http = {
         "ip": ip,
         "user_agent": headers.get("user-agent", ""),

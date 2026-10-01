@@ -386,6 +386,7 @@ gateway:
   service:
     type: NodePort        # NodePort | ClusterIP | LoadBalancer
     nodePort: 30333
+  trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러·LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽음
 
 # Ingress (선택)
 ingress:

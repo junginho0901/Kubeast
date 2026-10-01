@@ -136,7 +136,7 @@ func main() {
 
 	// Global middleware
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
+	r.Use(audit.RealIP) // gateway-set X-Real-IP only (not chi's: it also trusts client-settable headers)
 	r.Use(chimiddleware.Recoverer)
 	// Note: no global timeout middleware - it kills WebSocket connections.
 	// Individual handler timeouts are handled via context or http.Server settings.

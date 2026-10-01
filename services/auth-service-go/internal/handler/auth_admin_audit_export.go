@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -80,14 +81,28 @@ func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Reques
 	cw.UseCRLF = true
 	_ = cw.Write(exportColumns)
 	for _, e := range rows {
-		_ = cw.Write([]string{
+		_ = cw.Write(csvCells(
 			strconv.FormatInt(e.ID, 10), e.CreatedAt.UTC().Format(time.RFC3339), e.Service, e.Action, e.Result, e.Error,
 			e.ActorEmail, e.ActorUserID, e.Cluster, e.Namespace,
 			e.TargetType, e.TargetID, e.TargetEmail,
 			e.RequestIP, e.RequestID, e.Path, string(e.Before), string(e.After),
-		})
+		))
 	}
 	cw.Flush()
+}
+
+// csvCells neutralises spreadsheet formulas: a cell that starts with one of
+// the characters a spreadsheet treats as a formula or field separator gets a
+// leading apostrophe (OWASP CSV Injection). Audit columns carry user input —
+// a failed login stores the submitted email as target_email, for one — so
+// every cell goes through it. encoding/csv quotes and escapes the rest.
+func csvCells(cells ...string) []string {
+	for i, c := range cells {
+		if c != "" && strings.ContainsRune("=+-@\t\r", rune(c[0])) {
+			cells[i] = "'" + c
+		}
+	}
+	return cells
 }
 
 // auditFilterFromQuery reads the list/export filter query params.
