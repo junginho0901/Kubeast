@@ -18,7 +18,7 @@ RUN apk add --no-cache curl ca-certificates \
 # Build context is services/ (shared pkg module is pulled in via replace),
 # same layout as the other Go services. Runs on the build host and
 # cross-compiles for the target.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 ARG TARGETARCH
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 RUN apk add --no-cache git
