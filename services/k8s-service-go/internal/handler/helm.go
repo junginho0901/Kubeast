@@ -48,7 +48,12 @@ func (h *Handler) GetHelmRelease(w http.ResponseWriter, r *http.Request) {
 		h.handleHelmError(w, err)
 		return
 	}
-	if !h.helmReveal(r, ns, name, "detail") {
+	reveal, rerr := h.helmReveal(r, ns, name, "detail")
+	if rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
+	if !reveal {
 		rel.Manifest = helmRedactText(rel.Manifest)
 		rel.Values = helmRedactValues(rel.Values)
 		rel.Notes = helmRedactText(rel.Notes)
@@ -71,7 +76,12 @@ func (h *Handler) GetHelmReleaseSection(w http.ResponseWriter, r *http.Request) 
 		h.handleHelmError(w, err)
 		return
 	}
-	if !h.helmReveal(r, ns, name, string(section)) {
+	reveal, rerr := h.helmReveal(r, ns, name, string(section))
+	if rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
+	if !reveal {
 		text = helmRedactText(text)
 	}
 	// Keep the wire type uniform with existing .../yaml endpoints.
@@ -123,7 +133,12 @@ func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request)
 			h.handleHelmError(w, err)
 			return
 		}
-		if !h.helmReveal(r, ns, name, "revision-detail") {
+		reveal, rerr := h.helmReveal(r, ns, name, "revision-detail")
+		if rerr != nil {
+			h.refuseUnaudited(w, r, rerr)
+			return
+		}
+		if !reveal {
 			detail.Manifest = helmRedactText(detail.Manifest)
 			detail.Values = helmRedactValues(detail.Values)
 			detail.Notes = helmRedactText(detail.Notes)
@@ -136,7 +151,12 @@ func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request)
 		h.handleHelmError(w, err)
 		return
 	}
-	if !h.helmReveal(r, ns, name, "revision-"+string(section)) {
+	reveal, rerr := h.helmReveal(r, ns, name, "revision-"+string(section))
+	if rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
+	if !reveal {
 		text = helmRedactText(text)
 	}
 	response.JSON(w, http.StatusOK, map[string]interface{}{
@@ -169,7 +189,12 @@ func (h *Handler) DiffHelmRelease(w http.ResponseWriter, r *http.Request) {
 		h.handleHelmError(w, err)
 		return
 	}
-	if !h.helmReveal(r, ns, name, "diff") {
+	reveal, rerr := h.helmReveal(r, ns, name, "diff")
+	if rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
+	if !reveal {
 		result.Diff = helmRedactText(result.Diff)
 	}
 	response.JSON(w, http.StatusOK, result)

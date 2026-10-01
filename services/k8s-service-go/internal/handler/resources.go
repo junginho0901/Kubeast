@@ -158,8 +158,15 @@ func (h *Handler) GetGenericResourceJSON(w http.ResponseWriter, r *http.Request)
 	}
 	// A Secret's values: the dedicated endpoints' rule (reveal permission,
 	// audited) — otherwise masked.
-	if isSecretObject(data) && !h.secretRevealAllowed(r, namespace, name, "generic-json", nil) {
-		maskSecretValues(data)
+	if isSecretObject(data) {
+		reveal, rerr := h.secretRevealAllowed(r, namespace, name, "generic-json", nil)
+		if rerr != nil {
+			h.refuseUnaudited(w, r, rerr)
+			return
+		}
+		if !reveal {
+			maskSecretValues(data)
+		}
 	}
 	response.JSON(w, http.StatusOK, data)
 }
@@ -184,10 +191,19 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 	// (audited), masked otherwise, and never through the YAML cache.
 	if h.isSecretResourceType(r, resourceType) {
 		canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+		if canReveal {
+			if rerr := h.auditReady(r); rerr != nil {
+				h.refuseUnaudited(w, r, rerr)
+				return
+			}
+		}
 		data, err := h.svc.GetSecretYAML(ctx, namespace, name, canReveal)
 		if canReveal {
-			h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
-				nil, audit.MustJSON(map[string]interface{}{"via": "generic-yaml"}))
+			if werr := h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+				nil, audit.MustJSON(map[string]interface{}{"via": "generic-yaml"})); werr != nil {
+				h.refuseUnaudited(w, r, werr)
+				return
+			}
 		}
 		if err != nil {
 			h.handleError(w, err)
@@ -297,10 +313,19 @@ func (h *Handler) DescribeGenericResource(w http.ResponseWriter, r *http.Request
 	// Secrets take the dedicated describe (values masked without reveal).
 	if h.isSecretResourceType(r, resourceType) {
 		canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+		if canReveal {
+			if rerr := h.auditReady(r); rerr != nil {
+				h.refuseUnaudited(w, r, rerr)
+				return
+			}
+		}
 		data, err := h.svc.DescribeSecret(ctx, namespace, name, canReveal)
 		if canReveal {
-			h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
-				nil, audit.MustJSON(map[string]interface{}{"via": "generic-describe"}))
+			if werr := h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+				nil, audit.MustJSON(map[string]interface{}{"via": "generic-describe"})); werr != nil {
+				h.refuseUnaudited(w, r, werr)
+				return
+			}
 		}
 		if err != nil {
 			h.handleError(w, err)

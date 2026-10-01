@@ -165,6 +165,12 @@ ai:
 audit:
   # Also write every audit record to the service log as one JSON line (event: audit) for the cluster log pipeline.
   stdout: true
+  # Refuse audited actions (writes, Secret/Helm reveal, exec, node shell, logs,
+  # AI write tools) with 503 while the audit database cannot store the row,
+  # instead of running them unrecorded. Lists and reads keep working. Services
+  # also wait for the database at start-up (AUDIT_DB_WAIT_SEC, 90 s) and exit
+  # if it does not come, rather than falling back to log-only auditing.
+  failClosed: true
 
 # --- Data retention ---
 # Days to keep rows before auth-service deletes them (once at boot, then daily;

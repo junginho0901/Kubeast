@@ -41,7 +41,7 @@ Every **write-class HTTP handler** (create/update/delete/rollback/restart/…) a
 
 - **Action names are strict**: `<domain>.<object>.<verb>` (e.g. `k8s.pod.delete`, `helm.release.rollback`, `ai.tool.execute`, `admin.audit.read`). New actions must be added to the catalog in `docs/audit-log-plan.md §5-2` **first** (update the plan doc before the code).
 - **Record both success and failure** — on failure set `rec.Result = audit.ResultFailure` and fill `rec.Error`.
-- Audit writes are **best-effort**: a Postgres failure must NOT abort the underlying operation. Log with `slog.Error` and still return the normal response.
+- The **database row is a precondition for sensitive actions; only the stdout mirror is best-effort.** While the audit store cannot take a row, writes and sensitive reads are refused with 503 `audit unavailable` (`AUDIT_FAIL_CLOSED`, default true; chart `audit.failClosed`) — mutation routes through the `audit.RequireWritable` middleware, conditionally-audited GET handlers via `h.auditReady(r)` before the action plus the `recordAudit*` return value (`h.refuseUnaudited`). A write that fails after a mutation already ran is counted and logged by `audit.Guarded`; the response stands. Services wait for the database at boot (`AUDIT_DB_WAIT_SEC`, 90 s) and exit if it does not come — there is no log-only fallback.
 - Mask sensitive fields (password/secret/token/apikey) with `audit.MaskSensitive(...)` before storing in `Before`/`After`.
 - Every new `docs/*-plan.md` must include a `## N. 감사 로그` section (record-target actions + permission/audit-action mapping table).
 

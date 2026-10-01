@@ -2,6 +2,7 @@
 AI Service API 라우터
 """
 import copy
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
@@ -10,6 +11,8 @@ from app.models.ai import ChatRequest, SessionChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
 from app.security import require_auth, decode_access_token, bearer_or_cookie
+
+logger = logging.getLogger(__name__)
 
 
 def _validation_message(err: ValidationError) -> str:
@@ -318,7 +321,7 @@ async def approve_tool_approval(
     authorization: str = Depends(bearer_or_cookie),
 ):
     from datetime import datetime
-    from app.services.audit_writer import write_audit
+    from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import formatters
 
     from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
@@ -330,18 +333,34 @@ async def approve_tool_approval(
         approval_token = sign_approval(approval.id, approval.user_id, approval.cluster, approval.tool, approval.args or {})
     except ApprovalTokenUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
+    # A write tool runs only when its audit rows can be stored (fail-closed):
+    # checked before the approval leaves `pending`, so a refusal changes nothing.
+    try:
+        await require_audit_ready()
+    except AuditUnavailable as e:
+        # The reason names the database host; it stays in the log.
+        logger.warning("audit: refusing unrecorded tool run (approval=%s tool=%s): %s", approval.id, approval.tool, e)
+        raise HTTPException(status_code=503, detail="audit unavailable")
     # One statement moves pending → approved; a second click, or two clicks
     # racing, finds the row no longer pending and stops here.
     approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=datetime.utcnow())
     if approval is None:
         raise HTTPException(status_code=409, detail="Approval is no longer pending")
     actor, http = _extract_audit_meta(request, authorization)
-    await write_audit(
+    stored = await write_audit(
         action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type="tool", target_id=approval.tool,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
     )
+    if not stored and fail_closed_enabled():
+        # The database went away between the readiness probe and the row: the
+        # tool has not run, so close the approval instead of executing unrecorded.
+        await db.transition_tool_approval(
+            approval.id, "approved", status="failed", result="audit unavailable", decided_at=datetime.utcnow(),
+        )
+        _invalidate_caches()
+        raise HTTPException(status_code=503, detail="audit unavailable")
 
     # Run with the stored arguments as the approving user: tool-server re-checks
     # ai.tool.<name> in the cluster (C1) and impersonates the user (C2).

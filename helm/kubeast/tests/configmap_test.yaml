@@ -13,6 +13,9 @@ tests:
           path: data.AUDIT_STDOUT
           value: "true"
       - equal:
+          path: data.AUDIT_FAIL_CLOSED
+          value: "true"
+      - equal:
           path: data.MIGRATIONS_MODE
           value: startup
       - equal:
@@ -61,6 +64,14 @@ tests:
     asserts:
       - equal:
           path: data.AUDIT_STDOUT
+          value: "false"
+
+  - it: audit.failClosed=false lets audited actions run while the database is down
+    set:
+      audit.failClosed: false
+    asserts:
+      - equal:
+          path: data.AUDIT_FAIL_CLOSED
           value: "false"
 
   - it: migrations.mode=job is handed to the services

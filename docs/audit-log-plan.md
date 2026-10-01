@@ -13,7 +13,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | D1 | 모든 **쓰기 핸들러**(create/update/delete/rollback/restart/scale/apply/…)와 **민감 읽기**(Secret reveal, Node shell, Pod exec, Pod logs, kubeconfig 읽기, 감사 로그 조회·내보내기)는 기록한다. 단순 목록/조회, health, 공개 엔드포인트는 제외 | 핸들러가 `audit.FromHTTPRequest(r)`로 레코드를 만들고 `auditStore.Write` |
 | D2 | 성공과 실패를 모두 기록한다. 실패는 `Result = failure`, `Error`에 사유 | `recordHelmAudit` 등 헬퍼가 err 유무로 채움 |
 | D3 | `Before`/`After`에 비밀이 들어가지 않게 마스킹한다 | `audit.MaskSensitive`(password/secret/token/apikey 키), AI 툴 결과는 `pkg/redact` |
-| D4 | 감사 기록은 best-effort — DB 실패가 본 작업을 막지 않는다 | `Write` 오류는 `slog.Error`로 남기고 정상 응답 |
+| D4 | **DB 행은 민감 동작의 선행 조건**(fail-closed), stdout 미러만 best-effort. 감사 DB에 기록할 수 없으면 쓰기와 민감 읽기는 503 `audit unavailable`, 목록·조회는 계속. 이미 실행된 변경의 사후 쓰기 실패는 세고 ERROR 로그, 응답은 유지. 부팅 때 DB가 없으면 기다렸다가(`AUDIT_DB_WAIT_SEC` 90 s) 종료 — 로그 전용 폴백 없음(NIST AU-5(4) 제한 모드·Vault 감사 장치·kube-apiserver `--audit-log-mode blocking`과 같은 방향) | k8s-service: `audit.Guarded`(핑 캐시 2 s·실패 카운터·`/health` `audit` 블록) + 변경 라우트 `audit.RequireWritable`(POST `/search` 제외) + 조건부 감사 GET 핸들러의 `auditReady`/`refuseUnaudited`. ai-service: `require_audit_ready()`가 승인된 쓰기 툴 실행 전. 스위치 `AUDIT_FAIL_CLOSED`(기본 true, 차트 `audit.failClosed`) |
 | D5 | 감사 1건 = DB 1행 + **stdout JSON 1줄**. 앱 DB와 독립된 사본을 클러스터 로그 파이프라인이 가져간다 | `audit.StdoutTee`(Go), `audit_writer._emit_stdout`(Python). 줄 형식 §4 |
 | D6 | 액션 이름은 `<domain>.<object>.<verb>`. 새 액션은 코드보다 이 문서 §5-2에 먼저 추가한다 | 도메인 = `user` `admin` `k8s` `helm` `ai` |
 
@@ -36,6 +36,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 
 - **DB**: `auth_audit_logs`(모든 서비스 공용, auth-service가 스키마 관리). Go는 `audit.PostgresStore`, Python은 `audit_writer.py`가 같은 컬럼에 INSERT.
 - **stdout**: 서비스 로거(JSON)로 한 줄. `{"time":…,"level":"INFO","msg":"audit","event":"audit","audit":{id,service,action,result,error,actor_user_id,actor_email,target_type,target_id,target_email,cluster,namespace,path,request_ip,user_agent,request_id,before,after}}`. 최상위 `event: "audit"`이 로그 파이프라인의 라우팅 키. `AUDIT_STDOUT=false`(차트 `audit.stdout`)로 끈다. DB 쓰기가 실패해도 줄은 남고 `store_error`가 붙는다.
+- **DB를 못 쓸 때(D4)**: 변경·민감 읽기는 503 `{"detail":"audit unavailable"}`(사유는 서비스 로그 `audit: refusing unrecorded action`), k8s-service `/health`의 `audit` 블록에 `ready`·`write_failures`·`last_error`. 스위치 `AUDIT_FAIL_CLOSED`(기본 true, 차트 `audit.failClosed`), 부팅 대기 `AUDIT_DB_WAIT_SEC`(기본 90).
 - **조회·내보내기**: `GET /api/v1/auth/admin/audit-logs`(필터·페이지), `GET /api/v1/auth/admin/audit-logs/export`(같은 필터, CSV UTF-8 BOM, 최대 50,000행). 둘 다 감사 대상(`admin.audit.read`, `admin.audit.export`).
 
 ## 5. 카탈로그

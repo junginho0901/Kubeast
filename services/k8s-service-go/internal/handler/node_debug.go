@@ -45,10 +45,17 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	namespace := h.cfg.NodeShellNamespace
 	image, imageErr := nodeShellImage(h.cfg.NodeShellImages, r.URL.Query().Get("image"))
 
-	// Audit at connection time (per §11 Q2). We do not record session
-	// duration or individual commands — that's a v2 decision.
-	h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, nil,
-		nil, audit.MustJSON(map[string]interface{}{"image": image}))
+	// Audit at connection time (per §11 Q2); no session without the row. We do
+	// not record session duration or individual commands — that's a v2 decision.
+	if rerr := h.auditReady(r); rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
+	if werr := h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, nil,
+		nil, audit.MustJSON(map[string]interface{}{"image": image})); werr != nil {
+		h.refuseUnaudited(w, r, werr)
+		return
+	}
 
 	conn, err := debugUpgrader.Upgrade(w, r, nil)
 	if err != nil {

@@ -79,6 +79,11 @@ func (h *Handler) GetPodLogs(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, err)
 		return
 	}
+	// A sensitive read: not served while the audit store cannot record it.
+	if rerr := h.auditReady(r); rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
@@ -92,7 +97,10 @@ func (h *Handler) GetPodLogs(w http.ResponseWriter, r *http.Request) {
 		"container":  container,
 		"tail_lines": tailLines,
 	})
-	h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+	if werr := h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after); werr != nil {
+		h.refuseUnaudited(w, r, werr)
+		return
+	}
 
 	if err != nil {
 		h.handleError(w, err)
