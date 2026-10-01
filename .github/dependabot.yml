@@ -1,0 +1,57 @@
+# Dependency updates: one grouped PR per ecosystem per week (minor + patch);
+# majors come as their own PRs. Workflow actions are pinned to commit SHAs in
+# the workflows, so the github-actions entry is what keeps those pins current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directories:
+      - /services/pkg
+      - /services/auth-service-go
+      - /services/k8s-service-go
+      - /services/session-service-go
+      - /services/tool-server
+      - /services/model-config-controller-go
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: pip
+    directory: /services/ai-service
+    schedule:
+      interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: docker
+    directories:
+      - /services/auth-service-go
+      - /services/k8s-service-go
+      - /services/session-service-go
+      - /services/tool-server
+      - /services/model-config-controller-go
+      - /services/ai-service
+      - /frontend
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]

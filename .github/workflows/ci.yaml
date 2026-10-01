@@ -161,3 +161,60 @@ jobs:
       - run: |
           cd frontend && npm ci
           npm run lint
+
+  # Known-vulnerability gates on what the images ship. govulncheck reports only
+  # vulnerabilities on a reachable call path; npm audit and pip-audit are
+  # lockfile/requirements based and fail at high or above. The release trivy
+  # scan does not see bundled JavaScript dependencies, so this is where they
+  # are checked.
+  govulncheck:
+    name: govulncheck (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - services/pkg
+          - services/auth-service-go
+          - services/k8s-service-go
+          - services/session-service-go
+          - services/tool-server
+          - services/model-config-controller-go
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # govulncheck also reports standard-library advisories for the toolchain
+      # it runs under, so scan with the newest 1.26 patch — the one the images
+      # are built with (golang:1.26-alpine) — not the go.mod minimum (1.26.0).
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - working-directory: ${{ matrix.module }}
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  npm-audit:
+    name: npm audit (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: |
+          cd frontend && npm ci
+          npm audit --omit=dev --audit-level=high
+
+  pip-audit:
+    name: pip-audit (ai-service)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - run: |
+          pip install pip-audit
+          pip-audit -r services/ai-service/requirements.txt
