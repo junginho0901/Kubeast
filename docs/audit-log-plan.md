@@ -58,17 +58,19 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `user.token.refresh` | 액세스 토큰 갱신 |
 | `user.password.change` / `user.password.reset` | 비밀번호 변경·재설정 |
 | `user.account.provision` | OIDC 첫 로그인으로 계정 생성(JIT) |
-| `user.role.update` / `user.role.sync` | 계정 등급 변경 / OIDC 그룹 동기화 |
+| `user.register` | 자기 가입(`ALLOW_REGISTRATION`) → `Pending` 역할. actor = target = 새 계정 |
+| `user.role.update` / `user.role.sync` | 계정 등급 변경 / OIDC 그룹 동기화. 대량 API(`PATCH /admin/users/bulk-role`)는 계정마다 1행, `after.bulk = true` |
+| `user.create` / `user.update` / `user.delete` | 관리자의 계정 생성·수정·삭제. 대량 생성(`POST /admin/users/bulk`)은 계정마다 1행, `after.bulk = true` |
 | `user.cluster_role.set` / `user.cluster_role.unset` | 클러스터별 Read/Write/Admin 부여·회수 |
 | `admin.users.create` / `.read` / `.update` / `.delete` | 관리자 사용자 관리 |
-| `admin.roles.create` / `.update` / `.delete` | 커스텀 역할 |
-| `admin.organizations.create` / `.delete` | 조직 |
+| `admin.roles.create` / `.update` / `.delete` | 역할 생성·수정·삭제. `before`/`after` = `{name, description, permissions}` — 권한 목록 변경이 그대로 남는다 |
+| `admin.organizations.create` / `.delete` | 조직(팀) 생성·삭제. `after`/`before` = `{type, name}` |
 | `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트 |
 | `admin.audit.read` / `admin.audit.export` | 감사 로그 조회·CSV |
 | `admin.retention.purge` | 보존 기간(`RETENTION_AUDIT_DAYS`·`RETENTION_CHAT_DAYS`)이 지난 감사·채팅 행 삭제 — auth-service의 일일 작업, actor `system`. `after`에 기간·기준 시각·삭제 행 수(감사·세션·툴 승인); 실패면 `failure` |
 | `ai.tool.helm_execute` | AI 승인 경로의 Helm 쓰기 실행 |
 
-**k8s-service (`k8s` / `helm`)**
+**k8s-service (`k8s` / `helm`)** — 모든 행의 `cluster` = 요청이 가리킨 클러스터 id(`?cluster=` / 세션 기본값). `request_ip` = 게이트웨이가 본 클라이언트 주소(`X-Real-IP`; `X-Forwarded-For`는 읽지 않음, 앞단 프록시는 차트 `gateway.trustedProxies`).
 
 | 액션 | 뜻 |
 |---|---|

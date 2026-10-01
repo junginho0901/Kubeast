@@ -45,7 +45,18 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		if uid == payload.UserID {
 			continue // skip changing own role
 		}
-		if err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID); err != nil {
+		target, _ := h.repo.GetUserByID(r.Context(), uid)
+		if target == nil {
+			continue
+		}
+		err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID)
+		// One audit row per account, like the single-user path.
+		writeAudit(h.auditStore, r, payload, auditEvent{
+			action: "user.role.update", targetType: "user", targetID: uid, targetEmail: target.Email,
+			before: map[string]any{"role": target.RoleName},
+			after:  map[string]any{"role": targetRole.Name, "bulk": true}, err: err,
+		})
+		if err != nil {
 			continue
 		}
 		_ = h.repo.BumpTokenVersion(r.Context(), uid) // issued tokens carry the old role
@@ -141,7 +152,13 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			UpdatedAt:    now,
 		}
 
-		if err := h.repo.CreateUser(r.Context(), user); err != nil {
+		err = h.repo.CreateUser(r.Context(), user)
+		// One audit row per account, like the single-user path.
+		writeAudit(h.auditStore, r, payload, auditEvent{
+			action: "user.create", targetType: "user", targetID: user.ID, targetEmail: user.Email,
+			after: map[string]any{"name": user.Name, "email": user.Email, "role": targetRole.Name, "team": derefStr(u.Team), "bulk": true}, err: err,
+		})
+		if err != nil {
 			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
 			continue
 		}

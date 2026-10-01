@@ -164,7 +164,7 @@ func main() {
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
-	roleHandler := handler.NewRoleHandler(repo)
+	roleHandler := handler.NewRoleHandler(repo, auditStore)
 	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
 	healthHandler := handler.NewHealthHandler(pool)

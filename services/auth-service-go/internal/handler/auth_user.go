@@ -76,7 +76,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    now,
 	}
 
-	if err := h.repo.CreateUser(r.Context(), user); err != nil {
+	err = h.repo.CreateUser(r.Context(), user)
+	// Self-registration: the new account is both actor and target.
+	writeAudit(h.auditStore, r, auth.TokenPayload{UserID: user.ID, Email: user.Email}, auditEvent{
+		action: "user.register", targetType: "user", targetID: user.ID, targetEmail: user.Email,
+		after: map[string]any{"name": user.Name, "email": user.Email, "role": user.RoleName, "team": derefStr(user.Team)}, err: err,
+	})
+	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
