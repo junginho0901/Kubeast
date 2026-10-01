@@ -110,7 +110,7 @@ export function ChatPanel({
         message,
         extraBody,
       )
-    } catch (e) {
+    } catch {
       // ChatStreamManager 가 내부 상태에 error 를 기록하므로 별도 처리 불필요
     }
   }
