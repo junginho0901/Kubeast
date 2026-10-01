@@ -97,6 +97,18 @@ auth:
   impersonation:
     enabled: true
     clusterRoles: true
+    # A custom Kubeast role (anything but Read/Write/Admin) granted on a
+    # cluster acts there as group kubeast:role:<slug> (lowercase; any character
+    # other than a-z 0-9 . _ - becomes "-"). The impersonator ClusterRole allows
+    # only the four fixed groups, so such a role gets 403 on every cluster call
+    # until its group is allowed and bound. Each entry here renders both for
+    # the installed cluster: the group joins an extra impersonator ClusterRole
+    # and is bound to each listed ClusterRole (view, edit, admin, cluster-admin,
+    # kubeast:cluster-reader or your own). Apply the same rendering to every
+    # registered cluster (templates/impersonation-custom-roles.yaml).
+    customRoles: []
+    #  - name: sre-readonly
+    #    clusterRoles: [view, "kubeast:cluster-reader"]
 
 # --- Node shell (privileged debug pod on a node) ---
 # Off by default. When on, the pod runs in `namespace` (created with the
