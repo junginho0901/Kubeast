@@ -9,10 +9,12 @@ on:
   # Dockerfiles before a tag.
   workflow_dispatch:
 
-# Each image is scanned (trivy: fixed CRITICAL/HIGH fail the release), gets an
-# SBOM and a build-provenance attestation (GitHub artifact attestations,
-# Sigstore), and is signed keyless with cosign. See docs/supply-chain.md for
-# how to verify.
+# Each image is pushed by digest, checked (architecture, trivy: fixed
+# CRITICAL/HIGH fail the release), gets an SBOM and a build-provenance
+# attestation (GitHub artifact attestations, Sigstore), is signed keyless with
+# cosign, and only then receives its version tag. Actions are pinned to commit
+# SHAs (Dependabot keeps them current). See docs/supply-chain.md for how to
+# verify.
 permissions:
   contents: read
   packages: write
@@ -60,7 +62,7 @@ jobs:
             binary: /controller
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Owner must be lowercase for ghcr.io image names.
       - name: Lowercase owner
@@ -68,7 +70,7 @@ jobs:
         run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -76,24 +78,26 @@ jobs:
 
       # Multi-arch (x86 and Graviton/Apple Silicon nodes): QEMU for the foreign
       # arch, buildx to assemble one manifest list per tag.
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Extract version
         id: version
-        run: echo "tag=$([ "$GITHUB_REF_TYPE" = tag ] && echo "$GITHUB_REF_NAME" || echo dry-run)" >> $GITHUB_OUTPUT
+        run: echo "tag=$([ "$GITHUB_REF_TYPE" = tag ] && echo "$GITHUB_REF_NAME" || echo dry-run)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push
+      # The image is pushed by digest only (no tag): the version tag is applied
+      # as the last step, after the architecture check, the vulnerability gate,
+      # the attestations and the signature. A build that fails any of them
+      # leaves an untagged manifest behind and nothing a `docker pull` by tag
+      # can reach. There is no `latest` tag: every release tag is immutable.
+      - name: Build and push (by digest)
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile != '' && format('{0}/{1}', matrix.context, matrix.dockerfile) || format('{0}/Dockerfile', matrix.context) }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'push' }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:${{ steps.version.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}:latest
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
 
       # Each platform variant must carry a binary of its own architecture: the
       # v0.3.0/v0.4.0 arm64 variants of two images shipped x86-64 binaries and
@@ -122,7 +126,7 @@ jobs:
       # digest, so it covers both architectures.
       - name: Vulnerability gate (trivy)
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
           scan-type: image
@@ -134,7 +138,7 @@ jobs:
 
       - name: SBOM (syft, SPDX JSON)
         if: github.event_name == 'push'
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
           format: spdx-json
@@ -143,7 +147,7 @@ jobs:
 
       - name: Attest SBOM
         if: github.event_name == 'push'
-        uses: actions/attest-sbom@v2
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -152,13 +156,13 @@ jobs:
 
       - name: Attest build provenance
         if: github.event_name == 'push'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
         if: github.event_name == 'push'
 
       - name: Sign image (cosign keyless, GitHub OIDC)
@@ -168,12 +172,21 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
 
+      # Last: the release tag points at the digest that passed everything above.
+      - name: Tag release
+        if: github.event_name == 'push'
+        run: docker buildx imagetools create -t "${IMAGE}:${TAG}" "${IMAGE}@${DIGEST}"
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAG: ${{ steps.version.outputs.tag }}
+
   helm-package:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Lowercase owner
         id: owner
@@ -182,7 +195,7 @@ jobs:
       # cosign and the attestation push read the registry credential from the
       # docker config; helm keeps its own.
       - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -190,7 +203,7 @@ jobs:
 
       - name: Extract version
         id: version
-        run: echo "tag=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+        run: echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Update Chart version
         run: |
@@ -219,13 +232,13 @@ jobs:
       # The chart gets the same evidence as the images: provenance attestation
       # and a keyless signature on the OCI artifact by digest.
       - name: Attest chart build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/charts/kubeast
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
       - name: Sign chart (cosign keyless, GitHub OIDC)
         run: cosign sign --yes "${CHART}@${DIGEST}"
@@ -234,7 +247,7 @@ jobs:
           DIGEST: ${{ steps.push.outputs.digest }}
 
       - name: Upload chart artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: helm-chart
           path: .helm-release/*.tgz

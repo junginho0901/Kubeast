@@ -1,7 +1,12 @@
 # Supply chain: scan, SBOM, provenance, signature
 
 Every release (`v*` tag, `.github/workflows/release.yaml`) publishes the seven
-images to ghcr.io and, per image, by digest:
+images to ghcr.io. Each image is pushed **by digest first**; the steps below run
+against that digest, and the version tag (`:vX.Y.Z`) is applied only after the
+last of them succeeds — a release that fails a gate leaves nothing a pull by tag
+can reach. There is no `latest` tag. The workflow's own actions are pinned to
+commit SHAs (`uses: owner/repo@<sha> # vX.Y.Z`), refreshed by Dependabot.
+Per image, by digest:
 
 | Step | What it produces | Fails the release when |
 |---|---|---|
