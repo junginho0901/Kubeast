@@ -1,7 +1,7 @@
 # ---- build stage ----
 # The bundle is architecture-independent: build it once on the build host
 # instead of once per target platform under emulation.
-FROM --platform=$BUILDPLATFORM node:26-alpine AS build
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

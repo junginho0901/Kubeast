@@ -55,3 +55,11 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+    ignore:
+      # Interpreter and runtime lines move on purpose, with the dependency
+      # set checked against them (3.14 had no psycopg2-binary wheel yet); Go
+      # and nginx minors follow their upstream cadence and build as is.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
