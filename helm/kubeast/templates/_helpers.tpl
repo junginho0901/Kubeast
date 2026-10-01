@@ -17,6 +17,8 @@ app.kubernetes.io/part-of: kubeast
 DATABASE_URL — the one URL every service reads. The Go services (pgx) and the
 ai-service (asyncpg, via app/db_ssl.py) both take libpq's sslmode / sslrootcert
 from it; with postgresql.sslMode unset the drivers use their default (prefer).
+Called with (dict "Values" .Values "password" <the password secret.yaml
+settled on>): the value may be generated, so the caller passes it in.
 */}}
 {{- /*
 ALLOWED_ORIGINS: the Ingress host as an origin (scheme from ingress.tls) and
@@ -37,7 +39,7 @@ every entry of gateway.allowedOrigins, comma-joined; empty with neither.
 {{- $p := .Values.postgresql -}}
 {{- $host := ternary "postgres" ($p.externalHost | default "") $p.enabled -}}
 {{- $port := ternary 5432 ($p.externalPort | default 5432) $p.enabled -}}
-postgresql+asyncpg://{{ $p.user }}:{{ $p.password }}@{{ $host }}:{{ $port }}/{{ $p.database }}
+postgresql+asyncpg://{{ $p.user }}:{{ .password }}@{{ $host }}:{{ $port }}/{{ $p.database }}
 {{- if $p.sslMode -}}
 ?sslmode={{ $p.sslMode }}
 {{- if $p.sslRootCert.secretName -}}

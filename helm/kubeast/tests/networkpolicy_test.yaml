@@ -1,0 +1,143 @@
+suite: NetworkPolicy — every flow the services actually use, nothing more
+templates:
+  - networkpolicy.yaml
+set:
+  networkPolicy.enabled: true
+tests:
+  - it: lets k8s-service reach the audit database, the cache and auth-service
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: postgres
+            ports:
+              - protocol: TCP
+                port: 5432
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-k8s-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: redis
+            ports:
+              - protocol: TCP
+                port: 6379
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-k8s-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: auth-service
+            ports:
+              - protocol: TCP
+                port: 8004
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-k8s-service
+
+  - it: lets tool-server reach auth-service for JWKS and token versions
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: auth-service
+            ports:
+              - protocol: TCP
+                port: 8004
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-tool-server
+
+  - it: opens the database to every DATABASE_URL reader and Redis to its one client
+    asserts:
+      - equal:
+          path: spec.ingress[0].from[0].podSelector.matchExpressions[0].values
+          value: [auth-service, ai-service, session-service, k8s-service, model-config-controller-go, kubeast-migrate]
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-postgres
+      - equal:
+          path: spec.ingress[0].from[0].podSelector.matchExpressions[0].values
+          value: [k8s-service]
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-redis
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    app: postgres
+            ports:
+              - protocol: TCP
+                port: 5432
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-model-config-controller
+
+  - it: sends ai-service to model APIs over TLS only
+    asserts:
+      # egress[2] = the public-internet rule (after postgres and the service peers)
+      - contains:
+          path: spec.egress[2].ports
+          content:
+            protocol: TCP
+            port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - notContains:
+          path: spec.egress[2].ports
+          content:
+            protocol: TCP
+            port: 80
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+
+  - it: points database egress at the external port when postgresql is disabled
+    set:
+      postgresql.enabled: false
+      postgresql.externalHost: db.example
+      postgresql.externalPort: 5433
+      migrations.mode: job
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+            ports:
+              - protocol: TCP
+                port: 5433
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+            ports:
+              - protocol: TCP
+                port: 5433
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-migrate

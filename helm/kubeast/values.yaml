@@ -20,6 +20,7 @@ admin:
 # looking the Secret up — which GitOps renderers such as Argo CD cannot do, so
 # every sync would rotate it). Set it to a Secret you manage (e.g. via
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
+# REDIS_PASSWORD (redis requirepass; k8s-service's cache uses it),
 # DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
 # tool-server to sign write-tool approvals), OPENAI_API_KEY, ANTHROPIC_API_KEY,
 # GEMINI_API_KEY (may be empty) and, with auth.oidc enabled and no
@@ -174,7 +175,9 @@ migrations:
 postgresql:
   enabled: true          # Set false to use external postgres
   user: kubeast
-  password: kubeast
+  # Empty = generated at install (randAlphaNum 24) and kept across upgrades,
+  # like admin.password. Required when postgresql.enabled=false.
+  password: ""
   database: kubeast
   storage: 5Gi
   storageClassName: ""   # "" = cluster default StorageClass
@@ -268,6 +271,9 @@ resources:
 # --- Redis ---
 redis:
   enabled: true
+  # requirepass. Empty = generated at install and kept across upgrades
+  # (REDIS_PASSWORD in kubeast-secrets); k8s-service's cache signs in with it.
+  password: ""
 
 # --- Gateway ---
 gateway:
@@ -296,12 +302,14 @@ ingress:
   tls: false
   tlsSecretName: ""
 
-# --- NetworkPolicy (optional, opt-in) ---
-# Adds default-deny + per-component egress whitelist. Requires a CNI that
-# supports NetworkPolicy (Calico, Cilium, Weave). Flannel / kindnet ignore it.
-# Production cluster operators should enable this after confirming their CNI.
+# --- NetworkPolicy ---
+# Default-deny plus exactly the flows the services use (gateway → services,
+# services → database/cache/auth, apiserver and model APIs out). Enforced by
+# CNIs that implement NetworkPolicy (Calico, Cilium, EKS VPC CNI with network
+# policy on); on others (Flannel, kindnet) the objects are inert. Set false
+# only if the cluster's own policy tooling takes over.
 networkPolicy:
-  enabled: false
+  enabled: true
   # CoreDNS namespace (DNS egress is allowed cluster-wide)
   dnsNamespace: kube-system
   # Additional external CIDRs to allow for ai-service egress (e.g. private

@@ -1,0 +1,34 @@
+suite: redis — requirepass from kubeast-secrets
+templates:
+  - redis.yaml
+tests:
+  - it: starts redis with requirepass and probes with the same password
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--requirepass", "$(REDIS_PASSWORD)"]
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: kubeast-secrets
+                key: REDIS_PASSWORD
+      - matchRegex:
+          path: spec.template.spec.containers[0].readinessProbe.exec.command[2]
+          pattern: 'redis-cli --no-auth-warning -a "\$REDIS_PASSWORD" ping'
+
+  - it: reads the password from secrets.existingSecret when one is given
+    set:
+      secrets.existingSecret: company-kubeast
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: company-kubeast

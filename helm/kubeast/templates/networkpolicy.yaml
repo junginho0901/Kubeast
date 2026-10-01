@@ -1,3 +1,24 @@
+{{- /* Egress to the database for every service that reads or writes it:
+       the chart's postgres pod, or any address on the external port when
+       postgresql.enabled=false. */ -}}
+{{- define "kubeast.np.postgresEgress" }}
+{{- if .Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- else }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.externalPort | default 5432 }}
+{{- end }}
+{{- end }}
 {{- if .Values.networkPolicy.enabled }}
 # Kubeast NetworkPolicy — opt-in. Default-deny + per-component whitelist.
 #
@@ -117,7 +138,9 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [auth-service, ai-service, session-service, tool-server]
+                # every DATABASE_URL reader: auth, ai, session, k8s (audit),
+                # the ModelConfig controller and the migration Job
+                values: [auth-service, ai-service, session-service, k8s-service, model-config-controller-go, kubeast-migrate]
       ports:
         - protocol: TCP
           port: 5432
@@ -142,7 +165,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [ai-service, session-service]
+                values: [k8s-service] # the only Redis client (resource cache)
       ports:
         - protocol: TCP
           port: 6379
@@ -175,15 +198,7 @@ spec:
                 # auth-service-go 의 setup handler 가 k8s-service health 조회
                 values: [gateway, k8s-service, session-service, ai-service, tool-server]
   egress:
-{{- if .Values.postgresql.enabled }}
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgres
-      ports:
-        - protocol: TCP
-          port: 5432
-{{- end }}
+{{- include "kubeast.np.postgresEgress" . }}
     # k8s-service health check (dockersetup.GetStatus)
     - to:
         - podSelector:
@@ -231,24 +246,7 @@ spec:
             matchLabels:
               app: gateway
   egress:
-{{- if .Values.postgresql.enabled }}
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgres
-      ports:
-        - protocol: TCP
-          port: 5432
-{{- end }}
-{{- if .Values.redis.enabled }}
-    - to:
-        - podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - protocol: TCP
-          port: 6379
-{{- end }}
+{{- include "kubeast.np.postgresEgress" . }}
     # JWKS endpoint
     - to:
         - podSelector:
@@ -280,24 +278,7 @@ spec:
                 operator: In
                 values: [gateway, tool-server]
   egress:
-{{- if .Values.postgresql.enabled }}
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgres
-      ports:
-        - protocol: TCP
-          port: 5432
-{{- end }}
-{{- if .Values.redis.enabled }}
-    - to:
-        - podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - protocol: TCP
-          port: 6379
-{{- end }}
+{{- include "kubeast.np.postgresEgress" . }}
     - to:
         - podSelector:
             matchExpressions:
@@ -317,8 +298,6 @@ spec:
       ports:
         - protocol: TCP
           port: 443
-        - protocol: TCP
-          port: 80
     {{- range .Values.networkPolicy.allowExternalEgressCIDRs }}
     - to:
         - ipBlock:
@@ -326,8 +305,6 @@ spec:
       ports:
         - protocol: TCP
           port: 443
-        - protocol: TCP
-          port: 80
     {{- end }}
 ---
 # k8s-service: gateway 에서 inbound, kube-apiserver egress + auth(JWKS)
@@ -352,7 +329,19 @@ spec:
                 # auth-service 의 dockersetup 이 /health 조회, ai-service 가 tool 호출
                 values: [gateway, auth-service, ai-service, tool-server]
   egress:
-    # JWKS endpoint
+    # audit log (DATABASE_URL)
+{{- include "kubeast.np.postgresEgress" . }}
+{{- if .Values.redis.enabled }}
+    # resource cache
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+    # JWKS + token-version endpoint
     - to:
         - podSelector:
             matchLabels:
@@ -405,6 +394,14 @@ spec:
       ports:
         - protocol: TCP
           port: 8002
+    # JWKS + token-version endpoint
+    - to:
+        - podSelector:
+            matchLabels:
+              app: auth-service
+      ports:
+        - protocol: TCP
+          port: 8004
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -428,6 +425,8 @@ spec:
       app: model-config-controller-go
   policyTypes: [Egress]
   egress:
+    # ModelConfig rows (DATABASE_URL)
+{{- include "kubeast.np.postgresEgress" . }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -436,5 +435,22 @@ spec:
           port: 443
         - protocol: TCP
           port: 6443
-
+{{- if eq .Values.migrations.mode "job" }}
+---
+# migration Job (migrations.mode=job): database only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-migrate
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: kubeast-migrate
+  policyTypes: [Egress]
+  egress:
+{{- include "kubeast.np.postgresEgress" . }}
+{{- end }}
 {{- end }}
