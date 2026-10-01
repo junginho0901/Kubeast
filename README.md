@@ -334,9 +334,16 @@ aws:
   # (Kubeast 자격증명은 ClusterRole kubeast-impersonator 만 있으면 됨 — 설치된
   #  클러스터의 k8s-service·tool-server ServiceAccount도 이것과 kubeconfig Secret
   #  읽기 Role만 받음; false면 예전처럼 cluster-admin)
+  # 커스텀 역할(Read/Write/Admin 외)을 클러스터에 부여하면 그룹 kubeast:role:<slug>로
+  # 동작하는데, 위 RBAC은 고정 그룹 4개만 impersonate 허용 → customRoles에 적어야
+  # 그 그룹이 허용되고 적은 ClusterRole에 묶임(등록 클러스터마다 같은 렌더 적용):
+  #   helm template kubeast helm/kubeast -s templates/impersonation-custom-roles.yaml -f values.yaml | kubectl --context <cluster> apply -f -
   impersonation:
     enabled: true
     clusterRoles: true
+    customRoles: []
+    #  - name: sre-readonly
+    #    clusterRoles: [view, "kubeast:cluster-reader"]
 
 # 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
 nodeShell:

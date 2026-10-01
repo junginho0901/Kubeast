@@ -2,6 +2,12 @@
 {{ .Release.Namespace }}
 {{- end -}}
 
+{{/* Group slug of a Kubeast role name, as services/pkg/auth/impersonation.go
+     computes it: lowercase, anything but a-z 0-9 . _ - becomes "-". */}}
+{{- define "kubeast.roleSlug" -}}
+{{- regexReplaceAll "[^a-z0-9._-]" (lower .) "-" -}}
+{{- end }}
+
 {{- define "kubeast.labels" -}}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/instance: {{ .Release.Name }}

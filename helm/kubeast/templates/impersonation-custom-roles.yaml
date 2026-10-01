@@ -1,0 +1,64 @@
+{{- if and .Values.auth.impersonation.enabled .Values.auth.impersonation.customRoles }}
+# Custom Kubeast roles granted on a cluster act as group kubeast:role:<slug>
+# (services/pkg/auth/impersonation.go). files/impersonation-rbac.yaml allows
+# impersonating only the four fixed groups, so this adds the custom groups to
+# the impersonator (bound the same two ways: the kubeast:impersonator group for
+# external credentials and the two service accounts here) and binds each group
+# to the ClusterRoles it names. Apply to every registered cluster:
+#   helm template kubeast helm/kubeast -s templates/impersonation-custom-roles.yaml -f <values> | kubectl --context <cluster> apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeast-impersonator-custom-roles
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["groups"]
+    verbs: ["impersonate"]
+    resourceNames:
+    {{- range .Values.auth.impersonation.customRoles }}
+      - {{ printf "kubeast:role:%s" (include "kubeast.roleSlug" .name) | quote }}
+    {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeast-impersonator-custom-roles
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeast-impersonator-custom-roles
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: kubeast:impersonator
+  - kind: ServiceAccount
+    name: k8s-service
+    namespace: {{ include "kubeast.namespace" . }}
+  - kind: ServiceAccount
+    name: tool-server
+    namespace: {{ include "kubeast.namespace" . }}
+{{- range $role := .Values.auth.impersonation.customRoles }}
+{{- $group := printf "kubeast:role:%s" (include "kubeast.roleSlug" $role.name) }}
+{{- range $cr := $role.clusterRoles }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-%s" $group (include "kubeast.roleSlug" $cr) | replace ":" "-" }}
+  labels:
+    {{- include "kubeast.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $cr }}
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ $group }}
+{{- end }}
+{{- end }}
+{{- end }}
