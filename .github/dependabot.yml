@@ -32,6 +32,10 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # 0.5 needs eslint 9; the project is on eslint 8 until the flat-config move.
+      - dependency-name: eslint-plugin-react-refresh
+        versions: [">=0.5.0"]
 
   - package-ecosystem: pip
     directory: /services/ai-service
