@@ -36,6 +36,15 @@ updates:
       # 0.5 needs eslint 9; the project is on eslint 8 until the flat-config move.
       - dependency-name: eslint-plugin-react-refresh
         versions: [">=0.5.0"]
+      # Build-tool majors are their own migrations (Tailwind 4 moves the
+      # PostCSS plugin and the config format; Vite 8 / Vitest 5 change
+      # config and plugin APIs), not weekly bumps.
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directory: /services/ai-service

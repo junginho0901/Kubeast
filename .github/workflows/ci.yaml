@@ -114,6 +114,10 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit -p tsconfig.json
       - run: npx vitest run
+      # The production bundle: catches what type-checking cannot (a PostCSS
+      # plugin that moved, a package exports map that hides a worker path).
+      # Bundling monaco-editor exceeds Node's default heap.
+      - run: NODE_OPTIONS=--max-old-space-size=4096 npx vite build
 
   helm:
     name: helm lint + unittest + kubeconform
@@ -183,11 +187,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # govulncheck also reports standard-library advisories for the toolchain
-      # it runs under, so scan with the newest 1.26 patch — the one the images
-      # are built with (golang:1.26-alpine) — not the go.mod minimum (1.26.0).
+      # it runs under, so scan with the newest 1.27 patch — the one the images
+      # are built with (golang:1.27-alpine) — not the go.mod minimum (1.26.0).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26"
+          go-version: "1.27"
           check-latest: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
       - working-directory: ${{ matrix.module }}
