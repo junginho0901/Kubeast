@@ -69,8 +69,13 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ### 예외 없는 원칙
 
 - **성공뿐 아니라 실패도 기록**. 실패 시 `Result = audit.ResultFailure`, `Error` 필드 채움.
-- Postgres 장애로 감사 쓰기가 실패하더라도 **본래 작업은 멈추지 않는다** (best-effort).
-  `slog.Error` 로만 남기고 사용자 응답은 정상 반환.
+- **DB 감사 행은 민감 동작의 선행 조건, stdout 미러만 best-effort.** 감사 DB에 기록할 수 없으면
+  쓰기·민감 읽기(Secret/Helm reveal, exec, 노드 셸, 로그, kubeconfig, AI 쓰기 툴)는 **503 `audit unavailable`**로
+  거부한다(`AUDIT_FAIL_CLOSED`, 기본 true; 차트 `audit.failClosed`). 목록·조회는 계속된다.
+  구현 = 변경 라우트는 `audit.RequireWritable` 미들웨어, 감사가 조건부인 GET 핸들러는 동작 전 `h.auditReady(r)` +
+  `recordAudit*` 반환 오류 확인(`h.refuseUnaudited`). 이미 실행된 변경의 사후 쓰기 실패는 `audit.Guarded`가 세고
+  ERROR 로그로 남기며 응답은 그대로다. 부팅 때 DB가 없으면 `AUDIT_DB_WAIT_SEC`(90 s)까지 기다렸다가 종료한다 —
+  로그 전용 폴백은 없다.
 - 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장.
 
 ### PR 리뷰 기준

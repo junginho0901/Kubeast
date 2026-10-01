@@ -104,11 +104,20 @@ func (h *Handler) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
 	canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+	if canReveal {
+		if rerr := h.auditReady(r); rerr != nil {
+			h.refuseUnaudited(w, r, rerr)
+			return
+		}
+	}
 	data, err := h.svc.DescribeSecret(ctx, namespace, name, canReveal)
 	// Meta-read audit: only when the caller actually had permission to see plaintext.
 	if canReveal {
-		h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
-			nil, audit.MustJSON(map[string]interface{}{"via": "describe"}))
+		if werr := h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+			nil, audit.MustJSON(map[string]interface{}{"via": "describe"})); werr != nil {
+			h.refuseUnaudited(w, r, werr)
+			return
+		}
 	}
 	if err != nil {
 		h.handleError(w, err)
@@ -123,10 +132,19 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
 	canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+	if canReveal {
+		if rerr := h.auditReady(r); rerr != nil {
+			h.refuseUnaudited(w, r, rerr)
+			return
+		}
+	}
 	data, err := h.svc.GetSecretYAML(ctx, namespace, name, canReveal)
 	if canReveal {
-		h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
-			nil, audit.MustJSON(map[string]interface{}{"via": "yaml"}))
+		if werr := h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+			nil, audit.MustJSON(map[string]interface{}{"via": "yaml"})); werr != nil {
+			h.refuseUnaudited(w, r, werr)
+			return
+		}
 	}
 	if err != nil {
 		h.handleError(w, err)

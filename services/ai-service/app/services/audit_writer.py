@@ -1,8 +1,11 @@
 """AI service audit log writer.
 
 Writes to the same `auth_audit_logs` Postgres table that auth/k8s services
-use (see services/pkg/audit). Best-effort — every helper swallows errors so
-audit failures never block chat.
+use (see services/pkg/audit). The stdout mirror is best-effort; the database
+row is what `write_audit` reports back (True when stored). Chat itself keeps
+going when a write fails, but a write tool is not run unless the row can be
+stored: `require_audit_ready()` before the action, fail-closed by default
+(AUDIT_FAIL_CLOSED).
 
 Records only metadata: actor, action, target, result. Chat message content
 and LLM responses are stored in the `messages` table, NOT audit, to avoid
@@ -17,9 +20,11 @@ Schema columns come from services/pkg/dbmigrate/migrations (auth_audit_logs).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -31,6 +36,52 @@ logger = logging.getLogger(__name__)
 def stdout_enabled() -> bool:
     """AUDIT_STDOUT (default true): mirror every audit record to stdout as JSON."""
     return os.getenv("AUDIT_STDOUT", "true").strip().lower() not in ("false", "0", "off")
+
+
+def fail_closed_enabled() -> bool:
+    """AUDIT_FAIL_CLOSED (default true): a write tool is refused (503) while the
+    audit table cannot take a row, instead of running unrecorded."""
+    return os.getenv("AUDIT_FAIL_CLOSED", "true").strip().lower() not in ("false", "0", "off")
+
+
+class AuditUnavailable(Exception):
+    """The audit database cannot take a row right now (fail-closed refusal)."""
+
+
+# One probe per READY_TTL seconds; a failed write drops the cache (see write_audit).
+READY_TTL_SEC = 2.0
+_ready_cache: dict[str, Any] = {"at": 0.0, "ok": True, "error": None}
+write_failures = 0
+
+
+async def audit_ready() -> tuple[bool, Optional[str]]:
+    """Whether a row written now would land in auth_audit_logs: SELECT 1 through
+    the engine, cached READY_TTL_SEC. Always True with fail-closed off or on the
+    sqlite dev database (no audit table there)."""
+    if not fail_closed_enabled():
+        return True, None
+    now = time.monotonic()
+    if now - _ready_cache["at"] < READY_TTL_SEC:
+        return _ready_cache["ok"], _ready_cache["error"]
+    ok, error = True, None
+    try:
+        from app.database import get_db_service
+
+        db = await get_db_service()
+        if "postgresql" in str(db.database_url):
+            async with db.engine.connect() as conn:
+                await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=2.0)
+    except Exception as exc:  # unreachable, timeout, pool exhausted, ...
+        ok, error = False, str(exc) or exc.__class__.__name__
+    _ready_cache.update(at=time.monotonic(), ok=ok, error=error)
+    return ok, error
+
+
+async def require_audit_ready() -> None:
+    """Raise AuditUnavailable when a sensitive action must not run now."""
+    ok, error = await audit_ready()
+    if not ok:
+        raise AuditUnavailable(error or "database unreachable")
 
 
 def _emit_stdout(record: dict[str, Any]) -> None:
@@ -95,13 +146,16 @@ async def write_audit(
     cluster: Optional[str] = None,
     result: str = "success",
     error: Optional[str] = None,
-) -> None:
-    """Insert a single audit record. Failures are logged and swallowed.
+) -> bool:
+    """Insert a single audit record. Returns True when the row was stored (or
+    there is no Postgres to store it in); a failure is logged, counted and
+    returned as False — the caller decides whether the action may go on.
 
     Postgres-only — when DATABASE_URL points to sqlite (local dev) the table
     doesn't exist and we skip silently. `cluster` is the cluster the request
     acted on; callers that do not know it leave it unset (DEFAULT_CLUSTER).
     """
+    global write_failures
     _emit_stdout(
         {
             "service": SERVICE_AI,
@@ -126,7 +180,7 @@ async def write_audit(
 
         db = await get_db_service()
         if "postgresql" not in str(db.database_url):
-            return
+            return True
 
         after_json = json.dumps(after, ensure_ascii=False, default=str) if after else "{}"
 
@@ -151,5 +205,9 @@ async def write_audit(
                     "error": error or None,
                 },
             )
+        return True
     except Exception as exc:
-        logger.warning("audit write failed (action=%s): %s", action, exc)
+        write_failures += 1
+        _ready_cache["at"] = 0.0  # re-probe on the next readiness check
+        logger.error("audit write failed (action=%s, failures=%d): %s", action, write_failures, exc)
+        return False

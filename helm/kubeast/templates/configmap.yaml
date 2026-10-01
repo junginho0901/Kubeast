@@ -70,6 +70,7 @@ data:
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}
+  AUDIT_FAIL_CLOSED: {{ .Values.audit.failClosed | quote }}
   MIGRATIONS_MODE: {{ .Values.migrations.mode | quote }}
   RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}
   RETENTION_CHAT_DAYS: {{ .Values.retention.chatDays | quote }}

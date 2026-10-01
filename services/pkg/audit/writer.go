@@ -4,13 +4,14 @@ import "context"
 
 // Writer persists audit records.
 //
-// Implementations must be safe for concurrent use. Writes are best-effort —
-// failures are logged by the caller but never block or error the business
-// operation (see docs/audit-log-plan.md §2 D4).
+// Implementations must be safe for concurrent use. The stdout mirror is
+// best-effort, the database row is not: a sensitive action checks Readier
+// before it runs and treats a failed Write as a reason not to answer
+// (docs/audit-log-plan.md §2 D4). Mutations that already happened keep their
+// response — the failure is counted and logged by Guarded.
 type Writer interface {
 	// Write persists a Record and returns the assigned DB id.
-	// A zero id with a non-nil error indicates total failure; callers should
-	// log the error and continue with the original request.
+	// A zero id with a non-nil error indicates the row was not stored.
 	Write(ctx context.Context, rec Record) (int64, error)
 }
 

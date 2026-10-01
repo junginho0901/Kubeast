@@ -42,14 +42,9 @@ func main() {
 	// Init Redis cache
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
 
-	// Init shared Postgres pool (audit log) with a short timeout so that
-	// a misconfigured DB does not block k8s-service start-up indefinitely.
-	// On failure we fall back to the slog-backed audit store and continue.
+	// Shared Postgres pool: the audit log and the cluster registry.
 	bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer bootCancel()
-
-	// The pool is required for the cluster registry, so it is kept alive even
-	// when the audit writer falls back to slog.
 	pgPool, pgErr := pgxpool.New(bootCtx, cfg.DatabaseURLForPgx())
 	if pgErr != nil {
 		slog.Error("failed to create postgres pool", "error", pgErr)
@@ -57,24 +52,25 @@ func main() {
 	}
 	defer pgPool.Close()
 
-	var auditStore audit.Writer
-	if err := pgPool.Ping(bootCtx); err != nil {
-		slog.Warn("audit: Postgres unreachable at boot, using slog writer", "error", err)
-		auditStore = audit.NewSlogStore(audit.ServiceK8s)
-	} else {
-		// The schema is owned by auth-service (services/pkg/dbmigrate); the audit
-		// table must be at the version this build expects.
-		waitCtx, waitCancel := context.WithTimeout(context.Background(), 70*time.Second)
-		err := dbmigrate.WaitFor(waitCtx, pgPool, dbmigrate.Required, 60*time.Second)
-		waitCancel()
-		if err != nil {
-			slog.Warn("audit: database schema not ready, using slog writer", "error", err)
-			auditStore = audit.NewSlogStore(audit.ServiceK8s)
-		} else {
-			auditStore = audit.WithStdout(audit.NewPostgresStore(pgPool, audit.ServiceK8s), audit.StdoutEnabled())
-			slog.Info("audit: Postgres writer ready", "stdout", audit.StdoutEnabled())
-		}
+	// The audit database is a start-up requirement: wait for it (bounded by
+	// AUDIT_DB_WAIT_SEC) and exit when it does not come — a restarting pod is
+	// visible, a process writing audit rows to its log only is not. The schema
+	// is owned by auth-service (services/pkg/dbmigrate); the audit table must be
+	// at the version this build expects.
+	bootWait := audit.BootWait()
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), bootWait)
+	if err := audit.WaitReady(waitCtx, pgPool, 2*time.Second); err != nil {
+		slog.Error("audit: database unavailable at boot, exiting", "waited", bootWait, "error", err)
+		os.Exit(1)
 	}
+	if err := dbmigrate.WaitFor(waitCtx, pgPool, dbmigrate.Required, bootWait); err != nil {
+		slog.Error("audit: database schema not ready, exiting", "waited", bootWait, "error", err)
+		os.Exit(1)
+	}
+	waitCancel()
+	pgStore := audit.NewPostgresStore(pgPool, audit.ServiceK8s)
+	auditStore := audit.Guard(audit.WithStdout(pgStore, audit.StdoutEnabled()), pgStore, audit.FailClosedEnabled())
+	slog.Info("audit: Postgres writer ready", "stdout", audit.StdoutEnabled(), "fail_closed", auditStore.FailClosed())
 
 	// Cluster registry: per-cluster kubeconfigs are read at request time (no
 	// rollout on registration). In k8s mode they live in Secrets read via the
@@ -168,6 +164,9 @@ func main() {
 		// Resolve the target cluster from ?cluster= for every protected route
 		// (+ fail-fast for clusters the health checker has marked down).
 		r.Use(h.ClusterMiddleware)
+		// Fail-closed: a mutation is refused (503) while the audit store cannot
+		// record it. POST /search is a read. Audited GET paths check inside.
+		r.Use(audit.RequireWritable(auditStore, "/api/v1/search"))
 
 		routes.Register(r, h, wsMux)
 	})

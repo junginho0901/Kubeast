@@ -2,20 +2,24 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
-// recordAudit writes a k8s-service audit entry. It is best-effort —
-// a nil auditStore or a write failure never blocks the caller.
+// recordAudit writes a k8s-service audit entry and reports whether the row
+// was stored. Mutation handlers call it after the change and may ignore the
+// result (the store counts and logs the failure); sensitive reads must not
+// answer when it fails — see auditReady / refuseUnaudited.
 //
 // Use for simple delete/mutation endpoints where there is no meaningful
 // before/after payload; call recordAuditWithPayload when those are needed.
-func (h *Handler) recordAudit(r *http.Request, action, targetType, targetID, namespace string, err error) {
-	h.recordAuditWithPayload(r, action, targetType, targetID, namespace, err, nil, nil)
+func (h *Handler) recordAudit(r *http.Request, action, targetType, targetID, namespace string, err error) error {
+	return h.recordAuditWithPayload(r, action, targetType, targetID, namespace, err, nil, nil)
 }
 
 // recordAuditWithPayload is the full-form audit helper supporting
@@ -25,8 +29,8 @@ func (h *Handler) recordAuditWithPayload(
 	action, targetType, targetID, namespace string,
 	err error,
 	before, after json.RawMessage,
-) {
-	h.recordAuditAs(r, audit.ServiceK8s, action, targetType, targetID, namespace, err, before, after)
+) error {
+	return h.recordAuditAs(r, audit.ServiceK8s, action, targetType, targetID, namespace, err, before, after)
 }
 
 // recordHelmAudit is the helm-scoped counterpart to recordAudit. It
@@ -37,8 +41,8 @@ func (h *Handler) recordHelmAudit(
 	action, targetType, targetID, namespace string,
 	err error,
 	before, after json.RawMessage,
-) {
-	h.recordAuditAs(r, audit.ServiceHelm, action, targetType, targetID, namespace, err, before, after)
+) error {
+	return h.recordAuditAs(r, audit.ServiceHelm, action, targetType, targetID, namespace, err, before, after)
 }
 
 // recordAuditAs is the shared implementation that lets callers pin the
@@ -49,9 +53,9 @@ func (h *Handler) recordAuditAs(
 	service, action, targetType, targetID, namespace string,
 	err error,
 	before, after json.RawMessage,
-) {
+) error {
 	if h == nil || h.auditStore == nil {
-		return
+		return nil
 	}
 
 	payload, _ := auth.FromContext(r.Context())
@@ -76,5 +80,30 @@ func (h *Handler) recordAuditAs(
 		rec.Result = audit.ResultSuccess
 	}
 
-	_, _ = h.auditStore.Write(r.Context(), rec)
+	_, werr := h.auditStore.Write(r.Context(), rec)
+	return werr
+}
+
+// auditReady says whether a sensitive action may run now. With a fail-closed
+// store (audit.Guarded) that is a cached ping of the database; plain writers,
+// and a nil store in tests, always pass. Mutation routes get the same check
+// from audit.RequireWritable in main.go; the audited GET paths (Secret and
+// Helm reveal, logs, exec, node shell, kubeconfig) call this themselves
+// because only some of their requests are sensitive.
+func (h *Handler) auditReady(r *http.Request) error {
+	if h == nil || h.auditStore == nil {
+		return nil
+	}
+	if rd, ok := h.auditStore.(audit.Readier); ok {
+		return rd.Ready(r.Context())
+	}
+	return nil
+}
+
+// refuseUnaudited answers 503 "audit unavailable" for a sensitive action the
+// store could not record and logs the reason (an auditReady error or a raw
+// Write error — both may name the database host, so neither is sent back).
+func (h *Handler) refuseUnaudited(w http.ResponseWriter, r *http.Request, err error) {
+	slog.WarnContext(r.Context(), "audit: refusing unrecorded action", "method", r.Method, "path", r.URL.Path, "error", err)
+	response.Error(w, http.StatusServiceUnavailable, audit.ErrUnavailable.Error())
 }

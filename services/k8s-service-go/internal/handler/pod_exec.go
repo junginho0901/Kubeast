@@ -37,9 +37,16 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 		command = "/bin/sh"
 	}
 
-	// Audit at connection time (per §11 Q2).
-	h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, nil,
-		nil, audit.MustJSON(map[string]interface{}{"container": container, "command": command}))
+	// Audit at connection time (per §11 Q2); no session without the row.
+	if rerr := h.auditReady(r); rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
+	if werr := h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, nil,
+		nil, audit.MustJSON(map[string]interface{}{"container": container, "command": command})); werr != nil {
+		h.refuseUnaudited(w, r, werr)
+		return
+	}
 
 	conn, err := execUpgrader.Upgrade(w, r, nil)
 	if err != nil {

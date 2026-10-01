@@ -41,8 +41,16 @@ func (h *Handler) GetClusterKubeconfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A sensitive read: not served while the audit store cannot record it.
+	if rerr := h.auditReady(r); rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
 	blob, inCluster, err := h.svc.ClusterKubeconfig(r.Context(), cluster.ID(id))
-	h.auditKubeconfigRead(r, payload, id, err)
+	if werr := h.auditKubeconfigRead(r, payload, id, err); werr != nil {
+		h.refuseUnaudited(w, r, werr)
+		return
+	}
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -147,10 +155,11 @@ type forbiddenKubeconfigErr struct{}
 func (forbiddenKubeconfigErr) Error() string { return "forbidden" }
 
 // auditKubeconfigRead records a k8s.cluster.kubeconfig.read (sensitive read),
-// scoped to the cluster. Best-effort — never blocks the response.
-func (h *Handler) auditKubeconfigRead(r *http.Request, payload auth.TokenPayload, id string, err error) {
+// scoped to the cluster, and reports whether the row was stored — the caller
+// does not hand out the kubeconfig when it was not.
+func (h *Handler) auditKubeconfigRead(r *http.Request, payload auth.TokenPayload, id string, err error) error {
 	if h == nil || h.auditStore == nil {
-		return
+		return nil
 	}
 	rec := audit.FromHTTPRequest(r)
 	rec.Service = audit.ServiceK8s
@@ -166,5 +175,6 @@ func (h *Handler) auditKubeconfigRead(r *http.Request, payload auth.TokenPayload
 	} else {
 		rec.Result = audit.ResultSuccess
 	}
-	_, _ = h.auditStore.Write(r.Context(), rec)
+	_, werr := h.auditStore.Write(r.Context(), rec)
+	return werr
 }

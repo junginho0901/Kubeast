@@ -169,7 +169,10 @@ class DatabaseService:
             from app.db_ssl import split_ssl_params
 
             engine_url, connect_args = split_ssl_params(database_url)
-        self.engine = create_async_engine(engine_url, echo=False, connect_args=connect_args)
+        # pool_pre_ping: a pooled connection that died with a Postgres restart
+        # is replaced on checkout instead of surfacing as "connection is
+        # closed" on the first request after the database is back.
+        self.engine = create_async_engine(engine_url, echo=False, pool_pre_ping=True, connect_args=connect_args)
         self.async_session = async_sessionmaker(
             self.engine,
             class_=AsyncSession,

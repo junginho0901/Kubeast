@@ -33,6 +33,11 @@ func NewPostgresStore(pool *pgxpool.Pool, defaultService string) *PostgresStore 
 // The auth_audit_logs schema lives in services/pkg/dbmigrate (baseline
 // migration); this store assumes the table is at the required version.
 
+// Ping implements Pinger: a round trip on the pool.
+func (s *PostgresStore) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}
+
 // Write inserts a Record and returns the assigned id.
 func (s *PostgresStore) Write(ctx context.Context, rec Record) (int64, error) {
 	if rec.Service == "" {

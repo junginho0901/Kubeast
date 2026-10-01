@@ -17,14 +17,21 @@ import (
 var helmRedactOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
 
 // helmReveal reports whether the caller may see the section in full and
-// records the read when so.
-func (h *Handler) helmReveal(r *http.Request, namespace, name, section string) bool {
+// records the read when so. A non-nil error means the caller may reveal but
+// the read cannot be recorded — the handler answers 503 (refuseUnaudited)
+// rather than the full text.
+func (h *Handler) helmReveal(r *http.Request, namespace, name, section string) (bool, error) {
 	if h.requirePermissionForCluster(r, "resource.secret.reveal") != nil {
-		return false
+		return false, nil
 	}
-	h.recordHelmAudit(r, "helm.release.reveal", "release", name, namespace, nil,
-		nil, audit.MustJSON(map[string]interface{}{"section": section}))
-	return true
+	if rerr := h.auditReady(r); rerr != nil {
+		return false, rerr
+	}
+	if werr := h.recordHelmAudit(r, "helm.release.reveal", "release", name, namespace, nil,
+		nil, audit.MustJSON(map[string]interface{}{"section": section})); werr != nil {
+		return false, werr
+	}
+	return true, nil
 }
 
 func helmRedactText(s string) string {

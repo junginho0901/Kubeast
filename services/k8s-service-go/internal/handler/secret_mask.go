@@ -81,12 +81,19 @@ func (h *Handler) isSecretResourceType(r *http.Request, resourceType string) boo
 }
 
 // secretRevealAllowed is the dedicated endpoints' rule: true (and audited)
-// when the caller holds resource.secret.reveal on this cluster.
-func (h *Handler) secretRevealAllowed(r *http.Request, namespace, name, via string, err error) bool {
+// when the caller holds resource.secret.reveal on this cluster. A non-nil
+// error means the caller may reveal but the read cannot be recorded — the
+// handler answers 503 instead of the values (refuseUnaudited).
+func (h *Handler) secretRevealAllowed(r *http.Request, namespace, name, via string, err error) (bool, error) {
 	if h.requirePermissionForCluster(r, "resource.secret.reveal") != nil {
-		return false
+		return false, nil
 	}
-	h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
-		nil, audit.MustJSON(map[string]interface{}{"via": via}))
-	return true
+	if rerr := h.auditReady(r); rerr != nil {
+		return false, rerr
+	}
+	if werr := h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+		nil, audit.MustJSON(map[string]interface{}{"via": via})); werr != nil {
+		return false, werr
+	}
+	return true, nil
 }

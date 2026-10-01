@@ -6,9 +6,10 @@ import (
 	"sync/atomic"
 )
 
-// SlogStore is a fallback Writer that emits records to the structured
-// logger. Useful when Postgres is unavailable (local development, CI) or
-// while Postgres is being migrated.
+// SlogStore is a Writer that emits records to the structured logger only.
+// Services no longer fall back to it when Postgres is unavailable (they wait
+// at boot and refuse sensitive actions at runtime — see Guarded); it remains
+// for tests and tools that have no database.
 //
 // It is NOT a Reader — List/Get always return an empty result.
 type SlogStore struct {
