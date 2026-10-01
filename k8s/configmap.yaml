@@ -41,6 +41,8 @@ data:
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: "true"
   AI_WRITE_APPROVAL: "true"
+  # dev: the model runs on the laptop (Ollama) — a private address the policy would refuse
+  AI_BASE_URL_ALLOWED_HOSTS: "host.docker.internal"
   # dev kind is reached over plain http (NodePort 30080): a Secure cookie would
   # be dropped by the browser on any address but localhost.
   COOKIE_SECURE: "false"

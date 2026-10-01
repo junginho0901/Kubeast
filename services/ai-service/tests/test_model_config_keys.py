@@ -33,11 +33,17 @@ def test_resolve_api_key_reads_env_only(monkeypatch):
     from types import SimpleNamespace
     from app.services.model_config_service import _resolve_api_key
 
-    monkeypatch.setenv("MY_LLM_KEY", "from-env")
-    cfg = SimpleNamespace(api_key="leaked", api_key_env="MY_LLM_KEY", api_key_secret_key=None)
+    monkeypatch.setenv("KUBEAST_AI_KEY_MY_LLM", "from-env")
+    cfg = SimpleNamespace(api_key="leaked", api_key_env="KUBEAST_AI_KEY_MY_LLM", api_key_secret_key=None)
     assert _resolve_api_key(cfg) == "from-env"
 
     cfg = SimpleNamespace(api_key="leaked", api_key_env=None, api_key_secret_key=None)
+    assert _resolve_api_key(cfg) is None
+
+    # A variable outside the key allow-list is never read, even when set
+    # (model_config_policy): a row written before the rule gets no key.
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pw@db/x")
+    cfg = SimpleNamespace(api_key=None, api_key_env="DATABASE_URL", api_key_secret_key=None)
     assert _resolve_api_key(cfg) is None
 
 
@@ -59,11 +65,17 @@ async def test_connection_test_resolves_api_key_env(monkeypatch):
 async def test_connection_test_unset_env_is_400(monkeypatch):
     from app import api_public
 
-    monkeypatch.delenv("NOPE_KEY", raising=False)
+    monkeypatch.delenv("KUBEAST_AI_KEY_NOPE", raising=False)
     with pytest.raises(HTTPException) as exc:
-        await api_public.test_model_connection({"provider": "openai", "model": "gpt-4o-mini", "api_key_env": "NOPE_KEY"})
+        await api_public.test_model_connection({"provider": "openai", "model": "gpt-4o-mini", "api_key_env": "KUBEAST_AI_KEY_NOPE"})
     assert exc.value.status_code == 400
-    assert "NOPE_KEY" in exc.value.detail
+    assert "KUBEAST_AI_KEY_NOPE" in exc.value.detail
+
+    # A name outside the allow-list is refused before the environment is read.
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pw@db/x")
+    with pytest.raises(HTTPException) as exc:
+        await api_public.test_model_connection({"provider": "openai", "model": "gpt-4o-mini", "api_key_env": "DATABASE_URL"})
+    assert exc.value.status_code == 400 and "api_key_env" in exc.value.detail
 
 
 async def test_create_route_returns_400_for_plaintext_key():

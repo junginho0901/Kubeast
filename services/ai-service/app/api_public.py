@@ -5,14 +5,13 @@ Unauthenticated health plus the admin-only model connection test.
 authenticated POST /model-configs (app.api); the connection test lives on
 `admin_router` because it makes outbound HTTP calls to an operator-supplied URL.
 """
-import ipaddress
 import os
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
 from app.security import require_admin
+from app.services import model_config_policy
 
 public_router = APIRouter()
 admin_router = APIRouter(dependencies=[Depends(require_admin)])
@@ -23,27 +22,13 @@ async def health():
     return {"status": "healthy"}
 
 
-# Hosts that must never be probed from the service: cloud instance metadata.
-_BLOCKED_HOSTS = frozenset({"metadata.google.internal", "metadata", "instance-data"})
-_BLOCKED_NETWORKS = (ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fd00:ec2::254/128"))
-
-
 def _validate_base_url(url: str) -> None:
-    """Reject non-http(s) schemes, credentials in the URL and metadata endpoints."""
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise HTTPException(status_code=400, detail="base_url must be an http(s) URL")
-    if parts.username or parts.password:
-        raise HTTPException(status_code=400, detail="base_url must not contain credentials")
-    host = parts.hostname.lower()
-    if host in _BLOCKED_HOSTS:
-        raise HTTPException(status_code=400, detail="base_url host is not allowed")
+    """The same rule the stored configs follow (model_config_policy): public
+    http(s) endpoints only, hosts resolved, metadata/private ranges refused."""
     try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return
-    if any(ip in net for net in _BLOCKED_NETWORKS):
-        raise HTTPException(status_code=400, detail="base_url host is not allowed")
+        model_config_policy.check_base_url(url)
+    except model_config_policy.PolicyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 async def _test_openai_compatible(
@@ -235,6 +220,11 @@ async def test_model_connection(request: dict = None):
     body = request or {}
     api_key = (body.get("api_key") or "").strip()
     api_key_env = (body.get("api_key_env") or "").strip()
+    try:
+        model_config_policy.check_api_key_env(api_key_env)
+        model_config_policy.check_extra_headers(body.get("extra_headers"))
+    except model_config_policy.PolicyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not api_key and api_key_env:
         api_key = (os.getenv(api_key_env) or "").strip()
         if not api_key:

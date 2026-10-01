@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, model_validator
 
 
 # API keys are never stored in the database. ai-service reads the key from
@@ -92,3 +92,10 @@ class ModelConfigResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("extra_headers")
+    def _mask_extra_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+        # Header values are operator secrets as often as not: names only.
+        from app.services.model_config_policy import mask_headers
+
+        return mask_headers(headers)

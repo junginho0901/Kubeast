@@ -119,6 +119,15 @@ ai:
   apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrl: ""
+  # A model config's base_url must be a public http(s) endpoint; hosts that
+  # resolve to private addresses (an in-cluster Ollama, an internal LLM
+  # gateway) are refused unless listed here. Exact host, or ".suffix" for a
+  # domain and its subdomains. Cloud metadata addresses are never allowed.
+  # A config's api_key_env may only name OPENAI_API_KEY, ANTHROPIC_API_KEY,
+  # GEMINI_API_KEY or a KUBEAST_AI_KEY_* variable (add those to the secret).
+  baseUrlAllowedHosts: []
+  #  - ollama.ollama.svc
+  #  - .corp.example.com
   # AI tools that change a cluster (delete/scale/apply/...) are never run from
   # the model's call directly: the user approves each one in the chat first.
   writeApproval: true
