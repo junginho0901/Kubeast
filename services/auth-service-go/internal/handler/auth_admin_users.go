@@ -39,13 +39,32 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 		response.Error(w, http.StatusBadRequest, "No user IDs provided")
 		return
 	}
+	// Ceiling: the grantor must hold everything the role gives.
+	if missing := missingPermissions(payload, targetRole.Permissions, ""); len(missing) > 0 {
+		err := ceilingError(missing)
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.role.update", targetType: "user",
+			after: map[string]any{"role": targetRole.Name, "bulk": true, "user_ids": len(req.UserIDs)}, err: err})
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
 
 	updated := make([]model.UserResponse, 0, len(req.UserIDs))
 	for _, uid := range req.UserIDs {
 		if uid == payload.UserID {
 			continue // skip changing own role
 		}
-		if err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID); err != nil {
+		target, _ := h.repo.GetUserByID(r.Context(), uid)
+		if target == nil {
+			continue
+		}
+		err := h.repo.UpdateUserRole(r.Context(), uid, req.RoleID)
+		// One audit row per account, like the single-user path.
+		writeAudit(h.auditStore, r, payload, auditEvent{
+			action: "user.role.update", targetType: "user", targetID: uid, targetEmail: target.Email,
+			before: map[string]any{"role": target.RoleName},
+			after:  map[string]any{"role": targetRole.Name, "bulk": true}, err: err,
+		})
+		if err != nil {
 			continue
 		}
 		_ = h.repo.BumpTokenVersion(r.Context(), uid) // issued tokens carry the old role
@@ -108,6 +127,13 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: "Invalid role_id"})
 			continue
 		}
+		if missing := missingPermissions(payload, targetRole.Permissions, ""); len(missing) > 0 {
+			err := ceilingError(missing)
+			writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: u.Email,
+				after: map[string]any{"email": u.Email, "role": targetRole.Name, "bulk": true}, err: err})
+			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
+			continue
+		}
 
 		if u.Team != nil && strings.TrimSpace(*u.Team) != "" {
 			if ok, _ := h.repo.OrganizationExists(r.Context(), "team", strings.TrimSpace(*u.Team)); !ok {
@@ -141,7 +167,13 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 			UpdatedAt:    now,
 		}
 
-		if err := h.repo.CreateUser(r.Context(), user); err != nil {
+		err = h.repo.CreateUser(r.Context(), user)
+		// One audit row per account, like the single-user path.
+		writeAudit(h.auditStore, r, payload, auditEvent{
+			action: "user.create", targetType: "user", targetID: user.ID, targetEmail: user.Email,
+			after: map[string]any{"name": user.Name, "email": user.Email, "role": targetRole.Name, "team": derefStr(u.Team), "bulk": true}, err: err,
+		})
+		if err != nil {
 			bulkErrors = append(bulkErrors, model.BulkError{Email: u.Email, Message: err.Error()})
 			continue
 		}
@@ -194,6 +226,14 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	targetRole, err := h.repo.GetRoleByID(r.Context(), roleID)
 	if err != nil || targetRole == nil {
 		response.Error(w, http.StatusBadRequest, "Invalid role_id")
+		return
+	}
+	// Ceiling: the grantor must hold everything the role gives.
+	if missing := missingPermissions(payload, targetRole.Permissions, ""); len(missing) > 0 {
+		err := ceilingError(missing)
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.create", targetType: "user", targetEmail: req.Email,
+			after: map[string]any{"email": req.Email, "role": targetRole.Name}, err: err})
+		response.Error(w, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -294,6 +334,10 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	if req.RoleID != nil && userID == payload.UserID {
+		response.Error(w, http.StatusForbidden, "Cannot change your own role")
+		return
+	}
 
 	target, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil || target == nil {
@@ -330,6 +374,14 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		targetRole, err := h.repo.GetRoleByID(r.Context(), *req.RoleID)
 		if err != nil || targetRole == nil {
 			response.Error(w, http.StatusBadRequest, "Invalid role_id")
+			return
+		}
+		// Ceiling: the grantor must hold everything the role gives.
+		if missing := missingPermissions(payload, targetRole.Permissions, ""); len(missing) > 0 {
+			err := ceilingError(missing)
+			writeAudit(h.auditStore, r, payload, auditEvent{action: "user.role.update", targetType: "user", targetID: userID, targetEmail: target.Email,
+				before: map[string]any{"role": oldRoleName}, after: map[string]any{"role": targetRole.Name}, err: err})
+			response.Error(w, http.StatusForbidden, err.Error())
 			return
 		}
 		newRoleName = targetRole.Name

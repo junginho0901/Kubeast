@@ -55,6 +55,12 @@ func (h *AuthHandler) AdminCreateOrganization(w http.ResponseWriter, r *http.Req
 	}
 
 	org, err := h.repo.CreateOrganization(r.Context(), req.Type, strings.TrimSpace(req.Name))
+	ev := auditEvent{action: "admin.organizations.create", targetType: "organization",
+		after: map[string]any{"type": req.Type, "name": strings.TrimSpace(req.Name)}, err: err}
+	if org != nil {
+		ev.targetID = strconv.Itoa(org.ID)
+	}
+	writeAudit(h.auditStore, r, payload, ev)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			response.Error(w, http.StatusConflict, "Already exists")
@@ -81,7 +87,18 @@ func (h *AuthHandler) AdminDeleteOrganization(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.repo.DeleteOrganization(r.Context(), id); err != nil {
+	// The row is gone after the delete: keep its name for the audit trail.
+	before := map[string]any{"id": id}
+	if orgs, _ := h.repo.ListOrganizations(r.Context(), "team"); orgs != nil {
+		for _, o := range orgs {
+			if o.ID == id {
+				before["type"], before["name"] = o.Type, o.Name
+			}
+		}
+	}
+	err = h.repo.DeleteOrganization(r.Context(), id)
+	writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.organizations.delete", targetType: "organization", targetID: idStr, before: before, err: err})
+	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
