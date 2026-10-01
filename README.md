@@ -371,6 +371,7 @@ ai:
   geminiApiKey: ""
   apiKeysSecret: ""
   model: "gpt-4o-mini"
+  baseUrlAllowedHosts: []  # 모델 설정 base_url이 사설 주소(클러스터 안 Ollama·사내 LLM 게이트웨이)면 여기 등록. api_key_env는 OPENAI/ANTHROPIC/GEMINI_API_KEY 또는 KUBEAST_AI_KEY_*
 
 # 내장 PostgreSQL / Redis (false 면 외부 사용)
 postgresql:

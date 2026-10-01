@@ -7,12 +7,16 @@ Resolves the active model config from DB and caches the result for
 
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
+import logging
 import os
 import time
 import asyncio
 
 from app.config import settings
 from app.database import get_db_service, ModelConfig
+from app.services import model_config_policy
+
+logger = logging.getLogger(__name__)
 
 
 # ── cache settings ──────────────────────────────────────────────
@@ -41,15 +45,19 @@ class ResolvedModelConfig:
 
 
 def _resolve_api_key(config: ModelConfig) -> Optional[str]:
-    # Keys live only in ai-service's environment; the config names the variable.
-    # 1) 환경변수 이름
-    if config.api_key_env:
-        value = os.getenv(config.api_key_env)
-        if value:
-            return value
-    # 3) Legacy: K8s Secret key
-    if config.api_key_secret_key:
-        value = os.getenv(config.api_key_secret_key)
+    # Keys live only in ai-service's environment; the config names the
+    # variable — one of the key variables (model_config_policy), never an
+    # arbitrary one such as the database URL. Checked here as well as at
+    # save time so a row written before the rule cannot read other secrets.
+    for name in (config.api_key_env, config.api_key_secret_key):
+        if not name:
+            continue
+        try:
+            model_config_policy.check_api_key_env(name)
+        except model_config_policy.PolicyError:
+            logger.warning("model config %s names a disallowed key variable %s; ignoring it", getattr(config, "id", "?"), name)
+            continue
+        value = os.getenv(name)
         if value:
             return value
     return None
@@ -76,6 +84,13 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
         raise ValueError(f"API key is missing for active model config (provider={provider})")
 
     base_url = (config.base_url or "").strip().rstrip("/") or None
+    # The key goes wherever base_url points: re-check the destination at use
+    # time too (resolve_model_config caches the result, so this is not per
+    # request). A row written before the rule is refused here.
+    try:
+        model_config_policy.check_base_url(base_url)
+    except model_config_policy.PolicyError as e:
+        raise ValueError(f"active model config base_url is not allowed: {e}")
     # Ollama serves the OpenAI-compatible API under /v1; the connection test
     # already appends it, so the runtime client must resolve the same URL.
     if provider == "ollama" and base_url and not base_url.endswith("/v1"):

@@ -545,6 +545,7 @@ async def create_model_config(payload=Depends(require_auth), request: dict = Non
         data = ModelConfigCreate(**(request or {})).model_dump(exclude_unset=True)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=_validation_message(e))
+    _check_model_config_policy(data)
     db = await get_db_service()
     try:
         config = await db.create_model_config(data)
@@ -552,6 +553,20 @@ async def create_model_config(payload=Depends(require_auth), request: dict = Non
         raise HTTPException(status_code=400, detail=str(e))
     _invalidate_caches()
     return ModelConfigResponse.model_validate(config)
+
+
+def _check_model_config_policy(data: dict) -> None:
+    """Where the key may come from, where it may go, what rides along
+    (app.services.model_config_policy) — before anything is stored."""
+    from app.services import model_config_policy
+
+    try:
+        model_config_policy.check_api_key_env(data.get("api_key_env"))
+        model_config_policy.check_api_key_env(data.get("api_key_secret_key"))
+        model_config_policy.check_base_url(data.get("base_url"))
+        model_config_policy.check_extra_headers(data.get("extra_headers"))
+    except model_config_policy.PolicyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # NOTE: test_model_connection has been moved to public_router (no auth required).
@@ -569,7 +584,16 @@ async def update_model_config(config_id: int, payload=Depends(require_auth), req
         data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=_validation_message(e))
+    _check_model_config_policy(data)
     db = await get_db_service()
+    if data.get("extra_headers"):
+        # Responses mask header values; a client echoing them back keeps the
+        # stored value instead of overwriting it with the mask.
+        from app.services.model_config_policy import MASK
+
+        current = await db.get_model_config(config_id)
+        stored = (current.extra_headers or {}) if current else {}
+        data["extra_headers"] = {k: (stored.get(k, v) if v == MASK else v) for k, v in data["extra_headers"].items()}
     config = await db.update_model_config(config_id, data)
     if not config:
         raise HTTPException(status_code=404, detail="Model config not found")
