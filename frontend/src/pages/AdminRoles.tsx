@@ -52,7 +52,8 @@ export default function AdminRoles() {
       queryClient.invalidateQueries({ queryKey: ['roles'] })
       closeModal()
     },
-    onError: () => setFormError(tr('adminRoles.createError', 'Failed to create role')),
+    // The server says why (unknown permission, permission ceiling): show it.
+    onError: (err: any) => setFormError(err?.response?.data?.detail || tr('adminRoles.createError', 'Failed to create role')),
   })
 
   const updateMutation = useMutation({
@@ -62,7 +63,7 @@ export default function AdminRoles() {
       queryClient.invalidateQueries({ queryKey: ['roles'] })
       closeModal()
     },
-    onError: () => setFormError(tr('adminRoles.updateError', 'Failed to update role')),
+    onError: (err: any) => setFormError(err?.response?.data?.detail || tr('adminRoles.updateError', 'Failed to update role')),
   })
 
   const deleteMutation = useMutation({
@@ -336,8 +337,8 @@ export default function AdminRoles() {
                   </h2>
                   <p className="text-sm text-slate-400">
                     {editingRole?.is_system
-                      ? tr('adminRoles.systemNote', 'System role: name cannot be changed')
-                      : tr('adminRoles.customNote', 'Select permissions for this role')}
+                      ? tr('adminRoles.systemNote', 'System role: name and permissions are fixed; only the description can change')
+                      : tr('adminRoles.customNote', 'Select permissions for this role (only ones you hold yourself)')}
                   </p>
                 </div>
               </div>
@@ -388,7 +389,8 @@ export default function AdminRoles() {
                           type="checkbox"
                           checked={formPerms.has(p.key)}
                           onChange={() => togglePerm(p.key)}
-                          className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
+                          disabled={editingRole?.is_system}
+                          className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
                         />
                         <div className="flex-1 min-w-0">
                           <span className="text-xs font-mono text-slate-300 group-hover:text-white transition-colors">

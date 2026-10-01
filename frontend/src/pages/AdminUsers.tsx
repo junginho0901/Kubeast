@@ -148,7 +148,8 @@ export default function AdminUsers() {
       setDetailError(null)
     },
     onError: (err: any) => {
-      setDetailError(err?.response?.data?.error || err?.message || 'Failed to update user')
+      // The server answers {detail}: e.g. a permission-ceiling refusal.
+      setDetailError(err?.response?.data?.detail || err?.response?.data?.error || err?.message || 'Failed to update user')
     },
   })
 
