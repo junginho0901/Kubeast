@@ -98,7 +98,7 @@ export default function YamlEditor({
     if (!draft) return
     try {
       await navigator.clipboard.writeText(draft)
-    } catch (error) {
+    } catch {
       const textarea = document.createElement('textarea')
       textarea.value = draft
       textarea.style.position = 'fixed'

@@ -202,7 +202,7 @@ export function useModelForm() {
       } else {
         throw new Error('Health check returned non-ok')
       }
-    } catch (e: any) {
+    } catch {
       setRolloutStatus('error')
       setRolloutMessage('Rollout may still be in progress. Please wait and refresh.')
     }

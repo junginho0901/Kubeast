@@ -99,7 +99,7 @@ export default function Layout() {
       try {
         const health = await api.getHealth()
         setClusterStatus(health.kubernetes === 'connected' ? 'connected' : 'disconnected')
-      } catch (error) {
+      } catch {
         setClusterStatus('disconnected')
       }
     }
