@@ -171,23 +171,21 @@ async def chat_stream(request: ChatRequest, authorization: str = Depends(bearer_
 async def session_chat(
     session_id: str,
     request: Request,
-    body: Optional[SessionChatRequest] = None,
-    message: Optional[str] = None,
+    body: SessionChatRequest,
     authorization: str = Depends(bearer_or_cookie),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """
     세션 기반 AI 챗봇 (스트리밍)
 
-    message 는 JSON body(`{"message": …}`)로 받는다. 쿼리 파라미터 `?message=` 도
-    아직 받지만 — 그 경우 사용자가 쓴 문장이 게이트웨이·uvicorn 접근 로그에 그대로
-    남으므로 — 프론트는 body 를 쓴다.
+    message 는 JSON body(`{"message": …}`)로만 받는다. 쿼리 파라미터로 받으면
+    사용자가 쓴 문장(붙여 넣은 비밀 포함)이 게이트웨이·uvicorn 접근 로그에 그대로
+    남으므로 `?message=` 는 더 받지 않는다(422).
     """
     from app.database import get_db_service
 
-    if body is not None and body.message:
-        message = body.message
-    if not message or not message.strip():
+    message = body.message
+    if not message.strip():
         raise HTTPException(status_code=422, detail="message required")
 
     await _authorize_session_access(authorization, session_id)
