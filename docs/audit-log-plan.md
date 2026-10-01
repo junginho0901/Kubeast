@@ -83,6 +83,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `k8s.secret.reveal` | Secret 값 열람(민감 읽기) |
 | `k8s.cronjob.trigger` / `.suspend` / `.resume` | CronJob 조작 |
 | `k8s.cluster.kubeconfig.read` | tool-server가 클러스터 kubeconfig를 읽음(민감 읽기) |
+| `helm.release.reveal` | 릴리스의 manifest·values·hooks·diff를 **마스킹 없이** 읽음 — `resource.secret.reveal` 보유자만(없으면 Secret 문서 제거·민감 값 마스킹 후 반환, 기록 없음). `after.section` = manifest/values/hooks/diff/detail |
 | `helm.release.upgrade` / `.rollback` / `.uninstall` / `.test` | Helm 쓰기(dry-run은 기록하지 않음; uninstall은 `?confirm=<release>` 필수) |
 
 **ai-service (`ai`)**

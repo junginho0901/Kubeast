@@ -1,5 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
-import { execFileSync } from 'child_process'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 // What the assistant's tools return is masked before it reaches the model:
 // a ConfigMap with a password and a connection string is planted, the chat is
@@ -29,9 +31,14 @@ async function adminToken(request: APIRequestContext): Promise<string> {
 }
 
 // The ConfigMap is planted with kubectl against the kind cluster the suite runs
-// against (KUBECONFIG must point at it, as for the rest of the suite).
+// against: KUBECONFIG when set, else the repo-local .kubeconfig-kind. Never the
+// shell's default kubeconfig — that may be a real cluster — so with neither the
+// test refuses to run kubectl at all.
+const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
+const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
 function kubectl(args: string[], input?: string): string {
-  return execFileSync('kubectl', args, { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+  if (!KUBECONFIG) throw new Error('KUBECONFIG is unset and .kubeconfig-kind is missing: refusing to run kubectl against the default kubeconfig')
+  return execFileSync('kubectl', args, { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, KUBECONFIG } })
 }
 
 test.describe('AI tool results are redacted', () => {

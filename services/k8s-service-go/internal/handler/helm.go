@@ -48,6 +48,11 @@ func (h *Handler) GetHelmRelease(w http.ResponseWriter, r *http.Request) {
 		h.handleHelmError(w, err)
 		return
 	}
+	if !h.helmReveal(r, ns, name, "detail") {
+		rel.Manifest = helmRedactText(rel.Manifest)
+		rel.Values = helmRedactValues(rel.Values)
+		rel.Notes = helmRedactText(rel.Notes)
+	}
 	response.JSON(w, http.StatusOK, rel)
 }
 
@@ -65,6 +70,9 @@ func (h *Handler) GetHelmReleaseSection(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		h.handleHelmError(w, err)
 		return
+	}
+	if !h.helmReveal(r, ns, name, string(section)) {
+		text = helmRedactText(text)
 	}
 	// Keep the wire type uniform with existing .../yaml endpoints.
 	response.JSON(w, http.StatusOK, map[string]string{
@@ -115,6 +123,11 @@ func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request)
 			h.handleHelmError(w, err)
 			return
 		}
+		if !h.helmReveal(r, ns, name, "revision-detail") {
+			detail.Manifest = helmRedactText(detail.Manifest)
+			detail.Values = helmRedactValues(detail.Values)
+			detail.Notes = helmRedactText(detail.Notes)
+		}
 		response.JSON(w, http.StatusOK, detail)
 		return
 	}
@@ -122,6 +135,9 @@ func (h *Handler) GetHelmRevisionSection(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		h.handleHelmError(w, err)
 		return
+	}
+	if !h.helmReveal(r, ns, name, "revision-"+string(section)) {
+		text = helmRedactText(text)
 	}
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"revision": rev,
@@ -152,6 +168,9 @@ func (h *Handler) DiffHelmRelease(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.handleHelmError(w, err)
 		return
+	}
+	if !h.helmReveal(r, ns, name, "diff") {
+		result.Diff = helmRedactText(result.Diff)
 	}
 	response.JSON(w, http.StatusOK, result)
 }
