@@ -96,7 +96,7 @@ func Load() Config {
 
 		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),
 
-		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
+		AllowedOrigins: pkgconfig.LookupEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 
 		RedisHost: pkgconfig.GetEnv("REDIS_HOST", "localhost"),
 		RedisPort: pkgconfig.GetEnvInt("REDIS_PORT", 6379),

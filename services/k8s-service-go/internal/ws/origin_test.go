@@ -36,4 +36,15 @@ func TestCheckOrigin(t *testing.T) {
 			}
 		})
 	}
+
+	// A "*" entry is not a wildcard here: same host or a spelled-out origin only.
+	allowed = []string{"*", "https://console.example.com"}
+	for origin, want := range map[string]bool{"https://evil.example": false, "https://console.example.com": true, "http://kubeast.local": true} {
+		r := httptest.NewRequest("GET", "/api/v1/cluster/wsMultiplexer", nil)
+		r.Host = "kubeast.local"
+		r.Header.Set("Origin", origin)
+		if got := CheckOrigin(r); got != want {
+			t.Fatalf("with \"*\" listed, CheckOrigin(origin=%q) = %v, want %v", origin, got, want)
+		}
+	}
 }

@@ -388,6 +388,7 @@ gateway:
     type: NodePort        # NodePort | ClusterIP | LoadBalancer
     nodePort: 30333
   trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러·LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽음
+  allowedOrigins: []      # 게이트웨이 자기 호스트·Ingress 호스트 외에 API·WebSocket을 열 브라우저 origin(없으면 같은 호스트만)
 
 # Ingress (선택)
 ingress:

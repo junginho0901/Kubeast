@@ -1,0 +1,40 @@
+suite: ALLOWED_ORIGINS — same host by default, the Ingress host and gateway.allowedOrigins when set
+templates:
+  - configmap.yaml
+tests:
+  - it: lists no origin by default (same host only, never "*")
+    asserts:
+      - equal:
+          path: data.ALLOWED_ORIGINS
+          value: ""
+
+  - it: adds the Ingress host with its scheme
+    set:
+      ingress.enabled: true
+      ingress.host: kubeast.example.com
+      ingress.tls: true
+    asserts:
+      - equal:
+          path: data.ALLOWED_ORIGINS
+          value: "https://kubeast.example.com"
+
+  - it: uses http for an Ingress without TLS
+    set:
+      ingress.enabled: true
+      ingress.host: kubeast.example.com
+      ingress.tls: false
+    asserts:
+      - equal:
+          path: data.ALLOWED_ORIGINS
+          value: "http://kubeast.example.com"
+
+  - it: joins gateway.allowedOrigins after the Ingress host
+    set:
+      ingress.enabled: true
+      ingress.host: kubeast.example.com
+      ingress.tls: true
+      gateway.allowedOrigins: ["https://console.example.com", "http://localhost:5173"]
+    asserts:
+      - equal:
+          path: data.ALLOWED_ORIGINS
+          value: "https://kubeast.example.com,https://console.example.com,http://localhost:5173"

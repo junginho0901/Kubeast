@@ -42,7 +42,20 @@ func GetEnvBool(key string, defaultVal bool) bool {
 
 // GetEnvList returns the environment variable split by comma.
 func GetEnvList(key, defaultVal string) []string {
-	v := GetEnv(key, defaultVal)
+	return splitList(GetEnv(key, defaultVal))
+}
+
+// LookupEnvList is GetEnvList for variables where "set to nothing" means
+// "none" rather than "use the default": the default applies only when the
+// variable is absent, so ALLOWED_ORIGINS="" yields an empty list.
+func LookupEnvList(key, defaultVal string) []string {
+	if v, ok := os.LookupEnv(key); ok {
+		return splitList(v)
+	}
+	return splitList(defaultVal)
+}
+
+func splitList(v string) []string {
 	parts := strings.Split(v, ",")
 	result := make([]string, 0, len(parts))
 	for _, p := range parts {

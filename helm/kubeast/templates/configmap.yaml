@@ -8,7 +8,10 @@ data:
   APP_NAME: "Kubest"
   APP_VERSION: {{ .Values.global.imageTag | quote }}
   DEBUG: "false"
-  ALLOWED_ORIGINS: "*"
+  # Browser origins other than the gateway's own host (same host always
+  # passes): the Ingress host, plus gateway.allowedOrigins. Empty = same
+  # host only. Never "*": the WebSocket endpoints would accept any site.
+  ALLOWED_ORIGINS: {{ include "kubeast.allowedOrigins" . | quote }}
   WS_HEARTBEAT_INTERVAL: "30"
   JWT_ISSUER: "kubeast-auth"
   JWT_AUDIENCE: "kubeast"

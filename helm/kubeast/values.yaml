@@ -282,6 +282,11 @@ gateway:
   # X-Forwarded-For they append instead. Empty = the peer is the client.
   trustedProxies: []
   #  - 10.0.0.0/8
+  # Browser origins, besides the gateway's own host and the Ingress host, that
+  # may call the API (CORS) and open the WebSocket endpoints. Scheme + host
+  # [+ port], no path. Empty = same host and the Ingress host only.
+  allowedOrigins: []
+  #  - https://console.example.com
 
 # --- Ingress (optional) ---
 ingress:

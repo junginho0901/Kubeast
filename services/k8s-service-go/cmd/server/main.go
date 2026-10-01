@@ -140,14 +140,19 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 	// Note: no global timeout middleware - it kills WebSocket connections.
 	// Individual handler timeouts are handled via context or http.Server settings.
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.AllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	// CORS only for listed origins. With none listed the middleware is not
+	// installed at all: go-chi/cors treats an empty list as "every origin",
+	// and same-origin requests through the gateway need no CORS.
+	if len(cfg.AllowedOrigins) > 0 {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   cfg.AllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+			ExposedHeaders:   []string{"Link"},
+			AllowCredentials: true,
+			MaxAge:           300,
+		}))
+	}
 
 	// Public routes
 	r.Get("/", h.HealthRoot)

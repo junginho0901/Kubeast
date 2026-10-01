@@ -18,6 +18,21 @@ DATABASE_URL — the one URL every service reads. The Go services (pgx) and the
 ai-service (asyncpg, via app/db_ssl.py) both take libpq's sslmode / sslrootcert
 from it; with postgresql.sslMode unset the drivers use their default (prefer).
 */}}
+{{- /*
+ALLOWED_ORIGINS: the Ingress host as an origin (scheme from ingress.tls) and
+every entry of gateway.allowedOrigins, comma-joined; empty with neither.
+*/ -}}
+{{- define "kubeast.allowedOrigins" -}}
+{{- $list := list -}}
+{{- if and .Values.ingress.enabled .Values.ingress.host -}}
+{{- $list = append $list (printf "%s://%s" (ternary "https" "http" (eq (toString .Values.ingress.tls) "true")) .Values.ingress.host) -}}
+{{- end -}}
+{{- range .Values.gateway.allowedOrigins -}}
+{{- $list = append $list . -}}
+{{- end -}}
+{{- join "," $list -}}
+{{- end -}}
+
 {{- define "kubeast.databaseUrl" -}}
 {{- $p := .Values.postgresql -}}
 {{- $host := ternary "postgres" ($p.externalHost | default "") $p.enabled -}}
