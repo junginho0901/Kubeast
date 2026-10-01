@@ -173,7 +173,7 @@ func Load() Config {
 		LoginLockoutMinutes: pkgconfig.GetEnvInt("LOGIN_LOCKOUT_MINUTES", 15),
 		KeyDir:              pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
 
-		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
+		AllowedOrigins: pkgconfig.LookupEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 
 		PasswordHashIterations: pkgconfig.GetEnvInt("PASSWORD_HASH_ITERATIONS", 210000),
 

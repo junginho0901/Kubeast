@@ -99,21 +99,25 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
 
-	// CORS
-	hasWildcard := false
-	for _, o := range cfg.AllowedOrigins {
-		if o == "*" {
-			hasWildcard = true
-			break
+	// CORS only for listed origins. With none listed the middleware is not
+	// installed at all: go-chi/cors treats an empty list as "every origin",
+	// and same-origin requests through the gateway need no CORS.
+	if len(cfg.AllowedOrigins) > 0 {
+		hasWildcard := false
+		for _, o := range cfg.AllowedOrigins {
+			if o == "*" {
+				hasWildcard = true
+				break
+			}
 		}
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   cfg.AllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"*"},
+			AllowCredentials: !hasWildcard,
+			MaxAge:           300,
+		}))
 	}
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.AllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: !hasWildcard,
-		MaxAge:           300,
-	}))
 
 	// Health endpoints (no auth)
 	r.Get("/", healthHandler.Root)

@@ -49,8 +49,11 @@ func CheckOrigin(r *http.Request) bool {
 	if strings.EqualFold(hostOnly(u.Host), hostOnly(r.Host)) {
 		return true
 	}
+	// Only listed origins, spelled out: a "*" entry does not open the
+	// WebSocket endpoints to every site (cross-site WebSocket hijacking
+	// rides on the browser's cookie), whatever it means for plain CORS.
 	for _, a := range allowedOrigins() {
-		if a == "*" || strings.EqualFold(a, strings.TrimRight(origin, "/")) {
+		if a != "*" && strings.EqualFold(a, strings.TrimRight(origin, "/")) {
 			return true
 		}
 	}

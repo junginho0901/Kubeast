@@ -38,7 +38,7 @@ func Load() Config {
 		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 
-		AllowedOrigins: pkgconfig.GetEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
+		AllowedOrigins: pkgconfig.LookupEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 	}
 }
 
