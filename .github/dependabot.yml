@@ -45,6 +45,16 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: vitest
         update-types: ["version-update:semver-major"]
+      # React 19 moves react, react-dom and both @types packages together
+      # (a lone react bump fails npm ci with ERESOLVE) — a separate migration.
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directory: /services/ai-service
