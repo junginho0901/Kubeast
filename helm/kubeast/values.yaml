@@ -134,6 +134,10 @@ ai:
     enabled: true
     pii: false
     disable: []
+  # Write model responses, tool arguments and tool results to the ai-service
+  # log (redacted, length-capped). Debugging only — off keeps them out of the
+  # cluster log pipeline.
+  debugDump: false
 
 # --- PostgreSQL ---
 audit:

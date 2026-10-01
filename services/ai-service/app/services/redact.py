@@ -134,33 +134,58 @@ _JSON_SECRET_DATA = re.compile(r'"(data|stringData)"\s*:\s*\{[^{}]*\}')
 _JSON_LAST_APPLIED = re.compile(r'"kubectl\.kubernetes\.io/last-applied-configuration"\s*:\s*"(?:[^"\\]|\\.)*"')
 
 
+_LAST_APPLIED = "kubectl.kubernetes.io/last-applied-configuration:"
+
+
 def _strip_secret_yaml(doc: str) -> Tuple[str, int]:
+    """Blank every value under data:/stringData: and the last-applied annotation.
+
+    Blocks are found by indentation at any depth — a Secret may sit inside a
+    List's items: (``- data:`` or ``  data:``) rather than at the top level —
+    and end at the first line that is not deeper than the key. Lines deeper
+    than a value's key continue that value (``key: |`` blocks) and are dropped.
+    """
     lines = doc.split("\n")
     n = 0
-    in_block = in_anno = False
+    block = -1  # indent of the data:/stringData: key while inside its block
+    value = -1  # indent of the block's key lines; deeper lines continue a value
+    anno = -1  # indent of the annotations: key while inside it
+    last = -1  # indent of the last-applied key while inside its (block) value
     for i, line in enumerate(lines):
         trim = line.strip()
+        if not trim or trim.startswith("#"):
+            continue
         indent = len(line) - len(line.lstrip(" "))
-        if indent == 0 and trim:
-            in_block = trim in ("data:", "stringData:")
-            in_anno = False
-            continue
-        if in_block and indent > 0 and ":" in trim:
-            lines[i] = " " * indent + trim.split(":", 1)[0] + ": <REDACTED:secret>"
-            n += 1
-            continue
-        if in_block and indent > 0:
-            lines[i] = ""
-            continue
-        if trim.startswith("annotations:"):
-            in_anno = True
-            continue
-        if in_anno and trim.startswith("kubectl.kubernetes.io/last-applied-configuration:"):
-            lines[i] = " " * indent + "kubectl.kubernetes.io/last-applied-configuration: <REDACTED:secret>"
-            n += 1
-            continue
-        if in_anno and indent <= 2 and not trim.startswith("kubectl.kubernetes.io/"):
-            in_anno = False
+        key, key_indent = trim, indent
+        if key.startswith("- "):  # "- data:" — the item's keys sit two columns in
+            key, key_indent = key[2:].lstrip(), indent + 2
+        if block >= 0:
+            if indent > block:
+                if value < 0:
+                    value = indent
+                if indent == value and ":" in trim:
+                    lines[i] = " " * indent + trim.split(":", 1)[0] + ": <REDACTED:secret>"
+                    n += 1
+                else:
+                    lines[i] = ""
+                continue
+            block = value = -1
+        if anno >= 0:
+            if indent > anno:
+                if trim.startswith(_LAST_APPLIED):
+                    lines[i] = " " * indent + _LAST_APPLIED + " <REDACTED:secret>"
+                    n += 1
+                    last = indent
+                elif last >= 0 and indent > last:
+                    lines[i] = ""
+                else:
+                    last = -1
+                continue
+            anno = last = -1
+        if key in ("data:", "stringData:"):
+            block, value = key_indent, -1
+        elif key == "annotations:":
+            anno, last = key_indent, -1
     return "\n".join(lines), n
 
 

@@ -21,7 +21,9 @@ from app.models.ai import (
     TroubleshootResponse,
 )
 from app.services.ai import formatters
+from app.services.ai.debug_dump import dump, log
 from app.services.ai.tools import K8S_READONLY_TOOLS
+from app.services.redact import redact_text
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -62,7 +64,7 @@ JSON 형식으로 응답해주세요:
 """
     
     try:
-        print(f"[AI Service] Analyze Logs API 호출 - 요청 모델: {service.model}", flush=True)
+        log.debug("[AI Service] Analyze Logs API 호출 - 요청 모델: %s", service.model)
         _base_kwargs = dict(
             model=service.model,
             messages=[
@@ -76,7 +78,7 @@ JSON 형식으로 응답해주세요:
         except Exception:
             # 모델이 response_format을 지원하지 않는 경우 fallback
             response = await service.client.chat.completions.create(**_base_kwargs)
-        print(f"[AI Service] Analyze Logs API 응답 - 실제 사용 모델: {response.model}", flush=True)
+        log.debug("[AI Service] Analyze Logs API 응답 - 실제 사용 모델: %s", response.model)
         
         # OpenAI 응답 전체 로그 출력
         import json
@@ -101,7 +103,7 @@ JSON 형식으로 응답해주세요:
                 "total_tokens": response.usage.total_tokens if response.usage else None
             } if response.usage else None
         }
-        print(f"[OPENAI RESPONSE][analyze_logs] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+        dump("[OPENAI RESPONSE][analyze_logs]", response_dict)
         
         result = json.loads(response.choices[0].message.content)
         
@@ -127,9 +129,10 @@ JSON 형식으로 응답해주세요:
 async def troubleshoot(service: "AIService", request: TroubleshootRequest) -> TroubleshootResponse:
     """종합 트러블슈팅"""
     
-    # 리소스 정보 수집
+    # 리소스 정보 수집 — 파드 로그·이벤트가 들어가므로 모델에 넣기 전에 마스킹
     context = await service._gather_resource_context(request)
-    
+    context, _ = redact_text(context)
+
     prompt = f"""
 다음 Kubernetes 리소스에 문제가 발생했습니다:
 
@@ -162,7 +165,7 @@ JSON 형식으로 응답해주세요:
 """
     
     try:
-        print(f"[AI Service] Troubleshoot API 호출 - 요청 모델: {service.model}", flush=True)
+        log.debug("[AI Service] Troubleshoot API 호출 - 요청 모델: %s", service.model)
         _base_kwargs = dict(
             model=service.model,
             messages=[
@@ -175,7 +178,7 @@ JSON 형식으로 응답해주세요:
             response = await service.client.chat.completions.create(**_base_kwargs, response_format={"type": "json_object"})
         except Exception:
             response = await service.client.chat.completions.create(**_base_kwargs)
-        print(f"[AI Service] Troubleshoot API 응답 - 실제 사용 모델: {response.model}", flush=True)
+        log.debug("[AI Service] Troubleshoot API 응답 - 실제 사용 모델: %s", response.model)
         
         # OpenAI 응답 전체 로그 출력
         import json
@@ -200,7 +203,7 @@ JSON 형식으로 응답해주세요:
                 "total_tokens": response.usage.total_tokens if response.usage else None
             } if response.usage else None
         }
-        print(f"[OPENAI RESPONSE][troubleshoot] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+        dump("[OPENAI RESPONSE][troubleshoot]", response_dict)
         
         result = json.loads(response.choices[0].message.content)
         
@@ -299,7 +302,7 @@ async def chat(service: "AIService", request: ChatRequest) -> ChatResponse:
     
     try:
         # 첫 번째 GPT 호출 (function calling 포함)
-        print(f"[AI Service] Chat API 호출 - 요청 모델: {service.model}", flush=True)
+        log.debug("[AI Service] Chat API 호출 - 요청 모델: %s", service.model)
         _chat_kwargs = dict(
             model=service.model,
             messages=messages,
@@ -310,7 +313,7 @@ async def chat(service: "AIService", request: ChatRequest) -> ChatResponse:
             response = await service.client.chat.completions.create(**_chat_kwargs, tool_choice="auto")
         except Exception:
             response = await service.client.chat.completions.create(**_chat_kwargs)
-        print(f"[AI Service] Chat API 응답 - 실제 사용 모델: {response.model}", flush=True)
+        log.debug("[AI Service] Chat API 응답 - 실제 사용 모델: %s", response.model)
         
         # OpenAI 응답 전체 로그 출력
         import json
@@ -335,7 +338,7 @@ async def chat(service: "AIService", request: ChatRequest) -> ChatResponse:
                 "total_tokens": response.usage.total_tokens if response.usage else None
             } if response.usage else None
         }
-        print(f"[OPENAI RESPONSE][chat first] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+        dump("[OPENAI RESPONSE][chat first]", response_dict)
         
         response_message = response.choices[0].message
         tool_calls = response_message.tool_calls
@@ -365,13 +368,13 @@ async def chat(service: "AIService", request: ChatRequest) -> ChatResponse:
                 })
             
             # 함수 결과를 바탕으로 최종 답변 생성
-            print(f"[AI Service] Chat API 두 번째 호출 - 요청 모델: {service.model}", flush=True)
+            log.debug("[AI Service] Chat API 두 번째 호출 - 요청 모델: %s", service.model)
             second_response = await service.client.chat.completions.create(
                 model=service.model,
                 messages=messages,
                 temperature=0.7
             )
-            print(f"[AI Service] Chat API 두 번째 응답 - 실제 사용 모델: {second_response.model}", flush=True)
+            log.debug("[AI Service] Chat API 두 번째 응답 - 실제 사용 모델: %s", second_response.model)
             
             # OpenAI 응답 전체 로그 출력
             import json
@@ -396,7 +399,7 @@ async def chat(service: "AIService", request: ChatRequest) -> ChatResponse:
                     "total_tokens": second_response.usage.total_tokens if second_response.usage else None
                 } if second_response.usage else None
             }
-            print(f"[OPENAI RESPONSE][chat second] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+            dump("[OPENAI RESPONSE][chat second]", response_dict)
             
             message = second_response.choices[0].message.content
         else:
@@ -464,7 +467,7 @@ async def explain_resource(service: "AIService", resource_type: str, resource_ya
                 "total_tokens": response.usage.total_tokens if response.usage else None
             } if response.usage else None
         }
-        print(f"[OPENAI RESPONSE][explain_resource] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+        dump("[OPENAI RESPONSE][explain_resource]", response_dict)
         
         return response.choices[0].message.content
     except Exception as e:
@@ -529,7 +532,7 @@ async def suggest_optimization(service: "AIService", namespace: str) -> List[str
                 "total_tokens": response.usage.total_tokens if response.usage else None
             } if response.usage else None
         }
-        print(f"[OPENAI RESPONSE][suggest_optimization] {json.dumps(response_dict, ensure_ascii=False, indent=2)}", flush=True)
+        dump("[OPENAI RESPONSE][suggest_optimization]", response_dict)
         
         content = response.choices[0].message.content
         # 제안을 리스트로 파싱

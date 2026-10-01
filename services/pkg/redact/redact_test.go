@@ -106,6 +106,40 @@ func TestValuePatterns(t *testing.T) {
 	}
 }
 
+func TestSecretInsideListItems_Stripped(t *testing.T) {
+	// `kubectl get secrets -o yaml`: Secrets under items: at indent 2/4, a
+	// block-scalar last-applied annotation, a multi-line stringData value.
+	yaml := strings.Join([]string{
+		"apiVersion: v1", "items:",
+		"- apiVersion: v1", "  data:", "    password: aHVudGVyMg==", "  kind: Secret", "  metadata:", "    name: a",
+		"    annotations:", "      kubectl.kubernetes.io/last-applied-configuration: |",
+		`        {"apiVersion":"v1","data":{"password":"aHVudGVyMg=="},"kind":"Secret"}`, "      owner: team-a",
+		"- apiVersion: v1", "  kind: Secret", "  metadata:", "    name: b", "  stringData:", "    token: plain-token-value",
+		"    note: |", "      line one", "      line two", "  type: Opaque",
+		"kind: List",
+	}, "\n")
+	out, st := Text(yaml, Options{Enabled: false})
+	for _, gone := range []string{"aHVudGVyMg==", "plain-token-value", "line one", "line two"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("still present: %s\n%s", gone, out)
+		}
+	}
+	for _, kept := range []string{"name: a", "name: b", "owner: team-a", "kind: List", "type: Opaque",
+		"password: <REDACTED:secret>", "token: <REDACTED:secret>", "note: <REDACTED:secret>",
+		"kubectl.kubernetes.io/last-applied-configuration: <REDACTED:secret>"} {
+		if !strings.Contains(out, kept) {
+			t.Errorf("expected %q\n%s", kept, out)
+		}
+	}
+	if st.Kinds["secret"] < 4 {
+		t.Errorf("stats: %+v", st)
+	}
+	out2, _ := Text("kind: Secret\nitems:\n- data:\n    k: dmFsdWU=\n  kind: Secret\n", Options{Enabled: false})
+	if strings.Contains(out2, "dmFsdWU=") || !strings.Contains(out2, "k: <REDACTED:secret>") {
+		t.Errorf("\"- data:\" item form:\n%s", out2)
+	}
+}
+
 func TestSecretDocument_AlwaysStripped(t *testing.T) {
 	yaml := strings.Join([]string{
 		"apiVersion: v1",

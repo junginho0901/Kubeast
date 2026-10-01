@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "Kubeast"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
-    
+    # Dump model responses / tool arguments / tool results to the log (redacted).
+    AI_DEBUG_DUMP: bool = False
+
     # OpenAI
     OPENAI_API_KEY: str = ""  # 선택적으로 변경 (AI 기능 사용시 필요)
     OPENAI_MODEL: str = "gpt-4o-mini"

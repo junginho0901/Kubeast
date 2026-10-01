@@ -64,6 +64,7 @@ data:
   REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
+  AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}
   MIGRATIONS_MODE: {{ .Values.migrations.mode | quote }}
   RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}

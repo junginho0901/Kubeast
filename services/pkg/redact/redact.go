@@ -293,46 +293,69 @@ func stripSecretDocuments(s string) (string, int) {
 	return strings.Join(docs, "\n---"), total
 }
 
-var yamlTopKey = regexp.MustCompile(`^(\S[^:]*):`)
+const lastAppliedKey = "kubectl.kubernetes.io/last-applied-configuration:"
 
+// stripSecretYAML blanks every value under data:/stringData: and the
+// last-applied annotation. Blocks are found by indentation at any depth — a
+// Secret may sit inside a List's items: ("- data:" or "  data:") rather than
+// at the top level — and end at the first line that is not deeper than the
+// key. Lines deeper than a value's key continue that value ("key: |" blocks)
+// and are dropped.
 func stripSecretYAML(doc string) (string, int) {
 	lines := strings.Split(doc, "\n")
 	n := 0
-	inBlock := false // inside data:/stringData:
-	inAnno := false  // inside metadata.annotations (to drop last-applied)
+	block := -1 // indent of the data:/stringData: key while inside its block
+	value := -1 // indent of the block's key lines; deeper lines continue a value
+	anno := -1  // indent of the annotations: key while inside it
+	last := -1  // indent of the last-applied key while inside its (block) value
 	for i, line := range lines {
 		trim := strings.TrimSpace(line)
+		if trim == "" || strings.HasPrefix(trim, "#") {
+			continue
+		}
 		indent := len(line) - len(strings.TrimLeft(line, " "))
-		if indent == 0 && trim != "" {
-			inBlock = trim == "data:" || trim == "stringData:"
-			inAnno = false
-			continue
+		key, keyIndent := trim, indent
+		if strings.HasPrefix(key, "- ") { // "- data:" — the item's keys sit two columns in
+			key, keyIndent = strings.TrimLeft(key[2:], " "), indent+2
 		}
-		if inBlock && indent > 0 && strings.Contains(trim, ":") {
-			key := strings.SplitN(trim, ":", 2)[0]
-			lines[i] = strings.Repeat(" ", indent) + key + ": <REDACTED:secret>"
-			n++
-			continue
+		if block >= 0 {
+			if indent > block {
+				if value < 0 {
+					value = indent
+				}
+				if indent == value && strings.Contains(trim, ":") {
+					lines[i] = strings.Repeat(" ", indent) + strings.SplitN(trim, ":", 2)[0] + ": <REDACTED:secret>"
+					n++
+				} else {
+					lines[i] = ""
+				}
+				continue
+			}
+			block, value = -1, -1
 		}
-		if inBlock && indent > 0 && !strings.Contains(trim, ":") {
-			// continuation of a multi-line value
-			lines[i] = ""
-			continue
+		if anno >= 0 {
+			if indent > anno {
+				switch {
+				case strings.HasPrefix(trim, lastAppliedKey):
+					lines[i] = strings.Repeat(" ", indent) + lastAppliedKey + " <REDACTED:secret>"
+					n++
+					last = indent
+				case last >= 0 && indent > last:
+					lines[i] = ""
+				default:
+					last = -1
+				}
+				continue
+			}
+			anno, last = -1, -1
 		}
-		if strings.HasPrefix(trim, "annotations:") {
-			inAnno = true
-			continue
-		}
-		if inAnno && strings.HasPrefix(trim, "kubectl.kubernetes.io/last-applied-configuration:") {
-			lines[i] = strings.Repeat(" ", indent) + "kubectl.kubernetes.io/last-applied-configuration: <REDACTED:secret>"
-			n++
-			continue
-		}
-		if inAnno && indent <= 2 && !strings.HasPrefix(trim, "kubectl.kubernetes.io/") {
-			inAnno = false
+		switch key {
+		case "data:", "stringData:":
+			block, value = keyIndent, -1
+		case "annotations:":
+			anno, last = keyIndent, -1
 		}
 	}
-	_ = yamlTopKey
 	return strings.Join(lines, "\n"), n
 }
 

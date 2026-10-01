@@ -117,6 +117,55 @@ def test_object():
     assert st.kinds["key_name"] == 3, st
 
 
+def test_secret_inside_list_items_and_block_scalars_stripped():
+    # `kubectl get secrets -o yaml`: Secrets sit under items: at indent 2/4, the
+    # last-applied annotation is a block scalar, stringData has a multi-line value.
+    yaml = "\n".join([
+        "apiVersion: v1", "items:",
+        "- apiVersion: v1", "  data:", "    password: aHVudGVyMg==", "  kind: Secret", "  metadata:", "    name: a",
+        "    annotations:", "      kubectl.kubernetes.io/last-applied-configuration: |",
+        '        {"apiVersion":"v1","data":{"password":"aHVudGVyMg=="},"kind":"Secret"}', "      owner: team-a",
+        "- apiVersion: v1", "  kind: Secret", "  metadata:", "    name: b", "  stringData:", "    token: plain-token-value",
+        "    note: |", "      line one", "      line two", "  type: Opaque",
+        "kind: List",
+    ])
+    out, st = redact_text(yaml, Options(enabled=False))
+    for gone in ["aHVudGVyMg==", "plain-token-value", "line one", "line two"]:
+        assert gone not in out, (gone, out)
+    for kept in ["name: a", "name: b", "owner: team-a", "kind: List", "type: Opaque",
+                 "password: <REDACTED:secret>", "token: <REDACTED:secret>", "note: <REDACTED:secret>",
+                 "kubectl.kubernetes.io/last-applied-configuration: <REDACTED:secret>"]:
+        assert kept in out, (kept, out)
+    assert st.kinds["secret"] >= 4, st
+
+    # "- data:" as the item's first key
+    yaml2 = "kind: Secret\nitems:\n- data:\n    k: dmFsdWU=\n  kind: Secret\n- kind: ConfigMap\n  data:\n    greeting: hello\n"
+    out2, _ = redact_text(yaml2, Options(enabled=False))
+    assert "dmFsdWU=" not in out2 and "k: <REDACTED:secret>" in out2, out2
+
+
+def test_debug_dump_off_by_default_and_redacted_when_on(monkeypatch, caplog):
+    import logging
+    from app.config import settings
+    from app.services.ai import debug_dump
+
+    monkeypatch.setattr(settings, "AI_DEBUG_DUMP", False)
+    with caplog.at_level(logging.DEBUG, logger="kubeast.ai"):
+        debug_dump.dump("[x]", {"password": "hunter2"})
+    assert "hunter2" not in caplog.text and "[x]" not in caplog.text
+
+    monkeypatch.setattr(settings, "AI_DEBUG_DUMP", True)
+    with caplog.at_level(logging.DEBUG, logger="kubeast.ai"):
+        debug_dump.dump("[x]", {"password": "hunter2", "model": "m"})
+        debug_dump.dump("[y]", "kind: Secret\ndata:\n  p: aHVudGVyMg==\n")
+    assert "[x]" in caplog.text and '"model": "m"' in caplog.text
+    assert "hunter2" not in caplog.text and "aHVudGVyMg==" not in caplog.text
+    # the key=value rule works per line from the key: a provider error that
+    # echoes a credential line is masked, prose around it is kept
+    err = debug_dump.safe_error(Exception("request rejected\nauthorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789\ntoken=abc123-xyz"))
+    assert "abcdefghijklmnopqrstuvwxyz0123456789" not in err and "abc123-xyz" not in err and "request rejected" in err, err
+
+
 def test_pii_off_by_default_on_when_asked():
     text = "user alice@example.com (010-1234-5678, 900101-1234567) paid with 4111 1111 1111 1111; again alice@example.com and bob@example.com"
     out, _ = redact_text(text, on())
