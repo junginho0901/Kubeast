@@ -35,6 +35,7 @@ func (h *Handler) GetGenericResources(w http.ResponseWriter, r *http.Request) {
 			h.handleError(w, err)
 			return
 		}
+		maskSecretList(data) // lists never carry Secret values
 		response.JSON(w, http.StatusOK, data)
 		return
 	}
@@ -91,6 +92,7 @@ func (h *Handler) SearchResources(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				items, _ := data["items"].([]map[string]interface{})
+				maskSecretItems(items) // search results never carry Secret values
 				results[idx] = fetchResult{rt: resourceType, items: items}
 			}(i, rt)
 		}
@@ -154,6 +156,11 @@ func (h *Handler) GetGenericResourceJSON(w http.ResponseWriter, r *http.Request)
 		h.handleError(w, err)
 		return
 	}
+	// A Secret's values: the dedicated endpoints' rule (reveal permission,
+	// audited) — otherwise masked.
+	if isSecretObject(data) && !h.secretRevealAllowed(r, namespace, name, "generic-json", nil) {
+		maskSecretValues(data)
+	}
 	response.JSON(w, http.StatusOK, data)
 }
 
@@ -170,6 +177,23 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 
 	if resourceType == "" || name == "" {
 		response.Error(w, http.StatusBadRequest, "resource_type and resource_name are required")
+		return
+	}
+
+	// Secrets take the dedicated path: values only with resource.secret.reveal
+	// (audited), masked otherwise, and never through the YAML cache.
+	if h.isSecretResourceType(r, resourceType) {
+		canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+		data, err := h.svc.GetSecretYAML(ctx, namespace, name, canReveal)
+		if canReveal {
+			h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+				nil, audit.MustJSON(map[string]interface{}{"via": "generic-yaml"}))
+		}
+		if err != nil {
+			h.handleError(w, err)
+			return
+		}
+		response.JSON(w, http.StatusOK, map[string]interface{}{"yaml": data})
 		return
 	}
 
@@ -267,6 +291,22 @@ func (h *Handler) DescribeGenericResource(w http.ResponseWriter, r *http.Request
 
 	if resourceType == "" || name == "" {
 		response.Error(w, http.StatusBadRequest, "resource_type and resource_name are required")
+		return
+	}
+
+	// Secrets take the dedicated describe (values masked without reveal).
+	if h.isSecretResourceType(r, resourceType) {
+		canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+		data, err := h.svc.DescribeSecret(ctx, namespace, name, canReveal)
+		if canReveal {
+			h.recordAuditWithPayload(r, "k8s.secret.reveal", "secret", name, namespace, err,
+				nil, audit.MustJSON(map[string]interface{}{"via": "generic-describe"}))
+		}
+		if err != nil {
+			h.handleError(w, err)
+			return
+		}
+		response.JSON(w, http.StatusOK, data)
 		return
 	}
 
