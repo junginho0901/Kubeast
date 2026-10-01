@@ -1,0 +1,92 @@
+suite: impersonation — custom Kubeast roles get an impersonable group and cluster rights
+templates:
+  - impersonation-custom-roles.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing when impersonation is off
+    set:
+      auth.impersonation.enabled: false
+      auth.impersonation.customRoles:
+        - name: sre-readonly
+          clusterRoles: [view]
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: allows the slugged group for impersonation and binds it to each ClusterRole
+    set:
+      auth.impersonation.customRoles:
+        - name: SRE ReadOnly
+          clusterRoles: [view, "kubeast:cluster-reader"]
+        - name: platform-admins
+          clusterRoles: [cluster-admin]
+    asserts:
+      - hasDocuments:
+          count: 5
+      - isKind:
+          of: ClusterRole
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: kubeast-impersonator-custom-roles
+        documentIndex: 0
+      - equal:
+          path: rules[0].resourceNames
+          value: ["kubeast:role:sre-readonly", "kubeast:role:platform-admins"]
+        documentIndex: 0
+      - equal:
+          path: rules[0].verbs
+          value: ["impersonate"]
+        documentIndex: 0
+      - isKind:
+          of: ClusterRoleBinding
+        documentIndex: 1
+      - equal:
+          path: roleRef.name
+          value: kubeast-impersonator-custom-roles
+        documentIndex: 1
+      - contains:
+          path: subjects
+          content:
+            apiGroup: rbac.authorization.k8s.io
+            kind: Group
+            name: kubeast:impersonator
+        documentIndex: 1
+      - contains:
+          path: subjects
+          content:
+            kind: ServiceAccount
+            name: tool-server
+            namespace: NAMESPACE
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: kubeast-role-sre-readonly-view
+        documentIndex: 2
+      - equal:
+          path: roleRef.name
+          value: view
+        documentIndex: 2
+      - equal:
+          path: subjects[0]
+          value:
+            apiGroup: rbac.authorization.k8s.io
+            kind: Group
+            name: kubeast:role:sre-readonly
+        documentIndex: 2
+      - equal:
+          path: roleRef.name
+          value: kubeast:cluster-reader
+        documentIndex: 3
+      - equal:
+          path: metadata.name
+          value: kubeast-role-platform-admins-cluster-admin
+        documentIndex: 4
+      - equal:
+          path: roleRef.name
+          value: cluster-admin
+        documentIndex: 4
