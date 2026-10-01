@@ -39,7 +39,7 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.4",
     "react-syntax-highlighter": "^16.1.0",
-    "recharts": "^2.10.3",
+    "recharts": "^3.10.1",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "simple-eval": "^2.0.1",
