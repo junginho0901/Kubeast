@@ -114,6 +114,10 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit -p tsconfig.json
       - run: npx vitest run
+      # The production bundle: catches what type-checking cannot (a PostCSS
+      # plugin that moved, a package exports map that hides a worker path).
+      # Bundling monaco-editor exceeds Node's default heap.
+      - run: NODE_OPTIONS=--max-old-space-size=4096 npx vite build
 
   helm:
     name: helm lint + unittest + kubeconform
