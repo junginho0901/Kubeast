@@ -53,6 +53,9 @@ export default function Login() {
   })
   const ssoEnabled = oidc?.enabled === true
   const passwordFormShown = (oidc?.password_login ?? 'on') !== 'off'
+  // ALLOW_REGISTRATION off → the server answers 404 to /auth/register, so the
+  // "Create account" switch is not offered at all (unknown = older server = keep it).
+  const registrationOpen = oidc?.registration !== false
   const [searchParams] = useSearchParams()
   const ssoError = searchParams.get('error')
 
@@ -220,7 +223,7 @@ export default function Login() {
                   </h2>
                 </div>
 
-                {passwordFormShown && (
+                {passwordFormShown && registrationOpen && (
                   <button
                     type="button"
                     onClick={() => setMode((m) => (m === 'login' ? 'register' : 'login'))}
@@ -349,7 +352,8 @@ export default function Login() {
                     {formError ??
                       (mode === 'login'
                         ? tr('login.errors.loginFailed', 'Failed to sign in.')
-                        : tr('login.errors.registerFailed', 'Failed to create account.'))}
+                        : ((registerMutation.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
+                          || tr('login.errors.registerFailed', 'Failed to create account.')))}
                   </div>
                 )}
 

@@ -49,6 +49,31 @@ test.describe('non-admin UI notices', () => {
     }
   })
 
+  // Every other list page has no notice of its own: the banner above the page
+  // (fed by the API client's 403 event) names the kinds the viewer cannot list,
+  // instead of the page passing a 403 off as "No roles found.".
+  test('a viewer sees the permission banner on a page without its own notice (Roles)', async ({ browser, request }) => {
+    const admin = await adminHeaders(request)
+    const user = await createUser(request, admin, 'viewer-roles')
+    try {
+      const grant = await request.put(`/api/v1/auth/admin/users/${user.id}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })
+      expect(grant.status()).toBe(200)
+      const { ctx, page } = await userPage(browser, user.email, user.password)
+      await page.goto('/security/roles?cluster=self')
+      const banner = page.getByTestId('forbidden-banner')
+      await expect(banner).toBeVisible({ timeout: 20000 })
+      await expect(banner).toContainText(/permission|권한/)
+      await expect(banner).toContainText('roles')
+      // another page resets the banner; a page the viewer may read shows none
+      await page.goto('/workloads/pods?cluster=self')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
+      await ctx.close()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })
+    }
+  })
+
   // Helm keeps releases in Secrets, so the same viewer gets 403 on the release
   // list once the Helm calls run as the user.
   test('a viewer sees a permission notice on the Helm releases page', async ({ browser, request }) => {

@@ -29,6 +29,7 @@ import {
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
+import ForbiddenBanner from './ForbiddenBanner'
 import { ResourceDetailProvider } from './ResourceDetailProvider'
 import ResourceDetailDrawer from './LazyResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
@@ -63,6 +64,12 @@ type NavGroup = {
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
+  // The nav scrolls on short viewports: keep the current page's entry in view
+  // (deep links into the ADMIN section land below the fold otherwise).
+  useEffect(() => {
+    const active = document.querySelector<HTMLElement>(`nav a[href="${CSS.escape(location.pathname)}"]`)
+    active?.scrollIntoView({ block: 'nearest' })
+  }, [location.pathname])
   const { currentCluster } = useCluster()
   const queryClient = useQueryClient()
   const [clusterStatus, setClusterStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
@@ -366,7 +373,9 @@ export default function Layout() {
 
           <ClusterPicker />
 
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {/* min-h-0: a flex child defaults to min-height:auto, so without it the nav grows
+              past the sidebar and the ADMIN items end up under the account box */}
+          <nav data-testid="sidebar-nav" className="flex-1 min-h-0 px-4 py-6 space-y-2 overflow-y-auto">
             {navGroups
               .filter((group) => {
                 if (group.adminOnly && !isAdmin) return false
@@ -476,6 +485,7 @@ export default function Layout() {
               state (selected namespace, filters, open modals) never carries over
               to a different cluster — its namespaces/resources differ. */}
           <div key={currentCluster || 'default'} className="contents">
+            <ForbiddenBanner clusterKey={currentCluster || 'default'} />
             {noAccessibleCluster ? (
               <div
                 data-testid="no-accessible-cluster"
