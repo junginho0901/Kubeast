@@ -114,9 +114,20 @@ export default function PodExecTerminal({ podName, namespace, container, command
       term.focus()
     }
 
+    // A container without the requested shell (distroless images, most
+    // control-plane pods) answers with the runtime's raw error; say what it means.
+    const explainNoShell = (text: string) => {
+      if (!/no such file or directory|executable file not found|not found in \$PATH/i.test(text)) return false
+      term.writeln(tRef.current('pods.exec.noShell', {
+        defaultValue: 'This container has no "{{command}}" — the image ships no shell (distroless) or it lives elsewhere. Pick another shell (bash, ash) or another container of the pod.',
+        command,
+      }))
+      return true
+    }
     ws.onmessage = (event) => {
       if (typeof event.data === 'string') {
         term.writeln(event.data)
+        explainNoShell(event.data)
         return
       }
       const buffer = new Uint8Array(event.data)
@@ -128,6 +139,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
         term.write(text)
       } else if (channel === 3) {
         term.writeln(text)
+        explainNoShell(text)
       }
     }
 

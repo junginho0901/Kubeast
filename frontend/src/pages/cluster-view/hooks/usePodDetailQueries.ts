@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { PodDetail } from '../types'
 
 // 선택된 Pod 의 manifest (YAML) + describe — 탭이 활성화될 때만 fetch.
@@ -21,16 +20,10 @@ export function usePodDetailQueries({ selectedPod, showManifest, showDescribe }:
     queryKey: ['pod-yaml', selectedPod?.namespace, selectedPod?.name],
     queryFn: async () => {
       if (!selectedPod) return ''
-      const response = await fetch(
-        `/api/v1/cluster/namespaces/${selectedPod.namespace}/pods/${selectedPod.name}/yaml`,
-        { headers: { ...getAuthHeaders() } },
-      )
-      if (response.status === 401) {
-        handleUnauthorized()
-        throw new Error('Unauthorized')
-      }
-      const data = await response.json()
-      return data.yaml as string
+      // through the API client so the selected cluster (?cluster=) and the CSRF
+      // header ride along — a bare fetch asked the default cluster and 404ed
+      const data = await api.getResourceYaml('pods', selectedPod.name, selectedPod.namespace)
+      return data.yaml
     },
     enabled: showManifest && !!selectedPod,
   })

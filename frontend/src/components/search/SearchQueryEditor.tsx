@@ -53,6 +53,14 @@ export default function SearchQueryEditor({
   }, [monaco, typeDefinition])
 
   function handleEditorWillMount(m: Monaco) {
+    // vs-dark paints an opaque #1e1e1e box inside the rounded field and over the
+    // placeholder; this theme keeps the field's own background.
+    m.editor.defineTheme('kubeast-search', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: { 'editor.background': '#00000000', 'editorGutter.background': '#00000000' },
+    })
     const ts = (m.languages as any).typescript
     if (!ts) return
     ts.javascriptDefaults.setCompilerOptions({
@@ -79,7 +87,7 @@ export default function SearchQueryEditor({
           <MonacoEditor
             height="28px"
             language="javascript"
-            theme="vs-dark"
+            theme="kubeast-search"
             value={value}
             beforeMount={handleEditorWillMount}
             onChange={v => onChange(v ?? '')}

@@ -126,6 +126,7 @@
     "noResults": "No pods found.",
     "exec": {
       "connectingTo": "Connecting to {{pod}}/{{container}}...",
+      "noShell": "This container has no \"{{command}}\" — the image ships no shell (distroless) or it lives elsewhere. Pick another shell (bash, ash) or another container of the pod.",
       "connected": "Connected.",
       "connectionError": "Connection error.",
       "disconnected": "Disconnected.",
@@ -1393,7 +1394,7 @@
       "Show pods using the most memory",
       "Show current node status",
       "Check pod status in kube-system namespace",
-      "List services in okestro-cmp namespace"
+      "List services in the default namespace"
     ]
   },
   "monitoring": {
@@ -2302,6 +2303,16 @@
     "noResources": "Select resource types to search",
     "tooManyResults": "Found {{total}} results. Showing first {{max}}.",
     "examplesTitle": "Example Queries",
+    "examples": {
+      "podsNotRunning": "Pods that are not Running",
+      "labelApp": "Everything labelled app=nginx",
+      "replicasOver3": "Deployments with more than 3 replicas",
+      "restartsOver5": "Pods restarted more than 5 times",
+      "configMapWithData": "ConfigMaps that carry data",
+      "completedJobs": "Active jobs that have completed",
+      "loadBalancerServices": "Services of type LoadBalancer",
+      "pendingPvcs": "PVCs stuck in Pending"
+    },
     "colKind": "Kind",
     "colName": "Name",
     "colNamespace": "Namespace",
@@ -2931,10 +2942,39 @@
     }
   },
   "adminAudit": {
+    "title": "Audit log",
+    "subtitle": "Every write and every sensitive read, with who did it",
     "exportCsv": "Export CSV",
+    "refreshing": "Loading...",
+    "refresh": "Refresh",
     "filter": {
-      "cluster": "Cluster"
-    }
+      "service": "Service",
+      "any": "All",
+      "cluster": "Cluster",
+      "action": "Action",
+      "actor": "User email",
+      "result": "Result",
+      "namespace": "Namespace",
+      "since": "From",
+      "until": "To",
+      "limit": "Rows per page"
+    },
+    "apply": "Search",
+    "reset": "Reset",
+    "total": "{{total}} entries",
+    "col": {
+      "time": "Time",
+      "actor": "User",
+      "service": "Service",
+      "action": "Action",
+      "target": "Target",
+      "namespace": "Namespace",
+      "result": "Result"
+    },
+    "loading": "Loading...",
+    "empty": "No audit entries match the filters",
+    "prev": "Prev",
+    "next": "Next"
   },
   "deviceClassesPage": {
     "create": "Create DeviceClass",

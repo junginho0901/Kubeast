@@ -17,6 +17,13 @@
     caret-color: #fff;
     transition: background-color 9999s ease-out 0s;
   }
+  /* Chrome also swaps the autofilled text to its own font; ::first-line is the
+     one selector it honours for the autofilled value's font family and size. */
+  input:-webkit-autofill::first-line {
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+  }
 }
 
 :root {

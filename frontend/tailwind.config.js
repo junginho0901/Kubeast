@@ -1,5 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // The UI is dark only. Pages written with light/dark class pairs (Timeline,
+  // GPU) need the dark variants to apply; <html class="dark"> in index.html.
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
