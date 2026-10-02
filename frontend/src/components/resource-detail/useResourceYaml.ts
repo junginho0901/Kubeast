@@ -137,10 +137,6 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
       queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtlspolicies'] })
       queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtlspolicies', ns] })
       queryClient.invalidateQueries({ queryKey: ['backendtlspolicy-describe', ns, name] })
-    } else if (kind === 'BackendTrafficPolicy' && ns) {
-      queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies'] })
-      queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies', ns] })
-      queryClient.invalidateQueries({ queryKey: ['backendtrafficpolicy-describe', ns, name] })
     } else if (kind === 'DeviceClass') {
       queryClient.invalidateQueries({ queryKey: ['gpu', 'deviceclasses'] })
       queryClient.invalidateQueries({ queryKey: ['deviceclass-describe', name] })

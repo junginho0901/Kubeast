@@ -40,6 +40,7 @@ data:
   AUTH_TOKEN_VERSION_URL: "http://auth-service:8004/api/v1/auth/internal/token-version"
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: "true"
+  GATEWAY_POLICY_KINDS: ""
   AI_WRITE_APPROVAL: "true"
   # dev: the model runs on the laptop (Ollama) — a private address the policy would refuse
   AI_BASE_URL_ALLOWED_HOSTS: "host.docker.internal"

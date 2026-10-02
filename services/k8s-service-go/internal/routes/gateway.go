@@ -7,10 +7,10 @@ import (
 )
 
 // RegisterGateway — Gateway API resources (Gateway, GatewayClass,
-// HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy,
-// BackendTrafficPolicy). Distinct from network.go because the Gateway
-// API is its own gateway.networking.k8s.io group with its own RBAC and
-// CRD lifecycle.
+// HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy) plus the
+// implementation-neutral policy listing (gateway-policies). Distinct from
+// network.go because the Gateway API is its own gateway.networking.k8s.io
+// group with its own RBAC and CRD lifecycle.
 func RegisterGateway(r chi.Router, h *handler.Handler) {
 	// Gateways
 	r.Get("/api/v1/gateways/all", h.GetAllGateways)
@@ -47,9 +47,8 @@ func RegisterGateway(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/backendtlspolicies/{name}/describe", h.DescribeBackendTLSPolicy)
 	r.Delete("/api/v1/namespaces/{namespace}/backendtlspolicies/{name}", h.DeleteBackendTLSPolicy)
 
-	// BackendTrafficPolicies
-	r.Get("/api/v1/backendtrafficpolicies/all", h.GetAllBackendTrafficPolicies)
-	r.Get("/api/v1/namespaces/{namespace}/backendtrafficpolicies", h.GetBackendTrafficPolicies)
-	r.Get("/api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}/describe", h.DescribeBackendTrafficPolicy)
-	r.Delete("/api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}", h.DeleteBackendTrafficPolicy)
+	// Gateway policies of every implementation (read-only list; the drawer
+	// uses the custom-resources routes for describe / YAML / delete)
+	r.Get("/api/v1/gateway-policies/all", h.GetAllGatewayPolicies)
+	r.Get("/api/v1/namespaces/{namespace}/gateway-policies", h.GetGatewayPolicies)
 }

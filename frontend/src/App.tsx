@@ -54,7 +54,7 @@ const HTTPRoutes = lazy(() => import('./pages/gateway/HTTPRoutes'))
 const GRPCRoutes = lazy(() => import('./pages/gateway/GRPCRoutes'))
 const ReferenceGrants = lazy(() => import('./pages/gateway/ReferenceGrants'))
 const BackendTLSPolicies = lazy(() => import('./pages/gateway/BackendTLSPolicies'))
-const BackendTrafficPolicies = lazy(() => import('./pages/gateway/BackendTrafficPolicies'))
+const GatewayPolicies = lazy(() => import('./pages/gateway/Policies'))
 const GPUDashboard = lazy(() => import('./pages/gpu/GPUDashboard'))
 const GPUNodes = lazy(() => import('./pages/gpu/GPUNodes'))
 const GPUPods = lazy(() => import('./pages/gpu/GPUPods'))
@@ -124,7 +124,7 @@ function App() {
             <Route path="gpu/resourceclaimtemplates" element={<ResourceClaimTemplates />} />
             <Route path="gpu/resourceslices" element={<ResourceSlices />} />
             <Route path="gateway/backendtlspolicies" element={<BackendTLSPolicies />} />
-            <Route path="gateway/backendtrafficpolicies" element={<BackendTrafficPolicies />} />
+            <Route path="gateway/policies" element={<GatewayPolicies />} />
             <Route path="security/serviceaccounts" element={<ServiceAccounts />} />
             <Route path="security/roles" element={<Roles />} />
             <Route path="security/clusterroles" element={<ClusterRoles />} />

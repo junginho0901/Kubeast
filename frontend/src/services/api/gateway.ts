@@ -1,12 +1,12 @@
 // Gateway API objects — Gateway / GatewayClass / HTTPRoute / GRPCRoute
-// / ReferenceGrant / BackendTLSPolicy / BackendTrafficPolicy. These
-// belong to the gateway.networking.k8s.io API group, not the legacy
-// Ingress / Service surface in network.ts.
+// / ReferenceGrant / BackendTLSPolicy, plus the implementation-neutral
+// policy list (gateway-policies). These belong to the gateway.networking.k8s.io
+// API group, not the legacy Ingress / Service surface in network.ts.
 
 import { client } from './client'
 import type {
   BackendTLSPolicyInfo,
-  BackendTrafficPolicyInfo,
+  GatewayPoliciesResponse,
   GRPCRouteInfo,
   GatewayClassInfo,
   GatewayInfo,
@@ -152,27 +152,16 @@ export const gatewayApi = {
     await client.delete(`/cluster/namespaces/${namespace}/backendtlspolicies/${name}`)
   },
 
-  // BackendTrafficPolicies
-  getBackendTrafficPolicies: async (namespace: string, forceRefresh = false): Promise<BackendTrafficPolicyInfo[]> => {
-    const { data } = await client.get(`/cluster/namespaces/${namespace}/backendtrafficpolicies`, {
-      params: { force_refresh: forceRefresh },
-    })
+  // Policies of every implementation (label-discovered CRDs + Envoy Gateway /
+  // Istio built-ins + configured kinds). Rows are plain custom resources, so
+  // describe / YAML / delete go through the custom-resources API.
+  getGatewayPolicies: async (namespace: string): Promise<GatewayPoliciesResponse> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/gateway-policies`)
     return data
   },
 
-  getAllBackendTrafficPolicies: async (forceRefresh = false): Promise<BackendTrafficPolicyInfo[]> => {
-    const { data } = await client.get('/cluster/backendtrafficpolicies/all', {
-      params: { force_refresh: forceRefresh },
-    })
+  getAllGatewayPolicies: async (): Promise<GatewayPoliciesResponse> => {
+    const { data } = await client.get('/cluster/gateway-policies/all')
     return data
-  },
-
-  describeBackendTrafficPolicy: async (namespace: string, name: string): Promise<any> => {
-    const { data } = await client.get(`/cluster/namespaces/${namespace}/backendtrafficpolicies/${name}/describe`)
-    return data
-  },
-
-  deleteBackendTrafficPolicy: async (namespace: string, name: string): Promise<void> => {
-    await client.delete(`/cluster/namespaces/${namespace}/backendtrafficpolicies/${name}`)
   },
 }

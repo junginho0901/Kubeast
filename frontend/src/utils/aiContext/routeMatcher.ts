@@ -64,7 +64,7 @@ const STATIC_MAP: Record<string, StaticEntry> = {
   '/gateway/grpcroutes':                  { pageType: 'resource-list', resourceKind: 'GRPCRoute',            titleKey: 'nav.grpcRoutes',              pageTitle: 'GRPC 라우트' },
   '/gateway/referencegrants':             { pageType: 'resource-list', resourceKind: 'ReferenceGrant',       titleKey: 'nav.referenceGrants',         pageTitle: '레퍼런스 그랜트' },
   '/gateway/backendtlspolicies':          { pageType: 'resource-list', resourceKind: 'BackendTLSPolicy',     titleKey: 'nav.backendTlsPolicies',      pageTitle: '백엔드 TLS 폴리시' },
-  '/gateway/backendtrafficpolicies':      { pageType: 'resource-list', resourceKind: 'BackendTrafficPolicy', titleKey: 'nav.backendTrafficPolicies',  pageTitle: '백엔드 트래픽 폴리시' },
+  '/gateway/policies':                    { pageType: 'resource-list', resourceKind: 'CustomResource',       titleKey: 'nav.policies',                pageTitle: 'Gateway 정책' },
 
   '/gpu/dashboard':                       { pageType: 'gpu',                                            titleKey: 'nav.gpuDashboard',           pageTitle: 'GPU 대시보드' },
   '/gpu/nodes':                           { pageType: 'gpu',           resourceKind: 'Node',            titleKey: 'nav.gpuNodes',               pageTitle: 'GPU 노드' },

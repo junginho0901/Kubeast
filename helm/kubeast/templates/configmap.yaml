@@ -62,6 +62,7 @@ data:
   TOOL_SERVER_URL: "http://tool-server:8086"
   IMPERSONATION_ENABLED: {{ .Values.auth.impersonation.enabled | quote }}
   KUBECONFIG_EXEC_COMMANDS: {{ join "," .Values.multicluster.execCommands | quote }}
+  GATEWAY_POLICY_KINDS: {{ join "," .Values.gatewayApi.policyKinds | quote }}
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
   AI_BASE_URL_ALLOWED_HOSTS: {{ join "," .Values.ai.baseUrlAllowedHosts | quote }}
   COOKIE_SECURE: {{ .Values.auth.cookieSecure | quote }}

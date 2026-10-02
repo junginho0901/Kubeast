@@ -43,7 +43,7 @@
     "grpcRoutes": "GRPC 라우트",
     "referenceGrants": "레퍼런스 그랜트",
     "backendTlsPolicies": "백엔드 TLS 폴리시",
-    "backendTrafficPolicies": "백엔드 트래픽 폴리시",
+    "policies": "정책",
     "gpu": "GPU (베타)",
     "gpuDashboard": "GPU 대시보드",
     "gpuNodes": "GPU 노드",
@@ -551,34 +551,43 @@
       "confirm": "\"{{namespace}}\" 네임스페이스의 BackendTLSPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
-  "backendTrafficPoliciesPage": {
-    "title": "백엔드 트래픽 폴리시",
-    "subtitle": "네임스페이스 전반의 Gateway API BackendTrafficPolicy 리소스를 조회하고 관리합니다.",
-    "create": "백엔드 트래픽 폴리시 생성",
-    "createTitle": "YAML로 백엔드 트래픽 폴리시 생성",
+  "policiesPage": {
+    "title": "정책",
+    "subtitle": "클러스터에 설치된 모든 구현체의 Gateway API 정책을 한곳에서 봅니다.",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "BackendTrafficPolicy 이름 검색...",
+    "searchPlaceholder": "이름, 네임스페이스, 종류, 대상으로 검색...",
+    "allKinds": "전체 종류",
     "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 BackendTrafficPolicy가 검색되었습니다.",
+    "matchCount": "{{count}}개가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "kind": "종류",
       "name": "이름",
-      "targetRef": "대상 참조",
-      "status": "상태",
+      "namespace": "네임스페이스",
+      "target": "대상",
+      "accepted": "수락",
       "age": "생성 시각"
     },
     "stats": {
       "total": "전체",
-      "accepted": "수락됨",
-      "withTargets": "대상 있음"
+      "kinds": "종류",
+      "accepted": "수락됨"
     },
-    "noResults": "BackendTrafficPolicy를 찾을 수 없습니다.",
-    "delete": {
-      "button": "백엔드 트래픽 폴리시 삭제",
-      "title": "백엔드 트래픽 폴리시 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 BackendTrafficPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
-    }
+    "accepted": {
+      "yes": "예",
+      "no": "아니오"
+    },
+    "kinds": {
+      "title": "조회한 종류",
+      "none": "이 클러스터에 설치된 정책 종류가 없습니다.",
+      "forbidden": "권한 없음"
+    },
+    "source": {
+      "label": "라벨 CRD",
+      "builtin": "내장",
+      "configured": "설정"
+    },
+    "noResults": "정책이 없습니다."
   },
   "statefulsets": {
     "title": "스테이트풀셋",

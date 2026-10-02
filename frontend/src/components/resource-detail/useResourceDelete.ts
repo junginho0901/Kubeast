@@ -133,10 +133,6 @@ export function useResourceDelete({ target, close }: Args) {
         await api.deleteBackendTLSPolicy(ns, name)
         return
       }
-      if (kind === 'BackendTrafficPolicy' && ns) {
-        await api.deleteBackendTrafficPolicy(ns, name)
-        return
-      }
       if (kind === 'DeviceClass') {
         await api.deleteDeviceClass(name)
         return
@@ -389,12 +385,6 @@ export function useResourceDelete({ target, close }: Args) {
           queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtlspolicies'] }),
           queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtlspolicies', ns] }),
           queryClient.invalidateQueries({ queryKey: ['backendtlspolicy-describe', ns, name] }),
-        ])
-      } else if (kind === 'BackendTrafficPolicy' && ns) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies'] }),
-          queryClient.invalidateQueries({ queryKey: ['gateway', 'backendtrafficpolicies', ns] }),
-          queryClient.invalidateQueries({ queryKey: ['backendtrafficpolicy-describe', ns, name] }),
         ])
       } else if (kind === 'DeviceClass') {
         await Promise.all([

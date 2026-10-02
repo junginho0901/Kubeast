@@ -94,11 +94,10 @@ type Service struct {
 	// These discovery caches are PER CLUSTER — Gateway/DRA CRD versions and the
 	// API-resource set differ between clusters, so they're keyed by cluster.ID to
 	// stop one cluster's discovery from being served for another.
-	gatewayAPIVersionMu    sync.RWMutex
-	gatewayAPIVersionCache map[cluster.ID]string
-
-	draAPIVersionMu    sync.RWMutex
-	draAPIVersionCache map[cluster.ID]string
+	// resolveCache: group/resource → served version (apiversion.go), keyed by
+	// cluster id + group/resource.
+	resolveMu    sync.RWMutex
+	resolveCache map[string]resolvedEntry
 
 	apiResourcesMu    sync.RWMutex
 	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
@@ -139,17 +138,16 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	impersonationEnabled = opts.Impersonation
 	execCommands = opts.ExecCommands
 	s := &Service{
-		registry:               registry,
-		watchEnabled:           watchEnabled,
-		cache:                  c,
-		maxClusters:            opts.MaxClusters,
-		health:                 newClusterHealth(opts.BreakerFails),
-		promQ:                  newPromQueryCache(opts.QueryCacheTTL),
-		limiters:               newClusterLimiters(opts.RateLimitQPS, opts.RateLimitBurst),
-		gatewayAPIVersionCache: map[cluster.ID]string{},
-		draAPIVersionCache:     map[cluster.ID]string{},
-		apiResourcesCache:      map[cluster.ID][]metav1.APIResourceList{},
-		apiResourcesAt:         map[cluster.ID]time.Time{},
+		registry:          registry,
+		watchEnabled:      watchEnabled,
+		cache:             c,
+		maxClusters:       opts.MaxClusters,
+		health:            newClusterHealth(opts.BreakerFails),
+		promQ:             newPromQueryCache(opts.QueryCacheTTL),
+		limiters:          newClusterLimiters(opts.RateLimitQPS, opts.RateLimitBurst),
+		resolveCache:      map[string]resolvedEntry{},
+		apiResourcesCache: map[cluster.ID][]metav1.APIResourceList{},
+		apiResourcesAt:    map[cluster.ID]time.Time{},
 	}
 
 	defaultID, err := registry.Default(ctx)
@@ -361,13 +359,7 @@ func (s *Service) invalidateCaches() {
 	s.apiResourcesAt = map[cluster.ID]time.Time{}
 	s.apiResourcesMu.Unlock()
 
-	s.gatewayAPIVersionMu.Lock()
-	s.gatewayAPIVersionCache = map[cluster.ID]string{}
-	s.gatewayAPIVersionMu.Unlock()
-
-	s.draAPIVersionMu.Lock()
-	s.draAPIVersionCache = map[cluster.ID]string{}
-	s.draAPIVersionMu.Unlock()
+	s.invalidateResolveCache()
 
 	s.promQ.clear()
 

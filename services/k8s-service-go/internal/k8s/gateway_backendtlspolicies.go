@@ -9,7 +9,7 @@ import (
 
 // GetBackendTLSPolicies lists BackendTLSPolicies in a namespace.
 func (s *Service) GetBackendTLSPolicies(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
-	gvr := s.gatewayPolicyGVR(ctx, "backendtlspolicies")
+	gvr := s.gatewayGVR(ctx, "backendtlspolicies")
 	list, err := s.ListResources(ctx, gvr, namespace, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list backendtlspolicies: %w", err)
@@ -19,7 +19,7 @@ func (s *Service) GetBackendTLSPolicies(ctx context.Context, namespace string) (
 
 // GetAllBackendTLSPolicies lists BackendTLSPolicies across all namespaces.
 func (s *Service) GetAllBackendTLSPolicies(ctx context.Context) ([]map[string]interface{}, error) {
-	gvr := s.gatewayPolicyGVR(ctx, "backendtlspolicies")
+	gvr := s.gatewayGVR(ctx, "backendtlspolicies")
 	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list all backendtlspolicies: %w", err)
@@ -29,7 +29,7 @@ func (s *Service) GetAllBackendTLSPolicies(ctx context.Context) ([]map[string]in
 
 // DescribeBackendTLSPolicy returns detailed info about a BackendTLSPolicy.
 func (s *Service) DescribeBackendTLSPolicy(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	gvr := s.gatewayPolicyGVR(ctx, "backendtlspolicies")
+	gvr := s.gatewayGVR(ctx, "backendtlspolicies")
 	obj, err := s.GetResource(ctx, gvr, namespace, name)
 	if err != nil {
 		return nil, fmt.Errorf("get backendtlspolicy %s/%s: %w", namespace, name, err)
@@ -146,6 +146,6 @@ func (s *Service) DescribeBackendTLSPolicy(ctx context.Context, namespace, name 
 
 // DeleteBackendTLSPolicy deletes a BackendTLSPolicy.
 func (s *Service) DeleteBackendTLSPolicy(ctx context.Context, namespace, name string) error {
-	gvr := s.gatewayPolicyGVR(ctx, "backendtlspolicies")
+	gvr := s.gatewayGVR(ctx, "backendtlspolicies")
 	return s.DeleteResource(ctx, gvr, namespace, name)
 }

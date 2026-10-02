@@ -124,7 +124,7 @@ func statusForError(err error) int {
 		return http.StatusForbidden
 	case apierrors.IsNotFound(err):
 		return http.StatusNotFound
-	case apierrors.IsAlreadyExists(err), apierrors.IsConflict(err):
+	case apierrors.IsAlreadyExists(err), apierrors.IsConflict(err), errors.Is(err, k8s.ErrAlreadyAtRevision):
 		return http.StatusConflict
 	case apierrors.IsBadRequest(err), apierrors.IsInvalid(err):
 		return http.StatusBadRequest

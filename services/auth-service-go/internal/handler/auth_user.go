@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -399,8 +401,11 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Other sessions of this user must log in again with the new password.
-	// The caller's own token is refreshed by the client right after.
+	// Other sessions of this user must log in again with the new password:
+	// bumping token_version invalidates every token issued so far, including
+	// the one this request came with, so the caller gets a fresh one in the
+	// session cookie right here (a later /auth/refresh with the old token
+	// would be refused the same way).
 	_ = h.repo.BumpTokenVersion(r.Context(), user.ID)
 
 	// Audit log
@@ -410,5 +415,28 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if updated == nil {
 		updated = user
 	}
+	if token, err := h.issueToken(r.Context(), updated); err != nil {
+		slog.Error("change-password: re-issue session token", "user", updated.ID, "err", err)
+	} else {
+		h.setAuthCookie(w, r, token)
+	}
 	response.JSON(w, http.StatusOK, updated.ToResponse())
+}
+
+// issueToken builds a token for user from the current database state (role
+// permissions, cluster grants, token_version) — what login and refresh issue.
+func (h *AuthHandler) issueToken(ctx context.Context, user *model.User) (string, error) {
+	permissions, err := h.repo.GetPermissionsByRoleID(ctx, user.RoleID)
+	if err != nil {
+		return "", fmt.Errorf("load permissions: %w", err)
+	}
+	matrix, err := h.buildPermissionMatrix(ctx, user.ID, permissions)
+	if err != nil {
+		return "", fmt.Errorf("build permissions: %w", err)
+	}
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(ctx, user.ID)
+	if err != nil {
+		return "", fmt.Errorf("load cluster roles: %w", err)
+	}
+	return h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
 }
