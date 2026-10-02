@@ -2,93 +2,24 @@ package k8s
 
 import (
 	"context"
-	"log/slog"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
-// resolveGatewayAPIVersion auto-detects whether the cluster uses v1 or v1beta1 for gateway.networking.k8s.io.
-// The result is cached for the lifetime of the process.
-func (s *Service) resolveGatewayAPIVersion(ctx context.Context) string {
-	cid := ctxClusterID(ctx)
-	s.gatewayAPIVersionMu.RLock()
-	cached := s.gatewayAPIVersionCache[cid]
-	s.gatewayAPIVersionMu.RUnlock()
-	if cached != "" {
-		return cached
-	}
+const gatewayAPIGroup = "gateway.networking.k8s.io"
 
-	s.gatewayAPIVersionMu.Lock()
-	defer s.gatewayAPIVersionMu.Unlock()
-	if s.gatewayAPIVersionCache == nil {
-		s.gatewayAPIVersionCache = map[cluster.ID]string{}
-	}
-
-	// Double-check after acquiring write lock
-	if v := s.gatewayAPIVersionCache[cid]; v != "" {
-		return v
-	}
-
-	// Try v1 first
-	gvr := schema.GroupVersionResource{
-		Group:    "gateway.networking.k8s.io",
-		Version:  "v1",
-		Resource: "gateways",
-	}
-	_, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
-	if err == nil {
-		s.gatewayAPIVersionCache[cid] = "v1"
-		slog.Info("gateway API version detected", "cluster", cid, "version", "v1")
-		return "v1"
-	}
-
-	// Fall back to v1beta1
-	gvr.Version = "v1beta1"
-	_, err = s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
-	if err == nil {
-		s.gatewayAPIVersionCache[cid] = "v1beta1"
-		slog.Info("gateway API version detected", "cluster", cid, "version", "v1beta1")
-		return "v1beta1"
-	}
-
-	// Default to v1
-	s.gatewayAPIVersionCache[cid] = "v1"
-	slog.Warn("gateway API not detected, defaulting to v1", "cluster", cid)
-	return "v1"
-}
-
+// gatewayGVR is the GVR the cluster serves for one Gateway API resource. Each
+// kind is resolved on its own because the group mixes versions (gateways v1,
+// referencegrants v1beta1, backendtlspolicies v1alpha3). When the cluster has
+// no Gateway API, the v1 GVR is returned so the list fails with "not found",
+// which the handlers turn into an empty page.
 func (s *Service) gatewayGVR(ctx context.Context, resource string) schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    "gateway.networking.k8s.io",
-		Version:  s.resolveGatewayAPIVersion(ctx),
-		Resource: resource,
+	if gvr, ok := s.resolveGVR(ctx, gatewayAPIGroup, resource); ok {
+		return gvr
 	}
-}
-
-func (s *Service) gatewayPolicyGVR(ctx context.Context, resource string) schema.GroupVersionResource {
-	// Policy resources use v1alpha3 or v1alpha2, not the core gateway API version.
-	// Try v1alpha3 first, then v1alpha2.
-	for _, v := range []string{"v1alpha3", "v1alpha2"} {
-		gvr := schema.GroupVersionResource{
-			Group:    "gateway.networking.k8s.io",
-			Version:  v,
-			Resource: resource,
-		}
-		_, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
-		if err == nil {
-			return gvr
-		}
-	}
-	// Default to v1alpha3
-	return schema.GroupVersionResource{
-		Group:    "gateway.networking.k8s.io",
-		Version:  "v1alpha3",
-		Resource: resource,
-	}
+	return schema.GroupVersionResource{Group: gatewayAPIGroup, Version: "v1", Resource: resource}
 }
 
 func formatPolicyList(list *unstructured.UnstructuredList) []map[string]interface{} {

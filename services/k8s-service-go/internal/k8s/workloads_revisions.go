@@ -3,14 +3,22 @@ package k8s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
+
+// ErrAlreadyAtRevision is returned when the workload's current pod template
+// already equals the requested revision's, so a rollback would change nothing
+// (kubectl reports the same case as "skipped rollback").
+var ErrAlreadyAtRevision = errors.New("workload is already at the requested revision")
 
 // Workload revision history & rollback. Split out of workloads.go
 // because rollback is a distinct concern from list/describe and
@@ -246,33 +254,48 @@ func (s *Service) rollbackDeployment(ctx context.Context, namespace, name string
 		return fmt.Errorf("revision %d not found for deployment %s/%s", toRevision, namespace, name)
 	}
 
-	// Build patch from the target RS's pod template
-	// Remove the pod-template-hash label from the template to avoid conflicts
-	templateLabels := make(map[string]string)
-	for k, v := range targetRS.Spec.Template.Labels {
-		if k != "pod-template-hash" {
-			templateLabels[k] = v
-		}
-	}
-
-	patchTemplate := targetRS.Spec.Template.DeepCopy()
-	patchTemplate.Labels = templateLabels
-
-	patch := map[string]interface{}{
-		"spec": map[string]interface{}{
-			"template": patchTemplate,
-		},
-	}
-	patchBytes, err := json.Marshal(patch)
+	deploy, err := s.clientsetCtx(ctx).AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
+		return fmt.Errorf("get deployment %s/%s: %w", namespace, name, err)
+	}
+	patchBytes, err := deploymentRollbackPatch(deploy, targetRS)
+	if err != nil {
+		if errors.Is(err, ErrAlreadyAtRevision) {
+			return fmt.Errorf("deployment %s/%s: revision %d: %w", namespace, name, toRevision, err)
+		}
 		return fmt.Errorf("marshal rollback patch: %w", err)
 	}
 
-	_, err = s.clientsetCtx(ctx).AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = s.clientsetCtx(ctx).AppsV1().Deployments(namespace).Patch(ctx, name, types.JSONPatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("rollback deployment %s/%s to revision %d: %w", namespace, name, toRevision, err)
 	}
 	return nil
+}
+
+// deploymentRollbackPatch builds the patch that rolls deploy back to the pod
+// template of targetRS, the way kubectl rollout undo does: the whole
+// spec.template is replaced (JSON Patch "replace"), so fields a later revision
+// added disappear too — a strategic merge of the old template would keep them.
+// The pod-template-hash label belongs to the ReplicaSet, not the template. When
+// the templates already match (ignoring that label) nothing would change and
+// ErrAlreadyAtRevision is returned instead of a no-op patch.
+func deploymentRollbackPatch(deploy *appsv1.Deployment, targetRS *appsv1.ReplicaSet) ([]byte, error) {
+	target := targetRS.Spec.Template.DeepCopy()
+	delete(target.Labels, appsv1.DefaultDeploymentUniqueLabelKey)
+	if templatesEqualIgnoringHash(&deploy.Spec.Template, target) {
+		return nil, ErrAlreadyAtRevision
+	}
+	return json.Marshal([]map[string]interface{}{
+		{"op": "replace", "path": "/spec/template", "value": target},
+	})
+}
+
+func templatesEqualIgnoringHash(a, b *corev1.PodTemplateSpec) bool {
+	ac, bc := a.DeepCopy(), b.DeepCopy()
+	delete(ac.Labels, appsv1.DefaultDeploymentUniqueLabelKey)
+	delete(bc.Labels, appsv1.DefaultDeploymentUniqueLabelKey)
+	return apiequality.Semantic.DeepEqual(ac, bc)
 }
 
 func (s *Service) rollbackDaemonSet(ctx context.Context, namespace, name string, toRevision int64) error {

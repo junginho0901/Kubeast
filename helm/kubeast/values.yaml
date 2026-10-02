@@ -120,6 +120,15 @@ nodeShell:
     - docker.io/library/busybox:latest
   timeoutSeconds: 3600
 
+# --- Gateway API ---
+# The Gateway → Policies page lists every policy kind attached to Gateway API
+# objects: CRDs labelled gateway.networking.k8s.io/policy (GEP-713) plus a
+# built-in table for implementations that ship unlabelled CRDs (Envoy Gateway,
+# Istio). Add "group/plural" entries here for any other implementation.
+gatewayApi:
+  policyKinds: []
+  #  - gateway.kgateway.dev/trafficpolicies
+
 # --- AI Configuration ---
 # Provider keys reach ai-service only as environment variables; a model config
 # names the variable (api_key_env). Either fill the keys here (rendered into

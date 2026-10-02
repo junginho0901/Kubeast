@@ -43,7 +43,7 @@
     "grpcRoutes": "GRPC Routes",
     "referenceGrants": "Reference Grants",
     "backendTlsPolicies": "Backend TLS Policies",
-    "backendTrafficPolicies": "Backend Traffic Policies",
+    "policies": "Policies",
     "gpu": "GPU (Beta)",
     "gpuDashboard": "GPU Dashboard",
     "gpuNodes": "GPU Nodes",
@@ -551,34 +551,43 @@
       "confirm": "Are you sure you want to delete BackendTLSPolicy \"{{name}}\" in \"{{namespace}}\"?"
     }
   },
-  "backendTrafficPoliciesPage": {
-    "title": "Backend Traffic Policies",
-    "subtitle": "Inspect and manage Gateway API BackendTrafficPolicy resources across namespaces.",
-    "create": "Create BackendTrafficPolicy",
-    "createTitle": "Create BackendTrafficPolicy from YAML",
+  "policiesPage": {
+    "title": "Policies",
+    "subtitle": "Policies attached to Gateway API objects, from every implementation installed on the cluster.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "searchPlaceholder": "Search BackendTrafficPolicies by name...",
+    "searchPlaceholder": "Search by name, namespace, kind, or target...",
+    "allKinds": "All kinds",
     "allNamespaces": "All namespaces",
-    "matchCount": "{{count}} BackendTrafficPolic{{suffix}} match.",
+    "matchCount": "{{count}} result(s) match.",
     "table": {
-      "namespace": "Namespace",
+      "kind": "Kind",
       "name": "Name",
-      "targetRef": "Target Ref",
-      "status": "Status",
+      "namespace": "Namespace",
+      "target": "Target",
+      "accepted": "Accepted",
       "age": "Age"
     },
     "stats": {
       "total": "Total",
-      "accepted": "Accepted",
-      "withTargets": "With Targets"
+      "kinds": "Kinds",
+      "accepted": "Accepted"
     },
-    "noResults": "No BackendTrafficPolicies found.",
-    "delete": {
-      "button": "Delete BackendTrafficPolicy",
-      "title": "Delete BackendTrafficPolicy",
-      "confirm": "Are you sure you want to delete BackendTrafficPolicy \"{{name}}\" in \"{{namespace}}\"?"
-    }
+    "accepted": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "kinds": {
+      "title": "Scanned kinds",
+      "none": "No policy kinds are installed on this cluster.",
+      "forbidden": "no permission"
+    },
+    "source": {
+      "label": "labelled CRD",
+      "builtin": "built-in",
+      "configured": "configured"
+    },
+    "noResults": "No policies found."
   },
   "statefulsets": {
     "title": "Stateful Sets",

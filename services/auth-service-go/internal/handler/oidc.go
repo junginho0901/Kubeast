@@ -276,13 +276,15 @@ func passwordLoginAllowed(cfg config.Config, email string) bool {
 // --- handlers ---------------------------------------------------------------
 
 // OIDCConfig handles GET /auth/oidc/config — what the login page needs to
-// render: whether SSO exists, its button label, and whether the password form
-// is shown.
+// render: whether SSO exists, its button label, whether the password form is
+// shown, and whether self-registration is open (ALLOW_REGISTRATION), so the
+// page can hide "Create account" instead of letting the form fail with 404.
 func (h *AuthHandler) OIDCConfig(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]any{
 		"enabled":        h.cfg.OIDC.Enabled,
 		"display_name":   h.cfg.OIDC.DisplayName,
 		"password_login": h.cfg.PasswordLogin,
+		"registration":   h.cfg.AllowRegistration,
 	})
 }
 

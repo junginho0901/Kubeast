@@ -492,14 +492,45 @@ export interface BackendTLSPolicyInfo {
   created_at?: string | null
 }
 
-export interface BackendTrafficPolicyInfo {
+// Gateway → Policies (every implementation's policy kinds in one list)
+export interface GatewayPolicyTarget {
+  kind: string       // GEP-713 target kind, or "selector" / "host" for Istio-style attachment
+  name: string
+  namespace?: string
+  group?: string
+  section?: string
+}
+
+export interface GatewayPolicyItem {
   name: string
   namespace: string
-  target_refs?: Array<Record<string, any>>
-  conditions?: Array<Record<string, any>>
+  kind: string
+  group: string
+  version: string
+  plural: string
+  scope: string
+  source: 'label' | 'builtin' | 'configured' | string
   labels?: Record<string, string>
-  annotations?: Record<string, string>
   created_at?: string | null
+  targets: GatewayPolicyTarget[]
+  accepted?: boolean
+}
+
+export interface GatewayPolicyKindInfo {
+  group: string
+  version: string
+  plural: string
+  kind: string
+  scope: string
+  source: string
+  count: number
+  error?: string
+}
+
+export interface GatewayPoliciesResponse {
+  namespace: string
+  kinds: GatewayPolicyKindInfo[]
+  items: GatewayPolicyItem[]
 }
 
 // GPU / DRA types

@@ -42,6 +42,10 @@ type Config struct {
 	// Credential plugins a registered kubeconfig may run (exec.command base
 	// names). They execute inside this pod, so only known binaries are allowed.
 	KubeconfigExecCommands []string
+	// Extra policy kinds ("group/plural") the Gateway → Policies page lists
+	// besides the label-discovered and built-in ones (implementations that
+	// neither label their CRDs nor appear in the built-in table).
+	GatewayPolicyKinds []string
 
 	// CORS
 	AllowedOrigins []string
@@ -96,6 +100,7 @@ func Load() Config {
 		ImpersonationEnabled: pkgconfig.GetEnvBool("IMPERSONATION_ENABLED", true),
 
 		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),
+		GatewayPolicyKinds:     pkgconfig.GetEnvList("GATEWAY_POLICY_KINDS", ""),
 
 		AllowedOrigins: pkgconfig.LookupEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 

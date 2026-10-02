@@ -75,70 +75,25 @@ func (h *Handler) DeleteBackendTLSPolicy(w http.ResponseWriter, r *http.Request)
 	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
 }
 
-// --- BackendTrafficPolicies ---
+// --- Gateway policies (every kind, label-discovered + built-in table) ---
 
-// GetAllBackendTrafficPolicies handles GET /api/v1/backendtrafficpolicies/all.
-func (h *Handler) GetAllBackendTrafficPolicies(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data, err := h.svc.GetAllBackendTrafficPolicies(ctx)
+// GetAllGatewayPolicies handles GET /api/v1/gateway-policies/all.
+func (h *Handler) GetAllGatewayPolicies(w http.ResponseWriter, r *http.Request) {
+	data, err := h.svc.GetGatewayPolicies(r.Context(), "", h.cfg.GatewayPolicyKinds)
 	if err != nil {
-		if isGatewayAPINotAvailable(err) {
-			response.JSON(w, http.StatusOK, []interface{}{})
-			return
-		}
 		h.handleError(w, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, data)
 }
 
-// GetBackendTrafficPolicies handles GET /api/v1/namespaces/{namespace}/backendtrafficpolicies.
-func (h *Handler) GetBackendTrafficPolicies(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+// GetGatewayPolicies handles GET /api/v1/namespaces/{namespace}/gateway-policies.
+func (h *Handler) GetGatewayPolicies(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
-	data, err := h.svc.GetBackendTrafficPolicies(ctx, namespace)
+	data, err := h.svc.GetGatewayPolicies(r.Context(), namespace, h.cfg.GatewayPolicyKinds)
 	if err != nil {
-		if isGatewayAPINotAvailable(err) {
-			response.JSON(w, http.StatusOK, []interface{}{})
-			return
-		}
 		h.handleError(w, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, data)
-}
-
-// DescribeBackendTrafficPolicy handles GET /api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}/describe.
-func (h *Handler) DescribeBackendTrafficPolicy(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	namespace := chi.URLParam(r, "namespace")
-	name := chi.URLParam(r, "name")
-	data, err := h.svc.DescribeBackendTrafficPolicy(ctx, namespace, name)
-	if err != nil {
-		if isGatewayAPINotAvailable(err) {
-			response.JSON(w, http.StatusNotFound, map[string]string{"detail": "Gateway API not available"})
-			return
-		}
-		h.handleError(w, err)
-		return
-	}
-	response.JSON(w, http.StatusOK, data)
-}
-
-// DeleteBackendTrafficPolicy handles DELETE /api/v1/namespaces/{namespace}/backendtrafficpolicies/{name}.
-func (h *Handler) DeleteBackendTrafficPolicy(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermissionForCluster(r, "resource.backendtrafficpolicy.delete"); err != nil {
-		h.handleError(w, err)
-		return
-	}
-	ctx := r.Context()
-	namespace := chi.URLParam(r, "namespace")
-	name := chi.URLParam(r, "name")
-	err := h.svc.DeleteBackendTrafficPolicy(ctx, namespace, name)
-	h.recordAudit(r, "k8s.backendtrafficpolicy.delete", "backendtrafficpolicy", name, namespace, err)
-	if err != nil {
-		h.handleError(w, err)
-		return
-	}
-	response.JSON(w, http.StatusOK, map[string]interface{}{"deleted": true})
 }

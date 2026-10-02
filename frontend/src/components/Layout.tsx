@@ -236,7 +236,7 @@ export default function Layout() {
         { name: t('nav.grpcRoutes'), href: '/gateway/grpcroutes', icon: ArrowRight },
         { name: t('nav.referenceGrants'), href: '/gateway/referencegrants', icon: Key },
         { name: t('nav.backendTlsPolicies'), href: '/gateway/backendtlspolicies', icon: Shield },
-        { name: t('nav.backendTrafficPolicies'), href: '/gateway/backendtrafficpolicies', icon: Network },
+        { name: t('nav.policies'), href: '/gateway/policies', icon: Network },
       ],
     },
     {
