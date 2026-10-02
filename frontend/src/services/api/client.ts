@@ -44,9 +44,21 @@ client.interceptors.response.use(
     if (status === 401 && !isAuthRequest) {
       handleUnauthorized()
     }
+    // A 403 on a cluster read means the signed-in user's cluster role does not
+    // cover that kind. Pages render an empty list in that case; the banner in
+    // Layout listens for this event so the page says "no permission" instead of
+    // "nothing here".
+    if (status === 403 && String(error?.config?.method || 'get').toLowerCase() === 'get' && url.startsWith('/cluster/')) {
+      try {
+        window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { url, detail: error?.response?.data?.detail } }))
+      } catch { /* non-browser */ }
+    }
     return Promise.reject(error)
   },
 )
+
+/** Dispatched on window for every 403 on a GET /cluster/... request (detail: { url, detail }). */
+export const FORBIDDEN_EVENT = 'kubeast:forbidden'
 
 // Internal — used by domain files that want to fall through to a
 // "metrics-server unavailable" branch instead of bubbling the error.

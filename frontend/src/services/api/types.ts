@@ -1252,6 +1252,8 @@ export interface OIDCLoginConfig {
   enabled: boolean
   display_name: string
   password_login: 'on' | 'admin-only' | 'off'
+  /** self-service registration (ALLOW_REGISTRATION); absent on older servers = unknown, keep the link */
+  registration?: boolean
 }
 
 // AdminResetPassword 응답: Member 필드 + 1회용 평문 비밀번호

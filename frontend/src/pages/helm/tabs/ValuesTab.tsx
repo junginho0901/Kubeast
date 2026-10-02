@@ -116,13 +116,17 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
           </button>
         </div>
         <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
+          {/* keyed so the read-only editor above is not reused for editing: Monaco keeps
+              readOnly from the previous options unless it is set here explicitly */}
           <Editor
+            key="values-edit"
             height="60vh"
             defaultLanguage="yaml"
             value={draft}
             theme="vs-dark"
             onChange={(v) => setDraft(v ?? '')}
             options={{
+              readOnly: false,
               minimap: { enabled: false },
               fontSize: 12,
               lineNumbers: 'on',

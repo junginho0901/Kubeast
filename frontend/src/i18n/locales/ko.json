@@ -85,6 +85,10 @@
     "accountTitle": "설정",
     "account": "설정",
     "logout": "로그아웃",
+    "forbidden": {
+      "title": "권한 없음",
+      "body": "이 클러스터에서 {{resources}}을(를) 볼 권한이 없습니다. 아래 목록은 읽을 수 있는 것만 보여 줍니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요."
+    },
     "clusterChecking": "연결 확인 중...",
     "clusterConnected": "클러스터 연결됨",
     "clusterDisconnected": "클러스터 연결 안 됨",

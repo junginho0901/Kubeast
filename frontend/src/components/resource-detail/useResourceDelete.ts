@@ -6,6 +6,7 @@
 // 자체 unmount 라 추가 reset 불필요.
 
 import { useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
@@ -235,6 +236,14 @@ export function useResourceDelete({ target, close }: Args) {
       throw new Error('Delete is not supported for this resource.')
     },
     onSuccess: async () => {
+      // Unmount the drawer before invalidating: the describe queries below
+      // belong to the object that no longer exists, and an invalidated query
+      // only refetches while something still renders it. close() alone only
+      // schedules the unmount, so it is flushed synchronously here — otherwise
+      // the drawer's describe refetched first and logged a 404 on every delete.
+      setDeleteDialogOpen(false)
+      setDeleteError(null)
+      flushSync(() => close())
       if (kind === 'Pod' && ns) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['workloads', 'pods'] }),
@@ -515,10 +524,6 @@ export function useResourceDelete({ target, close }: Args) {
           queryClient.invalidateQueries({ queryKey: ['cr-instance-describe'] }),
         ])
       }
-
-      setDeleteDialogOpen(false)
-      setDeleteError(null)
-      close()
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail || err?.message || 'Failed to delete resource.'

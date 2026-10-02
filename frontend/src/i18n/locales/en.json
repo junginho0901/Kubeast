@@ -85,6 +85,10 @@
     "accountTitle": "Settings",
     "account": "Settings",
     "logout": "Log out",
+    "forbidden": {
+      "title": "No permission",
+      "body": "You do not have permission to view {{resources}} in this cluster. The list below only shows what you can read; ask an administrator for a role that includes it."
+    },
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
     "clusterDisconnected": "Cluster disconnected",
