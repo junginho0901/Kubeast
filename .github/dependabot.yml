@@ -65,6 +65,10 @@ updates:
       # @vitejs/plugin-react 5+ requires Vite 6+; it moves with the Vite major.
       - dependency-name: "@vitejs/plugin-react"
         update-types: ["version-update:semver-major"]
+      # TypeScript 6/7 (7 = the native compiler) change tsc flags and need
+      # matching @typescript-eslint and vite plugin releases; a separate migration.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directory: /services/ai-service
