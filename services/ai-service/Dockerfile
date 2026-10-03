@@ -17,6 +17,11 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
 # ---- runtime stage: no compiler, non-root uid 65532 ----
 FROM python:3.11-slim
 
+# Apply the OS package fixes published after the base image was built; the
+# release gate fails on fixed CRITICAL/HIGH CVEs (pcre2, openssl in 2026-10).
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # No packaging tools at runtime: the base image's pip/setuptools/wheel (and the
 # libraries they vendor) are not needed by the app and show up in image scans.
 RUN python -m pip uninstall -y pip setuptools wheel
