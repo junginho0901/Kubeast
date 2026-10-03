@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { IngressInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAddresses,
   formatAge,
@@ -92,7 +93,7 @@ export function IngressTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -111,7 +112,7 @@ export function IngressTable({
               <th className="text-left py-3 px-4 w-[210px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.addresses', 'Address')}{renderSortIcon('addresses')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -129,13 +130,13 @@ export function IngressTable({
                   rawJson: ingressToRawJson(ing),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{ing.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{ing.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{ing.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{ing.class || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatHosts(ing)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatRules(ing)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAddresses(ing)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(ing.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(ing.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -150,11 +151,9 @@ export function IngressTable({
             )}
 
             {sortedIngressesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                  {tr('ingressesPage.noResults', 'No ingresses found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="ingresses">
+                {tr('ingressesPage.noResults', 'No ingresses found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedIngresses.length} columnCount={6 + (showNamespaceColumn ? 1 : 0)} />

@@ -32,6 +32,7 @@ export default function ResourceGraph() {
 
   // State
   const [selectedNamespaces, setSelectedNamespaces] = useState<Set<string>>(new Set())
+  const [legendOpen, setLegendOpen] = useState(true)
   const [isNsDropdownOpen, setIsNsDropdownOpen] = useState(false)
   const [kindFilters, setKindFilters] = useState<Set<string>>(new Set(DEFAULT_KINDS))
   const [edgeTypeFilters, setEdgeTypeFilters] = useState<Set<string>>(new Set(ALL_EDGE_TYPES))
@@ -260,10 +261,21 @@ export default function ResourceGraph() {
         {/* Glance */}
         <Glance node={glanceNode} position={glancePos} />
 
-        {/* Legend (bottom left) */}
+        {/* Legend (bottom left) — only with a graph on screen (the empty state
+            has nothing to decode and the panel overlapped its cards at 1024px),
+            and collapsible to a single line */}
+        {(graphData?.nodes?.length ?? 0) > 0 && (
         <div className="absolute bottom-4 left-4 bg-slate-800/90 border border-slate-700 rounded-lg p-3 text-xs space-y-1.5 z-10 backdrop-blur-sm">
-          <div className="font-medium text-slate-300 mb-1">{t('resourceGraph.legend', 'Legend')}</div>
-          {ALL_EDGE_TYPES.filter(type => edgeTypeFilters.has(type)).slice(0, 7).map(type => {
+          <button
+            type="button"
+            onClick={() => setLegendOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-3 font-medium text-slate-300"
+            aria-expanded={legendOpen}
+          >
+            <span>{t('resourceGraph.legend', 'Legend')}</span>
+            <span className="text-slate-500">{legendOpen ? '−' : '+'}</span>
+          </button>
+          {legendOpen && ALL_EDGE_TYPES.filter(type => edgeTypeFilters.has(type)).slice(0, 7).map(type => {
             const style = edgeStyles[type]
             return (
               <div key={type} className="flex items-center gap-2">
@@ -275,6 +287,7 @@ export default function ResourceGraph() {
               </div>
             )
           })}
+          {legendOpen && (
           <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded border-2 border-green-500" />
@@ -289,7 +302,9 @@ export default function ResourceGraph() {
               <span className="text-slate-400">Failed / Error</span>
             </div>
           </div>
+          )}
         </div>
+        )}
       </div>
     </div>
   )

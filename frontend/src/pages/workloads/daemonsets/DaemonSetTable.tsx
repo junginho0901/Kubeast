@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { DaemonSetInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   getDaemonSetStatusColor,
@@ -90,7 +91,7 @@ export function DaemonSetTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[140px]">{tr('daemonsets.table.namespace', 'Namespace')}</th>
+                <th className="col-low text-left py-3 px-4 w-[140px]">{tr('daemonsets.table.namespace', 'Namespace')}</th>
               )}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">
@@ -128,12 +129,12 @@ export function DaemonSetTable({
                 </span>
               </th>
               <th className="text-left py-3 px-4 w-[200px]">{tr('daemonsets.table.nodeSelector', 'Node Selector')}</th>
-              <th className="text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-low text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('daemonsets.table.images', 'Images')}{renderSortIcon('images')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('daemonsets.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -153,7 +154,7 @@ export function DaemonSetTable({
                   rawJson: daemonSetToWorkloadRawJson(daemonset),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{daemonset.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{daemonset.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{daemonset.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.ready}/{daemonset.desired}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.current}</td>
@@ -168,8 +169,8 @@ export function DaemonSetTable({
                     {Object.entries(daemonset.node_selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}
                   </span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(daemonset.images || []).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(daemonset.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(daemonset.images || []).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(daemonset.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -184,11 +185,9 @@ export function DaemonSetTable({
             )}
 
             {sortedDaemonSetsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 12 : 11} className="py-6 px-4 text-center text-slate-400">
-                  {tr('daemonsets.noResults', 'No daemonsets found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 12 : 11} resource="daemonsets">
+                {tr('daemonsets.noResults', 'No daemonsets found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedDaemonSets.length} columnCount={10 + (showNamespaceColumn ? 1 : 0)} />

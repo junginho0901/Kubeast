@@ -11,6 +11,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { PVCInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   pvcToRawJson,
@@ -92,7 +93,7 @@ export function PVCTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('pvcs.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -114,10 +115,10 @@ export function PVCTable({
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('capacity')}>
                 <span className="inline-flex items-center gap-1">{tr('pvcs.table.capacity', 'Capacity')}{renderSortIcon('capacity')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
+              <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
                 <span className="inline-flex items-center gap-1">{tr('pvcs.table.accessModes', 'Access Modes')}{renderSortIcon('accessModes')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('pvcs.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -135,7 +136,7 @@ export function PVCTable({
                   rawJson: pvcToRawJson(pvc),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{pvc.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{pvc.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pvc.name}</span></td>
                 <td className="py-3 px-4">
                   <span className={`badge ${String(pvc.status || '').toLowerCase() === 'bound' ? 'badge-success' : String(pvc.status || '').toLowerCase() === 'pending' ? 'badge-warning' : 'badge-error'}`}>
@@ -146,8 +147,8 @@ export function PVCTable({
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pvc.volume_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pvc.requested || '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{pvc.capacity || '-'}</td>
-                <td className="py-3 px-4 text-xs"><span className="block truncate">{(pvc.access_modes || []).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(pvc.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{(pvc.access_modes || []).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pvc.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -162,11 +163,9 @@ export function PVCTable({
             )}
 
             {sortedPVCsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('pvcs.noResults', 'No PVCs found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="pvcs">
+                {tr('pvcs.noResults', 'No PVCs found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedPVCs.length} columnCount={8 + (showNamespaceColumn ? 1 : 0)} />

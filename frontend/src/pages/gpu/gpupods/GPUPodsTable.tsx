@@ -11,6 +11,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { GPUPodInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor, type SortKey } from './gpuPodsHelpers'
 
 interface PodMetric {
@@ -100,7 +101,7 @@ export function GPUPodsTable({
         <table className="w-full text-sm min-w-[980px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
+              <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuPods.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('name')}>
@@ -115,7 +116,7 @@ export function GPUPodsTable({
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuPods.table.status', 'Status')}{renderSortIcon('status')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuPods.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
               {metricsAvailable && (
@@ -141,14 +142,14 @@ export function GPUPodsTable({
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                 onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
               >
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.namespace}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.namespace}</span></td>
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name ?? '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pod.gpu_requested}</td>
                 <td className="py-3 px-4">
                   <span className={`badge ${getStatusColor(pod.status)}`}>{pod.status}</span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(pod.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pod.created_at)}</td>
                 {metricsAvailable && (
                   <>
                     <td className="py-3 px-4">
@@ -197,11 +198,9 @@ export function GPUPodsTable({
               </tr>
             )}
             {sortedPodsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={metricsAvailable ? 8 : 6} className="py-6 px-4 text-center text-slate-400">
-                  {tr('gpuPods.noResults', 'No GPU pods found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={metricsAvailable ? 8 : 6} resource="gpu">
+                {tr('gpuPods.noResults', 'No GPU pods found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={8} />

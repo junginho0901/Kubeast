@@ -21,7 +21,7 @@ export default function AdminAIModels() {
   } = form
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="space-y-6">
       {/* header */}
       <div className="flex items-center justify-between mb-6">
         <div>

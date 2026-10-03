@@ -6,10 +6,12 @@ import { api, type CustomResourceInstanceInfo } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+import CustomDropdown from '@/components/CustomDropdown'
 
 type SortKey = null | 'name' | 'namespace' | 'kind' | 'group' | 'age' | string
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -310,16 +312,17 @@ export default function CustomResourceInstances() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input type="text" placeholder={tr('crInstancesPage.searchPlaceholder', 'Search by name, namespace, kind, or group...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
-        <select
+        <CustomDropdown
+          size="lg"
+          className="min-w-[180px]"
+          testId="cr-instances-kind"
           value={kindFilter}
-          onChange={(e) => { setKindFilter(e.target.value); setSortKey(null) }}
-          className="h-12 min-w-[180px] px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        >
-          <option value="">{tr('crInstancesPage.allKinds', 'All kinds')}</option>
-          {uniqueKinds.map((k) => (
-            <option key={k} value={k}>{k}</option>
-          ))}
-        </select>
+          onChange={(v) => { setKindFilter(v); setSortKey(null) }}
+          options={[
+            { value: '', label: tr('crInstancesPage.allKinds', 'All kinds') },
+            ...uniqueKinds.map((k) => ({ value: k, label: k })),
+          ]}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3 shrink-0">
@@ -353,7 +356,7 @@ export default function CustomResourceInstances() {
                     <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
                       <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
                     </th>
-                    <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
+                    <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                       <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                     </th>
                   </>
@@ -363,7 +366,7 @@ export default function CustomResourceInstances() {
                     <span className="inline-flex items-center gap-1 truncate">{col.name}</span>
                   </th>
                 ))}
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -386,7 +389,7 @@ export default function CustomResourceInstances() {
                   {!kindFilter && (
                     <>
                       <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.kind}</span></td>
-                      <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.group}</span></td>
+                      <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.group}</span></td>
                     </>
                   )}
                   {showDynamicCols && printerColumns.map((col) => (
@@ -394,7 +397,7 @@ export default function CustomResourceInstances() {
                       <span className="block truncate">{getColumnValue(inst, col)}</span>
                     </td>
                   ))}
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(inst.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(inst.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -409,11 +412,9 @@ export default function CustomResourceInstances() {
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={totalColCount} className="py-6 px-4 text-center text-slate-400">
-                    {tr('crInstancesPage.noResults', 'No custom resource instances found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={totalColCount} resource="custom-resources">
+                  {tr('crInstancesPage.noResults', 'No custom resource instances found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={6} />

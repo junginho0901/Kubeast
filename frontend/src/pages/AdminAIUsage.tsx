@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw } from 'lucide-react'
+import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import type { AIUsageGroup, AIUsageRow } from '@/services/api'
 
@@ -110,20 +111,15 @@ export default function AdminAIUsage() {
             className="mt-1 block rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
           />
         </label>
-        <label className="text-xs text-slate-400">
-          {tr('adminAIUsage.groupBy', '기준')}
-          <select
-            value={group}
-            onChange={(e) => setGroup(e.target.value as AIUsageGroup)}
-            className="mt-1 block rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
-          >
-            {(['user', 'model', 'cluster'] as AIUsageGroup[]).map((g) => (
-              <option key={g} value={g}>
-                {groupLabel[g]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <CustomDropdown
+          size="sm"
+          className="w-36"
+          label={tr('adminAIUsage.groupBy', '기준')}
+          testId="ai-usage-group"
+          value={group}
+          onChange={(v) => setGroup(v as AIUsageGroup)}
+          options={(['user', 'model', 'cluster'] as AIUsageGroup[]).map((g) => ({ value: g, label: groupLabel[g] }))}
+        />
         <div className="ml-auto text-xs text-slate-400">
           {tr('adminAIUsage.totals', '합계')}: {fmtInt(totals.requests)} {tr('adminAIUsage.requests', '요청')} ·{' '}
           {fmtInt(totals.total)} {tr('adminAIUsage.tokens', '토큰')} · {fmtInt(totals.tools)} {tr('adminAIUsage.toolCalls', '툴 호출')}

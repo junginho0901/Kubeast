@@ -10,6 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { GRPCRouteInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatHostnames,
@@ -92,7 +93,7 @@ export function GRPCRouteTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('grpcRoutesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -114,7 +115,7 @@ export function GRPCRouteTable({
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('grpcRoutesPage.table.status', 'Status')}{renderSortIcon('status')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('grpcRoutesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -132,14 +133,14 @@ export function GRPCRouteTable({
                   rawJson: grpcRouteToRawJson(item),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatHostnames(item)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{item.parent_refs_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{item.rule_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{item.backend_refs_count || 0}</td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{item.status || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -154,11 +155,9 @@ export function GRPCRouteTable({
             )}
 
             {sortedGRPCRoutesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('grpcRoutesPage.noResults', 'No GRPCRoutes found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="grpcroutes">
+                {tr('grpcRoutesPage.noResults', 'No GRPCRoutes found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedGRPCRoutes.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

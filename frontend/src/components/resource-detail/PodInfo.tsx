@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
+import CustomDropdown from '@/components/CustomDropdown'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
@@ -781,20 +782,22 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Logs">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <CustomDropdown
+              size="sm"
+              className="w-40"
+              testId="pod-logs-container"
               value={logContainer}
-              onChange={e => setLogContainer(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-            >
-              {containerNames.map((n: string) => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <select
-              value={logLines}
-              onChange={e => setLogLines(Number(e.target.value))}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-            >
-              {[50, 100, 500, 1000].map(n => <option key={n} value={n}>{n} lines</option>)}
-            </select>
+              onChange={setLogContainer}
+              options={containerNames.map((n: string) => ({ value: n, label: n }))}
+            />
+            <CustomDropdown
+              size="sm"
+              className="w-28"
+              testId="pod-logs-lines"
+              value={String(logLines)}
+              onChange={(v) => setLogLines(Number(v))}
+              options={[50, 100, 500, 1000].map(n => ({ value: String(n), label: `${n} lines` }))}
+            />
             <button
               onClick={() => { setShowLogs(true); refetchLogs() }}
               className="text-xs px-3 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"

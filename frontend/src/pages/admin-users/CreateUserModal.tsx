@@ -110,19 +110,18 @@ export function CreateUserModal({
 
           <div>
             <label className="block text-xs text-slate-400 mb-1">{tr('adminUsers.form.role', 'Role')}</label>
-            <select
-              value={newUser.role_id}
-              onChange={(e) => onChangeNewUser((p) => ({ ...p, role_id: Number(e.target.value) }))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
-            >
-              <option value={0}>{tr('adminUsers.form.selectRole', 'Select role')}</option>
-              {/* Global role = account level only. Admin (global superuser) or
-                  Member (access via per-cluster grants). Read/Write are granted
-                  per-cluster, not globally. */}
-              {roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => (
-                <option key={r.id} value={r.id}>{r.name.toUpperCase()}</option>
-              ))}
-            </select>
+            {/* Global role = account level only. Admin (global superuser) or
+                Member (access via per-cluster grants). Read/Write are granted
+                per-cluster, not globally. */}
+            <CustomDropdown
+              testId="create-user-role"
+              value={String(newUser.role_id || 0)}
+              onChange={(v) => onChangeNewUser((p) => ({ ...p, role_id: Number(v) }))}
+              options={[
+                { value: '0', label: tr('adminUsers.form.selectRole', 'Select role') },
+                ...roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => ({ value: String(r.id), label: r.name.toUpperCase() })),
+              ]}
+            />
           </div>
 
           {mutation.isError && (

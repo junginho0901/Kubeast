@@ -98,12 +98,12 @@ export default function ReleaseTable({
                   {t('helmReleases.table.chartVersion')}{renderSortIcon('chartVersion')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('appVersion')}>
+              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('appVersion')}>
                 <span className="inline-flex items-center gap-1">
                   {t('helmReleases.table.appVersion')}{renderSortIcon('appVersion')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('updated')}>
+              <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('updated')}>
                 <span className="inline-flex items-center gap-1">
                   {t('helmReleases.table.updated')}{renderSortIcon('updated')}
                 </span>
@@ -139,8 +139,8 @@ export default function ReleaseTable({
                   </td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{r.chart || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{r.chartVersion || '-'}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{r.appVersion || '-'}</td>
-                  <td className="py-3 px-4 text-xs font-mono text-slate-400">{formatUpdated(r.updated)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{r.appVersion || '-'}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{formatUpdated(r.updated)}</td>
                 </tr>
               )
             })}

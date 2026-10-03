@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { JobInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatDuration,
@@ -90,7 +91,7 @@ export function JobTable({
         <table className="w-full text-sm min-w-[1260px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              {showNamespaceColumn && <th className="text-left py-3 px-4 w-[140px]">{tr('jobs.table.namespace', 'Namespace')}</th>}
+              {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('jobs.table.namespace', 'Namespace')}</th>}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
@@ -103,13 +104,13 @@ export function JobTable({
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('duration')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
+              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-low text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -127,7 +128,7 @@ export function JobTable({
                   rawJson: jobToWorkloadRawJson(job),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{job.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{job.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{job.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">
                   {(job.succeeded ?? 0)}/{(job.completions ?? '-')}
@@ -136,9 +137,9 @@ export function JobTable({
                   <span className={`badge ${getJobStatusColor(job.status)}`}>{job.status || '-'}</span>
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">{job.duration || formatDuration(job.duration_seconds)}</td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(job.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(job.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -153,11 +154,9 @@ export function JobTable({
             )}
 
             {sortedJobsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                  {tr('jobs.noResults', 'No jobs found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="jobs">
+                {tr('jobs.noResults', 'No jobs found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedJobs.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

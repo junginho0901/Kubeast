@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { ServiceInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatPorts,
   formatSelector,
@@ -91,7 +92,7 @@ export function ServiceTable({
         <table className="w-full text-sm min-w-[1320px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              {showNamespaceColumn && <th className="text-left py-3 px-4 w-[150px]">{tr('servicesPage.table.namespace', 'Namespace')}</th>}
+              {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[150px]">{tr('servicesPage.table.namespace', 'Namespace')}</th>}
               <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('servicesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
@@ -107,10 +108,10 @@ export function ServiceTable({
               <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('servicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('selector')}>
+              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('selector')}>
                 <span className="inline-flex items-center gap-1">{tr('servicesPage.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('servicesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -128,14 +129,14 @@ export function ServiceTable({
                   rawJson: serviceToRawJson(svc),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{svc.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{svc.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{svc.name}</span></td>
                 <td className="py-3 px-4"><span className="badge badge-info">{svc.type || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.cluster_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.external_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(svc.ports)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(svc.selector)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(svc.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(svc.selector)}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(svc.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -150,11 +151,9 @@ export function ServiceTable({
             )}
 
             {sortedServicesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('servicesPage.noResults', 'No services found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="services">
+                {tr('servicesPage.noResults', 'No services found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedServices.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

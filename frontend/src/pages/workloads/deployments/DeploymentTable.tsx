@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { DeploymentInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   computeDeploymentStatus,
@@ -91,7 +92,7 @@ export function DeploymentTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px]">{tr('deployments.table.namespace', 'Namespace')}</th>
+                <th className="col-low text-left py-3 px-4 w-[150px]">{tr('deployments.table.namespace', 'Namespace')}</th>
               )}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">
@@ -118,12 +119,12 @@ export function DeploymentTable({
                   {tr('deployments.table.status', 'Status')}{renderSortIcon('status')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
+              <th className="col-low text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('deployments.table.image', 'Image')}{renderSortIcon('image')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('deployments.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -143,7 +144,7 @@ export function DeploymentTable({
                   rawJson: deploymentToWorkloadRawJson(dep),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{dep.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{dep.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{dep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.ready_replicas}/{dep.replicas}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.updated_replicas ?? 0}</td>
@@ -153,8 +154,8 @@ export function DeploymentTable({
                     {dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0)}
                   </span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(dep.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(dep.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -169,11 +170,9 @@ export function DeploymentTable({
             )}
 
             {sortedDeploymentsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('deployments.noResults', 'No deployments found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="deployments">
+                {tr('deployments.noResults', 'No deployments found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedDeployments.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

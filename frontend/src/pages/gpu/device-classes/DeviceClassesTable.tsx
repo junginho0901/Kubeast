@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { DeviceClassItem } from '@/services/api'
 import { deviceClassToRawJson, formatAge, type SortKey } from './deviceClassesHelpers'
@@ -65,7 +66,7 @@ export default function DeviceClassesTable({
               <th className="text-left py-3 px-4 w-[320px] cursor-pointer" onClick={() => onSort('conditions')}>
                 <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.conditions', 'Conditions')}{renderSortIcon('conditions')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -107,7 +108,7 @@ export default function DeviceClassesTable({
                       : '-'}
                   </span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -122,11 +123,9 @@ export default function DeviceClassesTable({
             )}
 
             {sortedDeviceClasses.length === 0 && !isLoading && (
-              <tr>
-                <td colSpan={4} className="py-6 px-4 text-center text-slate-400">
-                  {tr('deviceClassesPage.noResults', 'No device classes found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={4} resource="deviceclasses">
+                {tr('deviceClassesPage.noResults', 'No device classes found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedDeviceClasses.length} columnCount={4} />

@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { PodInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor, pickPodDisplayStatus, type SortKey } from './podHelpers'
 
 interface OpenDetailArgs {
@@ -85,7 +86,7 @@ export function PodTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[140px]">
+                <th className="col-low text-left py-3 px-4 w-[140px]">
                   {tr('pods.table.namespace', 'Namespace')}
                 </th>
               )}
@@ -109,7 +110,7 @@ export function PodTable({
                   {tr('pods.table.restarts', 'Restarts')}{renderSortIcon('restarts')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('pod_ip')}>
+              <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('pod_ip')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('pods.table.podIp', 'Pod IP')}{renderSortIcon('pod_ip')}
                 </span>
@@ -119,7 +120,7 @@ export function PodTable({
                   {tr('pods.table.node', 'Node')}{renderSortIcon('node_name')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('pods.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -141,16 +142,16 @@ export function PodTable({
                     rawJson: pod as unknown as Record<string, unknown>,
                   })}
                 >
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{pod.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{pod.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{pod.ready || '-'}</td>
                   <td className="py-3 px-4">
                     <span className={`badge ${getStatusColor(displayStatus)}`}>{displayStatus}</span>
                   </td>
                   <td className="py-3 px-4 text-xs font-mono">{pod.restart_count ?? 0}</td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.pod_ip || '-'}</span></td>
+                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.pod_ip || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(pod.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pod.created_at)}</td>
                 </tr>
               )
             })}
@@ -166,11 +167,9 @@ export function PodTable({
             )}
 
             {sortedPodsLength === 0 && !isLoadingPods && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                  {tr('pods.noResults', 'No pods found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="pods">
+                {tr('pods.noResults', 'No pods found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

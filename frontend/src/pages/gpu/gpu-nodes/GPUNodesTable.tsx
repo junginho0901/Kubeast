@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Loader2, ChevronUp, ChevronDown } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { GPUNodeInfo } from '@/services/api'
 import { getStatusColor, type SortKey } from './gpuNodesHelpers'
@@ -78,7 +79,7 @@ export default function GPUNodesTable({
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.status', 'Status')}{renderSortIcon('status')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('mig_strategy')}>
+              <th className="col-low text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('mig_strategy')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.migStrategy', 'MIG Strategy')}{renderSortIcon('mig_strategy')}</span>
               </th>
             </tr>
@@ -99,7 +100,7 @@ export default function GPUNodesTable({
                 <td className="py-3 px-4">
                   <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono">{node.mig_strategy ?? '-'}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{node.mig_strategy ?? '-'}</td>
               </tr>
             ))}
             {isLoading && (
@@ -113,11 +114,9 @@ export default function GPUNodesTable({
               </tr>
             )}
             {sortedNodes.length === 0 && !isLoading && (
-              <tr>
-                <td colSpan={7} className="py-6 px-4 text-center text-slate-400">
-                  {tr('gpuNodes.noResults', 'No GPU nodes found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={7} resource="gpu">
+                {tr('gpuNodes.noResults', 'No GPU nodes found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={7} />

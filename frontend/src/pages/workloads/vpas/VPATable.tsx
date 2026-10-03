@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { VPAInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   vpaToRawJson,
@@ -89,7 +90,7 @@ export function VPATable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px]">{tr('vpas.table.namespace', 'Namespace')}</th>
+                <th className="col-low text-left py-3 px-4 w-[150px]">{tr('vpas.table.namespace', 'Namespace')}</th>
               )}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">
@@ -121,7 +122,7 @@ export function VPATable({
                   {tr('vpas.table.provided', 'Provided')}{renderSortIcon('provided')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('vpas.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -141,7 +142,7 @@ export function VPATable({
                   rawJson: vpaToRawJson(v),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{v.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{v.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{v.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{v.target_ref || '-'}</span></td>
                 <td className="py-3 px-4 text-xs">{v.update_mode || '-'}</td>
@@ -156,7 +157,7 @@ export function VPATable({
                     <span className="text-xs font-mono text-slate-500">-</span>
                   )}
                 </td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(v.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(v.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -171,11 +172,9 @@ export function VPATable({
             )}
 
             {sortedVPAsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('vpas.noResults', 'No VPAs found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="vpas">
+                {tr('vpas.noResults', 'No VPAs found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedVPAs.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

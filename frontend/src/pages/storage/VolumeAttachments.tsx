@@ -222,31 +222,13 @@ spec:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between gap-3 shrink-0">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <h1 className="text-3xl font-bold text-white shrink-0">{tr('volumeattachments.title', 'Volume Attachments')}</h1>
-            <span
-              className="hidden xl:inline text-[10px] leading-4 text-cyan-300"
-              title={tr(
-                'storage.volumeAttachment.infoTitle',
-                'VolumeAttachments are created for CSI volumes that require attach/detach. (e.g., NFS may not create them)',
-              )}
-            >
-              <span className="block">
-                {tr(
-                  'storage.volumeAttachment.infoLine1',
-                  'VolumeAttachments are created for CSI volumes that require attach/detach.',
-                )}
-              </span>
-              <span className="block">
-                {tr(
-                  'storage.volumeAttachment.infoLine2',
-                  '(e.g., NFS may not create them)',
-                )}
-              </span>
-            </span>
-          </div>
+          <h1 className="text-3xl font-bold text-white">{tr('volumeattachments.title', 'Volume Attachments')}</h1>
           <p className="mt-2 text-slate-400">
             {tr('volumeattachments.subtitle', 'Inspect cluster-wide volume attachment state and troubleshooting signals.')}
+          </p>
+          <p className="mt-1 text-xs text-cyan-300">
+            {tr('storage.volumeAttachment.infoLine1', 'VolumeAttachments are created for CSI volumes that require attach/detach.')}{' '}
+            {tr('storage.volumeAttachment.infoLine2', '(e.g., NFS may not create them)')}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

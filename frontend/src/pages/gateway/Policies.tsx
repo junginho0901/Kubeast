@@ -5,10 +5,12 @@ import { api, type GatewayPolicyItem, type GatewayPolicyKindInfo } from '@/servi
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+import CustomDropdown from '@/components/CustomDropdown'
 
 // Gateway → Policies: one table of every policy object attached to Gateway
 // API resources, whichever implementation owns the kind (label-discovered
@@ -220,14 +222,22 @@ export default function Policies() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input type="text" placeholder={tr('policiesPage.searchPlaceholder', 'Search by name, namespace, kind, or target...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
-        <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} className="h-12 min-w-[180px] px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-          <option value="">{tr('policiesPage.allKinds', 'All kinds')}</option>
-          {uniqueKinds.map((k) => <option key={k} value={k}>{k}</option>)}
-        </select>
-        <select value={namespaceFilter} onChange={(e) => setNamespaceFilter(e.target.value)} className="h-12 min-w-[180px] px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-          <option value="">{tr('policiesPage.allNamespaces', 'All namespaces')}</option>
-          {uniqueNamespaces.map((ns) => <option key={ns} value={ns}>{ns}</option>)}
-        </select>
+        <CustomDropdown
+          size="lg"
+          className="min-w-[180px]"
+          testId="policies-kind"
+          value={kindFilter}
+          onChange={setKindFilter}
+          options={[{ value: '', label: tr('policiesPage.allKinds', 'All kinds') }, ...uniqueKinds.map((k) => ({ value: k, label: k }))]}
+        />
+        <CustomDropdown
+          size="lg"
+          className="min-w-[180px]"
+          testId="policies-namespace"
+          value={namespaceFilter}
+          onChange={setNamespaceFilter}
+          options={[{ value: '', label: tr('policiesPage.allNamespaces', 'All namespaces') }, ...uniqueNamespaces.map((ns) => ({ value: ns, label: ns }))]}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3 shrink-0">
@@ -281,7 +291,7 @@ export default function Policies() {
                   <span className="inline-flex items-center gap-1">{tr('policiesPage.table.target', 'Target')}{renderSortIcon('target')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[110px]">{tr('policiesPage.table.accepted', 'Accepted')}</th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('policiesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -308,7 +318,7 @@ export default function Policies() {
                     {item.accepted === false && <span className="text-red-300">{tr('policiesPage.accepted.no', 'No')}</span>}
                     {item.accepted === undefined && <span className="text-slate-500">-</span>}
                   </td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -322,11 +332,9 @@ export default function Policies() {
                 </tr>
               )}
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={columnCount} className="py-6 px-4 text-center text-slate-400">
-                    {tr('policiesPage.noResults', 'No policies found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={columnCount} resource="gateway-policies">
+                  {tr('policiesPage.noResults', 'No policies found.')}
+                </TableEmptyRow>
               )}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={columnCount} />

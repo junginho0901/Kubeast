@@ -6,6 +6,7 @@ import type { ResourceQuotaInfo } from '@/services/api'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceQuotaHelpers'
 
 interface ResourceQuotaTableProps {
@@ -68,7 +69,7 @@ export function ResourceQuotaTable({
                 </span>
               </th>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('resourceQuotas.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
                   </span>
@@ -79,7 +80,7 @@ export function ResourceQuotaTable({
                   {tr('resourceQuotas.table.requests', 'Request')}{renderSortIcon('requests')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('resourceQuotas.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -96,10 +97,10 @@ export function ResourceQuotaTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rq.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="py-3 px-4 text-xs font-mono text-slate-400">{rq.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{rq.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono">{Object.keys(rq.status_hard || {}).length}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(rq.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rq.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -114,11 +115,9 @@ export function ResourceQuotaTable({
             )}
 
             {sortedResourceQuotasLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 4 : 3} className="py-6 px-4 text-center text-slate-400">
-                  {tr('resourceQuotas.noResults', 'No resource quotas found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="resourcequotas">
+                {tr('resourceQuotas.noResults', 'No resource quotas found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedResourceQuotas.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />

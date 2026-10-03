@@ -1448,6 +1448,7 @@
     "notAvailable": "N/A",
     "none": "None",
     "empty": "-",
+    "forbiddenEmpty": "You do not have permission to view {{resource}} in this cluster.",
     "deleteKind": "Delete {{kind}}",
     "deleteKindConfirm": "Are you sure you want to delete {{kind}} \"{{name}}\"?",
     "deleteKindConfirmNs": "Are you sure you want to delete {{kind}} \"{{name}}\" in \"{{namespace}}\"?",

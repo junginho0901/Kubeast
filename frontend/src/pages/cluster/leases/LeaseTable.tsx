@@ -6,6 +6,7 @@ import type { LeaseInfo } from '@/services/api'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './leaseHelpers'
 
 interface LeaseTableProps {
@@ -68,7 +69,7 @@ export function LeaseTable({
                 </span>
               </th>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('leases.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
                   </span>
@@ -79,12 +80,12 @@ export function LeaseTable({
                   {tr('leases.table.holder', 'Holder')}{renderSortIcon('holder')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('duration')}>
+              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('duration')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('leases.table.duration', 'Duration (s)')}{renderSortIcon('duration')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('leases.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -101,11 +102,11 @@ export function LeaseTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{l.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="py-3 px-4 text-xs font-mono text-slate-400">{l.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{l.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{l.holder_identity || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{l.lease_duration_seconds ?? '-'}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(l.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{l.lease_duration_seconds ?? '-'}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(l.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -120,11 +121,9 @@ export function LeaseTable({
             )}
 
             {sortedLeasesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 5 : 4} className="py-6 px-4 text-center text-slate-400">
-                  {tr('leases.noResults', 'No leases found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 5 : 4} resource="leases">
+                {tr('leases.noResults', 'No leases found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedLeases.length} columnCount={4 + (showNamespaceColumn ? 1 : 0)} />

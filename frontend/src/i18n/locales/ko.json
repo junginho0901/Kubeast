@@ -1448,6 +1448,7 @@
     "notAvailable": "N/A",
     "none": "(없음)",
     "empty": "-",
+    "forbiddenEmpty": "이 클러스터에서 {{resource}}을(를) 볼 권한이 없습니다.",
     "deleteKind": "{{kind}} 삭제",
     "deleteKindConfirm": "{{kind}} \"{{name}}\"을(를) 삭제할까요?",
     "deleteKindConfirmNs": "\"{{namespace}}\"의 {{kind}} \"{{name}}\"을(를) 삭제할까요?",

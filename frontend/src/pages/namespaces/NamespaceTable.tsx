@@ -1,6 +1,7 @@
 import { RefObject } from 'react'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatRelative, getStatusColor } from './namespaceHelpers'
 import type { NamespaceInfo, SortKey, SortDir } from './namespaceHelpers'
 
@@ -68,10 +69,10 @@ export default function NamespaceTable({
                   {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[30%]">
+              <th className="col-low text-left py-3 px-4 w-[30%]">
                 {tr('namespaces.table.labels', 'Labels')}
               </th>
-              <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('namespaces.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -94,7 +95,7 @@ export default function NamespaceTable({
                   <td className="py-3 px-4">
                     <span className={`badge ${getStatusColor(ns.status)}`}>{ns.status}</span>
                   </td>
-                  <td className="py-3 px-4 text-xs">
+                  <td className="col-low py-3 px-4 text-xs">
                     <div className="flex flex-nowrap items-center gap-1 max-w-full overflow-hidden min-w-0 whitespace-nowrap">
                       {labelEntries.length > 0
                         ? labelEntries.slice(0, 2).map(([k, v]) => (
@@ -112,7 +113,7 @@ export default function NamespaceTable({
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-xs font-mono">
+                  <td className="col-low py-3 px-4 text-xs font-mono">
                     <span className="block truncate">{formatRelative(ns.created_at)}</span>
                   </td>
                 </tr>
@@ -130,13 +131,11 @@ export default function NamespaceTable({
             )}
 
             {sortedNamespacesCount === 0 && !isLoadingNs && (
-              <tr>
-                <td colSpan={4} className="py-6 px-4 text-center text-slate-400">
-                  {searchQuery
-                    ? tr('namespaces.noSearchResults', 'No results found')
-                    : tr('namespaces.empty', 'No namespaces found')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={4} resource="namespaces">
+                {searchQuery
+                  ? tr('namespaces.noSearchResults', 'No results found')
+                  : tr('namespaces.empty', 'No namespaces found')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedNamespaces.length} columnCount={4} />

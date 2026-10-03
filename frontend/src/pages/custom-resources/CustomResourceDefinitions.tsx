@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -324,7 +325,7 @@ spec:
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.version', 'Version')}{renderSortIcon('version')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
@@ -333,7 +334,7 @@ spec:
                 <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -344,14 +345,14 @@ spec:
                       ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crd.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{crd.version}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{crd.version}</td>
                   <td className="py-3 px-4 text-xs">
                     <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium ${crd.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'}`}>
                       {crd.scope}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.kind}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(crd.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(crd.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -366,11 +367,9 @@ spec:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={6} className="py-6 px-4 text-center text-slate-400">
-                    {tr('crdPage.noResults', 'No custom resource definitions found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={6} resource="custom-resources">
+                  {tr('crdPage.noResults', 'No custom resource definitions found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={6} />

@@ -25,6 +25,14 @@ interface CustomDropdownProps {
   disabled?: boolean
   /** Optional test id, applied to the trigger button */
   testId?: string
+  /** Trigger height: sm = h-8 text-xs (inline toolbars), md = h-10 (default), lg = h-12 (next to h-12 search fields) */
+  size?: 'sm' | 'md' | 'lg'
+}
+
+const TRIGGER_SIZE: Record<NonNullable<CustomDropdownProps['size']>, string> = {
+  sm: 'h-8 px-3 text-xs',
+  md: 'h-10 px-4 text-sm',
+  lg: 'h-12 px-4 text-sm',
 }
 
 /**
@@ -40,6 +48,7 @@ export default function CustomDropdown({
   className = '',
   disabled = false,
   testId,
+  size = 'md',
 }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -70,9 +79,9 @@ export default function CustomDropdown({
         data-testid={testId}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
       >
-        <span className="flex items-center gap-2 text-sm font-medium truncate">
+        <span className="flex items-center gap-2 font-medium truncate">
           {selected?.icon && <span className="text-base flex-shrink-0">{selected.icon}</span>}
           <span className="truncate">{selected?.label ?? placeholder}</span>
           {selected?.hint && (

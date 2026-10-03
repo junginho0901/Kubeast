@@ -10,6 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { ReferenceGrantInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatFrom,
@@ -93,7 +94,7 @@ export function ReferenceGrantTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -106,7 +107,7 @@ export function ReferenceGrantTable({
               <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('to')}>
                 <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.to', 'To')}{renderSortIcon('to')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -124,11 +125,11 @@ export function ReferenceGrantTable({
                   rawJson: referenceGrantToRawJson(item),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatFrom(item)}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTo(item)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -143,11 +144,9 @@ export function ReferenceGrantTable({
             )}
 
             {sortedReferenceGrantsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 6 : 5} className="py-6 px-4 text-center text-slate-400">
-                  {tr('referenceGrantsPage.noResults', 'No ReferenceGrants found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 6 : 5} resource="referencegrants">
+                {tr('referenceGrantsPage.noResults', 'No ReferenceGrants found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedReferenceGrants.length} columnCount={4 + (showNamespaceColumn ? 1 : 0)} />

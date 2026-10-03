@@ -12,6 +12,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { CheckCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { StorageClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   storageClassToRawJson,
@@ -104,11 +105,11 @@ export function StorageClassTable({
               <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('bindingMode')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.volumeBindingMode', 'Volume Binding Mode')}{renderSortIcon('bindingMode')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
+              <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.allowVolumeExpansion', 'Allow Volume Expansion')}{renderSortIcon('allowExpansion')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -137,9 +138,9 @@ export function StorageClassTable({
                 </td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.reclaim_policy || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.volume_binding_mode || '-'}</span></td>
-                <td className="py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
-                <td className="py-3 px-4 text-xs">{Object.keys(sc.parameters || {}).length}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(sc.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
+                <td className="col-low py-3 px-4 text-xs">{Object.keys(sc.parameters || {}).length}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(sc.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -154,11 +155,9 @@ export function StorageClassTable({
             )}
 
             {sortedStorageClassesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('storageclasses.noResults', 'No StorageClasses found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={8} resource="storageclasses">
+                {tr('storageclasses.noResults', 'No StorageClasses found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedStorageClasses.length} columnCount={8} />

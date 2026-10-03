@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -299,7 +300,7 @@ subjects:
                 <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('subjects')}>
                   <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.subjects', 'Subjects')}{renderSortIcon('subjects')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -313,7 +314,7 @@ subjects:
                     <span className="text-slate-400">{crb.role_ref_kind}/</span>{crb.role_ref_name}
                   </td>
                   <td className="py-3 px-4 text-xs font-mono">{crb.subjects_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(crb.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(crb.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -328,11 +329,9 @@ subjects:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={4} className="py-6 px-4 text-center text-slate-400">
-                    {tr('clusterRoleBindingsPage.noResults', 'No cluster role bindings found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={4} resource="clusterrolebindings">
+                  {tr('clusterRoleBindingsPage.noResults', 'No cluster role bindings found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={4} />
