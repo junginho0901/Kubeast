@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { EndpointSliceInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   endpointSliceToRawJson,
   formatAge,
@@ -93,7 +94,7 @@ export function EndpointSliceTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -103,10 +104,10 @@ export function EndpointSliceTable({
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('service')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.service', 'Service')}{renderSortIcon('service')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
+              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.addressType', 'Address Type')}{renderSortIcon('addressType')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
+              <th className="col-low text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[280px]">
@@ -121,7 +122,7 @@ export function EndpointSliceTable({
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('notReady')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.notReady', 'Not Ready')}{renderSortIcon('notReady')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -141,16 +142,16 @@ export function EndpointSliceTable({
                     rawJson: endpointSliceToRawJson(es),
                   })}
                 >
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{es.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{es.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{es.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{es.service_name || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatEndpointPreview(es)}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{es.endpoints_total || 0}</td>
                   <td className="py-3 px-4 text-xs font-mono">{es.endpoints_ready || 0}</td>
                   <td className="py-3 px-4 text-xs font-mono">{notReady}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(es.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(es.created_at)}</td>
                 </tr>
               )
             })}
@@ -166,11 +167,9 @@ export function EndpointSliceTable({
             )}
 
             {sortedEndpointSlicesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 11 : 10} className="py-6 px-4 text-center text-slate-400">
-                  {tr('endpointSlicesPage.noResults', 'No endpoint slices found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 11 : 10} resource="endpointslices">
+                {tr('endpointSlicesPage.noResults', 'No endpoint slices found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedEndpointSlices.length} columnCount={9 + (showNamespaceColumn ? 1 : 0)} />

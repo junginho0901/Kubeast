@@ -2,6 +2,7 @@ import { useState, useEffect, useDeferredValue, useCallback, useMemo, useRef } f
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search, RefreshCw, AlertCircle, Database, AlertTriangle, Loader2 } from 'lucide-react'
+import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import ResourceTypePicker, { ResourceTypeOption, NON_LISTABLE } from '@/components/search/ResourceTypePicker'
 import SearchQueryEditor from '@/components/search/SearchQueryEditor'
@@ -282,16 +283,16 @@ export default function AdvancedSearch() {
         />
 
         {/* Namespace filter */}
-        <select
+        <CustomDropdown
+          className="w-48"
+          testId="advanced-search-namespace"
           value={namespace}
-          onChange={e => setNamespace(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-sm text-white focus:outline-none focus:border-sky-500"
-        >
-          <option value="">{t('advancedSearch.allNamespaces', 'All Namespaces')}</option>
-          {namespaces?.map(ns => (
-            <option key={ns.name} value={ns.name}>{ns.name}</option>
-          ))}
-        </select>
+          onChange={setNamespace}
+          options={[
+            { value: '', label: t('advancedSearch.allNamespaces', 'All Namespaces') },
+            ...(namespaces ?? []).map(ns => ({ value: ns.name, label: ns.name })),
+          ]}
+        />
 
         {/* Item count + errors */}
         <div className="ml-auto flex items-center gap-3 text-xs">

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Settings } from 'lucide-react'
+import CustomDropdown from '@/components/CustomDropdown'
 
 interface Props {
   maxItemsPerResource: number
@@ -18,14 +19,11 @@ export default function SearchSettings({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const maxItemsRef = useRef<HTMLInputElement>(null)
-  const refetchRef = useRef<HTMLSelectElement>(null)
+  const [refetchDraft, setRefetchDraft] = useState(refetchIntervalMs)
 
   const save = () => {
     if (maxItemsRef.current) setMaxItemsPerResource(parseInt(maxItemsRef.current.value) || 10000)
-    if (refetchRef.current) {
-      const val = parseInt(refetchRef.current.value)
-      setRefetchIntervalMs(isNaN(val) ? 0 : val)
-    }
+    setRefetchIntervalMs(refetchDraft)
     setOpen(false)
   }
 
@@ -62,16 +60,17 @@ export default function SearchSettings({
               <label className="block text-xs text-slate-400 mb-1">
                 {t('advancedSearch.refetchLabel', 'Refetch interval')}
               </label>
-              <select
-                ref={refetchRef}
-                defaultValue={refetchIntervalMs}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-sky-500"
-              >
-                <option value={0}>Off ({t('advancedSearch.manual', 'Manual refresh only')})</option>
-                <option value={30000}>30 {t('advancedSearch.seconds', 'seconds')}</option>
-                <option value={60000}>1 {t('advancedSearch.minute', 'minute')}</option>
-                <option value={300000}>5 {t('advancedSearch.minutes', 'minutes')}</option>
-              </select>
+              <CustomDropdown
+                testId="search-settings-refetch"
+                value={String(refetchDraft)}
+                onChange={(v) => setRefetchDraft(Number(v) || 0)}
+                options={[
+                  { value: '0', label: `Off (${t('advancedSearch.manual', 'Manual refresh only')})` },
+                  { value: '30000', label: `30 ${t('advancedSearch.seconds', 'seconds')}` },
+                  { value: '60000', label: `1 ${t('advancedSearch.minute', 'minute')}` },
+                  { value: '300000', label: `5 ${t('advancedSearch.minutes', 'minutes')}` },
+                ]}
+              />
             </div>
 
             <button

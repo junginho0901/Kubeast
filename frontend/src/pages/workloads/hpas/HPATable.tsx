@@ -19,6 +19,7 @@ function hasCurrentMetric(h: HPAInfo): boolean {
   })
 }
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   hpaToRawJson,
@@ -100,7 +101,7 @@ export function HPATable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px]">{tr('hpas.table.namespace', 'Namespace')}</th>
+                <th className="col-low text-left py-3 px-4 w-[150px]">{tr('hpas.table.namespace', 'Namespace')}</th>
               )}
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">
@@ -127,7 +128,7 @@ export function HPATable({
                   {tr('hpas.table.replicas', 'Replicas')}{renderSortIcon('currentReplicas')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('hpas.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -147,13 +148,13 @@ export function HPATable({
                   rawJson: hpaToRawJson(h),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{h.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{h.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{h.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{h.target_ref || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{h.min_replicas ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{h.max_replicas}</td>
                 <td className="py-3 px-4 text-xs font-mono">{h.current_replicas ?? 0}/{hasCurrentMetric(h) ? (h.desired_replicas ?? 0) : '-'}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(h.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(h.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -168,11 +169,9 @@ export function HPATable({
             )}
 
             {sortedHPAsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                  {tr('hpas.noResults', 'No HPAs found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="hpas">
+                {tr('hpas.noResults', 'No HPAs found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedHPAs.length} columnCount={6 + (showNamespaceColumn ? 1 : 0)} />

@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -336,7 +337,7 @@ webhooks:
                     {tr('mutatingWebhooks.table.webhooks', 'Webhooks')}{renderSortIcon('webhooksCount')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('mutatingWebhooks.table.age', 'Age')}{renderSortIcon('age')}
                   </span>
@@ -357,7 +358,7 @@ webhooks:
                 >
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{item.webhooks_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -372,11 +373,9 @@ webhooks:
               )}
 
               {sorted.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={3} className="py-6 px-4 text-center text-slate-400">
-                    {tr('mutatingWebhooks.noResults', 'No mutating webhook configurations found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={3} resource="mutatingwebhookconfigurations">
+                  {tr('mutatingWebhooks.noResults', 'No mutating webhook configurations found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - paged.length} columnCount={3} />

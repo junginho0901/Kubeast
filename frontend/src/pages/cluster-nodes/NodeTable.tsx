@@ -1,6 +1,7 @@
 import { RefObject } from 'react'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
 
@@ -79,10 +80,10 @@ export default function NodeTable({
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('internal_ip')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.internalIp', 'Internal IP')}{renderSortIcon('internal_ip')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('external_ip')}>
+              <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('external_ip')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.externalIp', 'External IP')}{renderSortIcon('external_ip')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -110,8 +111,8 @@ export default function NodeTable({
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{metric ? `${metric.memory} (${metric.memory_percent})` : '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.version || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.internal_ip || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.external_ip || '-'}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.age)}</span></td>
+                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{node.external_ip || '-'}</span></td>
+                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.age)}</span></td>
                 </tr>
               )
             })}
@@ -127,11 +128,9 @@ export default function NodeTable({
             )}
 
             {sortedNodesCount === 0 && !isLoadingNodes && (
-              <tr>
-                <td colSpan={9} className="py-6 px-4 text-center text-slate-400">
-                  {tr('nodes.noResults', 'No nodes found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={9} resource="nodes">
+                {tr('nodes.noResults', 'No nodes found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={9} />

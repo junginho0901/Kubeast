@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -353,12 +354,12 @@ description: "Sample priority class"
                     {tr('priorityClasses.table.globalDefault', 'Global Default')}{renderSortIcon('globalDefault')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('preemptionPolicy')}>
+                <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('preemptionPolicy')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('priorityClasses.table.preemptionPolicy', 'Preemption Policy')}{renderSortIcon('preemptionPolicy')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('priorityClasses.table.age', 'Age')}{renderSortIcon('age')}
                   </span>
@@ -386,8 +387,8 @@ description: "Sample priority class"
                       <span className="text-xs text-slate-400">False</span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-xs font-mono">{pc.preemption_policy}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(pc.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{pc.preemption_policy}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pc.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -402,11 +403,9 @@ description: "Sample priority class"
               )}
 
               {sortedPCs.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
-                    {tr('priorityClasses.noResults', 'No priority classes found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={5} resource="priorityclasses">
+                  {tr('priorityClasses.noResults', 'No priority classes found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedPCs.length} columnCount={5} />

@@ -145,19 +145,16 @@ export function UserDetailModal({
                 {tr('adminUsers.form.role', 'Role')}
               </label>
               {detailEditing ? (
-                <select
-                  value={detailDraft.role_id}
-                  onChange={(e) => setDetailDraft((p) => ({ ...p, role_id: Number(e.target.value) }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-600"
-                >
-                  {/* Global role = account level (Admin / Member / Pending).
-                      Cluster access is granted per-cluster below, not here. */}
-                  {roles
+                /* Global role = account level (Admin / Member / Pending).
+                   Cluster access is granted per-cluster below, not here. */
+                <CustomDropdown
+                  testId="user-detail-role"
+                  value={String(detailDraft.role_id)}
+                  onChange={(v) => setDetailDraft((p) => ({ ...p, role_id: Number(v) }))}
+                  options={roles
                     .filter((r) => ['Admin', 'Member', 'Pending'].includes(r.name))
-                    .map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                </select>
+                    .map((r) => ({ value: String(r.id), label: r.name }))}
+                />
               ) : (
                 <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">
                   {u.role?.name ?? '-'}

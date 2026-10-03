@@ -1,33 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ShieldAlert } from 'lucide-react'
-import { FORBIDDEN_EVENT } from '@/services/api/client'
-import { forbiddenResourceFromUrl, joinResources } from '@/utils/forbiddenResource'
+import { resetForbidden, useForbiddenLabels } from '@/services/forbiddenStore'
+import { joinResources } from '@/utils/forbiddenResource'
 
 // Shown above the page when a cluster list request answered 403 for the
-// signed-in user: every list page renders "No … found." on an empty result,
-// which is misleading when the real reason is a missing cluster role. The API
-// client dispatches FORBIDDEN_EVENT for each such response; the set resets on
-// every route or cluster change (the page remounts under Layout's key).
+// signed-in user. The forbidden store collects those responses (the API
+// client dispatches FORBIDDEN_EVENT for each); the list tables read the same
+// store for their empty row. The set resets on every route or cluster change
+// (the page remounts under Layout's key).
 export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) {
   const { t } = useTranslation()
   const location = useLocation()
-  const [resources, setResources] = useState<string[]>([])
+  const resources = useForbiddenLabels()
 
   useEffect(() => {
-    setResources([])
+    resetForbidden()
   }, [location.pathname, clusterKey])
-
-  useEffect(() => {
-    const onForbidden = (e: Event) => {
-      const url = String((e as CustomEvent<{ url?: string }>).detail?.url || '')
-      const name = forbiddenResourceFromUrl(url)
-      setResources((prev) => (prev.includes(name) ? prev : [...prev, name]))
-    }
-    window.addEventListener(FORBIDDEN_EVENT, onForbidden)
-    return () => window.removeEventListener(FORBIDDEN_EVENT, onForbidden)
-  }, [])
 
   if (resources.length === 0) return null
   return (

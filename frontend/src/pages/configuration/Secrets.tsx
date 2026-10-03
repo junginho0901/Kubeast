@@ -364,7 +364,7 @@ stringData:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('namespace')}>
                     <span className="inline-flex items-center gap-1">{tr('secretsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                   </th>
                 )}
@@ -377,7 +377,7 @@ stringData:
                 <th className="text-left py-3 px-4 w-[80px] cursor-pointer" onClick={() => handleSort('data')}>
                   <span className="inline-flex items-center gap-1">{tr('secretsPage.table.data', 'Data')}{renderSortIcon('data')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('secretsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -386,11 +386,11 @@ stringData:
               {pagedItems.map((secret, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${secret.namespace}/${secret.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Secret', name: secret.name, namespace: secret.namespace })}>
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{secret.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{secret.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{secret.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate">{secret.type}</td>
                   <td className="py-3 px-4 text-xs font-mono">{secret.data_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(secret.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(secret.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (

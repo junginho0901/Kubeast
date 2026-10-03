@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { NetworkPolicyInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatDefaultDeny,
@@ -92,7 +93,7 @@ export function NetworkPolicyTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -114,7 +115,7 @@ export function NetworkPolicyTable({
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('defaultDeny')}>
                 <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.defaultDeny', 'Default Deny')}{renderSortIcon('defaultDeny')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -132,14 +133,14 @@ export function NetworkPolicyTable({
                   rawJson: networkPolicyToRawJson(policy),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{policy.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{policy.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{policy.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(policy)}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatPolicyTypes(policy)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{policy.ingress_rules || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{policy.egress_rules || 0}</td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatDefaultDeny(policy)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(policy.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(policy.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -154,11 +155,9 @@ export function NetworkPolicyTable({
             )}
 
             {sortedPoliciesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('networkPoliciesPage.noResults', 'No network policies found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="networkpolicies">
+                {tr('networkPoliciesPage.noResults', 'No network policies found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedPolicies.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

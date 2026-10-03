@@ -10,6 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { GatewayInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   gatewayToRawJson,
@@ -91,7 +92,7 @@ export function GatewayTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -110,10 +111,10 @@ export function GatewayTable({
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('routes')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.attachedRoutes', 'Attached Routes')}{renderSortIcon('routes')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
+              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -131,14 +132,14 @@ export function GatewayTable({
                   rawJson: gatewayToRawJson(gateway),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{gateway.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{gateway.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{gateway.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.gateway_class_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.status || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.listeners_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.attached_routes || 0}</td>
-                <td className="py-3 px-4 text-xs font-mono">{gateway.addresses_count || 0}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(gateway.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{gateway.addresses_count || 0}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(gateway.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -153,11 +154,9 @@ export function GatewayTable({
             )}
 
             {sortedGatewaysLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('gatewaysPage.noResults', 'No gateways found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="gateways">
+                {tr('gatewaysPage.noResults', 'No gateways found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedGateways.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

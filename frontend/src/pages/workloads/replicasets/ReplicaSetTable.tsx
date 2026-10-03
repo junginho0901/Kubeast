@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { ReplicaSetInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   getReplicaSetStatusColor,
@@ -89,7 +90,7 @@ export function ReplicaSetTable({
         <table className="w-full text-sm min-w-[1480px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              {showNamespaceColumn && <th className="text-left py-3 px-4 w-[140px]">{tr('replicasets.table.namespace', 'Namespace')}</th>}
+              {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('replicasets.table.namespace', 'Namespace')}</th>}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
@@ -111,14 +112,14 @@ export function ReplicaSetTable({
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-low text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.images', 'Images')}{renderSortIcon('images')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
+              <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -136,7 +137,7 @@ export function ReplicaSetTable({
                   rawJson: replicaSetToWorkloadRawJson(rs),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{rs.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{rs.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rs.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.current_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.replicas ?? 0}</td>
@@ -144,10 +145,10 @@ export function ReplicaSetTable({
                 <td className="py-3 px-4 text-xs font-mono">{rs.available_replicas ?? 0}</td>
                 <td className="py-3 px-4"><span className={`badge ${getReplicaSetStatusColor(rs.status)}`}>{rs.status || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.container_names || []).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{rs.owner || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(rs.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{rs.owner || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rs.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -162,11 +163,9 @@ export function ReplicaSetTable({
             )}
 
             {sortedReplicaSetsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 13 : 12} className="py-6 px-4 text-center text-slate-400">
-                  {tr('replicasets.noResults', 'No replicasets found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 13 : 12} resource="replicasets">
+                {tr('replicasets.noResults', 'No replicasets found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedReplicaSets.length} columnCount={11 + (showNamespaceColumn ? 1 : 0)} />

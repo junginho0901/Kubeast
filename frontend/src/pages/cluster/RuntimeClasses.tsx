@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -328,7 +329,7 @@ handler: runc
                     {tr('runtimeClasses.table.handler', 'Handler')}{renderSortIcon('handler')}
                   </span>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('runtimeClasses.table.age', 'Age')}{renderSortIcon('age')}
                   </span>
@@ -349,7 +350,7 @@ handler: runc
                 >
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rc.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{rc.handler}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(rc.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rc.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -364,11 +365,9 @@ handler: runc
               )}
 
               {sortedRCs.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={3} className="py-6 px-4 text-center text-slate-400">
-                    {tr('runtimeClasses.noResults', 'No runtime classes found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={3} resource="runtimeclasses">
+                  {tr('runtimeClasses.noResults', 'No runtime classes found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedRCs.length} columnCount={3} />

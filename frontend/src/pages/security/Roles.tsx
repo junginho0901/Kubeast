@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -346,7 +347,7 @@ rules:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
                     <span className="inline-flex items-center gap-1">{tr('rolesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                   </th>
                 )}
@@ -356,7 +357,7 @@ rules:
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('rules')}>
                   <span className="inline-flex items-center gap-1">{tr('rolesPage.table.rules', 'Rules')}{renderSortIcon('rules')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('rolesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -365,10 +366,10 @@ rules:
               {pagedItems.map((role, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace })}>
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{role.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{role.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{role.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{role.rules_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(role.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(role.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -383,11 +384,9 @@ rules:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 4 : 3} className="py-6 px-4 text-center text-slate-400">
-                    {tr('rolesPage.noResults', 'No roles found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="roles">
+                  {tr('rolesPage.noResults', 'No roles found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />

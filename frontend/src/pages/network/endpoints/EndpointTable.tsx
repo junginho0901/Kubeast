@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { EndpointInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   endpointToRawJson,
   formatAddresses,
@@ -92,7 +93,7 @@ export function EndpointTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
                   <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
               )}
@@ -102,7 +103,7 @@ export function EndpointTable({
               <th className="text-left py-3 px-4 w-[320px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('ports')}>
+              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
@@ -111,7 +112,7 @@ export function EndpointTable({
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('notReady')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.notReady', 'Not Ready')}{renderSortIcon('notReady')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -129,13 +130,13 @@ export function EndpointTable({
                   rawJson: endpointToRawJson(ep),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{ep.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{ep.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{ep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAddresses(ep)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(ep.ports)}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(ep.ports)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{ep.ready_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{ep.not_ready_count || 0}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(ep.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(ep.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -150,11 +151,9 @@ export function EndpointTable({
             )}
 
             {sortedEndpointsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-6 px-4 text-center text-slate-400">
-                  {tr('endpointsPage.noResults', 'No endpoints found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="endpoints">
+                {tr('endpointsPage.noResults', 'No endpoints found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedEndpoints.length} columnCount={6 + (showNamespaceColumn ? 1 : 0)} />

@@ -11,6 +11,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { PVInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   claimToText,
   formatAge,
@@ -102,7 +103,7 @@ export function PVTable({
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('capacity')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.capacity', 'Capacity')}{renderSortIcon('capacity')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
+              <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.accessModes', 'Access Modes')}{renderSortIcon('accessModes')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('reclaimPolicy')}>
@@ -111,13 +112,13 @@ export function PVTable({
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('claim')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.claim', 'Claim')}{renderSortIcon('claim')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('volumeMode')}>
+              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('volumeMode')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.volumeMode', 'Volume Mode')}{renderSortIcon('volumeMode')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('source')}>
+              <th className="col-low text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('source')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.source', 'Source')}{renderSortIcon('source')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('pvs.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -140,12 +141,12 @@ export function PVTable({
                 </td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pv.storage_class || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pv.capacity || '-'}</td>
-                <td className="py-3 px-4 text-xs"><span className="block truncate">{(pv.access_modes || []).join(', ') || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{(pv.access_modes || []).join(', ') || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{pv.reclaim_policy || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{claimToText(pv.claim_ref)}</span></td>
-                <td className="py-3 px-4 text-xs">{pv.volume_mode || '-'}</td>
-                <td className="py-3 px-4 text-xs"><span className="block truncate">{pv.source || pv.driver || '-'}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(pv.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs">{pv.volume_mode || '-'}</td>
+                <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{pv.source || pv.driver || '-'}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pv.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -160,11 +161,9 @@ export function PVTable({
             )}
 
             {sortedPVsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={10} className="py-6 px-4 text-center text-slate-400">
-                  {tr('pvs.noResults', 'No PVs found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={10} resource="pvs">
+                {tr('pvs.noResults', 'No PVs found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedPVs.length} columnCount={10} />

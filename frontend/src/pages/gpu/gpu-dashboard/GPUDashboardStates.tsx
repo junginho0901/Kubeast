@@ -55,9 +55,10 @@ export function GPUDashboardError({ tr, onRefetch }: ErrorEmptyProps) {
         </div>
         <button
           onClick={onRefetch}
-          className="rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          className="btn btn-primary flex items-center gap-2"
         >
           <RefreshCw className="h-4 w-4" />
+          {tr('common.refresh', 'Refresh')}
         </button>
       </div>
       <div className="flex flex-col items-center justify-center rounded-xl border border-red-500/20 bg-red-500/5 py-24">
@@ -90,9 +91,10 @@ export function GPUDashboardEmpty({ tr, onRefetch }: ErrorEmptyProps) {
         </div>
         <button
           onClick={onRefetch}
-          className="rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          className="btn btn-primary flex items-center gap-2"
         >
           <RefreshCw className="h-4 w-4" />
+          {tr('common.refresh', 'Refresh')}
         </button>
       </div>
       <div className="flex flex-col items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 py-24">

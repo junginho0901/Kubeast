@@ -1,5 +1,45 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAdaptiveRowsPerPage } from './useAdaptiveRowsPerPage'
+
+// Marks the scroll wrapper with data-scroll-more="left|right|both" while the
+// table is wider than the wrapper, so index.css can paint an edge fade + chevron
+// (background-attachment: scroll keeps it pinned to the wrapper's edge). Without
+// it a wide table at 1024–1440 px just looks cut off.
+function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement>) {
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    let frameId = 0
+    const update = () => {
+      frameId = 0
+      const more = body.scrollWidth - body.clientWidth
+      const left = body.scrollLeft > 1
+      const right = more - body.scrollLeft > 1
+      const value = left && right ? 'both' : right ? 'right' : left ? 'left' : ''
+      if (value) body.setAttribute('data-scroll-more', value)
+      else body.removeAttribute('data-scroll-more')
+    }
+    const schedule = () => {
+      if (!frameId) frameId = requestAnimationFrame(update)
+    }
+    schedule()
+    body.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(schedule)
+      observer.observe(body)
+      if (body.firstElementChild) observer.observe(body.firstElementChild)
+    }
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId)
+      body.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      observer?.disconnect()
+      body.removeAttribute('data-scroll-more')
+    }
+  }, [bodyRef])
+}
 
 interface UseAdaptiveTableOptions {
   /** sorted/filtered 길이 등 — 변경 시 행 수 재계산 트리거 */
@@ -35,6 +75,7 @@ export function useAdaptiveTable(options: UseAdaptiveTableOptions = {}) {
     theadRef,
     rowRef: firstRowRef,
   })
+  useScrollMoreHint(bodyRef)
 
   return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage }
 }

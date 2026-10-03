@@ -10,6 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { IngressClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatParameters,
@@ -100,7 +101,7 @@ export function IngressClassTable({
               <th className="text-left py-3 px-4 w-[310px] cursor-pointer" onClick={() => handleSort('parameters')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.parameters', 'Parameters')}{renderSortIcon('parameters')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -125,7 +126,7 @@ export function IngressClassTable({
                     : <span className="badge badge-info">{tr('common.no', 'No')}</span>}
                 </td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatParameters(item)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -140,11 +141,9 @@ export function IngressClassTable({
             )}
 
             {sortedIngressClassesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
-                  {tr('ingressClassesPage.noResults', 'No ingress classes found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={5} resource="ingressclasses">
+                {tr('ingressClassesPage.noResults', 'No ingress classes found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedIngressClasses.length} columnCount={5} />

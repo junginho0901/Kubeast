@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { PDBInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   pdbToRawJson,
@@ -89,7 +90,7 @@ export function PDBTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[140px]">{tr('pdbs.table.namespace', 'Namespace')}</th>
+                <th className="col-low text-left py-3 px-4 w-[140px]">{tr('pdbs.table.namespace', 'Namespace')}</th>
               )}
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">
@@ -121,7 +122,7 @@ export function PDBTable({
                   {tr('pdbs.table.desiredHealthy', 'Desired')}{renderSortIcon('desiredHealthy')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('pdbs.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -141,14 +142,14 @@ export function PDBTable({
                   rawJson: pdbToRawJson(p),
                 })}
               >
-                {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{p.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{p.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{p.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{p.min_available ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.max_unavailable ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.disruptions_allowed}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.current_healthy}/{p.desired_healthy}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.desired_healthy}</td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(p.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(p.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -163,11 +164,9 @@ export function PDBTable({
             )}
 
             {sortedPDBsLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-6 px-4 text-center text-slate-400">
-                  {tr('pdbs.noResults', 'No PDBs found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="pdbs">
+                {tr('pdbs.noResults', 'No PDBs found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedPDBs.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />

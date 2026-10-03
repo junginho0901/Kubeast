@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -286,7 +287,7 @@ rules:
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('rules')}>
                   <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.rules', 'Rules')}{renderSortIcon('rules')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -297,7 +298,7 @@ rules:
                       ref={idx === 0 ? firstRowRef : undefined} key={cr.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRole', name: cr.name })}>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cr.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{cr.rules_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(cr.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cr.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -312,11 +313,9 @@ rules:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={3} className="py-6 px-4 text-center text-slate-400">
-                    {tr('clusterRolesPage.noResults', 'No cluster roles found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={3} resource="clusterroles">
+                  {tr('clusterRolesPage.noResults', 'No cluster roles found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={3} />

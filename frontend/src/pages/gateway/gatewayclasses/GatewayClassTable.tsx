@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { GatewayClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatParametersRef,
@@ -99,7 +100,7 @@ export function GatewayClassTable({
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('parameters')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.parametersRef', 'Parameters Ref')}{renderSortIcon('parameters')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -120,7 +121,7 @@ export function GatewayClassTable({
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{item.controller_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{item.status || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatParametersRef(item)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -135,11 +136,9 @@ export function GatewayClassTable({
             )}
 
             {sortedGatewayClassesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
-                  {tr('gatewayClassesPage.noResults', 'No gateway classes found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={5} resource="gatewayclasses">
+                {tr('gatewayClassesPage.noResults', 'No gateway classes found.')}
+              </TableEmptyRow>
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedGatewayClasses.length} columnCount={5} />

@@ -82,6 +82,53 @@ body {
     @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap leading-none;
   }
 
+  /* List tables: a column marked col-low (Age, Namespace, IPs, images …) folds
+     below the xl breakpoint; the value stays available in the row's drawer.
+     The table's min-width is released at the same point so the remaining
+     columns can fit the narrower content area. */
+  @media (max-width: 1279.98px) {
+    .col-low {
+      display: none;
+    }
+    .card > .overflow-x-auto > table {
+      min-width: 0;
+    }
+  }
+
+  /* useAdaptiveTable marks the scroll wrapper while the table overflows it:
+     an edge fade plus a chevron, pinned to the wrapper edge
+     (background-attachment: scroll), so a cut-off column reads as "more →". */
+  [data-scroll-more='right'],
+  [data-scroll-more='both'] {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E"),
+      linear-gradient(to left, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0));
+    background-position: right 4px center, right center;
+    background-size: 20px 20px, 56px 100%;
+    background-repeat: no-repeat;
+    background-attachment: scroll, scroll;
+  }
+  [data-scroll-more='left'] {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E"),
+      linear-gradient(to right, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0));
+    background-position: left 4px center, left center;
+    background-size: 20px 20px, 56px 100%;
+    background-repeat: no-repeat;
+    background-attachment: scroll, scroll;
+  }
+  [data-scroll-more='both'] {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E"),
+      linear-gradient(to left, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0)),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E"),
+      linear-gradient(to right, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0));
+    background-position: right 4px center, right center, left 4px center, left center;
+    background-size: 20px 20px, 56px 100%, 20px 20px, 56px 100%;
+    background-repeat: no-repeat;
+    background-attachment: scroll, scroll, scroll, scroll;
+  }
+
   .badge-success {
     @apply bg-green-500/20 text-green-400 border border-green-500/30;
   }

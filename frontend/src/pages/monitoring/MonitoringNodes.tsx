@@ -55,6 +55,14 @@ export default function MonitoringNodes({
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
 
+  // The node count comes from the node list, not from the metrics samples:
+  // without metrics-server the metrics list is empty while the nodes exist.
+  const { data: nodeList } = useQuery<any[]>({
+    queryKey: ['nodes', currentCluster],
+    queryFn: () => api.getNodes(),
+    staleTime: 30000,
+  })
+
   const { data: nodeMetrics, isLoading, error } = useQuery<NodeMetric[], Error>({
     queryKey: ['node-metrics', currentCluster],
     queryFn: api.getNodeMetrics,
@@ -161,9 +169,9 @@ export default function MonitoringNodes({
             </p>
           )}
           <p className="text-xs text-slate-500">{t('monitoring.fetchNote')}</p>
-          {nodeMetrics && (
+          {(nodeList || nodeMetrics) && (
             <p className="text-xs text-slate-400">
-              {t('monitoring.nodes.total', { count: nodeMetrics.length })}
+              {t('monitoring.nodes.total', { count: Array.isArray(nodeList) ? nodeList.length : (nodeMetrics?.length ?? 0) })}
             </p>
           )}
         </div>

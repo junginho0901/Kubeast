@@ -8,6 +8,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -346,7 +347,7 @@ data:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
                     <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                   </th>
                 )}
@@ -356,7 +357,7 @@ data:
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('dataCount')}>
                   <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.data', 'Data')}{renderSortIcon('dataCount')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -365,10 +366,10 @@ data:
               {pagedItems.map((cm, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${cm.namespace}/${cm.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ConfigMap', name: cm.name, namespace: cm.namespace })}>
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono">{cm.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{cm.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cm.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{cm.data_count}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(cm.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cm.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -383,11 +384,9 @@ data:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 4 : 3} className="py-6 px-4 text-center text-slate-400">
-                    {tr('configMapsPage.noResults', 'No config maps found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="configmaps">
+                  {tr('configMapsPage.noResults', 'No config maps found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />

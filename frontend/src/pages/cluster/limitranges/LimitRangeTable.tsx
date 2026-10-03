@@ -8,6 +8,7 @@ import type { LimitRangeInfo } from '@/services/api'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   getLimitTypes,
   formatAge,
@@ -74,7 +75,7 @@ export function LimitRangeTable({
                 </span>
               </th>
               {showNamespaceColumn && (
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('limitRanges.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
                   </span>
@@ -85,7 +86,7 @@ export function LimitRangeTable({
                   {tr('limitRanges.table.types', 'Types')}{renderSortIcon('types')}
                 </span>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('limitRanges.table.age', 'Age')}{renderSortIcon('age')}
                 </span>
@@ -102,10 +103,10 @@ export function LimitRangeTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{lr.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="py-3 px-4 text-xs font-mono text-slate-400">{lr.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{lr.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{getLimitTypes(lr)}</span></td>
-                <td className="py-3 px-4 text-xs font-mono">{formatAge(lr.created_at)}</td>
+                <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(lr.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
@@ -120,11 +121,9 @@ export function LimitRangeTable({
             )}
 
             {sortedLimitRangesLength === 0 && !isLoading && (
-              <tr>
-                <td colSpan={showNamespaceColumn ? 4 : 3} className="py-6 px-4 text-center text-slate-400">
-                  {tr('limitRanges.noResults', 'No limit ranges found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="limitranges">
+                {tr('limitRanges.noResults', 'No limit ranges found.')}
+              </TableEmptyRow>
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedLimitRanges.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />

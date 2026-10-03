@@ -13,6 +13,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { VolumeAttachmentInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   errorText,
   formatAge,
@@ -110,7 +111,7 @@ export function VolumeAttachmentTable({
               <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('error')}>
                 <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.error', 'Error')}{renderSortIcon('error')}</span>
               </th>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
             </tr>
@@ -162,17 +163,15 @@ export function VolumeAttachmentTable({
                   <td className="py-3 px-4 text-slate-300 max-w-[320px]">
                     <span className="block truncate" title={errors}>{errors}</span>
                   </td>
-                  <td className="py-3 px-4 text-slate-400">{formatAge(va.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-slate-400">{formatAge(va.created_at)}</td>
                 </tr>
               )
             })}
 
             {!isLoading && pagedVolumeAttachments.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-10 text-center text-slate-400">
-                  {tr('volumeattachments.noResults', 'No VolumeAttachments found.')}
-                </td>
-              </tr>
+              <TableEmptyRow colSpan={7} resource="volumeattachments" className="py-10 text-center text-slate-400">
+                {tr('volumeattachments.noResults', 'No VolumeAttachments found.')}
+              </TableEmptyRow>
             )}
 
             {isLoading && (

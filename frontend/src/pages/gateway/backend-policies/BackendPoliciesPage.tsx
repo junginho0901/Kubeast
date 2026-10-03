@@ -4,6 +4,7 @@ import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search }
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatConditionStatus,
@@ -212,7 +213,7 @@ ${yamlBodyTemplate}`
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
                     <span className="inline-flex items-center gap-1">{strings.tableNamespace}{renderSortIcon('namespace')}</span>
                   </th>
                 )}
@@ -225,7 +226,7 @@ ${yamlBodyTemplate}`
                 <th className="text-left py-3 px-4 w-[140px]">
                   {strings.tableStatus}
                 </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{strings.tableAge}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -243,11 +244,11 @@ ${yamlBodyTemplate}`
                     rawJson: toRawJson(item, apiVersion, config.kind),
                   })}
                 >
-                  {showNamespaceColumn && <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTargetRefs(item)}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{formatConditionStatus(item)}</span></td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -262,11 +263,9 @@ ${yamlBodyTemplate}`
               )}
 
               {sortedPolicies.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={showNamespaceColumn ? 5 : 4} className="py-6 px-4 text-center text-slate-400">
-                    {strings.noResults}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={showNamespaceColumn ? 5 : 4} resource="backendtlspolicies">
+                  {strings.noResults}
+                </TableEmptyRow>
               )}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedPolicies.length} columnCount={4 + (showNamespaceColumn ? 1 : 0)} />

@@ -7,6 +7,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -316,7 +317,7 @@ export default function ResourceSlices() {
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('node')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.node', 'Node')}{renderSortIcon('node')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
+                <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.driver', 'Driver')}{renderSortIcon('driver')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('pool')}>
@@ -325,7 +326,7 @@ export default function ResourceSlices() {
                 <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('devices')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.devices', 'Devices')}{renderSortIcon('devices')}</span>
                 </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
                 </th>
               </tr>
@@ -343,10 +344,10 @@ export default function ResourceSlices() {
                 >
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.node_name ?? '-'}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
+                  <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.pool_name ?? '-'}</span></td>
                   <td className="py-3 px-4 text-xs">{item.device_count ?? 0}</td>
-                  <td className="py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
                 </tr>
               ))}
               {isLoading && (
@@ -361,11 +362,9 @@ export default function ResourceSlices() {
               )}
 
               {sortedResourceSlices.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={6} className="py-6 px-4 text-center text-slate-400">
-                    {tr('resourceSlicesPage.noResults', 'No resource slices found.')}
-                  </td>
-                </tr>
+                <TableEmptyRow colSpan={6} resource="resourceslices">
+                  {tr('resourceSlicesPage.noResults', 'No resource slices found.')}
+                </TableEmptyRow>
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedResourceSlices.length} columnCount={6} />
