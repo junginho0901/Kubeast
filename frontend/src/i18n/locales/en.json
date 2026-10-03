@@ -2653,6 +2653,7 @@
     "title": "Change History Timeline",
     "subtitle": "View K8s events and resource changes in chronological order.",
     "selectNamespace": "Select Namespace",
+    "allNamespaces": "All namespaces",
     "timeRange": "Time Range",
     "1h": "1 hour",
     "6h": "6 hours",

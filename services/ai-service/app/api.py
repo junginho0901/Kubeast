@@ -491,10 +491,14 @@ async def explain_resource(resource_type: str, resource_yaml: str, authorization
 
 
 @router.post("/suggest-optimization")
-async def suggest_optimization(namespace: str, authorization: str = Depends(bearer_or_cookie)):
+async def suggest_optimization(
+    namespace: str,
+    authorization: str = Depends(bearer_or_cookie),
+    x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
+):
     """리소스 최적화 제안"""
-    ai_service = await _build_ai_service(authorization)
-    
+    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
+
     try:
         suggestions = await ai_service.suggest_optimization(namespace)
         return {"suggestions": suggestions}
@@ -502,9 +506,13 @@ async def suggest_optimization(namespace: str, authorization: str = Depends(bear
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/suggest-optimization/stream")
-async def suggest_optimization_stream(namespace: str, authorization: str = Depends(bearer_or_cookie)):
+async def suggest_optimization_stream(
+    namespace: str,
+    authorization: str = Depends(bearer_or_cookie),
+    x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
+):
     """리소스 최적화 제안 (SSE 스트리밍)"""
-    ai_service = await _build_ai_service(authorization)
+    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
 
     try:
         return StreamingResponse(

@@ -3,6 +3,7 @@
 // consume the response body as a stream of SSE events.
 
 import { getAuthHeaders, handleUnauthorized } from '../auth'
+import { clusterHeaders } from '../clusterRef'
 
 import { client } from './client'
 import type {
@@ -65,6 +66,7 @@ export const aiApi = {
       null,
       {
         params: { namespace },
+        headers: clusterHeaders(),
         timeout: 60000,
       },
     )
@@ -74,7 +76,8 @@ export const aiApi = {
   suggestOptimizationStream: async (namespace: string, handlers: OptimizationStreamHandlers = {}): Promise<void> => {
     const { onObserved, onContent, onUsage, onMeta, onError, onDone, signal } = handlers
 
-    const headers: Record<string, string> = { Accept: 'text/event-stream', ...getAuthHeaders() }
+    // X-Cluster-Name scopes the observations to the selected cluster (as the chat streams do).
+    const headers: Record<string, string> = { Accept: 'text/event-stream', ...getAuthHeaders(), ...clusterHeaders() }
 
     const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}`, {
       method: 'GET',

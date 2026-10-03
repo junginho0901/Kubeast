@@ -7,12 +7,22 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// GetClusterTimeline handles GET /api/v1/timeline — events and rollout history
+// across every namespace.
+func (h *Handler) GetClusterTimeline(w http.ResponseWriter, r *http.Request) {
+	h.serveNamespaceTimeline(w, r, metav1.NamespaceAll)
+}
 
 // GetNamespaceTimeline handles GET /api/v1/cluster/namespaces/{namespace}/timeline
 func (h *Handler) GetNamespaceTimeline(w http.ResponseWriter, r *http.Request) {
+	h.serveNamespaceTimeline(w, r, chi.URLParam(r, "namespace"))
+}
+
+func (h *Handler) serveNamespaceTimeline(w http.ResponseWriter, r *http.Request, namespace string) {
 	ctx := r.Context()
-	namespace := chi.URLParam(r, "namespace")
 	hours := queryParamInt(r, "hours", 24)
 	limit := queryParamInt(r, "limit", 500)
 

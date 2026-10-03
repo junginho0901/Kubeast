@@ -52,6 +52,7 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/resource-graph", h.GetNamespaceResourceGraph)
 
 	// Timeline (nginx rewrites /api/v1/cluster/namespaces/* → /api/v1/namespaces/*)
+	r.Get("/api/v1/timeline", h.GetClusterTimeline)
 	r.Get("/api/v1/namespaces/{namespace}/timeline", h.GetNamespaceTimeline)
 	r.Get("/api/v1/namespaces/{namespace}/timeline/{kind}/{name}", h.GetResourceTimeline)
 

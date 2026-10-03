@@ -10,6 +10,17 @@ import (
 
 const gatewayAPIGroup = "gateway.networking.k8s.io"
 
+// addObjectMetaFields adds the ObjectMeta values the detail drawers' Lifecycle
+// section reads (the same keys the typed describe responses carry).
+func addObjectMetaFields(result map[string]interface{}, obj *unstructured.Unstructured) {
+	result["uid"] = string(obj.GetUID())
+	result["resource_version"] = obj.GetResourceVersion()
+	result["generation"] = obj.GetGeneration()
+	if f := obj.GetFinalizers(); len(f) > 0 {
+		result["finalizers"] = f
+	}
+}
+
 // gatewayGVR is the GVR the cluster serves for one Gateway API resource. Each
 // kind is resolved on its own because the group mixes versions (gateways v1,
 // referencegrants v1beta1, backendtlspolicies v1alpha3). When the cluster has
