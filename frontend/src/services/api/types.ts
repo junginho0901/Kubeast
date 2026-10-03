@@ -1196,23 +1196,6 @@ export interface TopResources {
   node_error?: boolean
 }
 
-export interface LogAnalysisResponse {
-  summary: string
-  errors: Array<{
-    pattern: string
-    severity: string
-    occurrences: number
-  }>
-  root_cause?: string
-  recommendations: string[]
-  related_issues: string[]
-}
-
-export interface ChatResponse {
-  message: string
-  suggestions: string[]
-  actions: Array<any>
-}
 
 export type UserRole = 'admin' | 'read' | 'write' | 'pending'
 
@@ -1349,10 +1332,6 @@ export interface AuthResponse {
   token_type: string
   member?: Member
   user?: Member
-}
-
-export interface OptimizationSuggestionsResponse {
-  suggestions: string[]
 }
 
 export type OptimizationStreamHandlers = {

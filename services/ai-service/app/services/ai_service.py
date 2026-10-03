@@ -12,16 +12,6 @@ import time
 from app.config import settings
 from datetime import datetime
 from app.security import decode_access_token
-from app.models.ai import (
-    LogAnalysisRequest,
-    LogAnalysisResponse,
-    TroubleshootRequest,
-    TroubleshootResponse,
-    ChatRequest,
-    ChatResponse,
-    ErrorPattern,
-    SeverityLevel
-)
 from app.services.k8s_client import K8sServiceClient
 from app.services.tool_server_client import ToolServerClient
 from app.services.provider_adapter import ProviderAdapter
@@ -196,26 +186,6 @@ class AIService:
             sanitized = sanitized[:max_chars] + "\n... (truncated) ..."
         return sanitized
 
-    async def analyze_logs(self, request: LogAnalysisRequest) -> LogAnalysisResponse:
-        from app.services.ai.oneshot import analyze_logs
-        return await analyze_logs(self, request)
-
-    async def troubleshoot(self, request: TroubleshootRequest) -> TroubleshootResponse:
-        from app.services.ai.oneshot import troubleshoot
-        return await troubleshoot(self, request)
-
-    async def chat(self, request: ChatRequest) -> ChatResponse:
-        from app.services.ai.oneshot import chat
-        return await chat(self, request)
-
-    async def explain_resource(self, resource_type: str, resource_yaml: str) -> str:
-        from app.services.ai.oneshot import explain_resource
-        return await explain_resource(self, resource_type, resource_yaml)
-
-    async def suggest_optimization(self, namespace: str) -> List[str]:
-        from app.services.ai.oneshot import suggest_optimization
-        return await suggest_optimization(self, namespace)
-
     async def suggest_optimization_stream(self, namespace: str):
         async for chunk in streaming_module.suggest_optimization_stream(self, namespace):
             yield chunk
@@ -247,18 +217,6 @@ class AIService:
     async def _build_optimization_observations(self, namespace: str) -> Dict[str, str]:
         from app.services.ai.optimization import build_optimization_observations
         return await build_optimization_observations(self, namespace)
-
-    def _extract_error_patterns(self, logs: str) -> List[ErrorPattern]:
-        from app.services.ai.diagnostics import extract_error_patterns
-        return extract_error_patterns(logs)
-
-    async def _gather_resource_context(self, request: TroubleshootRequest) -> str:
-        from app.services.ai.diagnostics import gather_resource_context
-        return await gather_resource_context(self, request)
-    
-    async def chat_stream(self, request: ChatRequest):
-        async for chunk in streaming_module.chat_stream(self, request):
-            yield chunk
 
     async def _execute_function(self, function_name: str, function_args: dict):
         from app.services.ai.tool_dispatch import execute_function

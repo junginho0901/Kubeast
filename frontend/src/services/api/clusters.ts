@@ -76,4 +76,14 @@ export const clustersApi = {
     const { data } = await client.get('/system/deployment-mode')
     return data?.mode === 'docker' ? 'docker' : 'k8s'
   },
+
+  // Audit row for a picker cluster switch (`cluster.switch`). Fire-and-forget:
+  // the server answers 204 even when the row could not be written, and a
+  // network failure must never block the switch itself.
+  auditClusterSwitch: async (previousCluster: string, newCluster: string): Promise<void> => {
+    await client.post('/audit/cluster-switch', {
+      previous_cluster: previousCluster,
+      new_cluster: newCluster,
+    })
+  },
 }

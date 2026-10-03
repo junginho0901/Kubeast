@@ -3,7 +3,6 @@ package handler
 import (
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -41,93 +40,6 @@ func (h *Handler) GetGenericResources(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := h.svc.GetGenericResources(ctx, resourceType, namespace, labelSelector)
-	if err != nil {
-		h.handleError(w, err)
-		return
-	}
-	response.JSON(w, http.StatusOK, data)
-}
-
-// SearchResources handles POST /api/v1/search.
-// Supports both single resource_type and multi resource_types (Advanced Search).
-func (h *Handler) SearchResources(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	var body struct {
-		ResourceType  string   `json:"resource_type"`
-		ResourceTypes []string `json:"resource_types"`
-		Namespace     string   `json:"namespace"`
-		LabelSelector string   `json:"label_selector"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
-		return
-	}
-
-	// Multi-resource search (Advanced Search)
-	if len(body.ResourceTypes) > 0 {
-		ns := body.Namespace
-		allNamespaces := ns == ""
-
-		type fetchResult struct {
-			items []map[string]interface{}
-			err   error
-			rt    string
-		}
-
-		results := make([]fetchResult, len(body.ResourceTypes))
-		var wg sync.WaitGroup
-
-		for i, rt := range body.ResourceTypes {
-			wg.Add(1)
-			go func(idx int, resourceType string) {
-				defer wg.Done()
-				nsToUse := ns
-				if allNamespaces {
-					nsToUse = ""
-				}
-				data, err := h.svc.GetGenericResourcesRaw(ctx, resourceType, nsToUse, body.LabelSelector)
-				if err != nil {
-					results[idx] = fetchResult{rt: resourceType, err: err}
-					return
-				}
-				items, _ := data["items"].([]map[string]interface{})
-				maskSecretItems(items) // search results never carry Secret values
-				results[idx] = fetchResult{rt: resourceType, items: items}
-			}(i, rt)
-		}
-		wg.Wait()
-
-		allItems := make([]interface{}, 0)
-		errors := make([]map[string]interface{}, 0)
-		for _, res := range results {
-			if res.err != nil {
-				errors = append(errors, map[string]interface{}{
-					"resource_type": res.rt,
-					"error":         res.err.Error(),
-				})
-			} else {
-				for _, item := range res.items {
-					allItems = append(allItems, item)
-				}
-			}
-		}
-
-		response.JSON(w, http.StatusOK, map[string]interface{}{
-			"items":  allItems,
-			"total":  len(allItems),
-			"errors": errors,
-		})
-		return
-	}
-
-	// Single resource search
-	if body.ResourceType == "" {
-		response.Error(w, http.StatusBadRequest, "resource_type is required")
-		return
-	}
-
-	data, err := h.svc.GetGenericResources(ctx, body.ResourceType, body.Namespace, body.LabelSelector)
 	if err != nil {
 		h.handleError(w, err)
 		return

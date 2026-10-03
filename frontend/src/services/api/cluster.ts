@@ -256,14 +256,6 @@ export const clusterApi = {
     return data
   },
 
-  searchMultiResources: async (resourceTypes: string[], namespace?: string): Promise<{ items: any[]; total: number; errors: any[] }> => {
-    const { data } = await client.post('/cluster/search', {
-      resource_types: resourceTypes,
-      namespace: namespace || undefined,
-    }, { timeout: 60000 })
-    return data
-  },
-
   getApiResources: async (forceRefresh = false): Promise<any[]> => {
     const { data } = await client.get('/cluster/api-resources', {
       params: { force_refresh: forceRefresh },

@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
-from app.models.ai import ChatRequest, SessionChatRequest
+from app.models.ai import SessionChatRequest
 from app.models.floating_ai import FloatingChatRequest
 from pydantic import ValidationError
 from app.security import require_auth, decode_access_token, bearer_or_cookie
@@ -148,26 +148,6 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
     service = copy.copy(_cached_ai_service)
     service.update_authorization(authorization, cluster_name=cluster_name)
     return service
-
-
-@router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, authorization: str = Depends(bearer_or_cookie)):
-    """
-    AI 챗봇 스트리밍
-    """
-    ai_service = await _build_ai_service(authorization)
-    
-    try:
-        return StreamingResponse(
-            ai_service.chat_stream(request),
-            media_type="text/event-stream",
-            headers={
-                "X-Accel-Buffering": "no",
-                "Cache-Control": "no-cache, no-transform",
-            },
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/sessions/{session_id}/chat")
@@ -440,70 +420,6 @@ async def floating_session_chat(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/analyze-logs")
-async def analyze_logs(request: dict, authorization: str = Depends(bearer_or_cookie)):
-    """로그 분석"""
-    ai_service = await _build_ai_service(authorization)
-    
-    try:
-        from app.ai import LogAnalysisRequest
-        from app.services.redact import redact_text
-        req = LogAnalysisRequest(**request)
-        # The logs come straight from the browser: mask credentials (and PII when
-        # enabled) before they are put in front of the model.
-        req.logs, _ = redact_text(req.logs)
-        if req.context:
-            req.context, _ = redact_text(req.context)
-        result = await ai_service.analyze_logs(req)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/troubleshoot")
-async def troubleshoot(request: dict, authorization: str = Depends(bearer_or_cookie)):
-    """트러블슈팅"""
-    ai_service = await _build_ai_service(authorization)
-    
-    try:
-        from app.ai import TroubleshootRequest
-        req = TroubleshootRequest(**request)
-        result = await ai_service.troubleshoot(req)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/explain-resource")
-async def explain_resource(resource_type: str, resource_yaml: str, authorization: str = Depends(bearer_or_cookie)):
-    """리소스 YAML 설명"""
-    ai_service = await _build_ai_service(authorization)
-
-    try:
-        from app.services.redact import redact_text
-        # YAML comes from the browser (possibly a revealed Secret): strip and mask first.
-        resource_yaml, _ = redact_text(resource_yaml)
-        explanation = await ai_service.explain_resource(resource_type, resource_yaml)
-        return {"explanation": explanation}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/suggest-optimization")
-async def suggest_optimization(
-    namespace: str,
-    authorization: str = Depends(bearer_or_cookie),
-    x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
-):
-    """리소스 최적화 제안"""
-    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
-
-    try:
-        suggestions = await ai_service.suggest_optimization(namespace)
-        return {"suggestions": suggestions}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/suggest-optimization/stream")
 async def suggest_optimization_stream(

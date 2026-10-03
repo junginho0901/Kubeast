@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 
+import { clustersApi } from '@/services/api/clusters'
 import { setCurrentClusterRef } from '@/services/clusterRef'
 import { isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
 import { ClusterContext, STORAGE_KEY } from './ClusterContext'
@@ -70,6 +71,11 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   }, [isSwitching, clusterFetching])
 
   const setCurrentCluster = (id: string) => {
+    // A user-driven change from one cluster to another leaves an audit row.
+    // The picker's first auto-select ('' → cluster) is not a switch.
+    if (id && currentCluster && id !== currentCluster) {
+      clustersApi.auditClusterSwitch(currentCluster, id).catch(() => {})
+    }
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, id)
     }
