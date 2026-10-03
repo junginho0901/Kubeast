@@ -92,7 +92,7 @@ export default function Topology() {
         return await api.getNamespacedResourceYaml(category.endpoint, namespace, selectedResource)
       } catch (error) {
         const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        throw new Error(detail || 'Resource not found')
+        throw new Error(detail || 'Resource not found', { cause: error })
       }
     },
     enabled: !!namespace && !!selectedResource,

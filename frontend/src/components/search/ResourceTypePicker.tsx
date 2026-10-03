@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Check, Search } from 'lucide-react'
+import { NON_LISTABLE } from './nonListable'
 
 export interface ResourceTypeOption {
   name: string
@@ -28,13 +29,6 @@ const BUILTIN_RESOURCES: ResourceTypeOption[] = [
   { name: 'namespaces', kind: 'Namespace', group: 'core', namespaced: false },
   { name: 'persistentvolumes', kind: 'PersistentVolume', group: 'core', namespaced: false },
 ]
-
-export const NON_LISTABLE = new Set([
-  'bindings', 'localsubjectaccessreviews', 'selfsubjectaccessreviews',
-  'selfsubjectrulesreviews', 'subjectaccessreviews', 'tokenreviews',
-  'localresourceaccessreviews', 'resourceaccessreviews',
-  'tokenrequests', 'selfsubjectreviews',
-])
 
 const GROUPS = ['core', 'apps', 'batch', 'networking.k8s.io']
 
