@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, Th, NoneText } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -470,7 +470,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               />
             ))}
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       {/* Tolerations */}
@@ -479,7 +479,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title="Tolerations">
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[500px]">
-              <thead className="text-slate-400"><tr><th className="text-left py-1 w-[25%]">Key</th><th className="text-left py-1 w-[20%]">Operator</th><th className="text-left py-1 w-[20%]">Value</th><th className="text-left py-1 w-[20%]">Effect</th><th className="text-left py-1 w-[15%]">Seconds</th></tr></thead>
+              <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[25%]">Key</Th><Th className="text-left py-1 w-[20%]">Operator</Th><Th className="text-left py-1 w-[20%]">Value</Th><Th className="text-left py-1 w-[20%]">Effect</Th><Th className="text-left py-1 w-[15%]">Seconds</Th></tr></thead>
               <tbody className="divide-y divide-slate-800">
                 {(((podDescribe?.tolerations as any[]) ?? (spec.tolerations as any[])) as any[]).map((tol: any, i: number) => (
                   <tr key={i} className="text-slate-200">
@@ -881,10 +881,10 @@ function PodImagePullHistory({ events }: { events: any[] }) {
         <table className="w-full text-xs table-fixed min-w-[560px]">
           <thead className="text-slate-400">
             <tr>
-              <th className="text-left py-1 w-[14%]">Reason</th>
-              <th className="text-left py-1 w-[16%]">When</th>
-              <th className="text-left py-1 w-[10%]">Count</th>
-              <th className="text-left py-1 w-[60%]">Message</th>
+              <Th className="text-left py-1 w-[14%]">Reason</Th>
+              <Th className="text-left py-1 w-[16%]">When</Th>
+              <Th className="text-left py-1 w-[10%]">Count</Th>
+              <Th className="text-left py-1 w-[60%]">Message</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">

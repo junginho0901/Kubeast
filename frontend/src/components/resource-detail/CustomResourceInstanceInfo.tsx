@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { JSONPath } from 'jsonpath-plus'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -307,10 +307,10 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Manager</th>
-                  <th className="text-left py-1">Operation</th>
-                  <th className="text-left py-1">Subresource</th>
-                  <th className="text-left py-1">Time</th>
+                  <Th className="text-left py-1">Manager</Th>
+                  <Th className="text-left py-1">Operation</Th>
+                  <Th className="text-left py-1">Subresource</Th>
+                  <Th className="text-left py-1">Time</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -344,9 +344,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
               <table className="w-full text-xs">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1">Namespace</th>
-                    <th className="text-left py-1">Name</th>
-                    <th className="text-left py-1">Age</th>
+                    <Th className="text-left py-1">Namespace</Th>
+                    <Th className="text-left py-1">Name</Th>
+                    <Th className="text-left py-1">Age</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">

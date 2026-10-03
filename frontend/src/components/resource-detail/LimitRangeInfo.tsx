@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -86,11 +86,11 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
                   <table className="w-full text-xs table-fixed min-w-[480px]">
                     <thead className="text-slate-400">
                       <tr>
-                        <th className="text-left py-1 w-[20%]">Resource</th>
-                        <th className="text-left py-1 w-[20%]">Min</th>
-                        <th className="text-left py-1 w-[20%]">Max</th>
-                        <th className="text-left py-1 w-[20%]">Default</th>
-                        <th className="text-left py-1 w-[20%]">Default Request</th>
+                        <Th className="text-left py-1 w-[20%]">Resource</Th>
+                        <Th className="text-left py-1 w-[20%]">Min</Th>
+                        <Th className="text-left py-1 w-[20%]">Max</Th>
+                        <Th className="text-left py-1 w-[20%]">Default</Th>
+                        <Th className="text-left py-1 w-[20%]">Default Request</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
@@ -109,7 +109,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
               </div>
             ))}
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       <InfoSection title={`Violating Pods (${violationList.length})`}>
@@ -120,11 +120,11 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Pod</th>
-                  <th className="text-left py-1">Container</th>
-                  <th className="text-left py-1">Field</th>
-                  <th className="text-left py-1">Actual</th>
-                  <th className="text-left py-1">Limit</th>
+                  <Th className="text-left py-1">Pod</Th>
+                  <Th className="text-left py-1">Container</Th>
+                  <Th className="text-left py-1">Field</Th>
+                  <Th className="text-left py-1">Actual</Th>
+                  <Th className="text-left py-1">Limit</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

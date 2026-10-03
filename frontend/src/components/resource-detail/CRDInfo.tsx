@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -184,9 +184,9 @@ export default function CRDInfo({ name, rawJson }: Props) {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="text-slate-500">
-                            <th className="text-left py-1 pr-3">Name</th>
-                            <th className="text-left py-1 pr-3">Type</th>
-                            <th className="text-left py-1">JSON Path</th>
+                            <Th className="text-left py-1 pr-3">Name</Th>
+                            <Th className="text-left py-1 pr-3">Type</Th>
+                            <Th className="text-left py-1">JSON Path</Th>
                           </tr>
                         </thead>
                         <tbody>
@@ -248,9 +248,9 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-slate-500">
-                      <th className="text-left py-1.5 pr-3">Name</th>
-                      <th className="text-left py-1.5 pr-3">Namespace</th>
-                      <th className="text-left py-1.5">Age</th>
+                      <Th className="text-left py-1.5 pr-3">Name</Th>
+                      <Th className="text-left py-1.5 pr-3">Namespace</Th>
+                      <Th className="text-left py-1.5">Age</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">

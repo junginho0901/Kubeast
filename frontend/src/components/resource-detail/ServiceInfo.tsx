@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -252,12 +252,12 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
               <table className="w-full text-xs table-fixed min-w-[720px]">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-2 w-[18%]">Name</th>
-                    <th className="text-left py-2 w-[14%]">Protocol</th>
-                    <th className="text-left py-2 w-[14%]">Port</th>
-                    <th className="text-left py-2 w-[20%]">TargetPort</th>
-                    <th className="text-left py-2 w-[14%]">NodePort</th>
-                    <th className="text-left py-2 w-[20%]">AppProtocol</th>
+                    <Th className="text-left py-2 w-[18%]">Name</Th>
+                    <Th className="text-left py-2 w-[14%]">Protocol</Th>
+                    <Th className="text-left py-2 w-[14%]">Port</Th>
+                    <Th className="text-left py-2 w-[20%]">TargetPort</Th>
+                    <Th className="text-left py-2 w-[14%]">NodePort</Th>
+                    <Th className="text-left py-2 w-[20%]">AppProtocol</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
@@ -296,11 +296,11 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[680px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[28%]">Name</th>
-                  <th className="text-left py-2 w-[18%]">Address Type</th>
-                  <th className="text-left py-2 w-[14%]">Ready</th>
-                  <th className="text-left py-2 w-[14%]">Total</th>
-                  <th className="text-left py-2 w-[26%]">Ports</th>
+                  <Th className="text-left py-2 w-[28%]">Name</Th>
+                  <Th className="text-left py-2 w-[18%]">Address Type</Th>
+                  <Th className="text-left py-2 w-[14%]">Ready</Th>
+                  <Th className="text-left py-2 w-[14%]">Total</Th>
+                  <Th className="text-left py-2 w-[26%]">Ports</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -339,12 +339,12 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
               <table className="w-full text-xs">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1">Pod</th>
-                    <th className="text-left py-1">Status</th>
-                    <th className="text-left py-1">Ready</th>
-                    <th className="text-left py-1">Restarts</th>
-                    <th className="text-left py-1">Node</th>
-                    <th className="text-left py-1">Age</th>
+                    <Th className="text-left py-1">Pod</Th>
+                    <Th className="text-left py-1">Status</Th>
+                    <Th className="text-left py-1">Ready</Th>
+                    <Th className="text-left py-1">Restarts</Th>
+                    <Th className="text-left py-1">Node</Th>
+                    <Th className="text-left py-1">Age</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">

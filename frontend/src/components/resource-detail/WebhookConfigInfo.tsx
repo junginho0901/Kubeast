@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -245,11 +245,11 @@ function WebhookRulesTable({ rules }: { rules?: any[] }) {
         <table className="w-full text-xs border border-slate-700 rounded">
           <thead>
             <tr className="bg-slate-800/60 text-slate-400">
-              <th className="text-left px-2 py-1.5">API Groups</th>
-              <th className="text-left px-2 py-1.5">API Versions</th>
-              <th className="text-left px-2 py-1.5">Operations</th>
-              <th className="text-left px-2 py-1.5">Resources</th>
-              <th className="text-left px-2 py-1.5">Scope</th>
+              <Th className="text-left px-2 py-1.5">API Groups</Th>
+              <Th className="text-left px-2 py-1.5">API Versions</Th>
+              <Th className="text-left px-2 py-1.5">Operations</Th>
+              <Th className="text-left px-2 py-1.5">Resources</Th>
+              <Th className="text-left px-2 py-1.5">Scope</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">

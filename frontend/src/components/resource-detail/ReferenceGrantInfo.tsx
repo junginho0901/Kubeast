@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -102,9 +102,9 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[30%]">Group</th>
-                  <th className="text-left py-1 w-[30%]">Kind</th>
-                  <th className="text-left py-1 w-[40%]">Namespace</th>
+                  <Th className="text-left py-1 w-[30%]">Group</Th>
+                  <Th className="text-left py-1 w-[30%]">Kind</Th>
+                  <Th className="text-left py-1 w-[40%]">Namespace</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -129,9 +129,9 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[30%]">Group</th>
-                  <th className="text-left py-1 w-[30%]">Kind</th>
-                  <th className="text-left py-1 w-[40%]">Name</th>
+                  <Th className="text-left py-1 w-[30%]">Group</Th>
+                  <Th className="text-left py-1 w-[30%]">Kind</Th>
+                  <Th className="text-left py-1 w-[40%]">Name</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

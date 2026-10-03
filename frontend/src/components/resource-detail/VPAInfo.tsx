@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -112,11 +112,11 @@ export default function VPAInfo({ name, namespace }: Props) {
             <table className="w-full text-xs table-fixed min-w-[600px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[20%]">Container</th>
-                  <th className="text-left py-2 w-[15%]">Mode</th>
-                  <th className="text-left py-2 w-[20%]">Controlled</th>
-                  <th className="text-left py-2 w-[22%]">Min Allowed</th>
-                  <th className="text-left py-2 w-[23%]">Max Allowed</th>
+                  <Th className="text-left py-2 w-[20%]">Container</Th>
+                  <Th className="text-left py-2 w-[15%]">Mode</Th>
+                  <Th className="text-left py-2 w-[20%]">Controlled</Th>
+                  <Th className="text-left py-2 w-[22%]">Min Allowed</Th>
+                  <Th className="text-left py-2 w-[23%]">Max Allowed</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -148,11 +148,11 @@ export default function VPAInfo({ name, namespace }: Props) {
             <table className="w-full text-xs table-fixed min-w-[700px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[18%]">Container</th>
-                  <th className="text-left py-2 w-[18%]">Lower Bound</th>
-                  <th className="text-left py-2 w-[18%]">Target</th>
-                  <th className="text-left py-2 w-[18%]">Upper Bound</th>
-                  <th className="text-left py-2 w-[28%]">Uncapped Target</th>
+                  <Th className="text-left py-2 w-[18%]">Container</Th>
+                  <Th className="text-left py-2 w-[18%]">Lower Bound</Th>
+                  <Th className="text-left py-2 w-[18%]">Target</Th>
+                  <Th className="text-left py-2 w-[18%]">Upper Bound</Th>
+                  <Th className="text-left py-2 w-[28%]">Uncapped Target</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

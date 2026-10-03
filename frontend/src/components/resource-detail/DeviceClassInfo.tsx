@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -115,7 +115,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[300px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-full">Expression</th>
+                  <Th className="text-left py-1 w-full">Expression</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -136,9 +136,9 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[35%]">Key</th>
-                  <th className="text-left py-1 w-[20%]">Operator</th>
-                  <th className="text-left py-1 w-[45%]">Values</th>
+                  <Th className="text-left py-1 w-[35%]">Key</Th>
+                  <Th className="text-left py-1 w-[20%]">Operator</Th>
+                  <Th className="text-left py-1 w-[45%]">Values</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -180,8 +180,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Namespace</th>
-                  <th className="text-left py-1">ResourceClaim</th>
+                  <Th className="text-left py-1">Namespace</Th>
+                  <Th className="text-left py-1">ResourceClaim</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

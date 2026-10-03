@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, Th, NoneText } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -314,9 +314,9 @@ export default function NamespaceInfo({ name }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Resource</th>
-                  <th className="text-left py-1">Requests</th>
-                  <th className="text-left py-1">Limits</th>
+                  <Th className="text-left py-1">Resource</Th>
+                  <Th className="text-left py-1">Requests</Th>
+                  <Th className="text-left py-1">Limits</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -360,7 +360,7 @@ export default function NamespaceInfo({ name }: Props) {
                 <p className="text-xs text-white font-medium mb-2">{rq.name}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[360px]">
-                    <thead className="text-slate-400"><tr><th className="text-left py-1 w-[40%]">Resource</th><th className="text-left py-1 w-[30%]">Used</th><th className="text-left py-1 w-[30%]">Hard</th></tr></thead>
+                    <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[40%]">Resource</Th><Th className="text-left py-1 w-[30%]">Used</Th><Th className="text-left py-1 w-[30%]">Hard</Th></tr></thead>
                     <tbody className="divide-y divide-slate-800">
                       {Object.keys({ ...rq.status_hard, ...rq.spec_hard }).map(res => (
                         <tr key={res} className="text-slate-200">
@@ -375,7 +375,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       {/* Limit Ranges */}
@@ -389,7 +389,7 @@ export default function NamespaceInfo({ name }: Props) {
                   <div key={li} className="overflow-x-auto mb-2">
                     <p className="text-[11px] text-slate-400 mb-1">Type: {lim.type || '-'}</p>
                     <table className="w-full text-xs table-fixed min-w-[480px]">
-                      <thead className="text-slate-400"><tr><th className="text-left py-1 w-[20%]">Resource</th><th className="text-left py-1 w-[20%]">Min</th><th className="text-left py-1 w-[20%]">Max</th><th className="text-left py-1 w-[20%]">Default</th><th className="text-left py-1 w-[20%]">Default Req</th></tr></thead>
+                      <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[20%]">Resource</Th><Th className="text-left py-1 w-[20%]">Min</Th><Th className="text-left py-1 w-[20%]">Max</Th><Th className="text-left py-1 w-[20%]">Default</Th><Th className="text-left py-1 w-[20%]">Default Req</Th></tr></thead>
                       <tbody className="divide-y divide-slate-800">
                         {Object.keys({ ...lim.min, ...lim.max, ...lim.default, ...lim.default_request }).map(res => (
                           <tr key={res} className="text-slate-200">
@@ -407,7 +407,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       {/* Pods */}
@@ -430,7 +430,7 @@ export default function NamespaceInfo({ name }: Props) {
           <div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs table-fixed min-w-[620px]">
-                <thead className="text-slate-400"><tr><th className="text-left py-2 w-[30%]">Name</th><th className="text-left py-2 w-[12%]">Status</th><th className="text-left py-2 w-[10%]">Ready</th><th className="text-left py-2 w-[10%]">Restarts</th><th className="text-left py-2 w-[23%]">Node</th><th className="text-left py-2 w-[15%]">Age</th></tr></thead>
+                <thead className="text-slate-400"><tr><Th className="text-left py-2 w-[30%]">Name</Th><Th className="text-left py-2 w-[12%]">Status</Th><Th className="text-left py-2 w-[10%]">Ready</Th><Th className="text-left py-2 w-[10%]">Restarts</Th><Th className="text-left py-2 w-[23%]">Node</Th><Th className="text-left py-2 w-[15%]">Age</Th></tr></thead>
                 <tbody className="divide-y divide-slate-800">
                   {pagedPods.map((pod: any) => (
                     <tr key={pod.name} className="text-slate-200">
@@ -444,7 +444,7 @@ export default function NamespaceInfo({ name }: Props) {
                   ))}
                   {pagedPods.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-3 text-slate-400">(none)</td>
+                      <td colSpan={6} className="py-3 text-slate-400"><NoneText className="" /></td>
                     </tr>
                   )}
                 </tbody>
@@ -453,7 +453,7 @@ export default function NamespaceInfo({ name }: Props) {
             <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
               <span>
                 {filteredPods.length === 0
-                  ? '(none)'
+                  ? tr('detail.(none)', '(none)')
                   : `${(podPage - 1) * podPageSize + 1}-${Math.min(podPage * podPageSize, filteredPods.length)} / ${filteredPods.length}`}
               </span>
               <div className="flex gap-2">
@@ -474,7 +474,7 @@ export default function NamespaceInfo({ name }: Props) {
               </div>
             </div>
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       {/* Events */}

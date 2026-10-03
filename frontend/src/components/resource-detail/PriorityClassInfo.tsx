@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -113,11 +113,11 @@ export default function PriorityClassInfo({ name }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Namespace</th>
-                  <th className="text-left py-1">Pod</th>
-                  <th className="text-left py-1">Status</th>
-                  <th className="text-left py-1">Node</th>
-                  <th className="text-left py-1">Age</th>
+                  <Th className="text-left py-1">Namespace</Th>
+                  <Th className="text-left py-1">Pod</Th>
+                  <Th className="text-left py-1">Status</Th>
+                  <Th className="text-left py-1">Node</Th>
+                  <Th className="text-left py-1">Age</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

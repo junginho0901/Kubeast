@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -118,8 +118,8 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[25%]">Name</th>
-                  <th className="text-left py-1 w-[75%]">Attributes</th>
+                  <Th className="text-left py-1 w-[25%]">Name</Th>
+                  <Th className="text-left py-1 w-[75%]">Attributes</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -173,10 +173,10 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">ResourceClaim</th>
-                  <th className="text-left py-1">Device</th>
-                  <th className="text-left py-1">Driver</th>
-                  <th className="text-left py-1">Request</th>
+                  <Th className="text-left py-1">ResourceClaim</Th>
+                  <Th className="text-left py-1">Device</Th>
+                  <Th className="text-left py-1">Driver</Th>
+                  <Th className="text-left py-1">Request</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

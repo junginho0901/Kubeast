@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -89,16 +89,16 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
       {/* Resource Usage */}
       <InfoSection title="Resource Usage">
         {resourceKeys.length === 0 ? (
-          <span className="text-slate-400 text-xs">(none)</span>
+          <NoneText />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[480px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[35%]">Resource</th>
-                  <th className="text-left py-2 w-[20%]">Used</th>
-                  <th className="text-left py-2 w-[20%]">Hard</th>
-                  <th className="text-left py-2 w-[25%]">Usage %</th>
+                  <Th className="text-left py-2 w-[35%]">Resource</Th>
+                  <Th className="text-left py-2 w-[20%]">Used</Th>
+                  <Th className="text-left py-2 w-[20%]">Hard</Th>
+                  <Th className="text-left py-2 w-[25%]">Usage %</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

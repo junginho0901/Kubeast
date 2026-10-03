@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -88,11 +88,11 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
             <table className="w-full text-xs table-fixed min-w-[500px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[20%]">Name</th>
-                  <th className="text-left py-1 w-[20%]">Device Class</th>
-                  <th className="text-left py-1 w-[30%]">Selectors</th>
-                  <th className="text-left py-1 w-[10%]">Count</th>
-                  <th className="text-left py-1 w-[20%]">Allocation Mode</th>
+                  <Th className="text-left py-1 w-[20%]">Name</Th>
+                  <Th className="text-left py-1 w-[20%]">Device Class</Th>
+                  <Th className="text-left py-1 w-[30%]">Selectors</Th>
+                  <Th className="text-left py-1 w-[10%]">Count</Th>
+                  <Th className="text-left py-1 w-[20%]">Allocation Mode</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -124,8 +124,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
             <table className="w-full text-xs table-fixed min-w-[300px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[30%]">Requests</th>
-                  <th className="text-left py-1 w-[70%]">Match Attribute</th>
+                  <Th className="text-left py-1 w-[30%]">Requests</Th>
+                  <Th className="text-left py-1 w-[70%]">Match Attribute</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
