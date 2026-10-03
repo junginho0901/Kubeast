@@ -1,6 +1,7 @@
 import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
+import { backendPort, backendService } from '@/utils/ingressBackend'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 
@@ -106,8 +107,8 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
                           <td className="py-1 pr-2 font-mono">{path.path || '/'}</td>
                           <td className="py-1 pr-2">{path.pathType || 'Prefix'}</td>
                           <td className="py-1 pr-2">
-                            {path.backend?.service?.name ? (
-                              <><ResourceLink kind="Service" name={path.backend.service.name} namespace={namespace} />:{path.backend.service.port?.number || path.backend.service.port?.name || ''}</>
+                            {backendService(path.backend) ? (
+                              <><ResourceLink kind="Service" name={backendService(path.backend)!} namespace={namespace} />:{backendPort(path.backend)}</>
                             ) : '-'}
                           </td>
                         </tr>

@@ -398,7 +398,9 @@ export default function Resources() {
       )}
 
       {/* HPA */}
-      <HPATab filteredHPAs={filteredHPAs} hpasError={hpasError} />
+      {activeTab === 'hpas' && (
+        <HPATab filteredHPAs={filteredHPAs} hpasError={hpasError} />
+      )}
 
       {/* PDB */}
       {activeTab === 'pdbs' && (

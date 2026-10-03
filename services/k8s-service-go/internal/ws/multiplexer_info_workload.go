@@ -258,6 +258,7 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"available_replicas": availableReplicas,
 		"image":              image,
 		"images":             images,
+		"containers":         containerNamesFromTemplate(spec),
 		"selector":           selector,
 		"owner_deployment":   owner,
 		"status":             rsStatus,
@@ -355,6 +356,7 @@ func jobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"status":      jobStatus,
 		"image":       image,
 		"images":      images,
+		"containers":  containerNamesFromTemplate(spec),
 		"created_at":  metadata["creationTimestamp"],
 	}
 	if len(ownerRefs) > 0 {
@@ -414,10 +416,12 @@ func cronjobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 	// images — spec.jobTemplate.spec.template.spec.containers
 	images := []string{}
+	containers := []string{}
 	if spec != nil {
 		if jt, ok := spec["jobTemplate"].(map[string]interface{}); ok {
 			if jtSpec, ok := jt["spec"].(map[string]interface{}); ok {
 				images = containerImagesFromTemplate(jtSpec)
+				containers = containerNamesFromTemplate(jtSpec)
 			}
 		}
 	}
@@ -434,6 +438,7 @@ func cronjobToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"active":             activeCount,
 		"image":              image,
 		"images":             images,
+		"containers":         containers,
 		"concurrency_policy": concurrencyPolicy,
 		"created_at":         metadata["creationTimestamp"],
 	}

@@ -58,7 +58,11 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     const parts: string[] = []
     if (peer.ipBlock) parts.push(`CIDR: ${peer.ipBlock.cidr}${peer.ipBlock.except ? ` (except ${peer.ipBlock.except.join(', ')})` : ''}`)
     if (peer.namespaceSelector?.matchLabels) parts.push(`ns: ${Object.entries(peer.namespaceSelector.matchLabels).map(([k, v]) => `${k}=${v}`).join(',')}`)
-    if (peer.podSelector?.matchLabels) parts.push(`pod: ${Object.entries(peer.podSelector.matchLabels).map(([k, v]) => `${k}=${v}`).join(',')}`)
+    if (peer.podSelector) {
+      const labels = Object.entries(peer.podSelector.matchLabels || {}).map(([k, v]) => `${k}=${v}`).join(',')
+      // an empty podSelector selects every pod in the namespace
+      parts.push(`pod: ${labels || '*'}`)
+    }
     return parts.join(' | ') || '*'
   }
 

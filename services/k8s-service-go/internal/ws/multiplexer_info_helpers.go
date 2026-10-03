@@ -55,6 +55,37 @@ func containerImagesFromTemplate(spec map[string]interface{}) []string {
 	return containerImages(spec)
 }
 
+// containerNamesFromTemplate — spec.template.spec.containers[].name (list rows
+// carry `containers` next to `images`).
+func containerNamesFromTemplate(spec map[string]interface{}) []string {
+	names := []string{}
+	if spec == nil {
+		return names
+	}
+	tmpl, ok := spec["template"].(map[string]interface{})
+	if !ok {
+		return names
+	}
+	podSpec, ok := tmpl["spec"].(map[string]interface{})
+	if !ok {
+		return names
+	}
+	containers, ok := podSpec["containers"].([]interface{})
+	if !ok {
+		return names
+	}
+	for _, c := range containers {
+		cm, _ := c.(map[string]interface{})
+		if cm == nil {
+			continue
+		}
+		if name, ok := cm["name"].(string); ok {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // selectorMatchLabels — spec.selector.matchLabels 추출, 없으면 빈 map.
 func selectorMatchLabels(spec map[string]interface{}) interface{} {
 	if spec == nil {

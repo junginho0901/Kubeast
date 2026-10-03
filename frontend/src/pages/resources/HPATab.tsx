@@ -4,17 +4,20 @@
 // metricsMissing / desiredBelowMin / scalingLimited 등 미세 분기 많아 가장
 // 복잡한 카드. 부모는 filteredHPAs + hpasError 만 prop 으로 전달.
 
+import { useTranslation } from 'react-i18next'
+
 interface Props {
   filteredHPAs: any[]
   hpasError: unknown
 }
 
 export function HPATab({ filteredHPAs, hpasError }: Props) {
+  const { t, i18n } = useTranslation()
   return (
     <div className="space-y-4">
         {!!hpasError && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
-            HPA 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
+            {t('resourcesTabs.fetchFailed', { kind: 'HPA' })}
           </div>
         )}
         {filteredHPAs.map((hpa: any) => {
@@ -117,13 +120,13 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
       
               {!isHealthy && metricsMissing && (
                 <div className="mt-3 text-xs text-yellow-200 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                  Desired 계산 불가: metrics-server/metrics API에서 메트릭을 받지 못했습니다.
+                  {t('resourcesTabs.hpa.metricsMissing')}
                 </div>
               )}
-      
+
               {!isHealthy && !metricsMissing && desiredBelowMin && (
                 <div className="mt-3 text-xs text-yellow-200 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                  Desired({desired})가 minReplicas({min})보다 작습니다. 조건/메트릭을 확인하세요.
+                  {t('resourcesTabs.hpa.desiredBelowMin', { desired, min })}
                 </div>
               )}
       
@@ -143,7 +146,7 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
               <div className="mt-4">
                 <p className="text-xs text-slate-400 mb-2">Conditions</p>
                 {shownConditions.length === 0 ? (
-                  <div className="text-sm text-slate-500">(없음)</div>
+                  <div className="text-sm text-slate-500">{t('resourcesTabs.none')}</div>
                 ) : (
                   <div className="space-y-2">
                     {shownConditions.map((c, idx) => {
@@ -167,7 +170,7 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
                             </div>
                             {c?.last_transition_time && (
                               <div className="text-[11px] text-slate-500 whitespace-nowrap">
-                                {new Date(c.last_transition_time).toLocaleString('ko-KR')}
+                                {new Date(c.last_transition_time).toLocaleString(i18n.language)}
                               </div>
                             )}
                           </div>
@@ -182,14 +185,14 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
               </div>
       
               {hpa.last_scale_time && (
-                <p className="mt-3 text-xs text-slate-500">LastScale: {new Date(hpa.last_scale_time).toLocaleString('ko-KR')}</p>
+                <p className="mt-3 text-xs text-slate-500">LastScale: {new Date(hpa.last_scale_time).toLocaleString(i18n.language)}</p>
               )}
             </div>
           )
         })}
         {filteredHPAs.length === 0 && (
           <div className="card">
-            <div className="text-slate-400">(없음)</div>
+            <div className="text-slate-400">{t('resourcesTabs.none')}</div>
           </div>
         )}
     </div>

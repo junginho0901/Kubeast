@@ -61,6 +61,10 @@ func objectToInfo(resource string, obj *unstructured.Unstructured) map[string]in
 		return hpaToInfo(obj)
 	case "verticalpodautoscalers":
 		return vpaToInfo(obj)
+	case "endpoints":
+		return endpointsToInfo(obj)
+	case "endpointslices":
+		return endpointSliceToInfo(obj)
 	default:
 		// Generic: return metadata + spec summary
 		return genericToInfo(obj)

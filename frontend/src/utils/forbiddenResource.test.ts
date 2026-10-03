@@ -4,7 +4,9 @@ import { forbiddenResourceFromUrl, joinResources } from './forbiddenResource'
 describe('forbiddenResourceFromUrl', () => {
   it('names the kind for cluster-scoped and namespaced list paths', () => {
     expect(forbiddenResourceFromUrl('/cluster/roles/all?cluster=self')).toBe('roles')
-    expect(forbiddenResourceFromUrl('/cluster/namespaces/web/rolebindings')).toBe('rolebindings')
+    expect(forbiddenResourceFromUrl('/cluster/namespaces/web/rolebindings')).toBe('role bindings')
+    expect(forbiddenResourceFromUrl('/cluster/vpas/all')).toBe('vertical pod autoscalers')
+    expect(forbiddenResourceFromUrl('/cluster/ingressclasses')).toBe('ingress classes')
     expect(forbiddenResourceFromUrl('/cluster/namespaces/web/secrets/db/describe')).toBe('secrets')
     expect(forbiddenResourceFromUrl('/cluster/namespaces')).toBe('namespaces')
     expect(forbiddenResourceFromUrl('http://localhost:30080/api/v1/cluster/leases/all')).toBe('leases')

@@ -35,7 +35,6 @@ interface Args {
 
 export async function exportToolCallsAsZip({ message, sessionId, t: _t, getCurrentMessages }: Args) {
   if (!message.toolCalls || message.toolCalls.length === 0) {
-    console.warn('[DEBUG] No toolCalls available for download')
     return
   }
 

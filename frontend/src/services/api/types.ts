@@ -746,6 +746,8 @@ export interface JobInfo {
   images?: string[]
   start_time?: string | null
   completion_time?: string | null
+  // list rows carry a Go duration string ("3s", "1m30s"); the describe view carries seconds
+  duration?: string | null
   duration_seconds?: number | null
   created_at?: string | null
   owner_references?: Array<{
@@ -1174,6 +1176,9 @@ export interface ResourceGraphResponse {
 }
 
 export interface TopResources {
+  // set by k8s-service when the metrics API call failed (e.g. no metrics-server)
+  pod_metrics_error?: string
+  node_metrics_error?: string
   top_pods: Array<{
     namespace: string
     name: string

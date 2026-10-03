@@ -358,7 +358,7 @@ spec:
 
       {podStats.topReasons.length > 0 && (
         <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3 shrink-0">
-          <div className="text-xs text-slate-400 mb-2">Top status reasons</div>
+          <div className="text-xs text-slate-400 mb-2">{tr('pods.topStatusReasons', 'Top status reasons')}</div>
           <div className="flex flex-wrap gap-2">
             {podStats.topReasons.map(([reason, count]) => (
               <span key={reason} className="badge badge-info font-mono">

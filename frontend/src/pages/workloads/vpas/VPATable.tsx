@@ -148,9 +148,13 @@ export function VPATable({
                 <td className="py-3 px-4 text-xs font-mono">{v.cpu_target || '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{v.memory_target || '-'}</td>
                 <td className="py-3 px-4">
-                  <span className={`badge ${v.provided === 'True' ? 'badge-success' : 'badge-warning'}`}>
-                    {v.provided || '-'}
-                  </span>
+                  {v.provided ? (
+                    <span className={`badge ${v.provided === 'True' ? 'badge-success' : 'badge-warning'}`}>
+                      {v.provided}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-mono text-slate-500">-</span>
+                  )}
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">{formatAge(v.created_at)}</td>
               </tr>

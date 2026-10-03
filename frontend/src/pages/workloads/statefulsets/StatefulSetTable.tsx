@@ -147,7 +147,7 @@ export function StatefulSetTable({
         <span>
           {filteredLength === 0
             ? tr('statefulsets.paging.empty', '0 items')
-            : tr('statefulsets.paging.range', '{{from}}-{{to}} / {{total}}', {
+            : tr('statefulsets.paging.range', 'Showing {{from}}-{{to}} of {{total}}', {
                 from: (currentPage - 1) * pageSize + 1,
                 to: Math.min(currentPage * pageSize, filteredLength),
                 total: filteredLength,
@@ -159,7 +159,7 @@ export function StatefulSetTable({
             disabled={currentPage <= 1}
             className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
           >
-            {tr('statefulsets.paging.prev', 'Prev')}
+            {tr('statefulsets.paging.prev', 'Previous')}
           </button>
           <span>{currentPage} / {totalPages}</span>
           <button

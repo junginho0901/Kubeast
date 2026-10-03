@@ -6,6 +6,7 @@
 // "Pods 로 이동" 버튼은 부모의 setter 3개 (setPodLabelSelector / setSearchQuery /
 // setActiveTab) 를 호출 — Resources 페이지 안에서만 의미 있어 prop 으로 받는다.
 
+import { useTranslation } from 'react-i18next'
 import type { ResourceType } from './types'
 
 import { isPodReady, podMatchesSelector, selectorToString } from './podHelpers'
@@ -27,11 +28,12 @@ export function PDBTab({
   setSearchQuery,
   setActiveTab,
 }: Props) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-4">
       {!!pdbsError && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
-          PDB 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)
+          {t('resourcesTabs.fetchFailed', { kind: 'PDB' })}
         </div>
       )}
       {filteredPDBs.map((pdb: any) => (
@@ -59,7 +61,7 @@ export function PDBTab({
                   .join(' · ')
 
                 if (Object.keys(selectorObj).length === 0) {
-                  return <p className="text-xs text-slate-500 mt-1">selector가 없어 매칭 Pod를 계산할 수 없습니다.</p>
+                  return <p className="text-xs text-slate-500 mt-1">{t('resourcesTabs.pdb.noSelector')}</p>
                 }
 
                 return (
@@ -76,19 +78,19 @@ export function PDBTab({
                 const allowed = Number(pdb.disruptions_allowed || 0)
 
                 if (expected === 0) {
-                  return <p className="text-xs text-slate-400 mt-2">매칭 Pod가 없어 PDB가 적용되지 않습니다.</p>
+                  return <p className="text-xs text-slate-400 mt-2">{t('resourcesTabs.pdb.noMatchingPods')}</p>
                 }
                 if (allowed > 0) {
-                  return <p className="text-xs text-slate-400 mt-2">현재 {allowed}개까지 disruption(퇴거)이 허용됩니다.</p>
+                  return <p className="text-xs text-slate-400 mt-2">{t('resourcesTabs.pdb.allowed', { count: allowed })}</p>
                 }
                 if (currentHealthy < desiredHealthy) {
                   return (
                     <p className="text-xs text-yellow-200 mt-2">
-                      현재는 보호 불가: healthy({currentHealthy})가 desiredHealthy({desiredHealthy}) 미만이라 disruptionsAllowed=0 입니다.
+                      {t('resourcesTabs.pdb.notProtectedBelow', { healthy: currentHealthy, desired: desiredHealthy })}
                     </p>
                   )
                 }
-                return <p className="text-xs text-yellow-200 mt-2">현재는 보호 불가: disruptionsAllowed=0 입니다.</p>
+                return <p className="text-xs text-yellow-200 mt-2">{t('resourcesTabs.pdb.notProtected')}</p>
               })()}
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -105,9 +107,9 @@ export function PDBTab({
                 }}
                 disabled={!pdb.selector || Object.keys(pdb.selector).length === 0}
                 className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="PDB selector로 Pod 목록을 필터링합니다"
+                title={t('resourcesTabs.pdb.filterTitle')}
               >
-                Pods로 이동
+                {t('resourcesTabs.pdb.goToPods')}
               </button>
             </div>
           </div>
@@ -135,7 +137,7 @@ export function PDBTab({
       ))}
       {filteredPDBs.length === 0 && (
         <div className="card">
-          <div className="text-slate-400">(없음)</div>
+          <div className="text-slate-400">{t('resourcesTabs.none')}</div>
         </div>
       )}
     </div>

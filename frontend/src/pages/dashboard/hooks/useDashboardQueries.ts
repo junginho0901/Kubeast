@@ -164,6 +164,17 @@ export function useDashboardQueries({
                           (result.top_nodes && result.top_nodes.length > 0)
 
       if (!hasValidData) {
+        // The k8s-service answers 200 with empty lists and the metrics API
+        // error when the cluster has no metrics-server ("could not find the
+        // requested resource"). Surface that as the metrics-unavailable state
+        // (same shape as the 503 the other metrics endpoints raise) instead of
+        // a generic fetch failure.
+        const apiErr = `${result.pod_metrics_error || ''} ${result.node_metrics_error || ''}`
+        if (/could not find the requested resource/i.test(apiErr)) {
+          const unavailable: any = new Error('metrics server not available')
+          unavailable.response = { status: 503, data: { code: 'metrics_unavailable' } }
+          throw unavailable
+        }
         // 빈 데이터면 에러를 throw하여 React Query가 이전 데이터를 유지하도록
         // placeholderData가 이전 데이터를 반환하도록 함
         throw new Error('No valid metrics data available')

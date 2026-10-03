@@ -66,7 +66,6 @@ export function useChatHandlers({
     const snapshot = chatStreamManager.getState()
     if (!snapshot.sessionId || !snapshot.isStreaming) return
 
-    console.log('[DEBUG] Stop button clicked. sessionId=', snapshot.sessionId)
 
     // 중단된 세션은 현재 UI 상태를 유지하기 위해 DB 동기화를 잠시 막는다.
     setStoppedSessionId(snapshot.sessionId)
@@ -77,7 +76,6 @@ export function useChatHandlers({
     if (assistantContent) {
       try {
         // DB에 중단된 assistant 메시지만 저장 (user 메시지는 백엔드에서 이미 저장)
-        console.log('[DEBUG] Saving stopped assistant message to DB')
         const response = await fetch(`/api/v1/sessions/${snapshot.sessionId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -98,7 +96,6 @@ export function useChatHandlers({
         }
 
         if (response.ok) {
-          console.log('[DEBUG] Messages saved successfully')
           await queryClient.refetchQueries({ queryKey: ['session', snapshot.sessionId] })
           await queryClient.invalidateQueries({ queryKey: ['sessions'] })
         }
