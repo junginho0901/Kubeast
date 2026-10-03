@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -63,10 +63,10 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[25%]">Group</th>
-                  <th className="text-left py-1 w-[25%]">Kind</th>
-                  <th className="text-left py-1 w-[30%]">Name</th>
-                  <th className="text-left py-1 w-[20%]">Section</th>
+                  <Th className="text-left py-1 w-[25%]">Group</Th>
+                  <Th className="text-left py-1 w-[25%]">Kind</Th>
+                  <Th className="text-left py-1 w-[30%]">Name</Th>
+                  <Th className="text-left py-1 w-[20%]">Section</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -96,9 +96,9 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
                   <table className="w-full text-xs table-fixed min-w-[300px]">
                     <thead className="text-slate-400">
                       <tr>
-                        <th className="text-left py-1 w-[30%]">Group</th>
-                        <th className="text-left py-1 w-[30%]">Kind</th>
-                        <th className="text-left py-1 w-[40%]">Name</th>
+                        <Th className="text-left py-1 w-[30%]">Group</Th>
+                        <Th className="text-left py-1 w-[30%]">Kind</Th>
+                        <Th className="text-left py-1 w-[40%]">Name</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
@@ -132,10 +132,10 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
                   <table className="w-full text-xs table-fixed min-w-[400px]">
                     <thead className="text-slate-400">
                       <tr>
-                        <th className="text-left py-1 w-[25%]">Type</th>
-                        <th className="text-left py-1 w-[15%]">Status</th>
-                        <th className="text-left py-1 w-[25%]">Reason</th>
-                        <th className="text-left py-1 w-[35%]">Message</th>
+                        <Th className="text-left py-1 w-[25%]">Type</Th>
+                        <Th className="text-left py-1 w-[15%]">Status</Th>
+                        <Th className="text-left py-1 w-[25%]">Reason</Th>
+                        <Th className="text-left py-1 w-[35%]">Message</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">

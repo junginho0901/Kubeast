@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -104,11 +104,11 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[500px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[20%]">Name</th>
-                  <th className="text-left py-1 w-[20%]">Device Class</th>
-                  <th className="text-left py-1 w-[30%]">Selectors</th>
-                  <th className="text-left py-1 w-[10%]">Count</th>
-                  <th className="text-left py-1 w-[20%]">Allocation Mode</th>
+                  <Th className="text-left py-1 w-[20%]">Name</Th>
+                  <Th className="text-left py-1 w-[20%]">Device Class</Th>
+                  <Th className="text-left py-1 w-[30%]">Selectors</Th>
+                  <Th className="text-left py-1 w-[10%]">Count</Th>
+                  <Th className="text-left py-1 w-[20%]">Allocation Mode</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -140,10 +140,10 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[25%]">Request</th>
-                  <th className="text-left py-1 w-[25%]">Driver</th>
-                  <th className="text-left py-1 w-[25%]">Pool</th>
-                  <th className="text-left py-1 w-[25%]">Device</th>
+                  <Th className="text-left py-1 w-[25%]">Request</Th>
+                  <Th className="text-left py-1 w-[25%]">Driver</Th>
+                  <Th className="text-left py-1 w-[25%]">Pool</Th>
+                  <Th className="text-left py-1 w-[25%]">Device</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -167,9 +167,9 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
             <table className="w-full text-xs table-fixed min-w-[400px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1 w-[35%]">Name</th>
-                  <th className="text-left py-1 w-[25%]">Resource</th>
-                  <th className="text-left py-1 w-[40%]">API Group</th>
+                  <Th className="text-left py-1 w-[35%]">Name</Th>
+                  <Th className="text-left py-1 w-[25%]">Resource</Th>
+                  <Th className="text-left py-1 w-[40%]">API Group</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -194,9 +194,9 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Pod</th>
-                  <th className="text-left py-1">Status</th>
-                  <th className="text-left py-1">Node</th>
+                  <Th className="text-left py-1">Pod</Th>
+                  <Th className="text-left py-1">Status</Th>
+                  <Th className="text-left py-1">Node</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

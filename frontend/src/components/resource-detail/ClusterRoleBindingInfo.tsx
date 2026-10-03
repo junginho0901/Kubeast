@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, StatusBadge, KeyValueTags } from './DetailCommon'
+import { InfoSection, InfoRow, StatusBadge, KeyValueTags, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -138,10 +138,10 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
               <table className="w-full text-xs">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1">Namespace</th>
-                    <th className="text-left py-1">Pod</th>
-                    <th className="text-left py-1">SA</th>
-                    <th className="text-left py-1">Status</th>
+                    <Th className="text-left py-1">Namespace</Th>
+                    <Th className="text-left py-1">Pod</Th>
+                    <Th className="text-left py-1">SA</Th>
+                    <Th className="text-left py-1">Status</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">

@@ -1,13 +1,28 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, ThHTMLAttributes } from 'react'
 import { fmtRel } from './detailFormat'
+import { useDetailLabel } from './useDetailLabel'
 
 /* ── Shared UI primitives for resource detail views ── */
 
+// Table header whose string child goes through the detail label catalog
+// (see useDetailLabel: descriptive labels in Korean, Kubernetes names unchanged).
+export function Th({ children, ...rest }: ThHTMLAttributes<HTMLTableCellElement>) {
+  const dl = useDetailLabel()
+  return <th {...rest}>{typeof children === 'string' ? dl(children) : children}</th>
+}
+
+// "(none)" placeholder through the catalog ("(없음)" in Korean).
+export function NoneText({ className = 'text-slate-400 text-xs' }: { className?: string }) {
+  const dl = useDetailLabel()
+  return <span className={className}>{dl('(none)')}</span>
+}
+
 export function InfoSection({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
+  const dl = useDetailLabel()
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-slate-400">{title}</p>
+        <p className="text-xs text-slate-400">{dl(title)}</p>
         {actions}
       </div>
       {children}
@@ -16,9 +31,10 @@ export function InfoSection({ title, children, actions }: { title: string; child
 }
 
 export function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+  const dl = useDetailLabel()
   return (
     <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
-      <span className="text-slate-400 shrink-0">{label}</span>
+      <span className="text-slate-400 shrink-0">{dl(label)}</span>
       <span className="text-white font-medium break-all">{typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
   )
@@ -38,6 +54,7 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function SummaryBadge({ label, value, color }: { label: string; value: string | number; color?: 'green' | 'amber' | 'red' | 'default' }) {
+  const dl = useDetailLabel()
   const c = {
     green: 'border-emerald-500/60 text-emerald-300',
     amber: 'border-amber-500/60 text-amber-300',
@@ -46,14 +63,15 @@ export function SummaryBadge({ label, value, color }: { label: string; value: st
   }
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c[color || 'default']}`}>
-      {label}: {value}
+      {dl(label)}: {value}
     </span>
   )
 }
 
 export function KeyValueTags({ data, emptyText = '(none)' }: { data?: Record<string, string>; emptyText?: string }) {
+  const dl = useDetailLabel()
   const entries = data ? Object.entries(data) : []
-  if (entries.length === 0) return <span className="text-slate-400 text-xs">{emptyText}</span>
+  if (entries.length === 0) return <span className="text-slate-400 text-xs">{dl(emptyText)}</span>
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-200">
       {entries.map(([key, value]) => (
@@ -71,17 +89,18 @@ export function KeyValueTags({ data, emptyText = '(none)' }: { data?: Record<str
 }
 
 export function ConditionsTable({ conditions }: { conditions: any[] }) {
-  if (!conditions || conditions.length === 0) return <span className="text-slate-400 text-xs">(none)</span>
+  const dl = useDetailLabel()
+  if (!conditions || conditions.length === 0) return <span className="text-slate-400 text-xs">{dl('(none)')}</span>
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs table-fixed min-w-[700px]">
         <thead className="text-slate-400">
           <tr>
-            <th className="text-left py-2 w-[28%]">Type</th>
-            <th className="text-left py-2 w-[10%]">Status</th>
-            <th className="text-left py-2 w-[17%]">Reason</th>
-            <th className="text-left py-2 w-[30%]">Message</th>
-            <th className="text-left py-2 w-[15%]">Last Transition</th>
+            <Th className="text-left py-2 w-[28%]">Type</Th>
+            <Th className="text-left py-2 w-[10%]">Status</Th>
+            <Th className="text-left py-2 w-[17%]">Reason</Th>
+            <Th className="text-left py-2 w-[30%]">Message</Th>
+            <Th className="text-left py-2 w-[15%]">Last Transition</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
@@ -101,7 +120,8 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
 }
 
 export function EventsTable({ events }: { events: any[] }) {
-  if (!events || events.length === 0) return <span className="text-slate-400 text-xs">(none)</span>
+  const dl = useDetailLabel()
+  if (!events || events.length === 0) return <span className="text-slate-400 text-xs">{dl('(none)')}</span>
   const badge = (type?: string | null) => {
     const t = (type || '').toLowerCase()
     if (t.includes('warning')) return 'badge-warning'
@@ -113,11 +133,11 @@ export function EventsTable({ events }: { events: any[] }) {
       <table className="w-full text-xs table-fixed min-w-[620px]">
         <thead className="text-slate-400">
           <tr>
-            <th className="text-left py-2 w-[12%]">Type</th>
-            <th className="text-left py-2 w-[18%]">Reason</th>
-            <th className="text-left py-2 w-[44%]">Message</th>
-            <th className="text-left py-2 w-[14%]">Last Seen</th>
-            <th className="text-left py-2 w-[12%]">Count</th>
+            <Th className="text-left py-2 w-[12%]">Type</Th>
+            <Th className="text-left py-2 w-[18%]">Reason</Th>
+            <Th className="text-left py-2 w-[44%]">Message</Th>
+            <Th className="text-left py-2 w-[14%]">Last Seen</Th>
+            <Th className="text-left py-2 w-[12%]">Count</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
@@ -137,9 +157,10 @@ export function EventsTable({ events }: { events: any[] }) {
 }
 
 export function UsageCard({ label, value, percent, color }: { label: string; value: string; percent: number; color: string }) {
+  const dl = useDetailLabel()
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
-      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-xs text-slate-400">{dl(label)}</p>
       <p className="text-base text-white mt-1">{value}</p>
       <div className="mt-3 w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${Math.min(Math.max(percent, 0), 100)}%`, backgroundColor: color }} />

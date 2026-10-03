@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, SummaryBadge } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, SummaryBadge, Th, NoneText } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useNodeData } from './node-info/useNodeData'
@@ -107,9 +107,9 @@ export default function NodeInfo({ name }: Props) {
             <table className="w-full text-xs min-w-[540px] table-fixed">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[38%]">Resource</th>
-                  <th className="text-left py-2 w-[31%]">Allocatable</th>
-                  <th className="text-left py-2 w-[31%]">Capacity</th>
+                  <Th className="text-left py-2 w-[38%]">Resource</Th>
+                  <Th className="text-left py-2 w-[31%]">Allocatable</Th>
+                  <Th className="text-left py-2 w-[31%]">Capacity</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -123,7 +123,7 @@ export default function NodeInfo({ name }: Props) {
               </tbody>
             </table>
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       <NodeGpuInfo nodeDescribe={nodeDescribe} tr={tr} />
@@ -147,19 +147,19 @@ export default function NodeInfo({ name }: Props) {
               </div>
             ))}
           </div>
-        ) : <span className="text-slate-400 text-xs">(none)</span>}
+        ) : <NoneText />}
       </InfoSection>
 
       {/* Addresses & Taints */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoSection title={tr('nodes.detail.addresses', 'Addresses')}>
           <div className="text-xs text-slate-200 whitespace-pre-wrap break-all">
-            {nodeDescribe.addresses?.length > 0 ? nodeDescribe.addresses.map((a: any) => `${a.type}: ${a.address}`).join('\n') : '(none)'}
+            {nodeDescribe.addresses?.length > 0 ? nodeDescribe.addresses.map((a: any) => `${a.type}: ${a.address}`).join('\n') : tr('detail.(none)', '(none)')}
           </div>
         </InfoSection>
         <InfoSection title={tr('nodes.detail.taints', 'Taints')}>
           <div className="text-xs text-slate-200 whitespace-pre-wrap break-all">
-            {nodeDescribe.taints?.length > 0 ? nodeDescribe.taints.map((t: any) => `${t.key || ''}=${t.value || ''}:${t.effect || ''}`).join('\n') : '(none)'}
+            {nodeDescribe.taints?.length > 0 ? nodeDescribe.taints.map((t: any) => `${t.key || ''}=${t.value || ''}:${t.effect || ''}`).join('\n') : tr('detail.(none)', '(none)')}
           </div>
         </InfoSection>
       </div>
@@ -234,8 +234,8 @@ function NodeImages({ images }: { images: any }) {
         <table className="w-full text-xs table-fixed min-w-[400px]">
           <thead className="text-slate-400">
             <tr>
-              <th className="text-left py-1 w-[80%]">Name</th>
-              <th className="text-left py-1 w-[20%]">Size</th>
+              <Th className="text-left py-1 w-[80%]">Name</Th>
+              <Th className="text-left py-1 w-[20%]">Size</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
@@ -271,8 +271,8 @@ function NodeVolumes({ volumesAttached, volumesInUse }: { volumesAttached: any; 
               <table className="w-full text-xs table-fixed min-w-[400px]">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1 w-[60%]">Volume Name</th>
-                    <th className="text-left py-1 w-[40%]">Device Path</th>
+                    <Th className="text-left py-1 w-[60%]">Volume Name</Th>
+                    <Th className="text-left py-1 w-[40%]">Device Path</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">

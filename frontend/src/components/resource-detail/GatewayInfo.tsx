@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -133,14 +133,14 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title="Addresses">
         {addresses.length === 0 ? (
-          <p className="text-xs text-slate-400">(none)</p>
+          <p className="text-xs text-slate-400"><NoneText className="" /></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[560px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[25%]">Type</th>
-                  <th className="text-left py-2 w-[75%]">Value</th>
+                  <Th className="text-left py-2 w-[25%]">Type</Th>
+                  <Th className="text-left py-2 w-[75%]">Value</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -158,7 +158,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title="Listeners">
         {listeners.length === 0 ? (
-          <p className="text-xs text-slate-400">(none)</p>
+          <p className="text-xs text-slate-400"><NoneText className="" /></p>
         ) : (
           <div className="space-y-3">
             {listeners.map((listener, idx) => {

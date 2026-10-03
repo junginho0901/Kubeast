@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -141,10 +141,10 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
               <table className="w-full text-xs">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1">Pod</th>
-                    <th className="text-left py-1">SA</th>
-                    <th className="text-left py-1">Status</th>
-                    <th className="text-left py-1">Node</th>
+                    <Th className="text-left py-1">Pod</Th>
+                    <Th className="text-left py-1">SA</Th>
+                    <Th className="text-left py-1">Status</Th>
+                    <Th className="text-left py-1">Node</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
