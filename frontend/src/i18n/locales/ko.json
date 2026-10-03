@@ -131,6 +131,7 @@
     "noResults": "파드가 없습니다.",
     "exec": {
       "connectingTo": "{{pod}}/{{container}}에 연결 중...",
+      "noShell": "이 컨테이너에는 \"{{command}}\"이(가) 없습니다 — 이미지에 셸이 없거나(distroless) 다른 경로에 있습니다. 다른 셸(bash, ash)이나 파드의 다른 컨테이너를 고르세요.",
       "connected": "연결됨.",
       "connectionError": "연결 오류.",
       "disconnected": "연결 종료.",
@@ -1393,7 +1394,7 @@
       "현재 메모리 많이 쓰는 파드들 알려줘",
       "현재 노드들 상태 알려줘",
       "kube-system 네임스페이스의 Pod 상태를 확인해줘",
-      "okestro-cmp 네임스페이스의 Service 목록을 조회해줘"
+      "default 네임스페이스의 Service 목록을 조회해줘"
     ]
   },
   "monitoring": {
@@ -2326,6 +2327,16 @@
     "noResources": "검색할 리소스 타입을 선택하세요",
     "tooManyResults": "{{total}}건의 결과를 찾았습니다. 처음 {{max}}건만 표시합니다.",
     "examplesTitle": "쿼리 예시",
+    "examples": {
+      "podsNotRunning": "Running 상태가 아닌 파드 찾기",
+      "labelApp": "app=nginx 라벨이 있는 모든 리소스",
+      "replicasOver3": "레플리카가 3개 초과인 디플로이먼트",
+      "restartsOver5": "재시작 5회 초과 파드",
+      "configMapWithData": "data가 있는 ConfigMap",
+      "completedJobs": "완료된 활성 잡",
+      "loadBalancerServices": "LoadBalancer 타입 서비스",
+      "pendingPvcs": "Pending 상태인 PVC"
+    },
     "colKind": "종류",
     "colName": "이름",
     "colNamespace": "네임스페이스",

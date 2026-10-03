@@ -5,6 +5,8 @@ interface ExampleQuery {
   label: string
   types: string[]
   query: string
+  /** i18n key under advancedSearch.examples; `description` is the English default */
+  key: string
   description: string
 }
 
@@ -13,49 +15,57 @@ const EXAMPLES: ExampleQuery[] = [
     label: 'Pod',
     types: ['pods'],
     query: 'status.phase !== "Running"',
-    description: 'Running 상태가 아닌 파드 찾기',
+    key: 'podsNotRunning',
+    description: 'Pods that are not Running',
   },
   {
     label: 'All',
     types: [],
     query: 'metadata.labels?.app === "nginx"',
-    description: 'app=nginx 라벨이 있는 모든 리소스',
+    key: 'labelApp',
+    description: 'Everything labelled app=nginx',
   },
   {
     label: 'Deployment',
     types: ['deployments'],
     query: 'spec.replicas > 3',
-    description: '레플리카가 3개 초과인 디플로이먼트',
+    key: 'replicasOver3',
+    description: 'Deployments with more than 3 replicas',
   },
   {
     label: 'Pod',
     types: ['pods'],
     query: 'status.containerStatuses?.some(c => c.restartCount > 5)',
-    description: '재시작 5회 초과 파드',
+    key: 'restartsOver5',
+    description: 'Pods restarted more than 5 times',
   },
   {
     label: 'ConfigMap',
     types: ['configmaps'],
     query: '!!data',
-    description: 'data가 있는 ConfigMap',
+    key: 'configMapWithData',
+    description: 'ConfigMaps that carry data',
   },
   {
     label: 'Job',
     types: ['jobs'],
     query: 'spec.suspend === false && status.succeeded > 0',
-    description: '완료된 활성 잡',
+    key: 'completedJobs',
+    description: 'Active jobs that have completed',
   },
   {
     label: 'Service',
     types: ['services'],
     query: 'spec.type === "LoadBalancer"',
-    description: 'LoadBalancer 타입 서비스',
+    key: 'loadBalancerServices',
+    description: 'Services of type LoadBalancer',
   },
   {
     label: 'PVC',
     types: ['persistentvolumeclaims'],
     query: 'status.phase === "Pending"',
-    description: 'Pending 상태인 PVC',
+    key: 'pendingPvcs',
+    description: 'PVCs stuck in Pending',
   },
 ]
 
@@ -85,7 +95,7 @@ export default function SearchExamples({ onSelect }: Props) {
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 font-semibold uppercase">
                 {ex.label}
               </span>
-              <span className="text-xs text-slate-500">{ex.description}</span>
+              <span className="text-xs text-slate-500">{t(`advancedSearch.examples.${ex.key}`, ex.description)}</span>
             </div>
             <code className="text-xs text-slate-300 font-mono group-hover:text-sky-300 transition-colors">
               {ex.query}
