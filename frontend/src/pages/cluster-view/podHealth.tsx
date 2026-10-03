@@ -118,6 +118,12 @@ export const getPodHealth = (pod: any): PodHealth => {
     return { level: 'warn' as const, reason: phase, phase }
   }
 
+  // A completed pod (Job/CronJob) has no ready container by design — that is
+  // not a NotReady warning.
+  if (phase === 'Succeeded') {
+    return { level: 'ok' as const, reason: 'Succeeded', phase }
+  }
+
   if (initNotReady) {
     const initReason = pickReason(initWaitingReasons, warnPriority) || 'PodInitializing'
     return { level: 'warn' as const, reason: initReason, phase }
@@ -126,10 +132,6 @@ export const getPodHealth = (pod: any): PodHealth => {
   if (notReady) {
     const warnReason = pickReason(waitingReasons, warnPriority) || 'NotReady'
     return { level: 'warn' as const, reason: warnReason, phase }
-  }
-
-  if (phase === 'Succeeded') {
-    return { level: 'ok' as const, reason: 'Succeeded', phase }
   }
 
   const warnReason = pickReason(waitingReasons, warnPriority)

@@ -5,6 +5,7 @@
 // dialog UI 와 disabled 처리만 담당.
 
 import { HelpCircle } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import type { PodInfo } from '@/services/api'
 
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, onClose, onConfirm }: Props) {
+  const { t } = useTranslation()
   if (!pod) return null
   return (
     <ModalOverlay onClose={onClose}>
@@ -27,19 +29,18 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Pod 삭제"
+        aria-label={t('podDeleteModal.title')}
       >
-        <h2 className="text-xl font-bold text-white mb-4">Pod 삭제</h2>
+        <h2 className="text-xl font-bold text-white mb-4">{t('podDeleteModal.title')}</h2>
         <p className="text-slate-300 leading-relaxed">
-          <strong>Pod</strong>{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-100">
-            {pod.name}
-          </kbd>
-          를 삭제할까요?
+          <Trans
+            i18nKey="podDeleteModal.question"
+            values={{ name: pod.name }}
+            components={{ kbd: <kbd className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-100" /> }}
+          />
         </p>
         <p className="text-slate-400 mt-3">
-          리소스 삭제는 <strong>위험</strong>할 수 있습니다. 삭제 효과를 충분히 이해한 뒤 진행하세요.
-          가능하면 변경 전 다른 사람의 리뷰를 받는 것을 권장합니다.
+          {t('podDeleteModal.warning')}
         </p>
 
         <div className="mt-4 flex items-center gap-2">
@@ -51,9 +52,9 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
             className="w-4 h-4 rounded border-slate-500 bg-slate-700"
           />
           <label htmlFor="force-delete-checkbox" className="text-sm text-slate-300">
-            강제 삭제
+            {t('podDeleteModal.force')}
           </label>
-          <span title="체크 시 grace period를 무시하고 즉시 삭제합니다">
+          <span title={t('podDeleteModal.forceHint')}>
             <HelpCircle className="w-4 h-4 text-slate-400" />
           </span>
         </div>
@@ -69,7 +70,7 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
             onClick={onClose}
             disabled={isDeleting}
           >
-            취소
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -77,7 +78,7 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
             onClick={onConfirm}
             disabled={isDeleting}
           >
-            확인
+            {t('podDeleteModal.confirm')}
           </button>
         </div>
       </div>

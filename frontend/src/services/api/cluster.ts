@@ -76,6 +76,19 @@ export const clusterApi = {
   // Generic resource (yaml / json / apply / multi-create) — shared
   // pathway used by ResourceDetailDrawer / yaml editors. Stays here
   // because the URL surface is /cluster/resources/*.
+  // Generic namespaced list / YAML by API path segment (pods, deployments, …):
+  // used by pages that pick the kind at runtime (Topology). Through the client
+  // so the selected cluster and the CSRF header are sent.
+  getNamespacedResources: async (endpoint: string, namespace: string): Promise<any[]> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/${endpoint}`)
+    return Array.isArray(data) ? data : (data?.items ?? [])
+  },
+
+  getNamespacedResourceYaml: async (endpoint: string, namespace: string, name: string): Promise<string> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/${endpoint}/${name}/yaml`)
+    return typeof data === 'string' ? data : data?.yaml ?? ''
+  },
+
   getResourceYaml: async (resourceType: string, name: string, namespace?: string): Promise<{ yaml: string }> => {
     const { data } = await client.get('/cluster/resources/yaml', {
       params: {

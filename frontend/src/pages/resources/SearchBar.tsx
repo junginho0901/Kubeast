@@ -6,7 +6,18 @@
 // 에만 사용.
 
 import { Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { ResourceType } from './types'
+
+const KIND_LABEL: Record<ResourceType, string> = {
+  deployments: 'Deployment',
+  replicasets: 'ReplicaSet',
+  hpas: 'HPA',
+  pdbs: 'PDB',
+  services: 'Service',
+  pods: 'Pod',
+  pvcs: 'PVC',
+}
 
 interface Props {
   activeTab: ResourceType
@@ -27,6 +38,7 @@ export function SearchBar({
   searchPlaceholder,
   counts,
 }: Props) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-2">
       <div className="relative">
@@ -49,21 +61,15 @@ export function SearchBar({
             type="button"
             onClick={onClearPodLabelSelector}
             className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1"
-            title="라벨 셀렉터 제거"
+            title={t('resourcesTabs.search.clearLabelSelector')}
           >
-            초기화
+            {t('resourcesTabs.search.reset')}
           </button>
         </div>
       )}
       {searchQuery && (
         <p className="text-sm text-slate-400">
-          {activeTab === 'deployments' && `${counts.deployments}개의 Deployment가 검색되었습니다`}
-          {activeTab === 'replicasets' && `${counts.replicasets}개의 ReplicaSet이 검색되었습니다`}
-          {activeTab === 'hpas' && `${counts.hpas}개의 HPA가 검색되었습니다`}
-          {activeTab === 'pdbs' && `${counts.pdbs}개의 PDB가 검색되었습니다`}
-          {activeTab === 'services' && `${counts.services}개의 Service가 검색되었습니다`}
-          {activeTab === 'pods' && `${counts.pods}개의 Pod가 검색되었습니다`}
-          {activeTab === 'pvcs' && `${counts.pvcs}개의 PVC가 검색되었습니다`}
+          {t('resourcesTabs.search.resultCount', { count: counts[activeTab], kind: KIND_LABEL[activeTab] })}
         </p>
       )}
     </div>

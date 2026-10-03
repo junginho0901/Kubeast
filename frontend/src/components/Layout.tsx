@@ -64,12 +64,6 @@ type NavGroup = {
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
-  // The nav scrolls on short viewports: keep the current page's entry in view
-  // (deep links into the ADMIN section land below the fold otherwise).
-  useEffect(() => {
-    const active = document.querySelector<HTMLElement>(`nav a[href="${CSS.escape(location.pathname)}"]`)
-    active?.scrollIntoView({ block: 'nearest' })
-  }, [location.pathname])
   const { currentCluster } = useCluster()
   const queryClient = useQueryClient()
   const [clusterStatus, setClusterStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
@@ -94,6 +88,15 @@ export default function Layout() {
     queryFn: () => clustersApi.listClusters(true),
     staleTime: 30_000,
   })
+
+  // The nav scrolls on short viewports: keep the current page's entry in view
+  // (deep links into the ADMIN section land below the fold otherwise). Runs
+  // again once `me` resolves: the account box under the nav renders then and
+  // shrinks the nav, which pushed the entry scrolled a moment earlier under it.
+  useEffect(() => {
+    const active = document.querySelector<HTMLElement>(`nav a[href="${CSS.escape(location.pathname)}"]`)
+    active?.scrollIntoView({ block: 'nearest' })
+  }, [location.pathname, isMeLoading])
 
   useEffect(() => {
     if (!isMeError) return

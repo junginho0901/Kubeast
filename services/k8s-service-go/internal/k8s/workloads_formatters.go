@@ -152,8 +152,10 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 	}
 
 	images := make([]string, 0)
+	containers := make([]string, 0)
 	for _, c := range rs.Spec.Template.Spec.Containers {
 		images = append(images, c.Image)
+		containers = append(containers, c.Name)
 	}
 	image := ""
 	if len(images) > 0 {
@@ -203,6 +205,7 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 		"available_replicas": rs.Status.AvailableReplicas,
 		"image":              image,
 		"images":             images,
+		"containers":         containers,
 		"selector":           selector,
 		"owner_deployment":   owner,
 		"owner_references":   ownerRefs,
@@ -231,8 +234,10 @@ func formatJobDetail(job *batchv1.Job) map[string]interface{} {
 	}
 
 	images := make([]string, 0)
+	containers := make([]string, 0)
 	for _, c := range job.Spec.Template.Spec.Containers {
 		images = append(images, c.Image)
+		containers = append(containers, c.Name)
 	}
 	image := ""
 	if len(images) > 0 {
@@ -272,6 +277,7 @@ func formatJobDetail(job *batchv1.Job) map[string]interface{} {
 		"status":           status,
 		"image":            image,
 		"images":           images,
+		"containers":       containers,
 		"owner_references": ownerRefs,
 		"created_at":       toISO(&job.CreationTimestamp),
 	}
@@ -304,8 +310,10 @@ func formatCronJobDetail(cj *batchv1.CronJob) map[string]interface{} {
 	}
 
 	images := make([]string, 0)
+	containers := make([]string, 0)
 	for _, c := range cj.Spec.JobTemplate.Spec.Template.Spec.Containers {
 		images = append(images, c.Image)
+		containers = append(containers, c.Name)
 	}
 	image := ""
 	if len(images) > 0 {
@@ -320,6 +328,7 @@ func formatCronJobDetail(cj *batchv1.CronJob) map[string]interface{} {
 		"active":     len(cj.Status.Active),
 		"image":      image,
 		"images":     images,
+		"containers": containers,
 		"created_at": toISO(&cj.CreationTimestamp),
 	}
 

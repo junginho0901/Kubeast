@@ -4,6 +4,7 @@
 // 상단 badge 로 표시 + per-policy detail (ingress/egress allow rules 일부) 표시.
 
 import { Shield } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { NetworkPolicyInfo, PodInfo } from '@/services/api'
 import { formatPeer, formatPorts, selectorToInline } from './netHelpers'
 import type { PolicySummary } from './useNetworkAnalysis'
@@ -16,18 +17,19 @@ interface Props {
 }
 
 export function NetworkPoliciesSection({ labelSelector, podsForService, networkPolicies, policySummary }: Props) {
+  const { t } = useTranslation()
   return (
     <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">
       <div className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
         <Shield className="w-4 h-4" />
-        NetworkPolicies (적용 후보)
+        {t('networkOverview.networkPoliciesTitle')}
       </div>
       {!labelSelector ? (
-        <div className="text-sm text-slate-400">selector가 없어 Pod 매핑을 못해 정책 연결을 계산할 수 없습니다</div>
+        <div className="text-sm text-slate-400">{t('networkOverview.noSelector')}</div>
       ) : (podsForService ?? []).length === 0 ? (
-        <div className="text-sm text-slate-400">선택된 Service selector에 매칭되는 Pod가 없습니다</div>
+        <div className="text-sm text-slate-400">{t('networkOverview.noMatchingPods')}</div>
       ) : networkPolicies.length === 0 ? (
-        <div className="text-sm text-slate-400">(없음)</div>
+        <div className="text-sm text-slate-400">{t('networkOverview.none')}</div>
       ) : (
         <div className="space-y-3">
           <div className="rounded-md border border-slate-700 bg-slate-900/20 p-3 text-xs text-slate-300">
@@ -52,7 +54,7 @@ export function NetworkPoliciesSection({ labelSelector, podsForService, networkP
               ) : null}
             </div>
             <div className="mt-2 text-[11px] text-slate-400">
-              ON이면 “허용 규칙의 합(Union)”만 통과합니다. (CNI/클러스터 설정에 따라 실제 동작은 달라질 수 있음)
+              {t('networkOverview.isolationHint')}
             </div>
           </div>
 

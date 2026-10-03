@@ -359,12 +359,13 @@ export default function ResourceDetailDrawer() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-white mb-2">
-              {`Delete ${kind}`}
+              {t('common.deleteKind', { kind, defaultValue: 'Delete {{kind}}' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
               {ns
-                ? `Are you sure you want to delete ${kind} "${name}" in "${ns}"?`
-                : `Are you sure you want to delete ${kind} "${name}"?`}
+                // `ns` is i18next's namespace option, so the value goes in as `namespace`
+                ? t('common.deleteKindConfirmNs', { kind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
+                : t('common.deleteKindConfirm', { kind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
             </p>
             {kind === 'Node' && (
               <p className="text-xs text-red-400 mb-4 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">

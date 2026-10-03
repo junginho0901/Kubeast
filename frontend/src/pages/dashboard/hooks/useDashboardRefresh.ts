@@ -14,12 +14,10 @@ export function useDashboardRefresh() {
   const queryClient = useQueryClient()
 
   const handleRefresh = async () => {
-    console.log('🔄 새로고침 시작...')
     setIsRefreshing(true)
     // 새로고침은 항상 강제 갱신 (force_refresh=true)
     try {
       // 메인 데이터를 직접 호출하고 캐시에 수동으로 업데이트
-      console.log('📡 API 호출 중 (force_refresh=true)...')
 
       // 먼저 네임스페이스 목록을 가져옴 (다른 API 호출에 필요)
       const namespacesData = await api.getNamespaces()
@@ -37,16 +35,6 @@ export function useDashboardRefresh() {
         api.getPVCs(undefined, true),
       ])
 
-      console.log('✅ API 응답 받음:', {
-        overview: overviewData,
-        overviewPods: overviewData?.total_pods,
-        namespaces: namespacesData?.length,
-        nodes: nodesData?.length,
-        pods: allPodsData?.length,
-        services: allServicesData?.length,
-        deployments: allDeploymentsData?.length,
-        pvcs: allPVCsData?.length,
-      })
 
       // 실제 데이터로 overview 보정 (타이밍 이슈 방지)
       const correctedOverview = {
@@ -58,7 +46,6 @@ export function useDashboardRefresh() {
         total_pvcs: allPVCsData.length,
       }
 
-      console.log('✏️  보정된 overview:', correctedOverview)
 
       // 캐시를 완전히 제거하고 새 데이터로 설정 (강제 리렌더링)
       queryClient.removeQueries({ queryKey: ['cluster-overview'] })
@@ -82,7 +69,6 @@ export function useDashboardRefresh() {
       queryClient.setQueryData(['all-deployments'], allDeploymentsData)
       queryClient.setQueryData(['all-pvcs'], allPVCsData)
 
-      console.log('💾 React Query 캐시 업데이트 완료')
     } catch (error) {
       console.error('❌ 새로고침 실패:', error)
     }

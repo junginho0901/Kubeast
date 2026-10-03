@@ -3,6 +3,7 @@
 // frontend/src/pages/Network.tsx 의 renderEndpointTargets 함수를 컴포넌트로 추출.
 // JSX 만 다루며 외부 상태/콜백 없음.
 
+import i18next from 'i18next'
 import type { EndpointInfo } from '@/services/api'
 
 type Tone = 'success' | 'warning'
@@ -57,9 +58,9 @@ function TargetList({
               key={`${title}-${ip}-${idx}`}
               className={`rounded-md border ${border} ${bg} px-2 py-1.5`}
             >
-              <div className="font-mono text-xs text-slate-200">{ip || '(ip 없음)'}</div>
+              <div className="font-mono text-xs text-slate-200">{ip || i18next.t('networkOverview.noIp', '(no ip)')}</div>
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-300">
-                {refName ? <span>{refName}</span> : <span className="text-slate-400">(targetRef 없음)</span>}
+                {refName ? <span>{refName}</span> : <span className="text-slate-400">{i18next.t('networkOverview.noTargetRef', '(no targetRef)')}</span>}
                 {nodeName ? <span className="text-slate-400">{`node=${nodeName}`}</span> : null}
               </div>
             </div>
@@ -71,7 +72,7 @@ function TargetList({
 }
 
 export function EndpointTargets({ endpoint }: { endpoint: EndpointInfo | null }) {
-  if (!endpoint) return <>(없음)</>
+  if (!endpoint) return <>{i18next.t('networkOverview.none', '(none)')}</>
 
   return (
     <div className="space-y-4">

@@ -135,7 +135,7 @@ export function JobTable({
                 <td className="py-3 px-4">
                   <span className={`badge ${getJobStatusColor(job.status)}`}>{job.status || '-'}</span>
                 </td>
-                <td className="py-3 px-4 text-xs font-mono">{formatDuration(job.duration_seconds)}</td>
+                <td className="py-3 px-4 text-xs font-mono">{job.duration || formatDuration(job.duration_seconds)}</td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{formatAge(job.created_at)}</td>

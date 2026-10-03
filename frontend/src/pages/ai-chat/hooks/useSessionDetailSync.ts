@@ -66,7 +66,6 @@ export function useSessionDetailSync({
   // - 동일 세션에서 스트리밍이 끝난 후에는, 이미 화면에 있는 답변을 덮어쓰지 않도록 함
   useEffect(() => {
     if (sessionDetail && stoppedSessionId !== sessionDetail.id) {
-      console.log('[DEBUG] Loading messages from DB:', sessionDetail.messages.length, 'messages')
 
       const dbMessages = sessionDetail.messages.map((msg: any) => ({
         id: msg.id,
@@ -104,7 +103,6 @@ export function useSessionDetailSync({
           return
         }
 
-        console.log('[DEBUG] Session changed, replacing messages from DB')
         setMessages(dbMessages)
         setLastLoadedSessionId(sessionDetail.id)
         setViewSessionId(sessionDetail.id)
@@ -156,11 +154,9 @@ export function useSessionDetailSync({
         }
         const hasNonTemporary = prev.some((msg: Message) => !msg.isTemporary)
         if (!hasNonTemporary) {
-          console.log('[DEBUG] No non-temporary messages yet, syncing from DB')
           setViewSessionId(sessionDetail.id)
           return dbMessages
         }
-        console.log('[DEBUG] Keeping existing messages (same session, non-temporary present)')
         return prev
       })
     }

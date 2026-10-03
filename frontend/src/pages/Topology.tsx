@@ -5,7 +5,7 @@ import { FileCode, Package, Network as NetworkIcon, Database, Key, Box, Clock, G
 import { useMemo, useState } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
+import { api } from '@/services/api'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -73,15 +73,9 @@ export default function Topology() {
       const category = resourceCategories.find(c => c.type === selectedType)
       if (!category) return []
       
-      const response = await fetch(
-        `/api/v1/cluster/namespaces/${namespace}/${category.endpoint}`,
-        { headers: { ...getAuthHeaders() } }
-      )
-      if (response.status === 401) {
-        handleUnauthorized()
-        throw new Error('Unauthorized')
-      }
-      return response.json()
+      // through the API client: the selected cluster (?cluster=) and the CSRF
+      // header ride along — a bare fetch listed the server's default cluster
+      return api.getNamespacedResources(category.endpoint, namespace)
     },
     enabled: !!namespace,
   })
@@ -95,31 +89,10 @@ export default function Topology() {
       if (!category) return null
       
       try {
-        const response = await fetch(
-          `/api/v1/cluster/namespaces/${namespace}/${category.endpoint}/${selectedResource}/yaml`,
-          { headers: { ...getAuthHeaders() } }
-        )
-
-        if (response.status === 401) {
-          handleUnauthorized()
-          throw new Error('Unauthorized')
-        }
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          // 콘솔에 일반 로그로만 출력
-          console.log(`ℹ️ 리소스를 찾을 수 없습니다: ${selectedType}/${selectedResource} (${namespace})`)
-          throw new Error(errorData.detail || `Resource not found`)
-        }
-
-        const data = await response.json()
-        return data.yaml
+        return await api.getNamespacedResourceYaml(category.endpoint, namespace, selectedResource)
       } catch (error) {
-        // fetch 에러를 잡아서 일반 로그로만 출력
-        if (error instanceof Error && error.message !== 'Resource not found') {
-          console.log(`ℹ️ YAML 조회 실패: ${selectedType}/${selectedResource}`)
-        }
-        throw error
+        const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        throw new Error(detail || 'Resource not found')
       }
     },
     enabled: !!namespace && !!selectedResource,

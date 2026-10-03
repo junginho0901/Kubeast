@@ -12,7 +12,9 @@ i18n
       en: { translation: en },
       ko: { translation: ko },
     },
-    lng: 'en',
+    // No fixed `lng`: it would override the detector, so the language chosen
+    // in Settings (cached in localStorage) and the browser language were both
+    // ignored on the next load and the UI always came back in English.
     fallbackLng: 'en',
     supportedLngs: ['en', 'ko'],
     interpolation: {

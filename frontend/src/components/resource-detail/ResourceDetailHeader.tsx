@@ -95,7 +95,7 @@ export function ResourceDetailHeader({
             className="flex items-center gap-1.5 px-3 py-1 rounded-md border border-red-700/60 bg-red-900/20 text-red-300 hover:bg-red-900/40"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {`Delete ${kind}`}
+            {t('common.deleteKind', { kind, defaultValue: 'Delete {{kind}}' })}
           </button>
         )}
       </div>

@@ -18,11 +18,21 @@
     transition: background-color 9999s ease-out 0s;
   }
   /* Chrome also swaps the autofilled text to its own font; ::first-line is the
-     one selector it honours for the autofilled value's font family and size. */
+     one selector it honours for the autofilled value's font family and size,
+     and it needs explicit values (inherit resolves to Chrome's defaults there).
+     Inputs are text-sm (14px / 20px) app-wide; the login fields grow to
+     text-base (16px / 24px) from the lg breakpoint. */
   input:-webkit-autofill::first-line {
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: inherit;
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 400;
+  }
+  @media (min-width: 1024px) {
+    input.login-field:-webkit-autofill::first-line {
+      font-size: 1rem;
+      line-height: 1.5rem;
+    }
   }
 }
 
@@ -56,7 +66,8 @@ body {
   }
 
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors;
+    /* nowrap: at 1024px the page-header actions ("Create Namespace") broke into two lines */
+    @apply px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap;
   }
 
   .btn-primary {

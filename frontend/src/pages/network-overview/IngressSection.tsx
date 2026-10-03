@@ -3,7 +3,9 @@
 // frontend/src/pages/Network.tsx 의 Ingress card 추출. ingressDetails (per-ingress
 // detail useQuery 결과) 와 ingressClasses (cluster-scope) 를 결합해 표시.
 
+import { useTranslation } from 'react-i18next'
 import type { IngressClassInfo, IngressDetail, IngressInfo } from '@/services/api'
+import { backendPort, backendService } from '@/utils/ingressBackend'
 
 interface Props {
   ingresses: IngressInfo[]
@@ -12,11 +14,12 @@ interface Props {
 }
 
 export function IngressSection({ ingresses, ingressDetails, ingressClasses }: Props) {
+  const { t } = useTranslation()
   return (
     <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">
-      <div className="text-sm font-semibold text-white mb-2">Ingress</div>
+      <div className="text-sm font-semibold text-white mb-2">{t('networkOverview.ingressTitle')}</div>
       {ingresses.length === 0 ? (
-        <div className="text-sm text-slate-400">(없음)</div>
+        <div className="text-sm text-slate-400">{t('networkOverview.none')}</div>
       ) : (
         <div className="space-y-3">
           {ingresses.map((ing) => {
@@ -52,12 +55,12 @@ export function IngressSection({ ingresses, ingressDetails, ingressClasses }: Pr
                 {addresses ? (
                   <div className="mt-2 text-[11px] text-slate-400">address: {addresses}</div>
                 ) : (
-                  <div className="mt-2 text-[11px] text-slate-500">address: (없음)</div>
+                  <div className="mt-2 text-[11px] text-slate-500">{t('networkOverview.addressNone')}</div>
                 )}
                 {tlsSecrets ? (
-                  <div className="mt-1 text-[11px] text-slate-400">tls secret: {tlsSecrets}</div>
+                  <div className="mt-1 text-[11px] text-slate-400">{t('networkOverview.tlsSecret', { secrets: tlsSecrets })}</div>
                 ) : (
-                  <div className="mt-1 text-[11px] text-slate-500">tls secret: (없음)</div>
+                  <div className="mt-1 text-[11px] text-slate-500">{t('networkOverview.tlsSecretNone')}</div>
                 )}
                 <div className="mt-2 text-xs text-slate-300 whitespace-pre-wrap break-words">
                   {(detail?.rules || []).length > 0
@@ -67,14 +70,13 @@ export function IngressSection({ ingresses, ingressDetails, ingressClasses }: Pr
                             const host = r.host || '*'
                             const path = p.path || '/'
                             const pathType = p.path_type ? ` (${p.path_type})` : ''
-                            const backend = (p.backend && p.backend.service && p.backend.service.name)
-                              ? ` → ${p.backend.service.name}:${p.backend.service.port ?? ''}`
-                              : ''
+                            const svc = backendService(p.backend)
+                            const backend = svc ? ` → ${svc}:${backendPort(p.backend)}` : ''
                             return `${host} ${path}${pathType}${backend}`
                           })
                         )
-                        .join('\n') || '(rules 없음)'
-                    : (ing.hosts || []).join('\n') || '(hosts 없음)'}
+                        .join('\n') || t('networkOverview.noRules')
+                    : (ing.hosts || []).join('\n') || t('networkOverview.noHosts')}
                 </div>
                 <div className="mt-2 text-[11px] text-slate-400">
                   controller: {detail?.class_controller || klass?.controller || '(unknown)'}

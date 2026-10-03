@@ -97,6 +97,7 @@
   "pods": {
     "title": "Pods",
     "subtitle": "Inspect pod health and placement across namespaces.",
+    "topStatusReasons": "Top status reasons",
     "searchPlaceholder": "Search pods by name...",
     "refresh": "Refresh",
     "forceRefreshTitle": "Force refresh",
@@ -621,9 +622,9 @@
       "unavailable": "Unavailable"
     },
     "paging": {
-      "empty": "0 items",
-      "range": "{{from}}-{{to}} / {{total}}",
-      "prev": "Prev",
+      "empty": "Showing 0 of 0",
+      "range": "Showing {{from}}-{{to}} of {{total}}",
+      "prev": "Previous",
       "next": "Next"
     },
     "noResults": "No StatefulSets found.",
@@ -1286,6 +1287,7 @@
       "addresses": "Addresses",
       "version": "Versions",
       "system": "System info",
+      "noMetrics": "No metrics (metrics-server not installed)",
       "labels": "Labels",
       "annotations": "Annotations",
       "pods": "Pods",
@@ -1446,6 +1448,9 @@
     "notAvailable": "N/A",
     "none": "None",
     "empty": "-",
+    "deleteKind": "Delete {{kind}}",
+    "deleteKindConfirm": "Are you sure you want to delete {{kind}} \"{{name}}\"?",
+    "deleteKindConfirmNs": "Are you sure you want to delete {{kind}} \"{{name}}\" in \"{{namespace}}\"?",
     "unknown": "Unknown",
     "close": "Close",
     "applied": "Applied",
@@ -1463,6 +1468,7 @@
     "loading": "Loading...",
     "next": "Next",
     "paginationRange": "Showing {{start}}-{{end}} of {{total}}",
+    "paginationEmpty": "Showing 0 of 0",
     "prev": "Previous",
     "readonly": "Read-only",
     "refresh": "Refresh",
@@ -2151,6 +2157,7 @@
     "errors": {
       "passwordMismatch": "Passwords do not match.",
       "loginFailed": "Failed to sign in.",
+      "lockoutHint": "Repeated failures lock the account for a while. Check the password, then wait a few minutes before trying again.",
       "registerFailed": "Failed to create account.",
       "ssoFailed": "Single sign-on failed. Please try again.",
       "ssoDenied": "Sign-in was cancelled or refused by the identity provider.",
@@ -2694,6 +2701,81 @@
     }
   },
   "adminRoles": {
+    "systemRoles": {
+      "pending": "Awaiting approval",
+      "member": "Regular user (access per cluster grant)",
+      "read": "Read-only",
+      "write": "Read / write",
+      "admin": "Full administrator"
+    },
+    "catalog": {
+      "category": {
+        "all": "All",
+        "menu": "Menu",
+        "resources": "Resources",
+        "node": "Node",
+        "pod": "Pod",
+        "workload": "Workload",
+        "secret": "Secret",
+        "helm": "Helm",
+        "ai_tools": "AI tools",
+        "admin": "Admin"
+      },
+      "permission": {
+        "all": "All permissions",
+        "menu_all": "All menus",
+        "menu_dashboard": "Dashboard",
+        "menu_workloads": "Workloads",
+        "menu_network": "Network",
+        "menu_storage": "Storage",
+        "menu_security": "Security",
+        "menu_cluster": "Cluster",
+        "menu_gateway": "Gateway",
+        "menu_gpu": "GPU",
+        "menu_helm": "Helm",
+        "menu_configuration": "Configuration",
+        "menu_admin": "Admin",
+        "resource_all_all": "All resources, every action",
+        "resource_all_read": "All resources: read",
+        "resource_all_create": "All resources: create",
+        "resource_all_edit": "All resources: edit",
+        "resource_all_delete": "All resources: delete",
+        "resource_node_cordon": "Cordon / uncordon",
+        "resource_node_drain": "Drain",
+        "resource_node_shell": "Node shell",
+        "resource_pod_exec": "Pod exec",
+        "resource_workload_restart": "Restart",
+        "resource_workload_rollback": "Rollback",
+        "resource_cronjob_suspend": "Suspend CronJob",
+        "resource_cronjob_trigger": "Run CronJob now",
+        "resource_secret_reveal": "Reveal Secret values",
+        "resource_helm_all": "All Helm actions",
+        "resource_helm_read": "View releases",
+        "resource_helm_rollback": "Roll back releases",
+        "resource_helm_upgrade": "Upgrade releases (edit values)",
+        "resource_helm_uninstall": "Uninstall releases",
+        "resource_helm_test": "Run release tests",
+        "ai_tool_all": "All AI tools",
+        "ai_tool_k8s_execute_command": "Run kubectl commands",
+        "ai_tool_helm_execute": "AI runs Helm commands (including writes)",
+        "admin_all": "All admin features",
+        "admin_users_all": "User management",
+        "admin_users_create": "Create users",
+        "admin_users_read": "View users",
+        "admin_users_update": "Update users",
+        "admin_users_delete": "Delete users",
+        "admin_roles_all": "Role management",
+        "admin_roles_create": "Create roles",
+        "admin_roles_update": "Update roles",
+        "admin_roles_delete": "Delete roles",
+        "admin_organizations_all": "Team management",
+        "admin_organizations_create": "Create teams",
+        "admin_organizations_delete": "Delete teams",
+        "admin_ai_models_all": "AI model settings",
+        "admin_audit_read": "View audit log",
+        "admin_audit_export": "Export audit log (CSV)"
+      }
+    },
     "viewUsers": "View users with this role",
     "usersWithRole": "Users with this global (account-level) role",
     "usersWithRoleNote": "This counts the global role only. Per-cluster access (Read/Write on a cluster) is granted separately in cluster access.",
@@ -3127,7 +3209,7 @@
       "namespace": "Namespace",
       "requests": "Requests"
     },
-    "title": "Resource Claim Template"
+    "title": "Resource Claim Templates"
   },
   "resourceClaimsPage": {
     "allNamespaces": "All Namespaces",
@@ -3152,7 +3234,7 @@
       "requests": "Requests",
       "status": "Status"
     },
-    "title": "Resource Claim"
+    "title": "Resource Claims"
   },
   "resourceSlicesPage": {
     "matchCount": "{{count}} resource slices matched.",
@@ -3173,7 +3255,7 @@
       "node": "Node",
       "pool": "Pool"
     },
-    "title": "Resource Slice"
+    "title": "Resource Slices"
   },
   "topology": {
     "title": "{{namespace}} Resource Definitions",
@@ -3230,5 +3312,64 @@
     "empty": "No AI chat records in this period.",
     "partialTokens": "{{n}} request(s) had no token usage from the provider and are not in the sum",
     "note": "Token counts are collected only when the provider sends usage in the last stream chunk (OpenAI-compatible stream_options.include_usage). Raw rows: audit log filtered by action=ai.chat.complete, CSV export."
+  },
+  "networkOverview": {
+    "none": "(none)",
+    "noIp": "(no ip)",
+    "noTargetRef": "(no targetRef)",
+    "ingressTitle": "Ingress",
+    "addressNone": "address: (none)",
+    "tlsSecret": "tls secret: {{secrets}}",
+    "tlsSecretNone": "tls secret: (none)",
+    "networkPoliciesTitle": "NetworkPolicies (candidates)",
+    "noSelector": "The Service has no selector, so pods cannot be matched and policy links cannot be computed",
+    "noMatchingPods": "No pods match the selected Service's selector",
+    "isolationHint": "When ON, only the union of allow rules passes. (Actual behavior depends on the CNI / cluster settings)",
+    "noRules": "(no rules)",
+    "noHosts": "(no hosts)"
+  },
+  "resourcesTabs": {
+    "none": "(none)",
+    "fetchFailed": "Failed to load {{kind}}. (May be unavailable depending on cluster permissions / version)",
+    "pdb": {
+      "noSelector": "The PDB has no selector, so matching pods cannot be computed.",
+      "noMatchingPods": "No pods match, so the PDB has no effect.",
+      "allowed": "Up to {{count}} disruption(s) (evictions) allowed right now.",
+      "notProtectedBelow": "Not protected right now: healthy ({{healthy}}) is below desiredHealthy ({{desired}}), so disruptionsAllowed=0.",
+      "notProtected": "Not protected right now: disruptionsAllowed=0.",
+      "filterTitle": "Filter the pod list by this PDB's selector",
+      "goToPods": "Go to Pods"
+    },
+    "pod": {
+      "topReasons": "Top reasons",
+      "podsCount": "pods: {{count}}",
+      "restarts": "Restarts: {{count}}"
+    },
+    "hpa": {
+      "metricsMissing": "Desired cannot be computed: no metrics received from metrics-server / the metrics API.",
+      "desiredBelowMin": "Desired ({{desired}}) is below minReplicas ({{min}}). Check conditions / metrics."
+    },
+    "search": {
+      "clearLabelSelector": "Clear label selector",
+      "reset": "Reset",
+      "resultCount": "{{count}} {{kind}} matched"
+    }
+  },
+  "yamlCreate": {
+    "clusterScoped": "Cluster-scoped resource: metadata.namespace is not used.",
+    "namespaceOverride": "Namespace override: {{namespace}}",
+    "namespaceFromYaml": "Namespace is read from YAML metadata.namespace (or default namespace if omitted).",
+    "failed": "Failed to create resource",
+    "cancel": "Cancel",
+    "create": "Create",
+    "creating": "Creating..."
+  },
+  "podDeleteModal": {
+    "title": "Delete pod",
+    "question": "Delete pod <kbd>{{name}}</kbd>?",
+    "warning": "Deleting resources can be destructive. Make sure you understand the effect before you continue, and get a second pair of eyes when you can.",
+    "force": "Force delete",
+    "forceHint": "Ignores the grace period and deletes immediately",
+    "confirm": "Delete"
   }
 }

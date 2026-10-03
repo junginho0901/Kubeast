@@ -8,6 +8,10 @@ import { usePermission } from '@/hooks/usePermission'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
 
+// The permission catalog comes from auth-service in English; translate it by
+// key here. "." and "*" are i18next separators / awkward in keys, so map them.
+const i18nKey = (s: string) => s.toLowerCase().replace(/\*/g, 'all').replace(/[^a-z0-9]+/g, '_')
+
 export default function AdminRoles() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
@@ -180,7 +184,11 @@ export default function AdminRoles() {
                       )}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-slate-400">{role.description || '-'}</td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {role.is_system
+                      ? tr(`adminRoles.systemRoles.${role.name.toLowerCase()}`, role.description || '-')
+                      : (role.description || '-')}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {role.permissions.slice(0, 5).map((p) => (
@@ -378,7 +386,7 @@ export default function AdminRoles() {
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
               {permCatalog.map((cat) => (
                 <div key={cat.category} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
-                  <h3 className="text-sm font-semibold text-slate-200 mb-3">{cat.category}</h3>
+                  <h3 className="text-sm font-semibold text-slate-200 mb-3">{tr(`adminRoles.catalog.category.${i18nKey(cat.category)}`, cat.category)}</h3>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                     {cat.permissions.map((p) => (
                       <label
@@ -396,7 +404,7 @@ export default function AdminRoles() {
                           <span className="text-xs font-mono text-slate-300 group-hover:text-white transition-colors">
                             {p.key}
                           </span>
-                          <span className="ml-2 text-[11px] text-slate-500">{p.description}</span>
+                          <span className="ml-2 text-[11px] text-slate-500">{tr(`adminRoles.catalog.permission.${i18nKey(p.key)}`, p.description)}</span>
                         </div>
                       </label>
                     ))}

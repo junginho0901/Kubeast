@@ -140,7 +140,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const events = (podDescribe?.events ?? []) as any[]
 
   const phase = podDescribe?.phase || podDescribe?.status || (status.phase as string) || '-'
-  const node = podDescribe?.node || (spec.nodeName as string) || '-'
+  // the describe payload names it node_name (pods_format.go); `node` is kept for raw-JSON callers
+  const node = podDescribe?.node_name || podDescribe?.node || (spec.nodeName as string) || '-'
   const podIP = podDescribe?.pod_ip || (status.podIP as string) || '-'
   const podIPs = (podDescribe?.pod_ips as string[] | undefined)
     ?? ((status.podIPs as Array<{ ip?: string }> | undefined)?.map((item) => item?.ip || '').filter(Boolean))

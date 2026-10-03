@@ -193,12 +193,12 @@ export function VolumeAttachmentTable({
       <div className="px-4 py-3 border-t border-slate-800 flex items-center justify-between shrink-0">
         <p className="text-xs text-slate-400">
           {sortedVolumeAttachmentsLength > 0
-            ? tr('common.pageSummary', '{{start}}-{{end}} of {{total}}', {
+            ? tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
                 start: (currentPage - 1) * rowsPerPage + 1,
                 end: Math.min(currentPage * rowsPerPage, sortedVolumeAttachmentsLength),
                 total: sortedVolumeAttachmentsLength,
               })
-            : tr('common.pageSummaryEmpty', '0 of 0')}
+            : tr('common.paginationEmpty', 'Showing 0 of 0')}
         </p>
         <div className="flex items-center gap-2">
           <button

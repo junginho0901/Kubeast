@@ -5,6 +5,8 @@ export function fmtRel(iso?: string | null): string {
   const d = new Date(iso)
   const ms = Date.now() - d.getTime()
   if (!Number.isFinite(ms) || ms < 0) return '-'
+  // Go zero time / Unix epoch serialised as a timestamp — there is no real time
+  if (d.getFullYear() < 1980) return '-'
   const m = Math.floor(ms / 60000)
   const h = Math.floor(m / 60)
   const days = Math.floor(h / 24)
