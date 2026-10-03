@@ -1,4 +1,4 @@
-// AI API — log analysis / chat / optimization (sync + SSE stream).
+// AI API — tool approvals + optimization (SSE stream).
 // suggestOptimizationStream uses raw fetch instead of axios so it can
 // consume the response body as a stream of SSE events.
 
@@ -6,12 +6,7 @@ import { getAuthHeaders, handleUnauthorized } from '../auth'
 import { clusterHeaders } from '../clusterRef'
 
 import { client } from './client'
-import type {
-  ChatResponse,
-  LogAnalysisResponse,
-  OptimizationStreamHandlers,
-  OptimizationSuggestionsResponse,
-} from './types'
+import type { OptimizationStreamHandlers } from './types'
 
 export interface ToolApproval {
   id: string
@@ -42,34 +37,6 @@ export const aiApi = {
   },
   rejectToolCall: async (id: string): Promise<ToolApproval> => {
     const { data } = await client.post(`/ai/tool-approvals/${id}/reject`)
-    return data
-  },
-
-  analyzeLogs: async (request: {
-    logs: string
-    namespace: string
-    pod_name: string
-    container?: string
-  }): Promise<LogAnalysisResponse> => {
-    const { data } = await client.post('/ai/analyze-logs', request)
-    return data
-  },
-
-  chat: async (messages: Array<{ role: string; content: string }>): Promise<ChatResponse> => {
-    const { data } = await client.post('/ai/chat', { messages })
-    return data
-  },
-
-  suggestOptimization: async (namespace: string): Promise<OptimizationSuggestionsResponse> => {
-    const { data } = await client.post(
-      '/ai/suggest-optimization',
-      null,
-      {
-        params: { namespace },
-        headers: clusterHeaders(),
-        timeout: 60000,
-      },
-    )
     return data
   },
 

@@ -31,7 +31,6 @@ func RegisterConfiguration(r chi.Router, h *handler.Handler) {
 
 	// Generic resources
 	r.Get("/api/v1/resources", h.GetGenericResources)
-	r.Post("/api/v1/search", h.SearchResources)
 	r.Get("/api/v1/resources/json", h.GetGenericResourceJSON)
 	r.Get("/api/v1/resources/yaml", h.GetGenericResourceYAML)
 	r.Post("/api/v1/resources/yaml/apply", h.ApplyResourceYAML)

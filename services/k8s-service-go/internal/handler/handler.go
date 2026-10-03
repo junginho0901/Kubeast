@@ -133,6 +133,9 @@ func statusForError(err error) int {
 	}
 	msg := err.Error()
 	switch {
+	case strings.Contains(msg, "parse YAML"):
+		// The caller's YAML did not parse (duplicate key, bad indent): a request error.
+		return http.StatusBadRequest
 	case strings.Contains(msg, "unauthorized"):
 		return http.StatusUnauthorized
 	case strings.Contains(msg, "forbidden"):

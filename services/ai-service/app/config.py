@@ -51,10 +51,6 @@ class Settings(BaseSettings):
         """ALLOWED_ORIGINS를 리스트로 변환"""
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
     
-    # Redis (Optional)
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
-    REDIS_DB: int = 0
     
     # WebSocket
     WS_HEARTBEAT_INTERVAL: int = 30

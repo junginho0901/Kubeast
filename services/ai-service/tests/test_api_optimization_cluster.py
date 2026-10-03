@@ -1,4 +1,4 @@
-"""/suggest-optimization and its stream build the service for the cluster named in
+"""/suggest-optimization/stream builds the service for the cluster named in
 X-Cluster-Name (the same header the chat streams send), so the observations come
 from the selected cluster instead of the default one."""
 import pytest
@@ -10,9 +10,6 @@ from app.security import require_auth
 
 
 class _StubService:
-    async def suggest_optimization(self, namespace):
-        return [f"ok:{namespace}"]
-
     async def suggest_optimization_stream(self, namespace):
         yield "event: done\ndata: {}\n\n"
 
@@ -40,16 +37,10 @@ def test_stream_builds_service_for_header_cluster(builder_calls):
     assert builder_calls[-1] == {"authorization": "Bearer tok", "cluster_name": "test2"}
 
 
-def test_post_builds_service_for_header_cluster_and_none_without_it(builder_calls):
-    client = TestClient(app)
-    r = client.post(
-        "/api/v1/ai/suggest-optimization?namespace=web",
-        headers={"Authorization": "Bearer tok", "X-Cluster-Name": "self"},
+def test_stream_without_header_builds_service_for_the_default_cluster(builder_calls):
+    r = TestClient(app).get(
+        "/api/v1/ai/suggest-optimization/stream?namespace=web",
+        headers={"Authorization": "Bearer tok"},
     )
-    assert r.status_code == 200
-    assert r.json() == {"suggestions": ["ok:web"]}
-    assert builder_calls[-1]["cluster_name"] == "self"
-
-    r = client.post("/api/v1/ai/suggest-optimization?namespace=web", headers={"Authorization": "Bearer tok"})
     assert r.status_code == 200
     assert builder_calls[-1]["cluster_name"] is None

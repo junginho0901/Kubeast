@@ -29,6 +29,7 @@ func TestStatusForError(t *testing.T) {
 		{"text not found", errors.New("release not found"), http.StatusNotFound},
 		{"text forbidden", errors.New("forbidden: no access to cluster x"), http.StatusForbidden},
 		{"text unreachable", errors.New("dial tcp: connection refused"), http.StatusServiceUnavailable},
+		{"yaml parse", fmt.Errorf("parse YAML: %w", errors.New("yaml: unmarshal errors: line 16: mapping key already defined")), http.StatusBadRequest},
 		{"unknown", errors.New("boom"), http.StatusInternalServerError},
 	}
 	for _, tc := range cases {

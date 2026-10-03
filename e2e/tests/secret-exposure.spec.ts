@@ -176,12 +176,6 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     expect(listed, 'our Secret is in the list').toBeTruthy()
     expect(listed.data.password).toBe('***')
 
-    const search = await request.post(`/api/v1/cluster/search?cluster=${CLUSTER}`, { headers: reader, data: { resource_types: ['secrets', 'configmaps'], namespace: NS } })
-    expect(search.status(), await search.text()).toBe(200)
-    const found = ((await search.json()).items as any[]).find((i) => i.kind === 'Secret' && i.metadata?.name === secretName)
-    expect(found, 'our Secret is in the search result').toBeTruthy()
-    expect(found.data.password).toBe('***')
-
     const json = await request.get(`/api/v1/cluster/resources/json?${q}&resource_name=${secretName}`, { headers: reader })
     expect(json.status(), await json.text()).toBe(200)
     const obj = await json.json()
