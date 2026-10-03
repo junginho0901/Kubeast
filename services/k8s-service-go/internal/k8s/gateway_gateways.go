@@ -42,6 +42,7 @@ func (s *Service) DescribeGateway(ctx context.Context, namespace, name string) (
 		"annotations": obj.GetAnnotations(),
 		"created_at":  toISO(&metav1.Time{Time: obj.GetCreationTimestamp().Time}),
 	}
+	addObjectMetaFields(result, obj)
 
 	spec := mapMap(obj.Object, "spec")
 	if spec != nil {

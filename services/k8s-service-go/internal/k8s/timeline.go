@@ -228,10 +228,17 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 		return nil, fmt.Errorf("list replicasets for timeline: %w", rsErr)
 	}
 
-	// Build deployment name set
-	deployNames := make(map[string]bool, len(deploys.Items))
+	return rolloutHistoryFromLists(deploys, rsList, cutoff), nil
+}
+
+// rolloutHistoryFromLists pairs each ReplicaSet created after cutoff with its
+// owning Deployment. Deployments are keyed by namespace/name: with
+// metav1.NamespaceAll both lists span the cluster, and a ReplicaSet may only
+// be owned by a Deployment in its own namespace.
+func rolloutHistoryFromLists(deploys *appsv1.DeploymentList, rsList *appsv1.ReplicaSetList, cutoff time.Time) []map[string]interface{} {
+	deployKeys := make(map[string]bool, len(deploys.Items))
 	for _, d := range deploys.Items {
-		deployNames[d.Name] = true
+		deployKeys[d.Namespace+"/"+d.Name] = true
 	}
 
 	result := make([]map[string]interface{}, 0)
@@ -243,7 +250,7 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 		// Find owning deployment
 		ownerName := ""
 		for _, ref := range rs.OwnerReferences {
-			if ref.Kind == "Deployment" && deployNames[ref.Name] {
+			if ref.Kind == "Deployment" && deployKeys[rs.Namespace+"/"+ref.Name] {
 				ownerName = ref.Name
 				break
 			}
@@ -287,7 +294,7 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 		return ti.After(tj)
 	})
 
-	return result, nil
+	return result
 }
 
 func (s *Service) getDeploymentRolloutTimeline(ctx context.Context, namespace, name string, cutoff time.Time) ([]map[string]interface{}, error) {

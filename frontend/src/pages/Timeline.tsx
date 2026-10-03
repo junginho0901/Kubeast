@@ -64,12 +64,13 @@ export default function Timeline() {
     staleTime: 30000,
   })
 
-  const namespace = selectedNamespace || (namespaces?.[0] as any)?.name || 'default'
+  // '' = every namespace (the default); a name narrows to that namespace.
+  const namespace = selectedNamespace
+  const allNamespaces = namespace === ''
 
   const { data: timeline, isLoading, refetch } = useQuery({
-    queryKey: ['timeline', namespace, hours],
-    queryFn: () => api.getNamespaceTimeline(namespace, hours),
-    enabled: !!namespace,
+    queryKey: ['timeline', allNamespaces ? '*' : namespace, hours],
+    queryFn: () => (allNamespaces ? api.getClusterTimeline(hours) : api.getNamespaceTimeline(namespace, hours)),
     staleTime: 15000,
   })
 
@@ -105,9 +106,9 @@ export default function Timeline() {
     const prefix = warnings > 0 ? '⚠️ ' : ''
     return {
       source: 'base' as const,
-      summary: `${prefix}타임라인 · ${namespace} · 최근 ${hours}h · 이벤트 ${totalEvents}, 롤아웃 ${totalRollouts}${warnings ? `, Warning ${warnings}` : ''}`,
+      summary: `${prefix}타임라인 · ${allNamespaces ? '전체 네임스페이스' : namespace} · 최근 ${hours}h · 이벤트 ${totalEvents}, 롤아웃 ${totalRollouts}${warnings ? `, Warning ${warnings}` : ''}`,
       data: {
-        filters: { namespace, hours, event_filter: eventFilter },
+        filters: { namespace: allNamespaces ? '*' : namespace, hours, event_filter: eventFilter },
         stats: { total_events: totalEvents, total_rollouts: totalRollouts, warnings },
         recent_items: visibleItems.slice(0, 15).map((it) =>
           it.type === 'event'
@@ -130,7 +131,7 @@ export default function Timeline() {
         ),
       },
     }
-  }, [timeline, namespace, hours, eventFilter, visibleItems])
+  }, [timeline, namespace, allNamespaces, hours, eventFilter, visibleItems])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -162,7 +163,10 @@ export default function Timeline() {
         <CustomDropdown
           testId="timeline-namespace"
           className="w-44"
-          options={namespaceOptions.map((ns: string) => ({ value: ns, label: ns }))}
+          options={[
+            { value: '', label: t('timeline.allNamespaces', 'All namespaces') },
+            ...namespaceOptions.map((ns: string) => ({ value: ns, label: ns })),
+          ]}
           value={namespace}
           onChange={(v) => { setSelectedNamespace(v); setShowCount(50) }}
           placeholder={t('timeline.namespace', 'Namespace')}
@@ -279,12 +283,14 @@ export default function Timeline() {
                       <EventRow
                         event={item.data}
                         onResourceClick={handleResourceClick}
+                        showNamespace={allNamespaces}
                         t={t}
                       />
                     ) : (
                       <RolloutRow
                         rollout={item.data}
                         onResourceClick={handleResourceClick}
+                        showNamespace={allNamespaces}
                         t={t}
                       />
                     )}
@@ -328,10 +334,12 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
 function EventRow({
   event,
   onResourceClick,
+  showNamespace = false,
   t,
 }: {
   event: TimelineEvent
   onResourceClick: (kind: string, name: string, ns: string) => void
+  showNamespace?: boolean
   t: any
 }) {
   const isWarning = event.type === 'Warning'
@@ -379,7 +387,7 @@ function EventRow({
             onClick={() => onResourceClick(event.resource.kind, event.resource.name, event.resource.namespace)}
             className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
           >
-            {event.resource.kind}/{event.resource.name}
+            {showNamespace && event.resource.namespace ? `${event.resource.namespace} · ` : ''}{event.resource.kind}/{event.resource.name}
           </button>
           {event.source && (
             <span className="text-[11px] text-gray-400 dark:text-gray-500">
@@ -395,10 +403,12 @@ function EventRow({
 function RolloutRow({
   rollout,
   onResourceClick,
+  showNamespace = false,
   t,
 }: {
   rollout: RolloutRevision
   onResourceClick: (kind: string, name: string, ns: string) => void
+  showNamespace?: boolean
   t: any
 }) {
   return (
@@ -433,7 +443,7 @@ function RolloutRow({
             onClick={() => onResourceClick(rollout.kind, rollout.name, rollout.namespace)}
             className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
           >
-            {rollout.kind}/{rollout.name}
+            {showNamespace && rollout.namespace ? `${rollout.namespace} · ` : ''}{rollout.kind}/{rollout.name}
           </button>
           <span className="text-[11px] text-gray-500 dark:text-gray-400">
             {rollout.images.join(', ')}

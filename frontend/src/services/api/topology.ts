@@ -17,6 +17,13 @@ export const topologyApi = {
   },
 
   // Timeline
+  getClusterTimeline: async (hours: number = 24, limit: number = 500): Promise<TimelineResult> => {
+    const { data } = await client.get('/cluster/timeline', {
+      params: { hours, limit },
+    })
+    return data
+  },
+
   getNamespaceTimeline: async (namespace: string, hours: number = 24, limit: number = 500): Promise<TimelineResult> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/timeline`, {
       params: { hours, limit },

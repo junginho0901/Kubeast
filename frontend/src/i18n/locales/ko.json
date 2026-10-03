@@ -2675,6 +2675,7 @@
     "title": "변경 이력 타임라인",
     "subtitle": "K8s 이벤트와 리소스 변경 이력을 시간순으로 확인합니다.",
     "selectNamespace": "네임스페이스 선택",
+    "allNamespaces": "전체 네임스페이스",
     "timeRange": "시간 범위",
     "1h": "1시간",
     "6h": "6시간",
