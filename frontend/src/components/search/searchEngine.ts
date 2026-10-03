@@ -20,6 +20,14 @@ function getTopLevelKeys(items: Record<string, unknown>[]): string[] {
   return Array.from(keys)
 }
 
+function tryParse(query: string): ReturnType<typeof jsep> | null {
+  try {
+    return jsep(query)
+  } catch {
+    return null
+  }
+}
+
 export async function searchWithExpression(
   items: Record<string, unknown>[],
   query: string,
@@ -28,12 +36,7 @@ export async function searchWithExpression(
   const start = performance.now()
   if (!query.trim()) return { results: [], timeMs: 0 }
 
-  let parsed: ReturnType<typeof jsep> | null = null
-  try {
-    parsed = jsep(query)
-  } catch {
-    return { results: [], timeMs: 0 }
-  }
+  const parsed = tryParse(query)
   if (!parsed) return { results: [], timeMs: 0 }
 
   const dummyKeys: Record<string, undefined> = {}
