@@ -2,9 +2,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: auth-service
+  labels:
+    kubeast.io/metrics: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   ports:
-    - port: 8004
+    - name: http
+      port: 8004
       targetPort: 8004
   selector:
     app: auth-service
@@ -13,9 +17,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ai-service
+  labels:
+    kubeast.io/metrics: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   ports:
-    - port: 8001
+    - name: http
+      port: 8001
       targetPort: 8001
   selector:
     app: ai-service
@@ -24,9 +32,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: k8s-service
+  labels:
+    kubeast.io/metrics: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   ports:
-    - port: 8002
+    - name: http
+      port: 8002
       targetPort: 8002
   selector:
     app: k8s-service
@@ -35,9 +47,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: session-service
+  labels:
+    kubeast.io/metrics: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   ports:
-    - port: 8003
+    - name: http
+      port: 8003
       targetPort: 8003
   selector:
     app: session-service
@@ -57,9 +73,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tool-server
+  labels:
+    kubeast.io/metrics: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   ports:
-    - port: 8086
+    - name: http
+      port: 8086
       targetPort: 8086
   selector:
     app: tool-server

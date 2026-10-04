@@ -1,0 +1,28 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+# One ServiceMonitor for every backend Service labelled kubeast.io/metrics
+# (auth, ai, k8s, session, tool-server): port "http", path /metrics. Needs the
+# prometheus-operator CRDs; with kube-prometheus-stack add its release label
+# through metrics.serviceMonitor.labels so its Prometheus selects this.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-backends
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      kubeast.io/metrics: "true"
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}

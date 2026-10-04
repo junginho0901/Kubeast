@@ -29,6 +29,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
 func main() {
@@ -130,6 +131,16 @@ func main() {
 	wsMux.MaxSubscriptions = cfg.WSMaxSubscriptions
 	wsMux.MaxSubscriptionsPerConn = cfg.WSMaxSubscriptionsPerConn
 
+	// Console metrics (services/pkg/metrics): HTTP by route pattern, the audit
+	// store's readiness and write failures, live WebSocket subscriptions.
+	m := metrics.New("k8s")
+	m.Route = metrics.ChiRoute
+	if s, ok := any(auditStore).(audit.Statuser); ok {
+		m.AuditStore(s)
+	}
+	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
+		func() float64 { return float64(wsMux.SubscriptionCount()) })
+
 	// Setup router
 	r := chi.NewRouter()
 
@@ -138,6 +149,7 @@ func main() {
 	r.Use(audit.RealIP) // gateway-set X-Real-IP only (not chi's: it also trusts client-settable headers)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(limits.MaxBody(int64(cfg.MaxRequestBodyBytes)))
+	r.Use(m.Middleware)
 	// Note: no global timeout middleware - it kills WebSocket connections.
 	// Individual handler timeouts are handled via context or http.Server settings.
 	// CORS only for listed origins. With none listed the middleware is not
@@ -157,6 +169,7 @@ func main() {
 	// Public routes
 	r.Get("/", h.HealthRoot)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// Protected API routes — domain-specific registrations live in
 	// internal/routes/. main.go retains middleware wiring only so it

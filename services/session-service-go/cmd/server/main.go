@@ -20,6 +20,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/pkg/metrics"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/repository"
@@ -100,6 +101,10 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
 	r.Use(limits.MaxBody(limits.DefaultMaxBody))
+	// Console metrics (services/pkg/metrics), served at /metrics on this port.
+	m := metrics.New("session")
+	m.Route = metrics.ChiRoute
+	r.Use(m.Middleware)
 
 	// CORS only for listed origins. With none listed the middleware is not
 	// installed at all: go-chi/cors treats an empty list as "every origin",
@@ -124,6 +129,7 @@ func main() {
 	// Health endpoints (no auth)
 	r.Get("/", healthHandler.Root)
 	r.Get("/health", healthHandler.Health)
+	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// API routes (with auth)
 	r.Route("/api/v1", func(r chi.Router) {

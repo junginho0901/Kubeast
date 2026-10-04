@@ -123,6 +123,33 @@ auth:
     maxHours: 8
     roles: [Write]
 
+# --- Console metrics (the console's own health, not the target clusters') ---
+# Every backend service (auth, ai, k8s, session, tool-server) serves Prometheus
+# metrics at /metrics on its service port: kubeast_http_requests_total /
+# _request_duration_seconds / _requests_in_flight by route pattern,
+# kubeast_audit_store_up / _audit_write_failures_total, kubeast_ws_subscriptions,
+# plus the Go/Python runtime collectors. The gateway never proxies /metrics; a
+# scraper reaches the service ports inside the cluster (networkPolicy.enabled:
+# allow it with metrics.networkPolicy.from).
+metrics:
+  enabled: true
+  # ServiceMonitor for the prometheus-operator (CRDs required). With
+  # kube-prometheus-stack set labels to its release, e.g. {release: monitoring}.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+  # Peers allowed to scrape when networkPolicy.enabled, e.g.
+  #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+  networkPolicy:
+    from: []
+  # Alerts (PrometheusRule, CRDs required): audit store down, 5xx ratio, p95 latency.
+  prometheusRule:
+    enabled: false
+    labels: {}
+    errorRatio: 0.05
+    p95Seconds: 2
+
 # --- Node shell (privileged debug pod on a node) ---
 # Off by default. When on, the pod runs in `namespace` (created with the
 # Pod Security "privileged" label) with an image from the allow list.

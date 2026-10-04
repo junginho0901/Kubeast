@@ -90,6 +90,13 @@ type Multiplexer struct {
 	subs map[string]*subscription // key -> subscription
 }
 
+// SubscriptionCount is the number of live subscriptions across all connections (metrics).
+func (m *Multiplexer) SubscriptionCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.subs)
+}
+
 // effectiveClusterID mirrors the HTTP ClusterMiddleware: an empty clusterId
 // falls back to the registry default, so that is what must be authorized.
 func effectiveClusterID(id string) string {

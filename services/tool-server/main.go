@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
 type ToolHandler func(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error)
@@ -44,8 +45,11 @@ func main() {
 
 	toolRegistry := buildToolRegistry()
 
+	// Console metrics (services/pkg/metrics): the four fixed paths by name.
+	m := metrics.New("tool-server")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handleHealth)
+	mux.Handle("/metrics", m.Handler())
 	mux.HandleFunc("/tools/list", func(w http.ResponseWriter, r *http.Request) {
 		handleList(w, r, toolRegistry)
 	})
@@ -65,7 +69,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      m.Middleware(mux),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
