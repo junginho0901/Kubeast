@@ -16,7 +16,6 @@ clusters:
 - name: test
   cluster:
     server: https://127.0.0.1:6443
-    insecure-skip-tls-verify: true
 contexts:
 - name: test
   context:

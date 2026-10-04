@@ -233,7 +233,13 @@ async def require_auth(authorization: Optional[str] = Depends(bearer_or_cookie))
     if not token:
         raise HTTPException(status_code=401, detail="Invalid Authorization header")
 
-    return decode_access_token(token)
+    payload = decode_access_token(token)
+    # A pending account (registered, no role granted yet) holds a session only
+    # to see its own state; it must not reach the AI endpoints (L15 — same
+    # rule as the Go services' shared middleware).
+    if (payload.role or "").lower() == "pending":
+        raise HTTPException(status_code=403, detail="Account pending approval")
+    return payload
 
 
 async def require_admin(payload: TokenPayload = Depends(require_auth)) -> TokenPayload:

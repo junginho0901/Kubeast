@@ -32,7 +32,7 @@ func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request)
 
 	entries, total, err := h.auditStore.List(r.Context(), filter)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 

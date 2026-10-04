@@ -23,13 +23,45 @@ var staticCredentialEnv = []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
 // matched on their base name, so an absolute path to an allowed binary
 // passes. A kubeconfig without an exec section always passes; an empty
 // allow-list forbids exec plugins altogether.
+//
+// It also rejects what a registered kubeconfig must never carry (second
+// review M28): `insecure-skip-tls-verify` (the API server would go
+// unverified), `proxy-url` (traffic would be routed through an arbitrary
+// host) and file references — `certificate-authority`, `client-certificate`,
+// `client-key`, `tokenFile` — which would point into the pod's own filesystem;
+// the inline `*-data` fields are the supported form.
 func CheckKubeconfigExec(blob string, allow []string) error {
 	cfg, err := clientcmd.Load([]byte(blob))
 	if err != nil {
 		return fmt.Errorf("invalid kubeconfig: %w", err)
 	}
+	for name, c := range cfg.Clusters {
+		if c == nil {
+			continue
+		}
+		if c.InsecureSkipTLSVerify {
+			return fmt.Errorf("cluster %q: insecure-skip-tls-verify is not allowed; provide certificate-authority-data", name)
+		}
+		if strings.TrimSpace(c.ProxyURL) != "" {
+			return fmt.Errorf("cluster %q: proxy-url is not allowed", name)
+		}
+		if strings.TrimSpace(c.CertificateAuthority) != "" {
+			return fmt.Errorf("cluster %q: certificate-authority must be inline (certificate-authority-data), not a file path", name)
+		}
+	}
 	for name, ai := range cfg.AuthInfos {
-		if ai == nil || ai.Exec == nil {
+		if ai == nil {
+			continue
+		}
+		switch {
+		case strings.TrimSpace(ai.ClientCertificate) != "":
+			return fmt.Errorf("user %q: client-certificate must be inline (client-certificate-data), not a file path", name)
+		case strings.TrimSpace(ai.ClientKey) != "":
+			return fmt.Errorf("user %q: client-key must be inline (client-key-data), not a file path", name)
+		case strings.TrimSpace(ai.TokenFile) != "":
+			return fmt.Errorf("user %q: tokenFile is not allowed; the kubeconfig must hold no file references", name)
+		}
+		if ai.Exec == nil {
 			continue
 		}
 		cmd := filepath.Base(strings.TrimSpace(ai.Exec.Command))

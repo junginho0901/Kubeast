@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     
     # WebSocket
     WS_HEARTBEAT_INTERVAL: int = 30
+
+    # Request body cap in bytes (413 above it)
+    MAX_REQUEST_BODY_BYTES: int = 1 << 20
     
     class Config:
         # 프로젝트 루트의 .env 파일 사용

@@ -27,6 +27,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -175,6 +176,7 @@ func main() {
 	r.Use(audit.RealIP) // gateway-set X-Real-IP only (not chi's: it also trusts client-settable headers)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
+	r.Use(limits.MaxBody(int64(cfg.MaxRequestBodyBytes)))
 
 	// CORS only for listed origins. With none listed the middleware is not
 	// installed at all: go-chi/cors treats an empty list as "every origin",
@@ -202,9 +204,11 @@ func main() {
 
 	// Auth API
 	r.Route("/api/v1/auth", func(r chi.Router) {
-		// Public endpoints
-		r.Post("/register", authHandler.Register)
-		r.Post("/login", authHandler.Login)
+		// Public endpoints. The two that take credentials accept only
+		// application/json bodies (login CSRF: a cross-site form cannot send
+		// that content type without a preflight).
+		r.With(handler.RequireJSON).Post("/register", authHandler.Register)
+		r.With(handler.RequireJSON).Post("/login", authHandler.Login)
 		r.Post("/logout", authHandler.Logout)
 		// OIDC login (provider chosen by configuration); the session it sets is
 		// the same cookie a password login sets.
@@ -312,6 +316,13 @@ func main() {
 
 func bootstrapUsers(ctx context.Context, repo *repository.Repository, cfg config.Config) {
 	if cfg.DefaultAdminPassword == "change-me-do-not-use-in-prod" {
+		// Outside DEBUG the service does not start with a guessable admin
+		// password: the Helm chart generates one and install-docker.sh writes
+		// one into .env, so hitting this means the value was lost or removed.
+		if !cfg.Debug {
+			slog.Error("DEFAULT_ADMIN_PASSWORD is the built-in placeholder; refusing to start outside DEBUG — set a strong value (the Helm chart generates one)")
+			os.Exit(1)
+		}
 		slog.Warn("DEFAULT_ADMIN_PASSWORD is the built-in placeholder; set a strong value (the Helm chart generates one)")
 	}
 	users := []struct {

@@ -119,7 +119,17 @@ func JWKThumbprint(pub *rsa.PublicKey) string {
 // becomes the "roles" claim the Kubernetes impersonation groups derive from.
 // tokenVersion is the user's revocation counter ("tv" claim): bumping it in
 // the database invalidates the token.
+// CreateToken signs a session token for a fresh authentication (login): the
+// "auth_time" claim is now.
 func (m *JWTManager) CreateToken(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int) (string, error) {
+	return m.CreateTokenAt(userID, email, roleName, permissions, clusterRoles, tokenVersion, time.Time{})
+}
+
+// CreateTokenAt signs a session token with an explicit authTime — when the
+// user last proved their identity. A refresh passes the previous token's
+// value through so the "auth_time" claim stays fixed and the session's
+// absolute lifetime can be enforced. A zero authTime means "now".
+func (m *JWTManager) CreateTokenAt(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, authTime time.Time) (string, error) {
 	if permissions == nil {
 		permissions = auth.PermissionMatrix{}
 	}
@@ -127,6 +137,9 @@ func (m *JWTManager) CreateToken(userID, email, roleName string, permissions aut
 		clusterRoles = map[string]string{}
 	}
 	now := time.Now()
+	if authTime.IsZero() {
+		authTime = now
+	}
 	claims := jwt.MapClaims{
 		"sub":         userID,
 		"email":       email,
@@ -134,6 +147,7 @@ func (m *JWTManager) CreateToken(userID, email, roleName string, permissions aut
 		"permissions": permissions,
 		"roles":       clusterRoles,
 		"tv":          tokenVersion,
+		"auth_time":   authTime.Unix(),
 		"jti":         uuid.NewString(), // unique per issue (login vs refresh in the same second)
 		"iss":         m.Issuer,
 		"aud":         m.Audience,

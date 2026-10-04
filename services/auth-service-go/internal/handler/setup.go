@@ -46,7 +46,7 @@ func (h *SetupHandler) GetSetupPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, model.ClusterSetupStatus{Configured: true})
@@ -64,7 +64,7 @@ func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusConflict, "Already configured")
 		return
 	} else if !errors.Is(err, cluster.ErrNotFound) {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 

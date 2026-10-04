@@ -16,6 +16,7 @@ data:
   JWT_ISSUER: "kubeast-auth"
   JWT_AUDIENCE: "kubeast"
   JWT_EXPIRES_MINUTES: {{ .Values.auth.tokenTTLMinutes | quote }}
+  SESSION_ABSOLUTE_HOURS: {{ .Values.auth.sessionAbsoluteHours | quote }}
   ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
   BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
   PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}

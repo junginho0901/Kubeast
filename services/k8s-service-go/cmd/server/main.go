@@ -27,6 +27,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 )
 
@@ -126,6 +127,8 @@ func main() {
 
 	// Init WebSocket multiplexer
 	wsMux := ws.NewMultiplexer(k8sSvc)
+	wsMux.MaxSubscriptions = cfg.WSMaxSubscriptions
+	wsMux.MaxSubscriptionsPerConn = cfg.WSMaxSubscriptionsPerConn
 
 	// Setup router
 	r := chi.NewRouter()
@@ -134,6 +137,7 @@ func main() {
 	r.Use(chimiddleware.RequestID)
 	r.Use(audit.RealIP) // gateway-set X-Real-IP only (not chi's: it also trusts client-settable headers)
 	r.Use(chimiddleware.Recoverer)
+	r.Use(limits.MaxBody(int64(cfg.MaxRequestBodyBytes)))
 	// Note: no global timeout middleware - it kills WebSocket connections.
 	// Individual handler timeouts are handled via context or http.Server settings.
 	// CORS only for listed origins. With none listed the middleware is not

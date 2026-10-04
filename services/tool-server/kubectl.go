@@ -12,23 +12,49 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
+// outputMaxBytes caps what one kubectl call hands back to the model: the tool
+// result goes into the prompt and the chat history, so an unbounded `logs` or
+// `get -o json` would blow the context (and memory) before anything else
+// (second review M30). TOOL_OUTPUT_MAX_BYTES overrides the 1 MiB default.
+var outputMaxBytes = envInt("TOOL_OUTPUT_MAX_BYTES", 1<<20)
+
+const truncatedMarker = "\n… [output truncated by tool-server: %d bytes limit]\n"
+
+func envInt(name string, def int) int {
+	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
+}
+
+// capOutput truncates output to outputMaxBytes with a visible marker.
+func capOutput(output []byte) string {
+	if len(output) <= outputMaxBytes {
+		return string(output)
+	}
+	return string(output[:outputMaxBytes]) + fmt.Sprintf(truncatedMarker, outputMaxBytes)
+}
+
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "kubectl", kubectlArgs(ctx, args)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		errText := strings.TrimSpace(string(output))
+		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
 			errText = err.Error()
 		}
 		return "", fmt.Errorf("kubectl failed: %s", errText)
 	}
 
-	return string(output), nil
+	return capOutput(output), nil
 }
 
 func runKubectlWithInput(ctx context.Context, headers http.Header, input string, args ...string) (string, error) {
@@ -36,13 +62,13 @@ func runKubectlWithInput(ctx context.Context, headers http.Header, input string,
 	cmd.Stdin = strings.NewReader(input)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		errText := strings.TrimSpace(string(output))
+		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
 			errText = err.Error()
 		}
 		return "", fmt.Errorf("kubectl failed: %s", errText)
 	}
-	return string(output), nil
+	return capOutput(output), nil
 }
 
 // kubectlArgs prefixes the tool's arguments with the per-request kubeconfig and

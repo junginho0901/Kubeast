@@ -33,6 +33,28 @@ type TokenPayload struct {
 	// TokenVersion is the "tv" claim: the user's token_version when the token
 	// was issued. auth-service bumps the stored version to revoke tokens.
 	TokenVersion int
+	// AuthTime is the "auth_time" claim (unix seconds): when the user last
+	// proved their identity (password or SSO login). A refresh carries it over
+	// unchanged so auth-service can cap the session's absolute lifetime
+	// (OWASP Session Management: absolute timeout). Falls back to "iat".
+	AuthTime int64
+}
+
+// PendingAllowedPaths are the only paths a token with the "pending" role may
+// call: the account exists but no administrator has granted a role yet, so it
+// must not reach anything beyond seeing its own state, keeping the session
+// alive and signing out (second review L15).
+var PendingAllowedPaths = map[string]struct{}{
+	"/api/v1/auth/me":              {},
+	"/api/v1/auth/refresh":         {},
+	"/api/v1/auth/logout":          {},
+	"/api/v1/auth/change-password": {},
+}
+
+// pendingAllowed reports whether a pending account may call this request.
+func pendingAllowed(r *http.Request) bool {
+	_, ok := PendingAllowedPaths[r.URL.Path]
+	return ok
 }
 
 // ParseRoles converts the raw "roles" claim ({cluster: roleName}) into a map;
@@ -300,7 +322,13 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 			return TokenPayload{}, err
 		}
 	}
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), TokenVersion: claimedTV}, nil
+	var authTime int64
+	if f, ok := claims["auth_time"].(float64); ok && f > 0 {
+		authTime = int64(f)
+	} else if f, ok := claims["iat"].(float64); ok && f > 0 {
+		authTime = int64(f)
+	}
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), TokenVersion: claimedTV, AuthTime: authTime}, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change
@@ -371,6 +399,10 @@ func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler
 		payload, err := v.Validate(tokenStr)
 		if err != nil {
 			http.Error(w, `{"detail":"Invalid token"}`, http.StatusUnauthorized)
+			return
+		}
+		if payload.Role == "pending" && !pendingAllowed(r) {
+			http.Error(w, `{"detail":"Account pending approval"}`, http.StatusForbidden)
 			return
 		}
 

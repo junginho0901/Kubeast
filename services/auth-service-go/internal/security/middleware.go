@@ -86,7 +86,26 @@ func AuthMiddleware(jwtMgr *JWTManager, tokenVersion TokenVersionLookup, cookieN
 				return
 			}
 
-			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"])}
+			// auth_time: when the user last signed in (refresh keeps it); older
+			// tokens without it count from iat. Refresh enforces the absolute
+			// session lifetime from this value.
+			var authTime int64
+			if f, ok := claims["auth_time"].(float64); ok && f > 0 {
+				authTime = int64(f)
+			} else if f, ok := claims["iat"].(float64); ok && f > 0 {
+				authTime = int64(f)
+			}
+
+			// A pending account may only see its own state, keep its session and
+			// sign out (same rule as pkg/auth's middleware in the other services).
+			if role == "pending" {
+				if _, allowed := auth.PendingAllowedPaths[r.URL.Path]; !allowed {
+					http.Error(w, `{"detail":"Account pending approval"}`, http.StatusForbidden)
+					return
+				}
+			}
+
+			payload := auth.TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: auth.ParseRoles(claims["roles"]), AuthTime: authTime}
 			ctx := context.WithValue(r.Context(), auth.TokenPayloadContextKey(), payload)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

@@ -32,6 +32,35 @@ users:
 	return b.String()
 }
 
+// A registered kubeconfig must not disable TLS verification, route through a
+// proxy, or reference files on the pod's filesystem (second review M28).
+func TestCheckKubeconfigExec_RejectsUnsafeClusterAndUserFields(t *testing.T) {
+	const head = "apiVersion: v1\nkind: Config\ncontexts:\n- name: c\n  context: {cluster: c, user: u}\ncurrent-context: c\n"
+	cases := []struct {
+		name string
+		blob string
+		want string
+	}{
+		{"insecure-skip-tls-verify", head + "clusters:\n- name: c\n  cluster:\n    server: https://example:6443\n    insecure-skip-tls-verify: true\nusers:\n- name: u\n  user:\n    token: abc\n", "insecure-skip-tls-verify"},
+		{"proxy-url", head + "clusters:\n- name: c\n  cluster:\n    server: https://example:6443\n    proxy-url: http://proxy.example:3128\nusers:\n- name: u\n  user:\n    token: abc\n", "proxy-url"},
+		{"certificate-authority file", head + "clusters:\n- name: c\n  cluster:\n    server: https://example:6443\n    certificate-authority: /etc/ssl/ca.crt\nusers:\n- name: u\n  user:\n    token: abc\n", "certificate-authority"},
+		{"client-certificate file", head + "clusters:\n- name: c\n  cluster:\n    server: https://example:6443\nusers:\n- name: u\n  user:\n    client-certificate: /tmp/c.crt\n    client-key: /tmp/c.key\n", "client-certificate"},
+		{"tokenFile", head + "clusters:\n- name: c\n  cluster:\n    server: https://example:6443\nusers:\n- name: u\n  user:\n    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token\n", "tokenFile"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckKubeconfigExec(tc.blob, []string{"aws-iam-authenticator"})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want error mentioning %q, got %v", tc.want, err)
+			}
+		})
+	}
+	inline := head + "clusters:\n- name: c\n  cluster:\n    server: https://example:6443\n    certificate-authority-data: Zm9v\nusers:\n- name: u\n  user:\n    client-certificate-data: Zm9v\n    client-key-data: YmFy\n"
+	if err := CheckKubeconfigExec(inline, nil); err != nil {
+		t.Fatalf("inline data fields must pass: %v", err)
+	}
+}
+
 func TestCheckKubeconfigExec(t *testing.T) {
 	allow := []string{"aws-iam-authenticator"}
 	cases := []struct {

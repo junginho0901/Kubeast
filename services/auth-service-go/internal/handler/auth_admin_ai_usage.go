@@ -53,7 +53,7 @@ func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusBadRequest, "group must be user, model or cluster")
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 

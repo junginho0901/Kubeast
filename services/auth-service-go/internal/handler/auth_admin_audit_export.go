@@ -52,7 +52,7 @@ func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Reques
 			rec.Result = audit.ResultFailure
 			rec.Error = err.Error()
 			_, _ = h.auditStore.Write(r.Context(), rec)
-			response.Error(w, http.StatusInternalServerError, err.Error())
+			response.InternalError(w, r, err)
 			return
 		}
 		rows = append(rows, page...)

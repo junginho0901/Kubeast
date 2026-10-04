@@ -58,6 +58,13 @@ type Config struct {
 
 	// WebSocket
 	WSHeartbeatInterval int
+	// Watch subscriptions: a global cap and a per-connection cap, so one
+	// browser cannot take the whole budget (second review L22).
+	WSMaxSubscriptions        int
+	WSMaxSubscriptionsPerConn int
+	// MaxRequestBodyBytes caps every request body; YAML apply/create of large
+	// manifests fit well under the default 4 MiB.
+	MaxRequestBodyBytes int
 
 	// Node shell: privileged debug pod on a node. Off unless enabled; the pod
 	// always runs in NodeShellNamespace with an image from NodeShellImages.
@@ -109,7 +116,10 @@ func Load() Config {
 		RedisDB:       pkgconfig.GetEnvInt("REDIS_DB", 0),
 		RedisPassword: pkgconfig.GetEnv("REDIS_PASSWORD", ""),
 
-		WSHeartbeatInterval: pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
+		WSHeartbeatInterval:       pkgconfig.GetEnvInt("WS_HEARTBEAT_INTERVAL", 30),
+		WSMaxSubscriptions:        pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS", 200),
+		WSMaxSubscriptionsPerConn: pkgconfig.GetEnvInt("WS_MAX_SUBSCRIPTIONS_PER_CONN", 50),
+		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
 
 		NodeShellEnabled:    pkgconfig.GetEnvBool("NODE_SHELL_ENABLED", false),
 		NodeShellNamespace:  pkgconfig.GetEnv("NODE_SHELL_NAMESPACE", "kubeast-node-shell"),

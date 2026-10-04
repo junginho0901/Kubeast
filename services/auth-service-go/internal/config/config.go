@@ -28,6 +28,12 @@ type Config struct {
 	JWTIssuer         string
 	JWTAudience       string
 	JWTExpiresMinutes int
+	// SessionAbsoluteHours caps how long a session can be refreshed after the
+	// user last signed in, whatever its activity (OWASP: absolute timeout,
+	// 4-8 h for a working day). 0 disables the cap.
+	SessionAbsoluteHours int
+	// MaxRequestBodyBytes caps every request body (http.MaxBytesReader).
+	MaxRequestBodyBytes int
 	// Password login lockout: LoginMaxFailures failures within
 	// LoginLockoutMinutes lock the account for LoginLockoutMinutes.
 	LoginMaxFailures    int
@@ -166,16 +172,20 @@ func Load() Config {
 		RetentionAuditDays: pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
 		RetentionChatDays:  pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
 
-		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
-		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
-		JWTExpiresMinutes:   pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 15),
-		LoginMaxFailures:    pkgconfig.GetEnvInt("LOGIN_MAX_FAILURES", 5),
-		LoginLockoutMinutes: pkgconfig.GetEnvInt("LOGIN_LOCKOUT_MINUTES", 15),
-		KeyDir:              pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
+		JWTIssuer:            pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
+		JWTAudience:          pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
+		JWTExpiresMinutes:    pkgconfig.GetEnvInt("JWT_EXPIRES_MINUTES", 15),
+		SessionAbsoluteHours: pkgconfig.GetEnvInt("SESSION_ABSOLUTE_HOURS", 8),
+		MaxRequestBodyBytes:  pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 1<<20),
+		LoginMaxFailures:     pkgconfig.GetEnvInt("LOGIN_MAX_FAILURES", 5),
+		LoginLockoutMinutes:  pkgconfig.GetEnvInt("LOGIN_LOCKOUT_MINUTES", 15),
+		KeyDir:               pkgconfig.GetEnv("KEY_DIR", "/app/.keys"),
 
 		AllowedOrigins: pkgconfig.LookupEnvList("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 
-		PasswordHashIterations: pkgconfig.GetEnvInt("PASSWORD_HASH_ITERATIONS", 210000),
+		// OWASP Password Storage: PBKDF2-HMAC-SHA256 at 600,000 iterations.
+		// Older hashes are re-hashed on the next successful login.
+		PasswordHashIterations: pkgconfig.GetEnvInt("PASSWORD_HASH_ITERATIONS", 600000),
 
 		DefaultAdminEmail: pkgconfig.GetEnv("DEFAULT_ADMIN_EMAIL", "admin"),
 		// 프로덕션에서는 반드시 DEFAULT_ADMIN_PASSWORD 환경변수로 강한 값을 주입하세요.
