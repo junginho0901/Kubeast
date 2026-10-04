@@ -172,7 +172,7 @@ AI 어시스턴트가 활성화됩니다.
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 게이팅**
 - **플로팅 AI 위젯** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트(보고 있는 리소스)**
   를 이해하고 답변 (read-only 툴로 제한)
-- **로그 분석 / 트러블슈팅 / 리소스 설명 / 최적화 제안** — 원샷 분석 엔드포인트
+- **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍
 - **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트
 
 ### 🌐 멀티클러스터 & RBAC
@@ -269,7 +269,7 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | --- | --- | --- | --- |
 | `gateway` | NGINX | 8000 | API 라우팅, CORS, SSE/WebSocket 프록시 (이미지 빌드 없음, 설정만) |
 | `auth-service` | Go | 8004 | 인증, JWT/JWKS, 조직/팀/RBAC, 클러스터 레지스트리 |
-| `ai-service` | Python (FastAPI) | 8001 | LLM 통합, 스트리밍 챗봇, 로그 분석, Tool calling |
+| `ai-service` | Python (FastAPI) | 8001 | LLM 통합, 스트리밍 챗봇, 최적화 제안, Tool calling |
 | `k8s-service` | Go | 8002 | K8s 리소스 CRUD, WS 로그/exec, 토폴로지, Helm, GPU/DRA, 멀티클러스터 풀 |
 | `session-service` | Go | 8003 | 채팅 세션 / 메시지 히스토리 |
 | `tool-server` | Go | — | AI Tool 호출 백엔드 (kubectl 실행) |
@@ -501,7 +501,7 @@ curl http://localhost:8000/health   # Gateway
 - React 18 · TypeScript · Vite · Tailwind CSS
 - TanStack Query · React Router
 - Monaco Editor · xterm.js
-- React Flow · dagre · elkjs (그래프) · Recharts (차트)
+- React Flow · dagre · elkjs (그래프) · three.js (3D 토폴로지)
 - i18next (한/영)
 
 **Infra**

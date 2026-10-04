@@ -14,7 +14,7 @@ Requests enter through an NGINX **gateway** (`:8000`) that routes to backend ser
 | --- | --- | --- | --- | --- |
 | `gateway` | NGINX | 8000 | `k8s/nginx.conf` | Routing, CORS, SSE/WebSocket proxy. No image build — ConfigMap only. |
 | `auth-service` | Go | 8004 | `services/auth-service-go` | JWT issuance, JWKS, org/team/user hierarchy, RBAC |
-| `ai-service` | Python/FastAPI | 8001 | `services/ai-service` | LLM integration, streaming chat, log analysis, tool calling |
+| `ai-service` | Python/FastAPI | 8001 | `services/ai-service` | LLM integration, streaming chat, optimization suggestions, tool calling |
 | `k8s-service` | Go | 8002 | `services/k8s-service-go` | K8s resource CRUD, WebSocket logs/exec, topology, Helm, GPU/DRA |
 | `session-service` | Go | 8003 | `services/session-service-go` | Chat session / message history |
 | `tool-server` | Go | — | `services/tool-server` | Backend for AI tool calls |
