@@ -1,0 +1,336 @@
+# QA sweep seed: one of every resource kind the action catalog touches, in namespace qa-sweep of the
+# second (target) cluster. Applied by seed.sh before each run; the namespace is recreated for a reset.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qa-sweep
+  labels: { kubeast.io/qa-sweep: "true" }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: qa-cm, namespace: qa-sweep }
+data: { greeting: hello, mode: qa }
+---
+apiVersion: v1
+kind: Secret
+metadata: { name: qa-secret, namespace: qa-sweep }
+type: Opaque
+stringData: { password: qa-pass-123, token: qa-token-abc }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: qa-web, namespace: qa-sweep, labels: { app: qa-web } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: qa-web } }
+  template:
+    metadata: { labels: { app: qa-web } }
+    spec:
+      containers:
+        - name: web
+          image: nginx:alpine
+          ports: [{ containerPort: 80 }]
+          resources: { requests: { cpu: 10m, memory: 16Mi }, limits: { cpu: 100m, memory: 64Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: qa-web, namespace: qa-sweep }
+spec:
+  selector: { app: qa-web }
+  ports: [{ port: 80, targetPort: 80 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: qa-web, namespace: qa-sweep }
+spec:
+  rules:
+    - host: qa-web.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: qa-web, port: { number: 80 } } }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: qa-sts, namespace: qa-sweep }
+spec:
+  serviceName: qa-sts
+  replicas: 1
+  selector: { matchLabels: { app: qa-sts } }
+  template:
+    metadata: { labels: { app: qa-sts } }
+    spec:
+      containers:
+        - name: app
+          image: nginx:alpine
+          resources: { requests: { cpu: 10m, memory: 16Mi }, limits: { cpu: 100m, memory: 64Mi } }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: { name: qa-ds, namespace: qa-sweep }
+spec:
+  selector: { matchLabels: { app: qa-ds } }
+  template:
+    metadata: { labels: { app: qa-ds } }
+    spec:
+      containers:
+        - name: app
+          image: nginx:alpine
+          resources: { requests: { cpu: 10m, memory: 16Mi }, limits: { cpu: 100m, memory: 64Mi } }
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: qa-job, namespace: qa-sweep }
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: job
+          image: busybox:1.36
+          command: ["sh", "-c", "echo qa-job done"]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: qa-cron, namespace: qa-sweep }
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: cron
+              image: busybox:1.36
+              command: ["sh", "-c", "date"]
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: qa-pod, namespace: qa-sweep, labels: { app: qa-pod } }
+spec:
+  containers:
+    - name: shell
+      image: busybox:1.36
+      command: ["sh", "-c", "while true; do echo tick $(date +%s); sleep 5; done"]
+      resources: { requests: { cpu: 10m, memory: 16Mi }, limits: { cpu: 100m, memory: 64Mi } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: qa-web, namespace: qa-sweep }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: qa-web }
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 80 } }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: qa-pvc, namespace: qa-sweep }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 100Mi } }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: qa-sa, namespace: qa-sweep }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: qa-role, namespace: qa-sweep }
+rules: [{ apiGroups: [""], resources: [configmaps], verbs: [get, list] }]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: qa-rb, namespace: qa-sweep }
+subjects: [{ kind: ServiceAccount, name: qa-sa, namespace: qa-sweep }]
+roleRef: { kind: Role, name: qa-role, apiGroup: rbac.authorization.k8s.io }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata: { name: qa-quota, namespace: qa-sweep }
+spec: { hard: { pods: "50" } }
+---
+apiVersion: v1
+kind: LimitRange
+metadata: { name: qa-limits, namespace: qa-sweep }
+spec:
+  limits: [{ type: Container, default: { cpu: 200m, memory: 128Mi }, defaultRequest: { cpu: 10m, memory: 16Mi } }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: qa-np, namespace: qa-sweep }
+spec:
+  podSelector: { matchLabels: { app: qa-web } }
+  policyTypes: [Ingress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: qa-pdb, namespace: qa-sweep }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: qa-web } }
+---
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata: { name: qa-lease, namespace: qa-sweep }
+spec: { holderIdentity: qa }
+---
+# cluster-scoped kinds the delete routes cover (all inert: nothing schedules on them)
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata: { name: qa-priority, labels: { kubeast.io/qa-sweep: "true" } }
+value: 1000
+globalDefault: false
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata: { name: qa-runtime, labels: { kubeast.io/qa-sweep: "true" } }
+handler: runc
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata: { name: qa-storage, labels: { kubeast.io/qa-sweep: "true" } }
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata: { name: qa-ingressclass, labels: { kubeast.io/qa-sweep: "true" } }
+spec: { controller: example.com/qa }
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: { name: qa-pv, labels: { kubeast.io/qa-sweep: "true" } }
+spec:
+  capacity: { storage: 50Mi }
+  accessModes: [ReadWriteOnce]
+  storageClassName: qa-storage
+  persistentVolumeReclaimPolicy: Delete
+  hostPath: { path: /tmp/qa-pv }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata: { name: qa-mutating, labels: { kubeast.io/qa-sweep: "true" } }
+webhooks: []
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata: { name: qa-validating, labels: { kubeast.io/qa-sweep: "true" } }
+webhooks: []
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: { name: widgets.qa.example.com, labels: { kubeast.io/qa-sweep: "true" } }
+spec:
+  group: qa.example.com
+  scope: Namespaced
+  names: { plural: widgets, singular: widget, kind: Widget }
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - { name: Color, type: string, jsonPath: .spec.color }
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties: { color: { type: string } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: qa-sweep-2, labels: { kubeast.io/qa-sweep: "true" } }
+# --- added 10-02 (coverage pass): cluster RBAC, Gateway API (needs the v1.3.0 experimental CRDs), VPA (needs the VPA CRD), DRA (resource.k8s.io/v1, K8s ≥ 1.34)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: qa-clusterrole, labels: { kubeast.io/qa-sweep: "true" } }
+rules: [{ apiGroups: [""], resources: ["configmaps"], verbs: ["get", "list"] }]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: qa-crb, labels: { kubeast.io/qa-sweep: "true" } }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: qa-clusterrole }
+subjects: [{ kind: ServiceAccount, name: qa-sa, namespace: qa-sweep }]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: { name: qa-gatewayclass, labels: { kubeast.io/qa-sweep: "true" } }
+spec: { controllerName: qa.example.com/gateway-controller }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: { name: qa-gateway, namespace: qa-sweep }
+spec:
+  gatewayClassName: qa-gatewayclass
+  listeners: [{ name: http, protocol: HTTP, port: 80 }]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: { name: qa-httproute, namespace: qa-sweep }
+spec:
+  parentRefs: [{ name: qa-gateway }]
+  hostnames: ["qa.example.com"]
+  rules: [{ backendRefs: [{ name: qa-web, port: 80 }] }]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata: { name: qa-grpcroute, namespace: qa-sweep }
+spec:
+  parentRefs: [{ name: qa-gateway }]
+  rules: [{ backendRefs: [{ name: qa-web, port: 80 }] }]
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata: { name: qa-refgrant, namespace: qa-sweep }
+spec:
+  from: [{ group: gateway.networking.k8s.io, kind: HTTPRoute, namespace: qa-sweep-2 }]
+  to: [{ group: "", kind: Service }]
+---
+apiVersion: gateway.networking.k8s.io/v1alpha3
+kind: BackendTLSPolicy
+metadata: { name: qa-btls, namespace: qa-sweep }
+spec:
+  targetRefs: [{ group: "", kind: Service, name: qa-web }]
+  validation: { hostname: qa.example.com, wellKnownCACertificates: System }
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata: { name: qa-vpa, namespace: qa-sweep }
+spec:
+  targetRef: { apiVersion: apps/v1, kind: Deployment, name: qa-web }
+  updatePolicy: { updateMode: "Off" }
+---
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata: { name: qa-deviceclass, labels: { kubeast.io/qa-sweep: "true" } }
+spec: {}
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: qa-claim-template, namespace: qa-sweep }
+spec:
+  spec:
+    devices: { requests: [{ name: gpu, exactly: { deviceClassName: qa-deviceclass } }] }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata: { name: qa-claim, namespace: qa-sweep }
+spec:
+  devices: { requests: [{ name: gpu, exactly: { deviceClassName: qa-deviceclass } }] }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceSlice
+metadata: { name: qa-slice, labels: { kubeast.io/qa-sweep: "true" } }
+spec:
+  driver: qa.example.com
+  allNodes: true
+  pool: { name: qa-pool, generation: 1, resourceSliceCount: 1 }
+  devices: [{ name: dev0 }]
