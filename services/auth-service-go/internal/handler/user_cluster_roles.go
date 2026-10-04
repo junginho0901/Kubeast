@@ -40,7 +40,7 @@ func (h *AuthHandler) GetUserClusterRoles(w http.ResponseWriter, r *http.Request
 	}
 	roles, err := h.repo.ListUserClusterRoleNames(r.Context(), userID)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, roles)
@@ -56,7 +56,7 @@ func (h *AuthHandler) GetClusterUserRoles(w http.ResponseWriter, r *http.Request
 	clusterID := chi.URLParam(r, "cluster_id")
 	rows, err := h.repo.ListClusterUserRoles(r.Context(), clusterID)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, rows)
@@ -84,7 +84,7 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 	}
 	role, err := h.repo.GetRoleByName(r.Context(), req.Role)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	if role == nil {

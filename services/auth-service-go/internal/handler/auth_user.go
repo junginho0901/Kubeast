@@ -85,7 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		after: map[string]any{"name": user.Name, "email": user.Email, "role": user.RoleName, "team": derefStr(user.Team)}, err: err,
 	})
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -121,6 +121,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.repo.GetUserByEmail(r.Context(), req.Email)
 	if err != nil || user == nil {
+		// Spend the same hashing work as a real check so an unknown email is
+		// not distinguishable from a wrong password by response time (L18).
+		security.VerifyPassword(req.Password, h.dummyPasswordHash())
 		// failed login — user not found. actorID 없음 (인증 안 됐으니).
 		// email 은 target_email 로 기록 (실제 존재 여부 정보 노출 안 되도록
 		// actor 자리에는 안 둠).
@@ -172,6 +175,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if state.Failures > 0 || !state.LockedUntil.IsZero() {
 		if err := h.repo.ResetLoginFailures(r.Context(), user.ID); err != nil {
 			slog.Error("login lockout: reset", "err", err)
+		}
+	}
+	// A hash made with an older iteration count is upgraded now, while the
+	// plaintext is at hand (the stored format carries its own count).
+	if security.NeedsRehash(user.PasswordHash, h.cfg.PasswordHashIterations) {
+		if newHash, err := security.HashPassword(req.Password, h.cfg.PasswordHashIterations); err == nil {
+			if err := h.repo.UpdateUserPassword(r.Context(), user.ID, newHash); err != nil {
+				slog.Warn("password rehash on login failed", "user", user.ID, "err", err)
+			}
 		}
 	}
 
@@ -230,6 +242,20 @@ func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, r *http.Request, toke
 	})
 }
 
+// clearAuthCookie removes the session cookie (same attributes as setAuthCookie
+// so the browser matches it).
+func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     h.cfg.AuthCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
 // Refresh handles POST /auth/refresh: re-issues a token for the caller from
 // the current database state (role, cluster grants, token_version), so a
 // change made after login takes effect without a password prompt and the
@@ -244,6 +270,20 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
 	if err != nil || user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
+		return
+	}
+	// Absolute lifetime (OWASP Session Management): a session may be refreshed
+	// only for SESSION_ABSOLUTE_HOURS after the user last signed in, however
+	// active it is. auth_time travels unchanged through every refresh.
+	authTime := time.Unix(payload.AuthTime, 0)
+	if payload.AuthTime <= 0 {
+		authTime = time.Now()
+	}
+	if limit := time.Duration(h.cfg.SessionAbsoluteHours) * time.Hour; limit > 0 && time.Since(authTime) > limit {
+		reason := jsonRaw(map[string]interface{}{"reason": "session_absolute_lifetime", "auth_time": authTime.UTC().Format(time.RFC3339), "limit_hours": h.cfg.SessionAbsoluteHours})
+		h.writeAuditLog(r, "user.token.refresh", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		h.clearAuthCookie(w, r)
+		response.Error(w, http.StatusUnauthorized, "Session expired; sign in again")
 		return
 	}
 	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
@@ -261,7 +301,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
 		return
 	}
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
+	token, err := h.jwtMgr.CreateTokenAt(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion, authTime)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return
@@ -398,7 +438,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateUserPassword(r.Context(), user.ID, newHash); err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	// Other sessions of this user must log in again with the new password:

@@ -71,7 +71,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		slog.Error("list sessions failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *SessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	session, err := h.repo.CreateSession(r.Context(), sessionID, payload.UserID, cluster, title)
 	if err != nil {
 		slog.Error("create session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -139,7 +139,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	session, err := h.repo.GetSession(r.Context(), sessionID)
 	if err != nil {
 		slog.Error("get session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	if session == nil || session.UserID != payload.UserID {
@@ -150,7 +150,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	messages, err := h.repo.GetMessages(r.Context(), sessionID, 100)
 	if err != nil {
 		slog.Error("get messages failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -187,7 +187,7 @@ func (h *SessionHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.repo.GetSession(r.Context(), sessionID)
 	if err != nil {
 		slog.Error("get session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	if existing == nil || existing.UserID != payload.UserID {
@@ -203,7 +203,7 @@ func (h *SessionHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.repo.UpdateSessionTitle(r.Context(), sessionID, req.Title); err != nil {
 		slog.Error("update session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -240,7 +240,7 @@ func (h *SessionHandler) SaveMessages(w http.ResponseWriter, r *http.Request) {
 	session, err := h.repo.GetSession(r.Context(), sessionID)
 	if err != nil {
 		slog.Error("get session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	if session == nil || session.UserID != payload.UserID {
@@ -257,7 +257,7 @@ func (h *SessionHandler) SaveMessages(w http.ResponseWriter, r *http.Request) {
 	for _, msg := range req.Messages {
 		if _, err := h.repo.AddMessage(r.Context(), sessionID, msg.Role, msg.Content, msg.ToolCalls); err != nil {
 			slog.Error("add message failed", "error", err)
-			response.Error(w, http.StatusInternalServerError, err.Error())
+			response.InternalError(w, r, err)
 			return
 		}
 	}
@@ -281,7 +281,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	session, err := h.repo.GetSession(r.Context(), sessionID)
 	if err != nil {
 		slog.Error("get session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	if session == nil || session.UserID != payload.UserID {
@@ -291,7 +291,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.repo.DeleteSession(r.Context(), sessionID); err != nil {
 		slog.Error("delete session failed", "error", err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 

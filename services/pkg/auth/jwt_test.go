@@ -80,6 +80,80 @@ func newValidator(s *jwksServer) *JWTValidator {
 	return NewJWTValidator(JWKSConfig{JWKSURL: s.srv.URL, Issuer: "iss", Audience: "aud"})
 }
 
+// signClaims signs a token with the given extra/overriding claims.
+func signClaims(t *testing.T, key *rsa.PrivateKey, kid string, extra jwt.MapClaims) string {
+	t.Helper()
+	claims := jwt.MapClaims{
+		"sub": "u1", "email": "u1@example.com", "role": "admin",
+		"permissions": map[string][]string{"*": {"*"}},
+		"iss":         "iss", "aud": "aud",
+		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
+	}
+	for k, v := range extra {
+		claims[k] = v
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["kid"] = kid
+	s, err := tok.SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestValidate_AuthTimeClaimFallsBackToIat(t *testing.T) {
+	s := newJWKSServer(t, "kid-a")
+	v := newValidator(s)
+	iat := time.Now().Add(-2 * time.Hour).Unix()
+	p, err := v.Validate(signClaims(t, s.key, "kid-a", jwt.MapClaims{"iat": iat}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.AuthTime != iat {
+		t.Fatalf("auth_time missing → iat expected %d, got %d", iat, p.AuthTime)
+	}
+	at := time.Now().Add(-5 * time.Hour).Unix()
+	p, err = v.Validate(signClaims(t, s.key, "kid-a", jwt.MapClaims{"auth_time": at}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.AuthTime != at {
+		t.Fatalf("auth_time expected %d, got %d", at, p.AuthTime)
+	}
+}
+
+func TestMiddleware_PendingRoleIsScoped(t *testing.T) {
+	s := newJWKSServer(t, "kid-a")
+	v := newValidator(s)
+	pending := signClaims(t, s.key, "kid-a", jwt.MapClaims{"role": "Pending", "permissions": map[string][]string{}})
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := v.Middleware(next)
+	for path, want := range map[string]int{
+		"/api/v1/auth/me":              http.StatusNoContent,
+		"/api/v1/auth/refresh":         http.StatusNoContent,
+		"/api/v1/auth/change-password": http.StatusNoContent,
+		"/api/v1/sessions":             http.StatusForbidden,
+		"/api/v1/audit/cluster-switch": http.StatusForbidden,
+		"/api/v1/pods":                 http.StatusForbidden,
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+pending)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("pending → %s: got %d, want %d", path, rec.Code, want)
+		}
+	}
+	// a granted role is not affected
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/pods", nil)
+	req.Header.Set("Authorization", "Bearer "+sign(t, s.key, "kid-a"))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("admin → /api/v1/pods: got %d", rec.Code)
+	}
+}
+
 func TestValidate_RotatedKeyNewKidIsFetched(t *testing.T) {
 	s := newJWKSServer(t, "kid-a")
 	v := newValidator(s)

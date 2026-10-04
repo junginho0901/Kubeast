@@ -13,6 +13,10 @@ import (
 	"net/http"
 )
 
+// maxLogTailLines caps a pod-logs tool call; the output is also capped in
+// bytes by runKubectl (TOOL_OUTPUT_MAX_BYTES) and `--limit-bytes`.
+const maxLogTailLines = 2000
+
 // Secrets are readable for the assistant, but never their values: every tool
 // result passes through services/pkg/redact in handleCall, which empties
 // data/stringData of any Secret document and masks credentials elsewhere
@@ -89,15 +93,21 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 
 	namespace := argString(args, "namespace", "default")
 	container := argString(args, "container", "")
+	// tail_lines is clamped to [1, maxLogTailLines]: a non-positive value
+	// would mean "the whole log" and the model-supplied number is untrusted.
 	tailLines := argInt(args, "tail_lines", 50)
+	if tailLines <= 0 {
+		tailLines = 50
+	}
+	if tailLines > maxLogTailLines {
+		tailLines = maxLogTailLines
+	}
 
 	cmdArgs := []string{"logs", podName, "-n", namespace}
 	if container != "" {
 		cmdArgs = append(cmdArgs, "-c", container)
 	}
-	if tailLines > 0 {
-		cmdArgs = append(cmdArgs, "--tail", fmt.Sprintf("%d", tailLines))
-	}
+	cmdArgs = append(cmdArgs, "--tail", fmt.Sprintf("%d", tailLines), "--limit-bytes", fmt.Sprintf("%d", outputMaxBytes))
 
 	return runKubectl(ctx, headers, cmdArgs...)
 }

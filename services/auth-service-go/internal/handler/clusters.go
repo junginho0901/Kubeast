@@ -60,7 +60,7 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 
 	clusters, err := h.registry.ListMeta(r.Context())
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) 
 	}
 	if err != nil {
 		h.audit(r, "admin.cluster.delete", payload, string(id), before, nil, err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	h.audit(r, "admin.cluster.delete", payload, string(id), before, map[string]any{"deleted": true}, nil)
@@ -274,7 +274,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 	}
 	if err != nil {
 		h.audit(r, "admin.cluster.update", payload, string(id), before, nil, err)
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	h.audit(r, "admin.cluster.update", payload, string(id), before, meta, nil)
@@ -348,7 +348,7 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 

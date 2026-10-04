@@ -63,6 +63,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(terminalFrameMaxBytes)
 
 	if imageErr != nil {
 		_ = conn.WriteMessage(websocket.TextMessage, []byte("\r\n"+imageErr.Error()+"\r\n"))

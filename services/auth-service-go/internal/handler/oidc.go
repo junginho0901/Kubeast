@@ -23,6 +23,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -511,6 +512,12 @@ func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want
 			continue
 		}
 		if err := h.repo.SetUserClusterRole(ctx, userID, clusterID, role.ID); err != nil {
+			// A group for a cluster that is not (or no longer) registered must
+			// not fail the whole login: skip it and keep the other grants (L21).
+			if repository.IsForeignKeyViolation(err) {
+				slog.Warn("oidc: cluster group names an unregistered cluster, skipped", "cluster", clusterID, "role", roleName)
+				continue
+			}
 			return err
 		}
 	}

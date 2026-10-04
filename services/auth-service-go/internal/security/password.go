@@ -100,6 +100,20 @@ func GenerateRandomPassword(length int) (string, error) {
 	return string(out), nil
 }
 
+// NeedsRehash reports whether a stored hash was made with a different
+// iteration count than the one configured now, so a successful login can
+// re-hash the password transparently (OWASP Password Storage: upgrade legacy
+// hashes when the user authenticates). Malformed values report true so they
+// get replaced too.
+func NeedsRehash(stored string, iterations int) bool {
+	parts := strings.SplitN(stored, "$", 4)
+	if len(parts) != 4 || parts[0] != pbkdf2Alg {
+		return true
+	}
+	n, err := strconv.Atoi(parts[1])
+	return err != nil || n != iterations
+}
+
 // VerifyPassword checks a password against a stored PBKDF2-SHA256 hash.
 // Timing-safe comparison to prevent timing attacks.
 func VerifyPassword(password, stored string) bool {

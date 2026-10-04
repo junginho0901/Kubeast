@@ -14,6 +14,11 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 )
 
+// terminalFrameMaxBytes bounds a client → server frame on the exec and node
+// shell sockets: terminal input is keystrokes, pastes and resize messages
+// (second review M30).
+const terminalFrameMaxBytes = 32 * 1024
+
 var execUpgrader = websocket.Upgrader{
 	CheckOrigin:       ws.CheckOrigin,
 	ReadBufferSize:    4096,
@@ -54,6 +59,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(terminalFrameMaxBytes) // keystrokes and resizes; never a bulk upload
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

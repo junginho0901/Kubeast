@@ -55,7 +55,7 @@ func roleState(name, description string, permissions []string) map[string]any {
 func (h *RoleHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles, err := h.repo.ListRoles(r.Context())
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, roles)
@@ -103,7 +103,7 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 	}
 	writeAudit(h.auditStore, r, payload, ev)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, role)
@@ -169,7 +169,7 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		after:  roleState(name, req.Description, req.Permissions), err: err,
 	})
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, role)
@@ -205,7 +205,7 @@ func (h *RoleHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 		before: roleState(existing.Name, existing.Description, existing.Permissions), err: err,
 	})
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

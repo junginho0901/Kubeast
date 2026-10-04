@@ -40,6 +40,9 @@ auth:
   # Access-token lifetime. The UI refreshes it silently while the user is
   # active, so this is also the idle timeout.
   tokenTTLMinutes: 15
+  # Absolute session lifetime: refreshing stops this many hours after the
+  # user signed in, however active the session is (OWASP: 4-8 h). 0 = no cap.
+  sessionAbsoluteHours: 8
   # Self-service sign-up (POST /auth/register). Off: admins create accounts.
   allowRegistration: false
   # Demo read/write accounts (password = username). Never enable outside dev.

@@ -23,7 +23,7 @@ func (h *AuthHandler) ListOrganizations(w http.ResponseWriter, r *http.Request) 
 	}
 	orgs, err := h.repo.ListOrganizations(r.Context(), orgType)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusOK, orgs)
@@ -66,7 +66,7 @@ func (h *AuthHandler) AdminCreateOrganization(w http.ResponseWriter, r *http.Req
 			response.Error(w, http.StatusConflict, "Already exists")
 			return
 		}
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	response.JSON(w, http.StatusCreated, org)
@@ -99,7 +99,7 @@ func (h *AuthHandler) AdminDeleteOrganization(w http.ResponseWriter, r *http.Req
 	err = h.repo.DeleteOrganization(r.Context(), id)
 	writeAudit(h.auditStore, r, payload, auditEvent{action: "admin.organizations.delete", targetType: "organization", targetID: idStr, before: before, err: err})
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.InternalError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

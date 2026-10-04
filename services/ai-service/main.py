@@ -2,10 +2,10 @@
 AI Service - OpenAI 통합 및 AI 기능 전담
 Port: 8001
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.api import router
 from app.api_public import admin_router, public_router
 from app.config import settings
@@ -29,6 +29,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request body cap (second review M30): uvicorn imposes none. A chat message or
+# a model config is a few KB; anything near the limit is not ours.
+MAX_REQUEST_BODY_BYTES = int(getattr(settings, "MAX_REQUEST_BODY_BYTES", 0) or 0) or (1 << 20)
+
+
+@app.middleware("http")
+async def limit_request_body(request: Request, call_next):
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > MAX_REQUEST_BODY_BYTES:
+        return JSONResponse(status_code=413, content={"detail": "request body too large"})
+    return await call_next(request)
+
 
 # API 라우터 등록 (인증 필요)
 app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_auth)])

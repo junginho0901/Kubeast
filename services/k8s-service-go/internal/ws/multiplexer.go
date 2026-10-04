@@ -59,7 +59,16 @@ type subscription struct {
 	cancel context.CancelFunc
 }
 
-const maxSubscriptions = 200
+const (
+	// defaultMaxSubscriptions caps watches across every connection;
+	// defaultMaxSubscriptionsPerConn caps one browser tab so a single client
+	// cannot exhaust the global budget (second review L22).
+	defaultMaxSubscriptions        = 200
+	defaultMaxSubscriptionsPerConn = 50
+	// maxFrameBytes bounds a client → server frame: a REQUEST/CLOSE message
+	// is a few hundred bytes; anything larger is not ours (M30).
+	maxFrameBytes = 64 * 1024
+)
 
 // ClientProvider supplies K8s clients at use-time so hot-reload of the
 // underlying clientBundle is transparent to long-lived subscriptions.
@@ -72,7 +81,10 @@ type ClientProvider interface {
 
 // Multiplexer handles multiplexed WebSocket watch connections.
 type Multiplexer struct {
-	provider ClientProvider
+	// MaxSubscriptions / MaxSubscriptionsPerConn: 0 = the defaults above.
+	MaxSubscriptions        int
+	MaxSubscriptionsPerConn int
+	provider                ClientProvider
 
 	mu   sync.Mutex
 	subs map[string]*subscription // key -> subscription
@@ -116,9 +128,17 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(maxFrameBytes)
 
 	wsID := fmt.Sprintf("%p", conn)
 	slog.Info("ws connected", "id", wsID)
+	maxTotal, maxPerConn := m.MaxSubscriptions, m.MaxSubscriptionsPerConn
+	if maxTotal <= 0 {
+		maxTotal = defaultMaxSubscriptions
+	}
+	if maxPerConn <= 0 {
+		maxPerConn = defaultMaxSubscriptionsPerConn
+	}
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -208,14 +228,18 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Reject if max subscriptions reached
-			if len(m.subs) >= maxSubscriptions {
+			// Reject if this connection's or the global cap is reached
+			if len(wsSubKeys) >= maxPerConn || len(m.subs) >= maxTotal {
 				m.mu.Unlock()
+				limit, scope := maxPerConn, "this connection"
+				if len(wsSubKeys) < maxPerConn {
+					limit, scope = maxTotal, "the server"
+				}
 				sendCh <- ResponseMessage{
 					Type:  "ERROR",
 					Path:  req.Path,
 					Query: req.Query,
-					Error: map[string]string{"message": fmt.Sprintf("max subscriptions reached (%d), cannot create new watch", maxSubscriptions)},
+					Error: map[string]string{"message": fmt.Sprintf("max subscriptions reached for %s (%d), cannot create new watch", scope, limit)},
 				}
 				continue
 			}

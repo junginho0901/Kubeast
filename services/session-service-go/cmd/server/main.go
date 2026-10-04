@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/session-service-go/internal/handler"
@@ -98,6 +99,7 @@ func main() {
 	r.Use(audit.RealIP) // gateway-set X-Real-IP only (not chi's: it also trusts client-settable headers)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
+	r.Use(limits.MaxBody(limits.DefaultMaxBody))
 
 	// CORS only for listed origins. With none listed the middleware is not
 	// installed at all: go-chi/cors treats an empty list as "every origin",
