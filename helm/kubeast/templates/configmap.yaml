@@ -17,6 +17,9 @@ data:
   JWT_AUDIENCE: "kubeast"
   JWT_EXPIRES_MINUTES: {{ .Values.auth.tokenTTLMinutes | quote }}
   SESSION_ABSOLUTE_HOURS: {{ .Values.auth.sessionAbsoluteHours | quote }}
+  ACCESS_REQUESTS_ENABLED: {{ .Values.auth.accessRequests.enabled | quote }}
+  ACCESS_REQUESTS_MAX_HOURS: {{ .Values.auth.accessRequests.maxHours | quote }}
+  ACCESS_REQUESTS_ROLES: {{ join "," .Values.auth.accessRequests.roles | quote }}
   ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
   BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
   PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}

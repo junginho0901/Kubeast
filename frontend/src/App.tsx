@@ -29,6 +29,7 @@ const AdminNodeShell = lazy(() => import('./pages/AdminNodeShell'))
 const AdminClusters = lazy(() => import('./pages/admin/Clusters'))
 const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations'))
 const AdminRoles = lazy(() => import('./pages/AdminRoles'))
+const AdminAccessRequests = lazy(() => import('./pages/admin/AccessRequests'))
 const Account = lazy(() => import('./pages/Account'))
 const HPAs = lazy(() => import('./pages/workloads/HPAs'))
 const VPAs = lazy(() => import('./pages/workloads/VPAs'))
@@ -161,6 +162,7 @@ function App() {
             <Route path="admin/node-shell" element={<RequireAdmin><AdminNodeShell /></RequireAdmin>} />
             <Route path="admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
+            <Route path="admin/access-requests" element={<RequireAdmin><AdminAccessRequests /></RequireAdmin>} />
           </Route>
           </Routes>
         </Suspense>

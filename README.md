@@ -344,6 +344,16 @@ aws:
     customRoles: []
     #  - name: sre-readonly
     #    clusterRoles: [view, "kubeast:cluster-reader"]
+  # 임시 권한 요청 — 기본 off. 켜면 사용자가 Settings → Cluster access에서 이미 권한이 있는
+  # 클러스터에 더 높은 역할(기본 Write까지)을 최대 maxHours 동안 사유와 함께 요청하고,
+  # 관리자(본인 제외)가 Admin → Access requests에서 승인·거절. 승인되면 요청자는 다시
+  # 로그인해 그 역할로 들어오고, 시간이 지나면 자동으로 이전 역할로 돌아간다(감사 로그
+  # access.request.* / access.grant.expire). 클러스터 RBAC가 그 역할의 그룹을 바인딩한
+  # 클러스터에서만 효력이 있다(viewer만 바인딩한 운영 클러스터에선 승격돼도 403).
+  accessRequests:
+    enabled: false
+    maxHours: 8
+    roles: [Write]
 
 # 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
 nodeShell:

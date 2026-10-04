@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/accessrequests"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
@@ -122,6 +123,18 @@ func main() {
 	if retentionCfg.Enabled() {
 		slog.Info("retention enabled", "audit_days", retentionCfg.AuditDays, "chat_days", retentionCfg.ChatDays)
 		go retention.Run(ctx, retention.Purger{Pool: pool, Cfg: retentionCfg, Audit: auditStore}, 24*time.Hour)
+	}
+
+	// Temporary grants from approved access requests end on time: restore the
+	// previous role, close the request, revoke the tokens, audit as system.
+	// Runs whether or not requests are enabled so earlier grants still end.
+	sweepEvery := time.Duration(cfg.AccessRequests.SweepSec) * time.Second
+	if sweepEvery <= 0 {
+		sweepEvery = time.Minute
+	}
+	go accessrequests.Run(ctx, accessrequests.Sweeper{Store: repo, Audit: auditStore}, sweepEvery)
+	if cfg.AccessRequests.Enabled {
+		slog.Info("access requests enabled", "max_hours", cfg.AccessRequests.MaxHours, "roles", cfg.AccessRequests.Roles)
 	}
 
 	// Seed system roles and migrate auth_users.role → role_id
@@ -265,6 +278,16 @@ func main() {
 			r.Delete("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.DeleteUserClusterRole)
 			// Inverse view: the per-cluster access list (who has a grant on a cluster).
 			r.Get("/admin/clusters/{cluster_id}/user-roles", authHandler.GetClusterUserRoles)
+
+			// Access requests: a user asks for a higher role on a cluster for a
+			// bounded time; admin.users.update approves or rejects (not their own).
+			r.Get("/access-requests/config", authHandler.AccessRequestsConfig)
+			r.Get("/access-requests", authHandler.ListMyAccessRequests)
+			r.Post("/access-requests", authHandler.CreateAccessRequest)
+			r.Delete("/access-requests/{id}", authHandler.CancelAccessRequest)
+			r.Get("/admin/access-requests", authHandler.AdminListAccessRequests)
+			r.Post("/admin/access-requests/{id}/approve", authHandler.AdminApproveAccessRequest)
+			r.Post("/admin/access-requests/{id}/reject", authHandler.AdminRejectAccessRequest)
 		})
 	})
 

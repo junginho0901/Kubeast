@@ -10,6 +10,14 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("PASSWORD_LOGIN must be on, admin-only or off (got %q)", c.PasswordLogin)
 	}
+	if c.AccessRequests.Enabled {
+		if c.AccessRequests.MaxHours < 1 {
+			return fmt.Errorf("ACCESS_REQUESTS_MAX_HOURS must be at least 1 (got %d)", c.AccessRequests.MaxHours)
+		}
+		if len(c.AccessRequests.Roles) == 0 {
+			return fmt.Errorf("ACCESS_REQUESTS_ROLES must name at least one role when ACCESS_REQUESTS_ENABLED=true")
+		}
+	}
 	if !c.OIDC.Enabled {
 		return nil
 	}

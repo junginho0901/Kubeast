@@ -22,6 +22,8 @@ export interface ClusterUserRole {
   name: string
   email: string
   role: string
+  // Set for a temporary grant (approved access request): when it ends.
+  expires_at?: string
 }
 
 export const adminApi = {

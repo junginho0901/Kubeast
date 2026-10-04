@@ -47,6 +47,9 @@ type NavItem = {
   icon?: ComponentType<{ className?: string }>
   exact?: boolean
   match?: (pathname: string, search: string) => boolean
+  // A count shown after the name (pending access requests).
+  badge?: number
+  testId?: string
 }
 
 type NavGroup = {
@@ -142,6 +145,24 @@ export default function Layout() {
   const noAccessibleCluster =
     !isAdmin && !isClustersLoading && accessibleClusters.length === 0 && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
+
+  // Access requests (temporary role grants): the admin menu item appears only
+  // when the installation has them on, with the number waiting for a decision.
+  const { data: accessRequestsConfig } = useQuery({
+    queryKey: ['access-requests', 'config'],
+    queryFn: api.getAccessRequestsConfig,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const accessRequestsOn = !!accessRequestsConfig?.enabled
+  const { data: pendingAccessRequests = [] } = useQuery({
+    queryKey: ['access-requests', 'admin', 'pending'],
+    queryFn: () => api.adminListAccessRequests('pending'),
+    enabled: isAdmin && accessRequestsOn,
+    refetchInterval: 60_000,
+    retry: false,
+  })
+  const pendingAccessCount = pendingAccessRequests.length
 
   const storageTabMatch = (tab: string, pathname: string, search: string) => {
     if (!pathname.startsWith('/storage')) return false
@@ -305,6 +326,9 @@ export default function Layout() {
         { name: t('nav.clusters', { defaultValue: 'Clusters' }), href: '/admin/clusters', icon: Server },
         { name: t('nav.userManagement'), href: '/admin/users', icon: Shield },
         { name: t('nav.roleManagement'), href: '/admin/roles', icon: Key },
+        ...(accessRequestsOn
+          ? [{ name: t('nav.accessRequests', { defaultValue: 'Access requests' }), href: '/admin/access-requests', icon: Clock, badge: pendingAccessCount, testId: 'nav-access-requests' }]
+          : []),
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
         { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
@@ -312,7 +336,7 @@ export default function Layout() {
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
       ],
     },
-  ], [t])
+  ], [t, accessRequestsOn, pendingAccessCount])
 
   const activeGroup = useMemo(() => {
     for (const group of navGroups) {
@@ -416,6 +440,7 @@ export default function Layout() {
                           <Link
                             key={item.href}
                             to={item.href}
+                            data-testid={item.testId}
                             className={`
                               flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
                               ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}
@@ -423,6 +448,14 @@ export default function Layout() {
                           >
                             {Icon && <Icon className="w-4 h-4" />}
                             <span className="font-medium">{item.name}</span>
+                            {item.badge ? (
+                              <span
+                                className="ml-auto rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900"
+                                data-testid={item.testId ? `${item.testId}-badge` : undefined}
+                              >
+                                {item.badge}
+                              </span>
+                            ) : null}
                           </Link>
                         )
                       })}

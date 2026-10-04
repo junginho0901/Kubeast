@@ -112,6 +112,16 @@ auth:
     customRoles: []
     #  - name: sre-readonly
     #    clusterRoles: [view, "kubeast:cluster-reader"]
+  # Access requests: a user who already reaches a cluster asks for a higher
+  # role on it for a bounded time with a reason; an admin (admin.users.update,
+  # never the requester) approves or rejects in Admin → Access requests. The
+  # grant ends by itself when the time passes and the previous role returns.
+  # roles lists what may be requested; the server also refuses any role wider
+  # than the built-in Write role. Off by default.
+  accessRequests:
+    enabled: false
+    maxHours: 8
+    roles: [Write]
 
 # --- Node shell (privileged debug pod on a node) ---
 # Off by default. When on, the pod runs in `namespace` (created with the

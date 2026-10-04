@@ -7,6 +7,7 @@
 // which are kept as objects so call sites can still write
 // `api.helm.listReleases(...)`.
 
+import { accessRequestsApi } from './access_requests'
 import { adminApi } from './admin'
 import { aiApi } from './ai'
 import { authApi } from './auth'
@@ -30,6 +31,7 @@ import { workloadsApi } from './workloads'
 export const api = {
   ...authApi,
   ...adminApi,
+  ...accessRequestsApi,
   ...clusterApi,
   ...workloadsApi,
   ...podsApi,
