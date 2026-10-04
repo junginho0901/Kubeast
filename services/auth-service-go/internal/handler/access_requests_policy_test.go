@@ -1,0 +1,71 @@
+package handler
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+)
+
+var testAccessCfg = config.AccessRequestsConfig{Enabled: true, MaxHours: 8, Roles: []string{"Write"}}
+
+func TestValidateAccessRequestInput(t *testing.T) {
+	ok := accessRequestInput{ClusterID: "alpha", Role: "Write", DurationMinutes: 120, Reason: "deploy hotfix"}
+	if err := validateAccessRequestInput(ok, testAccessCfg); err != nil {
+		t.Fatalf("valid input refused: %v", err)
+	}
+	cases := map[string]accessRequestInput{
+		"no cluster":      {Role: "Write", DurationMinutes: 60, Reason: "x"},
+		"no role":         {ClusterID: "alpha", DurationMinutes: 60, Reason: "x"},
+		"admin role":      {ClusterID: "alpha", Role: "Admin", DurationMinutes: 60, Reason: "x"},
+		"zero minutes":    {ClusterID: "alpha", Role: "Write", DurationMinutes: 0, Reason: "x"},
+		"over max":        {ClusterID: "alpha", Role: "Write", DurationMinutes: 8*60 + 1, Reason: "x"},
+		"no reason":       {ClusterID: "alpha", Role: "Write", DurationMinutes: 60, Reason: "   "},
+		"reason too long": {ClusterID: "alpha", Role: "Write", DurationMinutes: 60, Reason: strings.Repeat("r", accessRequestReasonMax+1)},
+	}
+	for name, in := range cases {
+		if err := validateAccessRequestInput(in, testAccessCfg); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	// The allow list is case-insensitive and trimmed (it comes from an env list).
+	if err := validateAccessRequestInput(ok, config.AccessRequestsConfig{MaxHours: 8, Roles: []string{" write "}}); err != nil {
+		t.Fatalf("allow list match should ignore case and spaces: %v", err)
+	}
+}
+
+func TestUncoveredPermissions_WriteCeiling(t *testing.T) {
+	write := []string{
+		"menu.*", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete",
+		"resource.cronjob.suspend", "resource.cronjob.trigger", "resource.secret.reveal",
+		"resource.helm.read", "resource.helm.rollback", "resource.helm.upgrade", "resource.helm.test", "ai.tool.*",
+	}
+	if got := uncoveredPermissions(write, write); got != nil {
+		t.Fatalf("Write within Write: %v", got)
+	}
+	read := []string{"menu.workloads", "menu.dashboard", "resource.*.read", "resource.helm.read"}
+	if got := uncoveredPermissions(read, write); got != nil {
+		t.Fatalf("Read within Write: %v", got)
+	}
+	custom := []string{"resource.pod.read", "resource.deployment.edit", "resource.helm.uninstall", "admin.users.read", "*"}
+	got := uncoveredPermissions(custom, write)
+	want := []string{"*", "admin.users.read", "resource.helm.uninstall"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("uncovered = %v, want %v", got, want)
+	}
+	if got := uncoveredPermissions(nil, write); len(got) != 1 {
+		t.Fatalf("an empty role must not be requestable: %v", got)
+	}
+}
+
+func TestCanDecideAccessRequest_RefusesOwn(t *testing.T) {
+	req := &repository.AccessRequest{ID: "r1", UserID: "u1"}
+	if err := canDecideAccessRequest(auth.TokenPayload{UserID: "u1"}, req); err == nil {
+		t.Fatal("own request accepted")
+	}
+	if err := canDecideAccessRequest(auth.TokenPayload{UserID: "admin"}, req); err != nil {
+		t.Fatalf("another admin refused: %v", err)
+	}
+}

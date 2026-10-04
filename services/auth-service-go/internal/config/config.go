@@ -71,6 +71,10 @@ type Config struct {
 	// OIDC login (one provider, chosen by configuration: Keycloak, Google, …).
 	OIDC OIDCConfig
 
+	// AccessRequests: a user asks for a higher role on a cluster for a bounded
+	// time and an admin approves (temporary per-cluster grants).
+	AccessRequests AccessRequestsConfig
+
 	// K8s setup
 	SetupNamespace          string
 	SetupKubeconfigSecret   string
@@ -122,6 +126,18 @@ type OIDCConfig struct {
 	DisplayName        string
 }
 
+// AccessRequestsConfig bounds what a user may request. Roles lists the role
+// names a request may name; whatever it lists, the server also refuses a role
+// whose permissions exceed the built-in Write role. The sweeper that reverts
+// expired grants runs every SweepSec seconds whether or not Enabled, so grants
+// made before the feature was switched off still end.
+type AccessRequestsConfig struct {
+	Enabled  bool
+	MaxHours int
+	Roles    []string
+	SweepSec int
+}
+
 // parseRoleMapping reads "group=Role,group2=Role".
 func parseRoleMapping(s string) map[string]string {
 	out := map[string]string{}
@@ -160,6 +176,12 @@ func Load() Config {
 			SyncRoles:          pkgconfig.GetEnvBool("OIDC_SYNC_ROLES", true),
 			ClusterGroupPrefix: pkgconfig.GetEnv("OIDC_CLUSTER_GROUP_PREFIX", "kubeast:cluster:"),
 			DisplayName:        pkgconfig.GetEnv("OIDC_DISPLAY_NAME", "SSO"),
+		},
+		AccessRequests: AccessRequestsConfig{
+			Enabled:  pkgconfig.GetEnvBool("ACCESS_REQUESTS_ENABLED", false),
+			MaxHours: pkgconfig.GetEnvInt("ACCESS_REQUESTS_MAX_HOURS", 8),
+			Roles:    pkgconfig.GetEnvList("ACCESS_REQUESTS_ROLES", "Write"),
+			SweepSec: pkgconfig.GetEnvInt("ACCESS_REQUESTS_SWEEP_SEC", 60),
 		},
 		Port:  pkgconfig.GetEnvInt("PORT", 8004),
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),

@@ -1,6 +1,11 @@
 package repository
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
 
 // UserClusterRole is one (cluster, role) grant for a user — a row of
 // user_cluster_roles. No row for a (user, cluster) pair means no access to that
@@ -10,11 +15,63 @@ type UserClusterRole struct {
 	RoleID    int
 }
 
+// activeGrant keeps the queries that feed tokens and access lists to grants
+// that have not expired. A temporary grant (access request) carries
+// expires_at; once it passes, the grant is gone for every new token even
+// before the sweeper restores the row.
+const activeGrant = `(expires_at IS NULL OR expires_at > NOW())`
+
+// UserClusterGrant is a grant with its temporary-access fields.
+type UserClusterGrant struct {
+	ClusterID string     `json:"cluster_id"`
+	RoleID    int        `json:"-"`
+	Role      string     `json:"role"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// GetUserClusterGrant returns the user's active grant on clusterID, or nil.
+func (r *Repository) GetUserClusterGrant(ctx context.Context, userID, clusterID string) (*UserClusterGrant, error) {
+	var g UserClusterGrant
+	err := r.pool.QueryRow(ctx,
+		`SELECT ucr.cluster_id, ucr.role_id, ro.name, ucr.expires_at
+		   FROM user_cluster_roles ucr JOIN roles ro ON ro.id = ucr.role_id
+		  WHERE ucr.user_id = $1 AND ucr.cluster_id = $2 AND `+activeGrant,
+		userID, clusterID).Scan(&g.ClusterID, &g.RoleID, &g.Role, &g.ExpiresAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
+// ListUserClusterGrants returns the user's active grants with their expiry.
+func (r *Repository) ListUserClusterGrants(ctx context.Context, userID string) ([]UserClusterGrant, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT ucr.cluster_id, ucr.role_id, ro.name, ucr.expires_at
+		   FROM user_cluster_roles ucr JOIN roles ro ON ro.id = ucr.role_id
+		  WHERE ucr.user_id = $1 AND `+activeGrant+` ORDER BY ucr.cluster_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UserClusterGrant{}
+	for rows.Next() {
+		var g UserClusterGrant
+		if err := rows.Scan(&g.ClusterID, &g.RoleID, &g.Role, &g.ExpiresAt); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
 // ListUserClusterRoles returns every per-cluster role grant for a user. Used
 // when building the JWT permission matrix at login.
 func (r *Repository) ListUserClusterRoles(ctx context.Context, userID string) ([]UserClusterRole, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT cluster_id, role_id FROM user_cluster_roles WHERE user_id = $1`, userID)
+		`SELECT cluster_id, role_id FROM user_cluster_roles WHERE user_id = $1 AND `+activeGrant, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -38,6 +95,8 @@ type ClusterUserRole struct {
 	Name   string `json:"name"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
+	// ExpiresAt is set for a temporary grant (approved access request).
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // ListClusterUserRoles returns every user that has a per-cluster grant on
@@ -45,11 +104,11 @@ type ClusterUserRole struct {
 // reach every cluster via the "*" matrix entry without a per-cluster row.
 func (r *Repository) ListClusterUserRoles(ctx context.Context, clusterID string) ([]ClusterUserRole, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT u.id, u.name, u.email, ro.name
+		`SELECT u.id, u.name, u.email, ro.name, ucr.expires_at
 		   FROM user_cluster_roles ucr
 		   JOIN auth_users u ON u.id = ucr.user_id
 		   JOIN roles ro ON ro.id = ucr.role_id
-		  WHERE ucr.cluster_id = $1
+		  WHERE ucr.cluster_id = $1 AND `+activeGrant+`
 		  ORDER BY u.email`, clusterID)
 	if err != nil {
 		return nil, err
@@ -59,7 +118,7 @@ func (r *Repository) ListClusterUserRoles(ctx context.Context, clusterID string)
 	out := []ClusterUserRole{}
 	for rows.Next() {
 		var c ClusterUserRole
-		if err := rows.Scan(&c.UserID, &c.Name, &c.Email, &c.Role); err != nil {
+		if err := rows.Scan(&c.UserID, &c.Name, &c.Email, &c.Role, &c.ExpiresAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -73,7 +132,7 @@ func (r *Repository) ListUserClusterRoleNames(ctx context.Context, userID string
 	rows, err := r.pool.Query(ctx,
 		`SELECT ucr.cluster_id, ro.name
 		   FROM user_cluster_roles ucr JOIN roles ro ON ro.id = ucr.role_id
-		  WHERE ucr.user_id = $1`, userID)
+		  WHERE ucr.user_id = $1 AND `+activeGrant, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,12 +150,15 @@ func (r *Repository) ListUserClusterRoleNames(ctx context.Context, userID string
 }
 
 // SetUserClusterRole grants (or re-grants) roleID to userID on clusterID.
-// Upsert on the (user_id, cluster_id) pair so a re-grant updates the role.
+// Upsert on the (user_id, cluster_id) pair so a re-grant updates the role. An
+// explicit grant is permanent: it clears the temporary-access fields a
+// previous approval may have left.
 func (r *Repository) SetUserClusterRole(ctx context.Context, userID, clusterID string, roleID int) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO user_cluster_roles (user_id, cluster_id, role_id)
 		 VALUES ($1, $2, $3)
-		 ON CONFLICT (user_id, cluster_id) DO UPDATE SET role_id = EXCLUDED.role_id`,
+		 ON CONFLICT (user_id, cluster_id) DO UPDATE
+		   SET role_id = EXCLUDED.role_id, expires_at = NULL, restore_role_id = NULL, request_id = NULL`,
 		userID, clusterID, roleID)
 	return err
 }
@@ -116,7 +178,7 @@ func (r *Repository) DeleteUserClusterRole(ctx context.Context, userID, clusterI
 // on — used by ListClusters(accessibleOnly) for non-admin callers.
 func (r *Repository) ListAccessibleClusterIDs(ctx context.Context, userID string) ([]string, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT cluster_id FROM user_cluster_roles WHERE user_id = $1`, userID)
+		`SELECT DISTINCT cluster_id FROM user_cluster_roles WHERE user_id = $1 AND `+activeGrant, userID)
 	if err != nil {
 		return nil, err
 	}

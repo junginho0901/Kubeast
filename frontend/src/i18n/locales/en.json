@@ -1,5 +1,70 @@
 {
+  "accessRequests": {
+    "title": "Access requests",
+    "disabled": "Access requests are off on this installation (auth.accessRequests.enabled).",
+    "empty": "No requests.",
+    "until": "until {{time}}",
+    "tabs": { "pending": "Pending", "history": "History" },
+    "columns": {
+      "requester": "Requester",
+      "cluster": "Cluster",
+      "role": "Role",
+      "duration": "Duration",
+      "reason": "Reason",
+      "requested": "Requested",
+      "actions": "Decision",
+      "status": "Status",
+      "decidedBy": "Decided by",
+      "expires": "Until"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "expired": "Ended"
+    },
+    "endReason": {
+      "expired": "time elapsed",
+      "not_reviewed": "not reviewed within 24 h",
+      "revoked": "revoked by an admin",
+      "superseded": "role set by an admin"
+    },
+    "admin": {
+      "subtitle": "Users ask for a higher role on a cluster for a limited time. Approving grants it until the time runs out, then the previous role comes back. You cannot decide your own request.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "notePlaceholder": "Note (optional)",
+      "own": "Your own request — another admin must decide.",
+      "failed": "The decision was not saved."
+    },
+    "mine": {
+      "title": "Cluster access",
+      "subtitle": "Your role on each cluster. Ask for a higher role for a limited time when you need it; an admin approves.",
+      "globalAdmin": "Global admin — you reach every cluster already; nothing to request.",
+      "noClusters": "You have no cluster access yet. Ask an admin for a grant first.",
+      "noRole": "No role",
+      "request": "Request temporary access",
+      "pendingShort": "Request pending",
+      "list": "My requests",
+      "cancel": "Cancel",
+      "sent": "Request sent. An admin will review it; once approved you will be signed out and back in with the role.",
+      "failed": "The request was not sent."
+    },
+    "modal": {
+      "title": "Request temporary access",
+      "current": "current role: {{role}}",
+      "close": "Close",
+      "role": "Role",
+      "duration": "Duration",
+      "reason": "Reason",
+      "reasonPlaceholder": "What you need to do and why (ticket, incident, deploy…)",
+      "cancel": "Cancel",
+      "submit": "Send request"
+    }
+  },
   "nav": {
+    "accessRequests": "Access requests",
     "core": "Core",
     "cluster": "Cluster",
     "workloads": "Workloads",

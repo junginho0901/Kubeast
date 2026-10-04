@@ -103,4 +103,4 @@ npm run baseline                         # playwright test --update-snapshots (r
 
 `auth.setup.ts` is a setup project that logs in once and stores state in `.auth/user.json`; all chromium tests depend on it.
 
-`e2e/actions/` is an **opt-in** action suite (90 catalogued UI actions — deletes of every kind, YAML edits, rollbacks, Helm, nodes, admin pages — each verified with `kubectl` against a seeded second kind cluster). It is not in the default run: `E2E_ACTIONS=1 npx playwright test --project=actions` (≈ 12 min + seed). Prerequisites and the per-test contract are in [e2e/actions/README.md](e2e/actions/README.md).
+`e2e/actions/` is an **opt-in** action suite (92 catalogued UI actions — deletes of every kind, YAML edits, rollbacks, Helm, nodes, admin pages including access requests — each verified with `kubectl` against a seeded second kind cluster). It is not in the default run: `E2E_ACTIONS=1 npx playwright test --project=actions` (≈ 12 min + seed). Prerequisites and the per-test contract are in [e2e/actions/README.md](e2e/actions/README.md).

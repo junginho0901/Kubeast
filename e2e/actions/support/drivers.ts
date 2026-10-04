@@ -900,12 +900,69 @@ def('register', 'auth-service:POST:/register', '', async (page, ctx) => {
 // Reads and in-place changes first, namespace create/delete, then every delete (a deleted seed object cannot
 // be read afterwards), helm uninstall, admin pages, and the own-session drivers last. pod-delete runs before
 // node-drain: the drain evicts the bare qa-pod.
+// ---------- access requests (temporary role grants; needs ACCESS_REQUESTS_ENABLED on the installation) ----------
+const AR_EMAIL = `qa-access-${STAMP}@example.com`
+let arEnabled: boolean | null = null
+async function accessRequestsOn(page: Page): Promise<boolean> {
+  if (arEnabled === null) arEnabled = (await api(page, 'GET', '/api/v1/auth/access-requests/config')).body?.enabled === true
+  return arEnabled
+}
+const arPrecondition = () => (process.env.E2E_ACCESS_REQUESTS === '0' ? 'E2E_ACCESS_REQUESTS=0' : null)
+
+def('access-request-create', 'auth-service:POST:/access-requests', '', async (page, ctx) => {
+  if (!(await accessRequestsOn(page))) { ctx.skipped = 'access requests are off on this installation'; return }
+  await createTempUser(page, AR_EMAIL, PW0)
+  const users = list((await api(page, 'GET', '/api/v1/auth/admin/users?limit=500')).body)
+  const u = users.find((x: any) => x.email === AR_EMAIL)
+  await api(page, 'PUT', `/api/v1/auth/admin/users/${u.id}/cluster-roles/${TARGET_CLUSTER}`, { role: 'Read' })
+  const c = await ownSession(page)
+  try {
+    const p = await c.newPage()
+    await login(p, AR_EMAIL, PW0)
+    await p.goto('/account')
+    await p.getByTestId(`access-request-open-${TARGET_CLUSTER}`).click()
+    await p.getByTestId('access-request-reason').fill('qa: temporary write for the action sweep')
+    await p.getByTestId('access-request-submit').click()
+    await p.getByTestId('access-request-notice').waitFor({ state: 'visible', timeout: 10000 })
+  } finally {
+    await c.close()
+  }
+}, async (page, ctx) => {
+  if (ctx.skipped) return { ok: true, detail: String(ctx.skipped) }
+  const pending = list((await api(page, 'GET', '/api/v1/auth/admin/access-requests?status=pending')).body)
+  const mine = pending.find((r: any) => r.user_email === AR_EMAIL && r.cluster_id === TARGET_CLUSTER)
+  return { ok: !!mine, detail: mine ? `request ${mine.id} pending (${mine.role}, ${mine.duration_minutes} min)` : 'no pending request for the temp user' }
+}, { precondition: arPrecondition })
+
+def('access-request-decide', 'auth-service:POST:/admin/access-requests/{id}/approve', 'admin/access-requests', async (page, ctx) => {
+  if (!(await accessRequestsOn(page))) { ctx.skipped = 'access requests are off on this installation'; return }
+  const pending = list((await api(page, 'GET', '/api/v1/auth/admin/access-requests?status=pending')).body)
+  const mine = pending.find((r: any) => r.user_email === AR_EMAIL)
+  if (!mine) throw new Error('access-request-create left no pending request')
+  ctx.requestId = mine.id
+  await page.getByTestId(`access-request-note-${mine.id}`).fill('qa ok')
+  await page.getByTestId(`access-request-approve-${mine.id}`).click()
+  await page.getByTestId(`access-request-row-${mine.id}`).waitFor({ state: 'detached', timeout: 10000 })
+}, async (page, ctx) => {
+  if (ctx.skipped) return { ok: true, detail: String(ctx.skipped) }
+  const users = list((await api(page, 'GET', '/api/v1/auth/admin/users?limit=500')).body)
+  const u = users.find((x: any) => x.email === AR_EMAIL)
+  const grants = u ? (await api(page, 'GET', `/api/v1/auth/admin/clusters/${TARGET_CLUSTER}/user-roles`)).body : []
+  const g = list(grants).find((x: any) => x.user_id === u?.id)
+  const all = list((await api(page, 'GET', '/api/v1/auth/admin/access-requests')).body)
+  const r = all.find((x: any) => x.id === ctx.requestId)
+  await deleteUserByEmail(page, AR_EMAIL) // cascades the grant and the request
+  const ok = r?.status === 'approved' && g?.role === 'Write' && !!g?.expires_at
+  return { ok, detail: `request ${r?.status}, grant ${g?.role ?? 'none'} until ${g?.expires_at ?? '-'}` }
+}, { precondition: arPrecondition })
+
 const ADMIN = [
   'team-add', 'team-delete',
   'user-add', 'users-bulk-upload', 'cluster-access', 'cluster-access-revoke', 'user-reset-password', 'user-role-change', 'user-delete',
   'role-create', 'role-edit', 'role-delete',
   'cluster-test', 'cluster-edit', 'cluster-register', 'cluster-delete',
   'model-config-create', 'model-config-update', 'model-config-delete',
+  'access-request-create', 'access-request-decide',
   'account-password-change', 'logout', 'register',
 ]
 const EDITS = ['cm-yaml-apply', 'node-yaml-apply', 'ns-yaml-apply', 'cronjob-resume', 'helm-values-upgrade', 'helm-test', 'helm-revision-diff', 'node-drain', 'ds-rollback', 'sts-rollback']

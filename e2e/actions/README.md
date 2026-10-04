@@ -1,8 +1,8 @@
 # Action suite (opt-in)
 
-Every catalogued UI action — 90 of them: deletes of every resource kind the UI lists, in-place YAML edits,
+Every catalogued UI action — 92 of them: deletes of every resource kind the UI lists, in-place YAML edits,
 rollbacks, Helm upgrade/rollback/uninstall, node cordon/drain, and the admin pages (teams, users, roles,
-clusters, model configs, own password, logout, registration) — performed **through the real UI** against a
+clusters, model configs, access requests, own password, logout, registration) — performed **through the real UI** against a
 seeded target cluster and verified with `kubectl` against that cluster or with the app's API.
 
 It is **not part of the default `npx playwright test` run**: it takes about 12 minutes on top of the regular
@@ -11,7 +11,8 @@ release or after a large UI change.
 
 ```bash
 cd e2e
-E2E_ACTIONS=1 npx playwright test --project=actions                      # seed + all 90 actions
+E2E_ACTIONS=1 npx playwright test --project=actions                      # seed + all 92 actions
+                                                                         # (the 2 access-request actions pass as skipped when ACCESS_REQUESTS_ENABLED is off)
 E2E_ACTIONS=1 E2E_ACTIONS_ONLY=cm-delete,helm-rollback npx playwright test --project=actions
 E2E_ACTIONS=1 npx playwright test --project=actions --list               # the catalogue
 ```

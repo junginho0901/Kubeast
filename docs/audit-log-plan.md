@@ -62,7 +62,11 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `user.register` | 자기 가입(`ALLOW_REGISTRATION`) → `Pending` 역할. actor = target = 새 계정 |
 | `user.role.update` / `user.role.sync` | 계정 등급 변경 / OIDC 그룹 동기화. 대량 API(`PATCH /admin/users/bulk-role`)는 계정마다 1행, `after.bulk = true` |
 | `user.create` / `user.update` / `user.delete` | 관리자의 계정 생성·수정·삭제. 대량 생성(`POST /admin/users/bulk`)은 계정마다 1행, `after.bulk = true` |
-| `user.cluster_role.set` / `user.cluster_role.unset` | 클러스터별 Read/Write/Admin 부여·회수 |
+| `user.cluster_role.set` / `user.cluster_role.unset` | 클러스터별 Read/Write/Admin 부여·회수. 직접 부여는 영구 — 그 뒤에 있던 승인된 권한 요청은 `superseded`/`revoked`로 닫힌다 |
+| `access.request.create` / `.cancel` | 사용자가 이미 권한이 있는 클러스터에 더 높은 역할을 기간 한정으로 요청 / 본인이 대기 중 요청을 취소(`ACCESS_REQUESTS_ENABLED`). actor = target = 요청자, `cluster` = 대상 클러스터, `after` = `{request_id, role, current_role, duration_minutes, reason}` |
+| `access.request.approve` / `.reject` | 관리자(`admin.users.update`, 본인 요청 불가, 상한 규칙)의 결정. 승인 = 임시 부여(`user_cluster_roles.expires_at`) + 요청자 토큰 폐기, `after`에 `expires_at`·`note`. 본인 요청·상한 위반 거부도 `failure`로 남는다 |
+| `access.request.expire` | 대기 요청이 24 h 동안 결정되지 않아 소멸(`after.end_reason = not_reviewed`). actor `system` |
+| `access.grant.expire` | 임시 부여가 기간을 다해 이전 역할로 복귀(`after.restored_role`, 없으면 `null` = 부여 삭제) + 토큰 폐기. actor `system`, 스위퍼 `ACCESS_REQUESTS_SWEEP_SEC`(기본 60 s) |
 | `admin.users.create` / `.read` / `.update` / `.delete` | 관리자 사용자 관리 |
 | `admin.roles.create` / `.update` / `.delete` | 역할 생성·수정·삭제. `before`/`after` = `{name, description, permissions}` — 권한 목록 변경이 그대로 남는다 |
 | `admin.organizations.create` / `.delete` | 조직(팀) 생성·삭제. `after`/`before` = `{type, name}` |

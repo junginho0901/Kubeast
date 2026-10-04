@@ -502,8 +502,21 @@ func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want
 	if err != nil {
 		return err
 	}
+	// An approved access request (temporary grant) outlives the sync: the
+	// cluster keeps the elevated role until it expires, then returns to the
+	// role the grant remembers.
+	grants, err := h.repo.ListUserClusterGrants(ctx, userID)
+	if err != nil {
+		return err
+	}
+	temporary := map[string]bool{}
+	for _, g := range grants {
+		if g.ExpiresAt != nil {
+			temporary[g.ClusterID] = true
+		}
+	}
 	for clusterID, roleName := range want {
-		if have[clusterID] == roleName {
+		if temporary[clusterID] || have[clusterID] == roleName {
 			continue
 		}
 		role, err := h.repo.GetRoleByName(ctx, roleName)
@@ -522,6 +535,9 @@ func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want
 		}
 	}
 	for clusterID := range have {
+		if temporary[clusterID] {
+			continue
+		}
 		if _, keep := want[clusterID]; !keep {
 			if _, err := h.repo.DeleteUserClusterRole(ctx, userID, clusterID); err != nil {
 				return err

@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -106,6 +108,9 @@ func (h *AuthHandler) SetUserClusterRole(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusInternalServerError, setErr.Error())
 		return
 	}
+	// A direct grant is permanent: an approved access request behind the old
+	// grant is over.
+	h.endApprovedRequests(r, userID, clusterID, repository.EndReasonSuperseded)
 	if err := h.repo.BumpTokenVersion(r.Context(), userID); err != nil { // tokens carry the old matrix
 		slog.Warn("cluster role: bump token version failed", "user", userID, "err", err)
 	}
@@ -135,12 +140,21 @@ func (h *AuthHandler) DeleteUserClusterRole(w http.ResponseWriter, r *http.Reque
 	}
 	if existed {
 		_ = h.repo.BumpTokenVersion(r.Context(), userID) // tokens carry the old matrix
+		h.endApprovedRequests(r, userID, clusterID, repository.EndReasonRevoked)
 	}
 	if !existed {
 		response.Error(w, http.StatusNotFound, "No such grant")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// endApprovedRequests closes the approved access requests behind the user's
+// grant on clusterID after an admin changed or revoked it by hand.
+func (h *AuthHandler) endApprovedRequests(r *http.Request, userID, clusterID, reason string) {
+	if _, err := h.repo.EndApprovedRequests(r.Context(), userID, clusterID, reason, time.Now()); err != nil {
+		slog.Warn("cluster role: closing access requests failed", "user", userID, "cluster", clusterID, "err", err)
+	}
 }
 
 // requireClusterRoleAdmin gates the cluster-role endpoints on admin.users.update.
