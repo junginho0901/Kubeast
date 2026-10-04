@@ -435,6 +435,7 @@ multicluster:
 ├── helm/kubeast/                    # Helm 차트 (정본 nginx.conf = files/nginx.conf)
 ├── k8s/                             # 원본 매니페스트 (참고용)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
+│   └── actions/                     # 옵트인 동작 스위트 — UI 동작 90개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
 ├── scripts/                         # 빌드/배포/개발 스크립트
 ├── install.sh                       # K8s 원라인 설치
 ├── install-docker.sh                # Docker 원라인 설치
