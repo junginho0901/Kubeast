@@ -85,7 +85,6 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-kubeast}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
-      - REDIS_URL=redis://redis:6379/0
       - K8S_SERVICE_URL=http://k8s-service:8002
       - SESSION_SERVICE_URL=http://session-service:8003
       - TOOL_SERVER_URL=http://tool-server:8086
@@ -94,8 +93,6 @@ services:
       - msa-network
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       auth-service:
         condition: service_started
