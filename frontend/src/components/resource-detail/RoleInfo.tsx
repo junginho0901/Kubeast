@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -93,7 +93,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                 <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-2">
                   <div className="text-xs text-slate-300 space-y-1.5">
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">API Groups:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
                       <span className="font-mono">
                         {apiGroups.length > 0
                           ? apiGroups.map((g: string) => g || '""').join(', ')
@@ -101,11 +101,11 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Resources:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Resources:</Tx></span>
                       <span className="font-mono">{resources.join(', ') || '-'}</span>
                     </div>
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Verbs:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Verbs:</Tx></span>
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {verbs.map((verb: string) => (
                           <span key={verb} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
@@ -116,7 +116,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                     </div>
                     {resourceNames.length > 0 && (
                       <div>
-                        <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Resource Names:</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Resource Names:</Tx></span>
                         <span className="font-mono">{resourceNames.join(', ')}</span>
                       </div>
                     )}
@@ -129,10 +129,9 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {ruleConflicts.length > 0 && (
-        <InfoSection title={`Rule Conflict Warnings (${ruleConflicts.length})`}>
+        <InfoSection title="Rule Conflict Warnings ({{n}})" titleValues={{ n: ruleConflicts.length }}>
           <p className="text-[11px] text-amber-300 mb-2">
-            Same (apiGroup, resource) is covered by multiple rules — verbs are unioned at evaluation time but the duplication may be unintentional.
-          </p>
+            <Tx>Same (apiGroup, resource) is covered by multiple rules — verbs are unioned at evaluation time but the duplication may be unintentional.</Tx></p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-slate-400">
@@ -156,9 +155,9 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title={`Referenced By RoleBindings (${referencedBy.length}${truncated ? '+' : ''})`}>
+      <InfoSection title="Referenced By RoleBindings ({{n}}{{more}})" titleValues={{ n: referencedBy.length, more: truncated ? '+' : '' }}>
         {referencedBy.length === 0 ? (
-          <p className="text-xs text-slate-400">No RoleBinding in this namespace references this Role.</p>
+          <p className="text-xs text-slate-400"><Tx>No RoleBinding in this namespace references this Role.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

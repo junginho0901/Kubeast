@@ -1,4 +1,4 @@
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, Th } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 
 export default function HPADetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
@@ -78,9 +78,9 @@ export default function HPADetail({ name, namespace, rawJson }: { name: string; 
               <table className="w-full text-xs table-fixed min-w-[360px]">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-2 w-[34%]">Type</th>
-                    <th className="text-left py-2 w-[33%]">Value</th>
-                    <th className="text-left py-2 w-[33%]">Period (s)</th>
+                    <Th className="text-left py-2 w-[34%]">Type</Th>
+                    <Th className="text-left py-2 w-[33%]">Value</Th>
+                    <Th className="text-left py-2 w-[33%]">Period (s)</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
@@ -135,15 +135,15 @@ export default function HPADetail({ name, namespace, rawJson }: { name: string; 
       </InfoSection>
 
       {metrics.length > 0 && (
-        <InfoSection title={`Metrics (${metrics.length})`}>
+        <InfoSection title="Metrics ({{n}})" titleValues={{ n: metrics.length }}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[520px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[28%]">Metric Name</th>
-                  <th className="text-left py-2 w-[18%]">Type</th>
-                  <th className="text-left py-2 w-[27%]">Target</th>
-                  <th className="text-left py-2 w-[27%]">Current</th>
+                  <Th className="text-left py-2 w-[28%]">Metric Name</Th>
+                  <Th className="text-left py-2 w-[18%]">Type</Th>
+                  <Th className="text-left py-2 w-[27%]">Target</Th>
+                  <Th className="text-left py-2 w-[27%]">Current</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

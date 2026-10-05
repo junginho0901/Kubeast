@@ -1,4 +1,4 @@
-import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 
 interface Props {
@@ -24,7 +24,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
 
   const renderTargets = (targets: any[], fallbackIps: string[], tone: 'ready' | 'notReady') => {
     if (!Array.isArray(targets) || targets.length === 0) {
-      if (!Array.isArray(fallbackIps) || fallbackIps.length === 0) return <p className="text-xs text-slate-400">(none)</p>
+      if (!Array.isArray(fallbackIps) || fallbackIps.length === 0) return <p className="text-xs text-slate-400"><Tx>(none)</Tx></p>
       return <p className="text-xs text-slate-200 break-all">{fallbackIps.join(', ')}</p>
     }
 
@@ -49,7 +49,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
 
   return (
     <>
-      <InfoSection title={`${kind} Info`}>
+      <InfoSection title="{{kind}} Info" titleValues={{ kind }}>
         <div className="space-y-2">
           <InfoRow label="Kind" value={kind} />
           <InfoRow label="Name" value={name} />
@@ -78,9 +78,9 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
             <table className="w-full text-xs min-w-[360px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Name</th>
-                  <th className="text-left py-1">Port</th>
-                  <th className="text-left py-1">Protocol</th>
+                  <Th className="text-left py-1">Name</Th>
+                  <Th className="text-left py-1">Port</Th>
+                  <Th className="text-left py-1">Protocol</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -114,8 +114,8 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
           <div className="space-y-2 text-xs">
             {subsets.map((s: any, i: number) => (
               <div key={i} className="rounded border border-slate-800 p-2">
-                <div className="text-slate-200">Addresses: {(s.addresses || []).map((a: any) => a.ip).join(', ') || '(none)'}</div>
-                <div className="text-slate-400">Ports: {(s.ports || []).map((p: any) => `${p.name || ''}:${p.port}/${p.protocol || 'TCP'}`).join(', ') || '(none)'}</div>
+                <div className="text-slate-200">Addresses: {(s.addresses || []).map((a: any) => a.ip).join(', ') || <Tx>(none)</Tx>}</div>
+                <div className="text-slate-400">Ports: {(s.ports || []).map((p: any) => `${p.name || ''}:${p.port}/${p.protocol || 'TCP'}`).join(', ') || <Tx>(none)</Tx>}</div>
               </div>
             ))}
           </div>

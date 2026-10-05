@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -98,8 +98,8 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
   return (
     <>
       <InfoSection title="GatewayClass Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading gateway class details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading gateway class details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Accepted" value={accepted ? 'Yes' : 'No'} color={accepted ? 'green' : 'amber'} />
@@ -118,7 +118,7 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
       </InfoSection>
 
       {Array.isArray(describe?.supported_features) && describe.supported_features.length > 0 && (
-        <InfoSection title={`Supported Features (${describe.supported_features.length})`}>
+        <InfoSection title="Supported Features ({{n}})" titleValues={{ n: describe.supported_features.length }}>
           <div className="flex flex-wrap gap-1.5">
             {describe.supported_features.map((f, i) => (
               <span key={i} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-mono text-slate-200">

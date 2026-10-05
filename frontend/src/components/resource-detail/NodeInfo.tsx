@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, SummaryBadge, Th, NoneText } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, UsageCard, EventsTable, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useNodeData } from './node-info/useNodeData'
@@ -62,7 +62,7 @@ export default function NodeInfo({ name }: Props) {
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
-          <p className="text-xs text-slate-400">Uptime</p>
+          <p className="text-xs text-slate-400"><Tx>Uptime</Tx></p>
           <p className="text-base text-white mt-1">{fmtRel(nodeDescribe.conditions?.find((c: any) => c.type === 'Ready')?.last_transition_time)}</p>
         </div>
         <UsageCard
@@ -229,7 +229,7 @@ function NodeImages({ images }: { images: any }) {
   const { items: paged, nav, total } = usePagination(sorted, 10)
   if (list.length === 0) return null
   return (
-    <InfoSection title={`Images (${total})`}>
+    <InfoSection title="Images ({{n}})" titleValues={{ n: total }}>
       <div className="overflow-x-auto">
         <table className="w-full text-xs table-fixed min-w-[400px]">
           <thead className="text-slate-400">
@@ -266,7 +266,7 @@ function NodeVolumes({ volumesAttached, volumesInUse }: { volumesAttached: any; 
       <div className="space-y-3">
         {attached.length > 0 && (
           <div>
-            <div className="text-xs font-semibold text-slate-300 mb-1">Attached ({attached.length})</div>
+            <div className="text-xs font-semibold text-slate-300 mb-1"><Tx text="Attached ({{n}})" values={{ n: attached.length }} /></div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs table-fixed min-w-[400px]">
                 <thead className="text-slate-400">
@@ -289,7 +289,7 @@ function NodeVolumes({ volumesAttached, volumesInUse }: { volumesAttached: any; 
         )}
         {inUse.length > 0 && (
           <div>
-            <div className="text-xs font-semibold text-slate-300 mb-1">In Use ({inUse.length})</div>
+            <div className="text-xs font-semibold text-slate-300 mb-1"><Tx text="In Use ({{n}})" values={{ n: inUse.length }} /></div>
             <div className="flex flex-wrap gap-1">
               {inUse.map((vi: string, i: number) => (
                 <span key={i} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">

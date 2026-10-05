@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -39,11 +39,11 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
   useResourceDetailOverlay({ kind: 'LimitRange', name, namespace, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const limits: any[] = desc.limits || []
@@ -112,9 +112,9 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         ) : <NoneText />}
       </InfoSection>
 
-      <InfoSection title={`Violating Pods (${violationList.length})`}>
+      <InfoSection title="Violating Pods ({{n}})" titleValues={{ n: violationList.length }}>
         {violationList.length === 0 ? (
-          <p className="text-xs text-slate-400">No pod in this namespace currently violates this LimitRange.</p>
+          <p className="text-xs text-slate-400"><Tx>No pod in this namespace currently violates this LimitRange.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

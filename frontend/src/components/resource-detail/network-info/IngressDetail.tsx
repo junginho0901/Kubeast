@@ -1,4 +1,4 @@
-import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { backendPort, backendService } from '@/utils/ingressBackend'
@@ -56,10 +56,10 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Address</th>
-                  <th className="text-left py-1">Port</th>
-                  <th className="text-left py-1">Protocol</th>
-                  <th className="text-left py-1">Error</th>
+                  <Th className="text-left py-1">Address</Th>
+                  <Th className="text-left py-1">Port</Th>
+                  <Th className="text-left py-1">Protocol</Th>
+                  <Th className="text-left py-1">Error</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -82,7 +82,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
           <div className="space-y-1 text-xs">
             {tls.map((t: any, i: number) => (
               <div key={i} className="text-slate-200">
-                <span className="text-slate-400">Secret:</span>{' '}
+                <span className="text-slate-400"><Tx>Secret:</Tx></span>{' '}
                 {t.secretName ? (
                   <ResourceLink kind="Secret" name={String(t.secretName)} namespace={namespace} />
                 ) : '-'} <span className="text-slate-400">→</span> {(t.hosts || []).join(', ')}
@@ -100,7 +100,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
                 <p className="text-xs text-white font-medium mb-2">{rule.host || '*'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="text-slate-400"><tr><th className="text-left py-1">Path</th><th className="text-left py-1">Type</th><th className="text-left py-1">Backend</th></tr></thead>
+                    <thead className="text-slate-400"><tr><Th className="text-left py-1">Path</Th><Th className="text-left py-1">Type</Th><Th className="text-left py-1">Backend</Th></tr></thead>
                     <tbody className="divide-y divide-slate-800">
                       {(rule.http?.paths || []).map((path: any, pi: number) => (
                         <tr key={pi} className="text-slate-200">
@@ -176,8 +176,7 @@ function IngressLatencyMetrics({ name, namespace }: { name: string; namespace?: 
     <PrometheusSection available={metrics.available} title="Response Time">
       {!hasAny ? (
         <div className="text-[11px] text-slate-500">
-          Requires nginx-ingress-controller with metrics scraped.
-        </div>
+          <Tx>Requires nginx-ingress-controller with metrics scraped.</Tx></div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
           {p50 !== null && (

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 
@@ -52,17 +52,17 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      <InfoSection title={`Used By Ingresses (${usedList.length})`}>
+      <InfoSection title="Used By Ingresses ({{n}})" titleValues={{ n: usedList.length }}>
         {usedList.length === 0 ? (
-          <p className="text-xs text-slate-400">No Ingress in the cluster uses this IngressClass.</p>
+          <p className="text-xs text-slate-400"><Tx>No Ingress in the cluster uses this IngressClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Namespace</th>
-                  <th className="text-left py-1">Ingress</th>
-                  <th className="text-left py-1">Age</th>
+                  <Th className="text-left py-1">Namespace</Th>
+                  <Th className="text-left py-1">Ingress</Th>
+                  <Th className="text-left py-1">Age</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

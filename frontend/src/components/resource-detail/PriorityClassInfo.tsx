@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -43,11 +43,11 @@ export default function PriorityClassInfo({ name }: Props) {
   useResourceDetailOverlay({ kind: 'PriorityClass', name, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const value = desc.value ?? 0
@@ -92,7 +92,7 @@ export default function PriorityClassInfo({ name }: Props) {
         <InfoSection title="Global Default Conflict">
           <div className="rounded border border-amber-700/50 bg-amber-900/20 p-2 space-y-1.5">
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-200">
-              <span>⚠ Multiple globalDefault PriorityClasses ({collidingGlobalDefaults.length + 1}) — only one is honored</span>
+              <span>⚠ <Tx text="Multiple globalDefault PriorityClasses ({{n}}) — only one is honored" values={{ n: collidingGlobalDefaults.length + 1 }} /></span>
             </div>
             <div className="flex flex-wrap gap-1">
               {[{ name } as { name: string }, ...collidingGlobalDefaults].map((pc) => (
@@ -105,9 +105,9 @@ export default function PriorityClassInfo({ name }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title={`Used By Pods (${usingPods.length})`}>
+      <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
         {usingPods.length === 0 ? (
-          <p className="text-xs text-slate-400">No pod in the cluster uses this PriorityClass.</p>
+          <p className="text-xs text-slate-400"><Tx>No pod in the cluster uses this PriorityClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

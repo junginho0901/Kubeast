@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -59,7 +59,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
               return (
                 <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3">
                   <div className="text-xs text-slate-300">
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Match Labels:</span>
+                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Match Labels:</Tx></span>
                     {matchLabels && Object.keys(matchLabels).length > 0 ? (
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {Object.entries(matchLabels).map(([k, v]) => (
@@ -93,7 +93,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                 <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-2">
                   <div className="text-xs text-slate-300 space-y-1.5">
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">API Groups:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
                       <span className="font-mono">
                         {apiGroups.length > 0
                           ? apiGroups.map((g: string) => g || '""').join(', ')
@@ -101,11 +101,11 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Resources:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Resources:</Tx></span>
                       <span className="font-mono">{resources.join(', ') || '-'}</span>
                     </div>
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Verbs:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Verbs:</Tx></span>
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {verbs.map((verb: string) => (
                           <span key={verb} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
@@ -116,13 +116,13 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                     </div>
                     {resourceNames.length > 0 && (
                       <div>
-                        <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Resource Names:</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Resource Names:</Tx></span>
                         <span className="font-mono">{resourceNames.join(', ')}</span>
                       </div>
                     )}
                     {nonResourceURLs.length > 0 && (
                       <div>
-                        <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Non-Resource URLs:</span>
+                        <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Non-Resource URLs:</Tx></span>
                         <span className="font-mono">{nonResourceURLs.join(', ')}</span>
                       </div>
                     )}
@@ -134,9 +134,9 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title={`Referenced By ClusterRoleBindings (${referencedBy.length}${truncated ? '+' : ''})`}>
+      <InfoSection title="Referenced By ClusterRoleBindings ({{n}}{{more}})" titleValues={{ n: referencedBy.length, more: truncated ? '+' : '' }}>
         {referencedBy.length === 0 ? (
-          <p className="text-xs text-slate-400">No ClusterRoleBinding references this ClusterRole.</p>
+          <p className="text-xs text-slate-400"><Tx>No ClusterRoleBinding references this ClusterRole.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -163,7 +163,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
             </table>
             {referencedByNav}
             {truncated && (
-              <p className="text-[11px] text-amber-300 mt-1">Showing first 50 ClusterRoleBindings (truncated for performance).</p>
+              <p className="text-[11px] text-amber-300 mt-1"><Tx>Showing first 50 ClusterRoleBindings (truncated for performance).</Tx></p>
             )}
           </div>
         )}

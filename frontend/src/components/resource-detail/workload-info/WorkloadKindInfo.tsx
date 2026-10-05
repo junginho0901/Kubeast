@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Pause, Play, Zap } from 'lucide-react'
-import { InfoSection, InfoRow } from '../DetailCommon'
+import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 
 interface Props {
@@ -116,15 +116,15 @@ export default function WorkloadKindInfo({
             if (sorted.length === 0) return null
             return (
               <div className="mt-3">
-                <p className="text-xs font-medium text-slate-300 mb-1">Recent Runs (last {sorted.length})</p>
+                <p className="text-xs font-medium text-slate-300 mb-1"><Tx text="Recent Runs (last {{n}})" values={{ n: sorted.length }} /></p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="text-slate-400">
                       <tr>
-                        <th className="text-left py-1">Job</th>
-                        <th className="text-left py-1">Status</th>
-                        <th className="text-left py-1">Started</th>
-                        <th className="text-left py-1">Duration</th>
+                        <Th className="text-left py-1">Job</Th>
+                        <Th className="text-left py-1">Status</Th>
+                        <Th className="text-left py-1">Started</Th>
+                        <Th className="text-left py-1">Duration</Th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">

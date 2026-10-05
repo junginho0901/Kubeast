@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -101,8 +101,8 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
   return (
     <>
       <InfoSection title="DeviceClass Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading DeviceClass details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading DeviceClass details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
@@ -172,9 +172,9 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title={`Used By ResourceClaims (${usingClaims.length})`}>
+      <InfoSection title="Used By ResourceClaims ({{n}})" titleValues={{ n: usingClaims.length }}>
         {usingClaims.length === 0 ? (
-          <p className="text-xs text-slate-400">No ResourceClaim in the cluster references this DeviceClass.</p>
+          <p className="text-xs text-slate-400"><Tx>No ResourceClaim in the cluster references this DeviceClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

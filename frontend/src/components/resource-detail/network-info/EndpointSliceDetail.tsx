@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 
@@ -70,10 +70,10 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
             <table className="w-full text-xs min-w-[460px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-1">Name</th>
-                  <th className="text-left py-1">Port</th>
-                  <th className="text-left py-1">Protocol</th>
-                  <th className="text-left py-1">App Protocol</th>
+                  <Th className="text-left py-1">Name</Th>
+                  <Th className="text-left py-1">Port</Th>
+                  <Th className="text-left py-1">Protocol</Th>
+                  <Th className="text-left py-1">App Protocol</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -101,18 +101,18 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
               return (
                 <div key={i} className="rounded border border-slate-800 p-3 space-y-2">
                   <div className="text-xs text-slate-200 break-all">
-                    <span className="text-slate-400">Addresses:</span> {addresses.length > 0 ? addresses.join(', ') : '-'}
+                    <span className="text-slate-400"><Tx>Addresses:</Tx></span> {addresses.length > 0 ? addresses.join(', ') : '-'}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="text-slate-200 break-all"><span className="text-slate-400">Hostname:</span> {ep?.hostname || '-'}</div>
-                    <div className="text-slate-200 break-all"><span className="text-slate-400">Node:</span> {ep?.node_name || ep?.nodeName || '-'}</div>
-                    <div className="text-slate-200 break-all"><span className="text-slate-400">Zone:</span> {ep?.zone || '-'}</div>
-                    <div className="text-slate-200 break-all"><span className="text-slate-400">TargetRef:</span> {refText}</div>
+                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {ep?.hostname || '-'}</div>
+                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Node:</Tx></span> {ep?.node_name || ep?.nodeName || '-'}</div>
+                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>Zone:</Tx></span> {ep?.zone || '-'}</div>
+                    <div className="text-slate-200 break-all"><span className="text-slate-400"><Tx>TargetRef:</Tx></span> {refText}</div>
                   </div>
                   {/* topology-aware-routing hints — Service annotation 의 topology-aware-hints 가 켜져 있으면 EndpointSlice 에 hints.forZones 가 채워짐 */}
                   {Array.isArray(ep?.hints?.for_zones) && ep.hints.for_zones.length > 0 && (
                     <div className="text-xs text-slate-200 break-all">
-                      <span className="text-slate-400">Hints (for zones):</span>{' '}
+                      <span className="text-slate-400"><Tx>Hints (for zones):</Tx></span>{' '}
                       <span className="font-mono">{ep.hints.for_zones.join(', ')}</span>
                     </div>
                   )}
@@ -129,17 +129,17 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
       )}
 
       {serviceName !== '-' && (
-        <InfoSection title={`Peer EndpointSlices for ${serviceName} (${peerSlices.length})`}>
+        <InfoSection title="Peer EndpointSlices for {{service}} ({{n}})" titleValues={{ service: serviceName, n: peerSlices.length }}>
           {peerSlices.length === 0 ? (
-            <p className="text-xs text-slate-400">No other EndpointSlice for this Service in the namespace.</p>
+            <p className="text-xs text-slate-400"><Tx>No other EndpointSlice for this Service in the namespace.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1">Name</th>
-                    <th className="text-left py-1">Address Type</th>
-                    <th className="text-left py-1">Ready / Total</th>
+                    <Th className="text-left py-1">Name</Th>
+                    <Th className="text-left py-1">Address Type</Th>
+                    <Th className="text-left py-1">Ready / Total</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">

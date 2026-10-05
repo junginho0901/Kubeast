@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge } from '../DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -147,8 +147,8 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
           {describe?.message && <InfoRow label="Failure Message" value={<span className="text-red-300 break-words">{String(describe.message)}</span>} />}
         </div>
       </InfoSection>
-      {isLoading && <p className="text-xs text-slate-400">Loading details...</p>}
-      {isError && <p className="text-xs text-amber-300">Some detailed PV fields are unavailable right now.</p>}
+      {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
+      {isError && <p className="text-xs text-amber-300"><Tx>Some detailed PV fields are unavailable right now.</Tx></p>}
       {csiVolumeAttributes && Object.keys(csiVolumeAttributes).length > 0 && (
         <InfoSection title="Volume Attributes">
           <KeyValueTags data={csiVolumeAttributes} />
@@ -183,23 +183,23 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
         </InfoSection>
       )}
       {usedByPods.length > 0 && (
-        <InfoSection title={`Used By Pods (${usedByPods.length})`}>
+        <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usedByPods.length }}>
           {usedByPods.length > displayedUsedByPods.length && (
             <p className="text-[11px] text-slate-400 mb-2">
-              Showing first {displayedUsedByPods.length} pods.
+              <Tx text="Showing first {{n}} pods." values={{ n: displayedUsedByPods.length }} />
             </p>
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[760px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[24%]">Pod</th>
-                  <th className="text-left py-2 w-[12%]">Status</th>
-                  <th className="text-left py-2 w-[8%]">Ready</th>
-                  <th className="text-left py-2 w-[10%]">Restarts</th>
-                  <th className="text-left py-2 w-[18%]">Node</th>
-                  <th className="text-left py-2 w-[18%]">Mounted As</th>
-                  <th className="text-left py-2 w-[10%]">Age</th>
+                  <Th className="text-left py-2 w-[24%]">Pod</Th>
+                  <Th className="text-left py-2 w-[12%]">Status</Th>
+                  <Th className="text-left py-2 w-[8%]">Ready</Th>
+                  <Th className="text-left py-2 w-[10%]">Restarts</Th>
+                  <Th className="text-left py-2 w-[18%]">Node</Th>
+                  <Th className="text-left py-2 w-[18%]">Mounted As</Th>
+                  <Th className="text-left py-2 w-[10%]">Age</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

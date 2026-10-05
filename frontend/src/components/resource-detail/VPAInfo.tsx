@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -50,11 +50,11 @@ export default function VPAInfo({ name, namespace }: Props) {
   } : null
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const containerPolicies: any[] = desc.container_policies || []
@@ -94,7 +94,14 @@ export default function VPAInfo({ name, namespace }: Props) {
           {targetStatus && (
             <InfoRow
               label="Target Status"
-              value={<span className="font-mono">Desired: {String(targetStatus.desired)} · Ready: {String(targetStatus.ready)} · Available: {String(targetStatus.available)}</span>}
+              value={
+                <span className="font-mono">
+                  <Tx
+                    text="Desired: {{desired}} · Ready: {{ready}} · Available: {{available}}"
+                    values={{ desired: String(targetStatus.desired), ready: String(targetStatus.ready), available: String(targetStatus.available) }}
+                  />
+                </span>
+              }
             />
           )}
         </div>

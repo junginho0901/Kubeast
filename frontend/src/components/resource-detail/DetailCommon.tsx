@@ -1,4 +1,5 @@
 import type { ReactNode, ThHTMLAttributes } from 'react'
+import type { LabelValues } from './detailLabel'
 import { fmtRel } from './detailFormat'
 import { useDetailLabel } from './useDetailLabel'
 
@@ -11,18 +12,26 @@ export function Th({ children, ...rest }: ThHTMLAttributes<HTMLTableCellElement>
   return <th {...rest}>{typeof children === 'string' ? dl(children) : children}</th>
 }
 
+// Drawer text through the same catalog: <Tx>No data</Tx>, or with placeholders
+// <Tx text="Showing first {{n}} of {{total}}" values={{ n, total }} />.
+export function Tx({ children, text, values }: { children?: string; text?: string; values?: LabelValues }) {
+  const dl = useDetailLabel()
+  return <>{dl(text ?? children ?? '', values)}</>
+}
+
 // "(none)" placeholder through the catalog ("(없음)" in Korean).
 export function NoneText({ className = 'text-slate-400 text-xs' }: { className?: string }) {
   const dl = useDetailLabel()
   return <span className={className}>{dl('(none)')}</span>
 }
 
-export function InfoSection({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
+// titleValues fill {{placeholders}} in the title ("Used By Pods ({{n}})").
+export function InfoSection({ title, titleValues, children, actions }: { title: string; titleValues?: LabelValues; children: ReactNode; actions?: ReactNode }) {
   const dl = useDetailLabel()
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-slate-400">{dl(title)}</p>
+        <p className="text-xs text-slate-400">{dl(title, titleValues)}</p>
         {actions}
       </div>
       {children}
@@ -30,12 +39,15 @@ export function InfoSection({ title, children, actions }: { title: string; child
   )
 }
 
+// Values are data and stay as they are, except the Yes / No the views print for booleans.
+const isYesNo = (v: unknown): v is 'Yes' | 'No' => v === 'Yes' || v === 'No'
+
 export function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   const dl = useDetailLabel()
   return (
     <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
       <span className="text-slate-400 shrink-0">{dl(label)}</span>
-      <span className="text-white font-medium break-all">{typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
+      <span className="text-white font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' || typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
   )
 }
@@ -63,7 +75,7 @@ export function SummaryBadge({ label, value, color }: { label: string; value: st
   }
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c[color || 'default']}`}>
-      {dl(label)}: {value}
+      {dl(label)}: {isYesNo(value) ? dl(value) : value}
     </span>
   )
 }

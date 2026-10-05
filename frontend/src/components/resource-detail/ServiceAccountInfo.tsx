@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -109,15 +109,18 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         </InfoSection>
       )}
 
-      <InfoSection title={`Effective Permissions (${effectivePerms.length} binding${effectivePerms.length === 1 ? '' : 's'}${effectivePermsLoading ? ', loading...' : ''})`}>
+      <InfoSection
+        title={effectivePermsLoading ? 'Effective Permissions ({{n}} bindings, loading…)' : effectivePerms.length === 1 ? 'Effective Permissions (1 binding)' : 'Effective Permissions ({{n}} bindings)'}
+        titleValues={{ n: effectivePerms.length }}
+      >
         {effectivePerms.length === 0 ? (
-          <p className="text-xs text-slate-400">No RoleBinding or ClusterRoleBinding binds this ServiceAccount.</p>
+          <p className="text-xs text-slate-400"><Tx>No RoleBinding or ClusterRoleBinding binds this ServiceAccount.</Tx></p>
         ) : (
           <div className="space-y-3">
             {pagedEffectivePerms.map((b, i) => (
               <div key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} className="rounded border border-slate-800 p-2">
                 <div className="flex items-center gap-2 text-xs mb-1">
-                  <span className="text-slate-400">via</span>
+                  <span className="text-slate-400"><Tx>via</Tx></span>
                   <ResourceLink
                     kind={b.binding_kind}
                     name={b.binding_name}
@@ -131,11 +134,11 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                   />
                 </div>
                 {b.error ? (
-                  <p className="text-[11px] text-amber-300">Failed to load rules: {b.error}</p>
+                  <p className="text-[11px] text-amber-300"><Tx text="Failed to load rules: {{error}}" values={{ error: String(b.error) }} /></p>
                 ) : b.loading ? (
-                  <p className="text-[11px] text-slate-500">Loading rules...</p>
+                  <p className="text-[11px] text-slate-500"><Tx>Loading rules...</Tx></p>
                 ) : b.rules.length === 0 ? (
-                  <p className="text-[11px] text-slate-500">No rules.</p>
+                  <p className="text-[11px] text-slate-500"><Tx>No rules.</Tx></p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px]">
@@ -167,9 +170,9 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         )}
       </InfoSection>
 
-      <InfoSection title={`Pods Using This ServiceAccount (${usingPods.length})`}>
+      <InfoSection title="Pods Using This ServiceAccount ({{n}})" titleValues={{ n: usingPods.length }}>
         {usingPods.length === 0 ? (
-          <p className="text-xs text-slate-400">No pod in this namespace uses this ServiceAccount.</p>
+          <p className="text-xs text-slate-400"><Tx>No pod in this namespace uses this ServiceAccount.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

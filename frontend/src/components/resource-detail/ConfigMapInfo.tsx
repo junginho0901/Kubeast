@@ -6,8 +6,9 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -20,6 +21,7 @@ interface Props {
 export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const dl = useDetailLabel()
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const { open: openDetail } = useResourceDetail()
 
@@ -105,12 +107,12 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      <InfoSection title={`Data (${filteredDataKeys.length}${dataSearch ? ` / ${dataKeys.length}` : ''})`}>
+      <InfoSection title="Data ({{n}}{{total}})" titleValues={{ n: filteredDataKeys.length, total: dataSearch ? ` / ${dataKeys.length}` : '' }}>
         {dataKeys.length > DATA_PER_PAGE && (
           <div className="mb-2">
             <input
               type="text"
-              placeholder="Search keys..."
+              placeholder={dl('Search keys...')}
               value={dataSearch}
               onChange={(e) => { setDataSearch(e.target.value); setDataPage(1) }}
               className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -134,13 +136,13 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                   >
                     <span className="font-mono text-xs text-cyan-300 break-all">{key}</span>
                     <span className="text-[10px] text-slate-500 ml-2 flex-shrink-0">
-                      {value ? `${value.length} chars` : 'empty'}
+                      {value ? dl('{{n}} chars', { n: value.length }) : dl('empty')}
                     </span>
                   </button>
                   {isExpanded && (
                     <div className="px-3 pb-2 border-t border-slate-800">
                       <pre className={`text-[11px] text-slate-300 whitespace-pre-wrap break-words mt-1.5 ${isLong ? 'max-h-[300px] overflow-y-auto' : ''}`}>
-                        {value || <span className="text-slate-600 italic">{'(empty)'}</span>}
+                        {value || <span className="text-slate-600 italic"><Tx>(empty)</Tx></span>}
                       </pre>
                     </div>
                   )}
@@ -149,22 +151,22 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
             })}
           </div>
         ) : (
-          <p className="text-xs text-slate-500">{dataSearch ? 'No matching keys.' : 'No data entries.'}</p>
+          <p className="text-xs text-slate-500"><Tx>{dataSearch ? 'No matching keys.' : 'No data entries.'}</Tx></p>
         )}
 
         {filteredDataKeys.length > DATA_PER_PAGE && (
           <div className="flex items-center justify-between mt-2">
             <span className="text-[10px] text-slate-500">{dataPage} / {dataTotalPages}</span>
             <div className="flex gap-1">
-              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40">Prev</button>
-              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40">Next</button>
+              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Prev</Tx></button>
+              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Next</Tx></button>
             </div>
           </div>
         )}
       </InfoSection>
 
       {binaryKeys.length > 0 && (
-        <InfoSection title={`Binary Data Keys (${binaryKeys.length})`}>
+        <InfoSection title="Binary Data Keys ({{n}})" titleValues={{ n: binaryKeys.length }}>
           <div className="flex flex-wrap gap-1">
             {binaryKeys.map((key: string) => (
               <span key={key} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 font-mono">
@@ -176,9 +178,9 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {podsEnabled && (
-        <InfoSection title={`Used By Pods (${usingPods.length})`}>
+        <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
           {usingPods.length === 0 ? (
-            <p className="text-xs text-slate-400">No pod in this namespace references this ConfigMap.</p>
+            <p className="text-xs text-slate-400"><Tx>No pod in this namespace references this ConfigMap.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

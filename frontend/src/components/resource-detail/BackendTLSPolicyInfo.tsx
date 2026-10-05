@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -45,8 +45,8 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
   return (
     <>
       <InfoSection title="BackendTLSPolicy Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
@@ -57,7 +57,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
 
       <InfoSection title="Target Refs">
         {targetRefs.length === 0 ? (
-          <p className="text-xs text-slate-400">No data</p>
+          <p className="text-xs text-slate-400"><Tx>No data</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[400px]">
@@ -91,7 +91,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
             <InfoRow label="Well-Known CA Certificates" value={text(validation.well_known_ca_certificates || validation.wellKnownCACertificates)} />
             {Array.isArray(validation.ca_certificate_refs || validation.caCertificateRefs) && (
               <>
-                <p className="text-xs text-slate-400 mt-2 font-medium">CA Certificate Refs</p>
+                <p className="text-xs text-slate-400 mt-2 font-medium"><Tx>CA Certificate Refs</Tx></p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[300px]">
                     <thead className="text-slate-400">

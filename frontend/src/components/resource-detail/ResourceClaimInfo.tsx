@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -86,8 +86,8 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
   return (
     <>
       <InfoSection title="Claim Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading ResourceClaim details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ResourceClaim details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />
@@ -186,9 +186,9 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title={`Using Pods (${usingPods.length})`}>
+      <InfoSection title="Using Pods ({{n}})" titleValues={{ n: usingPods.length }}>
         {usingPods.length === 0 ? (
-          <p className="text-xs text-slate-400">No pod in this namespace references this ResourceClaim.</p>
+          <p className="text-xs text-slate-400"><Tx>No pod in this namespace references this ResourceClaim.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

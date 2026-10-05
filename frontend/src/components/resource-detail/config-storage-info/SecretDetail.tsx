@@ -1,4 +1,4 @@
-import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 
 export default function SecretDetail({ name, namespace, rawJson }: { name: string; namespace?: string; rawJson?: Record<string, unknown> }) {
@@ -25,7 +25,7 @@ export default function SecretDetail({ name, namespace, rawJson }: { name: strin
             {Object.entries(data).map(([key, value]) => (
               <div key={key} className="flex items-center gap-2 text-xs">
                 <span className="font-medium text-white min-w-[140px]">{key}</span>
-                <span className="text-slate-400 font-mono">{value ? `${value.length} bytes (base64)` : '(empty)'}</span>
+                <span className="text-slate-400 font-mono">{value ? `${value.length} bytes (base64)` : <Tx>(empty)</Tx>}</span>
               </div>
             ))}
           </div>

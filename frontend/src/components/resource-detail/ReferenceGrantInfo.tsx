@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -83,8 +83,8 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
   return (
     <>
       <InfoSection title="ReferenceGrant Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading ReferenceGrant details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ReferenceGrant details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
@@ -96,7 +96,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
 
       <InfoSection title="From">
         {from.length === 0 ? (
-          <p className="text-xs text-slate-400">No data</p>
+          <p className="text-xs text-slate-400"><Tx>No data</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[400px]">
@@ -123,7 +123,7 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
 
       <InfoSection title="To">
         {to.length === 0 ? (
-          <p className="text-xs text-slate-400">No data</p>
+          <p className="text-xs text-slate-400"><Tx>No data</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[400px]">
@@ -149,10 +149,9 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
       </InfoSection>
 
       {(dupFrom.length > 0 || dupTo.length > 0) && (
-        <InfoSection title={`Rule Conflict Warnings (${dupFrom.length + dupTo.length})`}>
+        <InfoSection title="Rule Conflict Warnings ({{n}})" titleValues={{ n: dupFrom.length + dupTo.length }}>
           <p className="text-[11px] text-amber-300 mb-2">
-            Duplicate from/to entries — admission silently unions them, so duplicates may indicate spec mistakes.
-          </p>
+            <Tx>Duplicate from/to entries — admission silently unions them, so duplicates may indicate spec mistakes.</Tx></p>
           <div className="space-y-1 text-xs text-slate-200">
             {dupFrom.map((d) => {
               const [g, k, ns] = d.key.split('|')

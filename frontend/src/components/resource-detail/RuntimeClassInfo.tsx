@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -42,11 +42,11 @@ export default function RuntimeClassInfo({ name }: Props) {
   useResourceDetailOverlay({ kind: 'RuntimeClass', name, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const handler = desc.handler || '-'
@@ -109,13 +109,13 @@ export default function RuntimeClassInfo({ name }: Props) {
         <InfoSection title="Scheduling">
           {scheduling.node_selector && (
             <div className="mb-2">
-              <p className="text-xs text-slate-400 mb-1">Node Selector</p>
+              <p className="text-xs text-slate-400 mb-1"><Tx>Node Selector</Tx></p>
               <KeyValueTags data={scheduling.node_selector as Record<string, string>} />
             </div>
           )}
           {Array.isArray(scheduling.tolerations) && scheduling.tolerations.length > 0 && (
             <div>
-              <p className="text-xs text-slate-400 mb-1">Tolerations</p>
+              <p className="text-xs text-slate-400 mb-1"><Tx>Tolerations</Tx></p>
               <div className="space-y-1">
                 {(scheduling.tolerations as any[]).map((tol: any, i: number) => (
                   <div key={i} className="text-xs text-slate-200 bg-slate-800/60 rounded px-2 py-1">
@@ -130,13 +130,13 @@ export default function RuntimeClassInfo({ name }: Props) {
       )}
 
       {schedulableNodes && (
-        <InfoSection title={`Schedulable Nodes (${schedulableNodes.length})`}>
+        <InfoSection title="Schedulable Nodes ({{n}})" titleValues={{ n: schedulableNodes.length }}>
           {schedulableNodes.length === 0 ? (
-            <p className="text-xs text-slate-400">No Node matches scheduling.nodeSelector.</p>
+            <p className="text-xs text-slate-400"><Tx>No Node matches scheduling.nodeSelector.</Tx></p>
           ) : (
             <>
               {schedulableNodes.length > 20 && (
-                <p className="text-[11px] text-slate-400 mb-2">Showing first 20 of {schedulableNodes.length} nodes.</p>
+                <p className="text-[11px] text-slate-400 mb-2"><Tx text="Showing first 20 of {{n}} nodes." values={{ n: schedulableNodes.length }} /></p>
               )}
               <div className="flex flex-wrap gap-1.5">
                 {schedulableNodes.slice(0, 20).map((n: any) => (
@@ -148,9 +148,9 @@ export default function RuntimeClassInfo({ name }: Props) {
         </InfoSection>
       )}
 
-      <InfoSection title={`Used By Pods (${usingPods.length})`}>
+      <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
         {usingPods.length === 0 ? (
-          <p className="text-xs text-slate-400">No pod in the cluster uses this RuntimeClass.</p>
+          <p className="text-xs text-slate-400"><Tx>No pod in the cluster uses this RuntimeClass.</Tx></p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

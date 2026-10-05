@@ -1,5 +1,6 @@
 import { usePrometheusQueries, usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard, Sparkline } from '../PrometheusMetrics'
+import { Tx } from '../DetailCommon'
 
 interface NodePrometheusMetricsProps {
   name: string
@@ -56,16 +57,16 @@ export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetric
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(findNodeValue('disk_read') !== null || findNodeValue('disk_write') !== null) && (
           <div className="space-y-2">
-            <div className="text-[11px] text-slate-400 font-medium">Disk I/O</div>
+            <div className="text-[11px] text-slate-400 font-medium"><Tx>Disk I/O</Tx></div>
             {findNodeValue('disk_read') !== null && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Read</span>
+                <span className="text-slate-400"><Tx>Read</Tx></span>
                 <span className="font-mono text-slate-300">{(findNodeValue('disk_read')! / 1024 / 1024).toFixed(1)} MB/s</span>
               </div>
             )}
             {findNodeValue('disk_write') !== null && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Write</span>
+                <span className="text-slate-400"><Tx>Write</Tx></span>
                 <span className="font-mono text-slate-300">{(findNodeValue('disk_write')! / 1024 / 1024).toFixed(1)} MB/s</span>
               </div>
             )}
@@ -73,16 +74,16 @@ export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetric
         )}
         {(findNodeValue('network_rx') !== null || findNodeValue('network_tx') !== null) && (
           <div className="space-y-2">
-            <div className="text-[11px] text-slate-400 font-medium">Network I/O</div>
+            <div className="text-[11px] text-slate-400 font-medium"><Tx>Network I/O</Tx></div>
             {findNodeValue('network_rx') !== null && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Receive</span>
+                <span className="text-slate-400"><Tx>Receive</Tx></span>
                 <span className="font-mono text-slate-300">{(findNodeValue('network_rx')! / 1024 / 1024).toFixed(2)} MB/s</span>
               </div>
             )}
             {findNodeValue('network_tx') !== null && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Transmit</span>
+                <span className="text-slate-400"><Tx>Transmit</Tx></span>
                 <span className="font-mono text-slate-300">{(findNodeValue('network_tx')! / 1024 / 1024).toFixed(2)} MB/s</span>
               </div>
             )}
@@ -135,9 +136,9 @@ function NodeResourceTrend({ name }: { name: string }) {
     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
-          <span>24h CPU%</span>
+          <span><Tx>24h CPU%</Tx></span>
           {cpuStats && (
-            <span className="font-mono">avg {cpuStats.avg.toFixed(1)} · max {cpuStats.max.toFixed(1)}</span>
+            <span className="font-mono"><Tx text="avg {{avg}} · max {{max}}" values={{ avg: cpuStats.avg.toFixed(1), max: cpuStats.max.toFixed(1) }} /></span>
           )}
         </div>
         {cpuPoints ? (
@@ -152,14 +153,14 @@ function NodeResourceTrend({ name }: { name: string }) {
             max={100}
           />
         ) : (
-          <div className="text-[10px] text-slate-500">(no data)</div>
+          <div className="text-[10px] text-slate-500"><Tx>(no data)</Tx></div>
         )}
       </div>
       <div>
         <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
-          <span>24h Memory%</span>
+          <span><Tx>24h Memory%</Tx></span>
           {memStats && (
-            <span className="font-mono">avg {memStats.avg.toFixed(1)} · max {memStats.max.toFixed(1)}</span>
+            <span className="font-mono"><Tx text="avg {{avg}} · max {{max}}" values={{ avg: memStats.avg.toFixed(1), max: memStats.max.toFixed(1) }} /></span>
           )}
         </div>
         {memPoints ? (
@@ -174,7 +175,7 @@ function NodeResourceTrend({ name }: { name: string }) {
             max={100}
           />
         ) : (
-          <div className="text-[10px] text-slate-500">(no data)</div>
+          <div className="text-[10px] text-slate-500"><Tx>(no data)</Tx></div>
         )}
       </div>
     </div>

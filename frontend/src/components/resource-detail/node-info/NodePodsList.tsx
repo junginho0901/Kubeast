@@ -1,5 +1,6 @@
-import { InfoSection } from '../DetailCommon'
+import { InfoSection, Th, Tx } from '../DetailCommon'
 import { fmtPodAge } from '../detailFormat'
+import { useDetailLabel } from '../useDetailLabel'
 import { ResourceLink } from '../ResourceLink'
 
 interface NodePodsListProps {
@@ -25,6 +26,7 @@ export default function NodePodsList({
   totalPages,
   tr,
 }: NodePodsListProps) {
+  const dl = useDetailLabel()
   return (
     <InfoSection
       title={tr('nodes.detail.pods', 'Pods')}
@@ -33,7 +35,7 @@ export default function NodePodsList({
           type="text"
           value={podFilter}
           onChange={e => setPodFilter(e.target.value)}
-          placeholder="Filter..."
+          placeholder={dl('Filter...')}
           className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 w-36"
         />
       }
@@ -42,13 +44,13 @@ export default function NodePodsList({
         <table className="w-full text-xs min-w-[820px] table-fixed">
           <thead className="text-slate-400">
             <tr>
-              <th className="text-left py-2 w-[32%]">Name</th>
-              <th className="text-left py-2 w-[16%]">Namespace</th>
-              <th className="text-left py-2 w-[10%]">Ready</th>
-              <th className="text-left py-2 w-[12%]">Status</th>
-              <th className="text-left py-2 w-[10%]">Restarts</th>
-              <th className="text-left py-2 w-[12%]">IP</th>
-              <th className="text-left py-2 w-[8%]">Age</th>
+              <Th className="text-left py-2 w-[32%]">Name</Th>
+              <Th className="text-left py-2 w-[16%]">Namespace</Th>
+              <Th className="text-left py-2 w-[10%]">Ready</Th>
+              <Th className="text-left py-2 w-[12%]">Status</Th>
+              <Th className="text-left py-2 w-[10%]">Restarts</Th>
+              <Th className="text-left py-2 w-[12%]">IP</Th>
+              <Th className="text-left py-2 w-[8%]">Age</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
@@ -63,15 +65,15 @@ export default function NodePodsList({
                 <td className="py-2 pr-2">{fmtPodAge(pod.created_at)}</td>
               </tr>
             ))}
-            {pagedPods.length === 0 && <tr><td colSpan={7} className="py-4 text-slate-400">(none)</td></tr>}
+            {pagedPods.length === 0 && <tr><td colSpan={7} className="py-4 text-slate-400"><Tx>(none)</Tx></td></tr>}
           </tbody>
         </table>
       </div>
       <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
-        <span>{filteredPods.length === 0 ? '(none)' : `${(podPage - 1) * pageSize + 1}-${Math.min(podPage * pageSize, filteredPods.length)} / ${filteredPods.length}`}</span>
+        <span>{filteredPods.length === 0 ? <Tx>(none)</Tx> : `${(podPage - 1) * pageSize + 1}-${Math.min(podPage * pageSize, filteredPods.length)} / ${filteredPods.length}`}</span>
         <div className="flex gap-2">
-          <button onClick={() => setPodPage(p => Math.max(1, p - 1))} disabled={podPage === 1} className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40">Prev</button>
-          <button onClick={() => setPodPage(p => Math.min(totalPages, p + 1))} disabled={podPage >= totalPages} className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40">Next</button>
+          <button onClick={() => setPodPage(p => Math.max(1, p - 1))} disabled={podPage === 1} className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"><Tx>Prev</Tx></button>
+          <button onClick={() => setPodPage(p => Math.min(totalPages, p + 1))} disabled={podPage >= totalPages} className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"><Tx>Next</Tx></button>
         </div>
       </div>
     </InfoSection>

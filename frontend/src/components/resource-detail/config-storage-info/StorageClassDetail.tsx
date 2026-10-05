@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge } from '../DetailCommon'
+import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -113,8 +113,8 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
-      {isLoading && <p className="text-xs text-slate-400">Loading details...</p>}
-      {isError && <p className="text-xs text-amber-300">Some detailed StorageClass fields are unavailable right now.</p>}
+      {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
+      {isError && <p className="text-xs text-amber-300"><Tx>Some detailed StorageClass fields are unavailable right now.</Tx></p>}
 
       {Object.keys(parameters).length > 0 && (
         <InfoSection title="Parameters">
@@ -140,16 +140,16 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         </InfoSection>
       )}
       {relatedPVs.length > 0 && (
-        <InfoSection title={`Related PersistentVolumes (${relatedPVs.length})`}>
+        <InfoSection title="Related PersistentVolumes ({{n}})" titleValues={{ n: relatedPVs.length }}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[620px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[34%]">Name</th>
-                  <th className="text-left py-2 w-[14%]">Status</th>
-                  <th className="text-left py-2 w-[14%]">Capacity</th>
-                  <th className="text-left py-2 w-[22%]">Claim</th>
-                  <th className="text-left py-2 w-[16%]">Age</th>
+                  <Th className="text-left py-2 w-[34%]">Name</Th>
+                  <Th className="text-left py-2 w-[14%]">Status</Th>
+                  <Th className="text-left py-2 w-[14%]">Capacity</Th>
+                  <Th className="text-left py-2 w-[22%]">Claim</Th>
+                  <Th className="text-left py-2 w-[16%]">Age</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -182,17 +182,17 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         </InfoSection>
       )}
       {relatedPVCs.length > 0 && (
-        <InfoSection title={`Related PersistentVolumeClaims (${relatedPVCs.length})`}>
+        <InfoSection title="Related PersistentVolumeClaims ({{n}})" titleValues={{ n: relatedPVCs.length }}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[760px]">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="text-left py-2 w-[26%]">PVC</th>
-                  <th className="text-left py-2 w-[12%]">Status</th>
-                  <th className="text-left py-2 w-[14%]">Requested</th>
-                  <th className="text-left py-2 w-[14%]">Capacity</th>
-                  <th className="text-left py-2 w-[20%]">Volume</th>
-                  <th className="text-left py-2 w-[14%]">Age</th>
+                  <Th className="text-left py-2 w-[26%]">PVC</Th>
+                  <Th className="text-left py-2 w-[12%]">Status</Th>
+                  <Th className="text-left py-2 w-[14%]">Requested</Th>
+                  <Th className="text-left py-2 w-[14%]">Capacity</Th>
+                  <Th className="text-left py-2 w-[20%]">Volume</Th>
+                  <Th className="text-left py-2 w-[14%]">Age</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
