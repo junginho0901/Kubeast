@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditsink"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 )
 
@@ -149,5 +150,48 @@ func TestPostgresPurgeBatches(t *testing.T) {
 	}
 	if n := count(t, pool, "auth_audit_logs"); n != 0 {
 		t.Fatalf("rows left = %d", n)
+	}
+}
+
+// With audit sinks, rows past their window stay until every configured sink
+// has sent them (auditsink.Floor); a configured sink with no cursor yet keeps
+// everything.
+func TestPostgresPurgeKeepsRowsSinksHaveNotSent(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	ctx := context.Background()
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	old := now.AddDate(0, 0, -100)
+	for i := 0; i < 4; i++ {
+		if _, err := pool.Exec(ctx, `INSERT INTO auth_audit_logs (service, action, created_at) VALUES ('auth', 'user.login.success', $1)`, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var first int64
+	if err := pool.QueryRow(ctx, `SELECT min(id) FROM auth_audit_logs`).Scan(&first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO audit_sink_cursors (sink_name, last_id) VALUES ('archive', $1), ('chat', $2)`, first+1, first+3); err != nil {
+		t.Fatal(err)
+	}
+	purge := func(sinks ...string) Result {
+		t.Helper()
+		res, err := Purger{Pool: pool, Cfg: Config{AuditDays: 30},
+			AuditFloor: func(ctx context.Context) (int64, error) { return auditsink.Floor(ctx, pool, sinks) }}.Purge(ctx, now)
+		if err != nil {
+			t.Fatalf("purge: %v", err)
+		}
+		return res
+	}
+	// a configured sink without a cursor: nothing goes
+	if res := purge("archive", "chat", "new-sink"); res.AuditRows != 0 {
+		t.Fatalf("deleted %d rows with a sink that has no cursor yet", res.AuditRows)
+	}
+	// floor = the slower sink (archive at first+1): two rows go, two stay
+	if res := purge("archive", "chat"); res.AuditRows != 2 {
+		t.Fatalf("deleted %d rows, want 2 (up to the slowest sink)", res.AuditRows)
+	}
+	var minLeft int64
+	if err := pool.QueryRow(ctx, `SELECT min(id) FROM auth_audit_logs`).Scan(&minLeft); err != nil || minLeft != first+2 {
+		t.Fatalf("lowest remaining id = %d (%v), want %d", minLeft, err, first+2)
 	}
 }

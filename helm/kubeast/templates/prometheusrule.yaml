@@ -1,6 +1,7 @@
 {{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
-# Three alerts on the console's own metrics: the audit store refusing rows
-# (audited actions are then refused), a 5xx ratio, and p95 latency.
+# Alerts on the console's own metrics: the audit store refusing rows
+# (audited actions are then refused), a 5xx ratio, p95 latency, and an audit
+# sink that has stopped copying rows out.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -40,4 +41,12 @@ spec:
             severity: warning
           annotations:
             summary: "Kubeast {{ "{{ $labels.service }}" }} p95 request latency above {{ .Values.metrics.prometheusRule.p95Seconds }}s"
+        - alert: KubeastAuditSinkStalled
+          expr: kubeast_audit_sink_pending > 0 and (time() - kubeast_audit_sink_last_success_timestamp_seconds) > 600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubeast audit sink {{ "{{ $labels.sink }}" }} has not sent for 10 minutes"
+            description: "Audit rows are waiting for the {{ "{{ $labels.type }}" }} sink; auth-service logs carry the send error and retention keeps the rows until it recovers."
 {{- end }}

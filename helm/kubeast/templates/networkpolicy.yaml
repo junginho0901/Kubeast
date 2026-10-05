@@ -221,6 +221,10 @@ spec:
         - ipBlock:
             cidr: {{ . }}
     {{- end }}
+    {{- with .Values.audit.sinkEgress }}
+    # audit sinks (audit.sinkEgress)
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 ---
 # session-service: gateway 에서 inbound, postgres + redis + auth(JWKS) egress
 apiVersion: networking.k8s.io/v1

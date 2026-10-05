@@ -76,6 +76,10 @@ type Purger struct {
 	Cfg   Config
 	Audit audit.Writer // may be nil (tests)
 	Now   func() time.Time
+	// AuditFloor, when set, caps audit deletion at the highest id every audit
+	// sink has sent (auditsink.Floor): rows a sink has not copied out yet stay
+	// past their window.
+	AuditFloor func(ctx context.Context) (int64, error)
 }
 
 // Run purges once immediately and then every `every`, until ctx is done.
@@ -129,8 +133,17 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
 	var err error
 	if !auditCutoff.IsZero() {
-		res.AuditRows, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 ORDER BY id LIMIT $2)`, auditCutoff)
+		if p.AuditFloor != nil {
+			floor, ferr := p.AuditFloor(ctx)
+			if ferr != nil {
+				return res, fmt.Errorf("audit log: sink floor: %w", ferr)
+			}
+			res.AuditRows, err = deleteBatched(ctx, p.Pool,
+				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND id <= $3 ORDER BY id LIMIT $2)`, auditCutoff, floor)
+		} else {
+			res.AuditRows, err = deleteBatched(ctx, p.Pool,
+				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 ORDER BY id LIMIT $2)`, auditCutoff)
+		}
 		if err != nil {
 			return res, fmt.Errorf("audit log: %w", err)
 		}
@@ -161,10 +174,11 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 }
 
 // deleteBatched repeats a batched DELETE until it deletes nothing.
-func deleteBatched(ctx context.Context, pool *pgxpool.Pool, sql string, cutoff time.Time) (int64, error) {
+func deleteBatched(ctx context.Context, pool *pgxpool.Pool, sql string, cutoff time.Time, extra ...any) (int64, error) {
 	var total int64
+	args := append([]any{cutoff, BatchSize}, extra...)
 	for {
-		tag, err := pool.Exec(ctx, sql, cutoff, BatchSize)
+		tag, err := pool.Exec(ctx, sql, args...)
 		if err != nil {
 			return total, err
 		}

@@ -1,0 +1,181 @@
+# Local stand-ins for the audit sinks on the kind dev cluster (applied by scripts/kind-deploy.sh, not part of
+# the chart): an S3-compatible store with Object Lock (versitygw), an SMTP catcher with a web inbox (Mailpit)
+# and a webhook receiver that keeps the last requests. deploy/kind/values.yaml points the dev sinks here.
+# Dev-only credentials; nothing here is meant for a real install.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubeast-devtools
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-root
+  namespace: kubeast-devtools
+stringData:
+  ROOT_ACCESS_KEY: kubeast-dev
+  ROOT_SECRET_KEY: kubeast-dev-secret
+---
+# the same pair, for the dev-s3 sink (mounted into auth-service)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeast-audit-dev-s3
+  namespace: kubeast
+stringData:
+  accessKeyId: kubeast-dev
+  secretAccessKey: kubeast-dev-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3
+  namespace: kubeast-devtools
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: s3}}
+  template:
+    metadata: {labels: {app: s3}}
+    spec:
+      containers:
+        - name: versitygw
+          image: versity/versitygw:latest
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c, "mkdir -p /data/objects /data/versions && exec versitygw --port :7070 posix --versioning-dir /data/versions /data/objects"]
+          envFrom: [{secretRef: {name: s3-root}}]
+          ports: [{containerPort: 7070}]
+          readinessProbe: {tcpSocket: {port: 7070}, periodSeconds: 5}
+          volumeMounts: [{name: data, mountPath: /data}]
+      volumes: [{name: data, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3
+  namespace: kubeast-devtools
+spec:
+  selector: {app: s3}
+  ports: [{port: 7070, targetPort: 7070}]
+---
+# bucket kubeast-audit with Object Lock and a 1-day GOVERNANCE default retention (re-run safe)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: s3-bucket
+  namespace: kubeast-devtools
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: amazon/aws-cli:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: AWS_ACCESS_KEY_ID, value: kubeast-dev}
+            - {name: AWS_SECRET_ACCESS_KEY, value: kubeast-dev-secret}
+            - {name: AWS_DEFAULT_REGION, value: us-east-1}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              S3="aws --endpoint-url http://s3:7070 s3api"
+              $S3 head-bucket --bucket kubeast-audit 2>/dev/null || $S3 create-bucket --bucket kubeast-audit --object-lock-enabled-for-bucket
+              $S3 put-object-lock-configuration --bucket kubeast-audit \
+                --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":1}}}'
+              echo bucket ready
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: kubeast-devtools
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mailpit}}
+  template:
+    metadata: {labels: {app: mailpit}}
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 1025}, {containerPort: 8025}]
+          readinessProbe: {tcpSocket: {port: 1025}, periodSeconds: 5}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: kubeast-devtools
+spec:
+  selector: {app: mailpit}
+  ports:
+    - {name: smtp, port: 1025, targetPort: 1025}
+    - {name: http, port: 8025, targetPort: 8025}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: receiver
+  namespace: kubeast-devtools
+data:
+  receiver.py: |
+    # POST any path → kept (last 500); GET /requests → the list; DELETE /requests → cleared.
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    store = []
+    class H(BaseHTTPRequestHandler):
+        def _send(self, code, body):
+            raw = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(n).decode("utf-8", "replace")
+            store.append({"path": self.path, "headers": {k.lower(): v for k, v in self.headers.items()}, "body": body})
+            del store[:-500]
+            self._send(200, {"ok": True})
+        def do_GET(self):
+            self._send(200, store if self.path.startswith("/requests") else {"ok": True})
+        def do_DELETE(self):
+            store.clear()
+            self._send(200, {"ok": True})
+        def log_message(self, *a):
+            pass
+    ThreadingHTTPServer(("", 8080), H).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: receiver
+  namespace: kubeast-devtools
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: receiver}}
+  template:
+    metadata: {labels: {app: receiver}}
+    spec:
+      containers:
+        - name: receiver
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command: [python, -u, /app/receiver.py]
+          ports: [{containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: 8080}, periodSeconds: 5}
+          volumeMounts: [{name: app, mountPath: /app}]
+      volumes: [{name: app, configMap: {name: receiver}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: receiver
+  namespace: kubeast-devtools
+spec:
+  selector: {app: receiver}
+  ports: [{port: 8080, targetPort: 8080}]

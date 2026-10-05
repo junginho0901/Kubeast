@@ -66,11 +66,11 @@ for entry in "${IMAGES[@]}"; do
   kind load docker-image "$image" --name "$KIND_CLUSTER_NAME"
 done
 
-# 3. The chart's other images (postgres, redis, the gateway's nginx): a kind node pulls them from the
-# registry on its own; where it cannot (a proxy), take them from the host's docker. `kind load` imports
-# with --all-platforms, which fails for multi-arch images that only have the host platform locally, so
-# the saved image is imported directly instead.
-helm template "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" -f "$VALUES" 2>/dev/null \
+# 3. The chart's other images (postgres, redis, the gateway's nginx) and the dev tools' (S3 stand-in,
+# mail catcher, webhook receiver): a kind node pulls them from the registry on its own; where it cannot
+# (a proxy), take them from the host's docker. `kind load` imports with --all-platforms, which fails for
+# multi-arch images that only have the host platform locally, so the saved image is imported directly.
+{ helm template "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" -f "$VALUES" 2>/dev/null; cat "$ROOT/deploy/kind/devtools.yaml"; } \
   | sed -n 's/^ *image: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' | sort -u | grep -v "^kubeast/" \
   | while IFS= read -r image; do
     if docker image inspect "$image" >/dev/null 2>&1; then
@@ -82,7 +82,12 @@ helm template "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" -f "$VALUES" 2>/de
     fi
   done
 
-# 4. Install or upgrade from the chart. --wait fails loudly when a pod never becomes ready.
+# 4. The dev tools the dev audit sinks point at (deploy/kind/devtools.yaml). Before the chart: the dev-s3
+# sink's Secret lives in the release namespace and auth-service mounts it.
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+kubectl apply -f "$ROOT/deploy/kind/devtools.yaml" >/dev/null
+
+# 5. Install or upgrade from the chart. --wait fails loudly when a pod never becomes ready.
 echo "═══ helm upgrade --install ${RELEASE} (${NAMESPACE}) ═══"
 helm upgrade --install "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" --create-namespace \
   -f "$VALUES" $( [[ -f "$LOCAL_VALUES" ]] && printf -- '-f %q' "$LOCAL_VALUES" ) \

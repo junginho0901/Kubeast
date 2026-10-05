@@ -82,9 +82,40 @@ data:
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}
   METRICS_ENABLED: {{ .Values.metrics.enabled | quote }}
   AUDIT_FAIL_CLOSED: {{ .Values.audit.failClosed | quote }}
+  {{- if .Values.audit.sinks }}
+  AUDIT_SINKS_FILE: /etc/kubeast/audit-sinks/sinks.yaml
+  AUDIT_SINK_SECRETS_DIR: /etc/kubeast/audit-sinks/secrets
+  {{- end }}
   MIGRATIONS_MODE: {{ .Values.migrations.mode | quote }}
   RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}
   RETENTION_CHAT_DAYS: {{ .Values.retention.chatDays | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
+{{- if .Values.audit.sinks }}
+{{- $seen := dict }}
+{{- range .Values.audit.sinks }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$" (toString .name)) }}
+{{- fail (printf "audit.sinks: name %q must be lowercase letters, digits and '-', up to 42 characters" (toString .name)) }}
+{{- end }}
+{{- if hasKey $seen .name }}
+{{- fail (printf "audit.sinks: name %q is used twice" .name) }}
+{{- end }}
+{{- $_ := set $seen .name true }}
+{{- if and (eq (toString .type) "file") (not (hasPrefix "/var/lib/kubeast-audit" (toString (dig "file" "path" "" .)))) }}
+{{- fail (printf "audit.sinks: file sink %q must write under /var/lib/kubeast-audit (audit.fileSinkVolume)" .name) }}
+{{- end }}
+{{- end }}
+---
+# Audit sinks for auth-service (internal/auditsink); each sink's Secret is
+# mounted next to this file, never rendered here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeast-audit-sinks
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+data:
+  sinks.yaml: |
+    {{- toYaml (dict "sinks" .Values.audit.sinks) | nindent 4 }}
+{{- end }}

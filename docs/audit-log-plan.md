@@ -38,6 +38,12 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 - **stdout**: 서비스 로거(JSON)로 한 줄. `{"time":…,"level":"INFO","msg":"audit","event":"audit","audit":{id,service,action,result,error,actor_user_id,actor_email,target_type,target_id,target_email,cluster,namespace,path,request_ip,user_agent,request_id,before,after}}`. 최상위 `event: "audit"`이 로그 파이프라인의 라우팅 키. `AUDIT_STDOUT=false`(차트 `audit.stdout`)로 끈다. DB 쓰기가 실패해도 줄은 남고 `store_error`가 붙는다.
 - **DB를 못 쓸 때(D4)**: 변경·민감 읽기는 503 `{"detail":"audit unavailable"}`(사유는 서비스 로그 `audit: refusing unrecorded action`), k8s-service `/health`의 `audit` 블록에 `ready`·`write_failures`·`last_error`. 스위치 `AUDIT_FAIL_CLOSED`(기본 true, 차트 `audit.failClosed`), 부팅 대기 `AUDIT_DB_WAIT_SEC`(기본 90).
 - **조회·내보내기**: `GET /api/v1/auth/admin/audit-logs`(필터·페이지), `GET /api/v1/auth/admin/audit-logs/export`(같은 필터, CSV UTF-8 BOM, 최대 50,000행). 둘 다 감사 대상(`admin.audit.read`, `admin.audit.export`).
+- **싱크(선택)**: DB가 1차 저장소이고, 싱크는 DB 행을 **밖으로 복사**한다. auth-service 한 곳의 디스패처(여러 replica 중 Postgres advisory lock을 잡은 하나)가 싱크마다 커서(`audit_sink_cursors.last_id`)보다 큰 행을 읽어 배치로 보내고, 성공하면 커서를 옮긴다. 쓰는 서비스(Go·Python)는 그대로 DB에만 INSERT한다. 늦게 커밋된 작은 id를 놓치지 않게 5초 지난 행만 읽는다.
+  - 종류: `s3`(S3 호환: AWS·MinIO·GCS·R2 — 시간 파티션 NDJSON gzip, 키 `prefix/YYYY/MM/DD/HH/<첫 id>-<끝 id>.ndjson.gz`) · `webhook`(`json` 범용 · `slack` · `teams`(Workflows Adaptive Card) · `discord` · `telegram` · `pagerduty`(Events v2)) · `email`(SMTP) · `file`(NDJSON, 크기 로테이션). 싱크마다 액션 필터(권한 패턴과 같은 와일드카드, 예 `k8s.*.delete`)와 결과 필터.
+  - 전달은 **최소 1회**(보낸 뒤 커서를 옮기기 전에 죽으면 다시 보냄): 레코드의 `id`가 수신 측 중복 제거 키, S3 객체 키는 id 범위라 같은 배치는 같은 키에 덮어쓴다.
+  - 요청 경로를 막지 않는다 — 싱크가 실패하면 커서가 멈추고 재시도(지수 백오프, 최대 5분)하며, 메트릭 `kubeast_audit_sink_pending`·`_failures_total`·`_last_success_timestamp_seconds`와 알람 `KubeastAuditSinkStalled`로 드러난다. 전송 결과는 감사 행으로 남기지 않는다(감사가 감사를 낳는 루프).
+  - 내보내는 레코드(snake_case): `id, time, service, action, result, error, actor_user_id, actor_email, target_type, target_id, target_email, cluster, namespace, path, request_ip, user_agent, request_id, before, after` — DB 행 그대로(마스킹은 기록 때 이미 됨).
+  - 설정: 차트 `audit.sinks[]`(비밀은 Secret 이름만), Object Lock(WORM)은 버킷 기본 보존에 맡기고 Kubeast는 `s3:PutObject`만 쓴다.
 
 ## 5. 카탈로그
 
@@ -114,8 +120,9 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 
 ## 6. 보존
 
-- DB 행은 삭제하지 않는다(관리자 화면은 조회·CSV만).
-- stdout 사본은 클러스터 운영자의 로그 파이프라인 정책(수집·보존·잠금)에 따른다. Kubeast는 백엔드로 직접 보내지 않는다.
+- DB 행은 `RETENTION_AUDIT_DAYS`(차트 `retention.auditDays`, 기본 0 = 무기한)가 지난 것만 auth-service가 매일 지운다(관리자 화면은 조회·CSV만). 싱크가 하나라도 있으면 **모든 싱크가 보낸 행까지만** 지운다 — 멈춘 싱크가 있으면 기간이 지나도 남는다.
+- 장기 보관은 S3 싱크(+ 버킷 Object Lock 기본 보존)로: DB는 콘솔 화면·CSV·fail-closed에 필요한 기간만(S3를 켰다면 90일 정도 권장).
+- stdout 사본은 클러스터 운영자의 로그 파이프라인 정책(수집·보존·잠금)에 따른다.
 
 ## 7. 확인 방법
 

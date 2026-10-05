@@ -512,6 +512,48 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
 
+### 감사 싱크 (S3 · 웹훅 · 메일 · 파일)
+
+감사 로그의 1차 저장소는 DB이고, 싱크는 그 행을 **밖으로 복사**합니다. auth-service 한 replica가 싱크마다
+"어디까지 보냈는지"(커서)를 DB에 두고 배치로 보내므로, 싱크가 죽어도 요청은 막히지 않고 복구되면 이어서
+보냅니다(최소 1회 전달 — 레코드의 `id`로 중복 제거). 싱크가 없으면 지금과 똑같습니다.
+
+| 종류 | 용도 | 비밀(Secret 키) |
+|---|---|---|
+| `s3` | 장기 보관(S3·MinIO·GCS·R2). 시간 파티션 NDJSON gzip | `accessKeyId`·`secretAccessKey` — 없으면 IRSA |
+| `webhook` `json` | SIEM·n8n 등 범용(선택 HMAC 서명 `X-Kubeast-Signature`) | `url`, `hmacSecret` |
+| `webhook` `slack` · `teams` · `discord` | 채팅 알림 | `url` |
+| `webhook` `telegram` | 채팅 알림(`chatId`) | `botToken` |
+| `webhook` `pagerduty` | 온콜(Events v2, 이벤트당 1건) | `routingKey` |
+| `email` | 메일(SMTP, STARTTLS/TLS) | `username`·`password` |
+| `file` | PVC에 NDJSON(`/var/lib/kubeast-audit`, `audit.fileSinkVolume`) | — |
+
+`teams`·`discord`·`pagerduty`는 각 서비스의 공개 페이로드 형식을 따르지만 실제 서비스로는 아직 확인하지 않았습니다.
+
+```yaml
+audit:
+  sinks:
+    - name: archive                      # 장기 보관, 전체 이력
+      type: s3
+      s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
+    - name: slack-danger                 # 위험한 행동만 Slack으로
+      type: webhook
+      secret: kubeast-audit-slack        # kubectl create secret generic kubeast-audit-slack --from-literal=url=https://hooks.slack.com/...
+      webhook: {format: slack}
+      filter: {actions: ["k8s.*.delete", "k8s.pod.exec", "k8s.node.shell", "access.request.create", "admin.*"]}
+retention:
+  auditDays: 90                          # S3를 켰다면 DB는 화면·CSV에 필요한 기간만
+```
+
+- **필터**: 권한 패턴과 같은 와일드카드(`k8s.*.delete`, `admin.*`)와 `results: [failure]`. 필터 없음 = 전부.
+- **시작점**: `s3`·`file`은 처음부터(기존 이력 전체), 나머지는 켠 시점부터(`startFrom`으로 바꿈).
+- **S3 Object Lock(WORM, ISMS-P 증적)**: 버킷을 Object Lock + 버전 관리로 만들고 **기본 보존**(compliance 또는 governance, 기간)을 겁니다. Kubeast는 객체마다 보존을 지정하지 않으며 IAM 권한은 `s3:PutObject` 하나면 됩니다. compliance 모드는 기간 동안 root도 못 지웁니다.
+- **보존**: `retention.auditDays`가 지나도 **아직 싱크로 안 보낸 행은 지우지 않습니다**. 멈춘 싱크는 알람 `KubeastAuditSinkStalled`(메트릭 `kubeast_audit_sink_pending`·`_failures_total`·`_last_success_timestamp_seconds`)로 드러납니다.
+- **네트워크**: 443은 열려 있습니다. SMTP(587/465)나 클러스터 안 엔드포인트는 `audit.sinkEgress`에 NetworkPolicy 규칙을 추가합니다.
+
+로컬 kind에는 `deploy/kind/devtools.yaml`(S3 대용 versitygw + Object Lock 버킷, Mailpit, 웹훅 수신기)이 `kind-deploy.sh`로
+함께 올라가고 dev 값이 싱크 3개를 그쪽으로 향합니다. 메일 수신함은 `kubectl -n kubeast-devtools port-forward svc/mailpit 8025`.
+
 ### 프론트엔드
 
 ```bash
