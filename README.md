@@ -355,6 +355,21 @@ aws:
     maxHours: 8
     roles: [Write]
 
+# 콘솔 자체 메트릭 — 백엔드 5개가 각자 포트의 /metrics로 Prometheus 메트릭을 냄
+# (요청 수·지연·진행 중, 감사 저장소 상태, WebSocket 구독; docs/metrics.md).
+# 게이트웨이는 /metrics를 프록시하지 않음. prometheus-operator가 있으면 ServiceMonitor,
+# networkPolicy.enabled면 스크레이퍼를 from에 적어 열어 줌. 알람 3개는 prometheusRule.
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}            # kube-prometheus-stack: {release: <그 릴리스 이름>}
+  networkPolicy:
+    from: []
+  prometheusRule:
+    enabled: false
+
 # 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
 nodeShell:
   enabled: false

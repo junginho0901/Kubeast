@@ -10,6 +10,7 @@ from app.api import router
 from app.api_public import admin_router, public_router
 from app.config import settings
 from app.security import require_auth
+from app import metrics as console_metrics
 import uvicorn
 
 app = FastAPI(
@@ -49,6 +50,11 @@ app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_au
 # 관리자 전용(모델 연결 테스트) / 공개(health)
 app.include_router(admin_router, prefix="/api/v1/ai")
 app.include_router(public_router, prefix="/api/v1/ai")
+
+# Console metrics (app/metrics.py): the shared kubeast_http_* instruments at
+# /metrics on this port. METRICS_ENABLED=false leaves it unmounted.
+_metrics_enabled = getattr(settings, "METRICS_ENABLED", None)
+console_metrics.install(app, True if _metrics_enabled is None else bool(_metrics_enabled))
 
 
 @app.get("/")

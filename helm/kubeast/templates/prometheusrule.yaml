@@ -1,0 +1,43 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+# Three alerts on the console's own metrics: the audit store refusing rows
+# (audited actions are then refused), a 5xx ratio, and p95 latency.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: kubeast
+      rules:
+        - alert: KubeastAuditStoreDown
+          expr: min by (service) (kubeast_audit_store_up) == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kubeast {{ "{{ $labels.service }}" }} cannot store audit rows"
+            description: "Writes, Secret reveals, exec and AI write tools are refused with 503 while the audit database is unreachable."
+        - alert: KubeastHighErrorRate
+          expr: |
+            sum by (service) (rate(kubeast_http_requests_total{code=~"5.."}[5m]))
+              / sum by (service) (rate(kubeast_http_requests_total[5m])) > {{ .Values.metrics.prometheusRule.errorRatio }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubeast {{ "{{ $labels.service }}" }} 5xx ratio above {{ .Values.metrics.prometheusRule.errorRatio }}"
+        - alert: KubeastSlowRequests
+          expr: |
+            histogram_quantile(0.95, sum by (service, le) (rate(kubeast_http_request_duration_seconds_bucket[5m]))) > {{ .Values.metrics.prometheusRule.p95Seconds }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubeast {{ "{{ $labels.service }}" }} p95 request latency above {{ .Values.metrics.prometheusRule.p95Seconds }}s"
+{{- end }}

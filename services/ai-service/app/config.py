@@ -57,6 +57,8 @@ class Settings(BaseSettings):
 
     # Request body cap in bytes (413 above it)
     MAX_REQUEST_BODY_BYTES: int = 1 << 20
+    # Prometheus metrics at /metrics (app/metrics.py); the gateway never proxies it.
+    METRICS_ENABLED: bool = True
     
     class Config:
         # 프로젝트 루트의 .env 파일 사용

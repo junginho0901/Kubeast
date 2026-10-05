@@ -1,0 +1,112 @@
+suite: Console metrics — ServiceMonitor, PrometheusRule, scrape policy and the named service ports
+templates:
+  - servicemonitor.yaml
+  - prometheusrule.yaml
+  - services.yaml
+  - networkpolicy.yaml
+  - configmap.yaml
+tests:
+  - it: renders no ServiceMonitor or PrometheusRule by default (CRDs may be absent)
+    templates: [servicemonitor.yaml, prometheusrule.yaml]
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: selects the labelled backend Services on port http at /metrics when enabled
+    template: servicemonitor.yaml
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.interval: 15s
+      metrics.serviceMonitor.labels:
+        release: monitoring
+    asserts:
+      - isKind:
+          of: ServiceMonitor
+      - equal:
+          path: metadata.labels.release
+          value: monitoring
+      - equal:
+          path: spec.selector.matchLabels["kubeast.io/metrics"]
+          value: "true"
+      - equal:
+          path: spec.endpoints[0].port
+          value: http
+      - equal:
+          path: spec.endpoints[0].path
+          value: /metrics
+      - equal:
+          path: spec.endpoints[0].interval
+          value: 15s
+
+  - it: names every backend service port http and labels it for the ServiceMonitor
+    template: services.yaml
+    asserts:
+      - equal:
+          path: spec.ports[0].name
+          value: http
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - equal:
+          path: metadata.labels["kubeast.io/metrics"]
+          value: "true"
+        documentSelector:
+          path: metadata.name
+          value: tool-server
+      - isNull:
+          path: metadata.labels
+        documentSelector:
+          path: metadata.name
+          value: frontend
+
+  - it: carries three alerts with the configured thresholds when the rule is enabled
+    template: prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      metrics.prometheusRule.errorRatio: 0.1
+    asserts:
+      - isKind:
+          of: PrometheusRule
+      - lengthEqual:
+          path: spec.groups[0].rules
+          count: 3
+      - equal:
+          path: spec.groups[0].rules[0].alert
+          value: KubeastAuditStoreDown
+      - matchRegex:
+          path: spec.groups[0].rules[1].expr
+          pattern: "> 0.1"
+
+  - it: opens the backend ports to the listed scrapers under the network policy
+    template: networkpolicy.yaml
+    set:
+      networkPolicy.enabled: true
+      metrics.networkPolicy.from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+    asserts:
+      - equal:
+          path: spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
+          value: monitoring
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-metrics-scrape
+      - lengthEqual:
+          path: spec.ingress[0].ports
+          count: 5
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-metrics-scrape
+
+  - it: passes METRICS_ENABLED to the services
+    template: configmap.yaml
+    set:
+      metrics.enabled: false
+    asserts:
+      - equal:
+          path: data.METRICS_ENABLED
+          value: "false"
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config

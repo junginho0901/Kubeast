@@ -30,6 +30,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
+	"github.com/junginho0901/kubeast/services/pkg/metrics"
 )
 
 func pingWithRetry(ctx context.Context, pool *pgxpool.Pool, attempts int, wait time.Duration) error {
@@ -190,6 +191,11 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
 	r.Use(limits.MaxBody(int64(cfg.MaxRequestBodyBytes)))
+	// Console metrics (services/pkg/metrics): request count / duration /
+	// in-flight by route pattern, served at /metrics on this port.
+	m := metrics.New("auth")
+	m.Route = metrics.ChiRoute
+	r.Use(m.Middleware)
 
 	// CORS only for listed origins. With none listed the middleware is not
 	// installed at all: go-chi/cors treats an empty list as "every origin",
@@ -214,6 +220,7 @@ func main() {
 	// Health (no auth)
 	r.Get("/", healthHandler.Root)
 	r.Get("/health", healthHandler.Health)
+	r.Get("/metrics", m.Handler().ServeHTTP)
 
 	// Auth API
 	r.Route("/api/v1/auth", func(r chi.Router) {

@@ -453,4 +453,36 @@ spec:
   egress:
 {{- include "kubeast.np.postgresEgress" . }}
 {{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.networkPolicy.from }}
+---
+# scrapers listed in metrics.networkPolicy.from → every backend's service port (/metrics)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-metrics-scrape
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [auth-service, ai-service, k8s-service, session-service, tool-server]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- toYaml .Values.metrics.networkPolicy.from | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8004
+        - protocol: TCP
+          port: 8001
+        - protocol: TCP
+          port: 8002
+        - protocol: TCP
+          port: 8003
+        - protocol: TCP
+          port: 8086
+{{- end }}
 {{- end }}
