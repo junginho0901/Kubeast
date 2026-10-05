@@ -8,6 +8,7 @@
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { Member, RoleWithDetails } from '@/services/api'
 import ClusterRoleMatrix from '@/pages/admin/ClusterRoleMatrix'
+import UserApiKeys from './UserApiKeys'
 import { Pencil, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import CustomDropdown from '@/components/CustomDropdown'
@@ -190,6 +191,8 @@ export function UserDetailModal({
             canEdit={canEditUsers}
             userIsGlobalAdmin={permissions.some((p) => p === '*' || p.startsWith('admin.'))}
           />
+
+          <UserApiKeys userID={u.id} canEdit={canEditUsers} tr={tr} />
         </div>
 
         {detailError && (

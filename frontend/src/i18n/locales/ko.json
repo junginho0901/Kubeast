@@ -1,4 +1,33 @@
 {
+  "apiKeys": {
+    "title": "API 키",
+    "subtitle": "스크립트·CI용 자격입니다. 키는 짧은 액세스 토큰으로 교환해 쓰며, 내 권한을 넘는 일은 할 수 없습니다.",
+    "create": "키 발급",
+    "name": "이름",
+    "namePlaceholder": "예: 배포 파이프라인",
+    "expires": "만료(일)",
+    "expiresHint": "최대 {{max}}일",
+    "clusters": "클러스터",
+    "clustersHint": "아무것도 고르지 않으면 내가 접근할 수 있는 모든 클러스터.",
+    "allClusters": "접근 가능한 모든 클러스터",
+    "ceiling": "역할 상한",
+    "ceilingHint": "클러스터별 내 역할을 넘지 않습니다.",
+    "issue": "발급",
+    "cancel": "취소",
+    "onceWarning": "지금 복사하세요 — 키는 이번 한 번만 표시됩니다.",
+    "done": "확인",
+    "empty": "발급한 키가 없습니다.",
+    "revoke": "폐기",
+    "confirmRevoke": "지금 폐기",
+    "expiresAt": "만료 {{time}}",
+    "lastUsed": "마지막 사용 {{time}}",
+    "never": "사용 전",
+    "failed": "키를 발급하지 못했습니다.",
+    "admin": {
+      "title": "API 키",
+      "empty": "API 키 없음"
+    }
+  },
   "accessRequests": {
     "title": "권한 요청",
     "disabled": "이 설치에서는 권한 요청이 꺼져 있습니다 (auth.accessRequests.enabled).",

@@ -76,6 +76,10 @@ type Config struct {
 	// time and an admin approves (temporary per-cluster grants).
 	AccessRequests AccessRequestsConfig
 
+	// APIKeys: long-lived credentials a user issues for automation, exchanged
+	// for short access tokens (handler/api_keys.go).
+	APIKeys APIKeysConfig
+
 	// K8s setup
 	SetupNamespace          string
 	SetupKubeconfigSecret   string
@@ -142,6 +146,13 @@ type AccessRequestsConfig struct {
 	SweepSec int
 }
 
+// APIKeysConfig: whether keys may be issued and exchanged, and the longest
+// expiry a key may be given (days).
+type APIKeysConfig struct {
+	Enabled bool
+	MaxDays int
+}
+
 // parseRoleMapping reads "group=Role,group2=Role".
 func parseRoleMapping(s string) map[string]string {
 	out := map[string]string{}
@@ -186,6 +197,10 @@ func Load() Config {
 			MaxHours: pkgconfig.GetEnvInt("ACCESS_REQUESTS_MAX_HOURS", 8),
 			Roles:    pkgconfig.GetEnvList("ACCESS_REQUESTS_ROLES", "Write"),
 			SweepSec: pkgconfig.GetEnvInt("ACCESS_REQUESTS_SWEEP_SEC", 60),
+		},
+		APIKeys: APIKeysConfig{
+			Enabled: pkgconfig.GetEnvBool("API_KEYS_ENABLED", true),
+			MaxDays: pkgconfig.GetEnvInt("API_KEYS_MAX_DAYS", 90),
 		},
 		Port:  pkgconfig.GetEnvInt("PORT", 8004),
 		Debug: pkgconfig.GetEnvBool("DEBUG", true),

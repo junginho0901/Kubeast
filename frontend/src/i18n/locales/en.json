@@ -1,4 +1,33 @@
 {
+  "apiKeys": {
+    "title": "API keys",
+    "subtitle": "For scripts and CI. A key is exchanged for a short access token and never grants more than you hold.",
+    "create": "Create key",
+    "name": "Name",
+    "namePlaceholder": "e.g. deploy pipeline",
+    "expires": "Expires in (days)",
+    "expiresHint": "up to {{max}}",
+    "clusters": "Clusters",
+    "clustersHint": "None selected = every cluster you can reach.",
+    "allClusters": "All clusters you can reach",
+    "ceiling": "Role ceiling",
+    "ceilingHint": "The key never exceeds your own role on a cluster.",
+    "issue": "Issue key",
+    "cancel": "Cancel",
+    "onceWarning": "Copy the key now — it is shown only this once.",
+    "done": "Done",
+    "empty": "No keys yet.",
+    "revoke": "Revoke",
+    "confirmRevoke": "Revoke now",
+    "expiresAt": "expires {{time}}",
+    "lastUsed": "last used {{time}}",
+    "never": "never used",
+    "failed": "The key was not created.",
+    "admin": {
+      "title": "API keys",
+      "empty": "No API keys"
+    }
+  },
   "accessRequests": {
     "title": "Access requests",
     "disabled": "Access requests are off on this installation (auth.accessRequests.enabled).",

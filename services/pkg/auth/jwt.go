@@ -38,6 +38,10 @@ type TokenPayload struct {
 	// unchanged so auth-service can cap the session's absolute lifetime
 	// (OWASP Session Management: absolute timeout). Falls back to "iat".
 	AuthTime int64
+	// APIKeyID is the "akid" claim: set when the token was issued for an API
+	// key (POST /auth/token) rather than a sign-in. Such a token cannot be
+	// refreshed; the client exchanges the key again.
+	APIKeyID string
 }
 
 // PendingAllowedPaths are the only paths a token with the "pending" role may
@@ -328,7 +332,8 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 	} else if f, ok := claims["iat"].(float64); ok && f > 0 {
 		authTime = int64(f)
 	}
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), TokenVersion: claimedTV, AuthTime: authTime}, nil
+	akid, _ := claims["akid"].(string)
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid}, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change

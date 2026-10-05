@@ -5,6 +5,7 @@ import { ChevronDown, KeyRound, Languages, User, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import ClusterAccessSection from './account/ClusterAccessSection'
+import ApiKeysSection from './account/ApiKeysSection'
 
 export default function Account() {
   const queryClient = useQueryClient()
@@ -129,6 +130,8 @@ export default function Account() {
         </div>
 
         <ClusterAccessSection me={me} />
+
+        <ApiKeysSection />
 
         <div className="card">
           <div className="flex items-center gap-3 mb-4">
