@@ -13,7 +13,7 @@
 > 2026-04-15 발효. 근거: [docs/audit-log-plan.md §8](docs/audit-log-plan.md#8-개발-규칙-영속화)
 
 모든 **쓰기(write) 성격의 HTTP 핸들러**, 그리고 **민감 정보 열람
-(Secret reveal / Node shell / 감사 로그 조회)** 은 반드시
+(Secret reveal / Node shell / 세션 기록 열람 / 감사 로그 조회)** 은 반드시
 [services/pkg/audit](services/pkg/audit) 를 통해 감사 로그를 기록한다.
 
 **포함 대상:**

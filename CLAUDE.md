@@ -37,7 +37,7 @@ A Go service follows a `cmd/server/main.go` → `internal/routes` (route registr
 
 > Authoritative rules: [AGENTS.md](AGENTS.md) and [docs/audit-log-plan.md](docs/audit-log-plan.md). PRs that add/modify a write-class HTTP handler **without** an audit call are rejected.
 
-Every **write-class HTTP handler** (create/update/delete/rollback/restart/…) and every **sensitive read** (Secret reveal, Node shell, Pod logs sensitive access, Cronjob trigger, audit-log read itself) MUST record an audit entry via `services/pkg/audit`. Plain list/get reads and health/public endpoints are excluded.
+Every **write-class HTTP handler** (create/update/delete/rollback/restart/…) and every **sensitive read** (Secret reveal, Node shell, Pod logs sensitive access, Cronjob trigger, session recording read, audit-log read itself) MUST record an audit entry via `services/pkg/audit`. Plain list/get reads and health/public endpoints are excluded.
 
 - **Action names are strict**: `<domain>.<object>.<verb>` (e.g. `k8s.pod.delete`, `helm.release.rollback`, `ai.tool.execute`, `admin.audit.read`). New actions must be added to the catalog in `docs/audit-log-plan.md §5-2` **first** (update the plan doc before the code).
 - **Record both success and failure** — on failure set `rec.Result = audit.ResultFailure` and fill `rec.Error`.

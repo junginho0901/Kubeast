@@ -12,6 +12,12 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출한다(�
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받는지(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기·Secret 열람·exec·AI 쓰기 툴이 503으로 거부된다 |
 | `kubeast_audit_write_failures_total` | counter | `service` | 기동 뒤 저장하지 못한 감사 행 수 |
 | `kubeast_ws_subscriptions` | gauge | `service` | k8s-service의 살아 있는 WebSocket 구독(로그·exec·watch) 수 |
+| `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 보내는 auth-service 레플리카만 낸다 |
+| `kubeast_audit_sink_failures_total` | counter | 같음 | 그 레플리카가 보내기 시작한 뒤 실패한 전송 수 |
+| `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | 같음 | 싱크 커서가 마지막으로 나아간 시각(보내기 시작한 시각부터) |
+| `kubeast_session_recording_pending_bytes` | gauge | `service` | 녹화됐지만 아직 저장소에 올리지 못한 터미널 출력 바이트(`sessionRecording`) |
+| `kubeast_session_recording_upload_failures_total` | counter | `service` | 기동 뒤 실패한 녹화 조각 업로드 수 |
+| `kubeast_session_recording_last_upload_timestamp_seconds` | gauge | `service` | 녹화 조각을 마지막으로 올린 시각(기동 시각부터) |
 | `go_*`, `process_*` / `python_*` | 기본 수집기 | | 런타임·프로세스 |
 
 `service` = `auth` · `ai` · `k8s` · `session` · `tool-server`. 사용자·클러스터 id는 라벨에 넣지 않는다(Prometheus 계측 지침: 라벨 집합은 작게, 식별자는 라벨에 두지 않는다).
@@ -29,7 +35,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # 알람 3개
+    enabled: true           # 알람 5개
 ```
 
 ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드 Service 다섯 개를 포트 이름 `http`, 경로 `/metrics`로 고른다. Operator 없이 쓰는 Prometheus는 `kubernetes_sd_configs`(role `endpoints`)로 같은 라벨을 고르면 된다.
@@ -41,6 +47,8 @@ ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` 2분 | 감사 DB를 못 써 감사 대상 동작이 거부되는 중 |
 | `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율 |
 | `KubeastSlowRequests` | p95 > `p95Seconds`(2 s) 10분 | 콘솔 지연 |
+| `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0`이고 마지막 전송 성공이 10분 넘음, 5분 | 감사 싱크 전송이 멈춤(auth-service 로그에 오류, 안 보낸 행은 보존이 남겨 둠) |
+| `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0`이고 마지막 업로드가 10분 넘음, 5분 | 세션 녹화 업로드가 멈춤(k8s-service 스풀에 쌓임, 세션은 막지 않음) |
 
 쓸 만한 식: 서비스별 요청률 `sum by (service) (rate(kubeast_http_requests_total[5m]))` · 라우트별 p95 `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`.
 
