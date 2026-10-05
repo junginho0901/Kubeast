@@ -12,6 +12,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 )
 
 // validateKubeconfigStatic runs the checks that need no network: valid YAML
@@ -65,6 +66,7 @@ func callProbe(r *http.Request, cfg config.Config, path string, body []byte) (st
 	}
 	req.Header.Set("Content-Type", "application/json")
 	forwardCallerCredential(r, req, cfg.AuthCookieName)
+	internalauth.Set(req, cfg.InternalAPIToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("k8s-service unreachable: %w", err)

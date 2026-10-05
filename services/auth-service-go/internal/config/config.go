@@ -5,6 +5,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 )
 
 type Config struct {
@@ -86,7 +87,10 @@ type Config struct {
 	DockerKubeconfigPath string
 	K8sServiceHealthURL  string
 	K8sServiceURL        string
-	ToolServerURL        string
+	// InternalAPIToken is sent on calls to k8s-service's /internal routes
+	// (kubeconfig validate, bundle invalidate) — services/pkg/internalauth.
+	InternalAPIToken string
+	ToolServerURL    string
 	// Credential plugins a registered kubeconfig may name (exec.command base names).
 	KubeconfigExecCommands []string
 
@@ -234,6 +238,7 @@ func Load() Config {
 		DockerKubeconfigPath: pkgconfig.GetEnv("DOCKER_KUBECONFIG_PATH", "/kubeconfig/kubeconfig.yaml"),
 		K8sServiceHealthURL:  pkgconfig.GetEnv("K8S_SERVICE_HEALTH_URL", "http://k8s-service:8002/health"),
 		K8sServiceURL:        pkgconfig.GetEnv("K8S_SERVICE_URL", "http://k8s-service:8002"),
+		InternalAPIToken:     pkgconfig.GetEnv(internalauth.Env, ""),
 		// Credential plugins a registered kubeconfig may name (checked before
 		// registration; k8s-service enforces the same list when it runs them).
 		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),

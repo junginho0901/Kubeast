@@ -108,6 +108,7 @@ else
   POSTGRES_PW=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 20)
   ADMIN_PW=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 20)
   APPROVAL_SECRET=$(openssl rand -hex 32)
+  INTERNAL_TOKEN=$(openssl rand -hex 20)
 
   # Preserve existing OPENAI_API_KEY if .env already exists
   EXISTING_API_KEY=""
@@ -141,6 +142,8 @@ DEFAULT_ADMIN_PASSWORD=${ADMIN_PW}
 KEY_DIR=/app/.keys
 # Shared by ai-service and tool-server to sign/verify AI write-tool approvals
 AI_APPROVAL_SECRET=${APPROVAL_SECRET}
+# Service-to-service token for k8s-service's /internal routes (tool-server, auth-service)
+INTERNAL_API_TOKEN=${INTERNAL_TOKEN}
 
 # Database
 POSTGRES_USER=kubeast

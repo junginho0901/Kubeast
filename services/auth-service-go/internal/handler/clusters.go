@@ -18,6 +18,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -299,6 +300,7 @@ func (h *ClustersHandler) invalidateK8sBundle(r *http.Request, id cluster.ID) {
 		return
 	}
 	forwardCallerCredential(r, req, h.cfg.AuthCookieName)
+	internalauth.Set(req, h.cfg.InternalAPIToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		slog.Warn("cluster: k8s-service invalidate call failed", "id", id, "err", err)

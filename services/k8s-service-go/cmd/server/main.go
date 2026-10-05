@@ -27,6 +27,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	"github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
@@ -40,6 +41,17 @@ func main() {
 	logger.Setup(cfg.AppName, cfg.Debug)
 
 	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug)
+
+	// The /internal routes (kubeconfig for tool-server, validate/invalidate for
+	// auth-service) need the shared service token; without one they answer 503
+	// and, outside DEBUG, the service does not start at all.
+	if cfg.InternalAPIToken == "" {
+		if !cfg.Debug {
+			slog.Error("INTERNAL_API_TOKEN is not set; refusing to start outside DEBUG (the Helm chart generates one)")
+			os.Exit(1)
+		}
+		slog.Warn("INTERNAL_API_TOKEN is not set; /internal routes will answer 503")
+	}
 
 	// Init Redis cache
 	redisCache := cache.New(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisPassword)
@@ -190,9 +202,11 @@ func main() {
 
 	// Internal-only (NOT routed via the gateway): tool-server fetches a cluster's
 	// kubeconfig at runtime so its kubectl targets the selected cluster (step 14).
-	// JWT-authed; per-cluster access is checked in the handler. No ClusterMiddleware
-	// — the cluster id comes from the path.
+	// The caller must be a known service (X-Internal-Token) AND carry the user's
+	// JWT: per-cluster access and the audit actor come from the user. No
+	// ClusterMiddleware — the cluster id comes from the path.
 	r.Group(func(r chi.Router) {
+		r.Use(internalauth.Middleware(cfg.InternalAPIToken))
 		r.Use(func(next http.Handler) http.Handler {
 			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
 		})

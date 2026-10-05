@@ -370,6 +370,11 @@ metrics:
   prometheusRule:
     enabled: false
 
+# 서비스 간 토큰 — k8s-service의 /internal 라우트(tool-server의 kubeconfig 조회,
+# auth-service의 validate·invalidate)는 사용자 JWT에 더해 Secret kubeast-secrets의
+# INTERNAL_API_TOKEN을 X-Internal-Token으로 요구한다(차트가 생성·보존). 회전 = 값 교체 후
+# auth-service·k8s-service·tool-server 롤아웃. secrets.existingSecret를 쓰면 그 Secret에 넣는다.
+
 # 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
 nodeShell:
   enabled: false
