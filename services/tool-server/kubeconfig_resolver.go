@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 )
 
 type ctxKey int
@@ -63,7 +65,9 @@ func kubeconfigForCtx(ctx context.Context) string {
 
 var (
 	k8sServiceURL = envOrDefault("K8S_SERVICE_URL", "http://k8s-service:8002")
-	kcHTTP        = &http.Client{Timeout: 10 * time.Second}
+	// Shared service token for k8s-service's /internal routes (services/pkg/internalauth).
+	internalAPIToken = os.Getenv(internalauth.Env)
+	kcHTTP           = &http.Client{Timeout: 10 * time.Second}
 )
 
 const kubeconfigTTL = 5 * time.Minute
@@ -189,9 +193,12 @@ func fetchClusterKubeconfig(ctx context.Context, clusterID string, headers http.
 	if err != nil {
 		return "", false, err
 	}
+	// The user's token (access gate + audit actor on k8s-service) plus this
+	// service's own token: a user session alone cannot fetch a kubeconfig.
 	if auth := headers.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
+	internalauth.Set(req, internalAPIToken)
 
 	resp, err := kcHTTP.Do(req)
 	if err != nil {

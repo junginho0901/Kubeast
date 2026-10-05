@@ -50,6 +50,7 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-change-me-do-not-use-in-prod}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:-}
       - KEY_DIR=/app/.keys
       - DEPLOYMENT_MODE=docker
       - DOCKER_KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
@@ -112,6 +113,7 @@ services:
       # Multi-cluster: read per-cluster kubeconfig files auth-service writes into
       # the shared volume (must match auth-service's KUBECONFIG_DIR).
       - KUBECONFIG_DIR=/kubeconfig/clusters
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:-}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - AUTH_TOKEN_VERSION_URL=http://auth-service:8004/api/v1/auth/internal/token-version
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}
@@ -167,6 +169,7 @@ services:
       - TOOL_SERVER_KUBECONFIG_PATH=/kubeconfig/kubeconfig.yaml
       - TOOL_SERVER_USE_INCLUSTER=false
       - AI_APPROVAL_SECRET=${AI_APPROVAL_SECRET:-}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN:-}
       - AUTH_JWKS_URL=http://auth-service:8004/api/v1/auth/jwks.json
       - AUTH_TOKEN_VERSION_URL=http://auth-service:8004/api/v1/auth/internal/token-version
       - JWT_ISSUER=${JWT_ISSUER:-kubeast-auth}

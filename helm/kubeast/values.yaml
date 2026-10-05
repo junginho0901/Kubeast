@@ -22,7 +22,9 @@ admin:
 # ExternalSecrets) holding these keys: POSTGRES_PASSWORD, DATABASE_URL,
 # REDIS_PASSWORD (redis requirepass; k8s-service's cache uses it),
 # DEFAULT_ADMIN_PASSWORD, AI_APPROVAL_SECRET (shared by ai-service and
-# tool-server to sign write-tool approvals), OPENAI_API_KEY, ANTHROPIC_API_KEY,
+# tool-server to sign write-tool approvals), INTERNAL_API_TOKEN (service token
+# tool-server and auth-service present on k8s-service's /internal routes; rotate
+# it by changing the value and rolling those three), OPENAI_API_KEY, ANTHROPIC_API_KEY,
 # GEMINI_API_KEY (may be empty) and, with auth.oidc enabled and no
 # auth.oidc.existingSecret, OIDC_CLIENT_SECRET. Pair it with
 # auth.signingKey.existingSecret for a fully deterministic render.

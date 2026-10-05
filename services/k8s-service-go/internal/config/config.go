@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 )
 
 type Config struct {
@@ -34,9 +35,12 @@ type Config struct {
 	// AuthTokenVersionURL is auth-service's token-version lookup; the JWT
 	// validator asks it so revoked tokens stop working before they expire.
 	AuthTokenVersionURL string
-	JWTIssuer           string
-	JWTAudience         string
-	AuthCookieName      string
+	// InternalAPIToken authenticates the services that call the /internal
+	// routes (tool-server, auth-service) — services/pkg/internalauth.
+	InternalAPIToken string
+	JWTIssuer        string
+	JWTAudience      string
+	AuthCookieName   string
 	// Act as the signed-in user toward every cluster (Kubernetes impersonation).
 	ImpersonationEnabled bool
 	// Credential plugins a registered kubeconfig may run (exec.command base
@@ -100,6 +104,7 @@ func Load() Config {
 
 		AuthJWKSURL:         pkgconfig.GetEnv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json"),
 		AuthTokenVersionURL: pkgconfig.GetEnv("AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"),
+		InternalAPIToken:    pkgconfig.GetEnv(internalauth.Env, ""),
 		JWTIssuer:           pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:         pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),
 		AuthCookieName:      pkgconfig.GetEnv("AUTH_COOKIE_NAME", "kubeast.token"),
