@@ -240,6 +240,9 @@ func main() {
 		// Service-to-service: the other services' validators ask for the
 		// bearer's current token_version (not routed by the gateway).
 		r.Get("/internal/token-version/{userID}", authHandler.TokenVersion)
+		// API key → access token (Authorization: Bearer kbk_…); the gateway
+		// rate-limits it like sign-in.
+		r.Post("/token", authHandler.ExchangeAPIKey)
 
 		// Setup: only "is a cluster registered yet" is public (login page routing).
 		r.Get("/setup", setupHandler.GetSetupPublic)
@@ -295,6 +298,15 @@ func main() {
 			r.Get("/admin/access-requests", authHandler.AdminListAccessRequests)
 			r.Post("/admin/access-requests/{id}/approve", authHandler.AdminApproveAccessRequest)
 			r.Post("/admin/access-requests/{id}/reject", authHandler.AdminRejectAccessRequest)
+
+			// API keys: a user's own (issue, list, revoke); admin.users.update
+			// lists and revokes anyone's, never issues.
+			r.Get("/api-keys/config", authHandler.APIKeysConfig)
+			r.Get("/api-keys", authHandler.ListMyAPIKeys)
+			r.Post("/api-keys", authHandler.CreateAPIKey)
+			r.Delete("/api-keys/{id}", authHandler.DeleteMyAPIKey)
+			r.Get("/admin/users/{user_id}/api-keys", authHandler.AdminListUserAPIKeys)
+			r.Delete("/admin/users/{user_id}/api-keys/{id}", authHandler.AdminDeleteUserAPIKey)
 		})
 	})
 

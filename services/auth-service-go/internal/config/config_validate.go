@@ -10,6 +10,9 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("PASSWORD_LOGIN must be on, admin-only or off (got %q)", c.PasswordLogin)
 	}
+	if c.APIKeys.Enabled && c.APIKeys.MaxDays < 1 {
+		return fmt.Errorf("API_KEYS_MAX_DAYS must be at least 1 (got %d)", c.APIKeys.MaxDays)
+	}
 	if c.AccessRequests.Enabled {
 		if c.AccessRequests.MaxHours < 1 {
 			return fmt.Errorf("ACCESS_REQUESTS_MAX_HOURS must be at least 1 (got %d)", c.AccessRequests.MaxHours)

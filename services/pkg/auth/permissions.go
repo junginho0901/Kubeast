@@ -52,6 +52,10 @@ func (m PermissionMatrix) HasForCluster(perm, clusterID string) bool {
 	return false
 }
 
+// MatchAny reports whether perm is granted by any entry of perms, wildcard
+// entries ("*", "k8s.pods.*") included.
+func MatchAny(perms []string, perm string) bool { return matchAny(perms, perm) }
+
 func matchAny(perms []string, perm string) bool {
 	for _, pp := range perms {
 		if permMatches(pp, perm) {

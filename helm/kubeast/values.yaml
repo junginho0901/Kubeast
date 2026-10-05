@@ -126,6 +126,13 @@ auth:
     roles: [Write]
     # How often expired grants are reverted (and tokens revoked).
     sweepSeconds: 60
+  # API keys: a user issues a key (Settings → API keys) and automation
+  # exchanges it for a short access token (POST /api/v1/auth/token). A key
+  # is scoped to clusters and capped at a role, never above the user's own
+  # rights, and must expire within maxDays.
+  apiKeys:
+    enabled: true
+    maxDays: 90
 
 # --- Console metrics (the console's own health, not the target clusters') ---
 # Every backend service (auth, ai, k8s, session, tool-server) serves Prometheus

@@ -136,6 +136,24 @@ tests:
           path: metadata.name
           value: kubeast-config
 
+  - it: hands the API key settings to auth-service as env values
+    set:
+      auth.apiKeys.enabled: false
+      auth.apiKeys.maxDays: 30
+    asserts:
+      - equal:
+          path: data.API_KEYS_ENABLED
+          value: "false"
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.API_KEYS_MAX_DAYS
+          value: "30"
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+
   - it: points the kubeconfig Secret namespace at the release namespace
     release:
       namespace: kubeast-helm

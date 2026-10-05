@@ -10,6 +10,7 @@
 import { accessRequestsApi } from './access_requests'
 import { adminApi } from './admin'
 import { aiApi } from './ai'
+import { apiKeysApi } from './api_keys'
 import { authApi } from './auth'
 import { clusterApi } from './cluster'
 import { clustersApi } from './clusters'
@@ -32,6 +33,7 @@ export const api = {
   ...authApi,
   ...adminApi,
   ...accessRequestsApi,
+  ...apiKeysApi,
   ...clusterApi,
   ...workloadsApi,
   ...podsApi,

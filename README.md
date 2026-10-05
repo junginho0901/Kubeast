@@ -223,6 +223,7 @@ AI 어시스턴트가 활성화됩니다.
 ### 🔐 인증 · 감사
 
 - JWT 기반 자체 인증(JWKS) — 조직(Organization) / 팀(Team) / 사용자 계층
+- **API 키** — 스크립트·CI용 자격(설정 → API 키). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함(아래 "API 키" 절)
 - **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, Helm 변경 등)를
   기록, 성공/실패 모두 추적
 - **i18n** — 한국어 · 영어
@@ -493,6 +494,23 @@ kind 노드는 postgres·redis·nginx 이미지를 레지스트리에서 당기�
 AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니다. 노트북에서 Ollama를 돌린다면
 `kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:8b`, `host.docker.internal:11434`
 — dev 값이 그 주소를 `ai.baseUrlAllowedHosts`와 NetworkPolicy에서 허용)로 등록하면 되고, 리셋 뒤에도 다시 적용합니다.
+
+### API 키 (자동화)
+
+사람 로그인 대신 스크립트·CI가 쓰는 긴 자격입니다. 설정 → API 키에서 이름·만료(기본 30일, 상한은 차트
+`auth.apiKeys.maxDays`)·클러스터·역할 상한(기본 Read)을 정해 발급하면 값(`kbk_…`)이 한 번만 보입니다. 키는 그
+자체로 API를 부르지 않고 짧은 액세스 토큰으로 교환해 씁니다 — 토큰은 발급자가 그 순간 가진 권한을 키의 범위로
+잘라낸 것이라 발급자보다 많은 일을 할 수 없고, 키를 폐기하면 다음 교환부터 거부됩니다(관리자는 사용자 상세에서
+남의 키를 폐기할 수 있고, 발급은 본인만).
+
+```bash
+TOKEN=$(curl -s -X POST https://console.example.com/api/v1/auth/token \
+  -H "Authorization: Bearer $KUBEAST_API_KEY" | jq -r .access_token)     # expires_in 초 뒤 다시 교환
+curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
+  -H "Authorization: Bearer $TOKEN" -H "X-Cluster-Name: prod"
+```
+
+끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
 
 ### 프론트엔드
 

@@ -67,6 +67,9 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `access.request.approve` / `.reject` | 관리자(`admin.users.update`, 본인 요청 불가, 상한 규칙)의 결정. 승인 = 임시 부여(`user_cluster_roles.expires_at`) + 요청자 토큰 폐기, `after`에 `expires_at`·`note`. 본인 요청·상한 위반 거부도 `failure`로 남는다 |
 | `access.request.expire` | 대기 요청이 24 h 동안 결정되지 않아 소멸(`after.end_reason = not_reviewed`). actor `system` |
 | `access.grant.expire` | 임시 부여가 기간을 다해 이전 역할로 복귀(`after.restored_role`, 없으면 `null` = 부여 삭제) + 토큰 폐기. actor `system`, 스위퍼 `ACCESS_REQUESTS_SWEEP_SEC`(기본 60 s) |
+| `user.apikey.create` / `.delete` | API 키 발급·폐기(본인). `target_type = api_key`, `target_id` = 키 id, `target_email` = 소유자. `after` = `{name, key_prefix, cluster_ids, role_ceiling, expires_at}` — 키 값은 절대 안 남는다 |
+| `user.apikey.exchange` | API 키를 액세스 토큰으로 교환(`POST /auth/token`). 성공·실패(모르는/폐기/만료 키, 소유자 없음·Pending) 모두 1행; actor = 키 소유자(키를 못 찾으면 actor 없음, `target_id` = 제시된 접두). 성공 `after`에 `akid`(키 id)와 토큰이 받은 `clusters` |
+| `admin.apikey.delete` | 관리자(`admin.users.update`)가 남의 키를 폐기. target = 키(id), `target_email` = 소유자 |
 | `admin.users.create` / `.read` / `.update` / `.delete` | 관리자 사용자 관리 |
 | `admin.roles.create` / `.update` / `.delete` | 역할 생성·수정·삭제. `before`/`after` = `{name, description, permissions}` — 권한 목록 변경이 그대로 남는다 |
 | `admin.organizations.create` / `.delete` | 조직(팀) 생성·삭제. `after`/`before` = `{type, name}` |

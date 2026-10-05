@@ -130,6 +130,25 @@ func (m *JWTManager) CreateToken(userID, email, roleName string, permissions aut
 // value through so the "auth_time" claim stays fixed and the session's
 // absolute lifetime can be enforced. A zero authTime means "now".
 func (m *JWTManager) CreateTokenAt(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, authTime time.Time) (string, error) {
+	return m.sign(m.claims(userID, email, roleName, permissions, clusterRoles, tokenVersion, authTime))
+}
+
+// CreateAPIKeyToken signs the token an API key is exchanged for: the same
+// claims as a sign-in (sub = the key's owner, so token_version revocation
+// applies) plus "akid", the key's id. Refresh refuses such a token.
+func (m *JWTManager) CreateAPIKeyToken(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, apiKeyID string) (string, error) {
+	claims := m.claims(userID, email, roleName, permissions, clusterRoles, tokenVersion, time.Time{})
+	claims["akid"] = apiKeyID
+	return m.sign(claims)
+}
+
+func (m *JWTManager) sign(claims jwt.MapClaims) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = m.KeyID
+	return token.SignedString(m.PrivateKey)
+}
+
+func (m *JWTManager) claims(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, authTime time.Time) jwt.MapClaims {
 	if permissions == nil {
 		permissions = auth.PermissionMatrix{}
 	}
@@ -140,7 +159,7 @@ func (m *JWTManager) CreateTokenAt(userID, email, roleName string, permissions a
 	if authTime.IsZero() {
 		authTime = now
 	}
-	claims := jwt.MapClaims{
+	return jwt.MapClaims{
 		"sub":         userID,
 		"email":       email,
 		"role":        roleName,
@@ -154,11 +173,6 @@ func (m *JWTManager) CreateTokenAt(userID, email, roleName string, permissions a
 		"iat":         now.Unix(),
 		"exp":         now.Add(time.Duration(m.ExpiresMinutes) * time.Minute).Unix(),
 	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	token.Header["kid"] = m.KeyID
-
-	return token.SignedString(m.PrivateKey)
 }
 
 // ValidateToken validates a JWT and returns claims.

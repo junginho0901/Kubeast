@@ -73,7 +73,7 @@ tests:
         documentIndex: 0
       - matchRegex:
           path: data["nginx.conf"]
-          pattern: 'location ~ \^/api/v1/auth/\(login\|register\|oidc/login\)\$ \{\s+limit_req zone=auth_signin burst=20 nodelay;\s+limit_req_status 429;'
+          pattern: 'location ~ \^/api/v1/auth/\(login\|register\|oidc/login\|token\)\$ \{\s+limit_req zone=auth_signin burst=20 nodelay;\s+limit_req_status 429;'
         template: gateway.yaml
         documentIndex: 0
 

@@ -267,6 +267,13 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
+	// A token issued for an API key is not a session: the client exchanges
+	// the key again instead (api_keys.go), so the key's scope and the user's
+	// current role are re-read every time.
+	if payload.APIKeyID != "" {
+		response.Error(w, http.StatusUnauthorized, "API key tokens cannot be refreshed; exchange the key again")
+		return
+	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
 	if err != nil || user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
