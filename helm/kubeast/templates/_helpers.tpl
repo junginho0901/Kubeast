@@ -185,3 +185,8 @@ annotations:
   value: "regional"
 {{- end }}
 {{- end -}}
+
+{{/* "true" when any audit sink writes files (auth-service then mounts audit.fileSinkVolume). */}}
+{{- define "kubeast.auditFileSinks" -}}
+{{- range .Values.audit.sinks }}{{ if eq (toString .type) "file" }}true{{ end }}{{ end }}
+{{- end -}}

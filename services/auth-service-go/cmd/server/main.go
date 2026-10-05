@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/accessrequests"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditsink"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
@@ -116,6 +117,25 @@ func main() {
 	// Data retention: delete audit / chat rows past their window, once now and
 	// then daily; every run is audited as admin.retention.purge. Off unless a
 	// window is set (RETENTION_AUDIT_DAYS / RETENTION_CHAT_DAYS).
+	// Audit sinks: copies of the audit rows to S3 / webhooks / mail / a file,
+	// sent by one replica (advisory lock) from each sink's cursor. A bad sinks
+	// file stops the service — a silently missing archive is worse.
+	sinksCfg, err := auditsink.LoadFile(cfg.AuditSinksFile, cfg.AuditSinkSecretsDir)
+	if err != nil {
+		slog.Error("invalid audit sinks configuration", "error", err)
+		os.Exit(1)
+	}
+	sinkStore := auditsink.PG{Pool: pool}
+	sinks, err := auditsink.New(sinksCfg, sinkStore, sinkStore)
+	if err != nil {
+		slog.Error("audit sinks", "error", err)
+		os.Exit(1)
+	}
+	if names := sinks.Names(); len(names) > 0 {
+		slog.Info("audit sinks configured", "sinks", names)
+		go sinks.Run(ctx)
+	}
+
 	retentionCfg := retention.Config{AuditDays: cfg.RetentionAuditDays, ChatDays: cfg.RetentionChatDays}
 	if err := retentionCfg.Validate(); err != nil {
 		slog.Error("invalid retention configuration", "error", err)
@@ -123,7 +143,11 @@ func main() {
 	}
 	if retentionCfg.Enabled() {
 		slog.Info("retention enabled", "audit_days", retentionCfg.AuditDays, "chat_days", retentionCfg.ChatDays)
-		go retention.Run(ctx, retention.Purger{Pool: pool, Cfg: retentionCfg, Audit: auditStore}, 24*time.Hour)
+		purger := retention.Purger{Pool: pool, Cfg: retentionCfg, Audit: auditStore}
+		if names := sinks.Names(); len(names) > 0 {
+			purger.AuditFloor = func(ctx context.Context) (int64, error) { return auditsink.Floor(ctx, pool, names) }
+		}
+		go retention.Run(ctx, purger, 24*time.Hour)
 	}
 
 	// Temporary grants from approved access requests end on time: restore the
@@ -195,6 +219,7 @@ func main() {
 	// in-flight by route pattern, served at /metrics on this port.
 	m := metrics.New("auth")
 	m.Route = metrics.ChiRoute
+	m.Registry.MustRegister(sinks.Collector())
 	r.Use(m.Middleware)
 
 	// CORS only for listed origins. With none listed the middleware is not

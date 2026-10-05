@@ -80,6 +80,11 @@ type Config struct {
 	// for short access tokens (handler/api_keys.go).
 	APIKeys APIKeysConfig
 
+	// Audit sinks (internal/auditsink): the sinks file the chart renders from
+	// audit.sinks (empty = none) and where each sink's Secret is mounted.
+	AuditSinksFile      string
+	AuditSinkSecretsDir string
+
 	// K8s setup
 	SetupNamespace          string
 	SetupKubeconfigSecret   string
@@ -198,6 +203,8 @@ func Load() Config {
 			Roles:    pkgconfig.GetEnvList("ACCESS_REQUESTS_ROLES", "Write"),
 			SweepSec: pkgconfig.GetEnvInt("ACCESS_REQUESTS_SWEEP_SEC", 60),
 		},
+		AuditSinksFile:      pkgconfig.GetEnv("AUDIT_SINKS_FILE", ""),
+		AuditSinkSecretsDir: pkgconfig.GetEnv("AUDIT_SINK_SECRETS_DIR", "/etc/kubeast/audit-sinks/secrets"),
 		APIKeys: APIKeysConfig{
 			Enabled: pkgconfig.GetEnvBool("API_KEYS_ENABLED", true),
 			MaxDays: pkgconfig.GetEnvInt("API_KEYS_MAX_DAYS", 90),

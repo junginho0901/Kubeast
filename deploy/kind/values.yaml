@@ -32,6 +32,32 @@ auth:
 ai:
   baseUrlAllowedHosts:
     - host.docker.internal
+audit:
+  # Audit sinks against the stand-ins in deploy/kind/devtools.yaml (S3 with Object Lock, a webhook
+  # receiver, a mail catcher) — what e2e/tests/audit-sinks.spec.ts checks.
+  sinks:
+    - name: dev-s3
+      type: s3
+      secret: kubeast-audit-dev-s3
+      s3: {bucket: kubeast-audit, prefix: audit/, endpoint: "http://s3.kubeast-devtools:7070", forcePathStyle: true}
+      batch: {maxWaitSeconds: 5}
+    - name: dev-webhook
+      type: webhook
+      webhook: {format: json, url: "http://receiver.kubeast-devtools:8080/hook"}
+      filter: {actions: ["k8s.*.delete", "access.request.*", "user.apikey.*"]}
+    - name: dev-mail
+      type: email
+      email: {host: mailpit.kubeast-devtools, port: 1025, tls: none, from: kubeast@kubeast.local, to: [sre@kubeast.local]}
+      filter: {actions: ["access.request.create"]}
+  sinkEgress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kubeast-devtools
+      ports:
+        - {protocol: TCP, port: 7070}
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 1025}
 networkPolicy:
   allowExternalEgressCIDRs:
     # Ollama on the laptop: Docker Desktop puts host.docker.internal in 192.168.65.0/24

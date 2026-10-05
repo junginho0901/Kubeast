@@ -1,0 +1,183 @@
+suite: Audit sinks — the sinks file, Secret mounts for auth-service only, egress and the stalled-sink alert
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - prometheusrule.yaml
+  - secret.yaml
+tests:
+  - it: renders nothing extra without sinks
+    template: configmap.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+      - notExists:
+          path: data.AUDIT_SINKS_FILE
+
+  - it: writes the sinks file and points auth-service at it
+    template: configmap.yaml
+    set:
+      audit.sinks:
+        - name: archive
+          type: s3
+          s3: {bucket: kubeast-audit, region: ap-northeast-2}
+        - name: slack
+          type: webhook
+          secret: kubeast-audit-slack
+          webhook: {format: slack}
+          filter: {actions: ["k8s.*.delete"]}
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: data.AUDIT_SINKS_FILE
+          value: /etc/kubeast/audit-sinks/sinks.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - matchRegex:
+          path: data["sinks.yaml"]
+          pattern: 'name: slack'
+        documentSelector:
+          path: metadata.name
+          value: kubeast-audit-sinks
+      - notMatchRegex:
+          path: data["sinks.yaml"]
+          pattern: 'hooks\.slack\.com'
+        documentSelector:
+          path: metadata.name
+          value: kubeast-audit-sinks
+
+  - it: mounts the file and each sink Secret into auth-service only
+    template: deployments.yaml
+    set:
+      audit.sinks:
+        - name: archive
+          type: s3
+          s3: {bucket: kubeast-audit}
+        - name: slack
+          type: webhook
+          secret: kubeast-audit-slack
+          webhook: {format: slack}
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: audit-sink-slack
+            secret:
+              secretName: kubeast-audit-slack
+              defaultMode: 0440
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: audit-sink-slack
+            mountPath: /etc/kubeast/audit-sinks/secrets/slack
+            readOnly: true
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: audit-sink-archive
+          any: true
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: audit-sink-slack
+          any: true
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+
+  - it: refuses a sink name that cannot be a volume name
+    template: deployments.yaml   # the checksum include renders the ConfigMap first
+    set:
+      audit.sinks:
+        - name: Slack_Alerts
+          type: webhook
+    asserts:
+      - failedTemplate:
+          errorPattern: 'audit.sinks: name "Slack_Alerts"'
+
+  - it: refuses the same sink name twice
+    template: deployments.yaml   # the checksum include renders the ConfigMap first
+    set:
+      audit.sinks:
+        - {name: a, type: file, file: {path: /var/lib/kubeast-audit/a}}
+        - {name: a, type: file, file: {path: /var/lib/kubeast-audit/b}}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'is used twice'
+
+  - it: appends audit.sinkEgress to the auth-service policy
+    template: networkpolicy.yaml
+    set:
+      networkPolicy.enabled: true
+      audit.sinkEgress:
+        - to:
+            - ipBlock: {cidr: 10.0.5.10/32}
+          ports:
+            - {protocol: TCP, port: 587}
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock: {cidr: 10.0.5.10/32}
+            ports:
+              - {protocol: TCP, port: 587}
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+
+  - it: alerts when a sink stops sending
+    template: prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+    asserts:
+      - contains:
+          path: spec.groups[0].rules
+          content:
+            alert: KubeastAuditSinkStalled
+          any: true
+
+  - it: gives file sinks a writable volume and refuses paths outside it
+    template: deployments.yaml
+    set:
+      audit.sinks:
+        - {name: local, type: file, file: {path: /var/lib/kubeast-audit/a}}
+      audit.fileSinkVolume:
+        persistentVolumeClaim: {claimName: kubeast-audit}
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: audit-files
+            persistentVolumeClaim: {claimName: kubeast-audit}
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: audit-files
+            mountPath: /var/lib/kubeast-audit
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+
+  - it: refuses a file sink outside the mounted volume
+    template: deployments.yaml   # the checksum include renders the ConfigMap first
+    set:
+      audit.sinks:
+        - {name: local, type: file, file: {path: /tmp/audit}}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must write under /var/lib/kubeast-audit'

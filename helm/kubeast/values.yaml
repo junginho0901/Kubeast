@@ -231,6 +231,48 @@ audit:
   # also wait for the database at start-up (AUDIT_DB_WAIT_SEC, 90 s) and exit
   # if it does not come, rather than falling back to log-only auditing.
   failClosed: true
+  # Copies of the audit rows outside the database (which stays the primary
+  # store). One auth-service replica reads past each sink's cursor and sends
+  # batches: at least once, never blocking requests (docs/audit-log-plan.md §4).
+  # Secrets are referenced by name and mounted for auth-service only:
+  #   s3       accessKeyId, secretAccessKey (omit the Secret for IRSA)
+  #   webhook  url (json/slack/teams/discord), hmacSecret (json, optional),
+  #            botToken (telegram), routingKey (pagerduty)
+  #   email    username, password (optional)
+  # teams, discord and pagerduty follow the vendors' published payloads but
+  # have not been tried against the real services yet.
+  sinks: []
+  # - name: archive
+  #   type: s3
+  #   s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
+  #   # endpoint: http://minio.minio:9000, forcePathStyle: true   (S3-compatible stores)
+  #   # sse: aws:kms, kmsKeyId: <arn>                              (empty = bucket default)
+  #   # Object Lock (WORM): turn on the bucket's default retention; Kubeast only needs s3:PutObject.
+  # - name: slack-danger
+  #   type: webhook
+  #   secret: kubeast-audit-slack
+  #   webhook: {format: slack}          # json | slack | teams | discord | telegram (chatId) | pagerduty (severity)
+  #   filter: {actions: ["k8s.*.delete", "k8s.pod.exec", "k8s.node.shell", "access.request.create", "admin.*"]}
+  # - name: mail-admins
+  #   type: email
+  #   secret: kubeast-smtp
+  #   email: {host: smtp.example.com, port: 587, tls: starttls, from: kubeast@example.com, to: [sre@example.com]}
+  #   filter: {actions: ["access.request.create"]}
+  # - name: local
+  #   type: file
+  #   file: {path: /var/lib/kubeast-audit, maxSizeMB: 100, maxFiles: 10}   # must sit under /var/lib/kubeast-audit
+  # Per sink, optional: startFrom (beginning | latest; default beginning for s3/file,
+  # latest for the rest), batch: {maxEvents, maxWaitSeconds}, filter.results: [success|failure].
+  #
+  # Extra NetworkPolicy egress rules for auth-service to reach sinks the
+  # default rules do not cover (443 is open; SMTP ports and in-cluster
+  # endpoints are not). Raw NetworkPolicyEgressRule entries.
+  sinkEgress: []
+  # Where file sinks write (mounted at /var/lib/kubeast-audit in auth-service
+  # when a file sink exists; the root filesystem is read-only). An emptyDir
+  # does not survive the pod — use a PVC for anything you keep, e.g.
+  # {persistentVolumeClaim: {claimName: kubeast-audit}}. Empty = emptyDir.
+  fileSinkVolume: {}
 
 # --- Data retention ---
 # Days to keep rows before auth-service deletes them (once at boot, then daily;
