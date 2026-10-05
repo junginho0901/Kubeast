@@ -26,6 +26,16 @@ stringData:
   accessKeyId: kubeast-dev
   secretAccessKey: kubeast-dev-secret
 ---
+# and for session recordings (mounted into k8s-service)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeast-recording-dev-s3
+  namespace: kubeast
+stringData:
+  accessKeyId: kubeast-dev
+  secretAccessKey: kubeast-dev-secret
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -57,7 +67,7 @@ spec:
   selector: {app: s3}
   ports: [{port: 7070, targetPort: 7070}]
 ---
-# bucket kubeast-audit with Object Lock and a 1-day GOVERNANCE default retention (re-run safe)
+# buckets: kubeast-audit with Object Lock and a 1-day GOVERNANCE default retention, kubeast-sessions plain (re-run safe)
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -85,7 +95,8 @@ spec:
               $S3 head-bucket --bucket kubeast-audit 2>/dev/null || $S3 create-bucket --bucket kubeast-audit --object-lock-enabled-for-bucket
               $S3 put-object-lock-configuration --bucket kubeast-audit \
                 --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":1}}}'
-              echo bucket ready
+              $S3 head-bucket --bucket kubeast-sessions 2>/dev/null || $S3 create-bucket --bucket kubeast-sessions
+              echo buckets ready
 ---
 apiVersion: apps/v1
 kind: Deployment

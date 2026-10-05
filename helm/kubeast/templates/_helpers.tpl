@@ -190,3 +190,37 @@ annotations:
 {{- define "kubeast.auditFileSinks" -}}
 {{- range .Values.audit.sinks }}{{ if eq (toString .type) "file" }}true{{ end }}{{ end }}
 {{- end -}}
+
+{{/* k8s-service volumes for terminal session recording (spool, file store, store Secret). */}}
+{{- define "kubeast.recordingVolumeMounts" -}}
+{{- if .Values.sessionRecording.enabled }}
+- name: recording-spool
+  mountPath: /var/lib/kubeast-recordings
+{{- if eq (toString .Values.sessionRecording.storage) "file" }}
+- name: recording-store
+  mountPath: /var/lib/kubeast-recordings-store
+{{- end }}
+{{- if .Values.sessionRecording.secret }}
+- name: recording-secret
+  mountPath: /etc/kubeast/recording-secret
+  readOnly: true
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.recordingVolumes" -}}
+{{- if .Values.sessionRecording.enabled }}
+- name: recording-spool
+  {{- toYaml (.Values.sessionRecording.spoolVolume | default (dict "emptyDir" (dict))) | nindent 2 }}
+{{- if eq (toString .Values.sessionRecording.storage) "file" }}
+- name: recording-store
+  {{- toYaml .Values.sessionRecording.fileVolume | nindent 2 }}
+{{- end }}
+{{- if .Values.sessionRecording.secret }}
+- name: recording-secret
+  secret:
+    secretName: {{ .Values.sessionRecording.secret }}
+    defaultMode: 0440
+{{- end }}
+{{- end }}
+{{- end -}}

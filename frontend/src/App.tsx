@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
+import RequirePermission from './components/RequirePermission'
 import RouteFallback from './components/RouteFallback'
 import Login from './pages/Login'
 import { ClusterProvider } from './contexts/ClusterProvider'
@@ -30,6 +31,7 @@ const AdminClusters = lazy(() => import('./pages/admin/Clusters'))
 const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations'))
 const AdminRoles = lazy(() => import('./pages/AdminRoles'))
 const AdminAccessRequests = lazy(() => import('./pages/admin/AccessRequests'))
+const AdminSessionRecordings = lazy(() => import('./pages/admin/SessionRecordings'))
 const Account = lazy(() => import('./pages/Account'))
 const HPAs = lazy(() => import('./pages/workloads/HPAs'))
 const VPAs = lazy(() => import('./pages/workloads/VPAs'))
@@ -163,6 +165,7 @@ function App() {
             <Route path="admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
             <Route path="admin/access-requests" element={<RequireAdmin><AdminAccessRequests /></RequireAdmin>} />
+            <Route path="admin/session-recordings" element={<RequirePermission permission="admin.sessions.read"><AdminSessionRecordings /></RequirePermission>} />
           </Route>
           </Routes>
         </Suspense>

@@ -291,6 +291,7 @@ func allPermissions() []map[string]interface{} {
 			{"admin.ai_models.*", "AI model settings"},
 			{"admin.audit.read", "View audit log"},
 			{"admin.audit.export", "Export audit log (CSV)"},
+			{"admin.sessions.read", "View terminal session recordings"},
 		}},
 	}
 	return categories

@@ -13,10 +13,12 @@ async function adminToken(request: APIRequestContext): Promise<string> {
 }
 
 test.describe('multi-cluster RBAC UI (step 12)', () => {
-  test('AdminAudit shows a cluster filter', async ({ page }) => {
+  test('AdminAudit shows a cluster filter; "All" is every cluster, not the selected one', async ({ page }) => {
+    const listed = page.waitForRequest((r) => r.url().includes('/api/v1/auth/admin/audit-logs?'))
     await page.goto('/admin/audit')
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByTestId('audit-cluster-filter')).toBeVisible({ timeout: 15000 })
+    expect(new URL((await listed).url()).searchParams.get('cluster') ?? '').toBe('')
   })
 
   test('ClusterRoleMatrix grants a per-cluster role to a user', async ({ page, request }) => {

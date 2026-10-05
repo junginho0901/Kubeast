@@ -1,0 +1,175 @@
+suite: Session recording — env, k8s-service volumes only, the file store needs a PVC, egress and the upload alert
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - prometheusrule.yaml
+  - secret.yaml
+tests:
+  - it: is off by default and adds nothing to k8s-service
+    asserts:
+      - equal:
+          path: data.SESSION_RECORDING_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - notExists:
+          path: data.SESSION_RECORDING_STORAGE
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - notExists:
+          path: spec.template.spec.volumes
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - notExists:
+          path: spec.template.spec.securityContext.fsGroup
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+
+  - it: hands the settings to k8s-service and mounts the spool and the store Secret there only
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.secret: kubeast-recording-s3
+      sessionRecording.s3.bucket: kubeast-sessions
+      sessionRecording.chunkSeconds: 10
+    asserts:
+      - equal:
+          path: data.SESSION_RECORDING_S3_BUCKET
+          value: kubeast-sessions
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.SESSION_RECORDING_CHUNK_SEC
+          value: "10"
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.SESSION_RECORDING_SECRET_DIR
+          value: /etc/kubeast/recording-secret
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: recording-spool
+            emptyDir: {}
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 65532
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: recording-secret
+            mountPath: /etc/kubeast/recording-secret
+            readOnly: true
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: recording-secret
+          any: true
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+
+  - it: never puts the store keys into AWS_* env (k8s-service keeps its own AWS identity)
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.secret: kubeast-recording-s3
+      sessionRecording.s3.bucket: kubeast-sessions
+    template: deployments.yaml
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+          any: true
+
+  - it: mounts the file store from its PVC
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume:
+        persistentVolumeClaim: {claimName: kubeast-recordings}
+    template: deployments.yaml
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: recording-store
+            persistentVolumeClaim: {claimName: kubeast-recordings}
+
+  - it: refuses the file store without a volume
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+    template: deployments.yaml   # the checksum include renders the ConfigMap first
+    asserts:
+      - failedTemplate:
+          errorPattern: 'sessionRecording.storage: file needs sessionRecording.fileVolume'
+
+  - it: appends sessionRecording.egress to the k8s-service policy
+    set:
+      networkPolicy.enabled: true
+      sessionRecording.egress:
+        - to:
+            - namespaceSelector:
+                matchLabels: {kubernetes.io/metadata.name: minio}
+          ports:
+            - {protocol: TCP, port: 9000}
+    template: networkpolicy.yaml
+    documentSelector:
+      path: metadata.name
+      value: RELEASE-NAME-k8s-service
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - namespaceSelector:
+                  matchLabels: {kubernetes.io/metadata.name: minio}
+            ports:
+              - {protocol: TCP, port: 9000}
+
+  - it: alerts when recordings stop uploading
+    set:
+      metrics.prometheusRule.enabled: true
+    template: prometheusrule.yaml
+    asserts:
+      - contains:
+          path: spec.groups[0].rules
+          content:
+            alert: KubeastSessionRecordingUploadStalled
+          any: true

@@ -128,7 +128,8 @@ export const adminApi = {
 
   // Audit Logs
   adminListAuditLogs: async (params?: AuditLogFilter): Promise<AuditLogListResponse> => {
-    const { data } = await client.get('/auth/admin/audit-logs', { params })
+    // cluster is a filter here: "All" must not become the selected cluster the client adds by default
+    const { data } = await client.get('/auth/admin/audit-logs', { params: { ...params, cluster: params?.cluster ?? '' } })
     return {
       total: data?.total ?? 0,
       items: Array.isArray(data?.items) ? data.items : [],

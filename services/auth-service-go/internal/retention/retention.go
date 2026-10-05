@@ -65,9 +65,10 @@ func (c Config) Cutoffs(now time.Time) (audit, chat time.Time) {
 
 // Result counts what one run deleted.
 type Result struct {
-	AuditRows     int64 `json:"audit_rows"`
-	Sessions      int64 `json:"sessions"`
-	ToolApprovals int64 `json:"tool_approvals"`
+	AuditRows         int64 `json:"audit_rows"`
+	Sessions          int64 `json:"sessions"`
+	ToolApprovals     int64 `json:"tool_approvals"`
+	SessionRecordings int64 `json:"session_recordings"` // index rows (and database-stored parts); objects in S3/files are the store's to expire
 }
 
 // Purger executes the policy against a database.
@@ -111,7 +112,7 @@ func (p Purger) RunOnce(ctx context.Context) Result {
 	if err != nil {
 		slog.Error("retention: purge failed", "error", err, "deleted", res)
 	} else {
-		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals,
+		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals, "session_recordings", res.SessionRecordings,
 			"audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays)
 	}
 	p.record(ctx, now, res, err)
@@ -146,6 +147,12 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 		}
 		if err != nil {
 			return res, fmt.Errorf("audit log: %w", err)
+		}
+		// Terminal recordings follow the audit window; finished ones only.
+		res.SessionRecordings, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM session_recordings WHERE id IN (SELECT id FROM session_recordings WHERE started_at < $1 AND status IN ('uploaded', 'interrupted') ORDER BY started_at LIMIT $2)`, auditCutoff)
+		if err != nil {
+			return res, fmt.Errorf("session recordings: %w", err)
 		}
 	}
 	if !chatCutoff.IsZero() {
@@ -195,13 +202,14 @@ func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr er
 	}
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
 	after, _ := json.Marshal(map[string]any{
-		"audit_days":     p.Cfg.AuditDays,
-		"chat_days":      p.Cfg.ChatDays,
-		"audit_cutoff":   nullableTime(auditCutoff),
-		"chat_cutoff":    nullableTime(chatCutoff),
-		"audit_rows":     res.AuditRows,
-		"sessions":       res.Sessions,
-		"tool_approvals": res.ToolApprovals,
+		"audit_days":         p.Cfg.AuditDays,
+		"chat_days":          p.Cfg.ChatDays,
+		"audit_cutoff":       nullableTime(auditCutoff),
+		"chat_cutoff":        nullableTime(chatCutoff),
+		"audit_rows":         res.AuditRows,
+		"sessions":           res.Sessions,
+		"tool_approvals":     res.ToolApprovals,
+		"session_recordings": res.SessionRecordings,
 	})
 	rec := audit.Record{
 		Service:    audit.ServiceAdmin,

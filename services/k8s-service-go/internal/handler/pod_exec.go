@@ -47,11 +47,18 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 		h.refuseUnaudited(w, r, rerr)
 		return
 	}
+	payload := map[string]interface{}{"container": container, "command": command}
+	rec, ok := h.startRecording(w, r, "exec", namespace, podName, container, "k8s.pod.exec", "pod", payload)
+	if !ok {
+		return
+	}
 	if werr := h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, nil,
-		nil, audit.MustJSON(map[string]interface{}{"container": container, "command": command})); werr != nil {
+		nil, audit.MustJSON(payload)); werr != nil {
+		h.recorder.Abort(rec)
 		h.refuseUnaudited(w, r, werr)
 		return
 	}
+	defer rec.Close()
 
 	conn, err := execUpgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -78,7 +85,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("pod exec attached", "pod", podName, "namespace", namespace, "container", container)
-	if err := streamShell(ctx, conn, cfg, execURL(cs, namespace, podName, container, command)); err != nil {
+	if err := streamShell(ctx, conn, cfg, execURL(cs, namespace, podName, container, command), rec); err != nil {
 		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))

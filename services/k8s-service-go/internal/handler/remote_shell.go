@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/client-go/kubernetes"
@@ -74,7 +75,10 @@ func attachURL(cs kubernetes.Interface, namespace, pod, container string) *url.U
 // pod output goes back as channel frames. It returns when the process ends,
 // the browser goes away, or ctx ends; a non-zero exit status is reported on
 // the error channel and is not an error here.
-func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u *url.URL) error {
+//
+// With rec set, the terminal output (what the user sees, not keystrokes) is
+// also written to the recording, after a one-line notice that it is.
+func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u *url.URL, rec *recording.Session) error {
 	exec, err := newShellExecutor(cfg, u)
 	if err != nil {
 		return err
@@ -82,7 +86,13 @@ func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	out := &shellWriter{conn: conn}
+	out := &shellWriter{conn: conn, rec: rec}
+	if rec != nil {
+		notice := []byte("\r\n[Kubeast] This session is recorded (" + rec.ID + ").\r\n")
+		if _, err := out.channel(shellStdout).Write(notice); err != nil {
+			return err
+		}
+	}
 	stdinR, stdinW := io.Pipe()
 	go func() {
 		defer cancel()
@@ -125,6 +135,7 @@ func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u 
 type shellWriter struct {
 	mu   sync.Mutex
 	conn *websocket.Conn
+	rec  *recording.Session // nil: not recorded
 }
 
 func (w *shellWriter) channel(ch byte) io.Writer { return &channelWriter{w: w, ch: ch} }
@@ -142,6 +153,9 @@ func (c *channelWriter) Write(p []byte) (int, error) {
 	defer c.w.mu.Unlock()
 	if err := c.w.conn.WriteMessage(websocket.BinaryMessage, frame); err != nil {
 		return 0, err
+	}
+	if c.ch == shellStdout || c.ch == shellStderr {
+		c.w.rec.Output(p)
 	}
 	return len(p), nil
 }

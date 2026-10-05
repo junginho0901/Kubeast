@@ -68,6 +68,8 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
     const wsUrl = buildWsUrl(`/api/v1/cluster/nodes/${nodeName}/debug-shell/ws`, {
       ...(namespace ? { namespace } : {}),
       ...(image ? { image } : {}),
+      cols: String(term.cols),
+      rows: String(term.rows),
       ...(clusterId ? { cluster: clusterId } : {}),
     })
     const ws = new WebSocket(wsUrl)

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
-import { CheckCircle, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
+import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -89,6 +90,7 @@ export default function AdminAudit() {
 
   const [filter, setFilter] = useState<AuditLogFilter>({ limit: 50, offset: 0 })
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [playing, setPlaying] = useState<{ id: string; title: string } | null>(null)
 
   // Local draft for inputs; committed to `filter` on "Apply".
   const [draft, setDraft] = useState<AuditLogFilter>(filter)
@@ -385,6 +387,8 @@ export default function AdminAudit() {
                 onToggle={() => setExpandedId(expandedId === entry.ID ? null : entry.ID)}
                 resultBadge={resultBadge}
                 fmtTime={fmtTime}
+                onPlay={(id) => setPlaying({ id, title: `${entry.ActorEmail ?? ''} · ${entry.Action} · ${entry.TargetID ?? ''} · ${fmtTime(entry.CreatedAt)}` })}
+                playLabel={tr('adminAudit.playRecording', 'Play recording')}
               />
             ))}
           </tbody>
@@ -413,8 +417,17 @@ export default function AdminAudit() {
           </button>
         </div>
       )}
+      {playing && <RecordingPlayerModal recordingId={playing.id} title={playing.title} onClose={() => setPlaying(null)} />}
     </div>
   )
+}
+
+// recording_id is set on k8s.pod.exec / k8s.node.shell rows when the
+// terminal was recorded.
+function recordingIdOf(entry: AuditLogEntry): string | null {
+  const after = entry.After as Record<string, unknown> | null | undefined
+  const id = after && typeof after === 'object' ? after['recording_id'] : null
+  return typeof id === 'string' && id ? id : null
 }
 
 interface AuditRowProps {
@@ -423,10 +436,13 @@ interface AuditRowProps {
   onToggle: () => void
   resultBadge: (result: string) => React.ReactNode
   fmtTime: (iso: string) => string
+  onPlay: (recordingId: string) => void
+  playLabel: string
 }
 
-function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime }: AuditRowProps) {
+function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
   const targetDisplay = entry.TargetEmail || entry.TargetID || '-'
+  const recordingId = recordingIdOf(entry)
 
   return (
     <>
@@ -442,7 +458,21 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime }: AuditRowP
         <td className="px-3 py-2 font-mono text-xs text-slate-200">{entry.Action}</td>
         <td className="px-3 py-2 text-slate-300">{targetDisplay}</td>
         <td className="px-3 py-2 text-slate-400">{entry.Namespace || '-'}</td>
-        <td className="px-3 py-2">{resultBadge(entry.Result || 'success')}</td>
+        <td className="px-3 py-2">
+          {resultBadge(entry.Result || 'success')}
+          {recordingId && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onPlay(recordingId) }}
+              title={playLabel}
+              aria-label={playLabel}
+              data-testid={`audit-play-${recordingId}`}
+              className="ml-2 inline-flex items-center rounded border border-primary-700/60 bg-primary-900/30 px-1.5 py-0.5 text-[11px] text-primary-200 hover:bg-primary-800/40"
+            >
+              <Play className="w-3 h-3" />
+            </button>
+          )}
+        </td>
         <td className="px-3 py-2 text-slate-400 text-right">
           {expanded ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />}
         </td>

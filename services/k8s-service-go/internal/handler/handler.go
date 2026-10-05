@@ -13,6 +13,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -25,7 +26,11 @@ type Handler struct {
 	cfg        config.Config
 	auditStore audit.Writer
 	helmSvc    *helm.Service
+	recorder   *recording.Manager // nil or disabled: terminals are not recorded
 }
+
+// SetRecorder turns on terminal session recording (internal/recording).
+func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
 
 // New creates a new Handler. The helm service is derived from the same
 // k8s.Service and cache so Helm SDK calls observe the kubeconfig

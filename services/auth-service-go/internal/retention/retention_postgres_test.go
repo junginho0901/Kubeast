@@ -195,3 +195,35 @@ func TestPostgresPurgeKeepsRowsSinksHaveNotSent(t *testing.T) {
 		t.Fatalf("lowest remaining id = %d (%v), want %d", minLeft, err, first+2)
 	}
 }
+
+// Recordings past the audit window go with it — finished ones only.
+func TestPostgresPurgeDropsOldFinishedRecordings(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	ctx := context.Background()
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	old, recent := now.AddDate(0, 0, -100), now.AddDate(0, 0, -5)
+	for _, row := range []struct {
+		id, status string
+		at         time.Time
+	}{{"old-done", "uploaded", old}, {"old-cut", "interrupted", old}, {"old-live", "recording", old}, {"new-done", "uploaded", recent}} {
+		if _, err := pool.Exec(ctx, `INSERT INTO session_recordings (id, kind, cluster, target, storage, started_at, status) VALUES ($1, 'exec', 'default', 'p', 'database', $2, $3)`, row.id, row.at, row.status); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO session_recording_parts (recording_id, part_no, data) VALUES ('old-done', 0, 'x')`); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Purger{Pool: pool, Cfg: Config{AuditDays: 30}}.Purge(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.SessionRecordings != 2 {
+		t.Fatalf("deleted %d recordings, want 2 (old uploaded + old interrupted)", res.SessionRecordings)
+	}
+	if n := count(t, pool, "session_recordings"); n != 2 {
+		t.Fatalf("left %d, want the live one and the recent one", n)
+	}
+	if n := count(t, pool, "session_recording_parts"); n != 0 {
+		t.Fatalf("parts left %d, want 0 (cascade)", n)
+	}
+}

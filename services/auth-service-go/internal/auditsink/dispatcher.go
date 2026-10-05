@@ -32,7 +32,7 @@ const (
 	settleDelay = 5 * time.Second
 	maxBackoff  = 5 * time.Minute
 	sendTimeout = 60 * time.Second
-	lockRetry   = 30 * time.Second
+	lockRetry   = 5 * time.Second // short: after a rollout the new pod takes over soon after the old one exits
 )
 
 type sinkRun struct {

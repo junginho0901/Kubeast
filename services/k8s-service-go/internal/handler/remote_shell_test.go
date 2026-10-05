@@ -91,7 +91,7 @@ func bridge(t *testing.T, fake *fakeExecutor) (*websocket.Conn, <-chan error) {
 			return
 		}
 		defer conn.Close()
-		done <- streamShell(r.Context(), conn, &rest.Config{Host: "https://k8s.example:6443", Impersonate: rest.ImpersonationConfig{UserName: "u@example.com"}}, &url.URL{Path: "/x"})
+		done <- streamShell(r.Context(), conn, &rest.Config{Host: "https://k8s.example:6443", Impersonate: rest.ImpersonationConfig{UserName: "u@example.com"}}, &url.URL{Path: "/x"}, nil)
 	}))
 	t.Cleanup(srv.Close)
 	c, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)

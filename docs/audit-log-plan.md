@@ -93,8 +93,9 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `k8s.namespace.create` / `k8s.namespace.apply` | 네임스페이스 생성·적용 |
 | `k8s.yaml.create` / `k8s.yaml.apply` | YAML로 생성·적용 |
 | `k8s.node.cordon` / `.uncordon` / `.drain` / `.edit` / `.delete` | 노드 조작 |
-| `k8s.node.shell` | 노드 셸(민감 읽기) |
-| `k8s.pod.exec` / `k8s.pod.logs.read` | Pod exec, 로그 읽기(민감 읽기) |
+| `k8s.node.shell` | 노드 셸(민감 읽기). 세션 기록이 켜져 있으면 `after.recording_id` |
+| `k8s.pod.exec` / `k8s.pod.logs.read` | Pod exec, 로그 읽기(민감 읽기). exec는 세션 기록이 켜져 있으면 `after.recording_id`; 기록을 시작하지 못해 거부한 세션은 failure 행(`error` = 사유) |
+| `admin.session.read` | 세션 기록 본문 열람·내려받기(asciicast 또는 텍스트 사본, `admin.sessions.read`). target = 녹화 id, `after` = `{kind, cluster, target, user_email, format}` |
 | `k8s.secret.reveal` | Secret 값 열람(민감 읽기) |
 | `k8s.cronjob.trigger` / `.suspend` / `.resume` | CronJob 조작 |
 | `k8s.cluster.kubeconfig.read` | tool-server가 클러스터 kubeconfig를 읽음(민감 읽기) |
@@ -117,6 +118,14 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 1. §5-2에 행 추가(PR에 포함).
 2. 핸들러에서 성공·실패 모두 기록, `Before`/`After` 마스킹.
 3. `docs/*-plan.md`를 새로 쓰는 기능이면 `## N. 감사 로그` 절에 대상 액션과 권한 매핑 표.
+
+### 4-1 세션 기록(선택)
+
+- Pod exec·노드 셸 터미널에 **찍힌 출력**(사용자가 본 화면)을 asciicast v2로 녹화한다. 키 입력은 남기지 않는다(비밀번호처럼 에코되지 않는 입력이 남지 않게; asciinema 권고와 같음). 세션 시작 때 터미널에 "이 세션은 기록됩니다" 한 줄이 찍힌다.
+- k8s-service가 로컬 볼륨에 쓰고 **세션 중에도 `chunkSeconds`(기본 30 s)마다 조각**을 저장소에 올린다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(S3 호환) · `database`(`session_recording_parts`, 세션당 1 MiB 상한) · `file`(PVC). 목록·상태는 `session_recordings`.
+- k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`: 정상 종료·컨테이너 재시작은 남은 출력까지 올리고, 파드가 사라지면 그 전에 올린 조각만 남는다(`last_error`에 사유).
+- 녹화를 시작하지 못하면(로컬 볼륨에 못 씀) `required: true`(기본)일 때 세션을 거부한다. 업로드 실패(조각당 30 s 제한)는 세션을 막지 않고 재시도하며 메트릭·알람으로 드러난다. 세션당 `maxBytes`(기본 64 MiB)를 넘으면 녹화만 멈추고 마커와 `truncated`를 남긴다.
+- 원격 저장소의 객체는 Kubeast가 지우지 않는다(버킷 수명주기·Object Lock). DB 행은 `retention.auditDays`를 따른다.
 
 ## 6. 보존
 
