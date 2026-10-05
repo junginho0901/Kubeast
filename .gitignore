@@ -78,8 +78,7 @@ services/*-go/server
 kubeconfig.yaml
 kubeconfig*.yaml
 .kubeconfig-kind
-k8s/secret.local.yaml
-k8s/secret.local.yaml.bak-20260224-001
+deploy/kind/values.local.yaml
 
 # Docker
 .dockerignore

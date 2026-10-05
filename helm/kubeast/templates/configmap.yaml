@@ -20,6 +20,7 @@ data:
   ACCESS_REQUESTS_ENABLED: {{ .Values.auth.accessRequests.enabled | quote }}
   ACCESS_REQUESTS_MAX_HOURS: {{ .Values.auth.accessRequests.maxHours | quote }}
   ACCESS_REQUESTS_ROLES: {{ join "," .Values.auth.accessRequests.roles | quote }}
+  ACCESS_REQUESTS_SWEEP_SEC: {{ .Values.auth.accessRequests.sweepSeconds | quote }}
   ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
   BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
   PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}
@@ -58,6 +59,8 @@ data:
   IN_CLUSTER: "true"
   KUBECONFIG_PATH: "/app/kubeconfig.yaml"
   SETUP_NAMESPACE: {{ include "kubeast.namespace" . | quote }}
+  # where auth-service writes and k8s-service reads the cluster-kubeconfig-<id> Secrets
+  POD_NAMESPACE: {{ include "kubeast.namespace" . | quote }}
   SETUP_KUBECONFIG_SECRET: "k8s-kubeconfig"
   SETUP_CONFIGMAP_NAME: "kubeast-config"
   SETUP_RESTART_DEPLOYMENTS: "k8s-service,tool-server"

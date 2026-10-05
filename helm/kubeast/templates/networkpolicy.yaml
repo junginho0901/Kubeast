@@ -175,7 +175,7 @@ spec:
 # Phase 4 — 백엔드 마이크로서비스 + kube-apiserver + 외부 LLM egress
 # ───────────────────────────────────────────────────────────────────────────
 ---
-# auth-service: gateway 에서 inbound, postgres egress (DNS 는 allow-dns 로 별도)
+# auth-service: gateway 에서 inbound, postgres + k8s-service + kube-apiserver egress (DNS 는 allow-dns 로 별도)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -207,24 +207,19 @@ spec:
       ports:
         - protocol: TCP
           port: 8002
-    # kube-apiserver (k8ssetup.go 의 /healthz)
+    # kube-apiserver (registered-cluster kubeconfig Secrets) + OIDC issuer — 사설망 (kind / VPC 사설 엔드포인트) + 공인 IP 모두 허용
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8
-              - 172.16.0.0/12
-              - 192.168.0.0/16
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 6443
     {{- with .Values.networkPolicy.apiserverCIDR }}
     - to:
         - ipBlock:
             cidr: {{ . }}
-      ports:
-        - protocol: TCP
-          port: 443
     {{- end }}
 ---
 # session-service: gateway 에서 inbound, postgres + redis + auth(JWKS) egress
@@ -301,10 +296,10 @@ spec:
     {{- range .Values.networkPolicy.allowExternalEgressCIDRs }}
     - to:
         - ipBlock:
-            cidr: {{ . }}
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
       ports:
         - protocol: TCP
-          port: 443
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
 ---
 # k8s-service: gateway 에서 inbound, kube-apiserver egress + auth(JWKS)

@@ -124,6 +124,8 @@ auth:
     enabled: false
     maxHours: 8
     roles: [Write]
+    # How often expired grants are reverted (and tokens revoked).
+    sweepSeconds: 60
 
 # --- Console metrics (the console's own health, not the target clusters') ---
 # Every backend service (auth, ai, k8s, session, tool-server) serves Prometheus
@@ -387,10 +389,12 @@ networkPolicy:
   dnsNamespace: kube-system
   # Additional external CIDRs to allow for ai-service egress (e.g. private
   # LLM gateway). Default is "0.0.0.0/0 except RFC1918" — covers public LLM
-  # APIs but blocks internal-only access.
+  # APIs but blocks internal-only access. A plain CIDR opens port 443;
+  # {cidr: 10.1.2.0/24, port: 8000} opens another port.
   allowExternalEgressCIDRs: []
-  # kube-apiserver CIDR for k8s-service / tool-server / model-config-controller
-  # egress. Empty string = allow private (10/12/192.168) ranges + public.
+  # Additional kube-apiserver CIDR (any port) for auth-service / k8s-service
+  # egress. Ports 443 and 6443 are already open to every address, private and
+  # public; set this only for an API server on another port.
   apiserverCIDR: ""
 
 # --- Feature flags ---

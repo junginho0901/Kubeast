@@ -6,7 +6,7 @@ metadata:
     {{- include "kubeast.labels" . | nindent 4 }}
 data:
   # Single source of truth: helm/kubeast/files/nginx.conf
-  # (mirrored to k8s/nginx.conf via symlink for the kustomize/dev path, and
+  # (the dev loop's rebuild-kind.sh refreshes this ConfigMap from the same file, and
   # mounted directly by docker-compose). Do NOT inline routes here — edit the
   # canonical file so every deploy path stays in sync.
   nginx.conf: |

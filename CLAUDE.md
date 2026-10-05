@@ -12,7 +12,7 @@ Requests enter through an NGINX **gateway** (`:8000`) that routes to backend ser
 
 | Service | Lang | Port | Module path / dir | Role |
 | --- | --- | --- | --- | --- |
-| `gateway` | NGINX | 8000 | `k8s/nginx.conf` | Routing, CORS, SSE/WebSocket proxy. No image build — ConfigMap only. |
+| `gateway` | NGINX | 8000 | `helm/kubeast/files/nginx.conf` | Routing, CORS, SSE/WebSocket proxy. No image build — ConfigMap only. |
 | `auth-service` | Go | 8004 | `services/auth-service-go` | JWT issuance, JWKS, org/team/user hierarchy, RBAC |
 | `ai-service` | Python/FastAPI | 8001 | `services/ai-service` | LLM integration, streaming chat, optimization suggestions, tool calling |
 | `k8s-service` | Go | 8002 | `services/k8s-service-go` | K8s resource CRUD, WebSocket logs/exec, topology, Helm, GPU/DRA |
@@ -49,7 +49,7 @@ The handler pattern is documented in [AGENTS.md](AGENTS.md); use `audit.FromHTTP
 
 ## Build & deploy
 
-**Always build/deploy through `scripts/rebuild-kind.sh`** — do not run raw `docker build` / `kubectl` for deploys (per AGENTS.md). It builds the image, loads it into the kind cluster, and rollout-restarts the deployment.
+**Always build/deploy through `scripts/rebuild-kind.sh`** — do not run raw `docker build` / `kubectl` for deploys (per AGENTS.md). It builds the image, loads it into the kind cluster, and rollout-restarts the deployment. The dev cluster itself is installed from the Helm chart by `scripts/kind-deploy.sh` (values in `deploy/kind/values.yaml`, personal extras in the git-ignored `deploy/kind/values.local.yaml`); `scripts/reset-and-deploy.sh` recreates it or resets just the database.
 
 ```bash
 scripts/rebuild-kind.sh ai-service frontend     # rebuild specific services
@@ -60,7 +60,7 @@ scripts/rebuild-kind.sh --tag dev k8s-service   # custom image tag
 
 The script resolves KUBECONFIG in priority order: `$KUBECONFIG_PATH` → single-file `$KUBECONFIG` → repo-local `.kubeconfig-kind` → `/tmp/kubeast-kubeconfig`. Note: the auth/k8s/session Go services share build context `services/` with explicit Dockerfiles (`<svc>-go/Dockerfile`).
 
-Production-grade install paths: `helm/kubeast` (Helm chart), `install.sh` (one-liner for an existing cluster), `install-docker.sh` + `docker-compose.yml` (single-host, no cluster). `k8s/` holds raw manifests for reference.
+Install paths, all from the one chart: `helm/kubeast` (Helm), `install.sh` (one-liner for an existing cluster), `scripts/kind-deploy.sh` (local kind), `install-docker.sh` + `docker-compose.yml` (single-host, no cluster). There is no separate copy of the manifests.
 
 ## Per-component dev & test
 
@@ -101,6 +101,6 @@ npx playwright test ai-chat.spec.ts      # single spec
 npm run baseline                         # playwright test --update-snapshots (regenerate baselines)
 ```
 
-`auth.setup.ts` is a setup project that logs in once and stores state in `.auth/user.json`; all chromium tests depend on it.
+`auth.setup.ts` is a setup project that logs in once and stores state in `.auth/user.json`; all chromium tests depend on it. The suite assumes the dev registry holds `self` (the kind cluster itself, in-cluster mode) and an external cluster registered as `default` that has **no** `kubeast` namespace (an empty second kind cluster, `scripts/add-kind-cluster.sh`); the multi-cluster specs tell the two apart by that. The AI specs need a default model registered on the dev cluster — with Ollama on the laptop, `kubectl apply -f deploy/kind/modelconfig-ollama.yaml`. Both are dev data: re-create them after a reset.
 
 `e2e/actions/` is an **opt-in** action suite (92 catalogued UI actions — deletes of every kind, YAML edits, rollbacks, Helm, nodes, admin pages including access requests — each verified with `kubectl` against a seeded second kind cluster). It is not in the default run: `E2E_ACTIONS=1 npx playwright test --project=actions` (≈ 12 min + seed). Prerequisites and the per-test contract are in [e2e/actions/README.md](e2e/actions/README.md).

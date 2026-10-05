@@ -462,8 +462,8 @@ multicluster:
 │   ├── model-config-controller-go/  # Go · ModelConfig CRD 컨트롤러
 │   └── pkg/                         # Go 공통 (audit / auth / cluster / config …)
 ├── frontend/                        # React + TS + Tailwind
-├── helm/kubeast/                    # Helm 차트 (정본 nginx.conf = files/nginx.conf)
-├── k8s/                             # 원본 매니페스트 (참고용)
+├── helm/kubeast/                    # Helm 차트 — 모든 설치 경로의 유일한 매니페스트 원본 (정본 nginx.conf = files/nginx.conf)
+├── deploy/kind/                     # 로컬 kind 개발 설치 값 (values.yaml; 개인 값은 values.local.yaml, git 제외)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
 │   └── actions/                     # 옵트인 동작 스위트 — UI 동작 90개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
 ├── scripts/                         # 빌드/배포/개발 스크립트
@@ -476,13 +476,23 @@ multicluster:
 
 ## 개발
 
-로컬 개발 루프는 kind 기반입니다. 빌드/배포는 **항상 `scripts/rebuild-kind.sh`**를 통해
-수행합니다(직접 docker/kubectl 금지).
+로컬 개발 루프는 kind 기반이고, dev 클러스터도 **같은 Helm 차트**로 설치합니다(`deploy/kind/values.yaml`
+— NodePort 30080·localhost origin·데모 계정·토큰 60분 같은 dev 차이만). 빌드/배포는 **항상
+`scripts/rebuild-kind.sh`**를 통해 수행합니다(직접 docker/kubectl 금지).
 
 ```bash
+scripts/kind-deploy.sh                        # 처음: kind 생성 + 이미지 빌드·적재 + helm install
 scripts/rebuild-kind.sh ai-service frontend   # 특정 서비스 재빌드+배포
 scripts/rebuild-kind.sh --all                 # 전체
+scripts/reset-and-deploy.sh [--keep|--db]     # 전체 재생성 / 릴리스·DB만 재설치 / DB만 비우기
 ```
+
+kind 노드는 postgres·redis·nginx 이미지를 레지스트리에서 당기는데, 프록시 뒤라 안 되면 `kind-deploy.sh`가
+호스트 docker에 있는 같은 이미지를 노드에 넣습니다(미리 `docker pull` 해 두면 됨).
+
+AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니다. 노트북에서 Ollama를 돌린다면
+`kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:8b`, `host.docker.internal:11434`
+— dev 값이 그 주소를 `ai.baseUrlAllowedHosts`와 NetworkPolicy에서 허용)로 등록하면 되고, 리셋 뒤에도 다시 적용합니다.
 
 ### 프론트엔드
 

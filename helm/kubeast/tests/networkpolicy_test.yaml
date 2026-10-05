@@ -62,6 +62,52 @@ tests:
           path: metadata.name
           value: RELEASE-NAME-tool-server
 
+  - it: lets auth-service reach the kube-apiserver for the registered-cluster kubeconfig Secrets
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+            ports:
+              - protocol: TCP
+                port: 443
+              - protocol: TCP
+                port: 6443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+      - lengthEqual:
+          path: spec.egress
+          count: 3
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+
+  - it: adds apiserverCIDR to the auth-service and k8s-service egress on every port
+    set:
+      networkPolicy.apiserverCIDR: 10.80.0.0/12
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 10.80.0.0/12
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-auth-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 10.80.0.0/12
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-k8s-service
+
   - it: opens the database to every DATABASE_URL reader and Redis to its one client
     asserts:
       - equal:
@@ -106,6 +152,38 @@ tests:
           content:
             protocol: TCP
             port: 80
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+
+  - it: opens ai-service egress to extra CIDRs on 443 or on the port given
+    set:
+      networkPolicy.allowExternalEgressCIDRs:
+        - 10.1.2.0/24
+        - cidr: 192.168.65.0/24
+          port: 11434
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 10.1.2.0/24
+            ports:
+              - protocol: TCP
+                port: 443
+        documentSelector:
+          path: metadata.name
+          value: RELEASE-NAME-ai-service
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - ipBlock:
+                  cidr: 192.168.65.0/24
+            ports:
+              - protocol: TCP
+                port: 11434
         documentSelector:
           path: metadata.name
           value: RELEASE-NAME-ai-service
