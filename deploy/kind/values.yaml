@@ -1,0 +1,41 @@
+# Local dev loop on kind (scripts/kind-deploy.sh): Kubeast installed from the chart itself with these
+# overrides — NodePort 30080 on the kind host port, localhost origins, the demo read/write accounts,
+# hour-long tokens, access requests on with a fast expiry sweep, node shell on, a local LLM reachable at
+# host.docker.internal. Everything else is the chart default. Personal extras (an OpenAI key, a model
+# base URL) go in deploy/kind/values.local.yaml, which is git-ignored.
+global:
+  imageTag: local
+  imagePullPolicy: IfNotPresent
+images:
+  frontend: kubeast/frontend
+  authService: kubeast/auth-service
+  aiService: kubeast/ai-service
+  k8sService: kubeast/k8s-service
+  sessionService: kubeast/session-service
+  toolServer: kubeast/tool-server
+  modelConfigController: kubeast/model-config-controller-go
+gateway:
+  service:
+    type: NodePort
+    nodePort: 30080
+  allowedOrigins:
+    - http://localhost:3000
+    - http://localhost:5173
+    - http://localhost:8000
+auth:
+  tokenTTLMinutes: 60
+  bootstrapDemoUsers: true
+  cookieSecure: false
+  accessRequests:
+    enabled: true
+    sweepSeconds: 5
+ai:
+  baseUrlAllowedHosts:
+    - host.docker.internal
+networkPolicy:
+  allowExternalEgressCIDRs:
+    # Ollama on the laptop: Docker Desktop puts host.docker.internal in 192.168.65.0/24
+    - cidr: 192.168.65.0/24
+      port: 11434
+nodeShell:
+  enabled: true

@@ -173,7 +173,7 @@ fi
 update_gateway() {
   echo "═══ Updating gateway ConfigMap ═══"
   kubectl create configmap gateway-nginx \
-    --from-file=nginx.conf="$ROOT/k8s/nginx.conf" \
+    --from-file=nginx.conf="$ROOT/helm/kubeast/files/nginx.conf" \
     -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
   echo "═══ Rolling out gateway ═══"

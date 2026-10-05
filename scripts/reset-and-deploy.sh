@@ -1,30 +1,27 @@
 #!/usr/bin/env bash
 #
-# reset-and-deploy.sh — 완전 초기화 + 빌드 + 배포 스크립트
+# reset-and-deploy.sh — start the local kind install over.
 #
-# Kind 클러스터를 삭제하고 처음부터 다시 만듭니다.
-# DB도 완전히 깨끗한 상태이며, 기본 계정(admin/read/write)만 존재합니다.
+#   scripts/reset-and-deploy.sh          # delete the kind cluster, recreate, build, install (fresh everything)
+#   scripts/reset-and-deploy.sh --keep   # keep the cluster: uninstall the release, drop the database volume,
+#                                        #   rebuild the images, install again (secrets are kept, so the
+#                                        #   admin password stays)
+#   scripts/reset-and-deploy.sh --db     # keep everything, empty the database tables and the registered
+#                                        #   clusters, restart the services (no build)
 #
-# Usage:
-#   ./scripts/reset-and-deploy.sh          # 전체 초기화 (Kind 삭제 + 재생성)
-#   ./scripts/reset-and-deploy.sh --keep   # Kind 유지, DB만 초기화 + 재빌드
-#   ./scripts/reset-and-deploy.sh --db     # DB만 초기화 (빌드 스킵)
-#
+# The install itself is scripts/kind-deploy.sh (the Helm chart + deploy/kind/values.yaml).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-KIND_NAME="kubeast"
-NS="kubeast"
-KUBECONFIG_PATH="/tmp/kubeast-kubeconfig"
-TAG="local"
+KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-kubeast}"
+NAMESPACE="${NAMESPACE:-kubeast}"
+RELEASE="${RELEASE:-kubeast}"
+KIND_HOST_PORT="${KIND_HOST_PORT:-30080}"
+KUBECONFIG_PATH="${KUBECONFIG_PATH:-$ROOT/.kubeconfig-kind}"
+export KUBECONFIG="$KUBECONFIG_PATH"
+export KIND_CLUSTER_NAME NAMESPACE RELEASE KIND_HOST_PORT KUBECONFIG_PATH
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; RED='\033[0;31m'; NC='\033[0m'
 step() { echo -e "\n${CYAN}═══ $1 ═══${NC}"; }
 ok()   { echo -e "${GREEN}  ✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}  ⚠ $1${NC}"; }
@@ -32,398 +29,71 @@ fail() { echo -e "${RED}  ✗ $1${NC}"; exit 1; }
 
 MODE="${1:-full}"
 
-# ~/.kube/config이 디렉토리인 경우 Kind가 실패하므로 별도 kubeconfig 경로를 미리 지정
-export KUBECONFIG="$KUBECONFIG_PATH"
+wait_for_auth() {
+  step "Waiting for auth-service"
+  for i in $(seq 1 60); do
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${KIND_HOST_PORT}/api/v1/auth/setup" 2>/dev/null || echo 000)
+    [[ "$code" == "200" ]] && { ok "auth-service ready (HTTP $code)"; return 0; }
+    sleep 2
+  done
+  warn "auth-service not ready after 2 minutes (last HTTP $code)"
+}
 
-# ═══════════════════════════════════════════════════
-# 1. Kind 클러스터 관리
-# ═══════════════════════════════════════════════════
-if [[ "$MODE" == "--db" ]]; then
-  step "DB-only reset (skip build)"
-elif [[ "$MODE" == "--keep" ]]; then
-  step "Keep Kind, rebuild + redeploy"
-else
-  step "Full reset — destroying Kind cluster"
+print_accounts() {
+  echo ""
+  echo "  URL:   http://localhost:${KIND_HOST_PORT}"
+  echo "  admin: kubectl -n ${NAMESPACE} get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d"
+  echo "  demo:  read / read · write / write"
+  echo ""
+}
 
-  # 기존 Kind 데이터 삭제
-  if kind get clusters 2>/dev/null | grep -qx "$KIND_NAME"; then
-    kind delete cluster --name "$KIND_NAME"
-    ok "Deleted Kind cluster"
-  else
-    warn "No existing cluster found"
-  fi
+case "$MODE" in
+  full)
+    step "Full reset — deleting kind cluster '${KIND_CLUSTER_NAME}'"
+    if kind get clusters 2>/dev/null | grep -x "$KIND_CLUSTER_NAME" >/dev/null; then
+      kind delete cluster --name "$KIND_CLUSTER_NAME"
+      ok "cluster deleted"
+    else
+      warn "no cluster named ${KIND_CLUSTER_NAME}"
+    fi
+    "$ROOT/scripts/kind-deploy.sh"
+    wait_for_auth
+    print_accounts
+    ;;
 
-  # Postgres 영구 데이터 삭제 (root 소유 파일일 수 있으므로 sudo 사용)
-  if [[ -d "$ROOT/.kind-data/postgres" ]]; then
-    rm -rf "$ROOT/.kind-data/postgres" 2>/dev/null || sudo rm -rf "$ROOT/.kind-data/postgres" 2>/dev/null || true
-    ok "Cleaned postgres data"
-  fi
-  mkdir -p "$ROOT/.kind-data/postgres"
+  --keep)
+    step "Keep the cluster — uninstall the release and drop the database volume"
+    kubectl cluster-info --request-timeout=10s >/dev/null 2>&1 || fail "cannot reach the cluster at ${KUBECONFIG_PATH}"
+    helm uninstall "$RELEASE" -n "$NAMESPACE" --wait 2>/dev/null && ok "release uninstalled (kubeast-secrets and the signing keys are kept)" || warn "no release to uninstall"
+    kubectl -n "$NAMESPACE" delete pvc kubeast-postgres-data --ignore-not-found --wait=true && ok "database volume dropped"
+    kubectl -n "$NAMESPACE" get secrets -o name 2>/dev/null | grep -E "cluster-kubeconfig-" | xargs -r kubectl -n "$NAMESPACE" delete 2>/dev/null || true
+    "$ROOT/scripts/kind-deploy.sh"
+    wait_for_auth
+    print_accounts
+    ;;
 
-  # Kind 클러스터 재생성
-  step "Creating Kind cluster"
-  KIND_CONFIG="$(mktemp)"
-  sed "s#__KUBEAST_ROOT__#${ROOT}#g" "$ROOT/kind-config.yaml" > "$KIND_CONFIG"
-  kind create cluster --name "$KIND_NAME" --config "$KIND_CONFIG"
-  rm -f "$KIND_CONFIG"
-  ok "Kind cluster created"
+  --db)
+    step "Database-only reset (no build)"
+    kubectl cluster-info --request-timeout=10s >/dev/null 2>&1 || fail "cannot reach the cluster at ${KUBECONFIG_PATH}"
+    PG_POD=$(kubectl -n "$NAMESPACE" get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    [[ -n "$PG_POD" ]] || fail "postgres pod not found in ${NAMESPACE}"
+    kubectl -n "$NAMESPACE" scale deploy/auth-service deploy/ai-service deploy/k8s-service deploy/session-service deploy/tool-server --replicas=0 >/dev/null
+    # Every table with application state, children first (FKs); roles and the schema stay.
+    kubectl -n "$NAMESPACE" exec "$PG_POD" -- psql -U kubeast -d kubeast -v ON_ERROR_STOP=0 -c "
+      DELETE FROM session_contexts; DELETE FROM messages; DELETE FROM sessions; DELETE FROM tool_approvals;
+      DELETE FROM model_configs; DELETE FROM access_requests; DELETE FROM user_cluster_roles;
+      DELETE FROM auth_audit_logs; DELETE FROM auth_users; DELETE FROM organizations;
+      DELETE FROM clusters; DELETE FROM cluster_setup;
+    " >/dev/null 2>&1 || warn "some tables may not exist yet"
+    ok "tables emptied"
+    kubectl -n "$NAMESPACE" get secrets -o name 2>/dev/null | grep -E "cluster-kubeconfig-" | xargs -r kubectl -n "$NAMESPACE" delete 2>/dev/null || true
+    ok "registered-cluster kubeconfigs removed"
+    kubectl -n "$NAMESPACE" scale deploy/auth-service deploy/ai-service deploy/k8s-service deploy/session-service deploy/tool-server --replicas=1 >/dev/null
+    kubectl -n "$NAMESPACE" rollout status deploy/auth-service --timeout=180s >/dev/null 2>&1 || warn "auth-service rollout slow"
+    wait_for_auth
+    print_accounts
+    ;;
 
-  # kubeconfig 저장. repo-local .kubeconfig-kind 도 함께 갱신해 둔다 —
-  # rebuild-kind.sh 가 이 파일을 우선 사용하므로, 동기화 안 하면 reset 후
-  # rebuild 의 rollout 단계가 옛 클러스터 포트로 connection refused 가 난다.
-  kind get kubeconfig --name "$KIND_NAME" > "$KUBECONFIG_PATH"
-  kind get kubeconfig --name "$KIND_NAME" > "$ROOT/.kubeconfig-kind"
-  ok "Kubeconfig saved to $KUBECONFIG_PATH (+ .kubeconfig-kind)"
-fi
-
-# 클러스터 접근 확인
-kubectl cluster-info --request-timeout=10s > /dev/null 2>&1 || fail "Cannot reach cluster"
-ok "Cluster reachable"
-
-# ═══════════════════════════════════════════════════
-# 2. DB 초기화 (--keep / --db 모드)
-# ═══════════════════════════════════════════════════
-if [[ "$MODE" == "--keep" || "$MODE" == "--db" ]]; then
-  step "Resetting database"
-
-  # Postgres Pod 확인
-  PG_POD=$(kubectl get pod -n "$NS" -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-  if [[ -z "$PG_POD" ]]; then
-    fail "Postgres pod not found in namespace $NS"
-  fi
-
-  # 모든 테이블 데이터 삭제 (순서 중요: FK 의존성)
-  kubectl exec -n "$NS" "$PG_POD" -- psql -U kubeast -d kubeast -c "
-    -- AI service tables
-    DELETE FROM session_contexts;
-    DELETE FROM messages;
-    DELETE FROM sessions;
-    DELETE FROM model_configs;
-
-    -- Auth service tables
-    DELETE FROM auth_audit_logs;
-    DELETE FROM auth_users;
-
-    -- Multi-cluster tables (user_cluster_roles FKs clusters/auth_users).
-    DELETE FROM user_cluster_roles;
-    DELETE FROM clusters;
-    DELETE FROM cluster_setup;
-  " 2>&1 || warn "Some tables may not exist (first run?)"
-  ok "Database cleared"
-
-  # K8s에 남아있는 클러스터 관련 리소스 정리
-  step "Cleaning up K8s cluster resources"
-
-  # 클러스터 kubeconfig 시크릿 삭제: 구형(k8s-kubeconfig*) + 멀티클러스터(cluster-kubeconfig-*)
-  KUBE_SECRETS=$(kubectl get secrets -n "$NS" -o name 2>/dev/null | grep -E "k8s-kubeconfig|cluster-kubeconfig" || true)
-  if [[ -n "$KUBE_SECRETS" ]]; then
-    echo "$KUBE_SECRETS" | xargs kubectl delete -n "$NS" 2>/dev/null || true
-    ok "Deleted kubeconfig secrets: $(echo $KUBE_SECRETS | tr '\n' ' ')"
-  else
-    warn "No kubeconfig secrets found"
-  fi
-
-  # 클러스터 목록 ConfigMap 삭제
-  kubectl delete configmap kubeast-clusters -n "$NS" --ignore-not-found 2>/dev/null
-  ok "Deleted cluster registry ConfigMap"
-
-  # auth-service 재시작하면 기본 계정 자동 생성됨
-  kubectl rollout restart deployment/auth-service -n "$NS" 2>/dev/null || true
-  ok "Auth-service will recreate bootstrap accounts on startup"
-
-  if [[ "$MODE" == "--db" ]]; then
-    # DB 초기화만 하는 경우: 모든 서비스 재시작
-    step "Restarting all services"
-    kubectl rollout restart deployment/auth-service deployment/ai-service \
-      deployment/frontend deployment/k8s-service \
-      deployment/session-service -n "$NS" 2>/dev/null || true
-    # tool-server도 재시작 (kubeconfig 시크릿 삭제됨)
-    kubectl rollout restart deployment/tool-server -n "$NS" 2>/dev/null || true
-    kubectl rollout status deployment/auth-service deployment/ai-service \
-      deployment/frontend -n "$NS" --timeout=90s 2>/dev/null || warn "Some deployments slow"
-    ok "All services restarted"
-
-    # auth-service의 DB 초기화 완료 대기
-    step "Waiting for auth-service DB initialization"
-    echo -n "  Waiting for auth-service to initialize database..."
-    for i in $(seq 1 30); do
-      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/auth/setup" 2>/dev/null || echo "000")
-      if [[ "$HTTP_CODE" == "200" ]]; then
-        ok "Auth-service DB initialized (HTTP $HTTP_CODE)"
-        break
-      fi
-      if [[ $i -eq 30 ]]; then
-        warn "Auth-service DB initialization timeout (got HTTP $HTTP_CODE)"
-        echo "    This may be normal if postgres was not fully reset."
-        echo "    Try accessing http://localhost:30080 manually."
-        break
-      fi
-      echo -n "."
-      sleep 2
-    done
-
-    step "Done! Access http://localhost:30080 (login as admin; /setup opens when no cluster is registered)"
-    echo ""
-    # --db 모드는 secret 을 건드리지 않으므로 기존 값을 그대로 보여줌
-    DB_ADMIN_PW=$(kubectl -n "$NS" get secret kubeast-secrets \
-      -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    [[ -z "$DB_ADMIN_PW" ]] && DB_ADMIN_PW="<secret 조회 실패>"
-    echo "  Accounts:"
-    echo -e "    admin / ${YELLOW}${DB_ADMIN_PW}${NC}  (admin)"
-    echo "    read  / read   (read)"
-    echo "    write / write  (write)"
-    echo ""
-    exit 0
-  fi
-fi
-
-# ═══════════════════════════════════════════════════
-# 3. Docker 이미지 빌드
-# ═══════════════════════════════════════════════════
-step "Building Docker images"
-
-# format: name:context[:dockerfile]
-IMAGES=(
-  "auth-service:services:auth-service-go/Dockerfile"
-  "ai-service:services/ai-service"
-  "k8s-service:services:k8s-service-go/Dockerfile"
-  "session-service:services:session-service-go/Dockerfile"
-  "frontend:frontend"
-  "tool-server:services:tool-server/Dockerfile"
-  "model-config-controller-go:services/model-config-controller-go"
-)
-
-BUILT_IMAGES=()
-for entry in "${IMAGES[@]}"; do
-  IFS=':' read -r name ctx dockerfile <<< "$entry"
-  img="kubeast/${name}:${TAG}"
-  echo -e "  Building ${YELLOW}${img}${NC} ..."
-  if [[ -n "$dockerfile" ]]; then
-    docker build ${DOCKER_BUILD_ARGS:-} -t "$img" -f "$ROOT/$ctx/$dockerfile" "$ROOT/$ctx" 2>&1 | tail -1
-  else
-    docker build ${DOCKER_BUILD_ARGS:-} -t "$img" "$ROOT/$ctx" 2>&1 | tail -1
-  fi
-  BUILT_IMAGES+=("$img")
-  ok "$img"
-done
-
-# ═══════════════════════════════════════════════════
-# 4. Kind에 이미지 로드
-# ═══════════════════════════════════════════════════
-step "Loading images into Kind"
-kind load docker-image "${BUILT_IMAGES[@]}" --name "$KIND_NAME"
-ok "All images loaded"
-
-# ═══════════════════════════════════════════════════
-# 5. Kubernetes 리소스 배포
-# ═══════════════════════════════════════════════════
-step "Applying Kubernetes manifests"
-kubectl kustomize --load-restrictor LoadRestrictionsNone "$ROOT/k8s" | kubectl apply -f - \
-  | grep -E "^(namespace|configmap|secret|deployment|service|clusterrole)" || fail "kubectl apply failed"
-ok "Base manifests applied"
-
-# local secret 덮어쓰기
-if [[ -f "$ROOT/k8s/secret.local.yaml" ]]; then
-  kubectl apply -f "$ROOT/k8s/secret.local.yaml" -n "$NS"
-  ok "Local secrets applied"
-fi
-
-# 매 reset 마다 admin 비밀번호를 새로 생성해서 secret 에 주입.
-# 이후 step 6 에서 auth-service 가 scale=0 → 1 되면서 새 secret 을 읽어 bootstrap.
-#
-# 주의: openssl rand -hex 사용. `tr -dc ... | head -c N` 조합은 head 가
-# 일찍 종료하면 tr 가 SIGPIPE 로 죽으면서 pipefail 에 걸려 스크립트가
-# 조용히 종료됨.
-step "Generating random admin password"
-ADMIN_PW="$(openssl rand -hex 10)"  # 20 hex chars
-ADMIN_PW_B64="$(printf '%s' "$ADMIN_PW" | base64)"
-kubectl -n "$NS" patch secret kubeast-secrets --type='json' \
-  -p="[{\"op\":\"replace\",\"path\":\"/data/DEFAULT_ADMIN_PASSWORD\",\"value\":\"${ADMIN_PW_B64}\"}]" \
-  >/dev/null
-ok "admin password injected (length=${#ADMIN_PW})"
-
-# ═══════════════════════════════════════════════════
-# 6. 이미지 태그 패치 (yaml은 :local, 실제는 :dev)
-# ═══════════════════════════════════════════════════
-step "Patching image tags to :${TAG}"
-
-for name in auth-service ai-service k8s-service session-service frontend; do
-  kubectl set image "deployment/${name}" "${name}=kubeast/${name}:${TAG}" -n "$NS" 2>/dev/null || true
-done
-# tool-server: 단일 deployment
-kubectl set image "deployment/tool-server" "tool-server=kubeast/tool-server:${TAG}" -n "$NS" 2>/dev/null || true
-# model-config-controller-go (container name = controller)
-kubectl set image "deployment/model-config-controller-go" \
-  "controller=kubeast/model-config-controller-go:${TAG}" -n "$NS" 2>/dev/null || true
-
-ok "Image tags patched"
-
-# ═══════════════════════════════════════════════════
-# 7. 순서 보장: auth/ai 먼저 내려두고 DB 준비 후 기동
-# ═══════════════════════════════════════════════════
-step "Scaling down auth/ai for ordered startup"
-kubectl scale deployment/auth-service deployment/ai-service -n "$NS" --replicas=0 2>/dev/null || true
-ok "Scaled down auth/ai"
-
-step "Rolling out remaining deployments"
-DEPLOYMENTS=$(kubectl get deploy -n "$NS" -o jsonpath='{.items[*].metadata.name}')
-for d in $DEPLOYMENTS; do
-  if [[ "$d" == "auth-service" || "$d" == "ai-service" ]]; then
-    continue
-  fi
-  kubectl rollout restart "deployment/${d}" -n "$NS" 2>/dev/null || true
-done
-
-# Postgres 먼저 대기
-step "Waiting for postgres"
-echo -n "  Waiting for postgres..."
-kubectl rollout status "deployment/postgres" -n "$NS" --timeout=120s 2>/dev/null && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}slow${NC}"
-
-# Postgres HBA 설정 (Pod CIDR 접근 허용) — auth-service가 DB에 붙지 못하는 문제 방지
-step "Configuring postgres pg_hba.conf"
-PG_POD=$(kubectl get pod -n "$NS" -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-if [[ -n "$PG_POD" ]]; then
-  kubectl exec -n "$NS" "$PG_POD" -- sh -c "
-    grep -q '0.0.0.0/0' /var/lib/postgresql/data/pg_hba.conf || echo 'host all all 0.0.0.0/0 scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf
-    grep -q '::/0' /var/lib/postgresql/data/pg_hba.conf || echo 'host all all ::/0 scram-sha-256' >> /var/lib/postgresql/data/pg_hba.conf
-  " >/dev/null 2>&1 || true
-  kubectl exec -n "$NS" "$PG_POD" -- psql -U kubeast -d postgres -c "SELECT pg_reload_conf();" >/dev/null 2>&1 || true
-  ok "pg_hba.conf updated"
-else
-  warn "Postgres pod not found for pg_hba.conf update"
-fi
-
-# Postgres 데이터가 남아있으면 kubeast DB가 없을 수 있으므로 안전하게 생성
-step "Ensuring kubeast database exists"
-PG_POD=""
-for attempt in $(seq 1 10); do
-  PG_POD=$(kubectl get pod -n "$NS" -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-  if [[ -n "$PG_POD" ]]; then
-    # Pod Ready 상태인지 확인
-    kubectl exec -n "$NS" "$PG_POD" -- pg_isready -U kubeast 2>/dev/null && break
-  fi
-  echo "  Waiting for postgres to be ready... (attempt $attempt/10)"
-  sleep 3
-done
-
-if [[ -n "$PG_POD" ]]; then
-  DB_EXISTS=$(kubectl exec -n "$NS" "$PG_POD" -- psql -U kubeast -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='kubeast'" 2>/dev/null || echo "")
-  if [[ "$DB_EXISTS" != "1" ]]; then
-    kubectl exec -n "$NS" "$PG_POD" -- psql -U kubeast -d postgres -c "CREATE DATABASE kubeast;" 2>/dev/null
-    ok "Created kubeast database"
-  else
-    ok "kubeast database already exists"
-  fi
-else
-  fail "Postgres pod not found"
-fi
-
-# auth-service는 DB/HBA 준비 후에 기동 (순서 보장)
-step "Starting auth-service after DB/HBA setup"
-kubectl scale deployment/auth-service -n "$NS" --replicas=1 2>/dev/null || true
-kubectl rollout status deployment/auth-service -n "$NS" --timeout=120s 2>/dev/null || warn "auth-service rollout slow"
-
-# 나머지 핵심 서비스 대기 (프런트/게이트웨이/클러스터 서비스)
-step "Waiting for core services"
-for d in frontend gateway k8s-service; do
-  echo -n "  Waiting for $d..."
-  kubectl rollout status "deployment/${d}" -n "$NS" --timeout=120s 2>/dev/null && echo -e " ${GREEN}✓${NC}" || echo -e " ${YELLOW}slow${NC}"
-done
-
-# auth-service DB 초기화 완료 대기 (순서 보장)
-step "Waiting for auth-service DB initialization"
-echo -n "  Waiting for auth-service to initialize database..."
-RESTARTED_AUTH=0
-for i in $(seq 1 60); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/auth/setup" 2>/dev/null || echo "000")
-  if [[ "$HTTP_CODE" == "200" ]]; then
-    ok "Auth-service DB initialized (HTTP $HTTP_CODE)"
-    break
-  fi
-  if [[ "$HTTP_CODE" == "500" && "$RESTARTED_AUTH" -eq 0 ]]; then
-    echo ""
-    warn "Auth-service returned 500. Restarting once to clear DB cache..."
-    kubectl rollout restart deployment/auth-service -n "$NS" 2>/dev/null || true
-    kubectl rollout status deployment/auth-service -n "$NS" --timeout=120s 2>/dev/null || true
-    RESTARTED_AUTH=1
-    echo -n "  Waiting for auth-service to initialize database..."
-  fi
-  if [[ $i -eq 60 ]]; then
-    warn "Auth-service DB initialization timeout (got HTTP $HTTP_CODE)"
-    echo "    Try accessing http://localhost:30080/setup manually."
-    break
-  fi
-  echo -n "."
-  sleep 2
-done
-
-# ai-service는 auth 완료 후 기동
-step "Starting ai-service after auth-service"
-kubectl scale deployment/ai-service -n "$NS" --replicas=1 2>/dev/null || true
-kubectl rollout status deployment/ai-service -n "$NS" --timeout=120s 2>/dev/null || warn "ai-service rollout slow"
-
-# ai-service DB 초기화 완료 대기 (auth 이후)
-step "Waiting for ai-service DB initialization"
-echo -n "  Waiting for ai-service to initialize database..."
-RESTARTED_AI=0
-for i in $(seq 1 60); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/api/v1/ai/health" 2>/dev/null || echo "000")
-  if [[ "$HTTP_CODE" == "200" ]]; then
-    ok "AI-service DB initialized (HTTP $HTTP_CODE)"
-    break
-  fi
-  if [[ "$HTTP_CODE" == "500" && "$RESTARTED_AI" -eq 0 ]]; then
-    echo ""
-    warn "AI-service returned 500. Restarting once to clear DB cache..."
-    kubectl rollout restart deployment/ai-service -n "$NS" 2>/dev/null || true
-    kubectl rollout status deployment/ai-service -n "$NS" --timeout=120s 2>/dev/null || true
-    RESTARTED_AI=1
-    echo -n "  Waiting for ai-service to initialize database..."
-  fi
-  if [[ $i -eq 60 ]]; then
-    warn "AI-service DB initialization timeout (got HTTP $HTTP_CODE)"
-    echo "    Try accessing http://localhost:30080/setup manually."
-    break
-  fi
-  echo -n "."
-  sleep 2
-done
-
-# ═══════════════════════════════════════════════════
-# 8. 상태 확인
-# ═══════════════════════════════════════════════════
-step "Deployment status"
-kubectl get pods -n "$NS" -o wide 2>/dev/null || true
-
-echo ""
-step "Health check"
-for i in $(seq 1 10); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:30080/health" 2>/dev/null || echo "000")
-  if [[ "$HTTP_CODE" == "200" ]]; then
-    ok "Gateway is healthy (HTTP $HTTP_CODE)"
-    break
-  fi
-  echo "  Waiting for gateway... (attempt $i/10, got $HTTP_CODE)"
-  sleep 3
-done
-
-# ═══════════════════════════════════════════════════
-# 9. 완료
-# ═══════════════════════════════════════════════════
-echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║         Deploy complete!                      ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
-echo ""
-echo "  URL:  http://localhost:30080  (admin 로그인 뒤 클러스터가 없으면 /setup 으로 이동)"
-echo ""
-echo "  Accounts (created after first auth-service boot):"
-echo -e "    admin / ${YELLOW}${ADMIN_PW}${NC}   (admin) ← 랜덤 생성됨"
-echo "    read  / read    (read)"
-echo "    write / write   (write)"
-echo ""
-echo -e "  ${YELLOW}⚠ admin 비번은 매 reset 마다 새로 생성됩니다. 로그인 후 즉시 변경하세요.${NC}"
-echo ""
-echo "  Kubeconfig: $KUBECONFIG_PATH"
-echo "  Usage:      export KUBECONFIG=$KUBECONFIG_PATH"
-echo ""
+  *)
+    echo "usage: $0 [--keep|--db]" >&2; exit 1 ;;
+esac

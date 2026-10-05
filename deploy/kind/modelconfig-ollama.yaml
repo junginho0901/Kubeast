@@ -1,0 +1,14 @@
+# A model for the local kind install: Ollama running on the laptop, reached from the pods as
+# host.docker.internal (allowed by ai.baseUrlAllowedHosts in values.yaml). The AI e2e specs need a
+# default model; apply this after a reset:  kubectl apply -f deploy/kind/modelconfig-ollama.yaml
+apiVersion: ai.kubeast.io/v1alpha1
+kind: ModelConfig
+metadata:
+  name: ollama-granite
+  namespace: kubeast
+spec:
+  provider: ollama
+  model: granite4.1:8b
+  baseURL: http://host.docker.internal:11434/v1
+  enabled: true
+  isDefault: true

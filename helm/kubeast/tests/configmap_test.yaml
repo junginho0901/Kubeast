@@ -103,3 +103,52 @@ tests:
       - equal:
           path: data.AI_DEBUG_DUMP
           value: "true"
+
+  - it: access request settings are handed to auth-service as env values
+    set:
+      auth.accessRequests.enabled: true
+      auth.accessRequests.maxHours: 4
+      auth.accessRequests.roles: [Write, Read]
+      auth.accessRequests.sweepSeconds: 5
+    asserts:
+      - equal:
+          path: data.ACCESS_REQUESTS_ENABLED
+          value: "true"
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.ACCESS_REQUESTS_MAX_HOURS
+          value: "4"
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.ACCESS_REQUESTS_ROLES
+          value: Write,Read
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.ACCESS_REQUESTS_SWEEP_SEC
+          value: "5"
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+
+  - it: points the kubeconfig Secret namespace at the release namespace
+    release:
+      namespace: kubeast-helm
+    asserts:
+      - equal:
+          path: data.POD_NAMESPACE
+          value: kubeast-helm
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.SETUP_NAMESPACE
+          value: kubeast-helm
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config

@@ -4,8 +4,5 @@ nodes:
   - role: control-plane
     extraPortMappings:
       - containerPort: 30080
-        hostPort: 30080
+        hostPort: __KIND_HOST_PORT__
         protocol: TCP
-    extraMounts:
-      - hostPath: __KUBEAST_ROOT__/.kind-data/postgres
-        containerPath: /var/lib/kind-postgres
