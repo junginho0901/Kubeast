@@ -122,7 +122,7 @@ PostgreSQL's autovacuum reuses the freed space; the files do not shrink.
 
 | values | env | deletes |
 |---|---|---|
-| `retention.auditDays` | `RETENTION_AUDIT_DAYS` | `auth_audit_logs` rows older than N days. The stdout copy of each record (see `audit.stdout`) stays in your log pipeline under its own retention, so the database is not the only copy. |
+| `retention.auditDays` | `RETENTION_AUDIT_DAYS` | `auth_audit_logs` rows older than N days. The stdout copy of each record (see `audit.stdout`) stays in your log pipeline under its own retention, so the database is not the only copy. With `audit.sinks`, rows a sink has not sent yet are kept until it has. Finished session recordings (`session_recordings`, and their parts with the `database` store) older than N days go too, so they leave the console list; recordings in S3 or files stay until the store's own lifecycle removes them. |
 | `retention.chatDays` | `RETENTION_CHAT_DAYS` | AI chat sessions whose last activity (`sessions.updated_at`) is older than N days, with their messages and contexts, and tool approval requests older than N days (their decisions are already audit records). |
 
 Example — access-log retention of one year and six months for chat:
