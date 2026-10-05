@@ -26,7 +26,7 @@ const testDatabaseURLEnv = "DBMIGRATE_TEST_DATABASE_URL"
 // old per-service CREATE TABLE code for.
 var expectedTables = []string{
 	"access_requests", "api_keys", "audit_sink_cursors", "auth_audit_logs", "auth_users", "cluster_setup", "clusters", "messages",
-	"model_configs", "organizations", "role_permissions", "roles", "session_contexts",
+	"model_configs", "organizations", "role_permissions", "roles", "session_contexts", "session_recording_parts", "session_recordings",
 	"sessions", "tool_approvals", "user_cluster_roles",
 }
 

@@ -33,7 +33,10 @@
     "disabled": "이 설치에서는 권한 요청이 꺼져 있습니다 (auth.accessRequests.enabled).",
     "empty": "요청이 없습니다.",
     "until": "{{time}}까지",
-    "tabs": { "pending": "대기", "history": "이력" },
+    "tabs": {
+      "pending": "대기",
+      "history": "이력"
+    },
     "columns": {
       "requester": "요청자",
       "cluster": "클러스터",
@@ -173,7 +176,8 @@
     "organizations": "팀",
     "helmReleases": "Releases",
     "clusters": "클러스터",
-    "aiUsage": "AI 사용량"
+    "aiUsage": "AI 사용량",
+    "sessionRecordings": "세션 기록"
   },
   "layout": {
     "accountTitle": "설정",
@@ -3351,7 +3355,8 @@
     "loading": "불러오는 중...",
     "empty": "조건에 맞는 감사 로그가 없습니다",
     "prev": "이전",
-    "next": "다음"
+    "next": "다음",
+    "playRecording": "녹화 재생"
   },
   "topology": {
     "title": "{{namespace}} 리소스 정의",
@@ -3591,5 +3596,45 @@
     "Operation": "작업",
     "Operations": "작업",
     "Section": "섹션"
+  },
+  "recordings": {
+    "title": "세션 기록",
+    "subtitle": "Pod exec·노드 셸 터미널에서 사용자가 본 화면입니다. 녹화를 열면 감사 로그에 남습니다.",
+    "refresh": "새로고침",
+    "disabled": "이 설치에서는 세션 기록이 꺼져 있습니다(sessionRecording.enabled). 이전 녹화는 계속 보입니다.",
+    "filter": {
+      "user": "사용자",
+      "kind": "종류",
+      "apply": "검색"
+    },
+    "kind": {
+      "all": "전체",
+      "exec": "Pod exec",
+      "nodeShell": "노드 셸"
+    },
+    "col": {
+      "started": "시작",
+      "user": "사용자",
+      "kind": "종류",
+      "target": "대상",
+      "cluster": "클러스터",
+      "size": "크기",
+      "status": "상태"
+    },
+    "loading": "불러오는 중…",
+    "empty": "녹화가 없습니다",
+    "truncated": "크기 상한에서 녹화가 멈췄습니다",
+    "play": "재생",
+    "status": {
+      "recording": "녹화 중",
+      "uploading": "업로드 중",
+      "uploaded": "저장됨",
+      "interrupted": "중단됨"
+    },
+    "player": {
+      "title": "세션 기록",
+      "text": "텍스트",
+      "close": "닫기"
+    }
   }
 }

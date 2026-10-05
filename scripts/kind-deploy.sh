@@ -85,6 +85,8 @@ done
 # 4. The dev tools the dev audit sinks point at (deploy/kind/devtools.yaml). Before the chart: the dev-s3
 # sink's Secret lives in the release namespace and auth-service mounts it.
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+# the bucket Job is re-run safe; drop the finished one so a changed spec applies (a Job's template is immutable)
+kubectl -n kubeast-devtools delete job s3-bucket --ignore-not-found >/dev/null 2>&1 || true
 kubectl apply -f "$ROOT/deploy/kind/devtools.yaml" >/dev/null
 
 # 5. Install or upgrade from the chart. --wait fails loudly when a pod never becomes ready.

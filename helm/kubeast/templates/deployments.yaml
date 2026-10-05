@@ -186,7 +186,8 @@ spec:
         checksum/config: {{ include "kubeast.configChecksum" . }}
     spec:
       serviceAccountName: k8s-service
-      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532) | nindent 6 }}
+      # recording on: fsGroup lets uid 65532 read the 0440 recording Secret and write a spool/store PVC
+      {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" (ternary 65532 0 .Values.sessionRecording.enabled)) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "k8s-service") | nindent 6 }}
       containers:
         - name: k8s-service
@@ -219,7 +220,11 @@ spec:
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
-          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
+          {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled }}
+          volumeMounts:
+            {{- with include "kubeast.dbCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
+            {{- with include "kubeast.recordingVolumeMounts" . }}{{ . | trim | nindent 12 }}{{ end }}
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /health
@@ -232,7 +237,11 @@ spec:
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
-      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
+      {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled }}
+      volumes:
+        {{- with include "kubeast.dbCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
+        {{- with include "kubeast.recordingVolumes" . }}{{ . | trim | nindent 8 }}{{ end }}
+      {{- end }}
 ---
 # --- Session Service ---
 apiVersion: apps/v1

@@ -1,7 +1,7 @@
 {{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
 # Alerts on the console's own metrics: the audit store refusing rows
-# (audited actions are then refused), a 5xx ratio, p95 latency, and an audit
-# sink that has stopped copying rows out.
+# (audited actions are then refused), a 5xx ratio, p95 latency, an audit sink
+# that has stopped copying rows out, and session recordings not uploading.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -49,4 +49,12 @@ spec:
           annotations:
             summary: "Kubeast audit sink {{ "{{ $labels.sink }}" }} has not sent for 10 minutes"
             description: "Audit rows are waiting for the {{ "{{ $labels.type }}" }} sink; auth-service logs carry the send error and retention keeps the rows until it recovers."
+        - alert: KubeastSessionRecordingUploadStalled
+          expr: kubeast_session_recording_pending_bytes > 0 and (time() - kubeast_session_recording_last_upload_timestamp_seconds) > 600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubeast session recordings have not uploaded for 10 minutes"
+            description: "Recorded terminal output waits on k8s-service's spool volume; its logs carry the upload error. Sessions are not blocked."
 {{- end }}

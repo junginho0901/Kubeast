@@ -362,6 +362,10 @@ spec:
         - ipBlock:
             cidr: {{ . }}
     {{- end }}
+    {{- with .Values.sessionRecording.egress }}
+    # session recording store (sessionRecording.egress)
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress
 apiVersion: networking.k8s.io/v1

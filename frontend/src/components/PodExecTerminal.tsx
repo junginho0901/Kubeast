@@ -99,6 +99,9 @@ export default function PodExecTerminal({ podName, namespace, container, command
       {
         container,
         command,
+        // the size the terminal opened at (the recording's width/height)
+        cols: String(term.cols),
+        rows: String(term.rows),
         ...(clusterId ? { cluster: clusterId } : {}),
       }
     )

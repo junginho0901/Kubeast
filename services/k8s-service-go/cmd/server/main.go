@@ -14,6 +14,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -138,6 +140,23 @@ func main() {
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
 
+	// Terminal session recording (off unless SESSION_RECORDING_ENABLED): the
+	// output of pod exec / node shell as asciicast, uploaded in parts while
+	// the session runs. A bad configuration stops the service.
+	recCfg := recording.LoadConfig()
+	recorder, err := recording.New(recCfg, pgPool)
+	if err != nil {
+		slog.Error("invalid session recording configuration", "err", err)
+		os.Exit(1)
+	}
+	h.SetRecorder(recorder)
+	recCtx, recCancel := context.WithCancel(context.Background())
+	defer recCancel()
+	if recorder.Enabled() {
+		slog.Info("session recording enabled", "storage", recCfg.Storage, "chunk_sec", recCfg.ChunkSeconds, "required", recCfg.Required)
+		go recorder.Run(recCtx)
+	}
+
 	// Init WebSocket multiplexer
 	wsMux := ws.NewMultiplexer(k8sSvc)
 	wsMux.MaxSubscriptions = cfg.WSMaxSubscriptions
@@ -152,6 +171,15 @@ func main() {
 	}
 	m.Gauge("kubeast_ws_subscriptions", "Live WebSocket subscriptions (logs, exec, watches) across all connections.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
+	if recorder.Enabled() {
+		m.Gauge("kubeast_session_recording_pending_bytes", "Recorded terminal output not uploaded to the recording store yet.",
+			func() float64 { return float64(recorder.PendingBytes()) })
+		m.Gauge("kubeast_session_recording_last_upload_timestamp_seconds", "When a recording part was last uploaded (or when recording started).",
+			func() float64 { return float64(recorder.LastSuccess()) })
+		m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+			Name: "kubeast_session_recording_upload_failures_total", Help: "Failed recording part uploads since start-up.", ConstLabels: prometheus.Labels{"service": "k8s"},
+		}, func() float64 { return float64(recorder.Failures()) }))
+	}
 
 	// Setup router
 	r := chi.NewRouter()
@@ -198,6 +226,18 @@ func main() {
 		r.Use(audit.RequireWritable(auditStore, "/api/v1/search"))
 
 		routes.Register(r, h, wsMux)
+	})
+
+	// Session recordings span clusters: JWT only, no cluster middleware; the
+	// handlers check admin.sessions.read (config is open to any signed-in user).
+	r.Group(func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return jwtValidator.MiddlewareWithCookie(cfg.AuthCookieName, next)
+		})
+		r.Get("/api/v1/recordings/config", h.RecordingsConfig)
+		r.Get("/api/v1/recordings", h.ListRecordings)
+		r.Get("/api/v1/recordings/{id}", h.GetRecording)
+		r.Get("/api/v1/recordings/{id}/cast", h.GetRecordingCast)
 	})
 
 	// Internal-only (NOT routed via the gateway): tool-server fetches a cluster's
@@ -250,6 +290,8 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "err", err)
 	}
+	// End live recordings and upload what is left before the process goes.
+	recorder.Shutdown(ctx)
 
 	slog.Info("server stopped")
 }

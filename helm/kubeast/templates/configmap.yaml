@@ -49,6 +49,28 @@ data:
   NODE_SHELL_NAMESPACE: {{ .Values.nodeShell.namespace | quote }}
   NODE_SHELL_IMAGES: {{ join "," .Values.nodeShell.images | quote }}
   NODE_SHELL_TIMEOUT_SEC: {{ .Values.nodeShell.timeoutSeconds | quote }}
+  SESSION_RECORDING_ENABLED: {{ .Values.sessionRecording.enabled | quote }}
+  {{- with .Values.sessionRecording }}
+  {{- if .enabled }}
+  {{- if and (eq (toString .storage) "file") (not .fileVolume) }}
+  {{- fail "sessionRecording.storage: file needs sessionRecording.fileVolume (a PersistentVolumeClaim)" }}
+  {{- end }}
+  SESSION_RECORDING_REQUIRED: {{ .required | quote }}
+  SESSION_RECORDING_MAX_BYTES: {{ .maxBytes | int64 | quote }}
+  SESSION_RECORDING_CHUNK_SEC: {{ .chunkSeconds | quote }}
+  SESSION_RECORDING_STORAGE: {{ .storage | quote }}
+  SESSION_RECORDING_S3_BUCKET: {{ .s3.bucket | quote }}
+  SESSION_RECORDING_S3_PREFIX: {{ .s3.prefix | quote }}
+  SESSION_RECORDING_S3_REGION: {{ .s3.region | quote }}
+  SESSION_RECORDING_S3_ENDPOINT: {{ .s3.endpoint | quote }}
+  SESSION_RECORDING_S3_FORCE_PATH_STYLE: {{ .s3.forcePathStyle | quote }}
+  SESSION_RECORDING_S3_SSE: {{ .s3.sse | quote }}
+  SESSION_RECORDING_S3_KMS_KEY_ID: {{ .s3.kmsKeyId | quote }}
+  {{- if .secret }}
+  SESSION_RECORDING_SECRET_DIR: /etc/kubeast/recording-secret
+  {{- end }}
+  {{- end }}
+  {{- end }}
   DEFAULT_ADMIN_EMAIL: {{ .Values.admin.email | quote }}
   KEY_DIR: "/app/.keys"
   POSTGRES_USER: {{ .Values.postgresql.user | quote }}

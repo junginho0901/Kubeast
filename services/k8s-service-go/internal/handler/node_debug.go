@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,17 +46,27 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	namespace := h.cfg.NodeShellNamespace
 	image, imageErr := nodeShellImage(h.cfg.NodeShellImages, r.URL.Query().Get("image"))
 
-	// Audit at connection time (per §11 Q2); no session without the row. We do
-	// not record session duration or individual commands — that's a v2 decision.
+	// Audit at connection time (per §11 Q2); no session without the row. With
+	// session recording on, the terminal output is recorded too (recording_id).
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
 		return
 	}
+	payload := map[string]interface{}{"image": image}
+	var rec *recording.Session
+	if imageErr == nil { // a rejected image never opens a shell: nothing to record
+		var ok bool
+		if rec, ok = h.startRecording(w, r, "node-shell", namespace, nodeName, "", "k8s.node.shell", "node", payload); !ok {
+			return
+		}
+	}
 	if werr := h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, nil,
-		nil, audit.MustJSON(map[string]interface{}{"image": image})); werr != nil {
+		nil, audit.MustJSON(payload)); werr != nil {
+		h.recorder.Abort(rec)
 		h.refuseUnaudited(w, r, werr)
 		return
 	}
+	defer rec.Close()
 
 	conn, err := debugUpgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -198,7 +209,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	conn.WriteMessage(websocket.TextMessage, []byte("Debug pod running. Attaching...\r\n"))
 
 	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
-	if err := streamShell(ctx, conn, restConfig, attachURL(clientset, namespace, podName, "debugger")); err != nil {
+	if err := streamShell(ctx, conn, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec); err != nil {
 		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
 		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))

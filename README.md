@@ -554,6 +554,24 @@ retention:
 로컬 kind에는 `deploy/kind/devtools.yaml`(S3 대용 versitygw + Object Lock 버킷, Mailpit, 웹훅 수신기)이 `kind-deploy.sh`로
 함께 올라가고 dev 값이 싱크 3개를 그쪽으로 향합니다. 메일 수신함은 `kubectl -n kubeast-devtools port-forward svc/mailpit 8025`.
 
+### 세션 기록 (exec · 노드 셸)
+
+켜면(`sessionRecording.enabled`, 기본 off) Pod exec와 노드 셸 터미널에 **찍힌 출력**(사용자가 본 화면 — 친 명령은
+에코로 보이고, 에코되지 않는 비밀번호 입력은 안 남음)을 asciicast v2로 녹화합니다. 세션을 열면 터미널에
+"This session is recorded" 한 줄이 먼저 찍히고, 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
+
+- **저장**: k8s-service가 로컬 볼륨에 쓰고 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(운영 권장, 감사 S3 싱크와 같은 필드) · `database`(세션당 1 MiB, S3 없는 작은 설치) · `file`(PVC). S3 키는 파일로 마운트돼 k8s-service의 IRSA 신원을 건드리지 않습니다.
+- **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다.
+- **실패**: 녹화를 시작하지 못하면(로컬 볼륨에 못 씀) 세션을 거부합니다(`required: true`). 저장소 업로드가 실패하거나 조각 하나가 30초 안에 끝나지 않아도 세션은 계속되고, 재시도하며 알람 `KubeastSessionRecordingUploadStalled`로 드러납니다. 세션당 `maxBytes`(기본 64 MiB)를 넘으면 녹화만 멈춥니다.
+- **다시보기**: Admin → 세션 기록(권한 `admin.sessions.read`)에서 재생·`.cast`·텍스트 사본 내려받기, 감사 화면의 exec 행에서도 재생. 녹화를 열 때마다 `admin.session.read`가 감사에 남습니다.
+- **보존**: 원격 객체는 버킷 수명주기·Object Lock에 맡기고, 목록 행은 `retention.auditDays`를 따릅니다.
+
+```yaml
+sessionRecording:
+  enabled: true
+  s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # IRSA에 s3:PutObject·GetObject
+```
+
 ### 프론트엔드
 
 ```bash

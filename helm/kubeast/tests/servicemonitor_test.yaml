@@ -59,7 +59,7 @@ tests:
           path: metadata.name
           value: frontend
 
-  - it: carries four alerts with the configured thresholds when the rule is enabled
+  - it: carries five alerts with the configured thresholds when the rule is enabled
     template: prometheusrule.yaml
     set:
       metrics.prometheusRule.enabled: true
@@ -69,7 +69,7 @@ tests:
           of: PrometheusRule
       - lengthEqual:
           path: spec.groups[0].rules
-          count: 4
+          count: 5
       - equal:
           path: spec.groups[0].rules[0].alert
           value: KubeastAuditStoreDown

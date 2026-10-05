@@ -33,7 +33,10 @@
     "disabled": "Access requests are off on this installation (auth.accessRequests.enabled).",
     "empty": "No requests.",
     "until": "until {{time}}",
-    "tabs": { "pending": "Pending", "history": "History" },
+    "tabs": {
+      "pending": "Pending",
+      "history": "History"
+    },
     "columns": {
       "requester": "Requester",
       "cluster": "Cluster",
@@ -173,7 +176,8 @@
     "organizations": "Team",
     "helmReleases": "Releases",
     "clusters": "Clusters",
-    "aiUsage": "AI Usage"
+    "aiUsage": "AI Usage",
+    "sessionRecordings": "Session recordings"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -3152,7 +3156,8 @@
     "loading": "Loading...",
     "empty": "No audit entries match the filters",
     "prev": "Prev",
-    "next": "Next"
+    "next": "Next",
+    "playRecording": "Play recording"
   },
   "deviceClassesPage": {
     "create": "Create DeviceClass",
@@ -3467,5 +3472,45 @@
     "force": "Force delete",
     "forceHint": "Ignores the grace period and deletes immediately",
     "confirm": "Delete"
+  },
+  "recordings": {
+    "title": "Session recordings",
+    "subtitle": "What users saw in pod exec and node shell terminals. Opening a recording is audited.",
+    "refresh": "Refresh",
+    "disabled": "Session recording is off on this installation (sessionRecording.enabled). Earlier recordings stay listed.",
+    "filter": {
+      "user": "User",
+      "kind": "Kind",
+      "apply": "Search"
+    },
+    "kind": {
+      "all": "All",
+      "exec": "Pod exec",
+      "nodeShell": "Node shell"
+    },
+    "col": {
+      "started": "Started",
+      "user": "User",
+      "kind": "Kind",
+      "target": "Target",
+      "cluster": "Cluster",
+      "size": "Size",
+      "status": "Status"
+    },
+    "loading": "Loading…",
+    "empty": "No recordings",
+    "truncated": "Recording stopped at the size limit",
+    "play": "Play",
+    "status": {
+      "recording": "Recording",
+      "uploading": "Uploading",
+      "uploaded": "Saved",
+      "interrupted": "Interrupted"
+    },
+    "player": {
+      "title": "Session recording",
+      "text": "Text",
+      "close": "Close"
+    }
   }
 }

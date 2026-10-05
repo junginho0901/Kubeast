@@ -171,6 +171,39 @@ nodeShell:
     - docker.io/library/busybox:latest
   timeoutSeconds: 3600
 
+# --- Terminal session recording ---
+# Records the output of pod exec and node shell terminals (what the user saw,
+# not keystrokes) as asciicast v2; the terminal tells the user it is recorded.
+# k8s-service writes to a local spool volume and uploads a part every
+# chunkSeconds while the session runs, so losing the pod costs at most one
+# part. Admins replay or download recordings (Admin → Session recordings,
+# permission admin.sessions.read; each read is audited).
+sessionRecording:
+  enabled: false
+  # Refuse the terminal when the recording cannot start (the spool volume is
+  # not writable). Upload failures never block a session; they retry.
+  required: true
+  maxBytes: 67108864       # per session; past it recording stops (marked truncated), the session goes on
+  chunkSeconds: 30
+  # s3 | database | file. Empty: s3 when s3.bucket is set, database otherwise
+  # (database keeps at most 1 MiB per session — small installs only).
+  storage: ""
+  s3:
+    bucket: ""
+    prefix: sessions/
+    region: ""
+    endpoint: ""           # S3-compatible stores (MinIO, R2, …)
+    forcePathStyle: false
+    sse: ""                # "" (bucket default) | AES256 | aws:kms
+    kmsKeyId: ""
+  # Secret with accessKeyId / secretAccessKey for the s3 store, mounted as
+  # files for k8s-service only (its own AWS identity stays untouched). Empty:
+  # the default AWS chain (IRSA).
+  secret: ""
+  spoolVolume: {}          # empty = emptyDir
+  fileVolume: {}           # required for storage: file, e.g. {persistentVolumeClaim: {claimName: kubeast-recordings}}
+  egress: []               # extra NetworkPolicy egress rules for k8s-service (an in-cluster store)
+
 # --- Gateway API ---
 # The Gateway → Policies page lists every policy kind attached to Gateway API
 # objects: CRDs labelled gateway.networking.k8s.io/policy (GEP-713) plus a

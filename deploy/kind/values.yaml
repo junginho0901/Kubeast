@@ -65,3 +65,17 @@ networkPolicy:
       port: 11434
 nodeShell:
   enabled: true
+# Terminal session recording into the S3 stand-in (bucket kubeast-sessions), parts every 10 s — what
+# e2e/tests/session-recording.spec.ts checks.
+sessionRecording:
+  enabled: true
+  chunkSeconds: 10
+  secret: kubeast-recording-dev-s3
+  s3: {bucket: kubeast-sessions, prefix: sessions/, endpoint: "http://s3.kubeast-devtools:7070", forcePathStyle: true}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kubeast-devtools
+      ports:
+        - {protocol: TCP, port: 7070}
