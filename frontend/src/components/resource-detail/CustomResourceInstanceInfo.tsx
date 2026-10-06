@@ -358,7 +358,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
                       <tr
                         key={`${itNs}/${itName}`}
                         className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                        onClick={() => openDetail({ kind: 'CustomResourceInstance', name: itName, namespace: itNs, rawJson: { ...it, group, version, crd_name: crdName } as any })}
+                        onClick={() => openDetail({ kind: 'CustomResourceInstance', name: itName, namespace: itNs, rawJson: { ...it, kind: crKind, group, version, crd_name: crdName } as any })}
                       >
                         <td className="py-1 pr-2 font-mono">{itNs || '-'}</td>
                         <td className="py-1 pr-2 font-mono">{itName}</td>

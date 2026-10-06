@@ -15,7 +15,8 @@ import CustomDropdown from '@/components/CustomDropdown'
 // Gateway → Policies: one table of every policy object attached to Gateway
 // API resources, whichever implementation owns the kind (label-discovered
 // CRDs, the Envoy Gateway / Istio built-in table, configured extras). Rows
-// open the generic custom-resource drawer (describe / YAML / delete).
+// open the generic custom-resource drawer (describe / YAML / delete); the
+// upstream BackendTLSPolicy has its own drawer.
 
 type SortKey = null | 'kind' | 'name' | 'namespace' | 'target' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
@@ -302,12 +303,14 @@ export default function Policies() {
                   ref={idx === 0 ? firstRowRef : undefined}
                   key={`${item.group}/${item.kind}/${item.namespace || '-'}/${item.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
-                    kind: 'CustomResourceInstance',
-                    name: item.name,
-                    namespace: item.namespace || undefined,
-                    rawJson: { group: item.group, version: item.version, crd_name: `${item.plural}.${item.group}`, scope: item.scope },
-                  })}
+                  onClick={() => openDetail(item.group === 'gateway.networking.k8s.io' && item.kind === 'BackendTLSPolicy'
+                    ? { kind: 'BackendTLSPolicy', name: item.name, namespace: item.namespace }
+                    : {
+                        kind: 'CustomResourceInstance',
+                        name: item.name,
+                        namespace: item.namespace || undefined,
+                        rawJson: { kind: item.kind, group: item.group, version: item.version, crd_name: `${item.plural}.${item.group}`, scope: item.scope },
+                      })}
                 >
                   <td className="py-3 px-4 text-xs font-mono" title={`${item.plural}.${item.group}/${item.version}`}><span className="block truncate">{item.kind}</span></td>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
