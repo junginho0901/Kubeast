@@ -198,7 +198,7 @@ sessionRecording:
     kmsKeyId: ""
   # Secret with accessKeyId / secretAccessKey for the s3 store, mounted as
   # files for k8s-service only (its own AWS identity stays untouched). Empty:
-  # the default AWS chain (IRSA).
+  # the default AWS chain (IRSA: serviceAccounts.k8sService or aws.irsaRoleArn).
   secret: ""
   spoolVolume: {}          # empty = emptyDir
   fileVolume: {}           # required for storage: file, e.g. {persistentVolumeClaim: {claimName: kubeast-recordings}}
@@ -268,7 +268,8 @@ audit:
   # store). One auth-service replica reads past each sink's cursor and sends
   # batches: at least once, never blocking requests (docs/audit-log-plan.md §4).
   # Secrets are referenced by name and mounted for auth-service only:
-  #   s3       accessKeyId, secretAccessKey (omit the Secret for IRSA)
+  #   s3       accessKeyId, secretAccessKey (omit the Secret for IRSA via
+  #            serviceAccounts.authService.annotations)
   #   webhook  url (json/slack/teams/discord), hmacSecret (json, optional),
   #            botToken (telegram), routingKey (pagerduty)
   #   email    username, password (optional)
@@ -514,6 +515,22 @@ multicluster:
 aws:
   irsaRoleArn: ""
   region: ""
+
+# --- ServiceAccount annotations ---
+# Per ServiceAccount the chart creates, e.g. a workload identity of its own:
+# an IRSA role (eks.amazonaws.com/role-arn) for auth-service's S3 audit sink or
+# k8s-service's S3 session recordings, or the GKE / Azure equivalent. On
+# k8s-service and tool-server they go over the aws.irsaRoleArn role. Pods take
+# a changed identity when they next start (kubectl rollout restart).
+serviceAccounts:
+  authService:
+    annotations: {}
+  k8sService:
+    annotations: {}
+  toolServer:
+    annotations: {}
+  modelConfigController:
+    annotations: {}
 
 # --- Image overrides (usually not needed) ---
 # Published to GitHub Container Registry as public packages (no pull rate limit,
