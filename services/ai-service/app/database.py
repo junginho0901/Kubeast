@@ -1,16 +1,20 @@
 """
 Database models and session management
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy import func
 from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 import json
 
 Base = declarative_base()
+
+
+def utcnow() -> datetime:
+    """현재 UTC 시각(naive) — DateTime 컬럼이 timezone 없이 저장된다."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Session(Base):
@@ -21,8 +25,8 @@ class Session(Base):
     user_id = Column(String, nullable=False, default="default")
     cluster_id = Column(String, nullable=True)  # step 13: per-cluster scope
     title = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     
     # Relationships
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
@@ -38,7 +42,7 @@ class Message(Base):
     role = Column(String, nullable=False)  # user, assistant, tool
     content = Column(Text, nullable=False)
     tool_calls = Column(JSON, nullable=True)  # Function calling 정보
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     
     # Relationships
     session = relationship("Session", back_populates="messages")
@@ -52,7 +56,7 @@ class SessionContext(Base):
     session_id = Column(String, ForeignKey("sessions.id"), nullable=False, unique=True)
     state = Column(JSON, nullable=False, default=dict)  # Tool 실행 상태
     cache = Column(JSON, nullable=False, default=dict)  # 조회 결과 캐시
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
     
     # Relationships
     session = relationship("Session", back_populates="context")
@@ -72,7 +76,7 @@ class ToolApproval(Base):
     args = Column(JSON, nullable=False, default=dict)
     status = Column(String, nullable=False, default="pending")  # pending|approved|executed|failed|rejected|expired
     result = Column(Text, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     expires_at = Column(DateTime, nullable=False)
     decided_at = Column(DateTime, nullable=True)
 
@@ -104,8 +108,8 @@ class ModelConfig(Base):
     enabled = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
 # Schema version this build needs — the newest file in
@@ -241,7 +245,7 @@ class DatabaseService:
             await db.execute(
                 update(Session)
                 .where(Session.id == session_id)
-                .values(title=title, updated_at=datetime.utcnow())
+                .values(title=title, updated_at=utcnow())
             )
             await db.commit()
     
@@ -279,7 +283,7 @@ class DatabaseService:
             await db.execute(
                 update(Session)
                 .where(Session.id == session_id)
-                .values(updated_at=datetime.utcnow())
+                .values(updated_at=utcnow())
             )
             
             await db.commit()
@@ -324,7 +328,7 @@ class DatabaseService:
         async with self.async_session() as db:
             from sqlalchemy import select, update
             
-            updates = {"updated_at": datetime.utcnow()}
+            updates = {"updated_at": utcnow()}
             if state is not None:
                 updates["state"] = state
             if cache is not None:
@@ -393,7 +397,7 @@ class DatabaseService:
                 tool=tool,
                 args=args or {},
                 status="pending",
-                expires_at=datetime.utcnow() + timedelta(seconds=ttl_seconds),
+                expires_at=utcnow() + timedelta(seconds=ttl_seconds),
             )
             db.add(row)
             await db.commit()

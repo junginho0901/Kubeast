@@ -3,7 +3,6 @@ moves out of pending exactly once, and is only offered for tools the model
 was actually given and the user may run."""
 import asyncio
 import hashlib
-from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -61,24 +60,27 @@ def test_sign_without_secret_is_refused(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_transition_wins_exactly_once(tmp_path):
-    from app.database import DatabaseService
+    from app.database import DatabaseService, utcnow
 
     db = DatabaseService(f"sqlite+aiosqlite:///{tmp_path}/approvals.db")
-    await db.init_db()
-    session = await db.create_session("s1", user_id="u1", title="t")
-    approval = await db.create_tool_approval(
-        session_id=session.id, user_id="u1", user_email="u1@example.com", cluster="prod",
-        tool="k8s_scale", args={"replicas": 2},
-    )
-    first, second = await asyncio.gather(
-        db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=datetime.utcnow()),
-        db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=datetime.utcnow()),
-    )
-    assert sorted([first is not None, second is not None]) == [False, True]
-    assert (await db.get_tool_approval(approval.id)).status == "approved"
-    # And the next hop only leaves "approved".
-    assert await db.transition_tool_approval(approval.id, "pending", status="rejected") is None
-    assert (await db.transition_tool_approval(approval.id, "approved", status="executed", result="ok")).status == "executed"
+    try:
+        await db.init_db()
+        session = await db.create_session("s1", user_id="u1", title="t")
+        approval = await db.create_tool_approval(
+            session_id=session.id, user_id="u1", user_email="u1@example.com", cluster="prod",
+            tool="k8s_scale", args={"replicas": 2},
+        )
+        first, second = await asyncio.gather(
+            db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow()),
+            db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow()),
+        )
+        assert sorted([first is not None, second is not None]) == [False, True]
+        assert (await db.get_tool_approval(approval.id)).status == "approved"
+        # And the next hop only leaves "approved".
+        assert await db.transition_tool_approval(approval.id, "pending", status="rejected") is None
+        assert (await db.transition_tool_approval(approval.id, "approved", status="executed", result="ok")).status == "executed"
+    finally:
+        await db.engine.dispose()
 
 
 def _svc(role="write", cluster="prod"):
