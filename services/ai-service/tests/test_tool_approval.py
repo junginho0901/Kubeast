@@ -1,10 +1,11 @@
 """H2: write tools are parked for the user's approval, never run from the stream."""
-from datetime import datetime, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
+from app.database import utcnow
 from app.services.tool_whitelists import READONLY_TOOL_NAMES, WRITE_TOOL_NAMES, write_approval_required
 
 
@@ -44,8 +45,8 @@ def _approval(**over):
     base = dict(
         id="ap1", session_id="s1", user_id="u1", user_email="u1@example.com", cluster="test2",
         tool="k8s_scale", args={"resource_type": "deployment", "name": "web", "replicas": 2},
-        status="pending", result=None, created_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(minutes=10), decided_at=None,
+        status="pending", result=None, created_at=utcnow(),
+        expires_at=utcnow() + timedelta(minutes=10), decided_at=None,
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -73,7 +74,7 @@ async def test_only_the_requesting_user_can_decide(monkeypatch):
 async def test_expired_pending_is_marked_and_refused(monkeypatch):
     from app.api import _load_own_pending_approval
 
-    db = _FakeDB(_approval(expires_at=datetime.utcnow() - timedelta(seconds=1)))
+    db = _FakeDB(_approval(expires_at=utcnow() - timedelta(seconds=1)))
     await _patch_db(monkeypatch, db)
     with pytest.raises(HTTPException) as exc:
         await _load_own_pending_approval("ap1", SimpleNamespace(user_id="u1"))

@@ -228,15 +228,14 @@ def _caller(authorization: str):
 
 
 async def _load_own_pending_approval(approval_id: str, payload):
-    from datetime import datetime
-    from app.database import get_db_service
+    from app.database import get_db_service, utcnow
 
     db = await get_db_service()
     approval = await db.get_tool_approval(approval_id)
     if approval is None or approval.user_id != payload.user_id:
         raise HTTPException(status_code=404, detail="Approval not found")
-    if approval.status == "pending" and approval.expires_at and approval.expires_at < datetime.utcnow():
-        approval = await db.transition_tool_approval(approval.id, "pending", status="expired", decided_at=datetime.utcnow()) or await db.get_tool_approval(approval.id)
+    if approval.status == "pending" and approval.expires_at and approval.expires_at < utcnow():
+        approval = await db.transition_tool_approval(approval.id, "pending", status="expired", decided_at=utcnow()) or await db.get_tool_approval(approval.id)
     if approval.status != "pending":
         raise HTTPException(status_code=409, detail=f"Approval is {approval.status}")
     return db, approval
@@ -271,12 +270,12 @@ async def reject_tool_approval(
     request: Request,
     authorization: str = Depends(bearer_or_cookie),
 ):
-    from datetime import datetime
+    from app.database import utcnow
     from app.services.audit_writer import write_audit
 
     payload = _caller(authorization)
     db, approval = await _load_own_pending_approval(approval_id, payload)
-    approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=datetime.utcnow())
+    approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=utcnow())
     if approval is None:
         raise HTTPException(status_code=409, detail="Approval is no longer pending")
     await db.add_message(
@@ -300,7 +299,7 @@ async def approve_tool_approval(
     request: Request,
     authorization: str = Depends(bearer_or_cookie),
 ):
-    from datetime import datetime
+    from app.database import utcnow
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import formatters
 
@@ -323,7 +322,7 @@ async def approve_tool_approval(
         raise HTTPException(status_code=503, detail="audit unavailable")
     # One statement moves pending → approved; a second click, or two clicks
     # racing, finds the row no longer pending and stops here.
-    approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=datetime.utcnow())
+    approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow())
     if approval is None:
         raise HTTPException(status_code=409, detail="Approval is no longer pending")
     actor, http = _extract_audit_meta(request, authorization)
@@ -337,7 +336,7 @@ async def approve_tool_approval(
         # The database went away between the readiness probe and the row: the
         # tool has not run, so close the approval instead of executing unrecorded.
         await db.transition_tool_approval(
-            approval.id, "approved", status="failed", result="audit unavailable", decided_at=datetime.utcnow(),
+            approval.id, "approved", status="failed", result="audit unavailable", decided_at=utcnow(),
         )
         _invalidate_caches()
         raise HTTPException(status_code=503, detail="audit unavailable")
@@ -354,7 +353,7 @@ async def approve_tool_approval(
         status, error = "failed", str(e)
         formatted = f"error: {error}"
     approval = await db.transition_tool_approval(
-        approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=datetime.utcnow(),
+        approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(),
     ) or approval
     icon = "✅" if status == "executed" else "⚠️"
     await db.add_message(
