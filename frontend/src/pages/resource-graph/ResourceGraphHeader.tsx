@@ -119,7 +119,7 @@ export function ResourceGraphHeader({
   }
 
   return (
-    <div className="flex-shrink-0 px-6 py-4 border-b border-slate-700">
+    <div className="shrink-0 px-6 py-4 border-b border-slate-700">
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-bold text-white">
           {t('resourceGraph.title', 'Resource Graph')}
@@ -137,7 +137,7 @@ export function ResourceGraphHeader({
           <button
             type="button"
             onClick={() => setIsNsDropdownOpen(!isNsDropdownOpen)}
-            className="h-9 px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2 min-w-[180px] justify-between"
+            className="h-9 px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 flex items-center gap-2 min-w-[180px] justify-between"
           >
             <span className="truncate">
               {selectedNamespaces.size === 0
@@ -147,7 +147,7 @@ export function ResourceGraphHeader({
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNsDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNsDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[280px] overflow-y-auto">
+            <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[280px] overflow-y-auto">
               {selectedNamespaces.size > 0 && (
                 <button
                   type="button"
@@ -164,7 +164,7 @@ export function ResourceGraphHeader({
                   onClick={() => toggleNs(ns.name)}
                   className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2"
                 >
-                  {selectedNamespaces.has(ns.name) && <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                  {selectedNamespaces.has(ns.name) && <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />}
                   <span className={selectedNamespaces.has(ns.name) ? 'font-medium' : ''}>{ns.name}</span>
                 </button>
               ))}
@@ -180,7 +180,7 @@ export function ResourceGraphHeader({
             placeholder={t('resourceGraph.search', 'Search resources...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="h-9 w-full pl-8 pr-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="h-9 w-full pl-8 pr-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -244,7 +244,7 @@ export function ResourceGraphHeader({
                     key={group.id}
                     type="button"
                     onClick={() => toggleSourceGroup(group.id)}
-                    className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                    className={`px-2.5 py-1 rounded-sm text-xs transition-colors ${
                       allEnabled
                         ? 'bg-primary-600/30 text-primary-300 border border-primary-500/50'
                         : someEnabled
@@ -270,7 +270,7 @@ export function ResourceGraphHeader({
                       return next
                     })
                   }}
-                  className={`px-1.5 py-0.5 rounded text-[10px] transition-colors ${
+                  className={`px-1.5 py-0.5 rounded-sm text-[10px] transition-colors ${
                     kindFilters.has(kind)
                       ? 'bg-slate-600 text-white'
                       : 'bg-slate-800 text-slate-600'
@@ -293,7 +293,7 @@ export function ResourceGraphHeader({
                     key={type}
                     type="button"
                     onClick={() => toggleEdgeType(type)}
-                    className={`px-2 py-0.5 rounded text-xs flex items-center gap-1.5 transition-colors ${
+                    className={`px-2 py-0.5 rounded-sm text-xs flex items-center gap-1.5 transition-colors ${
                       edgeTypeFilters.has(type)
                         ? 'bg-slate-700 border border-slate-500'
                         : 'bg-slate-800 text-slate-500 border border-slate-700'

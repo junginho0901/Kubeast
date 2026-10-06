@@ -11,8 +11,8 @@ import { Monitor, RefreshCw, XCircle } from 'lucide-react'
 function SkeletonCard() {
   return (
     <div className="animate-pulse rounded-xl border border-slate-700/50 bg-slate-800/50 p-5">
-      <div className="mb-3 h-4 w-24 rounded bg-slate-700" />
-      <div className="h-8 w-16 rounded bg-slate-700" />
+      <div className="mb-3 h-4 w-24 rounded-sm bg-slate-700" />
+      <div className="h-8 w-16 rounded-sm bg-slate-700" />
     </div>
   )
 }
@@ -22,8 +22,8 @@ export function GPUDashboardLoading() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <div className="h-8 w-48 animate-pulse rounded bg-slate-700" />
-          <div className="mt-2 h-4 w-72 animate-pulse rounded bg-slate-700" />
+          <div className="h-8 w-48 animate-pulse rounded-sm bg-slate-700" />
+          <div className="mt-2 h-4 w-72 animate-pulse rounded-sm bg-slate-700" />
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

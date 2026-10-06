@@ -101,9 +101,9 @@ function MessageBubble({ role, content, pending }: MessageBubbleProps) {
         } ${pending ? 'opacity-90' : ''}`}
       >
         {isUser ? (
-          <p className="whitespace-pre-wrap break-words">{content}</p>
+          <p className="whitespace-pre-wrap wrap-break-word">{content}</p>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none break-words">
+          <div className="prose prose-invert prose-sm max-w-none wrap-break-word">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}

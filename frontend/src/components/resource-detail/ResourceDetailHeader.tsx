@@ -45,7 +45,7 @@ export function ResourceDetailHeader({
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-sm">{kindIcon(kind)}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-medium">{kind}</span>
+            <span className="text-xs px-2 py-0.5 rounded-sm bg-slate-700 text-slate-300 font-medium">{kind}</span>
             {ns && <span className="text-xs text-slate-500">{ns}</span>}
           </div>
           <h2 className="text-lg font-semibold text-white truncate">{name}</h2>
@@ -55,7 +55,7 @@ export function ResourceDetailHeader({
           {canGoBack && (
             <button
               onClick={onGoBack}
-              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors"
+              className="text-slate-400 hover:text-white p-1 rounded-sm hover:bg-slate-700 transition-colors"
               title={t('common.back', { defaultValue: 'Back' })}
             >
               <ArrowLeft className="w-4 h-4" />

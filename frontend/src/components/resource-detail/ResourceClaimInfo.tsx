@@ -120,11 +120,11 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
                   })
                   return (
                     <tr key={idx} className="text-slate-200">
-                      <td className="py-1 pr-2 break-words">{text(req.name)}</td>
-                      <td className="py-1 pr-2 break-words">{text(req.deviceClassName ?? req.device_class_name)}</td>
-                      <td className="py-1 pr-2 break-words font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{text(req.name)}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{text(req.deviceClassName ?? req.device_class_name)}</td>
+                      <td className="py-1 pr-2 wrap-break-word font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
                       <td className="py-1 pr-2">{text(req.count)}</td>
-                      <td className="py-1 pr-2 break-words">{text(req.allocationMode ?? req.allocation_mode)}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{text(req.allocationMode ?? req.allocation_mode)}</td>
                     </tr>
                   )
                 })}
@@ -149,10 +149,10 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {allocResults.map((res, idx) => (
                   <tr key={idx} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words">{text(res.request)}</td>
-                    <td className="py-1 pr-2 break-words">{text(res.driver)}</td>
-                    <td className="py-1 pr-2 break-words">{text(res.pool)}</td>
-                    <td className="py-1 pr-2 break-words">{text(res.device)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(res.request)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(res.driver)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(res.pool)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(res.device)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -175,9 +175,9 @@ export default function ResourceClaimInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {reservedForList.map((rf, idx) => (
                   <tr key={idx} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words">{text(rf.name)}</td>
-                    <td className="py-1 pr-2 break-words">{text(rf.resource)}</td>
-                    <td className="py-1 pr-2 break-words">{text(rf.apiGroup ?? rf.api_group)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(rf.name)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(rf.resource)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(rf.apiGroup ?? rf.api_group)}</td>
                   </tr>
                 ))}
               </tbody>

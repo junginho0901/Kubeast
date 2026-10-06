@@ -142,7 +142,7 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
         <InfoSection title="Scope Selector">
           <div className="space-y-2">
             {scopeSelector.map((expr: any, idx: number) => (
-              <div key={idx} className="text-xs text-slate-200 rounded border border-slate-700 bg-slate-800/80 px-3 py-2">
+              <div key={idx} className="text-xs text-slate-200 rounded-sm border border-slate-700 bg-slate-800/80 px-3 py-2">
                 <InfoRow label="Scope Name" value={expr.scope_name || expr.scopeName || '-'} />
                 <InfoRow label="Operator" value={expr.operator || '-'} />
                 {(expr.values || []).length > 0 && (

@@ -78,7 +78,7 @@ export default function ModelConfigForm({ form }: Props) {
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
             placeholder={tr('admin.aiModels.namePlaceholder', 'e.g. my-gpt4')}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           />
         </div>
 
@@ -123,7 +123,7 @@ export default function ModelConfigForm({ form }: Props) {
               value={formModel}
               onChange={(e) => setFormModel(e.target.value)}
               placeholder={tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           )}
         </div>
@@ -139,7 +139,7 @@ export default function ModelConfigForm({ form }: Props) {
               value={formBaseUrl}
               onChange={(e) => setFormBaseUrl(e.target.value)}
               placeholder={currentProviderDef.baseUrlPlaceholder || 'https://api.example.com/v1'}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           </div>
         )}
@@ -154,7 +154,7 @@ export default function ModelConfigForm({ form }: Props) {
               onChange={(e) => setFormApiKeyEnv(e.target.value)}
               placeholder="OPENAI_API_KEY"
               spellCheck={false}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
             <p className="mt-1 text-[10px] text-slate-500">
               {tr('admin.aiModels.apiKeyEnvHint', 'Name of the environment variable in ai-service that holds the key (Helm values ai.*ApiKey or ai.apiKeysSecret). Keys are never stored in the database.')}
@@ -169,7 +169,7 @@ export default function ModelConfigForm({ form }: Props) {
         if (md && !md.functionCalling) {
           return (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 flex items-center gap-2">
-              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
               {tr('admin.aiModels.noToolCalling', 'This model does not support tool/function calling. AI assistant features that require tools will not work.')}
             </div>
           )
@@ -197,7 +197,7 @@ export default function ModelConfigForm({ form }: Props) {
                 rows={4}
                 spellCheck={false}
                 placeholder={'{\n  "temperature": 0.7,\n  "top_p": 0.9,\n  "num_ctx": 8192\n}'}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               />
               <p className="mt-1 text-[10px] text-slate-500">
                 {tr('admin.aiModels.optionsHint',
@@ -220,7 +220,7 @@ export default function ModelConfigForm({ form }: Props) {
                 rows={3}
                 spellCheck={false}
                 placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               />
               <p className="mt-1 text-[10px] text-slate-500">
                 {tr('admin.aiModels.caCertHint',
@@ -237,7 +237,7 @@ export default function ModelConfigForm({ form }: Props) {
             type="checkbox"
             checked={formEnabled}
             onChange={(e) => setFormEnabled(e.target.checked)}
-            className="rounded border-slate-600"
+            className="rounded-sm border-slate-600"
           />
           {tr('admin.aiModels.enabled', 'Enabled')}
         </label>
@@ -246,7 +246,7 @@ export default function ModelConfigForm({ form }: Props) {
             type="checkbox"
             checked={formIsDefault}
             onChange={(e) => setFormIsDefault(e.target.checked)}
-            className="rounded border-slate-600"
+            className="rounded-sm border-slate-600"
           />
           <CircleDot className="h-3.5 w-3.5 text-emerald-400" />
           {tr('admin.aiModels.setActive', 'Set as Active')}
@@ -293,7 +293,7 @@ export default function ModelConfigForm({ form }: Props) {
       {!editingId && testResult && !testResult.success && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300/80 space-y-2">
           <p className="flex items-center gap-1.5">
-            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
             {tr('admin.aiModels.testFailedHint', "Connection test failed. If you've recently added a new API key to the Kubernetes Secret, the ai-service pod may need a restart to pick up the new environment variable.")}
           </p>
           <button

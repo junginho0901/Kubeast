@@ -27,10 +27,10 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
       className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
     >
       <div
-        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
           message.role === 'user'
             ? 'bg-primary-500'
-            : 'bg-gradient-to-br from-purple-500 to-pink-500'
+            : 'bg-linear-to-br from-purple-500 to-pink-500'
         }`}
       >
         {message.role === 'user' ? (
@@ -71,7 +71,7 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
                           e.stopPropagation()
                           onCopy(message, messageKey)
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
                         title={isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}
                       >
                         {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -86,7 +86,7 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
                           e.stopPropagation()
                           onDownloadJson(message)
                         }}
-                        className="px-2.5 py-1 text-xs rounded bg-slate-600 hover:bg-slate-500 text-slate-100"
+                        className="px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
                       >
                         {t('aiChat.resultZipDownload')}
                       </button>

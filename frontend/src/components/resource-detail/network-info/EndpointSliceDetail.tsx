@@ -20,7 +20,7 @@ function renderConditionBadge(label: string, value: unknown) {
       ? 'border-emerald-700/60 bg-emerald-900/20 text-emerald-300'
       : 'border-amber-700/60 bg-amber-900/20 text-amber-300'
   const text = isUnknown ? 'Unknown' : isOn ? 'True' : 'False'
-  return <span className={`inline-flex items-center rounded px-2 py-0.5 border ${cls}`}>{label}: {text}</span>
+  return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: {text}</span>
 }
 
 export default function EndpointSliceDetail({ name, namespace, rawJson }: Props) {
@@ -99,7 +99,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
               const ref = ep?.target_ref || ep?.targetRef
               const refText = ref?.name ? `${ref?.kind || 'Target'}:${ref.name}` : '-'
               return (
-                <div key={i} className="rounded border border-slate-800 p-3 space-y-2">
+                <div key={i} className="rounded-sm border border-slate-800 p-3 space-y-2">
                   <div className="text-xs text-slate-200 break-all">
                     <span className="text-slate-400"><Tx>Addresses:</Tx></span> {addresses.length > 0 ? addresses.join(', ') : '-'}
                   </div>

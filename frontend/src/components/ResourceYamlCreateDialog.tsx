@@ -101,7 +101,7 @@ export default function ResourceYamlCreateDialog({
         </div>
 
         {error && (
-          <p className="mt-3 text-sm text-red-400 break-words whitespace-pre-wrap">
+          <p className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
             {error}
           </p>
         )}

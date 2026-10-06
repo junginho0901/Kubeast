@@ -176,7 +176,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
         ) : (
           <div className="space-y-2 text-xs">
             {parentRefs.map((parentRef, idx) => (
-              <div key={`parent-ref-${idx}`} className="rounded border border-slate-800 p-2 text-slate-200 break-words">
+              <div key={`parent-ref-${idx}`} className="rounded-sm border border-slate-800 p-2 text-slate-200 wrap-break-word">
                 {parentRef.name ? (
                   <><ResourceLink kind={parentRef.kind || 'Gateway'} name={parentRef.name} namespace={parentRef.namespace || namespace} /> <span className="text-slate-400">{parentRef.sectionName ? `section=${parentRef.sectionName}` : ''}</span></>
                 ) : formatParentRef(parentRef)}
@@ -197,12 +197,12 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
               const filters = Array.isArray(rule?.filters) ? rule.filters : []
 
               return (
-                <div key={`rule-${idx}`} className="rounded border border-slate-800 p-3">
+                <div key={`rule-${idx}`} className="rounded-sm border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Rule Name:</Tx></span> {text(rule?.name)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Matches:</Tx></span> {matches.length}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Backend Refs:</Tx></span> {backendRefs.length}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Filters:</Tx></span> {filters.length}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Rule Name:</Tx></span> {text(rule?.name)}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Matches:</Tx></span> {matches.length}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Backend Refs:</Tx></span> {backendRefs.length}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Filters:</Tx></span> {filters.length}</div>
                   </div>
 
                   {matches.length > 0 && (
@@ -220,9 +220,9 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
                         <tbody className="divide-y divide-slate-800">
                           {matches.map((match, matchIdx) => (
                             <tr key={`match-${idx}-${matchIdx}`} className="text-slate-200">
-                              <td className="py-1 pr-2 break-words">{text(match?.path?.type)}</td>
-                              <td className="py-1 pr-2 break-words">{text(match?.path?.value)}</td>
-                              <td className="py-1 pr-2 break-words">{text(match?.method)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(match?.path?.type)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(match?.path?.value)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(match?.method)}</td>
                               <td className="py-1 pr-2">{Array.isArray(match?.headers) ? match.headers.length : 0}</td>
                               <td className="py-1 pr-2">{Array.isArray(match?.queryParams) ? match.queryParams.length : 0}</td>
                             </tr>
@@ -248,12 +248,12 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
                         <tbody className="divide-y divide-slate-800">
                           {backendRefs.map((backendRef, backendRefIdx) => (
                             <tr key={`backend-ref-${idx}-${backendRefIdx}`} className="text-slate-200">
-                              <td className="py-1 pr-2 break-words">{backendRef?.name ? <ResourceLink kind={backendRef?.kind || 'Service'} name={backendRef.name} namespace={backendRef?.namespace || namespace} /> : '-'}</td>
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.namespace)}</td>
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.kind)}</td>
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.group)}</td>
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.port)}</td>
-                              <td className="py-1 pr-2 break-words">{text(backendRef?.weight)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{backendRef?.name ? <ResourceLink kind={backendRef?.kind || 'Service'} name={backendRef.name} namespace={backendRef?.namespace || namespace} /> : '-'}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.namespace)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.kind)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.group)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.port)}</td>
+                              <td className="py-1 pr-2 wrap-break-word">{text(backendRef?.weight)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -273,10 +273,10 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
         ) : (
           <div className="space-y-3">
             {parents.map((parent, idx) => (
-              <div key={`parent-status-${idx}`} className="rounded border border-slate-800 p-3">
+              <div key={`parent-status-${idx}`} className="rounded-sm border border-slate-800 p-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
-                  <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(parent?.controllerName)}</div>
-                  <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parentRef || {})}</div>
+                  <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(parent?.controllerName)}</div>
+                  <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parentRef || {})}</div>
                 </div>
                 <ConditionsTable conditions={Array.isArray(parent?.conditions) ? parent.conditions : []} />
               </div>

@@ -26,7 +26,7 @@ export default function PendingApproval() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.18),rgba(2,6,23,0))]" />
       </div>
 
-      <div className="relative w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/40 p-8 shadow-xl backdrop-blur text-center">
+      <div className="relative w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/40 p-8 shadow-xl backdrop-blur-sm text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20">
           <Clock className="h-8 w-8 text-amber-400" />
         </div>

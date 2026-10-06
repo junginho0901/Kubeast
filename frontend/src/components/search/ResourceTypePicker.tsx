@@ -116,15 +116,15 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                   placeholder={t('advancedSearch.filterResources', 'Filter resources...')}
                   value={filter}
                   onChange={e => setFilter(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:outline-hidden focus:border-sky-500"
                   autoFocus
                 />
               </div>
               <div className="flex gap-2 mt-2">
-                <button onClick={selectAll} className="flex-1 text-xs py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
+                <button onClick={selectAll} className="flex-1 text-xs py-1.5 rounded-sm bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
                   {t('advancedSearch.selectAll', 'Select All')}
                 </button>
-                <button onClick={clearAll} className="flex-1 text-xs py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
+                <button onClick={clearAll} className="flex-1 text-xs py-1.5 rounded-sm bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
                   {t('advancedSearch.clearAll', 'Clear All')}
                 </button>
               </div>
@@ -145,14 +145,14 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                           checked ? 'bg-sky-500/10 text-sky-300' : 'text-slate-300 hover:bg-slate-700'
                         }`}
                       >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                        <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
                           checked ? 'bg-sky-500 border-sky-500' : 'border-slate-500'
                         }`}>
                           {checked && <Check className="w-3 h-3 text-white" />}
                         </div>
                         <span className="font-medium">{r.kind}</span>
                         {!r.namespaced && (
-                          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-400">
                             {t('advancedSearch.clusterScoped', 'cluster')}
                           </span>
                         )}

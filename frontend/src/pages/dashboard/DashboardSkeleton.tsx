@@ -41,7 +41,7 @@ export function DashboardSkeleton() {
           </p>
           <p className="mt-1 text-sm text-slate-500">
             {tr('dashboard.clusterVersion', 'Cluster version: {{version}}', { version: '' })}
-            <span className="inline-block h-3.5 w-20 align-middle ml-0.5 rounded bg-slate-700/60 animate-pulse" />
+            <span className="inline-block h-3.5 w-20 align-middle ml-0.5 rounded-sm bg-slate-700/60 animate-pulse" />
           </p>
         </div>
         <button disabled className="btn btn-secondary flex items-center gap-2 opacity-50 cursor-not-allowed">
@@ -59,7 +59,7 @@ export function DashboardSkeleton() {
                 <p className="text-sm font-medium text-slate-400">{s.label}</p>
                 {/* same as: <p className="mt-2 text-3xl font-bold text-white">12</p> */}
                 <p className="mt-2 text-3xl font-bold leading-none">
-                  <span className="inline-block h-[1em] w-[1.6em] rounded bg-slate-700 animate-pulse align-baseline" />
+                  <span className="inline-block h-[1em] w-[1.6em] rounded-sm bg-slate-700 animate-pulse align-baseline" />
                 </p>
               </div>
               <div className={`p-3 rounded-lg ${s.bg}`}>
@@ -142,18 +142,18 @@ export function DashboardSkeleton() {
                     <span className="text-primary-400 font-bold text-sm">#{i + 1}</span>
                   </div>
                   <div className="flex-1 min-w-0 space-y-2">
-                    <div className="h-4 bg-slate-600/50 rounded w-3/4 animate-pulse" />
-                    <div className="h-3.5 bg-slate-600/30 rounded w-1/2 animate-pulse" />
+                    <div className="h-4 bg-slate-600/50 rounded-sm w-3/4 animate-pulse" />
+                    <div className="h-3.5 bg-slate-600/30 rounded-sm w-1/2 animate-pulse" />
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-6 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}:</span>
-                    <span className="inline-block h-3.5 w-12 rounded bg-slate-600/40 animate-pulse" />
+                    <span className="inline-block h-3.5 w-12 rounded-sm bg-slate-600/40 animate-pulse" />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-slate-400">{tr('dashboard.memory', 'Memory')}:</span>
-                    <span className="inline-block h-3.5 w-14 rounded bg-slate-600/40 animate-pulse" />
+                    <span className="inline-block h-3.5 w-14 rounded-sm bg-slate-600/40 animate-pulse" />
                   </div>
                 </div>
               </div>
@@ -175,17 +175,17 @@ export function DashboardSkeleton() {
                     <span className="text-cyan-400 font-bold text-sm">#{i + 1}</span>
                   </div>
                   <div className="flex-1">
-                    <div className="h-4 bg-slate-600/50 rounded w-1/2 animate-pulse mb-1.5" />
+                    <div className="h-4 bg-slate-600/50 rounded-sm w-1/2 animate-pulse mb-1.5" />
                     <div className="flex items-center gap-4 text-sm text-slate-400">
-                      <span>{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3 w-12 align-middle rounded bg-slate-600/40 animate-pulse" /></span>
-                      <span>{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3 w-14 align-middle rounded bg-slate-600/40 animate-pulse" /></span>
+                      <span>{tr('dashboard.cpu', 'CPU')}: <span className="inline-block h-3 w-12 align-middle rounded-sm bg-slate-600/40 animate-pulse" /></span>
+                      <span>{tr('dashboard.memory', 'Memory')}: <span className="inline-block h-3 w-14 align-middle rounded-sm bg-slate-600/40 animate-pulse" /></span>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1 pl-11">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">{tr('dashboard.cpu', 'CPU')}</span>
-                    <span className="inline-block h-3 w-10 rounded bg-slate-600/30 animate-pulse" />
+                    <span className="inline-block h-3 w-10 rounded-sm bg-slate-600/30 animate-pulse" />
                   </div>
                   <div className="w-full h-2.5 bg-slate-700 rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-slate-600/30 animate-pulse w-1/2" />
@@ -194,7 +194,7 @@ export function DashboardSkeleton() {
                 <div className="space-y-1 pl-11">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">{tr('dashboard.memory', 'Memory')}</span>
-                    <span className="inline-block h-3 w-10 rounded bg-slate-600/30 animate-pulse" />
+                    <span className="inline-block h-3 w-10 rounded-sm bg-slate-600/30 animate-pulse" />
                   </div>
                   <div className="w-full h-2.5 bg-slate-700 rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-slate-600/30 animate-pulse w-1/3" />
@@ -215,25 +215,25 @@ export function DashboardSkeleton() {
               <div className="flex items-start gap-2 mb-2">
                 <div className="w-4 h-4 rounded-full bg-slate-600/50 mt-0.5 animate-pulse" />
                 <div className="flex-1 min-w-0">
-                  <div className="h-4 bg-slate-600/50 rounded w-2/3 animate-pulse" />
+                  <div className="h-4 bg-slate-600/50 rounded-sm w-2/3 animate-pulse" />
                 </div>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.versionLabel', 'Version')}:</span>{' '}
-                  <span className="inline-block h-3 w-16 align-middle rounded bg-slate-600/30 animate-pulse" />
+                  <span className="inline-block h-3 w-16 align-middle rounded-sm bg-slate-600/30 animate-pulse" />
                 </p>
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.rolesLabel', 'Roles')}:</span>{' '}
-                  <span className="inline-block h-3 w-20 align-middle rounded bg-slate-600/30 animate-pulse" />
+                  <span className="inline-block h-3 w-20 align-middle rounded-sm bg-slate-600/30 animate-pulse" />
                 </p>
                 <p className="text-xs text-slate-400">
                   <span className="font-medium">{tr('dashboard.nodeCard.ipLabel', 'IP')}:</span>{' '}
-                  <span className="inline-block h-3 w-24 align-middle rounded bg-slate-600/30 animate-pulse" />
+                  <span className="inline-block h-3 w-24 align-middle rounded-sm bg-slate-600/30 animate-pulse" />
                 </p>
               </div>
               <div className="mt-2">
-                <span className="inline-block h-5 w-14 rounded bg-slate-600/30 animate-pulse" />
+                <span className="inline-block h-5 w-14 rounded-sm bg-slate-600/30 animate-pulse" />
               </div>
             </div>
           ))}

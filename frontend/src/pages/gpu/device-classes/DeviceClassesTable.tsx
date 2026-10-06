@@ -95,7 +95,7 @@ export default function DeviceClassesTable({
                           return (
                             <span
                               key={i}
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium mr-1 ${
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-[11px] font-medium mr-1 ${
                                 isTrue
                                   ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/40'
                                   : 'bg-red-900/40 text-red-300 border border-red-700/40'
@@ -147,7 +147,7 @@ export default function DeviceClassesTable({
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
             >
               {tr('common.prev', 'Prev')}
             </button>
@@ -156,7 +156,7 @@ export default function DeviceClassesTable({
               type="button"
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
             >
               {tr('common.next', 'Next')}
             </button>

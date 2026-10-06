@@ -165,7 +165,7 @@ export function StorageModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
                 title={tr('dashboard.storage.namespaceFilter', 'Namespace filter')}
               >
                 <span className="text-sm font-medium">
@@ -188,7 +188,7 @@ export function StorageModal({
                     className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
                   >
                     {namespaceFilter === 'all' && (
-                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                     )}
                     <span className={namespaceFilter === 'all' ? 'font-medium' : ''}>
                       {tr('dashboard.storage.allNamespaces', 'All namespaces')}
@@ -204,7 +204,7 @@ export function StorageModal({
                       className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
                     >
                       {namespaceFilter === ns && (
-                        <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                       )}
                       <span className={namespaceFilter === ns ? 'font-medium' : ''}>{ns}</span>
                     </button>
@@ -221,12 +221,12 @@ export function StorageModal({
               placeholder={tr('dashboard.storage.searchPlaceholder', 'Search (name/status/StorageClass/Claim)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
               >
                 <X className="w-4 h-4 text-slate-400" />
               </button>

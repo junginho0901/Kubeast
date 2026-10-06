@@ -81,7 +81,7 @@ export function PodDescribeTab({ data, locale, na, tr }: Props) {
               <div key={idx} className="bg-slate-800 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-white font-medium">{container.name}</h4>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  <span className={`px-2 py-1 rounded-sm text-xs font-medium ${
                     container.ready ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                   }`}>
                     {container.ready
@@ -147,7 +147,7 @@ export function PodDescribeTab({ data, locale, na, tr }: Props) {
                   <tr key={idx}>
                     <td className="px-4 py-2 text-sm text-white">{condition.type}</td>
                     <td className="px-4 py-2 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      <span className={`px-2 py-1 rounded-sm text-xs font-medium ${
                         condition.status === 'True' ? 'bg-green-500/20 text-green-400' : 'bg-slate-600 text-slate-300'
                       }`}>
                         {condition.status}
@@ -176,7 +176,7 @@ export function PodDescribeTab({ data, locale, na, tr }: Props) {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      <span className={`px-2 py-1 rounded-sm text-xs font-medium ${
                         event.type === 'Normal' ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-400'
                       }`}>
                         {event.type}

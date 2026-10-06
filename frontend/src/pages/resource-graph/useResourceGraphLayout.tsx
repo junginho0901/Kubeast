@@ -59,7 +59,7 @@ export function useResourceGraphLayout({
         data: {
           label: (
             <div className="flex items-center gap-1.5 px-2 py-1 min-w-0">
-              <span className="text-base flex-shrink-0">{icon}</span>
+              <span className="text-base shrink-0">{icon}</span>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] text-slate-400 leading-tight">{n.kind}</div>
                 <div className="text-xs font-medium text-white truncate leading-tight" title={n.name}>

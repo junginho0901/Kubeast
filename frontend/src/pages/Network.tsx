@@ -212,7 +212,7 @@ export default function NetworkPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('network.searchPlaceholder')}
-              className="w-full pl-9 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              className="w-full pl-9 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
             />
           </div>
 
@@ -312,7 +312,7 @@ export default function NetworkPage() {
                             </div>
                             {(selectedService.type === 'NodePort' || selectedService.type === 'LoadBalancer') &&
                             typeof p.node_port === 'number' ? (
-                              <span className="flex-shrink-0 text-slate-300">{`nodePort ${p.node_port}`}</span>
+                              <span className="shrink-0 text-slate-300">{`nodePort ${p.node_port}`}</span>
                             ) : null}
                           </div>
                           <div className="max-w-40 truncate text-xs text-slate-400">{p.name || ''}</div>
@@ -325,7 +325,7 @@ export default function NetworkPage() {
                 <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">
                   <div className="text-sm font-semibold text-white mb-2">Selector</div>
                   {labelSelector ? (
-                    <pre className="text-xs text-slate-200 whitespace-pre-wrap break-words bg-slate-900/40 border border-slate-700 rounded-md p-2">
+                    <pre className="text-xs text-slate-200 whitespace-pre-wrap wrap-break-word bg-slate-900/40 border border-slate-700 rounded-md p-2">
                       {labelSelector}
                     </pre>
                   ) : (

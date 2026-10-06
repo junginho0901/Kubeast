@@ -66,7 +66,7 @@ export default function HPADetail({ name, namespace, rawJson }: { name: string; 
     if (!cfg) return null
     const policies = Array.isArray(cfg.policies) ? cfg.policies : []
     return (
-      <div className="rounded border border-slate-800 p-3">
+      <div className="rounded-sm border border-slate-800 p-3">
         <p className="text-xs font-medium text-white mb-2">{label}</p>
         <div className="space-y-2">
           {cfg.stabilizationWindowSeconds != null && (

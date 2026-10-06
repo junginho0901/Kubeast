@@ -96,7 +96,7 @@ export function PodNodeGrid({ sortedNodeEntries, filteredPods, allPodsLen, isLoa
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <Box className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      <Box className="w-4 h-4 text-slate-400 shrink-0" />
                       {isDeleting ? (
                         <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
                       ) : (

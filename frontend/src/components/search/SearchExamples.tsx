@@ -92,7 +92,7 @@ export default function SearchExamples({ onSelect }: Props) {
             className="group flex flex-col items-start gap-1 px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:border-sky-500/30 hover:bg-slate-800 transition-all text-left"
           >
             <div className="flex items-center gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 font-semibold uppercase">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-sky-500/10 text-sky-400 font-semibold uppercase">
                 {ex.label}
               </span>
               <span className="text-xs text-slate-500">{t(`advancedSearch.examples.${ex.key}`, ex.description)}</span>

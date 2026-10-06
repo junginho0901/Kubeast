@@ -193,7 +193,7 @@ export default function Login() {
 
           <div className="w-full">
             {registered ? (
-              <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur text-center">
+              <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur-sm text-center">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20">
                   <UserPlus className="h-7 w-7 text-green-400" />
                 </div>
@@ -215,7 +215,7 @@ export default function Login() {
                 </button>
               </div>
             ) : (
-            <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur">
+            <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {mode === 'login' ? (
@@ -287,7 +287,7 @@ export default function Login() {
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                       placeholder={tr('login.form.namePlaceholder', 'Jane Doe')}
                       autoComplete="name"
                     />
@@ -311,7 +311,7 @@ export default function Login() {
                   <input
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                    className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                     placeholder="you@example.com"
                     autoComplete="email"
                     inputMode="email"
@@ -329,7 +329,7 @@ export default function Login() {
                       setPassword(e.target.value)
                       setFormError(null)
                     }}
-                    className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                    className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                     placeholder="••••••••"
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   />
@@ -347,7 +347,7 @@ export default function Login() {
                         setConfirmPassword(e.target.value)
                         setFormError(null)
                       }}
-                      className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                      className="login-field w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 lg:py-2.5 text-sm lg:text-base text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                       placeholder="••••••••"
                       autoComplete="new-password"
                     />

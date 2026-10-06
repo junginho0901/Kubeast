@@ -72,10 +72,10 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
               <tbody className="divide-y divide-slate-800">
                 {targetRefs.map((ref: Record<string, any>, idx: number) => (
                   <tr key={`ref-${idx}`} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words">{text(ref.group)}</td>
-                    <td className="py-1 pr-2 break-words">{text(ref.kind)}</td>
-                    <td className="py-1 pr-2 break-words">{text(ref.name)}</td>
-                    <td className="py-1 pr-2 break-words">{text(ref.section_name || ref.sectionName)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(ref.group)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(ref.kind)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(ref.name)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(ref.section_name || ref.sectionName)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -104,9 +104,9 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
                     <tbody className="divide-y divide-slate-800">
                       {(validation.ca_certificate_refs || validation.caCertificateRefs || []).map((cr: Record<string, any>, idx: number) => (
                         <tr key={`cert-${idx}`} className="text-slate-200">
-                          <td className="py-1 pr-2 break-words">{text(cr.group)}</td>
-                          <td className="py-1 pr-2 break-words">{text(cr.kind)}</td>
-                          <td className="py-1 pr-2 break-words">{text(cr.name)}</td>
+                          <td className="py-1 pr-2 wrap-break-word">{text(cr.group)}</td>
+                          <td className="py-1 pr-2 wrap-break-word">{text(cr.kind)}</td>
+                          <td className="py-1 pr-2 wrap-break-word">{text(cr.name)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -141,10 +141,10 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
                     <tbody className="divide-y divide-slate-800">
                       {as.conditions.map((c: Record<string, any>, ci: number) => (
                         <tr key={`cond-${ci}`} className="text-slate-200">
-                          <td className="py-1 pr-2 break-words">{text(c.type)}</td>
+                          <td className="py-1 pr-2 wrap-break-word">{text(c.type)}</td>
                           <td className="py-1 pr-2">{text(c.status)}</td>
-                          <td className="py-1 pr-2 break-words">{text(c.reason)}</td>
-                          <td className="py-1 pr-2 break-words whitespace-pre-wrap">{text(c.message)}</td>
+                          <td className="py-1 pr-2 wrap-break-word">{text(c.reason)}</td>
+                          <td className="py-1 pr-2 wrap-break-word whitespace-pre-wrap">{text(c.message)}</td>
                         </tr>
                       ))}
                     </tbody>

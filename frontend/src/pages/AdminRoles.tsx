@@ -194,13 +194,13 @@ export default function AdminRoles() {
                       {role.permissions.slice(0, 5).map((p) => (
                         <span
                           key={p}
-                          className="inline-block rounded bg-slate-700/60 px-1.5 py-0.5 text-[11px] text-slate-300"
+                          className="inline-block rounded-sm bg-slate-700/60 px-1.5 py-0.5 text-[11px] text-slate-300"
                         >
                           {p}
                         </span>
                       ))}
                       {role.permissions.length > 5 && (
-                        <span className="inline-block rounded bg-slate-700/60 px-1.5 py-0.5 text-[11px] text-slate-400">
+                        <span className="inline-block rounded-sm bg-slate-700/60 px-1.5 py-0.5 text-[11px] text-slate-400">
                           +{role.permissions.length - 5}
                         </span>
                       )}
@@ -222,7 +222,7 @@ export default function AdminRoles() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEdit(role)}
-                        className="rounded p-1.5 text-slate-500 hover:text-primary-400 hover:bg-primary-950/30 transition-colors"
+                        className="rounded-sm p-1.5 text-slate-500 hover:text-primary-400 hover:bg-primary-950/30 transition-colors"
                         title={tr('adminRoles.edit', 'Edit')}
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -234,7 +234,7 @@ export default function AdminRoles() {
                               deleteMutation.mutate(role.id)
                           }}
                           disabled={deleteMutation.isPending}
-                          className="rounded p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
+                          className="rounded-sm p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
                           title={tr('adminRoles.delete', 'Delete')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -281,7 +281,7 @@ export default function AdminRoles() {
               <button
                 type="button"
                 onClick={() => setUsersRole(null)}
-                className="rounded p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -329,7 +329,7 @@ export default function AdminRoles() {
 
       {/* Create / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60 backdrop-blur-xs">
           <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
@@ -350,7 +350,7 @@ export default function AdminRoles() {
                   </p>
                 </div>
               </div>
-              <button onClick={closeModal} className="rounded p-1.5 text-slate-400 hover:text-white hover:bg-slate-800">
+              <button onClick={closeModal} className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -365,7 +365,7 @@ export default function AdminRoles() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   disabled={editingRole?.is_system}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                   placeholder={tr('adminRoles.form.namePh', 'e.g. InfraManager')}
                 />
               </div>
@@ -376,7 +376,7 @@ export default function AdminRoles() {
                 <input
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder={tr('adminRoles.form.descPh', 'e.g. Infrastructure team lead')}
                 />
               </div>
@@ -398,7 +398,7 @@ export default function AdminRoles() {
                           checked={formPerms.has(p.key)}
                           onChange={() => togglePerm(p.key)}
                           disabled={editingRole?.is_system}
-                          className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
+                          className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
                         />
                         <div className="flex-1 min-w-0">
                           <span className="text-xs font-mono text-slate-300 group-hover:text-white transition-colors">

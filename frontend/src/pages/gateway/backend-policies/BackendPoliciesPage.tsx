@@ -154,30 +154,30 @@ ${yamlBodyTemplate}`
               type="text"
               placeholder={strings.searchPlaceholder}
               value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
         </div>
 
         <div className="relative" ref={namespaceDropdownRef}>
           <button type="button" onClick={() => setIsNamespaceDropdownOpen((v) => !v)}
-            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
+            className="h-12 w-full px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent flex items-center justify-between gap-2">
             <span className="text-sm font-medium">
               {selectedNamespace === 'all' ? strings.allNamespaces : selectedNamespace}
             </span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNamespaceDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[240px] overflow-y-auto">
+            <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[240px] overflow-y-auto">
               <button type="button" onClick={() => { setSelectedNamespace('all'); setIsNamespaceDropdownOpen(false) }}
                 className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg">
-                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
+                {selectedNamespace === 'all' && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
                 <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>{strings.allNamespaces}</span>
               </button>
               {(namespaces || []).map((ns) => (
                 <button key={ns.name} type="button" onClick={() => { setSelectedNamespace(ns.name); setIsNamespaceDropdownOpen(false) }}
                   className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg">
-                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
+                  {selectedNamespace === ns.name && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
                   <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>{ns.name}</span>
                 </button>
               ))}
@@ -284,12 +284,12 @@ ${yamlBodyTemplate}`
             </div>
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+                className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
                 {tr('common.prev', 'Prev')}
               </button>
               <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
               <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+                className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
                 {tr('common.next', 'Next')}
               </button>
             </div>

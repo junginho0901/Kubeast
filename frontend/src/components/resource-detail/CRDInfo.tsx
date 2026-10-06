@@ -96,7 +96,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
           <InfoRow label={tr('crdInfo.group', 'Group')} value={describe?.group || '-'} />
           <InfoRow label={tr('crdInfo.scope', 'Scope')} value={
             describe?.scope ? (
-              <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-medium ${
+              <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium ${
                 describe.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'
               }`}>
                 {describe.scope}
@@ -111,7 +111,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.shortNames', 'Short Names')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {shortNames.map((n: string) => (
-                  <span key={n} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{n}</span>
+                  <span key={n} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{n}</span>
                 ))}
               </div>
             } />
@@ -120,7 +120,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.categories', 'Categories')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {categories.map((c: string) => (
-                  <span key={c} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{c}</span>
+                  <span key={c} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{c}</span>
                 ))}
               </div>
             } />
@@ -129,7 +129,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.subresources', 'Subresources')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {subresources.map((s) => (
-                  <span key={s} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{s}</span>
+                  <span key={s} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{s}</span>
                 ))}
               </div>
             } />
@@ -163,17 +163,17 @@ export default function CRDInfo({ name, rawJson }: Props) {
         <InfoSection title={tr('crdInfo.versions', 'Versions')}>
           <div className="space-y-2">
             {versions.map((ver: any) => (
-              <div key={ver.name} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
+              <div key={ver.name} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-white">{ver.name}</span>
                   {ver.storage && (
-                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
                   )}
                   {ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-blue-900/40 text-blue-300"><Tx>Served</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-blue-900/40 text-blue-300"><Tx>Served</Tx></span>
                   )}
                   {!ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400"><Tx>Not Served</Tx></span>
+                    <span className="inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium bg-slate-800 text-slate-400"><Tx>Not Served</Tx></span>
                   )}
                 </div>
                 {/* describe.versions[].additionalPrinterColumns 는 backend 가 spec 의 원형을 그대로 forward 함 — verified */}
@@ -213,7 +213,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
         <InfoSection title={tr('crdInfo.storedVersions', 'Stored Versions')}>
           <div className="inline-flex flex-wrap gap-1">
             {storedVersions.map((v: string) => (
-              <span key={v} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{v}</span>
+              <span key={v} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{v}</span>
             ))}
           </div>
         </InfoSection>
@@ -236,7 +236,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 placeholder={tr('crdInfo.searchInstances', 'Search instances...')}
                 value={instanceSearch}
                 onChange={(e) => { setInstanceSearch(e.target.value); setInstancePage(1) }}
-                className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
               />
             </div>
           )}
@@ -268,9 +268,9 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 <div className="flex items-center justify-between mt-2 text-xs text-slate-400">
                   <span><Tx text="{{n}} total" values={{ n: filteredInstances.length }} /></span>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Prev</Tx></button>
+                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Prev</Tx></button>
                     <span className="min-w-[48px] text-center">{instancePage}/{instanceTotalPages}</span>
-                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Next</Tx></button>
+                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Next</Tx></button>
                   </div>
                 </div>
               )}

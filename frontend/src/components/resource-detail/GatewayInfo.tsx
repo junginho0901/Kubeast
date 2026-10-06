@@ -146,8 +146,8 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {addresses.map((address, idx) => (
                   <tr key={`addr-${idx}`} className="text-slate-200">
-                    <td className="py-2 pr-2 break-words">{text(address?.type)}</td>
-                    <td className="py-2 pr-2 break-words">{text(address?.value)}</td>
+                    <td className="py-2 pr-2 wrap-break-word">{text(address?.type)}</td>
+                    <td className="py-2 pr-2 wrap-break-word">{text(address?.value)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -175,14 +175,14 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 .join(', ')
 
               return (
-                <div key={`listener-${listenerName}-${idx}`} className="rounded border border-slate-800 p-3">
+                <div key={`listener-${listenerName}-${idx}`} className="rounded-sm border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Name:</Tx></span> {listenerName}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {text(listener?.hostname)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Protocol:</Tx></span> {text(listener?.protocol)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Port:</Tx></span> {text(listener?.port)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {text(s?.attachedRoutes)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Supported Kinds:</Tx></span> {supportedKindsText || '-'}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Name:</Tx></span> {listenerName}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {text(listener?.hostname)}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Protocol:</Tx></span> {text(listener?.protocol)}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Port:</Tx></span> {text(listener?.port)}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {text(s?.attachedRoutes)}</div>
+                    <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Supported Kinds:</Tx></span> {supportedKindsText || '-'}</div>
                   </div>
                   {listenerConditions.length > 0 && (
                     <div className="mt-3">
@@ -213,7 +213,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 })
                 .join(', ')
               return (
-                <div key={`route-summary-${idx}`} className="rounded border border-slate-800 p-2">
+                <div key={`route-summary-${idx}`} className="rounded-sm border border-slate-800 p-2">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                     <div className="text-slate-200"><span className="text-slate-400"><Tx>Listener:</Tx></span> {listenerName}</div>
                     <div className="text-slate-200"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {routeCount}</div>

@@ -72,7 +72,7 @@ export function CreateUserModal({
             <input
               value={newUser.name}
               onChange={(e) => onChangeNewUser((p) => ({ ...p, name: e.target.value }))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               placeholder={tr('adminUsers.form.namePlaceholder', 'Jane Doe')}
               autoFocus
             />
@@ -91,7 +91,7 @@ export function CreateUserModal({
             <input
               value={newUser.email}
               onChange={(e) => onChangeNewUser((p) => ({ ...p, email: e.target.value }))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               placeholder="user@example.com"
               type="email"
             />
@@ -102,7 +102,7 @@ export function CreateUserModal({
             <input
               value={newUser.password}
               onChange={(e) => onChangeNewUser((p) => ({ ...p, password: e.target.value }))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               placeholder={tr('adminUsers.form.passwordPlaceholder', 'Initial password')}
               type="password"
             />

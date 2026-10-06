@@ -43,7 +43,7 @@ export function InputArea({ onSubmit, onStop, isStreaming, disabled }: InputArea
         placeholder={t('floatingChat.inputPlaceholder', { defaultValue: 'Ask about this page...' })}
         rows={1}
         disabled={disabled}
-        className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+        className="max-h-32 min-h-9 flex-1 resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
       />
       {isStreaming ? (
         <button

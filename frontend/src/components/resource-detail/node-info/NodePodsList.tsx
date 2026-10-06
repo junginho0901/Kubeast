@@ -72,8 +72,8 @@ export default function NodePodsList({
       <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
         <span>{filteredPods.length === 0 ? <Tx>(none)</Tx> : `${(podPage - 1) * pageSize + 1}-${Math.min(podPage * pageSize, filteredPods.length)} / ${filteredPods.length}`}</span>
         <div className="flex gap-2">
-          <button onClick={() => setPodPage(p => Math.max(1, p - 1))} disabled={podPage === 1} className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"><Tx>Prev</Tx></button>
-          <button onClick={() => setPodPage(p => Math.min(totalPages, p + 1))} disabled={podPage >= totalPages} className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"><Tx>Next</Tx></button>
+          <button onClick={() => setPodPage(p => Math.max(1, p - 1))} disabled={podPage === 1} className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"><Tx>Prev</Tx></button>
+          <button onClick={() => setPodPage(p => Math.min(totalPages, p + 1))} disabled={podPage >= totalPages} className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"><Tx>Next</Tx></button>
         </div>
       </div>
     </InfoSection>

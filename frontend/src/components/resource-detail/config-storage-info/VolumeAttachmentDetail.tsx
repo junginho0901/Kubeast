@@ -137,16 +137,16 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
         <InfoSection title="Attach/Detach Errors">
           <div className="space-y-2">
             {attachErrorMessage && (
-              <div className="rounded border border-red-800/60 bg-red-950/20 p-3 text-xs">
+              <div className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
                 <p className="text-red-300 font-medium"><Tx>Attach Error</Tx></p>
-                <p className="mt-1 text-slate-200 whitespace-pre-wrap break-words">{attachErrorMessage}</p>
+                <p className="mt-1 text-slate-200 whitespace-pre-wrap wrap-break-word">{attachErrorMessage}</p>
                 {attachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(attachErrorTime)} ({fmtRel(attachErrorTime)})</p>}
               </div>
             )}
             {detachErrorMessage && (
-              <div className="rounded border border-red-800/60 bg-red-950/20 p-3 text-xs">
+              <div className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
                 <p className="text-red-300 font-medium"><Tx>Detach Error</Tx></p>
-                <p className="mt-1 text-slate-200 whitespace-pre-wrap break-words">{detachErrorMessage}</p>
+                <p className="mt-1 text-slate-200 whitespace-pre-wrap wrap-break-word">{detachErrorMessage}</p>
                 {detachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(detachErrorTime)} ({fmtRel(detachErrorTime)})</p>}
               </div>
             )}
@@ -234,7 +234,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
 
       {inlineVolumeSpec && (
         <InfoSection title="Inline Volume Spec">
-          <pre className="text-[11px] text-slate-300 bg-slate-950 rounded p-3 max-h-[220px] overflow-auto whitespace-pre-wrap break-words">
+          <pre className="text-[11px] text-slate-300 bg-slate-950 rounded-sm p-3 max-h-[220px] overflow-auto whitespace-pre-wrap wrap-break-word">
             {typeof inlineVolumeSpec === 'string' ? inlineVolumeSpec : JSON.stringify(inlineVolumeSpec, null, 2)}
           </pre>
         </InfoSection>

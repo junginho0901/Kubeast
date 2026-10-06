@@ -49,7 +49,7 @@ export function LimitRangeFilters({
             placeholder={tr('limitRanges.searchPlaceholder', 'Search limit ranges by name or namespace...')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>

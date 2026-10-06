@@ -25,7 +25,7 @@ function CollapsibleJson({ label, data }: { label: string; data: unknown }) {
     : json
 
   return (
-    <div className="rounded border border-slate-800 bg-slate-950/60">
+    <div className="rounded-sm border border-slate-800 bg-slate-950/60">
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -51,7 +51,7 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
     if (value.length > 200) {
       return <span className="font-mono text-[11px] break-all whitespace-pre-wrap">{value}</span>
     }
-    return <span className="font-mono text-[11px] break-words">{value}</span>
+    return <span className="font-mono text-[11px] wrap-break-word">{value}</span>
   }
 
   if (Array.isArray(value)) {
@@ -60,7 +60,7 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
       return (
         <div className="inline-flex flex-wrap gap-1">
           {value.map((v, i) => (
-            <span key={i} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+            <span key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
               {String(v)}
             </span>
           ))}
@@ -74,7 +74,7 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
     return (
       <div className="space-y-1.5 mt-1">
         {value.map((item, i) => (
-          <div key={i} className="rounded border border-slate-800 bg-slate-900/40 p-2">
+          <div key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 p-2">
             {renderValue(item, depth + 1)}
           </div>
         ))}
@@ -280,7 +280,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         <InfoSection title={tr('crInstanceInfo.ownerReferences', 'Owner References')}>
           <div className="space-y-2">
             {ownerRefs.map((ref: any, idx: number) => (
-              <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300 space-y-1">
+              <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300 space-y-1">
                 <div><span className="text-slate-500 mr-2"><Tx>Kind:</Tx></span>{ref.kind}</div>
                 <div><span className="text-slate-500 mr-2"><Tx>Name:</Tx></span>{ref.name}</div>
               </div>
@@ -294,7 +294,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
         <InfoSection title={tr('crInstanceInfo.finalizers', 'Finalizers')}>
           <div className="inline-flex flex-wrap gap-1">
             {finalizers.map((f: string) => (
-              <span key={f} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">{f}</span>
+              <span key={f} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">{f}</span>
             ))}
           </div>
         </InfoSection>

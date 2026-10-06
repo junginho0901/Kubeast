@@ -113,7 +113,7 @@ export default function SetupClusterPage({
             </label>
           </div>
           <textarea
-            className="mt-3 h-48 w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+            className="mt-3 h-48 w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             placeholder={tr('setup.external.placeholder', 'Paste kubeconfig content here...')}
             value={kubeconfigText}
             onChange={(e) => setKubeconfigText(e.target.value)}

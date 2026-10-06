@@ -36,14 +36,14 @@ export function usePagination<T>(items: T[], pageSize = 10): {
           type="button"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1}
-          className="px-2 py-0.5 rounded border border-slate-700 disabled:opacity-40"
+          className="px-2 py-0.5 rounded-sm border border-slate-700 disabled:opacity-40"
         >
           <Tx>Prev</Tx></button>
         <button
           type="button"
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page >= totalPages}
-          className="px-2 py-0.5 rounded border border-slate-700 disabled:opacity-40"
+          className="px-2 py-0.5 rounded-sm border border-slate-700 disabled:opacity-40"
         >
           <Tx>Next</Tx></button>
       </div>

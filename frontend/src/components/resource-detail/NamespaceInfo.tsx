@@ -306,7 +306,7 @@ export default function NamespaceInfo({ name }: Props) {
                 ? 'border-amber-700 bg-amber-900/20 text-amber-300'
                 : 'border-red-700 bg-red-900/20 text-red-300'
               return (
-                <span key={phase} className={`rounded border px-2 py-0.5 text-[11px] ${color}`}>
+                <span key={phase} className={`rounded-sm border px-2 py-0.5 text-[11px] ${color}`}>
                   {phase}: <span className="font-mono">{String(count)}</span>
                 </span>
               )
@@ -358,7 +358,7 @@ export default function NamespaceInfo({ name }: Props) {
         {Array.isArray(resourceQuotas) && resourceQuotas.length > 0 ? (
           <div className="space-y-3">
             {resourceQuotas.map((rq: any) => (
-              <div key={rq.name} className="rounded border border-slate-800 p-3">
+              <div key={rq.name} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs text-white font-medium mb-2">{rq.name}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[360px]">
@@ -385,7 +385,7 @@ export default function NamespaceInfo({ name }: Props) {
         {Array.isArray(limitRanges) && limitRanges.length > 0 ? (
           <div className="space-y-3">
             {limitRanges.map((lr: any) => (
-              <div key={lr.name} className="rounded border border-slate-800 p-3">
+              <div key={lr.name} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs text-white font-medium mb-2">{lr.name}</p>
                 {lr.limits?.map((lim: any, li: number) => (
                   <div key={li} className="overflow-x-auto mb-2">
@@ -424,7 +424,7 @@ export default function NamespaceInfo({ name }: Props) {
               value={podFilter}
               onChange={e => setPodFilter(e.target.value)}
               placeholder={dl('Filter...')}
-              className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none w-36"
+              className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded-sm text-white placeholder-slate-500 focus:outline-hidden w-36"
             />
           </div>
         }
@@ -463,13 +463,13 @@ export default function NamespaceInfo({ name }: Props) {
                 <button
                   onClick={() => setPodPage((p) => Math.max(1, p - 1))}
                   disabled={podPage <= 1}
-                  className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
+                  className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"
                 >
                   <Tx>Prev</Tx></button>
                 <button
                   onClick={() => setPodPage((p) => Math.min(podTotalPages, p + 1))}
                   disabled={podPage >= podTotalPages}
-                  className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
+                  className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"
                 >
                   <Tx>Next</Tx></button>
               </div>

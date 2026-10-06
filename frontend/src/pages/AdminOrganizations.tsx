@@ -73,7 +73,7 @@ export default function AdminOrganizations() {
         <input
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+          className="flex-1 rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
         />
         <button
@@ -128,7 +128,7 @@ export default function AdminOrganizations() {
                   deleteMutation.mutate({ id: item.id, type: item.type })
                 }}
                 disabled={deleteMutation.isPending && deleteMutation.variables?.id === item.id}
-                className="rounded p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
+                className="rounded-sm p-1 text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
                 title={tr('adminOrg.deleteTitle', 'Delete')}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -184,7 +184,7 @@ export default function AdminOrganizations() {
               <button
                 type="button"
                 onClick={() => setSelectedOrg(null)}
-                className="rounded p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+                className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -210,7 +210,7 @@ export default function AdminOrganizations() {
                         <td className="px-3 py-2.5">{u.name}</td>
                         <td className="px-3 py-2.5 text-slate-400">{u.email ?? '-'}</td>
                         <td className="px-3 py-2.5">
-                          <span className="inline-block rounded bg-slate-700/60 px-2 py-0.5 text-[11px] text-slate-300">
+                          <span className="inline-block rounded-sm bg-slate-700/60 px-2 py-0.5 text-[11px] text-slate-300">
                             {u.role?.name ?? '-'}
                           </span>
                         </td>

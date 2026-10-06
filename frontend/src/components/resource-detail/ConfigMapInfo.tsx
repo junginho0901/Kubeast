@@ -115,7 +115,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
               placeholder={dl('Search keys...')}
               value={dataSearch}
               onChange={(e) => { setDataSearch(e.target.value); setDataPage(1) }}
-              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-sm text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500"
             />
           </div>
         )}
@@ -128,20 +128,20 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
               const isLong = value && value.length > 200
 
               return (
-                <div key={key} className="rounded border border-slate-800 bg-slate-900/40">
+                <div key={key} className="rounded-sm border border-slate-800 bg-slate-900/40">
                   <button
                     type="button"
                     onClick={() => toggleKey(key)}
                     className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-800/40 transition-colors"
                   >
                     <span className="font-mono text-xs text-cyan-300 break-all">{key}</span>
-                    <span className="text-[10px] text-slate-500 ml-2 flex-shrink-0">
+                    <span className="text-[10px] text-slate-500 ml-2 shrink-0">
                       {value ? dl('{{n}} chars', { n: value.length }) : dl('empty')}
                     </span>
                   </button>
                   {isExpanded && (
                     <div className="px-3 pb-2 border-t border-slate-800">
-                      <pre className={`text-[11px] text-slate-300 whitespace-pre-wrap break-words mt-1.5 ${isLong ? 'max-h-[300px] overflow-y-auto' : ''}`}>
+                      <pre className={`text-[11px] text-slate-300 whitespace-pre-wrap wrap-break-word mt-1.5 ${isLong ? 'max-h-[300px] overflow-y-auto' : ''}`}>
                         {value || <span className="text-slate-600 italic"><Tx>(empty)</Tx></span>}
                       </pre>
                     </div>
@@ -158,8 +158,8 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
           <div className="flex items-center justify-between mt-2">
             <span className="text-[10px] text-slate-500">{dataPage} / {dataTotalPages}</span>
             <div className="flex gap-1">
-              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Prev</Tx></button>
-              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Next</Tx></button>
+              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Prev</Tx></button>
+              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded-sm border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Next</Tx></button>
             </div>
           </div>
         )}
@@ -169,7 +169,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title="Binary Data Keys ({{n}})" titleValues={{ n: binaryKeys.length }}>
           <div className="flex flex-wrap gap-1">
             {binaryKeys.map((key: string) => (
-              <span key={key} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 font-mono">
+              <span key={key} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 font-mono">
                 {key}
               </span>
             ))}

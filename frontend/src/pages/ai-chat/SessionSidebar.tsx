@@ -137,20 +137,20 @@ export function SessionSidebar({
             <div className="flex gap-2">
               <button
                 onClick={handleSelectAll}
-                className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-300"
+                className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-sm text-slate-300"
               >
                 {t('aiChat.selectAll')}
               </button>
               <button
                 onClick={handleDeselectAll}
-                className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-300"
+                className="flex-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-sm text-slate-300"
               >
                 {t('aiChat.deselectAll')}
               </button>
               <button
                 onClick={handleDeleteSelected}
                 disabled={selectedSessionIds.size === 0}
-                className="flex-1 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 rounded text-white"
+                className="flex-1 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-sm text-white"
               >
                 {t('aiChat.deleteWithCount', { count: selectedSessionIds.size })}
               </button>
@@ -228,7 +228,7 @@ export function SessionSidebar({
                           type="checkbox"
                           checked={selectedSessionIds.has(session.id)}
                           onChange={() => {}}
-                          className="w-4 h-4 rounded border-slate-500 cursor-pointer"
+                          className="w-4 h-4 rounded-sm border-slate-500 cursor-pointer"
                         />
                       </div>
                     )}
@@ -242,7 +242,7 @@ export function SessionSidebar({
                           type="text"
                           value={editingTitle}
                           onChange={(e) => setEditingTitle(e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded text-white min-w-0"
+                          className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded-sm text-white min-w-0"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit(session.id)
@@ -251,20 +251,20 @@ export function SessionSidebar({
                         />
                         <button
                           onClick={() => handleSaveEdit(session.id)}
-                          className="flex-shrink-0 p-1 hover:bg-slate-600 rounded"
+                          className="shrink-0 p-1 hover:bg-slate-600 rounded-sm"
                         >
                           <Check className="w-4 h-4 text-green-400" />
                         </button>
                         <button
                           onClick={handleCancelEdit}
-                          className="flex-shrink-0 p-1 hover:bg-slate-600 rounded"
+                          className="shrink-0 p-1 hover:bg-slate-600 rounded-sm"
                         >
                           <X className="w-4 h-4 text-red-400" />
                         </button>
                       </div>
                     ) : (
                       <div className={`flex items-start gap-2 p-3 h-full ${isMultiSelectMode ? 'ml-6' : ''}`}>
-                        <MessageSquare className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <MessageSquare className="w-4 h-4 mt-0.5 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium truncate" title={session.title}>
                             {session.title}

@@ -85,11 +85,11 @@ export default function RollbackModal({
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
         ) : error ? (
-          <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         ) : noChange ? (
-          <div className="rounded border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
+          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
             {t('helmReleaseDetail.rollback.noChange')}
           </div>
         ) : (

@@ -96,7 +96,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
         <InfoSection title="Rules">
           <div className="space-y-3">
             {rules.map((rule: any, i: number) => (
-              <div key={i} className="rounded border border-slate-800 p-3">
+              <div key={i} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs text-white font-medium mb-2">{rule.host || '*'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">

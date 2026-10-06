@@ -106,7 +106,7 @@ export function PDBTab({
                   setActiveTab('pods')
                 }}
                 disabled={!pdb.selector || Object.keys(pdb.selector).length === 0}
-                className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded-sm px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 title={t('resourcesTabs.pdb.filterTitle')}
               >
                 {t('resourcesTabs.pdb.goToPods')}

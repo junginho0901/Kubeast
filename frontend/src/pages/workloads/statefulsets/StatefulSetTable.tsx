@@ -159,7 +159,7 @@ export function StatefulSetTable({
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage <= 1}
-            className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
+            className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"
           >
             {tr('statefulsets.paging.prev', 'Previous')}
           </button>
@@ -167,7 +167,7 @@ export function StatefulSetTable({
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
-            className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
+            className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"
           >
             {tr('statefulsets.paging.next', 'Next')}
           </button>

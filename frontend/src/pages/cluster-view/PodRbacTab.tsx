@@ -66,7 +66,7 @@ export function PodRbacTab({ pod, tr }: Props) {
             {tr('clusterView.rbac.title', 'RBAC')}
           </h3>
           <span
-            className="px-2 py-1 rounded bg-slate-700 text-slate-200 text-xs border border-slate-600"
+            className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs border border-slate-600"
             title={tr(
               'clusterView.rbac.tooltip',
               'This view summarizes RBAC (Role/RoleBinding/ClusterRole/ClusterRoleBinding) only. Actual allow/deny can differ due to Admission (OPA/Gatekeeper), NetworkPolicy/CNI, and controller behavior.',
@@ -123,7 +123,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-slate-500 mt-1 break-words">
+                <p className="text-xs text-slate-500 mt-1 wrap-break-word">
                   system:serviceaccount:{rbacData?.pod?.namespace || pod.namespace}:{rbacData?.service_account?.name || tr('clusterView.rbac.defaultName', 'default')}
                 </p>
               </div>
@@ -169,7 +169,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                 </p>
                 <ul className="text-yellow-200/90 text-sm list-disc pl-5 space-y-1">
                   {rbacData.errors.map((e: string, idx: number) => (
-                    <li key={idx} className="break-words">{e}</li>
+                    <li key={idx} className="wrap-break-word">{e}</li>
                   ))}
                 </ul>
               </div>
@@ -193,7 +193,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                         : ` ${tr('clusterView.rbac.summary.excludeBroad', '(excluding broad)')}`}
                     </p>
                   </div>
-                  <div className="text-slate-300 text-sm flex-shrink-0">
+                  <div className="text-slate-300 text-sm shrink-0">
                     {tr('clusterView.rbac.summary.total', '{{count}} items', { count: total })}
                   </div>
                 </div>
@@ -232,8 +232,8 @@ export function PodRbacTab({ pod, tr }: Props) {
                             <tbody className="divide-y divide-slate-700">
                               {resourceItems.map((it: any, idx: number) => (
                                 <tr key={idx}>
-                                  <td className="py-2 pr-4 text-slate-300 font-mono break-words">{it.apiGroup}</td>
-                                  <td className="py-2 pr-4 text-white font-mono break-words">
+                                  <td className="py-2 pr-4 text-slate-300 font-mono wrap-break-word">{it.apiGroup}</td>
+                                  <td className="py-2 pr-4 text-white font-mono wrap-break-word">
                                     {it.resource}
                                     {it.resourceNames?.length ? (
                                       <span className="text-slate-400 text-xs ml-2">
@@ -243,7 +243,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                                       </span>
                                     ) : null}
                                   </td>
-                                  <td className="py-2 pr-4 text-slate-200 font-mono break-words">
+                                  <td className="py-2 pr-4 text-slate-200 font-mono wrap-break-word">
                                     {it.verbsList.join(', ') || tr('clusterView.rbac.summary.none', '(none)')}
                                   </td>
                                 </tr>
@@ -278,8 +278,8 @@ export function PodRbacTab({ pod, tr }: Props) {
                             <tbody className="divide-y divide-slate-700">
                               {nonResourceItems.map((it: any, idx: number) => (
                                 <tr key={idx}>
-                                  <td className="py-2 pr-4 text-white font-mono break-words">{it.nonResourceURL}</td>
-                                  <td className="py-2 pr-4 text-slate-200 font-mono break-words">
+                                  <td className="py-2 pr-4 text-white font-mono wrap-break-word">{it.nonResourceURL}</td>
+                                  <td className="py-2 pr-4 text-slate-200 font-mono wrap-break-word">
                                     {it.verbsList.join(', ') || tr('clusterView.rbac.summary.none', '(none)')}
                                   </td>
                                 </tr>
@@ -312,17 +312,17 @@ export function PodRbacTab({ pod, tr }: Props) {
                         <div key={`rb-${b.name}`} className="bg-slate-800 rounded-lg p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
-                              <p className="text-white font-medium break-words">{b.name}</p>
-                              <p className="text-sm text-slate-400 break-words">
+                              <p className="text-white font-medium wrap-break-word">{b.name}</p>
+                              <p className="text-sm text-slate-400 wrap-break-word">
                                 {b.role_ref?.kind}:{b.role_ref?.name}
                               </p>
                               {getBindingMatchPathText(b) && (
-                                <p className="text-xs text-slate-500 mt-1 break-words">
+                                <p className="text-xs text-slate-500 mt-1 wrap-break-word">
                                   {tr('clusterView.rbac.matchingLabel', 'Matching')}: {getBindingMatchPathText(b)}
                                 </p>
                               )}
                             </div>
-                            <div className="text-right flex-shrink-0">
+                            <div className="text-right shrink-0">
                               <p className="text-sm text-slate-300">
                                 {tr('clusterView.rbac.rulesCount', 'rules: {{count}}', { count: b.resolved_role?.rules?.length ?? 0 })}
                               </p>
@@ -339,7 +339,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                                 {(b.subjects || []).map((s: any, idx: number) => (
                                   <span
                                     key={idx}
-                                    className="px-2 py-1 rounded bg-slate-700 text-slate-200 text-xs break-words"
+                                    className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs wrap-break-word"
                                     title={`${s.kind || ''} ${s.namespace ? `${s.namespace}/` : ''}${s.name || ''}`}
                                   >
                                     {s.kind}:{s.namespace ? `${s.namespace}/` : ''}{s.name}
@@ -350,7 +350,7 @@ export function PodRbacTab({ pod, tr }: Props) {
 
                             {b.resolved_role?.error ? (
                               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                <p className="text-yellow-200 text-sm break-words">{b.resolved_role.error}</p>
+                                <p className="text-yellow-200 text-sm wrap-break-word">{b.resolved_role.error}</p>
                               </div>
                             ) : (
                               <div>
@@ -361,24 +361,24 @@ export function PodRbacTab({ pod, tr }: Props) {
                                       <div className="flex flex-col gap-1">
                                         <div className="flex flex-wrap gap-2">
                                           <span className="text-slate-400">{tr('clusterView.rbac.verbsLabel', 'verbs')}</span>
-                                          <span className="text-white font-mono break-words">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                          <span className="text-white font-mono wrap-break-word">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                           <span className="text-slate-400">{tr('clusterView.rbac.resourcesLabel', 'resources')}</span>
-                                          <span className="text-white font-mono break-words">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                          <span className="text-white font-mono wrap-break-word">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                           <span className="text-slate-500">{tr('clusterView.rbac.apiGroupsLabel', 'apiGroups')}</span>
-                                          <span className="text-slate-200 font-mono break-words">{(r.api_groups || []).join(', ') || '(core)'}</span>
+                                          <span className="text-slate-200 font-mono wrap-break-word">{(r.api_groups || []).join(', ') || '(core)'}</span>
                                         </div>
                                         {(r.non_resource_urls || []).length > 0 && (
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.nonResourceUrlsLabel', 'nonResourceURLs')}</span>
-                                            <span className="text-white font-mono break-words">{(r.non_resource_urls || []).join(', ')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.non_resource_urls || []).join(', ')}</span>
                                           </div>
                                         )}
                                         {(r.resource_names || []).length > 0 && (
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.resourceNamesLabel', 'resourceNames')}</span>
-                                            <span className="text-white font-mono break-words">{(r.resource_names || []).join(', ')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.resource_names || []).join(', ')}</span>
                                           </div>
                                         )}
                                       </div>
@@ -399,7 +399,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                     <div className="bg-slate-800 rounded-lg p-4 border border-yellow-500/30">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <p className="text-yellow-200 font-medium break-words">
+                          <p className="text-yellow-200 font-medium wrap-break-word">
                             {tr('clusterView.rbac.broadRoleBindingTitle', 'Broad RoleBinding {{count}} (system:authenticated)', {
                               count: authenticatedOnly.length,
                             })}
@@ -411,7 +411,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                             )}
                           </p>
                         </div>
-                        <span className="text-xs text-yellow-300 flex-shrink-0">
+                        <span className="text-xs text-yellow-300 shrink-0">
                           {tr('clusterView.rbac.broadLabel', 'Broad')}
                         </span>
                       </div>
@@ -421,17 +421,17 @@ export function PodRbacTab({ pod, tr }: Props) {
                           <div key={`rb-broad-${b.name}`} className="bg-slate-900 rounded-lg p-4">
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <p className="text-white font-medium break-words">{b.name}</p>
-                                <p className="text-sm text-slate-400 break-words">
+                                <p className="text-white font-medium wrap-break-word">{b.name}</p>
+                                <p className="text-sm text-slate-400 wrap-break-word">
                                   {b.role_ref?.kind}:{b.role_ref?.name}
                                 </p>
                                 {getBindingMatchPathText(b) && (
-                                  <p className="text-xs text-slate-500 mt-1 break-words">
+                                  <p className="text-xs text-slate-500 mt-1 wrap-break-word">
                                     {tr('clusterView.rbac.matchingLabel', 'Matching')}: {getBindingMatchPathText(b)}
                                   </p>
                                 )}
                               </div>
-                              <div className="text-right flex-shrink-0">
+                              <div className="text-right shrink-0">
                                 <p className="text-sm text-slate-300">
                                   {tr('clusterView.rbac.rulesCount', 'rules: {{count}}', { count: b.resolved_role?.rules?.length ?? 0 })}
                                 </p>
@@ -449,7 +449,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                                   {(b.subjects || []).map((s: any, idx: number) => (
                                     <span
                                       key={idx}
-                                      className="px-2 py-1 rounded bg-slate-700 text-slate-200 text-xs break-words"
+                                      className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs wrap-break-word"
                                       title={`${s.kind || ''} ${s.namespace ? `${s.namespace}/` : ''}${s.name || ''}`}
                                     >
                                       {s.kind}:{s.namespace ? `${s.namespace}/` : ''}{s.name}
@@ -460,7 +460,7 @@ export function PodRbacTab({ pod, tr }: Props) {
 
                               {b.resolved_role?.error ? (
                                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                  <p className="text-yellow-200 text-sm break-words">{b.resolved_role.error}</p>
+                                  <p className="text-yellow-200 text-sm wrap-break-word">{b.resolved_role.error}</p>
                                 </div>
                               ) : (
                                 <div>
@@ -471,13 +471,13 @@ export function PodRbacTab({ pod, tr }: Props) {
                                         <div className="flex flex-col gap-1">
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.verbsLabel', 'verbs')}</span>
-                                            <span className="text-white font-mono break-words">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                           </div>
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.resourcesLabel', 'resources')}</span>
-                                            <span className="text-white font-mono break-words">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                             <span className="text-slate-500">{tr('clusterView.rbac.apiGroupsLabel', 'apiGroups')}</span>
-                                            <span className="text-slate-200 font-mono break-words">{(r.api_groups || []).join(', ') || '(core)'}</span>
+                                            <span className="text-slate-200 font-mono wrap-break-word">{(r.api_groups || []).join(', ') || '(core)'}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -513,17 +513,17 @@ export function PodRbacTab({ pod, tr }: Props) {
                         <div key={`crb-${b.name}`} className="bg-slate-800 rounded-lg p-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
-                              <p className="text-white font-medium break-words">{b.name}</p>
-                              <p className="text-sm text-slate-400 break-words">
+                              <p className="text-white font-medium wrap-break-word">{b.name}</p>
+                              <p className="text-sm text-slate-400 wrap-break-word">
                                 {b.role_ref?.kind}:{b.role_ref?.name}
                               </p>
                               {getBindingMatchPathText(b) && (
-                                <p className="text-xs text-slate-500 mt-1 break-words">
+                                <p className="text-xs text-slate-500 mt-1 wrap-break-word">
                                   {tr('clusterView.rbac.matchingLabel', 'Matching')}: {getBindingMatchPathText(b)}
                                 </p>
                               )}
                             </div>
-                            <div className="text-right flex-shrink-0">
+                            <div className="text-right shrink-0">
                               <p className="text-sm text-slate-300">
                                 {tr('clusterView.rbac.rulesCount', 'rules: {{count}}', { count: b.resolved_role?.rules?.length ?? 0 })}
                               </p>
@@ -540,7 +540,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                                 {(b.subjects || []).map((s: any, idx: number) => (
                                   <span
                                     key={idx}
-                                    className="px-2 py-1 rounded bg-slate-700 text-slate-200 text-xs break-words"
+                                    className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs wrap-break-word"
                                     title={`${s.kind || ''} ${s.namespace ? `${s.namespace}/` : ''}${s.name || ''}`}
                                   >
                                     {s.kind}:{s.namespace ? `${s.namespace}/` : ''}{s.name}
@@ -551,7 +551,7 @@ export function PodRbacTab({ pod, tr }: Props) {
 
                             {b.resolved_role?.error ? (
                               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                <p className="text-yellow-200 text-sm break-words">{b.resolved_role.error}</p>
+                                <p className="text-yellow-200 text-sm wrap-break-word">{b.resolved_role.error}</p>
                               </div>
                             ) : (
                               <div>
@@ -562,24 +562,24 @@ export function PodRbacTab({ pod, tr }: Props) {
                                       <div className="flex flex-col gap-1">
                                         <div className="flex flex-wrap gap-2">
                                           <span className="text-slate-400">{tr('clusterView.rbac.verbsLabel', 'verbs')}</span>
-                                          <span className="text-white font-mono break-words">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                          <span className="text-white font-mono wrap-break-word">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                           <span className="text-slate-400">{tr('clusterView.rbac.resourcesLabel', 'resources')}</span>
-                                          <span className="text-white font-mono break-words">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                          <span className="text-white font-mono wrap-break-word">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                           <span className="text-slate-500">{tr('clusterView.rbac.apiGroupsLabel', 'apiGroups')}</span>
-                                          <span className="text-slate-200 font-mono break-words">{(r.api_groups || []).join(', ') || '(core)'}</span>
+                                          <span className="text-slate-200 font-mono wrap-break-word">{(r.api_groups || []).join(', ') || '(core)'}</span>
                                         </div>
                                         {(r.non_resource_urls || []).length > 0 && (
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.nonResourceUrlsLabel', 'nonResourceURLs')}</span>
-                                            <span className="text-white font-mono break-words">{(r.non_resource_urls || []).join(', ')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.non_resource_urls || []).join(', ')}</span>
                                           </div>
                                         )}
                                         {(r.resource_names || []).length > 0 && (
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.resourceNamesLabel', 'resourceNames')}</span>
-                                            <span className="text-white font-mono break-words">{(r.resource_names || []).join(', ')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.resource_names || []).join(', ')}</span>
                                           </div>
                                         )}
                                       </div>
@@ -600,7 +600,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                     <div className="bg-slate-800 rounded-lg p-4 border border-yellow-500/30">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <p className="text-yellow-200 font-medium break-words">
+                          <p className="text-yellow-200 font-medium wrap-break-word">
                             {tr('clusterView.rbac.broadClusterRoleBindingTitle', 'Broad ClusterRoleBinding {{count}} (system:authenticated)', {
                               count: authenticatedOnly.length,
                             })}
@@ -612,7 +612,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                             )}
                           </p>
                         </div>
-                        <span className="text-xs text-yellow-300 flex-shrink-0">
+                        <span className="text-xs text-yellow-300 shrink-0">
                           {tr('clusterView.rbac.broadLabel', 'Broad')}
                         </span>
                       </div>
@@ -622,17 +622,17 @@ export function PodRbacTab({ pod, tr }: Props) {
                           <div key={`crb-broad-${b.name}`} className="bg-slate-900 rounded-lg p-4">
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <p className="text-white font-medium break-words">{b.name}</p>
-                                <p className="text-sm text-slate-400 break-words">
+                                <p className="text-white font-medium wrap-break-word">{b.name}</p>
+                                <p className="text-sm text-slate-400 wrap-break-word">
                                   {b.role_ref?.kind}:{b.role_ref?.name}
                                 </p>
                                 {getBindingMatchPathText(b) && (
-                                  <p className="text-xs text-slate-500 mt-1 break-words">
+                                  <p className="text-xs text-slate-500 mt-1 wrap-break-word">
                                     {tr('clusterView.rbac.matchingLabel', 'Matching')}: {getBindingMatchPathText(b)}
                                   </p>
                                 )}
                               </div>
-                              <div className="text-right flex-shrink-0">
+                              <div className="text-right shrink-0">
                                 <p className="text-sm text-slate-300">
                                   {tr('clusterView.rbac.rulesCount', 'rules: {{count}}', { count: b.resolved_role?.rules?.length ?? 0 })}
                                 </p>
@@ -650,7 +650,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                                   {(b.subjects || []).map((s: any, idx: number) => (
                                     <span
                                       key={idx}
-                                      className="px-2 py-1 rounded bg-slate-700 text-slate-200 text-xs break-words"
+                                      className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs wrap-break-word"
                                       title={`${s.kind || ''} ${s.namespace ? `${s.namespace}/` : ''}${s.name || ''}`}
                                     >
                                       {s.kind}:{s.namespace ? `${s.namespace}/` : ''}{s.name}
@@ -661,7 +661,7 @@ export function PodRbacTab({ pod, tr }: Props) {
 
                               {b.resolved_role?.error ? (
                                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                                  <p className="text-yellow-200 text-sm break-words">{b.resolved_role.error}</p>
+                                  <p className="text-yellow-200 text-sm wrap-break-word">{b.resolved_role.error}</p>
                                 </div>
                               ) : (
                                 <div>
@@ -672,13 +672,13 @@ export function PodRbacTab({ pod, tr }: Props) {
                                         <div className="flex flex-col gap-1">
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.verbsLabel', 'verbs')}</span>
-                                            <span className="text-white font-mono break-words">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.verbs || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                           </div>
                                           <div className="flex flex-wrap gap-2">
                                             <span className="text-slate-400">{tr('clusterView.rbac.resourcesLabel', 'resources')}</span>
-                                            <span className="text-white font-mono break-words">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
+                                            <span className="text-white font-mono wrap-break-word">{(r.resources || []).join(', ') || tr('clusterView.rbac.none', '(none)')}</span>
                                             <span className="text-slate-500">{tr('clusterView.rbac.apiGroupsLabel', 'apiGroups')}</span>
-                                            <span className="text-slate-200 font-mono break-words">{(r.api_groups || []).join(', ') || '(core)'}</span>
+                                            <span className="text-slate-200 font-mono wrap-break-word">{(r.api_groups || []).join(', ') || '(core)'}</span>
                                           </div>
                                         </div>
                                       </div>

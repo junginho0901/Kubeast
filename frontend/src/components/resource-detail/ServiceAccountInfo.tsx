@@ -118,7 +118,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         ) : (
           <div className="space-y-3">
             {pagedEffectivePerms.map((b, i) => (
-              <div key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} className="rounded border border-slate-800 p-2">
+              <div key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} className="rounded-sm border border-slate-800 p-2">
                 <div className="flex items-center gap-2 text-xs mb-1">
                   <span className="text-slate-400"><Tx>via</Tx></span>
                   <ResourceLink

@@ -48,19 +48,19 @@ export function SearchBar({
           placeholder={searchPlaceholder[activeTab]}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
       {activeTab === 'pods' && podLabelSelector && (
         <div className="flex items-center justify-between gap-3 text-sm text-slate-300">
           <div className="min-w-0">
             <span className="text-slate-400">Label selector:</span>{' '}
-            <span className="font-mono break-words">{podLabelSelector}</span>
+            <span className="font-mono wrap-break-word">{podLabelSelector}</span>
           </div>
           <button
             type="button"
             onClick={onClearPodLabelSelector}
-            className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1"
+            className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded-sm px-2 py-1"
             title={t('resourcesTabs.search.clearLabelSelector')}
           >
             {t('resourcesTabs.search.reset')}

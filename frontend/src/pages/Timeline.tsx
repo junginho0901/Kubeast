@@ -178,9 +178,9 @@ export default function Timeline() {
             <button
               key={tr.value}
               onClick={() => { setHours(tr.value); setShowCount(50) }}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+              className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 hours === tr.value
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-xs'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -195,9 +195,9 @@ export default function Timeline() {
             <button
               key={f}
               onClick={() => setEventFilter(f)}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+              className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 eventFilter === f
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-xs'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
@@ -346,7 +346,7 @@ function EventRow({
   return (
     <div className="flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
       {/* Time */}
-      <div className="w-[120px] flex-shrink-0 text-right hidden md:block">
+      <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
           className="text-xs text-gray-400 dark:text-gray-500 cursor-default"
           title={fmtAbsolute(event.timestamp)}
@@ -356,7 +356,7 @@ function EventRow({
       </div>
 
       {/* Icon */}
-      <div className="flex-shrink-0 mt-0.5">
+      <div className="shrink-0 mt-0.5">
         {isWarning ? (
           <AlertTriangle className="w-4 h-4 text-yellow-500" />
         ) : (
@@ -371,7 +371,7 @@ function EventRow({
             {event.reason}
           </span>
           {event.count > 1 && (
-            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
+            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm">
               {t('timeline.repeated', '{{count}} times').replace('{{count}}', String(event.count))}
             </span>
           )}
@@ -379,7 +379,7 @@ function EventRow({
             {fmtRelative(event.timestamp)}
           </span>
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 break-words">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 wrap-break-word">
           {event.message}
         </p>
         <div className="flex items-center gap-2 mt-1">
@@ -414,7 +414,7 @@ function RolloutRow({
   return (
     <div className="flex items-start gap-3 px-4 py-2.5 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
       {/* Time */}
-      <div className="w-[120px] flex-shrink-0 text-right hidden md:block">
+      <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
           className="text-xs text-gray-400 dark:text-gray-500 cursor-default"
           title={fmtAbsolute(rollout.created_at)}
@@ -424,7 +424,7 @@ function RolloutRow({
       </div>
 
       {/* Icon */}
-      <div className="flex-shrink-0 mt-0.5">
+      <div className="shrink-0 mt-0.5">
         <ArrowUpCircle className="w-4 h-4 text-blue-500" />
       </div>
 

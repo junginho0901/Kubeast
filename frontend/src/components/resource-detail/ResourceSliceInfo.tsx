@@ -144,7 +144,7 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
                   }
                   return (
                     <tr key={idx} className="text-slate-200 align-top">
-                      <td className="py-1 pr-2 break-words">{devName}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{devName}</td>
                       <td className="py-1 pr-2">
                         {Object.keys(attrMap).length > 0 ? (
                           <KeyValueTags data={attrMap} />

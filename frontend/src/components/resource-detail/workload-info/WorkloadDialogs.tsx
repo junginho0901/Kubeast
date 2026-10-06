@@ -59,12 +59,12 @@ export default function WorkloadDialogs({
               <button
                 onClick={() => setTriggerDialogOpen(false)}
                 disabled={triggerMut.isPending}
-                className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
+                className="px-3 py-1.5 text-sm rounded-sm border border-slate-600 text-slate-300 hover:bg-slate-800"
               >{tr('rollback.cancel', 'Cancel')}</button>
               <button
                 onClick={() => triggerMut.mutate()}
                 disabled={triggerMut.isPending}
-                className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm rounded-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
               >{triggerMut.isPending ? '...' : tr('cronjob.runNow', 'Run Now')}</button>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function WorkloadDialogs({
                 {revisions.map((rev: any) => (
                   <label
                     key={rev.revision}
-                    className={`flex items-center gap-3 px-3 py-2 rounded cursor-pointer text-xs ${
+                    className={`flex items-center gap-3 px-3 py-2 rounded-sm cursor-pointer text-xs ${
                       rev.is_current ? 'opacity-50 cursor-not-allowed bg-slate-800/30' : 'hover:bg-slate-800/60'
                     } ${selectedRevision === rev.revision ? 'bg-blue-900/30 border border-blue-700' : 'border border-transparent'}`}
                   >
@@ -116,12 +116,12 @@ export default function WorkloadDialogs({
               <button
                 onClick={() => { setRollbackDialogOpen(false); setSelectedRevision(null) }}
                 disabled={rollbackMut.isPending}
-                className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
+                className="px-3 py-1.5 text-sm rounded-sm border border-slate-600 text-slate-300 hover:bg-slate-800"
               >{tr('rollback.cancel', 'Cancel')}</button>
               <button
                 onClick={() => { if (selectedRevision != null) rollbackMut.mutate(selectedRevision) }}
                 disabled={rollbackMut.isPending || selectedRevision == null}
-                className="px-3 py-1.5 text-sm rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                className="px-3 py-1.5 text-sm rounded-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
               >{rollbackMut.isPending ? '...' : tr('rollback.confirm', 'Rollback')}</button>
             </div>
           </div>

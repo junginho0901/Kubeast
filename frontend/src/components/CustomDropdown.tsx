@@ -80,17 +80,17 @@ export default function CustomDropdown({
         data-testid={testId}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
+        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="flex items-center gap-2 font-medium truncate">
-          {selected?.icon && <span className="text-base flex-shrink-0">{selected.icon}</span>}
+          {selected?.icon && <span className="text-base shrink-0">{selected.icon}</span>}
           <span className="truncate">{selected?.label ?? placeholder}</span>
           {selected?.hint && (
-            <span className="text-[10px] text-slate-400 flex-shrink-0">({selected.hint})</span>
+            <span className="text-[10px] text-slate-400 shrink-0">({selected.hint})</span>
           )}
         </span>
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
@@ -98,7 +98,7 @@ export default function CustomDropdown({
 
       {/* dropdown panel */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[200] max-h-[260px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-200 max-h-[260px] overflow-y-auto">
           {options.map((opt) => {
             const isSelected = opt.value === value
             return (
@@ -117,14 +117,14 @@ export default function CustomDropdown({
                 }`}
               >
                 {isSelected && (
-                  <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                 )}
                 {opt.icon && !isSelected && (
-                  <span className="text-base flex-shrink-0">{opt.icon}</span>
+                  <span className="text-base shrink-0">{opt.icon}</span>
                 )}
                 <span className={isSelected ? 'font-medium' : ''}>{opt.label}</span>
                 {opt.hint && (
-                  <span className="ml-auto text-[10px] text-slate-400 flex-shrink-0">
+                  <span className="ml-auto text-[10px] text-slate-400 shrink-0">
                     {opt.hint}
                   </span>
                 )}

@@ -342,7 +342,7 @@ export default function Resources() {
                     const compactText = Object.entries(compact).map(([k, v]: any) => `${k}=${v}`).join(', ')
                     return (
                       <p
-                        className="text-xs text-slate-500 mt-1 font-mono break-words"
+                        className="text-xs text-slate-500 mt-1 font-mono wrap-break-word"
                         title={t('resources.fullSelectorTitle', { selector: fullText })}
                       >
                         selector: {compactText}
@@ -366,7 +366,7 @@ export default function Resources() {
                       setActiveTab('pods')
                     }}
                     disabled={!rs.selector || Object.keys(rs.selector).length === 0}
-                    className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded-sm px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     title={t('resources.gotoPodsTitle')}
                   >
                     {t('resources.gotoPods')}

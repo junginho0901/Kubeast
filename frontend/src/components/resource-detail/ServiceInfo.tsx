@@ -263,12 +263,12 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                 <tbody className="divide-y divide-slate-800">
                   {ports.map((port, idx) => (
                     <tr key={`${port.name || 'port'}-${idx}`} className="text-slate-200">
-                      <td className="py-2 pr-2 break-words">{port.name || '-'}</td>
+                      <td className="py-2 pr-2 wrap-break-word">{port.name || '-'}</td>
                       <td className="py-2 pr-2">{port.protocol || 'TCP'}</td>
                       <td className="py-2 pr-2 font-mono">{port.port ?? '-'}</td>
                       <td className="py-2 pr-2 font-mono">{port.target_port ?? '-'}</td>
                       <td className="py-2 pr-2 font-mono">{port.node_port ?? '-'}</td>
-                      <td className="py-2 pr-2 break-words">{port.app_protocol || '-'}</td>
+                      <td className="py-2 pr-2 wrap-break-word">{port.app_protocol || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -310,11 +310,11 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
                     .join(', ')
                   return (
                     <tr key={`${slice.name || 'slice'}-${idx}`} className="text-slate-200">
-                      <td className="py-2 pr-2 break-words">{slice.name || '-'}</td>
+                      <td className="py-2 pr-2 wrap-break-word">{slice.name || '-'}</td>
                       <td className="py-2 pr-2">{slice.address_type || '-'}</td>
                       <td className="py-2 pr-2 font-mono">{slice.endpoints_ready ?? 0}</td>
                       <td className="py-2 pr-2 font-mono">{slice.endpoints_total ?? 0}</td>
-                      <td className="py-2 pr-2 break-words">{portsText || '-'}</td>
+                      <td className="py-2 pr-2 wrap-break-word">{portsText || '-'}</td>
                     </tr>
                   )
                 })}

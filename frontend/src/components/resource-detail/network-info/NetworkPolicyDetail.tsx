@@ -73,7 +73,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     return (
       <span className="inline-flex flex-wrap gap-1 ml-1">
         {Object.entries(matchLabels).map(([k, v]) => (
-          <span key={`${k}=${v}`} className="inline-flex rounded border border-cyan-700/50 bg-cyan-900/30 px-1.5 py-0.5 text-[10px] font-mono text-cyan-200">
+          <span key={`${k}=${v}`} className="inline-flex rounded-sm border border-cyan-700/50 bg-cyan-900/30 px-1.5 py-0.5 text-[10px] font-mono text-cyan-200">
             ns:{k}={v}
           </span>
         ))}
@@ -108,7 +108,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
         <InfoSection title="Ingress Rules">
           <div className="space-y-2 text-xs">
             {ingress.map((rule: any, i: number) => (
-              <div key={i} className="rounded border border-slate-800 p-2">
+              <div key={i} className="rounded-sm border border-slate-800 p-2">
                 {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
                 <div className="text-slate-200">From: {(rule.from || [{ ipBlock: { cidr: '0.0.0.0/0' } }]).map(renderPeer).join(' ; ')}</div>
               </div>
@@ -123,7 +123,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
             {egress.map((rule: any, i: number) => {
               const peers: any[] = rule.to || [{ ipBlock: { cidr: '0.0.0.0/0' } }]
               return (
-                <div key={i} className="rounded border border-slate-800 p-2">
+                <div key={i} className="rounded-sm border border-slate-800 p-2">
                   {rule.ports?.length > 0 && <div className="text-slate-400">Ports: {rule.ports.map((p: any) => `${p.port}/${p.protocol || 'TCP'}`).join(', ')}</div>}
                   <div className="text-slate-200">To: {peers.map(renderPeer).join(' ; ')}</div>
                   {peers.some((p) => p?.namespaceSelector?.matchLabels) && (
@@ -187,7 +187,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
         <InfoSection title="Finalizers">
           <div className="flex flex-wrap gap-1.5">
             {finalizers.map((f, i) => (
-              <span key={`${f}-${i}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
+              <span key={`${f}-${i}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
             ))}
           </div>
         </InfoSection>

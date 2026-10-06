@@ -33,11 +33,7 @@ updates:
       npm-minor-patch:
         update-types: ["minor", "patch"]
     ignore:
-      # Tailwind 4 moves the PostCSS plugin and the config format: its own
-      # migration, not a weekly bump. Vitest 5 needs Node 22.12+ on the
-      # developer machines first.
-      - dependency-name: tailwindcss
-        update-types: ["version-update:semver-major"]
+      # Vitest 5 needs Node 22.12+ on the developer machines first.
       - dependency-name: vitest
         update-types: ["version-update:semver-major"]
       # React 19 moves react, react-dom and both @types packages together

@@ -33,7 +33,7 @@ export function DashboardPodNodeStatus({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {podStatusData.length > 0 && (
         <div className="card relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-sky-500/5 via-transparent to-blue-500/5 pointer-events-none" />
+          <div className="absolute inset-0 bg-linear-to-br from-sky-500/5 via-transparent to-blue-500/5 pointer-events-none" />
           <h2 className="text-xl font-bold text-white mb-4 relative">{tr('dashboard.podStatus.title', 'Pod status')}</h2>
           <p className="text-sm text-slate-400 mb-4 relative">
             {tr('dashboard.podStatus.subtitle', 'Click to view pods in each status')}
@@ -54,7 +54,7 @@ export function DashboardPodNodeStatus({
 
       {nodeStatusChartData.length > 0 && (
         <div className="card relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-teal-500/5 pointer-events-none" />
+          <div className="absolute inset-0 bg-linear-to-br from-cyan-500/5 via-transparent to-teal-500/5 pointer-events-none" />
           <h2 className="text-xl font-bold text-white mb-4 relative">{tr('dashboard.nodeStatus.title', 'Node status')}</h2>
           <p className="text-sm text-slate-400 mb-4 relative">
             {tr('dashboard.nodeStatus.subtitle', 'Click to view nodes in each status')}

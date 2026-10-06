@@ -48,7 +48,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
             <button
               type="button"
               onClick={beginEdit}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
             >
               {t('helmReleaseDetail.upgrade.edit')}
             </button>
@@ -87,7 +87,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
               setEditing(false)
               setDraft('')
             }}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+            className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
           >
             {t('helmReleaseDetail.upgrade.cancel')}
           </button>
@@ -110,7 +110,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                 })
               }
             }}
-            className="inline-flex items-center gap-1.5 rounded bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-sm bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
           >
             {t('helmReleaseDetail.upgrade.preview')}
           </button>

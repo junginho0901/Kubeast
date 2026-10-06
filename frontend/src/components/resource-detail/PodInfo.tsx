@@ -248,7 +248,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execContainerRef}>
               <button
                 onClick={() => { setIsExecContainerOpen(!isExecContainerOpen); setIsExecShellOpen(false) }}
-                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
+                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
               >
                 <span className="text-[11px] font-medium truncate">{execSelectContainer || containerNames[0]}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecContainerOpen ? 'rotate-180' : ''}`} />
@@ -261,7 +261,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                       onClick={() => { setExecSelectContainer(n); setIsExecContainerOpen(false) }}
                       className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
-                      {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />}
+                      {(execSelectContainer || containerNames[0]) === n && <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />}
                       <span className={(execSelectContainer || containerNames[0]) === n ? 'font-medium' : ''}>{n}</span>
                     </button>
                   ))}
@@ -272,7 +272,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execShellRef}>
               <button
                 onClick={() => { setIsExecShellOpen(!isExecShellOpen); setIsExecContainerOpen(false) }}
-                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
+                className="h-7 px-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
               >
                 <span className="text-[11px] font-medium">{execCommand}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecShellOpen ? 'rotate-180' : ''}`} />
@@ -285,7 +285,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                       onClick={() => { setExecCommand(sh); setIsExecShellOpen(false) }}
                       className="w-full px-2.5 py-1.5 text-left text-[11px] text-white hover:bg-slate-600 transition-colors flex items-center gap-1.5 first:rounded-t-lg last:rounded-b-lg"
                     >
-                      {execCommand === sh && <CheckCircle className="w-3 h-3 text-green-400 flex-shrink-0" />}
+                      {execCommand === sh && <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />}
                       <span className={execCommand === sh ? 'font-medium' : ''}>{sh}</span>
                     </button>
                   ))}
@@ -306,23 +306,23 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {/* Top Summary */}
       <InfoSection title="Top">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
             <div className="mt-1 text-xs text-white font-medium truncate" title={statusReason}>{statusReason || '-'}</div>
           </div>
-          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Ready</Tx></div>
             <div className="mt-1 text-xs text-white font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
           </div>
-          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Waiting</Tx></div>
             <div className="mt-1 text-xs text-white font-medium">{waitingCount}</div>
           </div>
-          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>CrashLoop</Tx></div>
             <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-white'}`}>{crashLoopCount}</div>
           </div>
-          <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Terminated</Tx></div>
             <div className="mt-1 text-xs text-white font-medium">{terminatedCount}</div>
           </div>
@@ -507,12 +507,12 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           return terms.map((term: any, ti: number) => (
             <div key={ti} className="space-y-1">
               {Array.isArray(term.matchExpressions) && term.matchExpressions.map((expr: any, ei: number) => (
-                <span key={ei} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
+                <span key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
                   {expr.key} {expr.operator} {Array.isArray(expr.values) ? expr.values.join(', ') : ''}
                 </span>
               ))}
               {Array.isArray(term.matchFields) && term.matchFields.map((field: any, fi: number) => (
-                <span key={`f-${fi}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
+                <span key={`f-${fi}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
                   {field.key} {field.operator} {Array.isArray(field.values) ? field.values.join(', ') : ''}
                 </span>
               ))}
@@ -526,7 +526,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             const selectors = t.labelSelector?.matchExpressions || []
             const labels = t.labelSelector?.matchLabels ? Object.entries(t.labelSelector.matchLabels) : []
             return (
-              <div key={`${prefix}-${ti}`} className="rounded border border-slate-800 bg-slate-900/40 p-2 space-y-1 text-xs">
+              <div key={`${prefix}-${ti}`} className="rounded-sm border border-slate-800 bg-slate-900/40 p-2 space-y-1 text-xs">
                 {t.topologyKey && <div className="text-slate-400">topologyKey: <span className="text-slate-200 font-mono">{t.topologyKey}</span></div>}
                 {Array.isArray(t.namespaces) && t.namespaces.length > 0 && (
                   <div className="text-slate-400">namespaces: <span className="text-slate-200 font-mono">{t.namespaces.join(', ')}</span></div>
@@ -534,7 +534,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 {labels.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {labels.map(([k, v]) => (
-                      <span key={`${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={`${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                         {k}={String(v)}
                       </span>
                     ))}
@@ -543,7 +543,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 {selectors.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {selectors.map((expr: any, ei: number) => (
-                      <span key={ei} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                         {expr.key} {expr.operator} {Array.isArray(expr.values) ? expr.values.join(', ') : ''}
                       </span>
                     ))}
@@ -802,7 +802,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             />
             <button
               onClick={() => { setShowLogs(true); refetchLogs() }}
-              className="text-xs px-3 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
+              className="text-xs px-3 py-1 rounded-sm border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
             >
               {logsFetching ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
               {dl(showLogs ? 'Refresh' : 'Load Logs')}
@@ -895,7 +895,7 @@ function PodImagePullHistory({ events }: { events: any[] }) {
                 <td className="py-1 pr-2"><span className={`badge ${reasonBadge(String(e.reason || ''))}`}>{e.reason || '-'}</span></td>
                 <td className="py-1 pr-2">{fmtRel(e.last_timestamp || e.lastTimestamp || e.first_timestamp || e.firstTimestamp)}</td>
                 <td className="py-1 pr-2 font-mono">{e.count ?? 1}</td>
-                <td className="py-1 pr-2 break-words whitespace-normal">{e.message || '-'}</td>
+                <td className="py-1 pr-2 wrap-break-word whitespace-normal">{e.message || '-'}</td>
               </tr>
             ))}
           </tbody>

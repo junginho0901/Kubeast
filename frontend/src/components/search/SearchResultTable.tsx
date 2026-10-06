@@ -150,7 +150,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                       </button>
                       <button
                         onClick={() => copyName(item.name, globalIdx)}
-                        className="flex-shrink-0 p-0.5 text-slate-500 hover:text-white transition-colors"
+                        className="shrink-0 p-0.5 text-slate-500 hover:text-white transition-colors"
                         title={t('advancedSearch.copyName', 'Copy name')}
                       >
                         {copiedIdx === globalIdx ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}

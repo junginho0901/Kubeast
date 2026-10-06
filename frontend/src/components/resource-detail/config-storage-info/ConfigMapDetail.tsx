@@ -21,9 +21,9 @@ export default function ConfigMapDetail({ name, namespace, rawJson }: { name: st
         <InfoSection title="Data">
           <div className="space-y-3">
             {Object.entries(data).map(([key, value]) => (
-              <div key={key} className="rounded border border-slate-800 p-3">
+              <div key={key} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-xs font-medium text-white mb-1">{key}</p>
-                <pre className="text-[11px] text-slate-300 bg-slate-950 rounded p-2 max-h-[200px] overflow-auto whitespace-pre-wrap break-all">
+                <pre className="text-[11px] text-slate-300 bg-slate-950 rounded-sm p-2 max-h-[200px] overflow-auto whitespace-pre-wrap break-all">
                   {String(value).slice(0, 2000)}
                   {String(value).length > 2000 && '\n... (truncated)'}
                 </pre>

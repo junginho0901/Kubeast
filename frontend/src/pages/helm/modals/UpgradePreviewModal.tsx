@@ -59,7 +59,7 @@ export default function UpgradePreviewModal({
         </p>
 
         {noChange ? (
-          <div className="rounded border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
+          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
             {t('helmReleaseDetail.upgrade.noChange')}
           </div>
         ) : (

@@ -106,7 +106,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
                 <p className="text-[11px] text-slate-400 mt-2 mb-1"><Tx>Match Conditions</Tx></p>
                 <div className="space-y-1">
                   {wh.match_conditions.map((mc: any, mi: number) => (
-                    <div key={mi} className="rounded border border-slate-800 bg-slate-900/40 px-2 py-1.5">
+                    <div key={mi} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
                       <p className="text-[11px] text-slate-300">{mc?.name || '-'}</p>
                       <p className="font-mono text-[11px] text-slate-200 break-all">{mc?.expression || '-'}</p>
                     </div>
@@ -131,7 +131,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
               <p className="text-[11px] text-slate-400 mb-1"><Tx>Resource Types (apiGroup/resource)</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {affectedList.slice(0, 50).map((s) => (
-                  <span key={s} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
+                  <span key={s} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
                 ))}
                 {affectedList.length > 50 && (
                   <span className="text-[11px] text-amber-300"><Tx text="+{{n}} more" values={{ n: affectedList.length - 50 }} /></span>
@@ -142,7 +142,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
               <p className="text-[11px] text-slate-400 mb-1"><Tx>Operations</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {operationsList.map((op) => (
-                  <span key={op} className="rounded border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
+                  <span key={op} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
                 ))}
               </div>
             </div>
@@ -220,7 +220,7 @@ function SelectorRow({ label, selector }: { label: string; selector?: any }) {
         parts.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {parts.map((p) => (
-              <span key={p} className="inline-flex px-2 py-0.5 rounded bg-slate-700/60 text-xs text-slate-200 break-all">
+              <span key={p} className="inline-flex px-2 py-0.5 rounded-sm bg-slate-700/60 text-xs text-slate-200 break-all">
                 {p}
               </span>
             ))}
@@ -242,7 +242,7 @@ function WebhookRulesTable({ rules }: { rules?: any[] }) {
     <div className="mt-2">
       <p className="text-[11px] font-medium text-slate-400 mb-1"><Tx>Rules</Tx></p>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border border-slate-700 rounded">
+        <table className="w-full text-xs border border-slate-700 rounded-sm">
           <thead>
             <tr className="bg-slate-800/60 text-slate-400">
               <Th className="text-left px-2 py-1.5">API Groups</Th>
@@ -255,16 +255,16 @@ function WebhookRulesTable({ rules }: { rules?: any[] }) {
           <tbody className="divide-y divide-slate-700">
             {rules.map((rule, idx) => (
               <tr key={idx} className="text-slate-200">
-                <td className="px-2 py-1.5 break-words whitespace-pre-wrap">
+                <td className="px-2 py-1.5 wrap-break-word whitespace-pre-wrap">
                   {Array.isArray(rule.api_groups) ? rule.api_groups.map((g: string) => g || '""').join(', ') : '-'}
                 </td>
-                <td className="px-2 py-1.5 break-words whitespace-pre-wrap">
+                <td className="px-2 py-1.5 wrap-break-word whitespace-pre-wrap">
                   {Array.isArray(rule.api_versions) ? rule.api_versions.join(', ') : '-'}
                 </td>
-                <td className="px-2 py-1.5 break-words whitespace-pre-wrap">
+                <td className="px-2 py-1.5 wrap-break-word whitespace-pre-wrap">
                   {Array.isArray(rule.operations) ? rule.operations.join(', ') : '-'}
                 </td>
-                <td className="px-2 py-1.5 break-words whitespace-pre-wrap">
+                <td className="px-2 py-1.5 wrap-break-word whitespace-pre-wrap">
                   {Array.isArray(rule.resources) ? rule.resources.join(', ') : '-'}
                 </td>
                 <td className="px-2 py-1.5">{rule.scope || '*'}</td>

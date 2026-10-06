@@ -69,7 +69,7 @@ export default function HistoryTab({
                   <td className="px-3 py-2 text-white font-medium">
                     {h.revision}
                     {isCurrent && (
-                      <span className="ml-2 rounded bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">
+                      <span className="ml-2 rounded-sm bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">
                         {t('helmReleaseDetail.history.current')}
                       </span>
                     )}
@@ -91,7 +91,7 @@ export default function HistoryTab({
                           e.stopPropagation()
                           setRollbackTarget(h.revision)
                         }}
-                        className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20"
+                        className="inline-flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20"
                       >
                         <HistoryIcon className="w-3 h-3" />
                         {t('helmReleaseDetail.rollback.button')}

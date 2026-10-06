@@ -44,12 +44,12 @@ interface Props {
 
 function renderStatusBadge(status?: string | null) {
   if (status === 'Allocated') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">Allocated</span>
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">Allocated</span>
   }
   if (status === 'Reserved') {
-    return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-cyan-900/40 text-cyan-300 border border-cyan-700/40">Reserved</span>
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-cyan-900/40 text-cyan-300 border border-cyan-700/40">Reserved</span>
   }
-  return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/40">Pending</span>
+  return <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/40">Pending</span>
 }
 
 export function ResourceClaimsTable({
@@ -172,7 +172,7 @@ export function ResourceClaimsTable({
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
             >
               {tr('common.prev', 'Prev')}
             </button>
@@ -181,7 +181,7 @@ export function ResourceClaimsTable({
               type="button"
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
             >
               {tr('common.next', 'Next')}
             </button>

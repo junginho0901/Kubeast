@@ -132,7 +132,7 @@ export default function ReleaseTable({
                   <td className="py-3 px-4 text-xs font-mono">{r.revision}</td>
                   <td className="py-3 px-4">
                     <span
-                      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${statusBadge(r.status)}`}
+                      className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${statusBadge(r.status)}`}
                     >
                       {r.status}
                     </span>
@@ -162,7 +162,7 @@ export default function ReleaseTable({
             type="button"
             onClick={() => onPageChange(Math.max(1, currentPage - 1))}
             disabled={currentPage <= 1}
-            className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+            className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
           >
             {t('common.prev', { defaultValue: 'Prev' })}
           </button>
@@ -173,7 +173,7 @@ export default function ReleaseTable({
             type="button"
             onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage >= totalPages}
-            className="px-3 py-1.5 text-xs rounded border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
+            className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
           >
             {t('common.next', { defaultValue: 'Next' })}
           </button>
@@ -197,7 +197,7 @@ function EmptyState() {
           href={HELM_DOCS_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+          className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
         >
           {t('helmReleases.empty.docs')}
           <ExternalLink className="w-3 h-3" />
@@ -206,7 +206,7 @@ function EmptyState() {
           href={HELM_INSTALL_GUIDE_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+          className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
         >
           {t('helmReleases.empty.installGuide')}
           <ExternalLink className="w-3 h-3" />

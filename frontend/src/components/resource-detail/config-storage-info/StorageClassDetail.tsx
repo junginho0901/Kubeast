@@ -134,7 +134,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         <InfoSection title="Allowed Topologies">
           <div className="space-y-1 text-xs text-slate-200">
             {allowedTopologies.map((topology, idx) => (
-              <div key={`${topology}-${idx}`} className="break-words">{String(topology)}</div>
+              <div key={`${topology}-${idx}`} className="wrap-break-word">{String(topology)}</div>
             ))}
           </div>
         </InfoSection>

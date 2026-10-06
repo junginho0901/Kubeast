@@ -62,7 +62,7 @@ export function IngressSection({ ingresses, ingressDetails, ingressClasses }: Pr
                 ) : (
                   <div className="mt-1 text-[11px] text-slate-500">{t('networkOverview.tlsSecretNone')}</div>
                 )}
-                <div className="mt-2 text-xs text-slate-300 whitespace-pre-wrap break-words">
+                <div className="mt-2 text-xs text-slate-300 whitespace-pre-wrap wrap-break-word">
                   {(detail?.rules || []).length > 0
                     ? detail!.rules
                         .flatMap((r) =>

@@ -80,7 +80,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         {limits.length > 0 ? (
           <div className="space-y-3">
             {limits.map((lim: any, li: number) => (
-              <div key={li} className="rounded border border-slate-800 p-3">
+              <div key={li} className="rounded-sm border border-slate-800 p-3">
                 <p className="text-[11px] text-slate-400 mb-1">Type: {lim.type || '-'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[480px]">

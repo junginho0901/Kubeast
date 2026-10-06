@@ -99,7 +99,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
       <InfoSection title="Basic Info" actions={isRollbackKind && has('resource.workload.rollback') ? (
         <button
           onClick={() => setRollbackDialogOpen(true)}
-          className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500"
+          className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-white hover:border-slate-500"
         >
           {tr('rollback.title', 'Rollback')}
         </button>
@@ -205,7 +205,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         <InfoSection title="Volume Claim Templates">
           <div className="space-y-2 text-xs text-slate-200">
             {volumeClaimTemplates.map((vct: any, idx: number) => (
-              <div key={`${vct.name || 'vct'}-${idx}`} className="rounded border border-slate-800 p-2 space-y-1">
+              <div key={`${vct.name || 'vct'}-${idx}`} className="rounded-sm border border-slate-800 p-2 space-y-1">
                 <div className="font-medium text-white">{vct.name || '-'}</div>
                 <div>StorageClass: {vct.storage_class_name || vct.spec?.storageClassName || '-'}</div>
                 <div>

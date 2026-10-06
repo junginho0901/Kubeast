@@ -36,7 +36,7 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
           <Trans
             i18nKey="podDeleteModal.question"
             values={{ name: pod.name }}
-            components={{ kbd: <kbd className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-100" /> }}
+            components={{ kbd: <kbd className="px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-100" /> }}
           />
         </p>
         <p className="text-slate-400 mt-3">
@@ -49,7 +49,7 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
             type="checkbox"
             checked={force}
             onChange={(event) => onForceChange(event.target.checked)}
-            className="w-4 h-4 rounded border-slate-500 bg-slate-700"
+            className="w-4 h-4 rounded-sm border-slate-500 bg-slate-700"
           />
           <label htmlFor="force-delete-checkbox" className="text-sm text-slate-300">
             {t('podDeleteModal.force')}
