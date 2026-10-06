@@ -30,7 +30,7 @@ export interface ClusterViewContextValue {
   setSelectedNamespace: (s: string) => void
   isNamespaceDropdownOpen: boolean
   setIsNamespaceDropdownOpen: (b: boolean) => void
-  namespaceDropdownRef: React.RefObject<HTMLDivElement>
+  namespaceDropdownRef: React.RefObject<HTMLDivElement | null>
   searchQuery: string
   setSearchQuery: (s: string) => void
 
@@ -61,8 +61,8 @@ export interface ClusterViewContextValue {
   setIsExecContainerDropdownOpen: (b: boolean) => void
   isExecShellDropdownOpen: boolean
   setIsExecShellDropdownOpen: (b: boolean) => void
-  execContainerDropdownRef: React.RefObject<HTMLDivElement>
-  execShellDropdownRef: React.RefObject<HTMLDivElement>
+  execContainerDropdownRef: React.RefObject<HTMLDivElement | null>
+  execShellDropdownRef: React.RefObject<HTMLDivElement | null>
 
   // context-menu + delete modal
   podContextMenu: PodContextMenuPosition | null

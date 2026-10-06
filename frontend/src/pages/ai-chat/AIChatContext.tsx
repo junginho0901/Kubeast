@@ -31,7 +31,7 @@ export interface AIChatContextValue {
   setPendingFinalSyncSessionId: (id: string | null) => void
   pinnedSessions: Record<string, Session>
   setPinnedSessions: React.Dispatch<React.SetStateAction<Record<string, Session>>>
-  messagesEndRef: React.RefObject<HTMLDivElement>
+  messagesEndRef: React.RefObject<HTMLDivElement | null>
 }
 
 export const AIChatContext = createContext<AIChatContextValue | null>(null)

@@ -23,7 +23,7 @@ interface Props {
   sessionsHasNextPage: boolean
   sessionsFetchingNextPage: boolean
   fetchNextSessions: () => void
-  sessionsScrollRef: React.RefObject<HTMLDivElement>
+  sessionsScrollRef: React.RefObject<HTMLDivElement | null>
   sessionsScrollTop: number
   sessionsViewportHeight: number
   handleSessionsScroll: (e: React.UIEvent<HTMLDivElement>) => void

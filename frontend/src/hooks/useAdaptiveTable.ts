@@ -5,7 +5,7 @@ import { useAdaptiveRowsPerPage } from './useAdaptiveRowsPerPage'
 // table is wider than the wrapper, so index.css can paint an edge fade + chevron
 // (background-attachment: scroll keeps it pinned to the wrapper's edge). Without
 // it a wide table at 1024–1440 px just looks cut off.
-function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement>) {
+function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     const body = bodyRef.current
     if (!body) return

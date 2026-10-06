@@ -18,10 +18,10 @@ interface Props {
   totalPages: number
   rowsPerPage: number
   onPageChange: (page: number) => void
-  tableContainerRef: RefObject<HTMLDivElement>
-  tableBodyRef: RefObject<HTMLDivElement>
-  theadRef: RefObject<HTMLTableSectionElement>
-  firstRowRef: RefObject<HTMLTableRowElement>
+  tableContainerRef: RefObject<HTMLDivElement | null>
+  tableBodyRef: RefObject<HTMLDivElement | null>
+  theadRef: RefObject<HTMLTableSectionElement | null>
+  firstRowRef: RefObject<HTMLTableRowElement | null>
   onRowClick: (name: string) => void
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }
