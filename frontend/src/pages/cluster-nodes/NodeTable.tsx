@@ -4,6 +4,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
+import { Trans } from 'react-i18next'
 
 interface Props {
   pagedNodes: NodeInfo[]
@@ -121,7 +122,8 @@ export default function NodeTable({
                 <td colSpan={9} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
+                    
+                    <Trans i18nKey="common.loading" />
                   </div>
                 </td>
               </tr>

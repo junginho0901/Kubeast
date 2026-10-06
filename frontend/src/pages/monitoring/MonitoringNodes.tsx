@@ -245,7 +245,7 @@ export default function MonitoringNodes({
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-400 flex items-center gap-2">
                       <HardDrive className="w-4 h-4" />
-                      Memory
+                      {t('monitoring.memory', 'Memory')}
                     </span>
                     <span
                       className={`font-medium ${

@@ -153,7 +153,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                         <span className="font-medium">{r.kind}</span>
                         {!r.namespaced && (
                           <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
-                            cluster
+                            {t('advancedSearch.clusterScoped', 'cluster')}
                           </span>
                         )}
                       </button>

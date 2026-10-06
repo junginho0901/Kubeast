@@ -109,7 +109,7 @@ export default function WorkloadOwnedResources({
       )}
 
       {showOwnedPods && (
-        <InfoSection title={tr('workload.ownedPods', `Pods (${displayPods.length})`)}>
+        <InfoSection title="Pods ({{n}})" titleValues={{ n: displayPods.length }}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[700px]">
               <thead className="text-slate-400">

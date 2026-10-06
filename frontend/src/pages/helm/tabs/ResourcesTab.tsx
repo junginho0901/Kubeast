@@ -31,10 +31,10 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
       <table className="w-full text-sm">
         <thead className="bg-slate-800 text-slate-300 text-left">
           <tr>
-            <th className="px-3 py-2">Kind</th>
+            <th className="px-3 py-2">{t('helmReleaseDetail.resources.col.kind', 'Kind')}</th>
             <th className="px-3 py-2">API Version</th>
-            <th className="px-3 py-2">Name</th>
-            <th className="px-3 py-2">Namespace</th>
+            <th className="px-3 py-2">{t('helmReleaseDetail.resources.col.name', 'Name')}</th>
+            <th className="px-3 py-2">{t('helmReleaseDetail.resources.col.namespace', 'Namespace')}</th>
           </tr>
         </thead>
         <tbody className="bg-slate-900/40 divide-y divide-slate-800">

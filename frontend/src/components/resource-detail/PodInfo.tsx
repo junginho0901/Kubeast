@@ -615,7 +615,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         renderPodAffinitySection(affinity.podAntiAffinity, tr('pod.affinity.podAntiAffinity', 'Pod Anti-Affinity'))
         if (sections.length === 0) return null
         return (
-          <InfoSection title={tr('pod.affinity', 'Affinity')}>
+          <InfoSection title={tr('pod.affinityTitle', 'Affinity')}>
             <div className="space-y-3">
               {sections.map((s, i) => (
                 <div key={i}>
@@ -690,7 +690,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {/* Volumes */}
       {Array.isArray((podDescribe?.volumes as any[]) ?? (spec.volumes as any[])) &&
         (((podDescribe?.volumes as any[]) ?? (spec.volumes as any[])) as any[]).length > 0 && (
-        <InfoSection title={tr('pod.volumes', 'Volumes')}>
+        <InfoSection title={tr('pod.volumesTitle', 'Volumes')}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs table-fixed min-w-[500px]">
               <thead className="text-slate-400">

@@ -137,7 +137,7 @@ export default function SetupClusterPage({
           className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isBusy
-            ? tr('setup.submit.loading', 'Applying...')
+            ? tr('setup.submitLoading', 'Applying...')
             : tr('setup.submit', 'Continue')}
         </button>
       </div>

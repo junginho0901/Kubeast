@@ -16,6 +16,7 @@ import {
   gatewayClassToRawJson,
   type SortKey,
 } from './gatewayClassHelpers'
+import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
   kind: string
@@ -129,7 +130,8 @@ export function GatewayClassTable({
                 <td colSpan={5} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
+                    
+                    <Trans i18nKey="common.loading" />
                   </div>
                 </td>
               </tr>

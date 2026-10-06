@@ -36,7 +36,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                     <span className="text-xs text-slate-400 w-16 shrink-0">GPU {gpu.gpu}</span>
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 w-7">Core</span>
+                        <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
                         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
@@ -46,7 +46,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                         <span className="text-[10px] font-mono text-slate-300 w-10 text-right">{Math.round(gpu.gpu_util)}%</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 w-7">Mem</span>
+                        <span className="text-[10px] text-slate-500 w-7">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
                         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${gpu.memory_util_percent >= 80 ? 'bg-red-500' : gpu.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
@@ -65,8 +65,8 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost }: Props) {
                 ))}
               </div>
               <div className="mt-2 pt-2 border-t border-slate-700/50 flex gap-4 text-[10px] text-slate-500">
-                <span>Avg Core: {Math.round(avgUtil)}%</span>
-                <span>Avg Mem: {Math.round(avgMem)}%</span>
+                <span>{tr('gpuNodes.avgCore', 'Avg Core')}: {Math.round(avgUtil)}%</span>
+                <span>{tr('gpuNodes.avgMem', 'Avg Mem')}: {Math.round(avgMem)}%</span>
               </div>
             </div>
           )

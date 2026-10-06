@@ -72,29 +72,29 @@ export default function ModelConfigForm({ form }: Props) {
       <div className="grid gap-4 md:grid-cols-2">
         {/* Name */}
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1">Name</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('admin.aiModels.name', 'Name')}</label>
           <input
             type="text"
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
-            placeholder="e.g. my-gpt4"
+            placeholder={tr('admin.aiModels.namePlaceholder', 'e.g. my-gpt4')}
             className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
           />
         </div>
 
         {/* Provider — custom dropdown */}
         <CustomDropdown
-          label="Provider"
+          label={tr('admin.aiModels.provider', 'Provider')}
           options={providerOptions}
           value={formProvider}
           onChange={handleProviderChange}
-          placeholder="Select provider"
+          placeholder={tr('admin.aiModels.selectProvider', 'Select provider')}
         />
 
         {/* Model — 2-tier: dropdown + custom toggle */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-semibold text-slate-400">Model</label>
+            <label className="text-xs font-semibold text-slate-400">{tr('admin.aiModels.model', 'Model')}</label>
             {currentProviderDef.models.length > 0 && (
               <button
                 type="button"
@@ -106,7 +106,7 @@ export default function ModelConfigForm({ form }: Props) {
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"
               >
-                {formCustomModel ? '← Select from list' : 'Custom model name →'}
+                {formCustomModel ? tr('admin.aiModels.selectFromList', '← Select from list') : tr('admin.aiModels.customModel', 'Custom model name →')}
               </button>
             )}
           </div>
@@ -115,14 +115,14 @@ export default function ModelConfigForm({ form }: Props) {
               options={currentModelOptions}
               value={formModel}
               onChange={setFormModel}
-              placeholder="Select model"
+              placeholder={tr('admin.aiModels.selectModel', 'Select model')}
             />
           ) : (
             <input
               type="text"
               value={formModel}
               onChange={(e) => setFormModel(e.target.value)}
-              placeholder="e.g. gpt-4o-mini"
+              placeholder={tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
             />
           )}
@@ -132,7 +132,7 @@ export default function ModelConfigForm({ form }: Props) {
         {currentProviderDef.needsBaseUrl && (
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1">
-              Base URL {currentProviderDef.id !== 'custom' ? '(required)' : ''}
+              Base URL {currentProviderDef.id !== 'custom' ? tr('admin.aiModels.required', '(required)') : ''}
             </label>
             <input
               type="text"
@@ -147,7 +147,7 @@ export default function ModelConfigForm({ form }: Props) {
         {/* API key env var — the key itself is never stored */}
         {currentProviderDef.needsApiKey !== false && (
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">API key env var</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('admin.aiModels.apiKeyEnv', 'API key env var')}</label>
             <input
               type="text"
               value={formApiKeyEnv}
@@ -157,7 +157,7 @@ export default function ModelConfigForm({ form }: Props) {
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
             />
             <p className="mt-1 text-[10px] text-slate-500">
-              Name of the environment variable in ai-service that holds the key (Helm values ai.*ApiKey or ai.apiKeysSecret). Keys are never stored in the database.
+              {tr('admin.aiModels.apiKeyEnvHint', 'Name of the environment variable in ai-service that holds the key (Helm values ai.*ApiKey or ai.apiKeysSecret). Keys are never stored in the database.')}
             </p>
           </div>
         )}
@@ -170,7 +170,7 @@ export default function ModelConfigForm({ form }: Props) {
           return (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 flex items-center gap-2">
               <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-              This model does not support tool/function calling. AI assistant features that require tools will not work.
+              {tr('admin.aiModels.noToolCalling', 'This model does not support tool/function calling. AI assistant features that require tools will not work.')}
             </div>
           )
         }
@@ -239,7 +239,7 @@ export default function ModelConfigForm({ form }: Props) {
             onChange={(e) => setFormEnabled(e.target.checked)}
             className="rounded border-slate-600"
           />
-          Enabled
+          {tr('admin.aiModels.enabled', 'Enabled')}
         </label>
         <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
           <input
@@ -249,7 +249,7 @@ export default function ModelConfigForm({ form }: Props) {
             className="rounded border-slate-600"
           />
           <CircleDot className="h-3.5 w-3.5 text-emerald-400" />
-          Set as Active
+          {tr('admin.aiModels.setActive', 'Set as Active')}
         </label>
       </div>
 
@@ -261,7 +261,7 @@ export default function ModelConfigForm({ form }: Props) {
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600 disabled:opacity-50"
         >
           {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-yellow-400" />}
-          Test
+          {tr('admin.aiModels.test', 'Test')}
         </button>
 
         {testResult && (
@@ -276,7 +276,7 @@ export default function ModelConfigForm({ form }: Props) {
             onClick={resetForm}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
           >
-            Cancel
+            {tr('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleSubmit}
@@ -284,7 +284,7 @@ export default function ModelConfigForm({ form }: Props) {
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500 disabled:opacity-50"
           >
             {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {editingId ? 'Update' : 'Create'}
+            {editingId ? tr('admin.aiModels.update', 'Update') : tr('admin.aiModels.create', 'Create')}
           </button>
         </div>
       </div>
@@ -294,8 +294,7 @@ export default function ModelConfigForm({ form }: Props) {
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-300/80 space-y-2">
           <p className="flex items-center gap-1.5">
             <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-            Connection test failed. If you've recently added a new API key to the Kubernetes Secret,
-            the ai-service pod may need a restart to pick up the new environment variable.
+            {tr('admin.aiModels.testFailedHint', "Connection test failed. If you've recently added a new API key to the Kubernetes Secret, the ai-service pod may need a restart to pick up the new environment variable.")}
           </p>
           <button
             type="button"
@@ -308,7 +307,7 @@ export default function ModelConfigForm({ form }: Props) {
             ) : (
               <RefreshCw className="h-3 w-3" />
             )}
-            {rolloutStatus === 'rolling' ? 'Checking…' : 'Check service health'}
+            {rolloutStatus === 'rolling' ? tr('admin.aiModels.checking', 'Checking…') : tr('admin.aiModels.checkHealth', 'Check service health')}
           </button>
           {rolloutMessage && (
             <p className={`text-[11px] ${rolloutStatus === 'done' ? 'text-emerald-400' : rolloutStatus === 'error' ? 'text-red-400' : 'text-slate-400'}`}>

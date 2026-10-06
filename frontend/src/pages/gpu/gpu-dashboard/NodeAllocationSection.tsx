@@ -67,7 +67,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
                     <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {node.gpu_model ?? 'Unknown'} {node.gpu_memory ? `• ${node.gpu_memory}` : ''}
+                    {node.gpu_model ?? tr('common.unknown', 'Unknown')} {node.gpu_memory ? `• ${node.gpu_memory}` : ''}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">

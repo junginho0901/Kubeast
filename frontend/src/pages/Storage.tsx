@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import ComingSoon from './ComingSoon'
 import PersistentVolumeClaims from './storage/PersistentVolumeClaims'
@@ -17,6 +18,7 @@ function normalizeTab(value: string | null): StorageTab {
 }
 
 export default function Storage() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const tab = useMemo(() => normalizeTab(searchParams.get('tab')), [searchParams])
 
@@ -24,5 +26,5 @@ export default function Storage() {
   if (tab === 'pvs') return <PersistentVolumes />
   if (tab === 'storageclasses') return <StorageClasses />
   if (tab === 'volumeattachments') return <VolumeAttachments />
-  return <ComingSoon title="Storage" />
+  return <ComingSoon title={t('storage.title', 'Storage')} />
 }

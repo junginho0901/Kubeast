@@ -251,7 +251,7 @@ export default function AdvancedSearch() {
             <Search className="w-7 h-7 text-sky-400" />
             {t('advancedSearch.title', 'Advanced Search')}
             <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-medium">
-              Beta
+              {t('advancedSearch.beta', 'Beta')}
             </span>
           </h1>
           <p className="mt-1 text-sm text-slate-400">

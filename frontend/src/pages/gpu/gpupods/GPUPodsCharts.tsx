@@ -42,7 +42,7 @@ export function GPUPodsCharts({
                 <div>
                   <span className="text-sm font-medium text-white">{node}</span>
                   <span className="ml-2 text-xs text-slate-400">
-                    {info.podCount} {info.podCount === 1 ? 'pod' : 'pods'}
+                    {info.podCount === 1 ? tr('gpuPods.podCountOne', '{{n}} pod', { n: info.podCount }) : tr('gpuPods.podCount', '{{n}} pods', { n: info.podCount })}
                   </span>
                 </div>
                 <span className="text-sm font-semibold text-violet-300">

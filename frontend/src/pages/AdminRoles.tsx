@@ -212,10 +212,10 @@ export default function AdminRoles() {
                   <td className="px-4 py-3">
                     {role.is_system ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-400 border border-blue-500/20">
-                        <Shield className="w-2.5 h-2.5" /> System
+                        <Shield className="w-2.5 h-2.5" /> {tr('adminRoles.system', 'System')}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">Custom</span>
+                      <span className="text-xs text-slate-400">{tr('adminRoles.custom', 'Custom')}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">

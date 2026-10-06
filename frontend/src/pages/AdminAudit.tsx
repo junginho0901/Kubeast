@@ -441,6 +441,8 @@ interface AuditRowProps {
 }
 
 function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
+  const { t } = useTranslation()
+  const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   const targetDisplay = entry.TargetEmail || entry.TargetID || '-'
   const recordingId = recordingIdOf(entry)
 
@@ -482,7 +484,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
           <td colSpan={8} className="px-4 py-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
-                <div className="text-slate-400 mb-1">HTTP Context</div>
+                <div className="text-slate-400 mb-1">{tr('adminAudit.detail.httpContext', 'HTTP Context')}</div>
                 <dl className="grid grid-cols-[100px_1fr] gap-y-1 text-slate-300">
                   <dt className="text-slate-500">IP</dt>
                   <dd>{entry.RequestIP || '-'}</dd>
@@ -492,16 +494,16 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
                   <dd className="font-mono">{entry.RequestID || '-'}</dd>
                   <dt className="text-slate-500">Path</dt>
                   <dd className="font-mono break-all">{entry.Path || '-'}</dd>
-                  <dt className="text-slate-500">Cluster</dt>
+                  <dt className="text-slate-500">{tr('adminAudit.filter.cluster', 'Cluster')}</dt>
                   <dd>{entry.Cluster || '-'}</dd>
-                  <dt className="text-slate-500">TargetType</dt>
+                  <dt className="text-slate-500">{tr('adminAudit.detail.targetType', 'TargetType')}</dt>
                   <dd>{entry.TargetType || '-'}</dd>
                 </dl>
               </div>
               <div>
                 {entry.Error && (
                   <div className="mb-2">
-                    <div className="text-red-400 mb-1">Error</div>
+                    <div className="text-red-400 mb-1">{tr('adminAudit.detail.error', 'Error')}</div>
                     <div className="rounded bg-red-950/50 border border-red-800 p-2 text-red-200 font-mono">
                       {entry.Error}
                     </div>
@@ -509,7 +511,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
                 )}
                 {entry.Before !== undefined && entry.Before !== null && (
                   <div className="mb-2">
-                    <div className="text-slate-400 mb-1">Before</div>
+                    <div className="text-slate-400 mb-1">{tr('adminAudit.detail.before', 'Before')}</div>
                     <pre className="rounded bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
                       {JSON.stringify(entry.Before, null, 2)}
                     </pre>
@@ -517,7 +519,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
                 )}
                 {entry.After !== undefined && entry.After !== null && (
                   <div>
-                    <div className="text-slate-400 mb-1">After</div>
+                    <div className="text-slate-400 mb-1">{tr('adminAudit.detail.after', 'After')}</div>
                     <pre className="rounded bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
                       {JSON.stringify(entry.After, null, 2)}
                     </pre>
