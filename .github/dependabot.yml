@@ -46,9 +46,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/react-dom"
         update-types: ["version-update:semver-major"]
-      # TypeScript 6/7 (7 = the native compiler) change tsc flags and need
-      # matching @typescript-eslint and vite plugin releases; a separate migration.
+      # tsc is TypeScript 7 (@typescript/native); typescript stays the TS 6
+      # compatibility package that typescript-eslint imports. A new major of
+      # either is its own migration.
       - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript/native"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
