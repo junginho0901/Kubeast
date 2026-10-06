@@ -77,13 +77,13 @@ export function EndpointTargets({ endpoint }: { endpoint: EndpointInfo | null })
   return (
     <div className="space-y-4">
       <TargetList
-        title="Ready targets (max 50)"
+        title={i18next.t('networkOverview.readyTargets', 'Ready targets (max 50)')}
         targets={endpoint.ready_targets}
         addresses={endpoint.ready_addresses}
         tone="success"
       />
       <TargetList
-        title="Not-ready targets (max 50)"
+        title={i18next.t('networkOverview.notReadyTargets', 'Not-ready targets (max 50)')}
         targets={endpoint.not_ready_targets}
         addresses={endpoint.not_ready_addresses}
         tone="warning"

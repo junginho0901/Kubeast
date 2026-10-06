@@ -8,6 +8,7 @@ import type { Node, Edge } from 'react-flow-renderer'
 import { Position } from 'react-flow-renderer'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { Layers } from 'lucide-react'
+import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge } from '@/services/api'
 import { kindWeight, type GroupBy } from './constants'
 
@@ -166,7 +167,7 @@ export async function applyElkLayout(
           <div className="flex items-center gap-2 px-3 py-1.5">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-xs font-semibold text-slate-300">
-              {groupBy === 'namespace' ? 'NS' : groupBy === 'node' ? 'Node' : 'Instance'}: {groupKey}
+              {groupBy === 'namespace' ? 'NS' : groupBy === 'node' ? i18next.t('resourceGraph.glance.node', 'Node') : i18next.t('resourceGraph.glance.instance', 'Instance')}: {groupKey}
             </span>
             <span className="text-[10px] text-slate-500">({group.children?.length || 0})</span>
           </div>

@@ -2,6 +2,8 @@
 // promCluster.available 일 때만 mount. 4개 metric 모두 null 이면 빈 grid 만.
 // 색상 threshold 는 기존 inline 과 동일: >=80 red / >=60 amber / else 정상색.
 
+import { useTranslation } from 'react-i18next'
+
 interface Props {
   title: string
   cpu: number | null
@@ -34,21 +36,22 @@ function MetricBar({ label, value, normalClass }: { label: string; value: number
 }
 
 export function PrometheusClusterMetrics({ title, cpu, memory, disk, podCount }: Props) {
+  const { t } = useTranslation()
   return (
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
         <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
         <h2 className="text-xl font-bold text-white">{title}</h2>
-        <span className="text-xs text-slate-500">Live</span>
+        <span className="text-xs text-slate-500">{t('dashboard.live', 'Live')}</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {cpu !== null && <MetricBar label="CPU" value={cpu} normalClass="bg-emerald-500" />}
-        {memory !== null && <MetricBar label="Memory" value={memory} normalClass="bg-blue-500" />}
-        {disk !== null && <MetricBar label="Disk" value={disk} normalClass="bg-violet-500" />}
+        {memory !== null && <MetricBar label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-blue-500" />}
+        {disk !== null && <MetricBar label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-violet-500" />}
         {podCount !== null && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Pods</span>
+              <span className="text-slate-400">{t('dashboard.pods', 'Pods')}</span>
               <span className="font-mono text-slate-300">{Math.round(podCount)}</span>
             </div>
             <div className="text-2xl font-bold text-white">{Math.round(podCount)}</div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trans } from 'react-i18next'
 import { ChevronDown, CheckCircle } from 'lucide-react'
 
 export interface DropdownOption {
@@ -131,7 +132,7 @@ export default function CustomDropdown({
             )
           })}
           {options.length === 0 && (
-            <div className="px-4 py-2.5 text-sm text-slate-400">No options</div>
+            <div className="px-4 py-2.5 text-sm text-slate-400"><Trans i18nKey="common.noOptions" defaults="No options" /></div>
           )}
         </div>
       )}

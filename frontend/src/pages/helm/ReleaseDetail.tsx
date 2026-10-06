@@ -178,7 +178,7 @@ export default function HelmReleaseDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white"
         >
           <ArrowLeft className="w-4 h-4" />
-          Helm Releases
+          {t('helmReleases.title', 'Helm Releases')}
         </Link>
       </div>
 

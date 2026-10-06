@@ -125,9 +125,9 @@ export function ResourceGraphHeader({
           {t('resourceGraph.title', 'Resource Graph')}
         </h1>
         <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>{nodeCount} nodes</span>
+          <span>{t('resourceGraph.nodeCount', { defaultValue: '{{n}} nodes', n: nodeCount })}</span>
           <span>·</span>
-          <span>{edgeCount} edges</span>
+          <span>{t('resourceGraph.edgeCount', { defaultValue: '{{n}} edges', n: edgeCount })}</span>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export function ResourceGraphHeader({
           >
             <span className="truncate">
               {selectedNamespaces.size === 0
-                ? 'Select Namespace...'
+                ? t('resourceGraph.selectNamespace', 'Select Namespace...')
                 : [...selectedNamespaces].join(', ')}
             </span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNsDropdownOpen ? 'rotate-180' : ''}`} />
@@ -154,7 +154,7 @@ export function ResourceGraphHeader({
                   onClick={() => setSelectedNamespaces(new Set())}
                   className="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-600 transition-colors border-b border-slate-600"
                 >
-                  Clear selection
+                  {t('resourceGraph.clearSelection', 'Clear selection')}
                 </button>
               )}
               {(namespaces || []).map(ns => (

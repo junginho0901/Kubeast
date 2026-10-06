@@ -47,9 +47,9 @@ export function IngressSection({ ingresses, ingressDetails, ingressClasses }: Pr
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-medium text-slate-100 truncate">{ing.name}</div>
                   <div className="text-xs text-slate-400">
-                    class: {detail?.class || ing.class || '(none)'}
+                    class: {detail?.class || ing.class || t('common.none', '(none)')}
                     {classSourceLabel ? ` (${classSourceLabel})` : ''}
-                    {detail?.class_is_default || klass?.is_default ? ' (default)' : ''}
+                    {detail?.class_is_default || klass?.is_default ? ` (${t('networkOverview.default', 'default')})` : ''}
                   </div>
                 </div>
                 {addresses ? (
@@ -79,11 +79,11 @@ export function IngressSection({ ingresses, ingressDetails, ingressClasses }: Pr
                     : (ing.hosts || []).join('\n') || t('networkOverview.noHosts')}
                 </div>
                 <div className="mt-2 text-[11px] text-slate-400">
-                  controller: {detail?.class_controller || klass?.controller || '(unknown)'}
+                  controller: {detail?.class_controller || klass?.controller || `(${t('common.unknown', 'unknown')})`}
                 </div>
                 {(detail?.events || []).length > 0 ? (
                   <div className="mt-2 border-t border-slate-700 pt-2">
-                    <div className="text-[11px] text-slate-400 mb-1">events (latest)</div>
+                    <div className="text-[11px] text-slate-400 mb-1">{t('networkOverview.latestEvents', 'events (latest)')}</div>
                     <div className="space-y-1">
                       {detail!.events.slice(0, 3).map((e, idx) => (
                         <div key={idx} className="text-[11px] text-slate-300">

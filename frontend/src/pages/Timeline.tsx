@@ -306,7 +306,7 @@ export default function Timeline() {
                   onClick={() => setShowCount((c) => c + 50)}
                   className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
-                  {t('timeline.loadMore', 'Load More')} ({mergedItems.length - showCount} remaining)
+                  {t('timeline.loadMore', 'Load More')} {t('timeline.remaining', { defaultValue: '({{n}} remaining)', n: mergedItems.length - showCount })}
                 </button>
               </div>
             )}
@@ -391,7 +391,7 @@ function EventRow({
           </button>
           {event.source && (
             <span className="text-[11px] text-gray-400 dark:text-gray-500">
-              via {event.source}
+              {t('timeline.via', { defaultValue: 'via {{source}}', source: event.source })}
             </span>
           )}
         </div>

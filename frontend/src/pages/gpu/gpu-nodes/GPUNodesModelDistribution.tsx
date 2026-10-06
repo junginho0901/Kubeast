@@ -36,7 +36,7 @@ export default function GPUNodesModelDistribution({ modelDistribution }: Props) 
               <div className="flex items-center justify-between text-sm text-white">
                 <span className="font-medium truncate">{model}</span>
                 <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">
-                  {info.count} {info.count === 1 ? 'node' : 'nodes'}
+                  {info.count === 1 ? tr('gpuNodes.nodeCountOne', '{{n}} node', { n: info.count }) : tr('gpuNodes.nodeCount', '{{n}} nodes', { n: info.count })}
                 </span>
               </div>
               <div className="mt-3 space-y-2">

@@ -1407,7 +1407,9 @@
       "systemProxy": "Kube Proxy",
       "systemBootId": "Boot ID",
       "systemMachineId": "Machine ID",
-      "systemUuid": "System UUID"
+      "systemUuid": "System UUID",
+      "gpu": "GPU 정보",
+      "prometheus": "실시간 메트릭"
     },
     "pods": {
       "search": "파드 필터...",
@@ -1540,7 +1542,8 @@
       "cpuLimit": "CPU Limit",
       "memoryUsage": "Memory (사용량)",
       "memoryLimit": "Memory Limit"
-    }
+    },
+    "memory": "메모리"
   },
   "common": {
     "notAvailable": "N/A",
@@ -1575,7 +1578,20 @@
     "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시",
     "paginationEmpty": "0개 중 0 표시",
     "selectNamespace": "네임스페이스를 선택하세요",
-    "refreshForce": "새로고침 (강제 갱신)"
+    "refreshForce": "새로고침 (강제 갱신)",
+    "noOptions": "옵션 없음",
+    "loadingEditor": "에디터 로딩 중...",
+    "back": "뒤로",
+    "describeUnavailable": "지금은 상세 필드 일부를 볼 수 없습니다.",
+    "no": "아니요",
+    "yes": "예",
+    "save": "저장",
+    "pagination": {
+      "empty": "0",
+      "next": "다음",
+      "prev": "이전",
+      "range": "{{from}}-{{to}} / {{total}}"
+    }
   },
   "dashboard": {
     "optimization": {
@@ -1781,7 +1797,11 @@
       },
       "labels": "라벨",
       "annotations": "어노테이션"
-    }
+    },
+    "live": "실시간",
+    "disk": "디스크",
+    "pods": "파드",
+    "clusterMetrics": "클러스터 리소스 사용률"
   },
   "clusterView": {
     "rbac": {
@@ -1856,7 +1876,8 @@
       "linesCount": "{{count}}줄",
       "download": "다운로드",
       "downloading": "다운로드 중...",
-      "loading": "로그를 불러오는 중..."
+      "loading": "로그를 불러오는 중...",
+      "empty": "로그가 없습니다."
     },
     "title": "클러스터 뷰",
     "subtitle": "노드별 파드 배치를 확인합니다",
@@ -1905,7 +1926,8 @@
       "none": "컨테이너가 없습니다"
     },
     "health": {
-      "title": "Health"
+      "title": "Health",
+      "terminating": "종료 중"
     },
     "describe": {
       "basicInfo": "기본 정보",
@@ -2071,7 +2093,35 @@
       "options": "생성 옵션 (JSON)",
       "optionsHint": "표준 파라미터(temperature, top_p, seed, max_tokens)는 모든 프로바이더에 전달됩니다. 프로바이더 전용 키(예: num_ctx)는 best-effort이며 OpenAI 호환 엔드포인트에서는 무시될 수 있습니다.",
       "caCert": "CA 인증서 (PEM)",
-      "caCertHint": "셀프호스트 HTTPS 엔드포인트의 자체 서명 CA를 신뢰합니다. 비우면 시스템 CA를 사용합니다."
+      "caCertHint": "셀프호스트 HTTPS 엔드포인트의 자체 서명 CA를 신뢰합니다. 비우면 시스템 CA를 사용합니다.",
+      "active": "활성",
+      "disabled": "비활성",
+      "noKeyEnv": "키 환경변수 없음",
+      "setActive": "활성 모델로 지정",
+      "activate": "활성화",
+      "closeEdit": "편집 닫기",
+      "editTitle": "편집",
+      "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
+      "name": "이름",
+      "namePlaceholder": "예: my-gpt4",
+      "provider": "프로바이더",
+      "selectProvider": "프로바이더 선택",
+      "model": "모델",
+      "selectFromList": "← 목록에서 선택",
+      "customModel": "모델 이름 직접 입력 →",
+      "selectModel": "모델 선택",
+      "modelPlaceholder": "예: gpt-4o-mini",
+      "required": "(필수)",
+      "apiKeyEnv": "API 키 환경변수 이름",
+      "apiKeyEnvHint": "키를 담고 있는 ai-service 환경변수 이름입니다(Helm values ai.*ApiKey 또는 ai.apiKeysSecret). 키 자체는 DB에 저장되지 않습니다.",
+      "noToolCalling": "이 모델은 툴 호출(Function Calling)을 지원하지 않습니다. 툴이 필요한 AI 어시스턴트 기능은 동작하지 않습니다.",
+      "enabled": "사용",
+      "test": "연결 테스트",
+      "update": "수정",
+      "create": "생성",
+      "testFailedHint": "연결 테스트에 실패했습니다. Kubernetes Secret에 새 API 키를 최근에 추가했다면 ai-service 파드를 재시작해야 새 환경변수를 읽습니다.",
+      "checking": "확인 중…",
+      "checkHealth": "서비스 상태 확인"
     },
     "userClusterRoles": {
       "title": "클러스터 접근",
@@ -2159,7 +2209,8 @@
       "role": "역할",
       "cancel": "취소",
       "creating": "생성 중...",
-      "create": "생성"
+      "create": "생성",
+      "selectRole": "역할 선택"
     },
     "reauth": {
       "ariaLabel": "재로그인 필요",
@@ -2220,7 +2271,9 @@
       "enable": "노드 셸 사용",
       "enableHint": "노드 상세 화면에 디버그 셸 액션을 표시합니다.",
       "namespace": "네임스페이스",
-      "image": "리눅스 이미지"
+      "image": "리눅스 이미지",
+      "imageHint": "서버 허용 목록에 있어야 합니다(Helm nodeShell.images / NODE_SHELL_IMAGES). 셸 파드는 항상 전용 특권 네임스페이스에서 실행됩니다.",
+      "namespaceHint": "참고용: 서버는 셸 파드를 항상 설정된 특권 네임스페이스(NODE_SHELL_NAMESPACE)에 만듭니다."
     }
   },
   "storage": {
@@ -2389,7 +2442,8 @@
       "skip": "건너뛰기 — 기본값 사용",
       "save": "저장 후 계속",
       "saving": "저장 중..."
-    }
+    },
+    "submitLoading": "적용 중..."
   },
   "resourceGraph": {
     "title": "리소스 그래프",
@@ -2409,7 +2463,22 @@
     "featureFilteringDesc": "리소스 타입, 상태,\n엣지 타입별 필터",
     "featureInteractionTitle": "인터랙션",
     "featureInteractionDesc": "호버로 프리뷰,\n클릭으로 상세 보기",
-    "selectNamespaceHint": "왼쪽 상단 드롭다운에서 네임스페이스를 선택하세요"
+    "selectNamespaceHint": "왼쪽 상단 드롭다운에서 네임스페이스를 선택하세요",
+    "legendRunning": "실행 중 / 활성",
+    "legendPending": "대기 중",
+    "legendFailed": "실패 / 오류",
+    "glance": {
+      "status": "상태",
+      "ready": "준비",
+      "namespace": "네임스페이스",
+      "node": "노드",
+      "owner": "소유자",
+      "instance": "인스턴스"
+    },
+    "nodeCount": "리소스 {{n}}개",
+    "edgeCount": "연결 {{n}}개",
+    "selectNamespace": "네임스페이스 선택...",
+    "clearSelection": "선택 해제"
   },
   "advancedSearch": {
     "title": "고급 검색",
@@ -2474,7 +2543,11 @@
     "readonly": "읽기 전용",
     "editHint": "YAML 편집",
     "applied": "적용됨",
-    "refreshing": "새로고침 중..."
+    "refreshing": "새로고침 중...",
+    "clusterScoped": "클러스터",
+    "copyName": "이름 복사",
+    "detail": "상세",
+    "beta": "베타"
   },
   "serviceAccountsPage": {
     "title": "서비스 어카운트",
@@ -2667,7 +2740,12 @@
     "noMatchingKeys": "일치하는 키가 없습니다.",
     "noData": "데이터 항목이 없습니다.",
     "ownerReferences": "소유자 참조",
-    "maskedHint": "읽기 전용 사용자에게는 값이 숨겨집니다."
+    "maskedHint": "읽기 전용 사용자에게는 값이 숨겨집니다.",
+    "dockerConfigInfo": "Docker 레지스트리 정보",
+    "registries": "레지스트리",
+    "tlsCertInfo": "TLS 인증서 정보",
+    "tlsHint": "전체 인증서 정보는 `openssl x509 -in tls.crt -text -noout`로 확인하세요.",
+    "user": "사용자"
   },
   "crdPage": {
     "title": "Custom Resource Definitions",
@@ -2798,7 +2876,10 @@
     "repeated": "{{count}}회 반복",
     "resourceFilter": "리소스 종류",
     "refresh": "새로고침",
-    "closeSummary": "요약 닫기"
+    "closeSummary": "요약 닫기",
+    "remaining": "({{n}}개 남음)",
+    "via": "{{source}} 경유",
+    "namespace": "네임스페이스"
   },
   "adminOrg": {
     "title": "팀 관리",
@@ -2906,8 +2987,40 @@
     "col": {
       "userName": "이름",
       "userEmail": "이메일",
-      "userTeam": "팀"
-    }
+      "userTeam": "팀",
+      "description": "설명",
+      "name": "이름",
+      "permissions": "권한",
+      "type": "유형"
+    },
+    "system": "시스템",
+    "custom": "사용자 정의",
+    "cancel": "취소",
+    "create": "역할 생성",
+    "createBtn": "생성",
+    "createError": "역할을 만들지 못했습니다",
+    "createTitle": "역할 생성",
+    "customNote": "이 역할에 줄 권한을 고르세요(본인이 가진 권한만)",
+    "delete": "삭제",
+    "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
+    "edit": "편집",
+    "editTitle": "역할 편집",
+    "form": {
+      "desc": "설명",
+      "descPh": "예: 인프라팀 리드",
+      "name": "역할 이름",
+      "namePh": "예: InfraManager"
+    },
+    "loading": "로딩 중...",
+    "nameRequired": "역할 이름을 입력하세요",
+    "noPerms": "권한 없음",
+    "save": "저장",
+    "saving": "저장 중...",
+    "selectedCount": "권한 {{count}}개 선택됨",
+    "subtitle": "세분화된 권한으로 사용자 정의 역할을 만듭니다",
+    "systemNote": "시스템 역할: 이름과 권한은 고정이고 설명만 바꿀 수 있습니다",
+    "title": "역할 관리",
+    "updateError": "역할을 수정하지 못했습니다"
   },
   "gpuDashboardPage": {
     "title": "GPU 대시보드",
@@ -2937,7 +3050,14 @@
       "avgUtil": "평균 GPU 사용률",
       "avgMemUtil": "평균 메모리 사용률",
       "memUsed": "메모리 사용량",
-      "gpuCount": "물리 GPU"
+      "gpuCount": "물리 GPU",
+      "live": "실시간",
+      "detectedOne": "GPU {{n}}개 감지",
+      "detected": "GPU {{n}}개 감지",
+      "core": "코어",
+      "mem": "메모리",
+      "temp": "온도",
+      "pod": "파드"
     },
     "nodeAllocation": {
       "title": "노드별 GPU 할당",
@@ -2990,7 +3110,11 @@
       "allocatable": "할당 가능",
       "status": "상태",
       "migStrategy": "MIG 전략"
-    }
+    },
+    "nodeCountOne": "노드 {{n}}개",
+    "nodeCount": "노드 {{n}}개",
+    "avgCore": "평균 코어",
+    "avgMem": "평균 메모리"
   },
   "gpuPods": {
     "title": "GPU Pod",
@@ -3018,7 +3142,9 @@
       "age": "Age",
       "gpuUtil": "GPU 사용률",
       "memUtil": "메모리 사용률"
-    }
+    },
+    "podCountOne": "파드 {{n}}개",
+    "podCount": "파드 {{n}}개"
   },
   "deviceClassesPage": {
     "title": "디바이스 클래스",
@@ -3164,7 +3290,15 @@
     },
     "history": {
       "empty": "리비전 기록이 없습니다.",
-      "current": "현재"
+      "current": "현재",
+      "col": {
+        "revision": "리비전",
+        "status": "상태",
+        "chart": "차트",
+        "app": "앱",
+        "updated": "업데이트",
+        "description": "설명"
+      }
     },
     "revision": {
       "title": "리비전 {{rev}} 상세",
@@ -3172,7 +3306,12 @@
       "close": "닫기"
     },
     "resources": {
-      "empty": "이 Release가 관리하는 리소스를 찾지 못했습니다."
+      "empty": "이 Release가 관리하는 리소스를 찾지 못했습니다.",
+      "col": {
+        "kind": "종류",
+        "name": "이름",
+        "namespace": "네임스페이스"
+      }
     },
     "rollback": {
       "button": "롤백",
@@ -3298,7 +3437,9 @@
       "empty": "등록된 클러스터가 없습니다.",
       "test": "테스트",
       "delete": "삭제",
-      "unhealthy": "비정상"
+      "unhealthy": "비정상",
+      "access": "접근 권한 관리",
+      "edit": "편집"
     },
     "register": {
       "title": "클러스터 등록",
@@ -3320,6 +3461,25 @@
       "self": "멀티클러스터 화면에서만 제거됩니다.",
       "external": "저장된 kubeconfig도 함께 삭제됩니다.",
       "submit": "삭제"
+    },
+    "access": {
+      "add": "추가",
+      "allAdded": "모든 사용자에게 이미 부여됨",
+      "empty": "이 클러스터에 접근할 수 있는 사용자가 아직 없습니다.",
+      "note": "여기서 역할을 받은 사용자만 이 클러스터에 접근할 수 있습니다(나머지는 기본 거부). 전역 관리자는 모든 클러스터에 접근하며 목록에 나오지 않습니다. 변경은 사용자가 다시 로그인한 뒤 적용됩니다.",
+      "revoke": "회수",
+      "selectUser": "사용자 선택…",
+      "title": "클러스터 접근 권한"
+    },
+    "edit": {
+      "kubeconfig": "kubeconfig 교체 (선택)",
+      "kubeconfigHint": "비워 두면 지금 kubeconfig를 유지합니다. 자격 증명을 바꾸려면 새 kubeconfig를 붙여 넣으세요.",
+      "sameClusterNote": "새 kubeconfig는 같은 클러스터를 가리켜야 합니다 — RBAC 부여와 채팅 기록은 유지됩니다.",
+      "title": "클러스터 편집"
+    },
+    "noAccess": {
+      "body": "아직 접근 권한을 받은 클러스터가 없습니다. 관리자에게 클러스터 역할을 요청하세요.",
+      "title": "접근 가능한 클러스터 없음"
     }
   },
   "adminAudit": {
@@ -3356,7 +3516,14 @@
     "empty": "조건에 맞는 감사 로그가 없습니다",
     "prev": "이전",
     "next": "다음",
-    "playRecording": "녹화 재생"
+    "playRecording": "녹화 재생",
+    "detail": {
+      "httpContext": "HTTP 컨텍스트",
+      "targetType": "대상 유형",
+      "error": "오류",
+      "before": "변경 전",
+      "after": "변경 후"
+    }
   },
   "topology": {
     "title": "{{namespace}} 리소스 정의",
@@ -3378,7 +3545,18 @@
     "replicasetError": "ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
     "fullSelectorTitle": "전체 selector: {{selector}}",
     "gotoPodsTitle": "ReplicaSet selector로 Pod 목록을 필터링합니다",
-    "gotoPods": "Pods로 이동"
+    "gotoPods": "Pods로 이동",
+    "replicas": "레플리카",
+    "ready": "준비",
+    "available": "사용 가능",
+    "updated": "업데이트됨",
+    "owner": "소유자",
+    "type": "유형",
+    "ports": "포트",
+    "namespace": "네임스페이스",
+    "capacity": "용량",
+    "requested": "요청 용량",
+    "volume": "볼륨"
   },
   "network": {
     "subtitle": "Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy 연결을 빠르게 확인합니다",
@@ -3387,7 +3565,15 @@
     "selectServiceHint": "왼쪽에서 Service를 선택하세요",
     "anomaliesDetected": "이상 징후 감지",
     "selectorless": "selector가 없는 Service입니다. (Pod 매핑/NetworkPolicy 매핑은 제한됩니다)",
-    "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다"
+    "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다",
+    "title": "{{namespace}} 네트워크",
+    "ports": "포트",
+    "pods": "파드",
+    "levelError": "오류",
+    "levelWarn": "경고",
+    "readyCount": "준비 {{n}}",
+    "notReadyCount": "준비 안 됨 {{n}}",
+    "readyOfTotal": "준비 {{ready}} / 전체 {{total}}"
   },
   "adminAIUsage": {
     "title": "AI 사용량",
@@ -3427,7 +3613,28 @@
     "noMatchingPods": "선택된 Service selector에 매칭되는 Pod가 없습니다",
     "isolationHint": "ON이면 “허용 규칙의 합(Union)”만 통과합니다. (CNI/클러스터 설정에 따라 실제 동작은 달라질 수 있음)",
     "noRules": "(rules 없음)",
-    "noHosts": "(hosts 없음)"
+    "noHosts": "(hosts 없음)",
+    "readyTargets": "준비된 대상 (최대 50)",
+    "notReadyTargets": "준비 안 된 대상 (최대 50)",
+    "default": "기본",
+    "latestEvents": "이벤트 (최근)",
+    "ingressIsolation": "Ingress 격리",
+    "egressIsolation": "Egress 격리",
+    "on": "켜짐",
+    "off": "꺼짐",
+    "nsDefaultDenyIngress": "네임스페이스에 default-deny ingress 정책 있음",
+    "nsDefaultDenyEgress": "네임스페이스에 default-deny egress 정책 있음",
+    "selectsAllPods": "모든 파드 선택",
+    "ruleCounts": "ingress 규칙 {{ingress}} · egress 규칙 {{egress}}",
+    "allPods": "모든 파드",
+    "ingressAllow": "Ingress 허용",
+    "egressAllow": "Egress 허용",
+    "allSources": "(모든 출발지)",
+    "allDestinations": "(모든 목적지)",
+    "moreIngressRules": "ingress 규칙 {{n}}개 더",
+    "moreEgressRules": "egress 규칙 {{n}}개 더",
+    "noIngressRules": "(ingress 규칙 없음)",
+    "noEgressRules": "(egress 규칙 없음)"
   },
   "resourcesTabs": {
     "none": "(없음)",
@@ -3444,11 +3651,21 @@
     "pod": {
       "topReasons": "Top reason 요약",
       "podsCount": "pods: {{count}}",
-      "restarts": "재시작: {{count}}"
+      "restarts": "재시작: {{count}}",
+      "node": "노드",
+      "ready": "준비"
     },
     "hpa": {
       "metricsMissing": "Desired 계산 불가: metrics-server/metrics API에서 메트릭을 받지 못했습니다.",
-      "desiredBelowMin": "Desired({{desired}})가 minReplicas({{min}})보다 작습니다. 조건/메트릭을 확인하세요."
+      "desiredBelowMin": "Desired({{desired}})가 minReplicas({{min}})보다 작습니다. 조건/메트릭을 확인하세요.",
+      "target": "대상",
+      "min": "최소",
+      "max": "최대",
+      "current": "현재",
+      "desired": "목표",
+      "metrics": "메트릭",
+      "moreConditions": "(+{{n}}개 더)",
+      "lastScale": "마지막 스케일"
     },
     "search": {
       "clearLabelSelector": "라벨 셀렉터 제거",
@@ -3893,6 +4110,44 @@
       "title": "세션 기록",
       "text": "텍스트",
       "close": "닫기"
+    }
+  },
+  "comingSoon": {
+    "badge": "준비 중",
+    "description": "이 영역은 준비 중입니다. 사이드바 구조는 만들어져 있고 기능은 이어서 채워집니다.",
+    "route": "경로:"
+  },
+  "pod": {
+    "affinityTitle": "Affinity",
+    "affinity": {
+      "nodeAffinity": "Node Affinity",
+      "podAffinity": "Pod Affinity",
+      "podAntiAffinity": "Pod Anti-Affinity",
+      "preferred": "Preferred",
+      "required": "Required"
+    },
+    "secCtx": {
+      "fsGroup": "FS Group",
+      "fsGroupChangePolicy": "FS Group Change Policy",
+      "runAsGroup": "Run As Group",
+      "runAsNonRoot": "Run As Non-Root",
+      "runAsUser": "Run As User",
+      "seccompProfile": "Seccomp Profile",
+      "supplementalGroups": "Supplemental Groups"
+    },
+    "securityContext": "Security Context",
+    "topologySpreadConstraints": "Topology Spread Constraints",
+    "tsc": {
+      "labelSelector": "Label Selector",
+      "maxSkew": "Max Skew",
+      "topologyKey": "Topology Key",
+      "whenUnsatisfiable": "When Unsatisfiable"
+    },
+    "volumesTitle": "볼륨",
+    "volumes": {
+      "details": "상세",
+      "name": "이름",
+      "type": "유형"
     }
   }
 }

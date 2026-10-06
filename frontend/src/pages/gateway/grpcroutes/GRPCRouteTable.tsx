@@ -17,6 +17,7 @@ import {
   grpcRouteToRawJson,
   type SortKey,
 } from './grpcRouteHelpers'
+import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
   kind: string
@@ -148,7 +149,8 @@ export function GRPCRouteTable({
                 <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
+                    
+                    <Trans i18nKey="common.loading" />
                   </div>
                 </td>
               </tr>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { ModelConfigResponse } from '@/services/api'
 import { getProvider, getModelLabel } from '@/constants/modelCatalog'
 import { Check, Pencil, Trash2, X, Radio } from 'lucide-react'
@@ -20,6 +21,8 @@ export default function ModelConfigCard({
   onDelete,
   activateMutation,
 }: Props) {
+  const { t } = useTranslation()
+  const tr = (key: string, fb: string, o?: Record<string, unknown>) => t(key, { defaultValue: fb, ...o })
   const provDef = getProvider(cfg.provider)
   const isActive = cfg.is_default && cfg.enabled
 
@@ -52,13 +55,13 @@ export default function ModelConfigCard({
               {isActive && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
                   <Check className="h-2.5 w-2.5" />
-                  Active
+                  {tr('admin.aiModels.active', 'Active')}
                 </span>
               )}
 
               {!cfg.enabled && (
                 <span className="inline-flex rounded-full border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500">
-                  Disabled
+                  {tr('admin.aiModels.disabled', 'Disabled')}
                 </span>
               )}
             </div>
@@ -68,7 +71,7 @@ export default function ModelConfigCard({
                 ? <span className="text-emerald-600 ml-1">· 🔑 env: {cfg.api_key_env}</span>
                 : provDef?.needsApiKey === false
                   ? null
-                  : <span className="text-red-500 ml-1">· ⚠ No key env</span>}
+                  : <span className="text-red-500 ml-1">· ⚠ {tr('admin.aiModels.noKeyEnv', 'No key env')}</span>}
               {cfg.base_url && <span className="text-slate-600"> · {cfg.base_url}</span>}
             </div>
           </div>
@@ -80,10 +83,10 @@ export default function ModelConfigCard({
               onClick={() => activateMutation.mutate(cfg.id)}
               disabled={activateMutation.isPending}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-400 transition"
-              title="Set as Active"
+              title={tr('admin.aiModels.setActive', 'Set as Active')}
             >
               <Radio className="h-3 w-3" />
-              Activate
+              {tr('admin.aiModels.activate', 'Activate')}
             </button>
           )}
           <button
@@ -93,16 +96,16 @@ export default function ModelConfigCard({
                 ? 'bg-primary-500/20 text-primary-400'
                 : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
             }`}
-            title={isEditing ? 'Close edit' : 'Edit'}
+            title={isEditing ? tr('admin.aiModels.closeEdit', 'Close edit') : tr('admin.aiModels.editTitle', 'Edit')}
           >
             {isEditing ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={() => {
-              if (confirm(`Delete "${cfg.name}"?`)) onDelete(cfg.id)
+              if (confirm(tr('admin.aiModels.deleteConfirm', 'Delete "{{name}}"?', { name: cfg.name }))) onDelete(cfg.id)
             }}
             className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
-            title="Delete"
+            title={tr('common.delete', 'Delete')}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>

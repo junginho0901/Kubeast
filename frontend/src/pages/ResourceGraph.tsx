@@ -192,7 +192,7 @@ export default function ResourceGraph() {
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
             <div className="max-w-lg text-center">
               <div className="text-6xl mb-6 opacity-30">🔗</div>
-              <h2 className="text-xl font-bold text-white mb-3">Resource Graph</h2>
+              <h2 className="text-xl font-bold text-white mb-3">{t('resourceGraph.title', 'Resource Graph')}</h2>
               <p className="text-sm text-slate-400 mb-6 leading-relaxed">
                 {t('resourceGraph.emptyDesc1')}<br />
                 {t('resourceGraph.emptyDesc2')}<br />
@@ -291,15 +291,15 @@ export default function ResourceGraph() {
           <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded border-2 border-green-500" />
-              <span className="text-slate-400">Running / Active</span>
+              <span className="text-slate-400">{t('resourceGraph.legendRunning', 'Running / Active')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded border-2 border-yellow-500" />
-              <span className="text-slate-400">Pending</span>
+              <span className="text-slate-400">{t('resourceGraph.legendPending', 'Pending')}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded border-2 border-red-500" />
-              <span className="text-slate-400">Failed / Error</span>
+              <span className="text-slate-400">{t('resourceGraph.legendFailed', 'Failed / Error')}</span>
             </div>
           </div>
           )}

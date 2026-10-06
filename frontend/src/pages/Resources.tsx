@@ -294,19 +294,19 @@ export default function Resources() {
               </div>
               <div className="mt-4 grid grid-cols-4 gap-4">
                 <div>
-                  <p className="text-xs text-slate-400">Replicas</p>
+                  <p className="text-xs text-slate-400">{t('resources.replicas', 'Replicas')}</p>
                   <p className="text-lg font-bold text-white">{deploy.replicas}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Ready</p>
+                  <p className="text-xs text-slate-400">{t('resources.ready', 'Ready')}</p>
                   <p className="text-lg font-bold text-white">{deploy.ready_replicas}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Available</p>
+                  <p className="text-xs text-slate-400">{t('resources.available', 'Available')}</p>
                   <p className="text-lg font-bold text-white">{deploy.available_replicas}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Updated</p>
+                  <p className="text-xs text-slate-400">{t('resources.updated', 'Updated')}</p>
                   <p className="text-lg font-bold text-white">{deploy.updated_replicas}</p>
                 </div>
               </div>
@@ -334,7 +334,7 @@ export default function Resources() {
                 <div>
                   <h3 className="text-lg font-bold text-white">{rs.name}</h3>
                   <p className="text-sm text-slate-400 mt-1">{rs.image || '-'}</p>
-                  {rs.owner && <p className="text-xs text-slate-500 mt-1">Owner: {rs.owner}</p>}
+                  {rs.owner && <p className="text-xs text-slate-500 mt-1">{t('resources.owner', 'Owner')}: {rs.owner}</p>}
                   {rs.selector && Object.keys(rs.selector).length > 0 && (() => {
                     const full = rs.selector || {}
                     const compact = compactSelector(full)
@@ -375,15 +375,15 @@ export default function Resources() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-xs text-slate-400">Replicas</p>
+                  <p className="text-xs text-slate-400">{t('resources.replicas', 'Replicas')}</p>
                   <p className="text-lg font-bold text-white">{rs.replicas}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Ready</p>
+                  <p className="text-xs text-slate-400">{t('resources.ready', 'Ready')}</p>
                   <p className="text-lg font-bold text-white">{rs.ready_replicas}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Available</p>
+                  <p className="text-xs text-slate-400">{t('resources.available', 'Available')}</p>
                   <p className="text-lg font-bold text-white">{rs.available_replicas}</p>
                 </div>
               </div>
@@ -422,7 +422,7 @@ export default function Resources() {
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-white">{svc.name}</h3>
-                  <p className="text-sm text-slate-400 mt-1">Type: {svc.type}</p>
+                  <p className="text-sm text-slate-400 mt-1">{t('resources.type', 'Type')}: {svc.type}</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4">
@@ -432,12 +432,12 @@ export default function Resources() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">External IP</p>
-                  <p className="text-sm font-mono text-white">{svc.external_ip || 'none'}</p>
+                  <p className="text-sm font-mono text-white">{svc.external_ip || t('common.none', '(none)')}</p>
                 </div>
               </div>
               {svc.ports && svc.ports.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-xs text-slate-400 mb-2">Ports</p>
+                  <p className="text-xs text-slate-400 mb-2">{t('resources.ports', 'Ports')}</p>
                   <div className="flex flex-wrap gap-2">
                     {svc.ports.map((port: any, idx: number) => (
                       <span key={idx} className="badge badge-info">
@@ -476,7 +476,7 @@ export default function Resources() {
                 <div>
                   <h3 className="text-lg font-bold text-white">{pvc.name}</h3>
                   <p className="text-sm text-slate-400 mt-1">
-                    Namespace: {pvc.namespace}
+                    {t('resources.namespace', 'Namespace')}: {pvc.namespace}
                   </p>
                 </div>
                 <span className={`badge ${getStatusColor(pvc.status)}`}>
@@ -485,11 +485,11 @@ export default function Resources() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-xs text-slate-400">Capacity</p>
+                  <p className="text-xs text-slate-400">{t('resources.capacity', 'Capacity')}</p>
                   <p className="text-sm text-white">{pvc.capacity || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Requested</p>
+                  <p className="text-xs text-slate-400">{t('resources.requested', 'Requested')}</p>
                   <p className="text-sm text-white">{pvc.requested || 'N/A'}</p>
                 </div>
                 <div>
@@ -497,7 +497,7 @@ export default function Resources() {
                   <p className="text-sm text-white">{pvc.storage_class || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Volume</p>
+                  <p className="text-xs text-slate-400">{t('resources.volume', 'Volume')}</p>
                   <p className="text-sm font-mono text-white">{pvc.volume_name || 'N/A'}</p>
                 </div>
               </div>

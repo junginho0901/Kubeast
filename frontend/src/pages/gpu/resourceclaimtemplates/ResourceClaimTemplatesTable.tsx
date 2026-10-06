@@ -12,6 +12,7 @@ import type { ResourceClaimTemplateItem } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceClaimTemplatesHelpers'
+import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
   kind: string
@@ -125,7 +126,8 @@ export function ResourceClaimTemplatesTable({
                 <td colSpan={showNamespaceColumn ? 4 : 3} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
+                    
+                    <Trans i18nKey="common.loading" />
                   </div>
                 </td>
               </tr>

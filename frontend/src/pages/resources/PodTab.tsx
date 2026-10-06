@@ -78,7 +78,7 @@ export function PodTab({ filteredPods, podLabelSelector, searchQuery, getStatusC
           <div className="flex items-start justify-between">
             <div>
               <h3 className="text-lg font-bold text-white">{pod.name}</h3>
-              <p className="text-sm text-slate-400 mt-1">Node: {pod.node_name || 'N/A'}</p>
+              <p className="text-sm text-slate-400 mt-1">{t('resourcesTabs.pod.node', 'Node')}: {pod.node_name || 'N/A'}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`badge ${getStatusColor(pod.status)}`}>
@@ -101,7 +101,7 @@ export function PodTab({ filteredPods, podLabelSelector, searchQuery, getStatusC
               <p className="text-sm font-mono text-white">{pod.pod_ip || 'N/A'}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400">Ready</p>
+              <p className="text-xs text-slate-400">{t('resourcesTabs.pod.ready', 'Ready')}</p>
               <p className="text-sm text-white">{pod.ready}</p>
             </div>
           </div>

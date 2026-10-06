@@ -12,7 +12,7 @@ interface Props {
   metricsAvailable: boolean
   metrics: GPUMetricsData | undefined
   gpusByHost: Map<string, GPUDeviceMetric[]>
-  tr: (key: string, fallback: string) => string
+  tr: (key: string, fallback: string, options?: Record<string, unknown>) => string
 }
 
 export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, tr }: Props) {
@@ -27,11 +27,11 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
             {tr('gpuDashboardPage.realtime.title', 'Real-time GPU Metrics')}
           </h2>
           <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400 ring-1 ring-emerald-500/20">
-            Live
+            {tr('gpuDashboardPage.realtime.live', 'Live')}
           </span>
         </div>
         <span className="text-xs text-slate-500">
-          {metrics.gpu_count} GPU{metrics.gpu_count !== 1 ? 's' : ''} detected
+          {tr(metrics.gpu_count === 1 ? 'gpuDashboardPage.realtime.detectedOne' : 'gpuDashboardPage.realtime.detected', metrics.gpu_count === 1 ? '{{n}} GPU detected' : '{{n}} GPUs detected', { n: metrics.gpu_count })}
         </span>
       </div>
 
@@ -86,7 +86,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500 w-8">Core</span>
+                    <span className="text-[10px] text-slate-500 w-8">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
                     <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${gpu.gpu_util >= 80 ? 'bg-red-500' : gpu.gpu_util >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
@@ -96,7 +96,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
                     <span className="text-[10px] font-mono text-slate-300 w-10 text-right">{Math.round(gpu.gpu_util)}%</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500 w-8">Mem</span>
+                    <span className="text-[10px] text-slate-500 w-8">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
                     <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${gpu.memory_util_percent >= 80 ? 'bg-red-500' : gpu.memory_util_percent >= 50 ? 'bg-amber-500' : 'bg-blue-500'}`}
@@ -107,8 +107,8 @@ export function RealtimeMetricsSection({ metricsAvailable, metrics, gpusByHost, 
                   </div>
                   {gpu.memory_temp > 0 && (
                     <div className="text-[10px] text-slate-500">
-                      Temp: <span className={gpu.memory_temp >= 85 ? 'text-red-400' : gpu.memory_temp >= 70 ? 'text-amber-400' : 'text-slate-400'}>{gpu.memory_temp}°C</span>
-                      {gpu.exported_pod && <span className="ml-2">Pod: {gpu.exported_namespace}/{gpu.exported_pod}</span>}
+                      {tr('gpuDashboardPage.realtime.temp', 'Temp')}: <span className={gpu.memory_temp >= 85 ? 'text-red-400' : gpu.memory_temp >= 70 ? 'text-amber-400' : 'text-slate-400'}>{gpu.memory_temp}°C</span>
+                      {gpu.exported_pod && <span className="ml-2">{tr('gpuDashboardPage.realtime.pod', 'Pod')}: {gpu.exported_namespace}/{gpu.exported_pod}</span>}
                     </div>
                   )}
                 </div>

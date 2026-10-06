@@ -87,25 +87,25 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-white">{hpa.name}</h3>
-                  <p className="text-sm text-slate-400 mt-1">Target: {hpa.target_ref}</p>
+                  <p className="text-sm text-slate-400 mt-1">{t('resourcesTabs.hpa.target', 'Target')}: {hpa.target_ref}</p>
                 </div>
                 <span className={`badge ${badge}`}>{badgeText}</span>
               </div>
               <div className="mt-4 grid grid-cols-4 gap-4">
                 <div>
-                  <p className="text-xs text-slate-400">Min</p>
+                  <p className="text-xs text-slate-400">{t('resourcesTabs.hpa.min', 'Min')}</p>
                   <p className="text-lg font-bold text-white">{hpa.min_replicas ?? '-'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Max</p>
+                  <p className="text-xs text-slate-400">{t('resourcesTabs.hpa.max', 'Max')}</p>
                   <p className="text-lg font-bold text-white">{hpa.max_replicas}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Current</p>
+                  <p className="text-xs text-slate-400">{t('resourcesTabs.hpa.current', 'Current')}</p>
                   <p className="text-lg font-bold text-white">{hpa.current_replicas ?? '-'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">Desired</p>
+                  <p className="text-xs text-slate-400">{t('resourcesTabs.hpa.desired', 'Desired')}</p>
                   <p
                     className="text-lg font-bold text-white font-mono truncate"
                     title={desiredSecondary ? `${desiredPrimary} ${desiredSecondary}` : String(desiredPrimary)}
@@ -132,7 +132,7 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
       
               {metrics.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-xs text-slate-400 mb-2">Metrics</p>
+                  <p className="text-xs text-slate-400 mb-2">{t('resourcesTabs.hpa.metrics', 'Metrics')}</p>
                   <div className="flex flex-wrap gap-2">
                     {metrics.map((m, idx) => (
                       <span key={idx} className="badge badge-info font-mono">
@@ -178,14 +178,14 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
                       )
                     })}
                     {hiddenCondCount > 0 && (
-                      <div className="text-xs text-slate-500">…(+{hiddenCondCount} more)</div>
+                      <div className="text-xs text-slate-500">…{t('resourcesTabs.hpa.moreConditions', { defaultValue: '(+{{n}} more)', n: hiddenCondCount })}</div>
                     )}
                   </div>
                 )}
               </div>
       
               {hpa.last_scale_time && (
-                <p className="mt-3 text-xs text-slate-500">LastScale: {new Date(hpa.last_scale_time).toLocaleString(i18n.language)}</p>
+                <p className="mt-3 text-xs text-slate-500">{t('resourcesTabs.hpa.lastScale', 'LastScale')}: {new Date(hpa.last_scale_time).toLocaleString(i18n.language)}</p>
               )}
             </div>
           )

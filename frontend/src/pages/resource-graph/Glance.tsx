@@ -3,6 +3,7 @@
 // frontend/src/pages/ResourceGraph.tsx 의 Glance 함수를 컴포넌트로 추출.
 // position 은 viewport 기준 fixed.
 
+import { useTranslation } from 'react-i18next'
 import type { ResourceGraphNode } from '@/services/api'
 import { kindIcon, statusColor } from './constants'
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function Glance({ node, position }: Props) {
+  const { t } = useTranslation()
   if (!node) return null
 
   const borderColor = statusColor(node.status)
@@ -31,12 +33,12 @@ export function Glance({ node, position }: Props) {
       </div>
 
       <div className="space-y-1 text-[10px]">
-        <div className="flex justify-between"><span className="text-slate-400">Status</span><span className="text-white">{node.status}</span></div>
-        {node.ready && <div className="flex justify-between"><span className="text-slate-400">Ready</span><span className="text-white">{node.ready}</span></div>}
-        {node.namespace && <div className="flex justify-between"><span className="text-slate-400">Namespace</span><span className="text-white">{node.namespace}</span></div>}
-        {node.nodeName && <div className="flex justify-between"><span className="text-slate-400">Node</span><span className="text-white">{node.nodeName}</span></div>}
-        {node.ownerKind && <div className="flex justify-between"><span className="text-slate-400">Owner</span><span className="text-white">{node.ownerKind}</span></div>}
-        {node.instanceLabel && <div className="flex justify-between"><span className="text-slate-400">Instance</span><span className="text-white">{node.instanceLabel}</span></div>}
+        <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.status', 'Status')}</span><span className="text-white">{node.status}</span></div>
+        {node.ready && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.ready', 'Ready')}</span><span className="text-white">{node.ready}</span></div>}
+        {node.namespace && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.namespace', 'Namespace')}</span><span className="text-white">{node.namespace}</span></div>}
+        {node.nodeName && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.node', 'Node')}</span><span className="text-white">{node.nodeName}</span></div>}
+        {node.ownerKind && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.owner', 'Owner')}</span><span className="text-white">{node.ownerKind}</span></div>}
+        {node.instanceLabel && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.instance', 'Instance')}</span><span className="text-white">{node.instanceLabel}</span></div>}
       </div>
     </div>
   )

@@ -48,12 +48,12 @@ export default function HistoryTab({
         <table className="w-full text-sm">
           <thead className="bg-slate-800 text-slate-300 text-left">
             <tr>
-              <th className="px-3 py-2">Revision</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Chart</th>
-              <th className="px-3 py-2">App</th>
-              <th className="px-3 py-2">Updated</th>
-              <th className="px-3 py-2">Description</th>
+              <th className="px-3 py-2">{t('helmReleaseDetail.history.col.revision', 'Revision')}</th>
+              <th className="px-3 py-2">{t('helmReleaseDetail.history.col.status', 'Status')}</th>
+              <th className="px-3 py-2">{t('helmReleaseDetail.history.col.chart', 'Chart')}</th>
+              <th className="px-3 py-2">{t('helmReleaseDetail.history.col.app', 'App')}</th>
+              <th className="px-3 py-2">{t('helmReleaseDetail.history.col.updated', 'Updated')}</th>
+              <th className="px-3 py-2">{t('helmReleaseDetail.history.col.description', 'Description')}</th>
               <th className="px-3 py-2 w-px" />
             </tr>
           </thead>

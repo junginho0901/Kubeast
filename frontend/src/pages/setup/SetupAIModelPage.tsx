@@ -162,7 +162,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"
               >
-                {aiCustomModel ? '← Select from list' : 'Custom model name →'}
+                {aiCustomModel ? tr('admin.aiModels.selectFromList', '← Select from list') : tr('admin.aiModels.customModel', 'Custom model name →')}
               </button>
             )}
           </div>
@@ -171,14 +171,14 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               options={modelDropdownOptions}
               value={aiModel}
               onChange={setAiModel}
-              placeholder="Select model"
+              placeholder={tr('admin.aiModels.selectModel', 'Select model')}
             />
           ) : (
             <input
               type="text"
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              placeholder="e.g. gpt-4o-mini"
+              placeholder={tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
             />
           )}

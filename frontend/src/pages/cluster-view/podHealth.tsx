@@ -7,6 +7,7 @@
 // getHealthIcon 은 React 컴포넌트 반환이라 .tsx — ClusterView 본체와 Pod 상세
 // 모달 (Summary 탭) 양쪽에서 사용.
 
+import i18next from 'i18next'
 import { CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 
 export const pickReason = (reasons: string[], priority: string[]) => {
@@ -147,7 +148,7 @@ export const getHealthIcon = (level: 'ok' | 'warn' | 'error', reason?: string) =
     return (
       <span
         className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"
-        aria-label="terminating"
+        aria-label={i18next.t('clusterView.health.terminating', 'terminating')}
       />
     )
   }
@@ -155,7 +156,7 @@ export const getHealthIcon = (level: 'ok' | 'warn' | 'error', reason?: string) =
     return (
       <span
         className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"
-        aria-label="loading"
+        aria-label={i18next.t('common.loading', 'loading')}
       />
     )
   }

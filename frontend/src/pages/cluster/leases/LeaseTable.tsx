@@ -3,7 +3,7 @@
 // Leases.tsx 본체에서 분리. holder/duration 컬럼 LimitRanges 와 다름.
 
 import type { LeaseInfo } from '@/services/api'
-import { useTranslation } from 'react-i18next'
+import { useTranslation, Trans } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
@@ -114,7 +114,8 @@ export function LeaseTable({
                 <td colSpan={showNamespaceColumn ? 5 : 4} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
+                    
+                    <Trans i18nKey="common.loading" />
                   </div>
                 </td>
               </tr>

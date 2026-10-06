@@ -168,7 +168,7 @@ export default function NetworkPage() {
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <Waypoints className="w-8 h-8" />
-            {namespace} Network
+            {t('network.title', { defaultValue: '{{namespace}} Network', namespace })}
           </h1>
           <p className="mt-2 text-slate-400">
             {t('network.subtitle')}
@@ -269,8 +269,8 @@ export default function NetworkPage() {
                   </div>
                 </div>
                 <div className="text-right text-xs text-slate-400">
-                  <div>Ports: {selectedService.ports?.length ?? 0}</div>
-                  <div>Pods: {podsForService?.length ?? (labelSelector ? 0 : '-')}</div>
+                  <div>{t('network.ports', 'Ports')}: {selectedService.ports?.length ?? 0}</div>
+                  <div>{t('network.pods', 'Pods')}: {podsForService?.length ?? (labelSelector ? 0 : '-')}</div>
                 </div>
               </div>
 
@@ -286,7 +286,7 @@ export default function NetworkPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="text-sm text-slate-100">{w.title}</div>
                           <span className={`badge ${w.level === 'error' ? 'badge-error' : 'badge-warning'}`}>
-                            {w.level === 'error' ? 'error' : 'warn'}
+                            {w.level === 'error' ? t('network.levelError', 'error') : t('network.levelWarn', 'warn')}
                           </span>
                         </div>
                         {w.detail ? <div className="mt-1 text-xs text-slate-400">{w.detail}</div> : null}
@@ -298,7 +298,7 @@ export default function NetworkPage() {
 
               <div className="space-y-4">
                 <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">
-                  <div className="text-sm font-semibold text-white mb-2">Ports</div>
+                  <div className="text-sm font-semibold text-white mb-2">{t('network.ports', 'Ports')}</div>
                   <div className="space-y-2 text-sm text-slate-200">
                     {(selectedService.ports || []).length === 0 ? (
                       <div className="text-slate-400">{t('common.none')}</div>
@@ -340,8 +340,8 @@ export default function NetworkPage() {
                   {related.endpoints ? (
                     <div className="space-y-3">
                       <div className="flex items-center gap-3 text-sm">
-                        <span className="badge badge-success">ready {related.endpoints.ready_count}</span>
-                        <span className="badge badge-warning">not ready {related.endpoints.not_ready_count}</span>
+                        <span className="badge badge-success">{t('network.readyCount', { defaultValue: 'ready {{n}}', n: related.endpoints.ready_count })}</span>
+                        <span className="badge badge-warning">{t('network.notReadyCount', { defaultValue: 'not ready {{n}}', n: related.endpoints.not_ready_count })}</span>
                       </div>
                       <div className="bg-slate-900/40 border border-slate-700 rounded-md p-2 max-h-44 overflow-y-auto">
                         <EndpointTargets endpoint={related.endpoints} />
@@ -365,7 +365,7 @@ export default function NetworkPage() {
                             <div className="text-xs text-slate-400">{s.address_type}</div>
                           </div>
                           <div className="mt-1 text-sm text-slate-300">
-                            ready {s.endpoints_ready} / total {s.endpoints_total}
+                            {t('network.readyOfTotal', { defaultValue: 'ready {{ready}} / total {{total}}', ready: s.endpoints_ready, total: s.endpoints_total })}
                           </div>
                         </div>
                       ))}

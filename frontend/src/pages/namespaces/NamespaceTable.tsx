@@ -4,6 +4,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatRelative, getStatusColor } from './namespaceHelpers'
 import type { NamespaceInfo, SortKey, SortDir } from './namespaceHelpers'
+import { Trans } from 'react-i18next'
 
 interface Props {
   pagedNamespaces: NamespaceInfo[]
@@ -124,7 +125,8 @@ export default function NamespaceTable({
                 <td colSpan={4} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
+                    
+                    <Trans i18nKey="common.loading" />
                   </div>
                 </td>
               </tr>

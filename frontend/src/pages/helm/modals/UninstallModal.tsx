@@ -89,9 +89,9 @@ export default function UninstallModal({
             <table className="w-full">
               <thead className="bg-slate-800 text-slate-300 text-left sticky top-0">
                 <tr>
-                  <th className="px-2 py-1">Kind</th>
-                  <th className="px-2 py-1">Name</th>
-                  <th className="px-2 py-1">Namespace</th>
+                  <th className="px-2 py-1">{t('helmReleaseDetail.resources.col.kind', 'Kind')}</th>
+                  <th className="px-2 py-1">{t('helmReleaseDetail.resources.col.name', 'Name')}</th>
+                  <th className="px-2 py-1">{t('helmReleaseDetail.resources.col.namespace', 'Namespace')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-slate-300">

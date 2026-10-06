@@ -35,10 +35,10 @@ export function NetworkPoliciesSection({ labelSelector, podsForService, networkP
           <div className="rounded-md border border-slate-700 bg-slate-900/20 p-3 text-xs text-slate-300">
             <div className="flex flex-wrap gap-2">
               <span className={`badge ${policySummary.ingressIsolationOn ? 'badge-warning' : 'badge-success'}`}>
-                Ingress isolation: {policySummary.ingressIsolationOn ? 'ON' : 'OFF'}
+                {t('networkOverview.ingressIsolation', 'Ingress isolation')}: {policySummary.ingressIsolationOn ? t('networkOverview.on', 'ON') : t('networkOverview.off', 'OFF')}
               </span>
               <span className={`badge ${policySummary.egressIsolationOn ? 'badge-warning' : 'badge-success'}`}>
-                Egress isolation: {policySummary.egressIsolationOn ? 'ON' : 'OFF'}
+                {t('networkOverview.egressIsolation', 'Egress isolation')}: {policySummary.egressIsolationOn ? t('networkOverview.on', 'ON') : t('networkOverview.off', 'OFF')}
               </span>
               {policySummary.ingressEffectiveDenyAll ? (
                 <span className="badge badge-error">Ingress: deny-all</span>
@@ -47,10 +47,10 @@ export function NetworkPoliciesSection({ labelSelector, podsForService, networkP
                 <span className="badge badge-error">Egress: deny-all</span>
               ) : null}
               {policySummary.namespaceDefaultDenyIngress ? (
-                <span className="badge badge-info">ns default-deny ingress policy present</span>
+                <span className="badge badge-info">{t('networkOverview.nsDefaultDenyIngress', 'ns default-deny ingress policy present')}</span>
               ) : null}
               {policySummary.namespaceDefaultDenyEgress ? (
-                <span className="badge badge-info">ns default-deny egress policy present</span>
+                <span className="badge badge-info">{t('networkOverview.nsDefaultDenyEgress', 'ns default-deny egress policy present')}</span>
               ) : null}
             </div>
             <div className="mt-2 text-[11px] text-slate-400">
@@ -67,24 +67,24 @@ export function NetworkPoliciesSection({ labelSelector, podsForService, networkP
               <div className="mt-2 flex flex-wrap gap-2 text-xs">
                 {p.default_deny_ingress ? <span className="badge badge-error">default-deny ingress</span> : null}
                 {p.default_deny_egress ? <span className="badge badge-error">default-deny egress</span> : null}
-                {p.selects_all_pods ? <span className="badge badge-info">selects all pods</span> : null}
+                {p.selects_all_pods ? <span className="badge badge-info">{t('networkOverview.selectsAllPods', 'selects all pods')}</span> : null}
               </div>
               <div className="mt-1 text-xs text-slate-300">
-                ingress rules: {p.ingress_rules} · egress rules: {p.egress_rules}
+                {t('networkOverview.ruleCounts', { defaultValue: 'ingress rules: {{ingress}} · egress rules: {{egress}}', ingress: p.ingress_rules, egress: p.egress_rules })}
               </div>
               <div className="mt-2 text-[11px] text-slate-400">
                 selector:{' '}
-                {selectorToInline(p.pod_selector as any, 'all pods')}
+                {selectorToInline(p.pod_selector as any, t('networkOverview.allPods', 'all pods'))}
               </div>
 
               {(p.ingress && p.ingress.length > 0) || p.default_deny_ingress ? (
                 <div className="mt-3">
-                  <div className="text-[11px] text-slate-400 mb-1">Ingress allow</div>
+                  <div className="text-[11px] text-slate-400 mb-1">{t('networkOverview.ingressAllow', 'Ingress allow')}</div>
                   {p.ingress && p.ingress.length > 0 ? (
                     <div className="space-y-2">
                       {p.ingress.slice(0, 2).map((r, idx) => {
                         const peers = Array.isArray(r.from) ? r.from : []
-                        const from = peers.length === 0 ? '(all sources)' : peers.slice(0, 2).map(formatPeer).join(' | ')
+                        const from = peers.length === 0 ? t('networkOverview.allSources', '(all sources)') : peers.slice(0, 2).map(formatPeer).join(' | ')
                         const ports = formatPorts(r.ports)
                         return (
                           <div key={idx} className="text-[11px] text-slate-300">
@@ -93,23 +93,23 @@ export function NetworkPoliciesSection({ labelSelector, podsForService, networkP
                         )
                       })}
                       {p.ingress.length > 2 ? (
-                        <div className="text-[11px] text-slate-500">… +{p.ingress.length - 2} more ingress rules</div>
+                        <div className="text-[11px] text-slate-500">… {t('networkOverview.moreIngressRules', { defaultValue: '+{{n}} more ingress rules', n: p.ingress.length - 2 })}</div>
                       ) : null}
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-500">(no ingress rules)</div>
+                    <div className="text-[11px] text-slate-500">{t('networkOverview.noIngressRules', '(no ingress rules)')}</div>
                   )}
                 </div>
               ) : null}
 
               {(p.egress && p.egress.length > 0) || p.default_deny_egress ? (
                 <div className="mt-3">
-                  <div className="text-[11px] text-slate-400 mb-1">Egress allow</div>
+                  <div className="text-[11px] text-slate-400 mb-1">{t('networkOverview.egressAllow', 'Egress allow')}</div>
                   {p.egress && p.egress.length > 0 ? (
                     <div className="space-y-2">
                       {p.egress.slice(0, 2).map((r, idx) => {
                         const peers = Array.isArray(r.to) ? r.to : []
-                        const to = peers.length === 0 ? '(all destinations)' : peers.slice(0, 2).map(formatPeer).join(' | ')
+                        const to = peers.length === 0 ? t('networkOverview.allDestinations', '(all destinations)') : peers.slice(0, 2).map(formatPeer).join(' | ')
                         const ports = formatPorts(r.ports)
                         return (
                           <div key={idx} className="text-[11px] text-slate-300">
@@ -118,11 +118,11 @@ export function NetworkPoliciesSection({ labelSelector, podsForService, networkP
                         )
                       })}
                       {p.egress.length > 2 ? (
-                        <div className="text-[11px] text-slate-500">… +{p.egress.length - 2} more egress rules</div>
+                        <div className="text-[11px] text-slate-500">… {t('networkOverview.moreEgressRules', { defaultValue: '+{{n}} more egress rules', n: p.egress.length - 2 })}</div>
                       ) : null}
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-500">(no egress rules)</div>
+                    <div className="text-[11px] text-slate-500">{t('networkOverview.noEgressRules', '(no egress rules)')}</div>
                   )}
                 </div>
               ) : null}
