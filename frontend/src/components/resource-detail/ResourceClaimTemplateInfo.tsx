@@ -104,11 +104,11 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
                   })
                   return (
                     <tr key={idx} className="text-slate-200">
-                      <td className="py-1 pr-2 break-words">{text(req.name)}</td>
-                      <td className="py-1 pr-2 break-words">{text(req.deviceClassName ?? req.device_class_name)}</td>
-                      <td className="py-1 pr-2 break-words font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{text(req.name)}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{text(req.deviceClassName ?? req.device_class_name)}</td>
+                      <td className="py-1 pr-2 wrap-break-word font-mono text-[11px]">{selectorStrs.length > 0 ? selectorStrs.join('; ') : '-'}</td>
                       <td className="py-1 pr-2">{text(req.count)}</td>
-                      <td className="py-1 pr-2 break-words">{text(req.allocationMode ?? req.allocation_mode)}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{text(req.allocationMode ?? req.allocation_mode)}</td>
                     </tr>
                   )
                 })}
@@ -134,8 +134,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
                   const matchAttr = text(c.matchAttribute ?? c.match_attribute)
                   return (
                     <tr key={idx} className="text-slate-200">
-                      <td className="py-1 pr-2 break-words">{reqs}</td>
-                      <td className="py-1 pr-2 break-words font-mono">{matchAttr}</td>
+                      <td className="py-1 pr-2 wrap-break-word">{reqs}</td>
+                      <td className="py-1 pr-2 wrap-break-word font-mono">{matchAttr}</td>
                     </tr>
                   )
                 })}
@@ -164,7 +164,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
                 )
               }
               return (
-                <pre key={idx} className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-40">
+                <pre key={idx} className="text-xs text-gray-300 bg-gray-800 rounded-sm p-2 overflow-auto max-h-40">
                   {JSON.stringify(cfg, null, 2)}
                 </pre>
               )
@@ -176,7 +176,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
       {requests.length === 0 && constraints.length === 0 && configArr.length === 0 && (
         <InfoSection title="Claim Spec">
           {claimSpec ? (
-            <pre className="text-xs text-gray-300 bg-gray-800 rounded p-2 overflow-auto max-h-64">
+            <pre className="text-xs text-gray-300 bg-gray-800 rounded-sm p-2 overflow-auto max-h-64">
               {JSON.stringify(claimSpec, null, 2)}
             </pre>
           ) : (

@@ -179,7 +179,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
               placeholder={tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           )}
         </div>
@@ -190,7 +190,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
           if (md && !md.functionCalling) {
             return (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 flex items-center gap-2">
-                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 {tr('setup.ai.noToolCalling', 'This model does not support tool/function calling. AI assistant features may be limited.')}
               </div>
             )
@@ -210,7 +210,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               onChange={(e) => setAiApiKeyEnv(e.target.value)}
               placeholder="OPENAI_API_KEY"
               spellCheck={false}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
             <p className="mt-1 text-xs text-slate-500">
               {tr('setup.ai.apiKeyHint', 'Name of the ai-service environment variable that holds the key (Helm values ai.*ApiKey or a Secret via ai.apiKeysSecret). Keys are never stored in the database.')}
@@ -229,7 +229,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               value={aiBaseUrl}
               onChange={(e) => setAiBaseUrl(e.target.value)}
               placeholder={currentProviderDef.baseUrlPlaceholder || 'https://api.example.com/v1'}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           </div>
         )}

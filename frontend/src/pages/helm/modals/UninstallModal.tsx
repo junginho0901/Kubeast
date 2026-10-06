@@ -81,11 +81,11 @@ export default function UninstallModal({
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
         ) : error && !preview ? (
-          <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         ) : (
-          <div className="max-h-[40vh] overflow-auto rounded border border-slate-700 bg-slate-950 text-xs">
+          <div className="max-h-[40vh] overflow-auto rounded-sm border border-slate-700 bg-slate-950 text-xs">
             <table className="w-full">
               <thead className="bg-slate-800 text-slate-300 text-left sticky top-0">
                 <tr>
@@ -120,7 +120,7 @@ export default function UninstallModal({
             checked={keepHistory}
             disabled={applying}
             onChange={(e) => setKeepHistory(e.target.checked)}
-            className="rounded border-slate-600"
+            className="rounded-sm border-slate-600"
           />
           {t('helmReleaseDetail.uninstall.keepHistory')}
         </label>
@@ -135,7 +135,7 @@ export default function UninstallModal({
             onChange={(e) => setTyped(e.target.value)}
             disabled={applying}
             placeholder={name}
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-red-500 outline-none"
+            className="w-full rounded-sm border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-red-500 outline-hidden"
             autoFocus
           />
         </div>

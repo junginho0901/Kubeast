@@ -30,16 +30,16 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
           >
             <div className="flex items-start gap-2 mb-2">
               {node.status === 'Ready' ? (
-                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                <CheckCircle className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
               ) : (
-                <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate" title={node.name}>
                   {node.name}
                 </p>
               </div>
-              <Info className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <Info className="w-4 h-4 text-slate-400 shrink-0" />
             </div>
             <div className="space-y-1">
               <p className="text-xs text-slate-400">

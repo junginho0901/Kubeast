@@ -121,7 +121,7 @@ export default function GatewayClassInfo({ name, rawJson }: Props) {
         <InfoSection title="Supported Features ({{n}})" titleValues={{ n: describe.supported_features.length }}>
           <div className="flex flex-wrap gap-1.5">
             {describe.supported_features.map((f, i) => (
-              <span key={i} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-mono text-slate-200">
+              <span key={i} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] font-mono text-slate-200">
                 {f?.name || '-'}
               </span>
             ))}

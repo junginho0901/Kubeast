@@ -36,7 +36,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
           const refText = ref?.name ? `${ref.kind || 'Target'}:${ref.name}` : '(targetRef none)'
           const nodeText = t?.node_name ? `node=${t.node_name}` : null
           return (
-            <div key={`${tone}-${i}`} className={`rounded border px-2 py-1.5 text-xs ${borderTone}`}>
+            <div key={`${tone}-${i}`} className={`rounded-sm border px-2 py-1.5 text-xs ${borderTone}`}>
               <p className="text-slate-200 font-mono break-all">{t?.ip || '-'}</p>
               <p className="text-slate-300 break-all">{refText}</p>
               {nodeText && <p className="text-slate-400">{nodeText}</p>}
@@ -113,7 +113,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
         <InfoSection title="Subsets">
           <div className="space-y-2 text-xs">
             {subsets.map((s: any, i: number) => (
-              <div key={i} className="rounded border border-slate-800 p-2">
+              <div key={i} className="rounded-sm border border-slate-800 p-2">
                 <div className="text-slate-200">Addresses: {(s.addresses || []).map((a: any) => a.ip).join(', ') || <Tx>(none)</Tx>}</div>
                 <div className="text-slate-400">Ports: {(s.ports || []).map((p: any) => `${p.name || ''}:${p.port}/${p.protocol || 'TCP'}`).join(', ') || <Tx>(none)</Tx>}</div>
               </div>
@@ -126,7 +126,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
         <InfoSection title="Endpoints">
           <div className="space-y-2 text-xs">
             {endpoints.map((ep: any, i: number) => (
-              <div key={i} className="rounded border border-slate-800 p-2">
+              <div key={i} className="rounded-sm border border-slate-800 p-2">
                 <div className="text-slate-200">Addresses: {(ep.addresses || []).join(', ')}</div>
                 <div className="text-slate-400">Conditions: ready={String(ep.conditions?.ready ?? '-')}</div>
               </div>

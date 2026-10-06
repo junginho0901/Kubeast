@@ -19,7 +19,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
     <div className="relative" ref={namespaceDropdownRef}>
       <button
         onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
+        className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[200px] justify-between"
       >
         <span className="text-sm font-medium">
           {selectedNamespace === 'all'
@@ -43,7 +43,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
             className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
           >
             {selectedNamespace === 'all' && (
-              <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+              <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
             )}
             <span className={selectedNamespace === 'all' ? 'font-medium' : ''}>
               {tr('clusterView.allNamespaces', 'All namespaces')}
@@ -59,7 +59,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
               className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
             >
               {selectedNamespace === ns.name && (
-                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
               )}
               <span className={selectedNamespace === ns.name ? 'font-medium' : ''}>
                 {ns.name}

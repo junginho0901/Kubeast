@@ -138,7 +138,7 @@ export function OptimizationModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
                 title={tr('dashboard.optimization.selectNamespaceTitle', 'Select namespace')}
                 disabled={isLoadingNamespaces}
               >
@@ -169,7 +169,7 @@ export function OptimizationModal({
                         className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                       >
                         {namespace === ns && (
-                          <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                         )}
                         <span className={namespace === ns ? 'font-medium' : ''}>{ns}</span>
                       </button>
@@ -243,7 +243,7 @@ export function OptimizationModal({
               </span>
             )}
             {!!streamError && (
-              <span className="text-xs text-red-300 break-words">
+              <span className="text-xs text-red-300 wrap-break-word">
                 {tr('dashboard.optimization.streamError', 'Stream error')}: {streamError}
               </span>
             )}
@@ -267,12 +267,12 @@ export function OptimizationModal({
           ) : streamError && !fullMarkdown ? (
             <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-100">
                     {tr('dashboard.optimization.failed', 'Failed to generate suggestions')}
                   </p>
-                  <p className="text-xs text-slate-400 mt-1 break-words">{streamError}</p>
+                  <p className="text-xs text-slate-400 mt-1 wrap-break-word">{streamError}</p>
                   <div className="mt-3 flex items-center gap-2">
                     <button
                       onClick={onRun}

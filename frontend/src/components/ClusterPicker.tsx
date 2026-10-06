@@ -86,7 +86,7 @@ export default function ClusterPicker() {
           {selected?.display_name ?? currentCluster ?? tr('cluster.picker.select', 'Select cluster')}
         </span>
         {selected?.is_self_cluster && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 shrink-0">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300 shrink-0">
             self
           </span>
         )}
@@ -109,7 +109,7 @@ export default function ClusterPicker() {
               <span className={`w-2 h-2 rounded-full shrink-0 ${healthDotClass(c.health_status)}`} />
               <span className="flex-1 truncate text-white">{c.display_name}</span>
               {c.is_self_cluster && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">self</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
               )}
               {c.id === currentCluster && <Check className="w-4 h-4 text-primary-400 shrink-0" />}
             </button>

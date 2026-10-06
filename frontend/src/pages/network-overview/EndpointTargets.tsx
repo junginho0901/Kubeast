@@ -36,7 +36,7 @@ function TargetList({
     return (
       <div>
         <div className={`text-xs ${label}`}>{title}</div>
-        <pre className="mt-1 text-xs text-slate-200 whitespace-pre-wrap break-words bg-slate-900/30 border border-slate-700 rounded-md p-2 max-h-44 overflow-y-auto font-mono">
+        <pre className="mt-1 text-xs text-slate-200 whitespace-pre-wrap wrap-break-word bg-slate-900/30 border border-slate-700 rounded-md p-2 max-h-44 overflow-y-auto font-mono">
           {ips.join('\n')}
         </pre>
       </div>

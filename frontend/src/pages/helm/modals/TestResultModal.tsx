@@ -71,13 +71,13 @@ export default function TestResultModal({
             <span className="text-sm">{t('helmReleaseDetail.test.running')}</span>
           </div>
         ) : result && result.hooks.length === 0 ? (
-          <div className="rounded border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
+          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
             {t('helmReleaseDetail.test.noHooks')}
           </div>
         ) : result ? (
           <div className="space-y-2">
             <div
-              className={`rounded px-3 py-2 text-sm ${
+              className={`rounded-sm px-3 py-2 text-sm ${
                 result.success
                   ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
                   : 'bg-red-500/15 text-red-200 border border-red-500/30'
@@ -87,7 +87,7 @@ export default function TestResultModal({
                 ? t('helmReleaseDetail.test.passed')
                 : t('helmReleaseDetail.test.failed')}
             </div>
-            <ul className="rounded border border-slate-700 divide-y divide-slate-800 text-sm">
+            <ul className="rounded-sm border border-slate-700 divide-y divide-slate-800 text-sm">
               {result.hooks.map((h) => (
                 <li key={h.name} className="flex items-center gap-3 px-3 py-2">
                   {h.failed ? (
@@ -102,7 +102,7 @@ export default function TestResultModal({
             </ul>
           </div>
         ) : error ? (
-          <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         ) : null}

@@ -110,9 +110,9 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
               <tbody className="divide-y divide-slate-800">
                 {from.map((f, idx) => (
                   <tr key={`from-${idx}`} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words">{text(f.group)}</td>
-                    <td className="py-1 pr-2 break-words">{text(f.kind)}</td>
-                    <td className="py-1 pr-2 break-words">{text(f.namespace)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(f.group)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(f.kind)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(f.namespace)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -137,9 +137,9 @@ export default function ReferenceGrantInfo({ name, namespace, rawJson }: Props) 
               <tbody className="divide-y divide-slate-800">
                 {to.map((t, idx) => (
                   <tr key={`to-${idx}`} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words">{text(t.group)}</td>
-                    <td className="py-1 pr-2 break-words">{text(t.kind)}</td>
-                    <td className="py-1 pr-2 break-words">{text(t.name)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(t.group)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(t.kind)}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{text(t.name)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -175,7 +175,7 @@ export function PodLogsTab({
   return (
     <div className="flex flex-col h-full">
       {/* 컨테이너 선택 및 다운로드 - 고정 */}
-      <div className="flex items-end gap-4 pb-4 flex-shrink-0 border-b border-slate-700">
+      <div className="flex items-end gap-4 pb-4 shrink-0 border-b border-slate-700">
         {/* 컨테이너 선택 - 커스텀 드롭다운 */}
         <div className="flex-1 relative" ref={containerDropdownRef}>
           <label className="text-sm text-slate-400 mb-2 block">
@@ -183,7 +183,7 @@ export function PodLogsTab({
           </label>
           <button
             onClick={() => setIsContainerDropdownOpen(!isContainerDropdownOpen)}
-            className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+            className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
           >
             <span className="text-sm font-medium">
               {selectedContainer || tr('clusterView.logs.selectContainer', 'Select container')}
@@ -207,7 +207,7 @@ export function PodLogsTab({
                     value={containerSearchQuery}
                     onChange={(e) => onContainerSearchChange(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-white rounded text-sm border border-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
+                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-white rounded-sm text-sm border border-slate-500 focus:outline-hidden focus:border-primary-500 transition-colors"
                   />
                   {containerSearchQuery && (
                     <button
@@ -215,7 +215,7 @@ export function PodLogsTab({
                         e.stopPropagation()
                         onContainerSearchChange('')
                       }}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded transition-colors"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 hover:bg-slate-500 rounded-sm transition-colors"
                     >
                       <X className="w-3 h-3 text-slate-400" />
                     </button>
@@ -244,7 +244,7 @@ export function PodLogsTab({
                       className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                     >
                       {selectedContainer === container.name && (
-                        <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                       )}
                       <span className={selectedContainer === container.name ? 'font-medium' : ''}>
                         {container.name}
@@ -269,7 +269,7 @@ export function PodLogsTab({
           </label>
           <button
             onClick={() => setIsTailLinesDropdownOpen(!isTailLinesDropdownOpen)}
-            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
+            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
           >
             <span className="text-sm font-medium">
               {tr('clusterView.logs.linesCount', '{{count}} lines', { count: downloadTailLines })}
@@ -293,7 +293,7 @@ export function PodLogsTab({
                   className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg"
                 >
                   {downloadTailLines === lines && (
-                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                   )}
                   <span className={downloadTailLines === lines ? 'font-medium' : ''}>
                     {tr('clusterView.logs.linesCount', '{{count}} lines', { count: lines })}
@@ -312,7 +312,7 @@ export function PodLogsTab({
           <button
             onClick={handleDownloadLogs}
             disabled={isDownloading}
-            className="h-10 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg border border-primary-500 focus:outline-none focus:border-primary-400 transition-colors flex items-center gap-2"
+            className="h-10 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg border border-primary-500 focus:outline-hidden focus:border-primary-400 transition-colors flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             {isDownloading
@@ -324,7 +324,7 @@ export function PodLogsTab({
 
       {/* 로그 - 스크롤 가능 */}
       <div className="flex-1 bg-slate-900 rounded-lg p-4 mt-4 font-mono text-sm text-slate-300 overflow-x-auto overflow-y-auto">
-        <pre className="whitespace-pre-wrap break-words">
+        <pre className="whitespace-pre-wrap wrap-break-word">
           {logs
             ? logs
             : isStreamingLogs

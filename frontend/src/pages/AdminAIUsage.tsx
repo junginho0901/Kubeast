@@ -98,7 +98,7 @@ export default function AdminAIUsage() {
             value={sinceDay}
             max={untilDay}
             onChange={(e) => setSinceDay(e.target.value)}
-            className="mt-1 block rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 block rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
           />
         </label>
         <label className="text-xs text-slate-400">
@@ -108,7 +108,7 @@ export default function AdminAIUsage() {
             value={untilDay}
             min={sinceDay}
             onChange={(e) => setUntilDay(e.target.value)}
-            className="mt-1 block rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 block rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
           />
         </label>
         <CustomDropdown

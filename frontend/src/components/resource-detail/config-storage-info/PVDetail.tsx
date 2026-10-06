@@ -144,7 +144,7 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
             />
           )}
           {describe?.reason && <InfoRow label="Failure Reason" value={String(describe.reason)} />}
-          {describe?.message && <InfoRow label="Failure Message" value={<span className="text-red-300 break-words">{String(describe.message)}</span>} />}
+          {describe?.message && <InfoRow label="Failure Message" value={<span className="text-red-300 wrap-break-word">{String(describe.message)}</span>} />}
         </div>
       </InfoSection>
       {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}

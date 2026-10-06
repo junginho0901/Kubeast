@@ -108,7 +108,7 @@ export function IssuesModal({
               type="checkbox"
               checked={includeRestartHistory}
               onChange={(e) => setIncludeRestartHistory(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+              className="h-4 w-4 rounded-sm border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
             />
           </label>
 
@@ -119,12 +119,12 @@ export function IssuesModal({
               placeholder={tr('dashboard.issues.searchPlaceholder', 'Search issues (name/namespace/message)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded transition-colors"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
               >
                 <X className="w-4 h-4 text-slate-400" />
               </button>

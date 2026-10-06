@@ -57,7 +57,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
 
   return (
     <ModalOverlay onClose={saving ? () => {} : onClose}>
-      <div className="w-[34rem] max-w-full rounded-xl border border-slate-700 bg-slate-800 p-6">
+      <div className="w-136 max-w-full rounded-xl border border-slate-700 bg-slate-800 p-6">
         <h3 className="text-lg font-bold text-white">
           {tr('cluster.edit.title', 'Edit cluster')} — {cluster.id}
         </h3>
@@ -69,7 +69,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
           data-testid="edit-name"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-hidden"
         />
 
         {!isSelf && (
@@ -93,7 +93,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               onChange={(e) => setKubeconfig(e.target.value)}
               placeholder={tr('cluster.edit.kubeconfigHint', 'Leave blank to keep the current kubeconfig. Paste a new one to rotate credentials.')}
               rows={7}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-white focus:border-primary-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-white focus:border-primary-500 focus:outline-hidden"
             />
             <p className="mt-1 text-[11px] text-slate-500">
               {tr('cluster.edit.sameClusterNote', 'A new kubeconfig must point to the same cluster — RBAC grants and chat history are preserved.')}

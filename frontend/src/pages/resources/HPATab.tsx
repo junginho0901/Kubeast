@@ -158,11 +158,11 @@ export function HPATab({ filteredHPAs, hpasError }: Props) {
                         <div key={idx} className={`rounded-lg p-3 ${boxClass}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="text-sm text-white font-mono break-words">
+                              <div className="text-sm text-white font-mono wrap-break-word">
                                 {c?.type || '-'}: {c?.status ?? '-'}
                               </div>
                               {(c?.reason || c?.message) && (
-                                <div className="mt-1 text-xs text-slate-300 break-words">
+                                <div className="mt-1 text-xs text-slate-300 wrap-break-word">
                                   {c?.reason ? `[${c.reason}] ` : ''}
                                   {c?.message || ''}
                                 </div>

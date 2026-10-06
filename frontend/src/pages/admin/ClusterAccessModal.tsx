@@ -84,7 +84,7 @@ export default function ClusterAccessModal({
               <p className="text-xs text-slate-400">
                 {cluster.display_name}
                 {cluster.is_self_cluster && (
-                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">self</span>
+                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
                 )}
               </p>
             </div>

@@ -133,7 +133,7 @@ export default function SessionRecordings() {
                       {r.truncated && <span className="ml-1 text-amber-300" title={tr('recordings.truncated', 'Recording stopped at the size limit')}>✂</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block rounded border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} title={r.last_error ?? ''}>
+                      <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} title={r.last_error ?? ''}>
                         {tr(`recordings.status.${r.status}`, r.status)}
                       </span>
                     </td>

@@ -87,7 +87,7 @@ export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }
                 <span className="text-sm text-slate-200 truncate">
                   {c.display_name}
                   {c.is_self_cluster && (
-                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">self</span>
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
                   )}
                 </span>
                 {/* Pending/Member are account-level (no cluster perms), so only

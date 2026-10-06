@@ -194,7 +194,7 @@ export default function HelmReleaseDetailPage() {
             <button
               type="button"
               onClick={() => setTestOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
             >
               <FlaskConical className="w-4 h-4" />
               {t('helmReleaseDetail.test.button')}
@@ -204,7 +204,7 @@ export default function HelmReleaseDetailPage() {
             <button
               type="button"
               onClick={() => setUninstallOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm text-red-200 hover:bg-red-500/20"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm text-red-200 hover:bg-red-500/20"
             >
               <Trash2 className="w-4 h-4" />
               {t('helmReleaseDetail.uninstall.button')}

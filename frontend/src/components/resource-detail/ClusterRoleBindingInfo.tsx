@@ -82,7 +82,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
                 counts[k] = (counts[k] || 0) + 1
               }
               return Object.entries(counts).map(([k, c]) => (
-                <span key={k} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
+                <span key={k} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
                   {k}: <span className="font-mono">{String(c)}</span>
                 </span>
               ))
@@ -90,7 +90,7 @@ export default function ClusterRoleBindingInfo({ name, rawJson }: Props) {
           </div>
           <div className="space-y-2">
             {subjects.map((subj: any, idx: number) => (
-              <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
+              <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                 <div className="text-xs text-slate-300 space-y-1">
                   <div>
                     <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Kind:</Tx></span>

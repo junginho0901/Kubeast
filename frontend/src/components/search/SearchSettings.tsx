@@ -49,7 +49,7 @@ export default function SearchSettings({
                 ref={maxItemsRef}
                 type="number"
                 defaultValue={maxItemsPerResource}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:border-sky-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-hidden focus:border-sky-500"
               />
               <p className="mt-1 text-[11px] text-slate-500">
                 {t('advancedSearch.maxItemsHelp', 'Resources exceeding this limit will be excluded to prevent slowdowns.')}

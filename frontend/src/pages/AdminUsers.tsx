@@ -398,7 +398,7 @@ export default function AdminUsers() {
                       type="button"
                       data-testid={`user-detail-${u.email ?? u.id}`}
                       onClick={() => openDetail(u)}
-                      className="text-left text-slate-100 hover:text-primary-300 hover:underline focus:outline-none focus:ring-2 focus:ring-primary-600 rounded"
+                      className="text-left text-slate-100 hover:text-primary-300 hover:underline focus:outline-hidden focus:ring-2 focus:ring-primary-600 rounded-sm"
                       title={tr('adminUsers.viewDetail', 'View details')}
                     >
                       {u.name}
@@ -422,7 +422,7 @@ export default function AdminUsers() {
                         type="button"
                         disabled={isUpdating || isBlocked}
                         onClick={() => setOpenRoleDropdownUserId((prev) => (prev === u.id ? null : u.id))}
-                        className="w-32 inline-flex items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                        className="w-32 inline-flex items-center justify-between gap-2 rounded-lg border border-slate-600 bg-slate-900/40 px-3 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                         aria-haspopup="menu"
                         aria-expanded={isOpen}
                       >
@@ -462,7 +462,7 @@ export default function AdminUsers() {
                                 <span className="flex-1 text-left">
                                   {tr(`adminUsers.roles.${role.name}`, role.name.toUpperCase())}
                                 </span>
-                                {isSelected && <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />}
+                                {isSelected && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
                               </button>
                             )
                           })}
@@ -484,7 +484,7 @@ export default function AdminUsers() {
                         if (!ok) return
                         resetPasswordMutation.mutate({ userId: u.id, targetLabel })
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/40 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/40 px-2.5 py-2 text-xs text-slate-200 hover:bg-slate-900/60 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                       title={tr('adminUsers.resetPasswordTitle', 'Reset to random password')}
                     >
                       <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
@@ -510,7 +510,7 @@ export default function AdminUsers() {
                         if (!ok) return
                         deleteUserMutation.mutate({ userId: u.id })
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-2 text-xs text-red-200 hover:bg-red-950/35 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-2 text-xs text-red-200 hover:bg-red-950/35 focus:outline-hidden focus:ring-2 focus:ring-red-600 disabled:opacity-50"
                       title={
                         isSelf
                           ? tr('adminUsers.deleteSelfBlocked', 'You cannot delete your own account.')
@@ -593,7 +593,7 @@ export default function AdminUsers() {
                             type="checkbox"
                             checked={pendingSelectedIds.size === pendingRows.length && pendingRows.length > 0}
                             onChange={toggleAllPending}
-                            className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
+                            className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                           />
                         </th>
                         <th className="px-3 py-2.5">{tr('adminUsers.table.name', 'Name')}</th>
@@ -616,7 +616,7 @@ export default function AdminUsers() {
                                 checked={isChecked}
                                 onChange={() => togglePendingSelect(u.id)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
+                                className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                               />
                             </td>
                             <td className="px-3 py-2.5">{u.name}</td>
@@ -820,7 +820,7 @@ export default function AdminUsers() {
                     /* clipboard API unavailable — silently ignore */
                   }
                 }}
-                className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                className="inline-flex items-center gap-1 rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
               >
                 <Copy className="h-3.5 w-3.5" />
                 {resetCopied

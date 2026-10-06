@@ -64,7 +64,7 @@ export default function WorkloadKindInfo({
                 <button
                   onClick={() => suspendMut.mutate(!(describe?.suspend ?? spec.suspend))}
                   disabled={suspendMut.isPending}
-                  className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1 disabled:opacity-50"
+                  className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1 disabled:opacity-50"
                 >
                   {(describe?.suspend ?? spec.suspend) ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                   {(describe?.suspend ?? spec.suspend) ? tr('cronjob.resume', 'Resume') : tr('cronjob.suspend', 'Suspend')}
@@ -73,7 +73,7 @@ export default function WorkloadKindInfo({
               {has('resource.cronjob.trigger') && (
                 <button
                   onClick={() => setTriggerDialogOpen(true)}
-                  className="text-xs px-2 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
+                  className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
                 >
                   <Zap className="w-3 h-3" />
                   {tr('cronjob.runNow', 'Run Now')}

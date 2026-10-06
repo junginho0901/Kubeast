@@ -195,7 +195,7 @@ export function ChatPanel({
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-[1200] flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur transition-all duration-200 ease-out origin-bottom-right ${
+      className={`fixed bottom-6 right-6 z-1200 flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur-sm transition-all duration-200 ease-out origin-bottom-right ${
         visible
           ? 'opacity-100 scale-100 translate-y-0'
           : 'opacity-0 scale-95 translate-y-2 pointer-events-none'

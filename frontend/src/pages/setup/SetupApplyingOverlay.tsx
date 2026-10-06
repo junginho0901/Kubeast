@@ -13,7 +13,7 @@ export default function SetupApplyingOverlay({
   tr,
 }: SetupApplyingOverlayProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs">
       <div className="w-[min(92vw,540px)] rounded-2xl border border-slate-800 bg-slate-900/90 px-8 py-7 shadow-2xl">
         <div className="mb-6 text-center">
           <h2 className="text-base font-semibold text-slate-100">
@@ -52,7 +52,7 @@ export default function SetupApplyingOverlay({
 
                 {idx < STEPS.length - 1 && (
                   <ChevronRight
-                    className={`h-3.5 w-3.5 flex-shrink-0 transition-colors duration-500 ${
+                    className={`h-3.5 w-3.5 shrink-0 transition-colors duration-500 ${
                       isDone ? 'text-emerald-500/60' : 'text-slate-700'
                     }`}
                   />

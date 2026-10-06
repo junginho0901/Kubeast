@@ -1,8 +1,60 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #7dd3fc;
+  --color-primary-400: #38bdf8;
+  --color-primary-500: #0ea5e9;
+  --color-primary-600: #0284c7;
+  --color-primary-700: #0369a1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0c4a6e;
+
+  /* v3 line heights: v4's unitless ratios shrink the line box of a text-[11px]
+     child inside a text-sm parent. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+
+  --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
+
+  @keyframes indeterminate-bar {
+    0% { left: -35%; width: 35%; }
+    50% { left: 30%; width: 55%; }
+    100% { left: 100%; width: 35%; }
+  }
+}
 
 @layer base {
+  /* Tailwind 3 defaults that v4 changed (upgrade guide): border colour,
+     placeholder colour, pointer cursor on buttons. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
   /* Browser autofill paints its own light background over the dark inputs
      (Chrome: a pale yellow/blue fill with dark text). Keep the field's own
      colours: the inset shadow covers the fill, the text colour is forced. */
@@ -79,7 +131,9 @@ body {
   }
 
   .badge {
-    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap leading-none;
+    /* a plain line-height (not leading-none) so a text-* utility on the badge still resets it, as in v3 */
+    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap;
+    line-height: 1;
   }
 
   /* List tables: a column marked col-low (Age, Namespace, IPs, images …) folds
@@ -178,7 +232,7 @@ body {
 
 /* 중첩된 details (Arguments, Results) */
 .prose details details {
-  @apply my-2 mx-4 rounded border border-slate-600/50 bg-slate-800/30;
+  @apply my-2 mx-4 rounded-sm border border-slate-600/50 bg-slate-800/30;
 }
 
 .prose details details summary {
@@ -202,7 +256,7 @@ body {
 
 /* 코드 블록 스타일 - 가로 스크롤 가능하되 말풍선 너비 제한 */
 .prose details pre {
-  @apply my-2 mx-4 rounded bg-slate-900/50;
+  @apply my-2 mx-4 rounded-sm bg-slate-900/50;
   overflow-x: auto !important;
   max-width: 100% !important;
   white-space: pre !important;

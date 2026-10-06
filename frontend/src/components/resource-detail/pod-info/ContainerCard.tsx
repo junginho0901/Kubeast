@@ -50,14 +50,14 @@ export default function ContainerCard({
   const kp = keyPrefix ?? namePrefix
 
   return (
-    <div className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+    <div className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-white break-words">{c.name || `${namePrefix}-${i + 1}`}</span>
+        <span className="text-sm font-semibold text-white wrap-break-word">{c.name || `${namePrefix}-${i + 1}`}</span>
         <div className="flex items-center gap-2">
           {isContainer && canExec && stateKey === 'running' && onExec && (
             <button
               onClick={() => onExec(c.name)}
-              className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors"
+              className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors"
               title={execTooltip}
             >
               <Terminal className="w-3.5 h-3.5" />
@@ -74,19 +74,19 @@ export default function ContainerCard({
           <span className="font-mono break-all">{c.image || '-'}</span>
         </ContainerKvRow>
         <ContainerKvRow label="Command">
-          <span className="font-mono break-words whitespace-pre-wrap">{formatContainerCommand(c.command, c.args)}</span>
+          <span className="font-mono wrap-break-word whitespace-pre-wrap">{formatContainerCommand(c.command, c.args)}</span>
         </ContainerKvRow>
         <ContainerKvRow label="Restarts">
           <span className="font-mono">{String(c.restart_count ?? c.restartCount ?? 0)}</span>
         </ContainerKvRow>
         {stateDetail.reason && (
           <ContainerKvRow label="Reason">
-            <span className="text-amber-300 break-words">{stateDetail.reason}</span>
+            <span className="text-amber-300 wrap-break-word">{stateDetail.reason}</span>
           </ContainerKvRow>
         )}
         {stateDetail.message && (
           <ContainerKvRow label="Message">
-            <span className="text-red-300 break-words whitespace-pre-wrap">{stateDetail.message}</span>
+            <span className="text-red-300 wrap-break-word whitespace-pre-wrap">{stateDetail.message}</span>
           </ContainerKvRow>
         )}
         {isContainer && stateDetail.started_at && (
@@ -98,7 +98,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Ports">
             <div className="flex flex-wrap gap-1">
               {toPorts(c.ports).map((port, idx) => (
-                <span key={`${port}-${idx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`${port}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {port}
                 </span>
               ))}
@@ -109,7 +109,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Requests">
             <div className="flex flex-wrap gap-1">
               {toEntryPairs(requests).map(([k, v]) => (
-                <span key={`req-${kp}-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`req-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {k}={v}
                 </span>
               ))}
@@ -120,7 +120,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Limits">
             <div className="flex flex-wrap gap-1">
               {toEntryPairs(limits).map(([k, v]) => (
-                <span key={`lim-${kp}-${k}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`lim-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {k}={v}
                 </span>
               ))}
@@ -158,7 +158,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Mounts">
             <div className="flex flex-wrap gap-1">
               {toMounts(mounts).map((mount, idx) => (
-                <span key={`${mount}-${idx}`} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`${mount}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {mount}
                 </span>
               ))}
@@ -167,17 +167,17 @@ export default function ContainerCard({
         )}
         {formatProbe(c.livenessProbe) && (
           <ContainerKvRow label="Liveness Probe">
-            <span className="font-mono break-words">{formatProbe(c.livenessProbe)}</span>
+            <span className="font-mono wrap-break-word">{formatProbe(c.livenessProbe)}</span>
           </ContainerKvRow>
         )}
         {formatProbe(c.readinessProbe) && (
           <ContainerKvRow label="Readiness Probe">
-            <span className="font-mono break-words">{formatProbe(c.readinessProbe)}</span>
+            <span className="font-mono wrap-break-word">{formatProbe(c.readinessProbe)}</span>
           </ContainerKvRow>
         )}
         {formatProbe(c.startupProbe) && (
           <ContainerKvRow label="Startup Probe">
-            <span className="font-mono break-words">{formatProbe(c.startupProbe)}</span>
+            <span className="font-mono wrap-break-word">{formatProbe(c.startupProbe)}</span>
           </ContainerKvRow>
         )}
         {(() => {

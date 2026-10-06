@@ -41,7 +41,7 @@ export default function RevisionDetailModal({
         <p className="text-sm text-slate-400 mb-4">
           {namespace}/{name} — rev {revision}
           {revision === currentRevision && (
-            <span className="ml-2 rounded bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">
+            <span className="ml-2 rounded-sm bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">
               {t('helmReleaseDetail.history.current')}
             </span>
           )}
@@ -117,7 +117,7 @@ function SectionPane({
 
   const content = q.data?.content ?? ''
   return (
-    <pre className="max-h-[60vh] overflow-auto rounded bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200 whitespace-pre">
+    <pre className="max-h-[60vh] overflow-auto rounded-sm bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200 whitespace-pre">
       {content || '—'}
     </pre>
   )

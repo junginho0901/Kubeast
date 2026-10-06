@@ -230,7 +230,7 @@ export default function ResourceGraph() {
             <p className="text-sm">{t('resourceGraph.noData', 'No resources found')}</p>
           </div>
         ) : (
-          <div style={{ width: '100%', height: '100%' }} className="[&_.react-flow\_\_attribution]:!hidden">
+          <div style={{ width: '100%', height: '100%' }} className="[&_.react-flow\_\_attribution]:hidden!">
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -245,7 +245,7 @@ export default function ResourceGraph() {
               maxZoom={2}
             >
               <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#334155" />
-              <Controls className="!bg-slate-800 !border-slate-700 !rounded-lg [&>button]:!bg-slate-700 [&>button]:!border-slate-600 [&>button]:!text-white [&>button:hover]:!bg-slate-600" />
+              <Controls className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-white! [&>button:hover]:bg-slate-600!" />
               <MiniMap
                 nodeColor={node => {
                   const raw = node.data?.raw as ResourceGraphNode | undefined
@@ -265,7 +265,7 @@ export default function ResourceGraph() {
             has nothing to decode and the panel overlapped its cards at 1024px),
             and collapsible to a single line */}
         {(graphData?.nodes?.length ?? 0) > 0 && (
-        <div className="absolute bottom-4 left-4 bg-slate-800/90 border border-slate-700 rounded-lg p-3 text-xs space-y-1.5 z-10 backdrop-blur-sm">
+        <div className="absolute bottom-4 left-4 bg-slate-800/90 border border-slate-700 rounded-lg p-3 text-xs space-y-1.5 z-10 backdrop-blur-xs">
           <button
             type="button"
             onClick={() => setLegendOpen((v) => !v)}
@@ -279,7 +279,7 @@ export default function ResourceGraph() {
             const style = edgeStyles[type]
             return (
               <div key={type} className="flex items-center gap-2">
-                <svg width="24" height="8" className="flex-shrink-0">
+                <svg width="24" height="8" className="shrink-0">
                   <line x1="0" y1="4" x2="20" y2="4" stroke={style.stroke} strokeWidth="2" strokeDasharray={style.strokeDasharray || ''} />
                   <polygon points="20,1 24,4 20,7" fill={style.stroke} />
                 </svg>
@@ -290,15 +290,15 @@ export default function ResourceGraph() {
           {legendOpen && (
           <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded border-2 border-green-500" />
+              <span className="w-3 h-3 rounded-sm border-2 border-green-500" />
               <span className="text-slate-400">{t('resourceGraph.legendRunning', 'Running / Active')}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded border-2 border-yellow-500" />
+              <span className="w-3 h-3 rounded-sm border-2 border-yellow-500" />
               <span className="text-slate-400">{t('resourceGraph.legendPending', 'Pending')}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded border-2 border-red-500" />
+              <span className="w-3 h-3 rounded-sm border-2 border-red-500" />
               <span className="text-slate-400">{t('resourceGraph.legendFailed', 'Failed / Error')}</span>
             </div>
           </div>

@@ -471,7 +471,7 @@ export default function Layout() {
           <div className="px-6 py-4">
             <Link
               to="/account"
-              className="block rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 hover:bg-slate-700/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600"
+              className="block rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 hover:bg-slate-700/20 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600"
               title={t('layout.accountTitle')}
             >
               <div className="text-[11px] text-slate-400">{t('layout.account')}</div>

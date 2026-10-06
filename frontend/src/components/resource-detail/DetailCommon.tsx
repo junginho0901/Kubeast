@@ -92,7 +92,7 @@ export function KeyValueTags({ data, emptyText = '(none)' }: { data?: Record<str
           <span className="mx-1 text-slate-500">:</span>
           <span className="max-w-[260px] truncate">{value}</span>
           <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden w-max max-w-[520px] rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-200 shadow-lg group-hover:block">
-            <span className="break-words">{`${key}: ${value}`}</span>
+            <span className="wrap-break-word">{`${key}: ${value}`}</span>
           </span>
         </span>
       ))}
@@ -120,8 +120,8 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
             <tr key={`${c.type}-${idx}`} className="text-slate-200">
               <td className="py-2 pr-2 font-medium break-all whitespace-normal align-top">{c.type || '-'}</td>
               <td className="py-2 pr-2 whitespace-nowrap align-top"><StatusBadge status={c.status} /></td>
-              <td className="py-2 pr-2 break-words whitespace-normal align-top">{c.reason || '-'}</td>
-              <td className="py-2 pr-2 break-words whitespace-normal align-top">{c.message || '-'}</td>
+              <td className="py-2 pr-2 wrap-break-word whitespace-normal align-top">{c.reason || '-'}</td>
+              <td className="py-2 pr-2 wrap-break-word whitespace-normal align-top">{c.message || '-'}</td>
               <td className="py-2 pr-2 whitespace-nowrap align-top">{fmtRel(c.lastTransitionTime || c.last_transition_time)}</td>
             </tr>
           ))}
@@ -156,8 +156,8 @@ export function EventsTable({ events }: { events: any[] }) {
           {events.slice(0, 50).map((e: any, idx: number) => (
             <tr key={`${e.reason}-${idx}`} className="text-slate-200">
               <td className="py-2 pr-2"><span className={`badge ${badge(e.type)}`}>{e.type || '-'}</span></td>
-              <td className="py-2 pr-2 align-top"><span className="block break-words whitespace-normal">{e.reason || '-'}</span></td>
-              <td className="py-2 pr-2 align-top"><span className="block break-words whitespace-normal">{e.message || '-'}</span></td>
+              <td className="py-2 pr-2 align-top"><span className="block wrap-break-word whitespace-normal">{e.reason || '-'}</span></td>
+              <td className="py-2 pr-2 align-top"><span className="block wrap-break-word whitespace-normal">{e.message || '-'}</span></td>
               <td className="py-2 pr-2">{fmtRel(e.last_timestamp || e.lastTimestamp || e.first_timestamp || e.firstTimestamp)}</td>
               <td className="py-2 pr-2">{e.count ?? 1}</td>
             </tr>

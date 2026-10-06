@@ -90,13 +90,13 @@ export default function PriorityClassInfo({ name }: Props) {
 
       {collidingGlobalDefaults.length > 0 && (
         <InfoSection title="Global Default Conflict">
-          <div className="rounded border border-amber-700/50 bg-amber-900/20 p-2 space-y-1.5">
+          <div className="rounded-sm border border-amber-700/50 bg-amber-900/20 p-2 space-y-1.5">
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-200">
               <span>⚠ <Tx text="Multiple globalDefault PriorityClasses ({{n}}) — only one is honored" values={{ n: collidingGlobalDefaults.length + 1 }} /></span>
             </div>
             <div className="flex flex-wrap gap-1">
               {[{ name } as { name: string }, ...collidingGlobalDefaults].map((pc) => (
-                <span key={pc.name} className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-mono ${pc.name === name ? 'border-amber-500/60 bg-amber-800/30 text-amber-100' : 'border-slate-700 bg-slate-800 text-slate-200'}`}>
+                <span key={pc.name} className={`inline-flex rounded-sm border px-1.5 py-0.5 text-[11px] font-mono ${pc.name === name ? 'border-amber-500/60 bg-amber-800/30 text-amber-100' : 'border-slate-700 bg-slate-800 text-slate-200'}`}>
                   {pc.name}
                 </span>
               ))}
@@ -143,7 +143,7 @@ export default function PriorityClassInfo({ name }: Props) {
 
       {/* Description */}
       <InfoSection title="Description">
-        <div className="text-xs text-slate-200 whitespace-pre-wrap break-words">
+        <div className="text-xs text-slate-200 whitespace-pre-wrap wrap-break-word">
           {description}
         </div>
       </InfoSection>

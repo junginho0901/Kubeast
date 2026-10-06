@@ -120,7 +120,7 @@ export default function ApiKeysSection() {
             {tr('apiKeys.onceWarning', 'Copy the key now — it is shown only this once.')}
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 break-all rounded bg-slate-950/60 px-2 py-1.5 font-mono text-xs text-white" data-testid="api-key-value">
+            <code className="flex-1 break-all rounded-sm bg-slate-950/60 px-2 py-1.5 font-mono text-xs text-white" data-testid="api-key-value">
               {created.key}
             </code>
             <button

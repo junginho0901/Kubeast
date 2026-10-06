@@ -118,7 +118,7 @@ export default function RuntimeClassInfo({ name }: Props) {
               <p className="text-xs text-slate-400 mb-1"><Tx>Tolerations</Tx></p>
               <div className="space-y-1">
                 {(scheduling.tolerations as any[]).map((tol: any, i: number) => (
-                  <div key={i} className="text-xs text-slate-200 bg-slate-800/60 rounded px-2 py-1">
+                  <div key={i} className="text-xs text-slate-200 bg-slate-800/60 rounded-sm px-2 py-1">
                     {tol.key}{tol.operator === 'Equal' ? `=${tol.value}` : ''} : {tol.effect || '*'}
                     {tol.toleration_seconds != null && ` (${tol.toleration_seconds}s)`}
                   </div>

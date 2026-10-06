@@ -121,7 +121,7 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {selectorExpressions.map((expr, idx) => (
                   <tr key={idx} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words font-mono">{expr}</td>
+                    <td className="py-1 pr-2 wrap-break-word font-mono">{expr}</td>
                   </tr>
                 ))}
               </tbody>
@@ -144,9 +144,9 @@ export default function DeviceClassInfo({ name, rawJson }: Props) {
               <tbody className="divide-y divide-slate-800">
                 {matchExpressions.map((me, idx) => (
                   <tr key={idx} className="text-slate-200">
-                    <td className="py-1 pr-2 break-words font-mono">{me.key}</td>
-                    <td className="py-1 pr-2 break-words">{me.operator}</td>
-                    <td className="py-1 pr-2 break-words">{me.values}</td>
+                    <td className="py-1 pr-2 wrap-break-word font-mono">{me.key}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{me.operator}</td>
+                    <td className="py-1 pr-2 wrap-break-word">{me.values}</td>
                   </tr>
                 ))}
               </tbody>

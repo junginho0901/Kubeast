@@ -52,15 +52,15 @@ function CustomDropdown<T extends string | number>({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`w-full ${minWidth} px-2 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
+        className={`w-full ${minWidth} px-2 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
       >
         <span className="font-medium truncate">{selected?.label ?? '-'}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-600 rounded shadow-xl z-50 max-h-[300px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-600 rounded-sm shadow-xl z-50 max-h-[300px] overflow-y-auto">
           {options.map((opt) => (
             <button
               key={String(opt.value)}
@@ -72,7 +72,7 @@ function CustomDropdown<T extends string | number>({
               className="w-full px-3 py-2 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-2 first:rounded-t last:rounded-b"
             >
               {value === opt.value && (
-                <CheckCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />
               )}
               <span className={value === opt.value ? 'font-medium' : ''}>{opt.label}</span>
             </button>
@@ -161,7 +161,7 @@ export default function AdminAudit() {
     const isSuccess = result === 'success'
     return (
       <span
-        className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
           isSuccess
             ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
             : 'bg-red-500/15 text-red-300 border border-red-500/30'
@@ -194,14 +194,14 @@ export default function AdminAudit() {
           <button
             onClick={exportCsv}
             data-testid="audit-export-csv"
-            className="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
+            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
           >
             {tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
           >
             {isFetching ? tr('adminAudit.refreshing', '불러오는 중...') : tr('adminAudit.refresh', '새로고침')}
           </button>
@@ -242,7 +242,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="k8s.pod.delete"
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
               value={draft.action ?? ''}
               onChange={(e) => setDraft({ ...draft, action: e.target.value || undefined })}
             />
@@ -253,7 +253,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="user@kubeast.io"
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
             />
@@ -281,7 +281,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.namespace', 'Namespace')}
             <input
               type="text"
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
               value={draft.namespace ?? ''}
               onChange={(e) => setDraft({ ...draft, namespace: e.target.value || undefined })}
             />
@@ -291,7 +291,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.since', '시작 시각')}
             <input
               type="datetime-local"
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
               value={draft.since ? draft.since.slice(0, 16) : ''}
               onChange={(e) =>
                 setDraft({
@@ -306,7 +306,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.until', '종료 시각')}
             <input
               type="datetime-local"
-              className="mt-1 rounded bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
               value={draft.until ? draft.until.slice(0, 16) : ''}
               onChange={(e) =>
                 setDraft({
@@ -331,13 +331,13 @@ export default function AdminAudit() {
         <div className="flex gap-2 mt-3">
           <button
             onClick={applyFilter}
-            className="inline-flex items-center gap-1 rounded bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white"
+            className="inline-flex items-center gap-1 rounded-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white"
           >
             <Search className="w-4 h-4" /> {tr('adminAudit.apply', '조회')}
           </button>
           <button
             onClick={resetFilter}
-            className="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
+            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
           >
             {tr('adminAudit.reset', '초기화')}
           </button>
@@ -401,7 +401,7 @@ export default function AdminAudit() {
           <button
             onClick={() => goPage(page - 1)}
             disabled={page <= 1}
-            className="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
+            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
           >
             {tr('adminAudit.prev', '이전')}
           </button>
@@ -411,7 +411,7 @@ export default function AdminAudit() {
           <button
             onClick={() => goPage(page + 1)}
             disabled={page >= totalPages}
-            className="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
+            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
           >
             {tr('adminAudit.next', '다음')}
           </button>
@@ -469,7 +469,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
               title={playLabel}
               aria-label={playLabel}
               data-testid={`audit-play-${recordingId}`}
-              className="ml-2 inline-flex items-center rounded border border-primary-700/60 bg-primary-900/30 px-1.5 py-0.5 text-[11px] text-primary-200 hover:bg-primary-800/40"
+              className="ml-2 inline-flex items-center rounded-sm border border-primary-700/60 bg-primary-900/30 px-1.5 py-0.5 text-[11px] text-primary-200 hover:bg-primary-800/40"
             >
               <Play className="w-3 h-3" />
             </button>
@@ -504,7 +504,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
                 {entry.Error && (
                   <div className="mb-2">
                     <div className="text-red-400 mb-1">{tr('adminAudit.detail.error', 'Error')}</div>
-                    <div className="rounded bg-red-950/50 border border-red-800 p-2 text-red-200 font-mono">
+                    <div className="rounded-sm bg-red-950/50 border border-red-800 p-2 text-red-200 font-mono">
                       {entry.Error}
                     </div>
                   </div>
@@ -512,7 +512,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
                 {entry.Before !== undefined && entry.Before !== null && (
                   <div className="mb-2">
                     <div className="text-slate-400 mb-1">{tr('adminAudit.detail.before', 'Before')}</div>
-                    <pre className="rounded bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
+                    <pre className="rounded-sm bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
                       {JSON.stringify(entry.Before, null, 2)}
                     </pre>
                   </div>
@@ -520,7 +520,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
                 {entry.After !== undefined && entry.After !== null && (
                   <div>
                     <div className="text-slate-400 mb-1">{tr('adminAudit.detail.after', 'After')}</div>
-                    <pre className="rounded bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
+                    <pre className="rounded-sm bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
                       {JSON.stringify(entry.After, null, 2)}
                     </pre>
                   </div>

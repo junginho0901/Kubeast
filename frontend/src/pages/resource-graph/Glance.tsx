@@ -20,7 +20,7 @@ export function Glance({ node, position }: Props) {
 
   return (
     <div
-      className="fixed z-[200] bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-3 min-w-[220px] max-w-[300px] pointer-events-none"
+      className="fixed z-200 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-3 min-w-[220px] max-w-[300px] pointer-events-none"
       style={{ left: position.x + 16, top: position.y - 10 }}
     >
       <div className="flex items-center gap-2 mb-2">
@@ -29,7 +29,7 @@ export function Glance({ node, position }: Props) {
           <div className="text-[10px] text-slate-400">{node.kind}</div>
           <div className="text-xs font-semibold text-white truncate">{node.name}</div>
         </div>
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: borderColor, boxShadow: `0 0 6px ${borderColor}` }} />
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: borderColor, boxShadow: `0 0 6px ${borderColor}` }} />
       </div>
 
       <div className="space-y-1 text-[10px]">

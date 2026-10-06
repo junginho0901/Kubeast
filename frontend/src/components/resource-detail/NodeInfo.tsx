@@ -292,7 +292,7 @@ function NodeVolumes({ volumesAttached, volumesInUse }: { volumesAttached: any; 
             <div className="text-xs font-semibold text-slate-300 mb-1"><Tx text="In Use ({{n}})" values={{ n: inUse.length }} /></div>
             <div className="flex flex-wrap gap-1">
               {inUse.map((vi: string, i: number) => (
-                <span key={i} className="inline-flex rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">
+                <span key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">
                   {vi}
                 </span>
               ))}

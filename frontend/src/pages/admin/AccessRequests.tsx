@@ -132,7 +132,7 @@ export default function AccessRequests() {
                     <td className="px-4 py-3">{r.cluster_name || r.cluster_id}</td>
                     <td className="px-4 py-3 font-medium">{r.role}</td>
                     <td className="px-4 py-3 whitespace-nowrap"><span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-400" />{formatDuration(r.duration_minutes)}</span></td>
-                    <td className="px-4 py-3 max-w-xs whitespace-pre-wrap break-words text-slate-300">{r.reason}</td>
+                    <td className="px-4 py-3 max-w-xs whitespace-pre-wrap wrap-break-word text-slate-300">{r.reason}</td>
                     <td className="px-4 py-3 text-slate-400">{formatWhen(r.created_at)}</td>
                     {tab === 'pending' ? (
                       <td className="px-4 py-3">

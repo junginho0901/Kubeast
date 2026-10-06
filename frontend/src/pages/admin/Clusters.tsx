@@ -120,7 +120,7 @@ export default function AdminClusters() {
                   <td className="px-4 py-3">
                     {c.display_name}
                     {c.is_self_cluster && (
-                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">self</span>
+                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-300">{c.mode}</td>

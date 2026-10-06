@@ -46,7 +46,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
       <div className="relative w-full md:w-64" ref={containerRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+          className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
         >
           <span className="text-sm font-medium">{label}</span>
           <ChevronDown
@@ -57,7 +57,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
         </button>
 
         {isOpen && (
-          <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-[100] max-h-[200px] overflow-y-auto">
+          <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[200px] overflow-y-auto">
             <button
               onClick={() => {
                 onChange('')
@@ -66,7 +66,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
               className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg"
             >
               {value === '' && (
-                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
               )}
               <span className={value === '' ? 'font-medium' : ''}>
                 {t('monitoring.namespace.placeholder')}
@@ -80,7 +80,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
               className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2"
             >
               {value === 'all' && (
-                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
               )}
               <span className={value === 'all' ? 'font-medium' : ''}>
                 {t('monitoring.namespace.all')}
@@ -97,7 +97,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
                   className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 last:rounded-b-lg"
                 >
                   {value === ns.name && (
-                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                   )}
                   <span className={value === ns.name ? 'font-medium' : ''}>
                     {ns.name}
