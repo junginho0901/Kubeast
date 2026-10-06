@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo } from 'react'
-import ReactFlow, {
-  Node,
+import {
+  ReactFlow,
+  type Node,
   Controls,
   Background,
   MiniMap,
   BackgroundVariant,
-} from 'react-flow-renderer'
-import 'react-flow-renderer/dist/style.css'
-import 'react-flow-renderer/dist/theme-default.css'
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Info } from 'lucide-react'

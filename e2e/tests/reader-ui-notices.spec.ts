@@ -66,7 +66,7 @@ test.describe('non-admin UI notices', () => {
       await expect(banner).toContainText('roles')
       // another page resets the banner; a page the viewer may read shows none
       await page.goto('/workloads/pods?cluster=self')
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1, name: /^(Pods|파드)$/ })).toBeVisible()
       await expect(page.getByTestId('forbidden-banner')).toHaveCount(0)
       await ctx.close()
     } finally {

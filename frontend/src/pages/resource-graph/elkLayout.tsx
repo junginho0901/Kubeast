@@ -4,8 +4,8 @@
 // groupBy='none' = flat layered / 그 외 = compound (group container) 레이아웃.
 // JSX 라벨 (Layers icon) 사용으로 .tsx 확장자.
 
-import type { Node, Edge } from 'react-flow-renderer'
-import { Position } from 'react-flow-renderer'
+import type { Node, Edge } from '@xyflow/react'
+import { Position } from '@xyflow/react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { Layers } from 'lucide-react'
 import i18next from 'i18next'
@@ -13,6 +13,9 @@ import type { ResourceGraphNode, ResourceGraphEdge } from '@/services/api'
 import { kindWeight, type GroupBy } from './constants'
 
 const elk = new ELK()
+
+const kindPartition = (n: Node) =>
+  String(-(kindWeight[(n.data?.raw as ResourceGraphNode | undefined)?.kind ?? ''] || 0))
 
 export async function applyElkLayout(
   rfNodes: Node[],
@@ -60,7 +63,7 @@ export async function applyElkLayout(
         width: 200,
         height: 60,
         layoutOptions: {
-          'partitioning.partition': String(-(kindWeight[n.data?.raw?.kind] || 0)),
+          'partitioning.partition': kindPartition(n),
         },
       })),
       edges: validEdges.map((e, i) => ({
@@ -120,7 +123,7 @@ export async function applyElkLayout(
         width: 200,
         height: 60,
         layoutOptions: {
-          'partitioning.partition': String(-(kindWeight[n.data?.raw?.kind] || 0)),
+          'partitioning.partition': kindPartition(n),
         },
       })),
       edges: intraEdges.map((e, i) => ({
@@ -192,7 +195,7 @@ export async function applyElkLayout(
         childNodes.push({
           ...rfNode,
           position: { x: child.x!, y: child.y! },
-          parentNode: group.id,
+          parentId: group.id,
           extent: 'parent' as const,
           targetPosition: Position.Top,
           sourcePosition: Position.Bottom,

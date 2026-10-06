@@ -10,7 +10,7 @@ import {
   useNodesState,
   useEdgesState,
   MarkerType,
-} from 'react-flow-renderer'
+} from '@xyflow/react'
 import type { ResourceGraphNode, ResourceGraphEdge } from '@/services/api'
 import { edgeStyles, kindIcon, statusColor, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
@@ -33,8 +33,8 @@ export function useResourceGraphLayout({
   groupBy,
 }: ResourceGraphLayoutInput) {
   const [layoutReady, setLayoutReady] = useState(false)
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   const { filteredNodes, filteredEdges } = useMemo(() => {
     if (!graphData?.nodes || !graphData?.edges) return { filteredNodes: [] as Node[], filteredEdges: [] as Edge[] }
