@@ -68,10 +68,10 @@ func TestExtractClaims(t *testing.T) {
 }
 
 func TestDomainAllowed(t *testing.T) {
-	if !domainAllowed("a@jobplanet.com", nil) {
+	if !domainAllowed("a@example.com", nil) {
 		t.Fatal("empty allow-list allows any domain")
 	}
-	if !domainAllowed("a@JobPlanet.com", []string{"jobplanet.com"}) || domainAllowed("a@gmail.com", []string{"jobplanet.com"}) || domainAllowed("nodomain", []string{"jobplanet.com"}) {
+	if !domainAllowed("a@Example.com", []string{"example.com"}) || domainAllowed("a@gmail.com", []string{"example.com"}) || domainAllowed("nodomain", []string{"example.com"}) {
 		t.Fatal("domain allow-list")
 	}
 }
