@@ -324,11 +324,6 @@ auth:
   # 세션 쿠키 Secure(HTTPS에서만 전송). TLS 뒤(Ingress·Gateway API)면 true 유지,
   # localhost 아닌 주소를 plain http로 쓸 때만 false (아니면 로그인 쿠키가 버려짐)
   cookieSecure: true
-
-# EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
-aws:
-  irsaRoleArn: ""
-  region: ""
   # 클러스터에는 로그인한 사용자 본인(이메일)으로 impersonation — 클러스터 RBAC이
   # 최종 판단, K8s audit에 사용자가 남음. 등록하는 모든 클러스터에 아래 RBAC 적용:
   #   helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -
@@ -356,10 +351,22 @@ aws:
     maxHours: 8
     roles: [Write]
 
+# EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
+aws:
+  irsaRoleArn: ""
+  region: ""
+# 서비스마다 자기 롤(IRSA)이나 다른 클라우드 워크로드 아이덴티티 주석 — 감사 S3 싱크는
+# authService, S3 세션 기록은 k8sService(aws.irsaRoleArn 위에 덮어씀)
+serviceAccounts:
+  authService:
+    annotations: {}   # eks.amazonaws.com/role-arn: arn:aws:iam::<계정>:role/kubeast-audit-sink
+  k8sService:
+    annotations: {}
+
 # 콘솔 자체 메트릭 — 백엔드 5개가 각자 포트의 /metrics로 Prometheus 메트릭을 냄
 # (요청 수·지연·진행 중, 감사 저장소 상태, WebSocket 구독; docs/metrics.md).
 # 게이트웨이는 /metrics를 프록시하지 않음. prometheus-operator가 있으면 ServiceMonitor,
-# networkPolicy.enabled면 스크레이퍼를 from에 적어 열어 줌. 알람 3개는 prometheusRule.
+# networkPolicy.enabled면 스크레이퍼를 from에 적어 열어 줌. 알람 5개는 prometheusRule.
 metrics:
   enabled: true
   serviceMonitor:
@@ -520,7 +527,7 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 | 종류 | 용도 | 비밀(Secret 키) |
 |---|---|---|
-| `s3` | 장기 보관(S3·MinIO·GCS·R2). 시간 파티션 NDJSON gzip | `accessKeyId`·`secretAccessKey` — 없으면 IRSA |
+| `s3` | 장기 보관(S3·MinIO·GCS·R2). 시간 파티션 NDJSON gzip | `accessKeyId`·`secretAccessKey` — 없으면 IRSA(`serviceAccounts.authService.annotations`에 롤) |
 | `webhook` `json` | SIEM·n8n 등 범용(선택 HMAC 서명 `X-Kubeast-Signature`) | `url`, `hmacSecret` |
 | `webhook` `slack` · `teams` · `discord` | 채팅 알림 | `url` |
 | `webhook` `telegram` | 채팅 알림(`chatId`) | `botToken` |
@@ -569,7 +576,7 @@ retention:
 ```yaml
 sessionRecording:
   enabled: true
-  s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # IRSA에 s3:PutObject·GetObject
+  s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # k8s-service 롤에 s3:PutObject·GetObject
 ```
 
 ### 프론트엔드

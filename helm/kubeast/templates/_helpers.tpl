@@ -165,16 +165,22 @@ resources:
 {{- end -}}
 
 {{/*
-EKS IAM authentication: the k8s-service and tool-server pods run
-aws-iam-authenticator with the credentials the EKS pod identity webhook injects
-for the annotated ServiceAccount (IRSA). Empty when aws.irsaRoleArn is unset.
+Annotations of one of the chart's ServiceAccounts: serviceAccounts.<key>.annotations,
+over the aws.irsaRoleArn role when eksAuth (k8s-service and tool-server run
+aws-iam-authenticator with the credentials the EKS pod identity webhook injects).
+Empty when neither is set.
 */}}
-{{- define "kubeast.awsServiceAccountAnnotations" -}}
-{{- if .Values.aws.irsaRoleArn }}
+{{- define "kubeast.serviceAccountAnnotations" -}}
+{{- $a := dict -}}
+{{- if and .eksAuth .root.Values.aws.irsaRoleArn -}}
+{{- $_ := set $a "eks.amazonaws.com/role-arn" .root.Values.aws.irsaRoleArn -}}
+{{- $_ := set $a "eks.amazonaws.com/sts-regional-endpoints" "true" -}}
+{{- end -}}
+{{- $a = mergeOverwrite $a (dig .key "annotations" dict (.root.Values.serviceAccounts | default dict)) -}}
+{{- with $a -}}
 annotations:
-  eks.amazonaws.com/role-arn: {{ .Values.aws.irsaRoleArn | quote }}
-  eks.amazonaws.com/sts-regional-endpoints: "true"
-{{- end }}
+  {{- toYaml . | nindent 2 }}
+{{- end -}}
 {{- end -}}
 
 {{- define "kubeast.awsEnv" -}}

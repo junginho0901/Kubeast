@@ -4,7 +4,7 @@ metadata:
   name: k8s-service
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
-  {{- with include "kubeast.awsServiceAccountAnnotations" . }}{{ nindent 2 . }}{{- end }}
+  {{- with include "kubeast.serviceAccountAnnotations" (dict "root" $ "key" "k8sService" "eksAuth" true) }}{{ nindent 2 . }}{{- end }}
 {{- if .Values.auth.impersonation.enabled }}
 ---
 # With impersonation on, every request to this cluster runs as the signed-in
@@ -78,6 +78,7 @@ metadata:
   name: auth-service
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
+  {{- with include "kubeast.serviceAccountAnnotations" (dict "root" $ "key" "authService") }}{{ nindent 2 . }}{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -119,7 +120,7 @@ metadata:
   name: tool-server
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
-  {{- with include "kubeast.awsServiceAccountAnnotations" . }}{{ nindent 2 . }}{{- end }}
+  {{- with include "kubeast.serviceAccountAnnotations" (dict "root" $ "key" "toolServer" "eksAuth" true) }}{{ nindent 2 . }}{{- end }}
 {{- if not .Values.auth.impersonation.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
