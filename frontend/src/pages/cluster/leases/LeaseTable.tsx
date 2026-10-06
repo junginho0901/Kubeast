@@ -22,10 +22,10 @@ interface LeaseTableProps {
   rowsPerPage: number
   onPageChange: (page: number) => void
   onOpenDetail: (item: LeaseInfo) => void
-  containerRef: React.RefObject<HTMLDivElement>
-  bodyRef: React.RefObject<HTMLDivElement>
-  theadRef: React.RefObject<HTMLTableSectionElement>
-  firstRowRef: React.RefObject<HTMLTableRowElement>
+  containerRef: React.RefObject<HTMLDivElement | null>
+  bodyRef: React.RefObject<HTMLDivElement | null>
+  theadRef: React.RefObject<HTMLTableSectionElement | null>
+  firstRowRef: React.RefObject<HTMLTableRowElement | null>
 }
 
 export function LeaseTable({

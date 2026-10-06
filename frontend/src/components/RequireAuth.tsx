@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type JSX } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'

@@ -11,7 +11,7 @@ interface Params {
 }
 
 interface Result {
-  sessionsScrollRef: React.RefObject<HTMLDivElement>
+  sessionsScrollRef: React.RefObject<HTMLDivElement | null>
   sessionsScrollTop: number
   sessionsViewportHeight: number
   handleSessionsScroll: (e: React.UIEvent<HTMLDivElement>) => void

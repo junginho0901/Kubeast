@@ -43,9 +43,9 @@ interface Props {
   setCurrentPage: Dispatch<SetStateAction<number>>
   totalPages: number
   rowsPerPage: number
-  tableBodyRef: RefObject<HTMLDivElement>
-  theadRef: RefObject<HTMLTableSectionElement>
-  firstRowRef: RefObject<HTMLTableRowElement>
+  tableBodyRef: RefObject<HTMLDivElement | null>
+  theadRef: RefObject<HTMLTableSectionElement | null>
+  firstRowRef: RefObject<HTMLTableRowElement | null>
   openDetail: (args: OpenDetailArgs) => void
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }

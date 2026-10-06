@@ -30,19 +30,13 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # react, react-dom and both @types packages move in one PR: a lone react
+      # bump fails npm ci with ERESOLVE.
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       npm-minor-patch:
         update-types: ["minor", "patch"]
     ignore:
-      # React 19 moves react, react-dom and both @types packages together
-      # (a lone react bump fails npm ci with ERESOLVE) — a separate migration.
-      - dependency-name: react
-        update-types: ["version-update:semver-major"]
-      - dependency-name: react-dom
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@types/react"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@types/react-dom"
-        update-types: ["version-update:semver-major"]
       # tsc is TypeScript 7 (@typescript/native); typescript stays the TS 6
       # compatibility package that typescript-eslint imports. A new major of
       # either is its own migration.

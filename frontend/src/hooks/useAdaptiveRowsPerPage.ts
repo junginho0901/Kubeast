@@ -11,9 +11,9 @@ interface UseAdaptiveRowsPerPageOptions {
   // bodyRef 가 주어지면 우선 사용. clientHeight 로 가용 공간을
   // 직접 재므로 화면 비율·페이지 위쪽 콘텐츠와 무관하게 정확.
   // theadRef / rowRef 는 있으면 실측, 없으면 숫자 폴백.
-  bodyRef?: RefObject<HTMLElement>
-  theadRef?: RefObject<HTMLElement>
-  rowRef?: RefObject<HTMLElement>
+  bodyRef?: RefObject<HTMLElement | null>
+  theadRef?: RefObject<HTMLElement | null>
+  rowRef?: RefObject<HTMLElement | null>
 
   minRows?: number
   maxRows?: number
@@ -21,7 +21,7 @@ interface UseAdaptiveRowsPerPageOptions {
 }
 
 export function useAdaptiveRowsPerPage(
-  containerRef: RefObject<HTMLElement>,
+  containerRef: RefObject<HTMLElement | null>,
   options: UseAdaptiveRowsPerPageOptions = {},
 ): number {
   const {

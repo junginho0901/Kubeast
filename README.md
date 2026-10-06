@@ -624,7 +624,7 @@ curl http://localhost:8000/health   # Gateway
 - controller-runtime (CRD operator)
 
 **Frontend**
-- React 18 · TypeScript · Vite · Tailwind CSS
+- React 19 · TypeScript · Vite · Tailwind CSS
 - TanStack Query · React Router
 - Monaco Editor · xterm.js
 - React Flow · dagre · elkjs (그래프) · three.js (3D 토폴로지)

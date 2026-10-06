@@ -17,10 +17,10 @@ interface Props {
   totalPages: number
   rowsPerPage: number
   setCurrentPage: (updater: (prev: number) => number) => void
-  tableContainerRef: React.RefObject<HTMLDivElement>
-  tableBodyRef: React.RefObject<HTMLDivElement>
-  theadRef: React.RefObject<HTMLTableSectionElement>
-  firstRowRef: React.RefObject<HTMLTableRowElement>
+  tableContainerRef: React.RefObject<HTMLDivElement | null>
+  tableBodyRef: React.RefObject<HTMLDivElement | null>
+  theadRef: React.RefObject<HTMLTableSectionElement | null>
+  firstRowRef: React.RefObject<HTMLTableRowElement | null>
 }
 
 export default function DeviceClassesTable({
