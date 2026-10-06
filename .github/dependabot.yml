@@ -33,9 +33,6 @@ updates:
       npm-minor-patch:
         update-types: ["minor", "patch"]
     ignore:
-      # Vitest 5 needs Node 22.12+ on the developer machines first.
-      - dependency-name: vitest
-        update-types: ["version-update:semver-major"]
       # React 19 moves react, react-dom and both @types packages together
       # (a lone react bump fails npm ci with ERESOLVE) — a separate migration.
       - dependency-name: react
