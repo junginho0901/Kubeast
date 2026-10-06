@@ -619,7 +619,7 @@ curl http://localhost:8000/health   # Gateway
 
 **Backend**
 - Go 1.26 (auth · k8s · session · tool-server · controller · pkg)
-- Python 3.11 + FastAPI (ai-service)
+- Python 3.14 + FastAPI (ai-service)
 - PostgreSQL 15, Redis 7
 - controller-runtime (CRD operator)
 

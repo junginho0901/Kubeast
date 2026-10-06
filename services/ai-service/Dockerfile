@@ -1,5 +1,5 @@
 # ---- build stage: compile/install wheels into a venv ----
-FROM python:3.11-slim AS build
+FROM python:3.14-slim AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip uninstall -y pip setuptools wheel
 
 # ---- runtime stage: no compiler, non-root uid 65532 ----
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Apply the OS package fixes published after the base image was built; the
 # release gate fails on fixed CRITICAL/HIGH CVEs (pcre2, openssl in 2026-10).
