@@ -1,4 +1,4 @@
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -59,7 +59,7 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
             {typeof spec.serviceAccountName === 'string' && <InfoRow label="Service Account" value={spec.serviceAccountName} />}
             {Array.isArray(spec.containers) && (
               <div className="mt-2">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Containers</p>
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1"><Tx>Containers</Tx></p>
                 <div className="space-y-1">
                   {(spec.containers as any[]).map((c: any, i: number) => (
                     <div key={i} className="text-xs text-slate-300">
@@ -72,7 +72,7 @@ export default function GenericInfo({ name, namespace, kind, rawJson }: Props) {
             )}
             {Array.isArray(spec.ports) && (
               <div className="mt-2">
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Ports</p>
+                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1"><Tx>Ports</Tx></p>
                 {(spec.ports as any[]).map((p: any, i: number) => (
                   <div key={i} className="text-xs text-slate-300">
                     {p.name && <span className="font-medium">{p.name}: </span>}

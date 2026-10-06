@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, Th, NoneText } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
+import { useDetailLabel } from './useDetailLabel'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -27,6 +28,7 @@ interface Props {
 export default function PodInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (k: string, fb: string, o?: Record<string, any>) => t(k, { defaultValue: fb, ...o })
+  const dl = useDetailLabel()
 
   const [logContainer, setLogContainer] = useState<string>('')
   const [logLines, setLogLines] = useState(100)
@@ -305,23 +307,23 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Top">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400">Status</div>
+            <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
             <div className="mt-1 text-xs text-white font-medium truncate" title={statusReason}>{statusReason || '-'}</div>
           </div>
           <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400">Ready</div>
+            <div className="text-[11px] text-slate-400"><Tx>Ready</Tx></div>
             <div className="mt-1 text-xs text-white font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
           </div>
           <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400">Waiting</div>
+            <div className="text-[11px] text-slate-400"><Tx>Waiting</Tx></div>
             <div className="mt-1 text-xs text-white font-medium">{waitingCount}</div>
           </div>
           <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400">CrashLoop</div>
+            <div className="text-[11px] text-slate-400"><Tx>CrashLoop</Tx></div>
             <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-white'}`}>{crashLoopCount}</div>
           </div>
           <div className="rounded border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-[11px] text-slate-400">Terminated</div>
+            <div className="text-[11px] text-slate-400"><Tx>Terminated</Tx></div>
             <div className="mt-1 text-xs text-white font-medium">{terminatedCount}</div>
           </div>
         </div>
@@ -440,7 +442,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                   )}
                   {memMB !== null && (
                     <MetricBar
-                      label={`Memory ${memMB.toFixed(0)} MiB${memLimitMB ? ` / ${memLimitMB.toFixed(0)} MiB` : ''}`}
+                      label={`${dl('Memory')} ${memMB.toFixed(0)} MiB${memLimitMB ? ` / ${memLimitMB.toFixed(0)} MiB` : ''}`}
                       value={memLimitMB ? (memMB / memLimitMB) * 100 : Math.min((memMB / 512) * 100, 100)}
                       max={100}
                       unit="%"
@@ -749,7 +751,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                       <div key={`${ref.kind || 'Owner'}-${ref.name || idx}`}>
                         <span className="font-medium">{ref.kind || '-'}</span>/
                         {ref.name ? <ResourceLink kind={ref.kind} name={ref.name} namespace={namespace} /> : '-'}
-                        {ref.controller ? ' (controller)' : ''}
+                        {ref.controller ? ` ${dl('(controller)')}` : ''}
                       </div>
                     ))}
                   </div>
@@ -803,12 +805,12 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               className="text-xs px-3 py-1 rounded border border-slate-700 bg-slate-800 text-white hover:border-slate-500 flex items-center gap-1"
             >
               {logsFetching ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-              {showLogs ? 'Refresh' : 'Load Logs'}
+              {dl(showLogs ? 'Refresh' : 'Load Logs')}
             </button>
           </div>
           {showLogs && (
             <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
-              {logsFetching ? 'Loading...' : logData || '(no logs)'}
+              {logsFetching ? dl('Loading...') : logData || dl('(no logs)')}
             </div>
           )}
         </div>
@@ -876,7 +878,7 @@ function PodImagePullHistory({ events }: { events: any[] }) {
   }
 
   return (
-    <InfoSection title={`Image Pull History (${filtered.length}, last 1h)`}>
+    <InfoSection title="Image Pull History ({{n}}, last 1h)" titleValues={{ n: filtered.length }}>
       <div className="overflow-x-auto">
         <table className="w-full text-xs table-fixed min-w-[560px]">
           <thead className="text-slate-400">

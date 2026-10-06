@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { InfoSection, StatusBadge } from '../DetailCommon'
+import { InfoSection, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { ResourceLink } from '../ResourceLink'
@@ -73,20 +73,20 @@ export default function WorkloadOwnedResources({
   return (
     <>
       {showDeploymentRS && (
-        <InfoSection title={`Owned ReplicaSets (${replicaSets.length})`}>
+        <InfoSection title="Owned ReplicaSets ({{n}})" titleValues={{ n: replicaSets.length }}>
           {replicaSets.length === 0 ? (
-            <p className="text-xs text-slate-400">No replica sets owned by this deployment yet.</p>
+            <p className="text-xs text-slate-400"><Tx>No replica sets owned by this deployment yet.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs table-fixed min-w-[600px]">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-2 w-[35%]">Name</th>
-                    <th className="text-left py-2 w-[12%]">Replicas</th>
-                    <th className="text-left py-2 w-[12%]">Ready</th>
-                    <th className="text-left py-2 w-[12%]">Available</th>
-                    <th className="text-left py-2 w-[15%]">Status</th>
-                    <th className="text-left py-2 w-[14%]">Age</th>
+                    <Th className="text-left py-2 w-[35%]">Name</Th>
+                    <Th className="text-left py-2 w-[12%]">Replicas</Th>
+                    <Th className="text-left py-2 w-[12%]">Ready</Th>
+                    <Th className="text-left py-2 w-[12%]">Available</Th>
+                    <Th className="text-left py-2 w-[15%]">Status</Th>
+                    <Th className="text-left py-2 w-[14%]">Age</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
@@ -119,7 +119,7 @@ export default function WorkloadOwnedResources({
                   <th className="text-left py-2 w-[8%]">{tr('pods.table.ready', 'Ready')}</th>
                   <th className="text-left py-2 w-[9%]">{tr('pods.table.restarts', 'Restarts')}</th>
                   <th className="text-left py-2 w-[22%]">{tr('pods.table.node', 'Node')}</th>
-                  {pvcsEnabled && <th className="text-left py-2 w-[20%]">PVC Status</th>}
+                  {pvcsEnabled && <Th className="text-left py-2 w-[20%]">PVC Status</Th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">

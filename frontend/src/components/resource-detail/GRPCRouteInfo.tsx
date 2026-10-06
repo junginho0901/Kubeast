@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -149,8 +149,8 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
   return (
     <>
       <InfoSection title="GRPCRoute Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading GRPCRoute details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading GRPCRoute details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Accepted" value={accepted ? 'Yes' : 'No'} color={accepted ? 'green' : 'amber'} />
@@ -213,9 +213,9 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
               return (
                 <div key={`rule-${idx}`} className="rounded border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Matches:</span> {matches.length}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Backend Refs:</span> {backendRefs.length}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Filters:</span> {filters.length}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Matches:</Tx></span> {matches.length}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Backend Refs:</Tx></span> {backendRefs.length}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Filters:</Tx></span> {filters.length}</div>
                   </div>
 
                   {matches.length > 0 && (
@@ -286,7 +286,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
             {parentStatuses.map((parent, idx) => (
               <div key={`parent-status-${idx}`} className="rounded border border-slate-800 p-3">
                 <div className="text-xs mb-2 text-slate-200 break-words">
-                  <span className="text-slate-400">Parent Ref:</span> {formatParentRef(parent?.parent_ref || parent?.parentRef || {})}
+                  <span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parent_ref || parent?.parentRef || {})}
                 </div>
                 <ConditionsTable conditions={Array.isArray(parent?.conditions) ? parent.conditions : []} />
               </div>

@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, StatusBadge } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 
@@ -86,8 +86,8 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
       <InfoSection title="NetworkPolicy Info">
         {(isDefaultDenyIngress || isDefaultDenyEgress) && (
           <div className="flex flex-wrap gap-2 mb-3">
-            {isDefaultDenyIngress && <span className="badge badge-warning">Default Deny Ingress</span>}
-            {isDefaultDenyEgress && <span className="badge badge-warning">Default Deny Egress</span>}
+            {isDefaultDenyIngress && <span className="badge badge-warning"><Tx>Default Deny Ingress</Tx></span>}
+            {isDefaultDenyEgress && <span className="badge badge-warning"><Tx>Default Deny Egress</Tx></span>}
           </div>
         )}
         <div className="space-y-2">
@@ -142,20 +142,20 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
       )}
 
       {watchEnabled && (
-        <InfoSection title={`Affected Pods (${pods.length})`}>
+        <InfoSection title="Affected Pods ({{n}})" titleValues={{ n: pods.length }}>
           {pods.length === 0 ? (
-            <p className="text-xs text-slate-400">No pods match this podSelector.</p>
+            <p className="text-xs text-slate-400"><Tx>No pods match this podSelector.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="text-left py-1">Pod</th>
-                    <th className="text-left py-1">Status</th>
-                    <th className="text-left py-1">Ready</th>
-                    <th className="text-left py-1">Restarts</th>
-                    <th className="text-left py-1">Node</th>
-                    <th className="text-left py-1">Age</th>
+                    <Th className="text-left py-1">Pod</Th>
+                    <Th className="text-left py-1">Status</Th>
+                    <Th className="text-left py-1">Ready</Th>
+                    <Th className="text-left py-1">Restarts</Th>
+                    <Th className="text-left py-1">Node</Th>
+                    <Th className="text-left py-1">Age</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">

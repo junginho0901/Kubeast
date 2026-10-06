@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th } from './DetailCommon'
+import { ConditionsTable, EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, SummaryBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
@@ -212,8 +212,8 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
       </PrometheusSection>
 
       <InfoSection title="Service Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading service details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading service details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
           {namespace && <InfoRow label="Namespace" value={namespace} />}
@@ -331,9 +331,9 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {matchingEnabled && (
-        <InfoSection title={`Matching Pods (${matchingPodsList.length})`}>
+        <InfoSection title="Matching Pods ({{n}})" titleValues={{ n: matchingPodsList.length }}>
           {matchingPodsList.length === 0 ? (
-            <p className="text-xs text-slate-400">No pods match this selector.</p>
+            <p className="text-xs text-slate-400"><Tx>No pods match this selector.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

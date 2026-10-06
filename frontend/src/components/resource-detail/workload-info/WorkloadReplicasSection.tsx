@@ -1,4 +1,4 @@
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge } from '../DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, Tx } from '../DetailCommon'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 
 interface ReplicaView {
@@ -103,7 +103,7 @@ export default function WorkloadReplicasSection({
         </div>
         {promWorkloadMetrics.data['cpu_per_pod']?.results && promWorkloadMetrics.data['cpu_per_pod'].results.length > 0 && (
           <div className="space-y-2">
-            <div className="text-[11px] text-slate-400 font-medium">Per-Pod CPU (millicores)</div>
+            <div className="text-[11px] text-slate-400 font-medium"><Tx>Per-Pod CPU (millicores)</Tx></div>
             {promWorkloadMetrics.data['cpu_per_pod']!.results.map((r) => (
               <div key={r.metric?.pod} className="flex items-center gap-3">
                 <span className="text-xs text-slate-400 w-48 truncate">{r.metric?.pod}</span>

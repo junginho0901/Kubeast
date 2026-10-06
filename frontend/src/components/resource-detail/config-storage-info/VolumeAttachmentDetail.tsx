@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
-import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge } from '../DetailCommon'
+import { EventsTable, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -130,22 +130,22 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
-      {isLoading && <p className="text-xs text-slate-400">Loading details...</p>}
-      {isError && <p className="text-xs text-amber-300">Some detailed VolumeAttachment fields are unavailable right now.</p>}
+      {isLoading && <p className="text-xs text-slate-400"><Tx>Loading details...</Tx></p>}
+      {isError && <p className="text-xs text-amber-300"><Tx>Some detailed VolumeAttachment fields are unavailable right now.</Tx></p>}
 
       {(attachErrorMessage || detachErrorMessage) && (
         <InfoSection title="Attach/Detach Errors">
           <div className="space-y-2">
             {attachErrorMessage && (
               <div className="rounded border border-red-800/60 bg-red-950/20 p-3 text-xs">
-                <p className="text-red-300 font-medium">Attach Error</p>
+                <p className="text-red-300 font-medium"><Tx>Attach Error</Tx></p>
                 <p className="mt-1 text-slate-200 whitespace-pre-wrap break-words">{attachErrorMessage}</p>
                 {attachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(attachErrorTime)} ({fmtRel(attachErrorTime)})</p>}
               </div>
             )}
             {detachErrorMessage && (
               <div className="rounded border border-red-800/60 bg-red-950/20 p-3 text-xs">
-                <p className="text-red-300 font-medium">Detach Error</p>
+                <p className="text-red-300 font-medium"><Tx>Detach Error</Tx></p>
                 <p className="mt-1 text-slate-200 whitespace-pre-wrap break-words">{detachErrorMessage}</p>
                 {detachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(detachErrorTime)} ({fmtRel(detachErrorTime)})</p>}
               </div>
@@ -189,7 +189,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
       )}
 
       {boundClaim?.name && (
-        <InfoSection title={`Bound Chain — PV → PVC → Pods (${chainPods.length})`}>
+        <InfoSection title="Bound Chain — PV → PVC → Pods ({{n}})" titleValues={{ n: chainPods.length }}>
           <div className="space-y-2 text-xs">
             <InfoRow
               label="PVC"
@@ -204,12 +204,12 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
               )}
             />
             {chainPods.length === 0 ? (
-              <p className="text-xs text-slate-400">No pod currently mounts this PVC.</p>
+              <p className="text-xs text-slate-400"><Tx>No pod currently mounts this PVC.</Tx></p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="text-slate-400">
-                    <tr><th className="text-left py-1">Pod</th><th className="text-left py-1">Status</th><th className="text-left py-1">Node</th></tr>
+                    <tr><Th className="text-left py-1">Pod</Th><Th className="text-left py-1">Status</Th><Th className="text-left py-1">Node</Th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {pagedChainPods.map((p: any) => (

@@ -5,7 +5,7 @@ import type { PodInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, StatusBadge, Th } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -56,11 +56,11 @@ export default function PDBInfo({ name, namespace }: Props) {
   const { items: pagedPods, nav: podsNav } = usePagination(pods, 10)
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const minAvailable = desc.min_available ?? '-'
@@ -158,9 +158,9 @@ export default function PDBInfo({ name, namespace }: Props) {
 
       {/* Protected Pods (live) */}
       {protectedEnabled && (
-        <InfoSection title={`Protected Pods (${pods.length})`}>
+        <InfoSection title="Protected Pods ({{n}})" titleValues={{ n: pods.length }}>
           {pods.length === 0 ? (
-            <p className="text-xs text-slate-400">No pod matches this selector.</p>
+            <p className="text-xs text-slate-400"><Tx>No pod matches this selector.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

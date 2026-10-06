@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { useDetailLabel } from './useDetailLabel'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function HPAInfo({ name, namespace }: Props) {
+  const dl = useDetailLabel()
   const { data: desc, isLoading } = useQuery({
     queryKey: ['hpa-describe', namespace, name],
     queryFn: () => api.describeHPA(namespace, name),
@@ -24,11 +26,11 @@ export default function HPAInfo({ name, namespace }: Props) {
   useResourceDetailOverlay({ kind: 'HorizontalPodAutoscaler', name, namespace, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const scaleTargetRef = desc.scale_target_ref || {}
@@ -128,7 +130,7 @@ export default function HPAInfo({ name, namespace }: Props) {
           <div className="space-y-3">
             {behavior.scale_up && (
               <div>
-                <p className="text-xs text-slate-400 mb-1">Scale Up</p>
+                <p className="text-xs text-slate-400 mb-1"><Tx>Scale Up</Tx></p>
                 <div className="space-y-1">
                   {behavior.scale_up.stabilization_window_seconds != null && (
                     <InfoRow label="Stabilization Window" value={`${behavior.scale_up.stabilization_window_seconds}s`} />
@@ -137,14 +139,14 @@ export default function HPAInfo({ name, namespace }: Props) {
                     <InfoRow label="Select Policy" value={behavior.scale_up.select_policy} />
                   )}
                   {Array.isArray(behavior.scale_up.policies) && behavior.scale_up.policies.map((p: any, i: number) => (
-                    <InfoRow key={i} label={`Policy ${i + 1}`} value={`${p.type}: ${p.value} / ${p.period_seconds}s`} />
+                    <InfoRow key={i} label={dl('Policy {{n}}', { n: i + 1 })} value={`${p.type}: ${p.value} / ${p.period_seconds}s`} />
                   ))}
                 </div>
               </div>
             )}
             {behavior.scale_down && (
               <div>
-                <p className="text-xs text-slate-400 mb-1">Scale Down</p>
+                <p className="text-xs text-slate-400 mb-1"><Tx>Scale Down</Tx></p>
                 <div className="space-y-1">
                   {behavior.scale_down.stabilization_window_seconds != null && (
                     <InfoRow label="Stabilization Window" value={`${behavior.scale_down.stabilization_window_seconds}s`} />
@@ -153,7 +155,7 @@ export default function HPAInfo({ name, namespace }: Props) {
                     <InfoRow label="Select Policy" value={behavior.scale_down.select_policy} />
                   )}
                   {Array.isArray(behavior.scale_down.policies) && behavior.scale_down.policies.map((p: any, i: number) => (
-                    <InfoRow key={i} label={`Policy ${i + 1}`} value={`${p.type}: ${p.value} / ${p.period_seconds}s`} />
+                    <InfoRow key={i} label={dl('Policy {{n}}', { n: i + 1 })} value={`${p.type}: ${p.value} / ${p.period_seconds}s`} />
                   ))}
                 </div>
               </div>
@@ -219,13 +221,12 @@ function HPAScalingHistory({ name, namespace }: { name: string; namespace: strin
     <PrometheusSection available={available} title="Scaling History (24h)">
       {series.length === 0 ? (
         <div className="text-[11px] text-slate-500">
-          Requires kube-state-metrics with HPA series scraped.
-        </div>
+          <Tx>Requires kube-state-metrics with HPA series scraped.</Tx></div>
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span>{rescales} rescale{rescales === 1 ? '' : 's'} · {series.length} samples</span>
-            <span className="font-mono">min {minReplicas} · max {maxReplicas}</span>
+            <span><Tx text={rescales === 1 ? '1 rescale · {{samples}} samples' : '{{n}} rescales · {{samples}} samples'} values={{ n: rescales, samples: series.length }} /></span>
+            <span className="font-mono"><Tx text="min {{min}} · max {{max}}" values={{ min: minReplicas, max: maxReplicas }} /></span>
           </div>
           <Sparkline
             points={series}

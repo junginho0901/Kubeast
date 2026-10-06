@@ -1,4 +1,4 @@
-import { InfoSection } from '../DetailCommon'
+import { InfoSection, Th, Tx } from '../DetailCommon'
 import { formatLabelSelector } from './workloadInfoFormatters'
 
 interface Props {
@@ -16,10 +16,10 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
           <div className="space-y-3">
             {affinity!.nodeAffinity && (
               <div className="space-y-1">
-                <div className="text-xs font-medium text-slate-300">Node Affinity</div>
+                <div className="text-xs font-medium text-slate-300"><Tx>Node Affinity</Tx></div>
                 {affinity!.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution?.nodeSelectorTerms && (
                   <div className="space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Required</div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500"><Tx>Required</Tx></div>
                     {(affinity!.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms as any[]).map((term: any, tIdx: number) => (
                       <div key={`req-term-${tIdx}`} className="text-xs text-slate-200 pl-2">
                         {Array.isArray(term.matchExpressions) && term.matchExpressions.map((expr: any, eIdx: number) => (
@@ -38,7 +38,7 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
                 )}
                 {Array.isArray(affinity!.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution) && affinity!.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Preferred</div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500"><Tx>Preferred</Tx></div>
                     {(affinity!.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution as any[]).map((pref: any, pIdx: number) => (
                       <div key={`pref-${pIdx}`} className="text-xs text-slate-200 pl-2">
                         <span className="text-slate-400">weight={pref.weight ?? '?'}</span>{' '}
@@ -55,10 +55,10 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
             )}
             {affinity!.podAffinity && (
               <div className="space-y-1">
-                <div className="text-xs font-medium text-slate-300">Pod Affinity</div>
+                <div className="text-xs font-medium text-slate-300"><Tx>Pod Affinity</Tx></div>
                 {Array.isArray(affinity!.podAffinity.requiredDuringSchedulingIgnoredDuringExecution) && affinity!.podAffinity.requiredDuringSchedulingIgnoredDuringExecution.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Required</div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500"><Tx>Required</Tx></div>
                     {(affinity!.podAffinity.requiredDuringSchedulingIgnoredDuringExecution as any[]).map((term: any, tIdx: number) => (
                       <div key={`pa-req-${tIdx}`} className="text-xs text-slate-200 pl-2">
                         <div>topologyKey: {term.topologyKey || '-'}</div>
@@ -69,7 +69,7 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
                 )}
                 {Array.isArray(affinity!.podAffinity.preferredDuringSchedulingIgnoredDuringExecution) && affinity!.podAffinity.preferredDuringSchedulingIgnoredDuringExecution.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Preferred</div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500"><Tx>Preferred</Tx></div>
                     {(affinity!.podAffinity.preferredDuringSchedulingIgnoredDuringExecution as any[]).map((pref: any, pIdx: number) => (
                       <div key={`pa-pref-${pIdx}`} className="text-xs text-slate-200 pl-2">
                         <span className="text-slate-400">weight={pref.weight ?? '?'}</span>{' '}
@@ -82,10 +82,10 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
             )}
             {affinity!.podAntiAffinity && (
               <div className="space-y-1">
-                <div className="text-xs font-medium text-slate-300">Pod Anti-Affinity</div>
+                <div className="text-xs font-medium text-slate-300"><Tx>Pod Anti-Affinity</Tx></div>
                 {Array.isArray(affinity!.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution) && affinity!.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Required</div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500"><Tx>Required</Tx></div>
                     {(affinity!.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution as any[]).map((term: any, tIdx: number) => (
                       <div key={`paa-req-${tIdx}`} className="text-xs text-slate-200 pl-2">
                         <div>topologyKey: {term.topologyKey || '-'}</div>
@@ -96,7 +96,7 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
                 )}
                 {Array.isArray(affinity!.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution) && affinity!.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">Preferred</div>
+                    <div className="text-[11px] uppercase tracking-wide text-slate-500"><Tx>Preferred</Tx></div>
                     {(affinity!.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution as any[]).map((pref: any, pIdx: number) => (
                       <div key={`paa-pref-${pIdx}`} className="text-xs text-slate-200 pl-2">
                         <span className="text-slate-400">weight={pref.weight ?? '?'}</span>{' '}
@@ -117,10 +117,10 @@ export default function WorkloadAffinity({ affinity, topologySpreadConstraints }
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-slate-500 border-b border-slate-800">
-                  <th className="py-1.5 pr-3">Max Skew</th>
-                  <th className="py-1.5 pr-3">Topology Key</th>
-                  <th className="py-1.5 pr-3">When Unsatisfiable</th>
-                  <th className="py-1.5">Label Selector</th>
+                  <Th className="py-1.5 pr-3">Max Skew</Th>
+                  <Th className="py-1.5 pr-3">Topology Key</Th>
+                  <Th className="py-1.5 pr-3">When Unsatisfiable</Th>
+                  <Th className="py-1.5">Label Selector</Th>
                 </tr>
               </thead>
               <tbody className="text-slate-200">

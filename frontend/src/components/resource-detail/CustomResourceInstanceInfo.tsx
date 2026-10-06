@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { JSONPath } from 'jsonpath-plus'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -31,8 +31,8 @@ function CollapsibleJson({ label, data }: { label: string; data: unknown }) {
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-800/40 transition-colors"
       >
-        <span className="text-slate-400 font-medium">{label} <span className="text-slate-600 ml-1">({typeof data === 'object' && data ? Object.keys(data as object).length : 0} keys)</span></span>
-        <span className="text-slate-500 text-[11px]">{open ? '▼ collapse' : '▶ expand'}</span>
+        <span className="text-slate-400 font-medium">{label} <span className="text-slate-600 ml-1"><Tx text="({{n}} keys)" values={{ n: typeof data === 'object' && data ? Object.keys(data as object).length : 0 }} /></span></span>
+        <span className="text-slate-500 text-[11px]">{open ? '▼ ' : '▶ '}<Tx>{open ? 'collapse' : 'expand'}</Tx></span>
       </button>
       <div className="px-3 pb-2">
         <pre className="text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-all max-h-[400px] overflow-y-auto">
@@ -281,8 +281,8 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
           <div className="space-y-2">
             {ownerRefs.map((ref: any, idx: number) => (
               <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300 space-y-1">
-                <div><span className="text-slate-500 mr-2">Kind:</span>{ref.kind}</div>
-                <div><span className="text-slate-500 mr-2">Name:</span>{ref.name}</div>
+                <div><span className="text-slate-500 mr-2"><Tx>Kind:</Tx></span>{ref.kind}</div>
+                <div><span className="text-slate-500 mr-2"><Tx>Name:</Tx></span>{ref.name}</div>
               </div>
             ))}
           </div>
@@ -302,7 +302,7 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
 
       {/* Managed Fields (server-side apply) */}
       {Array.isArray(describe?.managed_fields) && describe.managed_fields.length > 0 && (
-        <InfoSection title={`Managed Fields (${describe.managed_fields.length})`}>
+        <InfoSection title="Managed Fields ({{n}})" titleValues={{ n: describe.managed_fields.length }}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="text-slate-400">
@@ -336,9 +336,9 @@ export default function CustomResourceInstanceInfo({ name, namespace, rawJson }:
       )}
 
       {plural && (
-        <InfoSection title={`Peer Instances (${peerInstances.length})`}>
+        <InfoSection title="Peer Instances ({{n}})" titleValues={{ n: peerInstances.length }}>
           {peerInstances.length === 0 ? (
-            <p className="text-xs text-slate-400">No other instance of {crKind} in the cluster.</p>
+            <p className="text-xs text-slate-400"><Tx text="No other instance of {{kind}} in the cluster." values={{ kind: crKind }} /></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsTable } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsTable, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -21,11 +21,11 @@ export default function LeaseInfo({ name, namespace }: Props) {
   useResourceDetailOverlay({ kind: 'Lease', name, namespace, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const holderIdentity = desc.holder_identity || '-'

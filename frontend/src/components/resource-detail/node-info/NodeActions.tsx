@@ -3,6 +3,8 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import NodeShellTerminal from '@/components/NodeShellTerminal'
 import { usePermission } from '@/hooks/usePermission'
 import type { useNodeData } from './useNodeData'
+import { Tx } from '../DetailCommon'
+import { useDetailLabel } from '../useDetailLabel'
 
 type NodeData = ReturnType<typeof useNodeData>
 
@@ -13,6 +15,7 @@ interface NodeActionsProps {
 }
 
 export default function NodeActions({ name, tr, data }: NodeActionsProps) {
+  const dl = useDetailLabel()
   const { has } = usePermission()
   const {
     nodeDescribe,
@@ -71,7 +74,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
             <button
               onClick={() => setShowNodeShell(true)}
               disabled={!isLinuxNode}
-              title={isLinuxNode ? undefined : 'Linux only'}
+              title={isLinuxNode ? undefined : dl('Linux only')}
               className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-white hover:border-slate-500 disabled:opacity-60"
             >
               {tr('nodes.actions.debug', 'Debug')}
@@ -85,7 +88,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
         <div className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${drainMeta.bg} ${drainMeta.border}`}>
           <drainMeta.icon className={`w-4 h-4 mt-0.5 ${drainMeta.tone} ${drainStatus === 'draining' ? 'animate-spin' : ''}`} />
           <div className="flex-1">
-            <span className={`text-xs font-semibold ${drainMeta.tone}`}>Drain: {drainMeta.label}</span>
+            <span className={`text-xs font-semibold ${drainMeta.tone}`}><Tx text="Drain: {{status}}" values={{ status: drainMeta.label }} /></span>
             {drainError && <div className="mt-1 text-xs text-red-300">{drainError}</div>}
           </div>
         </div>
@@ -100,12 +103,12 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
             <p className="text-slate-400 mt-3">{tr('nodes.drain.warning', 'Draining will evict pods from this node.')}</p>
             {drainError && <div className="mt-4 text-sm text-red-400">{drainError}</div>}
             <div className="mt-6 flex justify-end gap-3">
-              <button className="btn btn-secondary" onClick={() => setDrainDialogOpen(false)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => setDrainDialogOpen(false)}><Tx>Cancel</Tx></button>
               <button
                 className="btn bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"
                 onClick={() => { setDrainStatus('pending'); setDrainDialogOpen(false); drainMut.mutate(name) }}
                 disabled={isDrainMut}
-              >Drain</button>
+              ><Tx>Drain</Tx></button>
             </div>
           </div>
         </ModalOverlay>

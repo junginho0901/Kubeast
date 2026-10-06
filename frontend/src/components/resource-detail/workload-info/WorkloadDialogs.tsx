@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { fmtRel } from '../detailFormat'
+import { Tx } from '../DetailCommon'
 
 interface TriggerToast {
   type: 'success' | 'error'
@@ -76,9 +77,9 @@ export default function WorkloadDialogs({
             <h3 className="text-lg font-bold text-white mb-3">{tr('rollback.title', 'Rollback')}</h3>
             <p className="text-sm text-slate-400 mb-4">{tr('rollback.selectRevision', 'Select a revision to rollback to')}</p>
             {!revisions ? (
-              <p className="text-xs text-slate-400 py-4 text-center">Loading...</p>
+              <p className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></p>
             ) : revisions.length === 0 ? (
-              <p className="text-xs text-slate-400 py-4 text-center">No revisions found</p>
+              <p className="text-xs text-slate-400 py-4 text-center"><Tx>No revisions found</Tx></p>
             ) : (
               <div className="max-h-[300px] overflow-auto space-y-1">
                 {revisions.map((rev: any) => (

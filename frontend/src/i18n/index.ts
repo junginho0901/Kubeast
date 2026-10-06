@@ -8,10 +8,15 @@ i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
+    // `detail` = the drawer label catalog (ko.json's detail block) as its own
+    // namespace: keys are English labels that may hold "." or ":"
+    // (components/resource-detail/detailLabel.ts).
     resources: {
-      en: { translation: en },
-      ko: { translation: ko },
+      en: { translation: en, detail: {} },
+      ko: { translation: ko, detail: ko.detail },
     },
+    ns: ['translation', 'detail'],
+    defaultNS: 'translation',
     // No fixed `lng`: it would override the detector, so the language chosen
     // in Settings (cached in localStorage) and the browser language were both
     // ignored on the next load and the UI always came back in English.

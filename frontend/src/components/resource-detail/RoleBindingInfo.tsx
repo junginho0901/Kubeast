@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
@@ -76,7 +76,7 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
       </InfoSection>
 
       {subjects.length > 0 && (
-        <InfoSection title={`Subjects (${subjects.length})`}>
+        <InfoSection title="Subjects ({{n}})" titleValues={{ n: subjects.length }}>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {(() => {
               const counts: Record<string, number> = {}
@@ -96,11 +96,11 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
               <div key={idx} className="rounded border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                 <div className="text-xs text-slate-300 space-y-1">
                   <div>
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Kind:</span>
+                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Kind:</Tx></span>
                     <span className="font-mono">{subj.kind || '-'}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Name:</span>
+                    <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Name:</Tx></span>
                     {subj.kind === 'ServiceAccount' && subj.name ? (
                       <ResourceLink kind="ServiceAccount" name={subj.name} namespace={subj.namespace ?? namespace} />
                     ) : (
@@ -109,13 +109,13 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
                   </div>
                   {subj.namespace && (
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">Namespace:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>Namespace:</Tx></span>
                       <span className="font-mono">{subj.namespace}</span>
                     </div>
                   )}
                   {subj.apiGroup && (
                     <div>
-                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2">API Group:</span>
+                      <span className="text-[11px] uppercase tracking-wide text-slate-500 mr-2"><Tx>API Group:</Tx></span>
                       <span className="font-mono">{subj.apiGroup}</span>
                     </div>
                   )}
@@ -128,14 +128,14 @@ export default function RoleBindingInfo({ name, namespace, rawJson }: Props) {
 
       {subjects.length === 0 && (
         <InfoSection title="Subjects">
-          <p className="text-xs text-slate-500">No subjects defined.</p>
+          <p className="text-xs text-slate-500"><Tx>No subjects defined.</Tx></p>
         </InfoSection>
       )}
 
       {saSubjectNames.length > 0 && (
-        <InfoSection title={`Bound Pods via ServiceAccount Subjects (${boundPods.length})`}>
+        <InfoSection title="Bound Pods via ServiceAccount Subjects ({{n}})" titleValues={{ n: boundPods.length }}>
           {boundPods.length === 0 ? (
-            <p className="text-xs text-slate-400">No pod uses any of the bound ServiceAccounts.</p>
+            <p className="text-xs text-slate-400"><Tx>No pod uses any of the bound ServiceAccounts.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

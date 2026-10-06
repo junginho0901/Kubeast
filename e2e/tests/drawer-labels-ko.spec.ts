@@ -32,4 +32,23 @@ test.describe('drawer labels in Korean', () => {
     await expect(drawer.getByText('Resource Version', { exact: true }).first()).toBeVisible()
     await expect(drawer.getByText('Created', { exact: true })).toHaveCount(0)
   })
+
+  test('node drawer: section titles with a count, sub-section table heads and placeholders in Korean', async ({ page }) => {
+    await page.goto('/cluster/nodes?cluster=self')
+    const firstRow = page.locator('tbody tr').first()
+    await expect(firstRow).toBeVisible({ timeout: 20000 })
+    await firstRow.click()
+
+    const drawer = page.locator(DRAWER).last()
+    await expect(drawer).toBeVisible({ timeout: 15000 })
+    await drawer.getByRole('button', { name: /^(정보|Info)$/ }).first().click().catch(() => {})
+
+    // "Images ({{n}})": one catalog key whatever the count
+    await expect(drawer.getByText(/^이미지 \(\d+\)$/).first()).toBeVisible({ timeout: 15000 })
+    await expect(drawer.getByText(/^Images \(\d+\)$/)).toHaveCount(0)
+    // capacity table head and the pods list (node-info/) through the same catalog
+    await expect(drawer.locator('th', { hasText: /^용량$/ }).first()).toBeVisible()
+    await expect(drawer.locator('th', { hasText: /^재시작$/ }).first()).toBeVisible()
+    await expect(drawer.getByPlaceholder('필터...')).toBeVisible()
+  })
 })

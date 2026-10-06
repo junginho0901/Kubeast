@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -152,8 +152,8 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
   return (
     <>
       <InfoSection title="HTTPRoute Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading HTTPRoute details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading HTTPRoute details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Accepted" value={accepted ? 'Yes' : 'No'} color={accepted ? 'green' : 'amber'} />
@@ -199,10 +199,10 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
               return (
                 <div key={`rule-${idx}`} className="rounded border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Rule Name:</span> {text(rule?.name)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Matches:</span> {matches.length}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Backend Refs:</span> {backendRefs.length}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Filters:</span> {filters.length}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Rule Name:</Tx></span> {text(rule?.name)}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Matches:</Tx></span> {matches.length}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Backend Refs:</Tx></span> {backendRefs.length}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Filters:</Tx></span> {filters.length}</div>
                   </div>
 
                   {matches.length > 0 && (
@@ -275,8 +275,8 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
             {parents.map((parent, idx) => (
               <div key={`parent-status-${idx}`} className="rounded border border-slate-800 p-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
-                  <div className="text-slate-200 break-words"><span className="text-slate-400">Controller:</span> {text(parent?.controllerName)}</div>
-                  <div className="text-slate-200 break-words"><span className="text-slate-400">Parent Ref:</span> {formatParentRef(parent?.parentRef || {})}</div>
+                  <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(parent?.controllerName)}</div>
+                  <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parentRef || {})}</div>
                 </div>
                 <ConditionsTable conditions={Array.isArray(parent?.conditions) ? parent.conditions : []} />
               </div>

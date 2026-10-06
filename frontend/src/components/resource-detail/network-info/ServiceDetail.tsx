@@ -1,4 +1,4 @@
-import { InfoSection, InfoRow, KeyValueTags } from '../DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 
 interface Props {
@@ -42,7 +42,7 @@ export default function ServiceDetail({ name, namespace, rawJson }: Props) {
         <InfoSection title="Ports">
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[400px]">
-              <thead className="text-slate-400"><tr><th className="text-left py-1">Name</th><th className="text-left py-1">Port</th><th className="text-left py-1">Target</th><th className="text-left py-1">Protocol</th>{spec.type === 'NodePort' && <th className="text-left py-1">NodePort</th>}</tr></thead>
+              <thead className="text-slate-400"><tr><Th className="text-left py-1">Name</Th><Th className="text-left py-1">Port</Th><Th className="text-left py-1">Target</Th><Th className="text-left py-1">Protocol</Th>{spec.type === 'NodePort' && <Th className="text-left py-1">NodePort</Th>}</tr></thead>
               <tbody className="divide-y divide-slate-800">
                 {ports.map((p: any, i: number) => (
                   <tr key={i} className="text-slate-200">

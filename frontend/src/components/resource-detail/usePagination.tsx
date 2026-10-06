@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { Tx } from './DetailCommon'
 
 // Paginate a list inline. Returns the current page slice + a navigation node
 // that hides itself when the list fits in one page. Matches NamespaceInfo's
@@ -37,16 +38,14 @@ export function usePagination<T>(items: T[], pageSize = 10): {
           disabled={page <= 1}
           className="px-2 py-0.5 rounded border border-slate-700 disabled:opacity-40"
         >
-          Prev
-        </button>
+          <Tx>Prev</Tx></button>
         <button
           type="button"
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page >= totalPages}
           className="px-2 py-0.5 rounded border border-slate-700 disabled:opacity-40"
         >
-          Next
-        </button>
+          <Tx>Next</Tx></button>
       </div>
     </div>
   )

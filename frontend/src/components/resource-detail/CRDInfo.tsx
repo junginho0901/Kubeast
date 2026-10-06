@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -167,19 +167,19 @@ export default function CRDInfo({ name, rawJson }: Props) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-white">{ver.name}</span>
                   {ver.storage && (
-                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-green-900/40 text-green-300">Storage</span>
+                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-green-900/40 text-green-300"><Tx>Storage</Tx></span>
                   )}
                   {ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-blue-900/40 text-blue-300">Served</span>
+                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-blue-900/40 text-blue-300"><Tx>Served</Tx></span>
                   )}
                   {!ver.served && (
-                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400">Not Served</span>
+                    <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400"><Tx>Not Served</Tx></span>
                   )}
                 </div>
                 {/* describe.versions[].additionalPrinterColumns 는 backend 가 spec 의 원형을 그대로 forward 함 — verified */}
                 {Array.isArray(ver.additionalPrinterColumns) && ver.additionalPrinterColumns.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Additional Printer Columns</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1"><Tx>Additional Printer Columns</Tx></p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
@@ -266,11 +266,11 @@ export default function CRDInfo({ name, rawJson }: Props) {
               </div>
               {instanceTotalPages > 1 && (
                 <div className="flex items-center justify-between mt-2 text-xs text-slate-400">
-                  <span>{filteredInstances.length} total</span>
+                  <span><Tx text="{{n}} total" values={{ n: filteredInstances.length }} /></span>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white">Prev</button>
+                    <button onClick={() => setInstancePage(p => Math.max(1, p - 1))} disabled={instancePage <= 1} className="px-2 py-0.5 rounded border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Prev</Tx></button>
                     <span className="min-w-[48px] text-center">{instancePage}/{instanceTotalPages}</span>
-                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white">Next</button>
+                    <button onClick={() => setInstancePage(p => Math.min(instanceTotalPages, p + 1))} disabled={instancePage >= instanceTotalPages} className="px-2 py-0.5 rounded border border-slate-700 text-slate-400 disabled:opacity-40 hover:text-white"><Tx>Next</Tx></button>
                   </div>
                 </div>
               )}

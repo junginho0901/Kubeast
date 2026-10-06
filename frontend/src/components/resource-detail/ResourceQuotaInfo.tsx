@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -52,11 +52,11 @@ export default function ResourceQuotaInfo({ name, namespace }: Props) {
   useResourceDetailOverlay({ kind: 'ResourceQuota', name, namespace, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const statusHard: Record<string, string> = desc.status_hard || {}

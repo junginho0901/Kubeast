@@ -11,6 +11,7 @@ import {
 } from './podInfoFormatters'
 import { fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
+import { Tx } from '../DetailCommon'
 
 interface Props {
   container: any
@@ -146,7 +147,7 @@ export default function ContainerCard({
                       <span className="font-mono text-[11px]">{ef.name}</span>
                     )}
                     {ef.prefix && <span className="text-[11px] text-slate-500">prefix={ef.prefix}</span>}
-                    {ef.optional && <span className="text-[11px] text-slate-500">(optional)</span>}
+                    {ef.optional && <span className="text-[11px] text-slate-500"><Tx>(optional)</Tx></span>}
                   </div>
                 ))}
               </div>

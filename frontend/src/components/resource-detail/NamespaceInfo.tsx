@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Search } from 'lucide-react'
-import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, Th, NoneText } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDetailLabel } from './useDetailLabel'
 import { ResourceLink } from './ResourceLink'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
@@ -17,6 +18,7 @@ interface Props { name: string }
 export default function NamespaceInfo({ name }: Props) {
   const { t } = useTranslation()
   const tr = (k: string, fb: string, o?: Record<string, any>) => t(k, { defaultValue: fb, ...o })
+  const dl = useDetailLabel()
 
   const [podFilter, setPodFilter] = useState('')
   const [podPage, setPodPage] = useState(1)
@@ -274,7 +276,7 @@ export default function NamespaceInfo({ name }: Props) {
                     {nsDescribe.owner_references.map((ref: any, idx: number) => (
                       <div key={`${ref.kind || 'Owner'}-${ref.name || idx}`}>
                         <span className="font-medium">{ref.kind || '-'}</span>/{ref.name || '-'}
-                        {ref.controller ? ' (controller)' : ''}
+                        {ref.controller ? ` ${dl('(controller)')}` : ''}
                       </div>
                     ))}
                   </div>
@@ -294,7 +296,7 @@ export default function NamespaceInfo({ name }: Props) {
       </InfoSection>
 
       {resourceSummary && resourceSummary.podCount > 0 && (
-        <InfoSection title={`Resource Summary (sum across ${resourceSummary.podCount} pods)`}>
+        <InfoSection title="Resource Summary (sum across {{n}} pods)" titleValues={{ n: resourceSummary.podCount }}>
           {/* Phase 별 Pod count 배지 — Running 초록, Pending/Failed 등 amber/red */}
           <div className="flex flex-wrap gap-1.5 mb-2">
             {Object.entries(resourceSummary.phaseCounts).map(([phase, count]) => {
@@ -320,8 +322,8 @@ export default function NamespaceInfo({ name }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                <tr className="text-slate-200"><td className="py-1 pr-2 font-mono">CPU</td><td className="py-1 pr-2 font-mono">{resourceSummary.cpuReq}</td><td className="py-1 pr-2 font-mono">{resourceSummary.cpuLim}</td></tr>
-                <tr className="text-slate-200"><td className="py-1 pr-2 font-mono">Memory</td><td className="py-1 pr-2 font-mono">{resourceSummary.memReq}</td><td className="py-1 pr-2 font-mono">{resourceSummary.memLim}</td></tr>
+                <tr className="text-slate-200"><td className="py-1 pr-2 font-mono"><Tx>CPU</Tx></td><td className="py-1 pr-2 font-mono">{resourceSummary.cpuReq}</td><td className="py-1 pr-2 font-mono">{resourceSummary.cpuLim}</td></tr>
+                <tr className="text-slate-200"><td className="py-1 pr-2 font-mono"><Tx>Memory</Tx></td><td className="py-1 pr-2 font-mono">{resourceSummary.memReq}</td><td className="py-1 pr-2 font-mono">{resourceSummary.memLim}</td></tr>
               </tbody>
             </table>
           </div>
@@ -412,7 +414,8 @@ export default function NamespaceInfo({ name }: Props) {
 
       {/* Pods */}
       <InfoSection
-        title={`Pods${Array.isArray(nsPods) ? ` (${nsPods.length})` : ''}`}
+        title={Array.isArray(nsPods) ? 'Pods ({{n}})' : 'Pods'}
+        titleValues={{ n: Array.isArray(nsPods) ? nsPods.length : 0 }}
         actions={
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
@@ -420,7 +423,7 @@ export default function NamespaceInfo({ name }: Props) {
               type="text"
               value={podFilter}
               onChange={e => setPodFilter(e.target.value)}
-              placeholder="Filter..."
+              placeholder={dl('Filter...')}
               className="pl-6 pr-2 py-1 text-[11px] bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none w-36"
             />
           </div>
@@ -462,15 +465,13 @@ export default function NamespaceInfo({ name }: Props) {
                   disabled={podPage <= 1}
                   className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
                 >
-                  Prev
-                </button>
+                  <Tx>Prev</Tx></button>
                 <button
                   onClick={() => setPodPage((p) => Math.min(podTotalPages, p + 1))}
                   disabled={podPage >= podTotalPages}
                   className="px-2 py-1 rounded border border-slate-700 disabled:opacity-40"
                 >
-                  Next
-                </button>
+                  <Tx>Next</Tx></button>
               </div>
             </div>
           </div>

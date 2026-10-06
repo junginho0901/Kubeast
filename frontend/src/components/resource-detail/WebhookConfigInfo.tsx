@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th } from './DetailCommon'
+import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -27,11 +27,11 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
   useResourceDetailOverlay({ kind, name, describe: desc })
 
   if (isLoading) {
-    return <div className="text-xs text-slate-400 py-4 text-center">Loading...</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>Loading...</Tx></div>
   }
 
   if (!desc) {
-    return <div className="text-xs text-slate-400 py-4 text-center">No data</div>
+    return <div className="text-xs text-slate-400 py-4 text-center"><Tx>No data</Tx></div>
   }
 
   const webhooks: any[] = desc.webhooks || []
@@ -79,7 +79,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
 
       {/* Webhooks Detail */}
       {webhooks.map((wh: any, idx: number) => (
-        <InfoSection key={wh.name || idx} title={`Webhook: ${wh.name || `#${idx + 1}`}`}>
+        <InfoSection key={wh.name || idx} title="Webhook: {{name}}" titleValues={{ name: wh.name || `#${idx + 1}` }}>
           <div className="space-y-2">
             <InfoRow label="Name" value={wh.name || '-'} />
             <InfoRow
@@ -103,7 +103,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
             <WebhookRulesTable rules={wh.rules} />
             {Array.isArray(wh.match_conditions) && wh.match_conditions.length > 0 && (
               <div>
-                <p className="text-[11px] text-slate-400 mt-2 mb-1">Match Conditions</p>
+                <p className="text-[11px] text-slate-400 mt-2 mb-1"><Tx>Match Conditions</Tx></p>
                 <div className="space-y-1">
                   {wh.match_conditions.map((mc: any, mi: number) => (
                     <div key={mi} className="rounded border border-slate-800 bg-slate-900/40 px-2 py-1.5">
@@ -125,21 +125,21 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
       )}
 
       {affectedList.length > 0 && (
-        <InfoSection title={`Affected Resources (${affectedList.length} kinds, ${operationsList.length} ops)`}>
+        <InfoSection title="Affected Resources ({{kinds}} kinds, {{ops}} ops)" titleValues={{ kinds: affectedList.length, ops: operationsList.length }}>
           <div className="space-y-2">
             <div>
-              <p className="text-[11px] text-slate-400 mb-1">Resource Types (apiGroup/resource)</p>
+              <p className="text-[11px] text-slate-400 mb-1"><Tx>Resource Types (apiGroup/resource)</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {affectedList.slice(0, 50).map((s) => (
                   <span key={s} className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
                 ))}
                 {affectedList.length > 50 && (
-                  <span className="text-[11px] text-amber-300">+{affectedList.length - 50} more</span>
+                  <span className="text-[11px] text-amber-300"><Tx text="+{{n}} more" values={{ n: affectedList.length - 50 }} /></span>
                 )}
               </div>
             </div>
             <div>
-              <p className="text-[11px] text-slate-400 mb-1">Operations</p>
+              <p className="text-[11px] text-slate-400 mb-1"><Tx>Operations</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {operationsList.map((op) => (
                   <span key={op} className="rounded border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
@@ -240,7 +240,7 @@ function WebhookRulesTable({ rules }: { rules?: any[] }) {
 
   return (
     <div className="mt-2">
-      <p className="text-[11px] font-medium text-slate-400 mb-1">Rules</p>
+      <p className="text-[11px] font-medium text-slate-400 mb-1"><Tx>Rules</Tx></p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs border border-slate-700 rounded">
           <thead>

@@ -7,8 +7,9 @@ import type { PodInfo, ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { applyPodWatchEvent } from '@/pages/workloads/pods/podWatchNormalize'
-import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, EventsTable, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
+import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -217,7 +218,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
           {immutable !== undefined && (
             <InfoRow label={tr('secretInfo.immutable', 'Immutable')} value={
-              <span className={`badge ${immutable ? 'badge-warning' : 'badge-info'}`}>{immutable ? 'Yes' : 'No'}</span>
+              <span className={`badge ${immutable ? 'badge-warning' : 'badge-info'}`}><Tx>{immutable ? 'Yes' : 'No'}</Tx></span>
             } />
           )}
           <InfoRow label={tr('secretInfo.dataKeys', 'Data Keys')} value={String(describe?.data_count ?? dataKeys.length)} />
@@ -237,16 +238,16 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                 {tlsInfo.hasCert ? (
                   <>
                     {tlsInfo.certSize !== undefined && <span className="font-mono">{tlsInfo.certSize} bytes</span>}
-                    {tlsInfo.isPem && <span className="ml-2 text-[10px] text-emerald-400/80">(PEM format)</span>}
+                    {tlsInfo.isPem && <span className="ml-2 text-[10px] text-emerald-400/80"><Tx>(PEM format)</Tx></span>}
                   </>
-                ) : <span className="text-slate-500 italic">not present</span>}
+                ) : <span className="text-slate-500 italic"><Tx>not present</Tx></span>}
               </span>
             } />
             <InfoRow label="tls.key" value={
               <span className="text-xs text-slate-300">
                 {tlsInfo.hasKey ? (
-                  tlsInfo.keySize !== undefined ? <span className="font-mono">{tlsInfo.keySize} bytes</span> : <span>present</span>
-                ) : <span className="text-slate-500 italic">not present</span>}
+                  tlsInfo.keySize !== undefined ? <span className="font-mono">{tlsInfo.keySize} bytes</span> : <span><Tx>present</Tx></span>
+                ) : <span className="text-slate-500 italic"><Tx>not present</Tx></span>}
               </span>
             } />
             <div className="mt-1 px-1">
@@ -321,8 +322,8 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           <div className="flex items-center justify-between mt-2">
             <span className="text-[10px] text-slate-500">{dataPage} / {dataTotalPages}</span>
             <div className="flex gap-1">
-              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40">Prev</button>
-              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40">Next</button>
+              <button type="button" onClick={() => setDataPage((p) => Math.max(1, p - 1))} disabled={dataPage <= 1} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Prev</Tx></button>
+              <button type="button" onClick={() => setDataPage((p) => Math.min(dataTotalPages, p + 1))} disabled={dataPage >= dataTotalPages} className="px-2 py-0.5 text-[10px] rounded border border-slate-700 text-slate-400 disabled:opacity-40"><Tx>Next</Tx></button>
             </div>
           </div>
         )}
@@ -342,9 +343,9 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {enabled && (
-        <InfoSection title={`Used By Pods (${usingPods.length})`}>
+        <InfoSection title="Used By Pods ({{n}})" titleValues={{ n: usingPods.length }}>
           {usingPods.length === 0 ? (
-            <p className="text-xs text-slate-400">No pod in this namespace directly references this Secret.</p>
+            <p className="text-xs text-slate-400"><Tx>No pod in this namespace directly references this Secret.</Tx></p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -380,9 +381,9 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
       )}
 
       {enabled && (
-        <InfoSection title={`Used By ServiceAccounts (${usingSAs.length})`}>
+        <InfoSection title="Used By ServiceAccounts ({{n}})" titleValues={{ n: usingSAs.length }}>
           {usingSAs.length === 0 ? (
-            <p className="text-xs text-slate-400">No ServiceAccount in this namespace references this Secret.</p>
+            <p className="text-xs text-slate-400"><Tx>No ServiceAccount in this namespace references this Secret.</Tx></p>
           ) : (
             <div className="space-y-1 text-xs text-slate-200">
               {pagedUsingSAs.map((sa: any) => {
@@ -426,6 +427,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
 }
 
 function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; size?: number; value?: string; canReveal: boolean }) {
+  const dl = useDetailLabel()
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
   const sizeStr = size !== undefined ? `${size} bytes` : ''
@@ -458,7 +460,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
                 type="button"
                 onClick={() => setVisible((v) => !v)}
                 className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                title={visible ? 'Hide' : 'Show'}
+                title={dl(visible ? 'Hide' : 'Show')}
               >
                 {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -467,7 +469,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
                   type="button"
                   onClick={handleCopy}
                   className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-                  title="Copy value"
+                  title={dl('Copy value')}
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
@@ -479,7 +481,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
       {visible && canReveal && value !== undefined && (
         <div className="px-3 pb-2 border-t border-slate-800">
           <pre className="text-[11px] text-slate-300 whitespace-pre-wrap break-words mt-1.5 max-h-[200px] overflow-y-auto font-mono">
-            {value || <span className="text-slate-600 italic">{'(empty)'}</span>}
+            {value || <span className="text-slate-600 italic"><Tx>(empty)</Tx></span>}
           </pre>
         </div>
       )}

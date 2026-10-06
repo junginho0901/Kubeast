@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText } from './DetailCommon'
+import { ConditionsTable, InfoSection, InfoRow, KeyValueTags, SummaryBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
@@ -113,8 +113,8 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
   return (
     <>
       <InfoSection title="Gateway Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading gateway details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading gateway details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="flex flex-wrap gap-2 mb-3">
           <SummaryBadge label="Status" value={statusText} color="default" />
           <SummaryBadge label="Programmed" value={isProgrammed ? 'Yes' : 'No'} color={isProgrammed ? 'green' : 'amber'} />
@@ -177,12 +177,12 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
               return (
                 <div key={`listener-${listenerName}-${idx}`} className="rounded border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Name:</span> {listenerName}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Hostname:</span> {text(listener?.hostname)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Protocol:</span> {text(listener?.protocol)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Port:</span> {text(listener?.port)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Attached Routes:</span> {text(s?.attachedRoutes)}</div>
-                    <div className="text-slate-200 break-words"><span className="text-slate-400">Supported Kinds:</span> {supportedKindsText || '-'}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Name:</Tx></span> {listenerName}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {text(listener?.hostname)}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Protocol:</Tx></span> {text(listener?.protocol)}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Port:</Tx></span> {text(listener?.port)}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {text(s?.attachedRoutes)}</div>
+                    <div className="text-slate-200 break-words"><span className="text-slate-400"><Tx>Supported Kinds:</Tx></span> {supportedKindsText || '-'}</div>
                   </div>
                   {listenerConditions.length > 0 && (
                     <div className="mt-3">
@@ -198,7 +198,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
 
       <InfoSection title="Attached Routes Summary">
         {statusListeners.length === 0 ? (
-          <p className="text-xs text-slate-400">No listener status data available to determine attached routes.</p>
+          <p className="text-xs text-slate-400"><Tx>No listener status data available to determine attached routes.</Tx></p>
         ) : (
           <div className="space-y-2">
             {statusListeners.map((sl, idx) => {
@@ -215,15 +215,18 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
               return (
                 <div key={`route-summary-${idx}`} className="rounded border border-slate-800 p-2">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                    <div className="text-slate-200"><span className="text-slate-400">Listener:</span> {listenerName}</div>
-                    <div className="text-slate-200"><span className="text-slate-400">Attached Routes:</span> {routeCount}</div>
-                    <div className="text-slate-200"><span className="text-slate-400">Accepted Kinds:</span> {kindsText || '-'}</div>
+                    <div className="text-slate-200"><span className="text-slate-400"><Tx>Listener:</Tx></span> {listenerName}</div>
+                    <div className="text-slate-200"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {routeCount}</div>
+                    <div className="text-slate-200"><span className="text-slate-400"><Tx>Accepted Kinds:</Tx></span> {kindsText || '-'}</div>
                   </div>
                 </div>
               )
             })}
             <p className="text-[11px] text-slate-500 mt-1">
-              Total: {attachedRoutes} route(s) attached across {statusListeners.length} listener(s). Route details are available in HTTPRoute / GRPCRoute resources that reference this gateway.
+              <Tx
+                text="Total: {{routes}} route(s) attached across {{listeners}} listener(s). Route details are available in HTTPRoute / GRPCRoute resources that reference this gateway."
+                values={{ routes: attachedRoutes, listeners: statusListeners.length }}
+              />
             </p>
           </div>
         )}

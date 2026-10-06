@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import { InfoSection, InfoRow, KeyValueTags, Th } from './DetailCommon'
+import { InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -69,8 +69,8 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
   return (
     <>
       <InfoSection title="Template Info">
-        {isLoading && <p className="text-xs text-slate-400 mb-2">Loading ResourceClaimTemplate details...</p>}
-        {isError && <p className="text-xs text-red-400 mb-2">Failed to load describe data. Showing summary from list.</p>}
+        {isLoading && <p className="text-xs text-slate-400 mb-2"><Tx>Loading ResourceClaimTemplate details...</Tx></p>}
+        {isError && <p className="text-xs text-red-400 mb-2"><Tx>Failed to load describe data. Showing summary from list.</Tx></p>}
         <div className="space-y-2">
           <InfoRow label="Name" value={describe?.name || name} />
           <InfoRow label="Namespace" value={describe?.namespace || namespace} />
@@ -180,7 +180,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
               {JSON.stringify(claimSpec, null, 2)}
             </pre>
           ) : (
-            <p className="text-xs text-slate-400">No claim spec</p>
+            <p className="text-xs text-slate-400"><Tx>No claim spec</Tx></p>
           )}
         </InfoSection>
       )}
