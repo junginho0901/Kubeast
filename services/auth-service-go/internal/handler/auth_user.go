@@ -215,6 +215,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// successful login — actor + target 둘 다 같은 user (본인 로그인).
 	h.writeAuditLog(r, "user.login.success", &user.ID, &user.Email, &user.ID, &user.Email, nil, nil)
+	h.touchLastLogin(r, user)
 
 	response.JSON(w, http.StatusOK, model.LoginResponse{
 		AccessToken: token,

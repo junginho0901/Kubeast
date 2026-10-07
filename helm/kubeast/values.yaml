@@ -133,6 +133,16 @@ auth:
   apiKeys:
     enabled: true
     maxDays: 90
+  # Access review: Admin → Access review lists every account, per-cluster
+  # grant, API key, temporary grant decided since the last review and role,
+  # flags the dormant and the privileged, exports each section as CSV, and
+  # records a sign-off (with the report as it stood) when the review is done.
+  # dormantDays flags accounts with no sign-in for that long; intervalDays is
+  # how often a review falls due. Sign-offs are kept retention.reviewDays.
+  accessReview:
+    enabled: true
+    dormantDays: 90
+    intervalDays: 90
 
 # --- Console metrics (the console's own health, not the target clusters') ---
 # Every backend service (auth, ai, k8s, session, tool-server) serves Prometheus
@@ -318,6 +328,8 @@ audit:
 retention:
   auditDays: 0
   chatDays: 0
+  # Access review sign-offs (three years; 0 = keep forever).
+  reviewDays: 1095
 
 # --- Schema migrations ---
 # auth-service owns the database schema (versioned SQL, services/pkg/dbmigrate).

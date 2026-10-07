@@ -136,13 +136,13 @@ func main() {
 		go sinks.Run(ctx)
 	}
 
-	retentionCfg := retention.Config{AuditDays: cfg.RetentionAuditDays, ChatDays: cfg.RetentionChatDays}
+	retentionCfg := retention.Config{AuditDays: cfg.RetentionAuditDays, ChatDays: cfg.RetentionChatDays, ReviewDays: cfg.RetentionReviewDays}
 	if err := retentionCfg.Validate(); err != nil {
 		slog.Error("invalid retention configuration", "error", err)
 		os.Exit(1)
 	}
 	if retentionCfg.Enabled() {
-		slog.Info("retention enabled", "audit_days", retentionCfg.AuditDays, "chat_days", retentionCfg.ChatDays)
+		slog.Info("retention enabled", "audit_days", retentionCfg.AuditDays, "chat_days", retentionCfg.ChatDays, "review_days", retentionCfg.ReviewDays)
 		purger := retention.Purger{Pool: pool, Cfg: retentionCfg, Audit: auditStore}
 		if names := sinks.Names(); len(names) > 0 {
 			purger.AuditFloor = func(ctx context.Context) (int64, error) { return auditsink.Floor(ctx, pool, names) }
@@ -160,6 +160,9 @@ func main() {
 	go accessrequests.Run(ctx, accessrequests.Sweeper{Store: repo, Audit: auditStore}, sweepEvery)
 	if cfg.AccessRequests.Enabled {
 		slog.Info("access requests enabled", "max_hours", cfg.AccessRequests.MaxHours, "roles", cfg.AccessRequests.Roles)
+	}
+	if cfg.AccessReview.Enabled {
+		slog.Info("access review enabled", "dormant_days", cfg.AccessReview.DormantDays, "interval_days", cfg.AccessReview.IntervalDays)
 	}
 
 	// Seed system roles and migrate auth_users.role → role_id
@@ -332,6 +335,15 @@ func main() {
 			r.Delete("/api-keys/{id}", authHandler.DeleteMyAPIKey)
 			r.Get("/admin/users/{user_id}/api-keys", authHandler.AdminListUserAPIKeys)
 			r.Delete("/admin/users/{user_id}/api-keys/{id}", authHandler.AdminDeleteUserAPIKey)
+
+			// Access review: the periodic "who has what" report, its CSV and the
+			// sign-off that records a review was done (admin.review.*).
+			r.Get("/access-review/config", authHandler.AccessReviewConfig)
+			r.Get("/admin/access-review", authHandler.AdminAccessReview)
+			r.Get("/admin/access-review/export", authHandler.AdminAccessReviewExport)
+			r.Post("/admin/access-review/signoff", authHandler.AdminAccessReviewSignoff)
+			r.Get("/admin/access-review/history", authHandler.AdminAccessReviewHistory)
+			r.Get("/admin/access-review/history/{id}", authHandler.AdminAccessReviewSnapshot)
 		})
 	})
 

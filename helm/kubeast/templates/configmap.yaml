@@ -23,6 +23,9 @@ data:
   ACCESS_REQUESTS_SWEEP_SEC: {{ .Values.auth.accessRequests.sweepSeconds | quote }}
   API_KEYS_ENABLED: {{ .Values.auth.apiKeys.enabled | quote }}
   API_KEYS_MAX_DAYS: {{ .Values.auth.apiKeys.maxDays | quote }}
+  ACCESS_REVIEW_ENABLED: {{ .Values.auth.accessReview.enabled | quote }}
+  ACCESS_REVIEW_DORMANT_DAYS: {{ .Values.auth.accessReview.dormantDays | quote }}
+  ACCESS_REVIEW_INTERVAL_DAYS: {{ .Values.auth.accessReview.intervalDays | quote }}
   ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
   BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
   PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}
@@ -111,6 +114,7 @@ data:
   MIGRATIONS_MODE: {{ .Values.migrations.mode | quote }}
   RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}
   RETENTION_CHAT_DAYS: {{ .Values.retention.chatDays | quote }}
+  RETENTION_REVIEW_DAYS: {{ .Values.retention.reviewDays | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}

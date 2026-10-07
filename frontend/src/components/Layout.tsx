@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Box,
   Boxes,
+  ClipboardCheck,
   Clock,
   Database,
   FileBox,
@@ -164,6 +165,15 @@ export default function Layout() {
     retry: false,
   })
   const pendingAccessCount = pendingAccessRequests.length
+  // Access review: the admin menu item appears only when the installation has it on.
+  const { data: accessReviewConfig } = useQuery({
+    queryKey: ['access-review', 'config'],
+    queryFn: api.getAccessReviewConfig,
+    staleTime: 60_000,
+    retry: false,
+    enabled: isAdmin,
+  })
+  const accessReviewOn = !!accessReviewConfig?.enabled
 
   const storageTabMatch = (tab: string, pathname: string, search: string) => {
     if (!pathname.startsWith('/storage')) return false
@@ -330,6 +340,9 @@ export default function Layout() {
         ...(accessRequestsOn
           ? [{ name: t('nav.accessRequests', { defaultValue: 'Access requests' }), href: '/admin/access-requests', icon: Clock, badge: pendingAccessCount, testId: 'nav-access-requests' }]
           : []),
+        ...(accessReviewOn
+          ? [{ name: t('nav.accessReview', { defaultValue: 'Access review' }), href: '/admin/access-review', icon: ClipboardCheck, testId: 'nav-access-review' }]
+          : []),
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
         { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
@@ -338,7 +351,7 @@ export default function Layout() {
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn])
 
   const activeGroup = useMemo(() => {
     for (const group of navGroups) {

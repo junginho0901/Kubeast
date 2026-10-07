@@ -35,21 +35,31 @@ const Action = "admin.retention.purge"
 // BatchSize bounds one DELETE statement.
 const BatchSize = 5000
 
-// Config is the retention policy. Zero means keep forever.
+// Config is the retention policy. Zero means keep forever. ReviewDays covers
+// access review sign-offs (access_reviews, snapshot included).
 type Config struct {
-	AuditDays int
-	ChatDays  int
+	AuditDays  int
+	ChatDays   int
+	ReviewDays int
 }
 
 // Enabled reports whether any window is set.
-func (c Config) Enabled() bool { return c.AuditDays > 0 || c.ChatDays > 0 }
+func (c Config) Enabled() bool { return c.AuditDays > 0 || c.ChatDays > 0 || c.ReviewDays > 0 }
 
 // Validate rejects negative windows.
 func (c Config) Validate() error {
-	if c.AuditDays < 0 || c.ChatDays < 0 {
-		return fmt.Errorf("retention: days must be 0 or positive (audit=%d chat=%d)", c.AuditDays, c.ChatDays)
+	if c.AuditDays < 0 || c.ChatDays < 0 || c.ReviewDays < 0 {
+		return fmt.Errorf("retention: days must be 0 or positive (audit=%d chat=%d review=%d)", c.AuditDays, c.ChatDays, c.ReviewDays)
 	}
 	return nil
+}
+
+// ReviewCutoff returns the timestamp before which sign-offs are deleted (zero when off).
+func (c Config) ReviewCutoff(now time.Time) time.Time {
+	if c.ReviewDays > 0 {
+		return now.AddDate(0, 0, -c.ReviewDays)
+	}
+	return time.Time{}
 }
 
 // Cutoffs returns the timestamps before which rows are deleted (zero when off).
@@ -69,6 +79,7 @@ type Result struct {
 	Sessions          int64 `json:"sessions"`
 	ToolApprovals     int64 `json:"tool_approvals"`
 	SessionRecordings int64 `json:"session_recordings"` // index rows (and database-stored parts); objects in S3/files are the store's to expire
+	AccessReviews     int64 `json:"access_reviews"`
 }
 
 // Purger executes the policy against a database.
@@ -113,7 +124,7 @@ func (p Purger) RunOnce(ctx context.Context) Result {
 		slog.Error("retention: purge failed", "error", err, "deleted", res)
 	} else {
 		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals, "session_recordings", res.SessionRecordings,
-			"audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays)
+			"access_reviews", res.AccessReviews, "audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays)
 	}
 	p.record(ctx, now, res, err)
 	return res
@@ -177,6 +188,13 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 			return res, fmt.Errorf("sessions: %w", err)
 		}
 	}
+	if reviewCutoff := p.Cfg.ReviewCutoff(now); !reviewCutoff.IsZero() {
+		res.AccessReviews, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM access_reviews WHERE id IN (SELECT id FROM access_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, reviewCutoff)
+		if err != nil {
+			return res, fmt.Errorf("access reviews: %w", err)
+		}
+	}
 	return res, nil
 }
 
@@ -210,6 +228,9 @@ func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr er
 		"sessions":           res.Sessions,
 		"tool_approvals":     res.ToolApprovals,
 		"session_recordings": res.SessionRecordings,
+		"review_days":        p.Cfg.ReviewDays,
+		"review_cutoff":      nullableTime(p.Cfg.ReviewCutoff(now)),
+		"access_reviews":     res.AccessReviews,
 	})
 	rec := audit.Record{
 		Service:    audit.ServiceAdmin,

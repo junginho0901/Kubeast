@@ -36,7 +36,8 @@ type User struct {
 	FailedLogins    int        `json:"-"`
 	LastFailedLogin *time.Time `json:"-"`
 	LockedUntil     *time.Time `json:"-"`
-	AuthSource      string     `json:"auth_source"` // "password" or "oidc" (how the account was created)
+	AuthSource      string     `json:"auth_source"`   // "password" or "oidc" (how the account was created)
+	LastLoginAt     *time.Time `json:"last_login_at"` // last successful sign-in; nil = never
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

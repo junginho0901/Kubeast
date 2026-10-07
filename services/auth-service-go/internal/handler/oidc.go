@@ -425,6 +425,7 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	h.setAuthCookie(w, r, token)
 	h.writeAuditLog(r, "user.login.success", &user.ID, &user.Email, &user.ID, &user.Email, nil,
 		jsonRaw(map[string]any{"method": "oidc", "issuer": h.cfg.OIDC.IssuerURL}))
+	h.touchLastLogin(r, user)
 	http.Redirect(w, r, st.Next, http.StatusFound)
 }
 

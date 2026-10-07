@@ -292,6 +292,9 @@ func allPermissions() []map[string]interface{} {
 			{"admin.audit.read", "View audit log"},
 			{"admin.audit.export", "Export audit log (CSV)"},
 			{"admin.sessions.read", "View terminal session recordings"},
+			{"admin.review.read", "View the access review report"},
+			{"admin.review.export", "Export the access review (CSV)"},
+			{"admin.review.signoff", "Sign off an access review"},
 		}},
 	}
 	return categories

@@ -519,6 +519,23 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
 
+### 접근 권한 검토 (Access review)
+
+"지금 누가 무엇을 할 수 있나"를 한 장으로 뽑아 주기적으로 검토하고 "검토했다"를 남기는 기능입니다(ISMS-P 2.5.6 접근권한 검토, NIST 800-53 AC-2(j)). 관리자 → Access review에 섹션 5개가 표로 뜹니다.
+
+| 섹션 | 내용 | 플래그 |
+|---|---|---|
+| 사용자 | 이메일·팀·전역 역할·인증 출처·생성일·**마지막 로그인**(`auth_users.last_login_at`, 로그인 성공마다 기록·감사 로그로 백필)·클러스터 역할/API 키/임시 권한 개수 | `global_admin` · `never_logged_in` · `dormant`(마지막 로그인 또는 생성이 `dormantDays` 전) · `locked` |
+| 클러스터 역할 | 사용자별 클러스터·역할, 영구/요청 경유, 만료·복귀 역할 | `temporary` · `admin_role` |
+| API 키 | 소유자·이름·접두어·클러스터·역할 상한·생성·만료·마지막 사용 | `expired` · `expiring_30d` · `unused_30d` |
+| 임시 권한 이력 | 마지막 검토 이후의 권한 요청: 신청자·클러스터·역할·기간·사유·승인자·결정·종료 | — |
+| 역할 | 이름·시스템 여부·권한 목록·쓰는 사용자/바인딩 수 | `has_admin_permissions` · `unused` |
+
+- 탭마다 **CSV**(UTF-8 BOM, 수식 주입 방지) · 상단 카드에 전역 Admin·휴면·만료 임박 키·활성 임시 권한 수와 **마지막 검토·다음 기한**(`intervalDays` 뒤, 지나면 표시).
+- **검토 완료** 버튼이 메모와 함께 그 시점 보고서를 통째로 저장합니다(`access_reviews`, 보존 `retention.reviewDays` 기본 3년). 지난 검토는 목록에서 열어 보고 그때 CSV로 다시 내려받을 수 있습니다.
+- 권한 `admin.review.read` · `admin.review.export` · `admin.review.signoff`(시스템 Admin 역할에 포함), 감사 액션도 같은 이름. 쓰기는 서명뿐이고 권한 변경은 기존 화면에서 합니다.
+- 끄려면 `auth.accessReview.enabled: false`(메뉴·API가 사라짐). 비용: 페이지를 열 때 조회 7번, 서명 1건당 스냅샷 수십 KB.
+
 ### Argo CD 가드 (GitOps)
 
 Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tracking-id`, 값 `<앱>:<group>/<Kind>:<ns>/<이름>`)이 붙습니다. `gitops.argocd.enabled: true`면 콘솔이 그 표식을 읽어 드로어 머리에 "Argo CD · <앱>" 배지를 달고(`url`을 적으면 Argo CD 앱 페이지로 링크), 콘솔에서 그 객체를 바꾸려 할 때:
