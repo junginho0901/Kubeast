@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
-// Switching clusters in the picker leaves a `cluster.switch` audit row
+// Switching clusters in the picker leaves a `user.cluster.switch` audit row
 // (POST /api/v1/audit/cluster-switch, fired by ClusterProvider.setCurrentCluster).
 // The picker's initial auto-select is not a switch and must not record one.
 
@@ -16,7 +16,7 @@ async function adminToken(request: APIRequestContext): Promise<string> {
 async function switchRows(request: APIRequestContext, token: string, since: string) {
   const res = await request.get('/api/v1/auth/admin/audit-logs', {
     headers: { Authorization: `Bearer ${token}` },
-    params: { action: 'cluster.switch', since, limit: 20 },
+    params: { action: 'user.cluster.switch', since, limit: 20 },
   })
   expect(res.ok()).toBeTruthy()
   const { items } = (await res.json()) as { items: Array<Record<string, any>> | null }
@@ -24,7 +24,7 @@ async function switchRows(request: APIRequestContext, token: string, since: stri
 }
 
 test.describe('cluster switch audit', () => {
-  test('picking another cluster records cluster.switch with previous and new', async ({ page, request }) => {
+  test('picking another cluster records user.cluster.switch with previous and new', async ({ page, request }) => {
     const since = new Date(Date.now() - 5000).toISOString()
 
     await page.goto('/?cluster=self')
@@ -44,7 +44,7 @@ test.describe('cluster switch audit', () => {
       const after = r.After ?? r.after ?? {}
       return after.previous === 'self' && after.new === 'default'
     })
-    expect(mine.length, 'one cluster.switch row for self → default').toBeGreaterThanOrEqual(1)
+    expect(mine.length, 'one user.cluster.switch row for self → default').toBeGreaterThanOrEqual(1)
     expect(mine[0].Cluster ?? mine[0].cluster, 'cluster column = the new cluster').toBe('default')
   })
 
@@ -66,6 +66,6 @@ test.describe('cluster switch audit', () => {
     expect(posted, 'no audit call for the initial selection').toBe(0)
 
     const after = newestId(await switchRows(request, token, since))
-    expect(after, 'no new cluster.switch row').toBe(before)
+    expect(after, 'no new user.cluster.switch row').toBe(before)
   })
 })
