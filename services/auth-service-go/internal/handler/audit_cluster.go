@@ -35,7 +35,7 @@ func (h *AuthHandler) ClusterSwitch(w http.ResponseWriter, r *http.Request) {
 
 	rec := audit.FromHTTPRequest(r)
 	rec.Service = audit.ServiceAuth
-	rec.Action = "cluster.switch"
+	rec.Action = "user.cluster.switch"
 	rec.ActorUserID = payload.UserID
 	rec.ActorEmail = payload.Email
 	rec.TargetType = "cluster"
@@ -46,7 +46,7 @@ func (h *AuthHandler) ClusterSwitch(w http.ResponseWriter, r *http.Request) {
 		"new":      req.NewCluster,
 	})
 	if _, err := h.auditStore.Write(r.Context(), rec); err != nil {
-		slog.Error("cluster.switch audit write failed", "err", err)
+		slog.Error("user.cluster.switch audit write failed", "err", err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
