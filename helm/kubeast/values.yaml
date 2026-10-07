@@ -491,6 +491,21 @@ features:
   prometheus:
     enabled: false
 
+# Argo CD guard. An object that carries Argo CD's tracking annotation
+# (argocd.argoproj.io/tracking-id, naming the object itself) is badged with
+# its Application in the drawer. mode "warn" asks before a write from the
+# console; "block" refuses the write — in k8s-service and in the AI write
+# tools alike (409, "managed by Argo CD application <app>; change it in Git").
+# instanceLabel turns on label tracking (argocd-cm application.instanceLabelKey)
+# for installations that still use it. url links the badge to the Argo CD UI.
+gitops:
+  argocd:
+    enabled: false
+    mode: warn
+    trackingAnnotation: argocd.argoproj.io/tracking-id
+    instanceLabel: ""
+    url: ""
+
 # --- Multi-cluster load / failure isolation (step 15) ---
 # Tunes the k8s-service per-cluster bundle pool, health checks, Prometheus query
 # cache, rate limit and circuit breaker. Safe defaults; rateLimitQPS=0 leaves

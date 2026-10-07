@@ -125,6 +125,8 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		status := http.StatusInternalServerError
 		if errors.Is(err, errBadRequest) {
 			status = http.StatusBadRequest
+		} else if errors.Is(err, errConflict) {
+			status = http.StatusConflict
 		}
 		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
 		return

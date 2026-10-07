@@ -161,9 +161,13 @@ func (h *Handler) PrometheusQueryRange(w http.ResponseWriter, r *http.Request) {
 // once at boot and uses it to skip e.g. all Prometheus queries when the
 // integration is disabled.
 func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
+	g := h.svc.Gitops()
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"prometheus": map[string]interface{}{
 			"enabled": k8s.PrometheusFeatureEnabled(),
+		},
+		"gitops": map[string]interface{}{
+			"argocd": map[string]interface{}{"enabled": g.Enabled, "mode": g.Mode, "url": g.URL, "trackingAnnotation": g.TrackingAnnotation, "instanceLabel": g.InstanceLabel},
 		},
 	})
 }

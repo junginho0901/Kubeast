@@ -519,6 +519,15 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
 
+### Argo CD 가드 (GitOps)
+
+Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tracking-id`, 값 `<앱>:<group>/<Kind>:<ns>/<이름>`)이 붙습니다. `gitops.argocd.enabled: true`면 콘솔이 그 표식을 읽어 드로어 머리에 "Argo CD · <앱>" 배지를 달고(`url`을 적으면 Argo CD 앱 페이지로 링크), 콘솔에서 그 객체를 바꾸려 할 때:
+
+- `mode: warn`(기본) — 확인창에서 "다음 동기화 때 되돌아갑니다, Git에서 바꾸세요"를 알린 뒤 진행합니다.
+- `mode: block` — k8s-service가 쓰기 요청을 409로 거부하고(`managed by Argo CD application <앱>; change it in Git`), AI 쓰기 도구(apply·delete·patch·scale·rollout)도 같은 이유로 거부합니다. 드로어의 삭제·YAML 적용 버튼은 비활성입니다.
+
+어노테이션은 그 객체 자신을 가리킬 때만 인정합니다(파드 템플릿을 따라 복사된 어노테이션은 무시). 아직 라벨 방식(`app.kubernetes.io/instance` 또는 `argocd-cm`의 `application.instanceLabelKey`)을 쓰는 설치는 `instanceLabel`에 그 키를 적으면 됩니다. Helm 릴리스 작업·노드 cordon/drain·새 객체 생성은 대상이 아닙니다.
+
 ### 감사 싱크 (S3 · 웹훅 · 메일 · 파일)
 
 감사 로그의 1차 저장소는 DB이고, 싱크는 그 행을 **밖으로 복사**합니다. auth-service 한 replica가 싱크마다

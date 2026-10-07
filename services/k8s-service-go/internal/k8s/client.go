@@ -19,6 +19,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+	"github.com/junginho0901/kubeast/services/pkg/gitops"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -71,6 +72,7 @@ func (b *clientBundle) Close() error {
 // target the cluster carried in the request context.
 type Service struct {
 	registry cluster.Registry
+	gitops   gitops.Config
 	// bundles is an LRU pool of per-cluster client bundles (step 15): with many
 	// clusters this bounds memory — the least-recently-used cluster is evicted
 	// (and Closed) instead of holding every bundle forever. Thread-safe.
@@ -122,6 +124,7 @@ type ServiceOptions struct {
 	// ExecCommands is the allow-list of credential plugins a registered
 	// kubeconfig may run (cluster.CheckKubeconfigExec); they execute in this pod.
 	ExecCommands []string
+	Gitops       gitops.Config // Argo CD guard (chart gitops.argocd)
 }
 
 // impersonationEnabled and execCommands are read by buildClientBundle (set once
@@ -139,6 +142,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	execCommands = opts.ExecCommands
 	s := &Service{
 		registry:          registry,
+		gitops:            opts.Gitops,
 		watchEnabled:      watchEnabled,
 		cache:             c,
 		maxClusters:       opts.MaxClusters,

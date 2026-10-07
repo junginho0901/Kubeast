@@ -628,6 +628,9 @@ export interface PrometheusRangeResponse {
 // and cached on the React Query client. See helm values.yaml `features.*`.
 export interface ClusterFeatures {
   prometheus: { enabled: boolean }
+  gitops?: {
+    argocd: { enabled: boolean; mode: 'warn' | 'block'; url: string; trackingAnnotation: string; instanceLabel: string }
+  }
 }
 
 export interface DeviceClassItem {

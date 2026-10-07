@@ -114,6 +114,11 @@ data:
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
+  GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
+  GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
+  GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}
+  GITOPS_ARGOCD_INSTANCE_LABEL: {{ .Values.gitops.argocd.instanceLabel | quote }}
+  GITOPS_ARGOCD_URL: {{ .Values.gitops.argocd.url | quote }}
 {{- if .Values.audit.sinks }}
 {{- $seen := dict }}
 {{- range .Values.audit.sinks }}

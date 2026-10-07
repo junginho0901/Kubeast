@@ -19,6 +19,9 @@ func handleApplyManifest(ctx context.Context, args map[string]interface{}, heade
 	if err != nil {
 		return "", err
 	}
+	if err := gitopsRefuseManifest(ctx, headers, manifest); err != nil {
+		return "", err
+	}
 	return runKubectlWithInput(ctx, headers, manifest, "apply", "-f", "-")
 }
 
@@ -46,6 +49,9 @@ func handleDeleteResource(ctx context.Context, args map[string]interface{}, head
 	wait := argBool(args, "wait")
 	ignoreNotFound := argBool(args, "ignore_not_found")
 
+	if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"delete", resourceType}
 	if resourceName != "" {
 		cmdArgs = append(cmdArgs, resourceName)
@@ -84,6 +90,9 @@ func handlePatchResource(ctx context.Context, args map[string]interface{}, heade
 	namespace := argString(args, "namespace", "")
 	patchType := argString(args, "patch_type", "")
 
+	if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"patch", resourceType, resourceName, "-p", patchContent}
 	if namespace != "" {
 		cmdArgs = append(cmdArgs, "-n", namespace)
@@ -210,6 +219,9 @@ func handleScaleResource(ctx context.Context, args map[string]interface{}, heade
 	}
 	namespace := argString(args, "namespace", "")
 
+	if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+		return "", err
+	}
 	cmdArgs := []string{"scale", resourceType, resourceName, "--replicas", strconv.Itoa(replicas)}
 	if namespace != "" {
 		cmdArgs = append(cmdArgs, "-n", namespace)
@@ -231,6 +243,11 @@ func handleRollout(ctx context.Context, args map[string]interface{}, headers htt
 	revision := argInt(args, "revision", 0)
 	timeout := argString(args, "timeout", "")
 
+	if action != "status" && action != "history" {
+		if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+			return "", err
+		}
+	}
 	cmdArgs := []string{"rollout", action, fmt.Sprintf("%s/%s", resourceType, resourceName)}
 	if namespace != "" {
 		cmdArgs = append(cmdArgs, "-n", namespace)

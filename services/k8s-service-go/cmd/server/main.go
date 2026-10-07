@@ -107,6 +107,7 @@ func main() {
 	startCtx, startCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	k8sSvc, err := k8s.NewService(startCtx, registry, cfg.KubeconfigWatch, redisCache, k8s.ServiceOptions{
 		MaxClusters:    cfg.MaxClusters,
+		Gitops:         cfg.Gitops,
 		QueryCacheTTL:  time.Duration(cfg.QueryCacheTTLSec) * time.Second,
 		RateLimitQPS:   cfg.RateLimitQPS,
 		RateLimitBurst: cfg.RateLimitBurst,
@@ -224,6 +225,11 @@ func main() {
 		// Fail-closed: a mutation is refused (503) while the audit store cannot
 		// record it. POST /search is a read. Audited GET paths check inside.
 		r.Use(audit.RequireWritable(auditStore, "/api/v1/search"))
+		// A write to an object an Argo CD Application manages is refused while
+		// gitops.argocd.mode is "block" (the chart's default, "warn", only badges).
+		if cfg.Gitops.Enabled {
+			r.Use(h.GitopsGuard)
+		}
 
 		routes.Register(r, h, wsMux)
 	})

@@ -18,6 +18,8 @@ import {
   kindToPlural,
 } from './resource-detail/utils'
 import { useResourceDelete } from './resource-detail/useResourceDelete'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { argoAppUrl, detectArgoApp } from './resource-detail/gitops'
 import { useResourceYaml } from './resource-detail/useResourceYaml'
 import { ResourceDetailHeader } from './resource-detail/ResourceDetailHeader'
 import YamlEditor from './YamlEditor'
@@ -106,8 +108,12 @@ export default function ResourceDetailDrawer() {
     canEditYaml,
   })
 
+  // The Argo CD guard reads annotations, which the list pages' summarized
+  // rawJson does not carry: fetch the full object for the badge when needed.
+  const argoCfg = useClusterFeatures().data?.gitops?.argocd
+  const rawJsonLacksAnnotations = !!target?.rawJson && !((target.rawJson as Record<string, unknown>).metadata as Record<string, unknown> | undefined)?.annotations
   const needsRawJsonFetch = !!target
-    && !target.rawJson
+    && (!target.rawJson || (!!argoCfg?.enabled && rawJsonLacksAnnotations))
     && !SELF_LOADING_KINDS.has(kind)
     && !UNRESOLVABLE_KINDS.has(kind)
     && !!name
@@ -121,6 +127,16 @@ export default function ResourceDetailDrawer() {
   })
 
   const effectiveRawJson = target?.rawJson ?? fetchedRawJson
+  // Argo CD guard: an object an Application manages is badged; in block mode
+  // the console's write buttons are off (k8s-service refuses them anyway).
+  const argoManaged = detectArgoApp((fetchedRawJson ?? effectiveRawJson) as Record<string, unknown> | undefined, kind, argoCfg)
+  const argoBlocked = !!argoManaged && argoCfg?.mode === 'block'
+  const argo = argoCfg?.enabled ? { managed: argoManaged, url: argoManaged ? argoAppUrl(argoCfg, argoManaged.app) : null, blocked: argoBlocked } : undefined
+  const argoWarnText = t('common.gitops.confirm', { app: argoManaged?.app ?? '', defaultValue: 'Argo CD application "{{app}}" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?' })
+  const handleApplyYamlGuarded = async (rawYaml: string) => {
+    if (argoManaged && !argoBlocked && !window.confirm(argoWarnText)) return
+    await handleApplyYaml(rawYaml)
+  }
 
 
   // 플로팅 AI 위젯용 오버레이 스냅샷 (Info/YAML 2탭만)
@@ -295,7 +311,8 @@ export default function ResourceDetailDrawer() {
           name={name}
           effectiveRawJson={effectiveRawJson}
           canGoBack={canGoBack}
-          canDelete={canDelete}
+          canDelete={canDelete && !argoBlocked}
+          argo={argo}
           tab={tab}
           onClose={handleClose}
           onGoBack={() => {
@@ -324,12 +341,12 @@ export default function ResourceDetailDrawer() {
               <YamlEditor
                 key={`${kind}-${name}-${ns || ''}`}
                 value={kind === 'Secret' && canEditYaml && yamlData?.yaml ? decodeSecretYaml(yamlData.yaml) : yamlData?.yaml || ''}
-                canEdit={canEditYaml}
+                canEdit={canEditYaml && !argoBlocked}
                 isLoading={yamlLoading}
                 isRefreshing={yamlFetching}
                 error={yamlError ? t('common.yamlError', { defaultValue: 'Failed to load YAML.' }) : null}
                 onRefresh={() => setYamlRefreshNonce(prev => prev + 1)}
-                onApply={canEditYaml ? handleApplyYaml : undefined}
+                onApply={canEditYaml && !argoBlocked ? handleApplyYamlGuarded : undefined}
                 onApplySuccess={() => { invalidateAfterApply(); setApplyToast({ type: 'success', message: t('common.applied', { defaultValue: 'Applied' }) }) }}
                 onApplyError={(msg) => setApplyToast({ type: 'error', message: msg || t('common.applyError', { defaultValue: 'Apply failed.' }) })}
                 onDirtyChange={setIsYamlDirty}
@@ -371,6 +388,9 @@ export default function ResourceDetailDrawer() {
                 ? t('common.deleteKindConfirmNs', { kind: displayKind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
                 : t('common.deleteKindConfirm', { kind: displayKind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
             </p>
+            {argoManaged && !argoBlocked && (
+              <p className="text-xs text-amber-300 mb-4 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">{argoWarnText}</p>
+            )}
             {kind === 'Node' && (
               <p className="text-xs text-red-400 mb-4 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
                 {t('nodes.delete.warning', {
