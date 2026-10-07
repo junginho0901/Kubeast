@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member } from '@/services/api'
-import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Trash2, Unlock, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useTranslation } from 'react-i18next'
@@ -87,6 +87,26 @@ export default function AdminUsers() {
   // 비번 재발급 결과 (1회용 평문) — 모달로 한 번 보여주고 닫히면 잊어버림
   const [resetResult, setResetResult] = useState<{ targetLabel: string; password: string } | null>(null)
   const [resetCopied, setResetCopied] = useState(false)
+
+  // Dormant accounts: "sweep now" appears when the sweeper is on; the lock
+  // badge and the unlock button show for any locked account either way.
+  const { data: dormantConfig } = useQuery({ queryKey: ['dormant-accounts', 'config'], queryFn: api.getDormantAccountsConfig, staleTime: 60_000, retry: false })
+  const [sweepMessage, setSweepMessage] = useState<string | null>(null)
+  const sweepMutation = useMutation({
+    mutationFn: () => api.adminDormantSweep(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setSweepMessage(tr('adminUsers.sweepDone', 'Sweep done: {{count}} account(s) locked.', { count: res.locked }))
+    },
+    onError: () => setSweepMessage(tr('adminUsers.sweepFailed', 'The sweep failed.')),
+  })
+  const unlockMutation = useMutation({
+    mutationFn: ({ userId }: { userId: string }) => api.adminUnlockUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+    },
+  })
+  const isLocked = (u: Member) => !!u.dormant_locked_at || (!!u.locked_until && new Date(u.locked_until).getTime() > Date.now())
 
   const resetPasswordMutation = useMutation({
     mutationFn: ({ userId, targetLabel }: { userId: string; targetLabel: string }) =>
@@ -323,6 +343,9 @@ export default function AdminUsers() {
           <p className="mt-2 text-slate-400">
             {tr('adminUsers.subtitle', 'Update user roles (read/write/admin).')}
           </p>
+          {sweepMessage && (
+            <p className="mt-2 text-sm text-slate-300" data-testid="dormant-sweep-result">{sweepMessage}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {pendingRows.length > 0 && (
@@ -336,6 +359,19 @@ export default function AdminUsers() {
               <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-xs font-bold text-amber-400">
                 {pendingRows.length}
               </span>
+            </button>
+          )}
+          {dormantConfig?.enabled && (
+            <button
+              type="button"
+              onClick={() => sweepMutation.mutate()}
+              disabled={sweepMutation.isPending}
+              data-testid="dormant-sweep-now"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50"
+              title={tr('adminUsers.sweepTitle', 'Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)', { days: dormantConfig.days })}
+            >
+              <Lock className="w-4 h-4" />
+              {sweepMutation.isPending ? tr('adminUsers.sweeping', 'Sweeping...') : tr('adminUsers.sweepDormant', 'Sweep dormant now')}
             </button>
           )}
           <button
@@ -408,6 +444,19 @@ export default function AdminUsers() {
                         {tr('adminUsers.pendingBadge', 'Pending')}
                       </span>
                     )}
+                    {u.dormant_locked_at ? (
+                      <span
+                        className="ml-2 inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300 border border-red-500/20"
+                        data-testid="user-dormant-badge"
+                        title={tr('adminUsers.lastLogin', 'Last login {{when}}', { when: u.last_login_at ? new Date(u.last_login_at).toLocaleString() : tr('adminUsers.neverLoggedIn', 'never signed in') })}
+                      >
+                        {tr('adminUsers.dormantBadge', 'Dormant lock')}
+                      </span>
+                    ) : isLocked(u) ? (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-yellow-500/15 px-2 py-0.5 text-[10px] font-medium text-yellow-300 border border-yellow-500/20" data-testid="user-locked-badge">
+                        {tr('adminUsers.lockedBadge', 'Locked')}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">{u.email ?? '-'}</td>
                   <td className="px-4 py-3 text-slate-400">{u.team || '-'}</td>
@@ -494,6 +543,27 @@ export default function AdminUsers() {
                           : tr('adminUsers.reset', 'Reset PW')}
                       </span>
                     </button>
+                    {isLocked(u) && (
+                      <button
+                        type="button"
+                        disabled={isBlocked || (unlockMutation.isPending && unlockMutation.variables?.userId === u.id)}
+                        onClick={() => {
+                          const ok = window.confirm(tr('adminUsers.unlockConfirm', 'Unlock this account?\n\nTarget: {{target}}', { target: u.email ?? u.name }))
+                          if (!ok) return
+                          unlockMutation.mutate({ userId: u.id })
+                        }}
+                        data-testid="user-unlock"
+                        className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-yellow-700/60 bg-yellow-950/20 px-2.5 py-2 text-xs text-yellow-200 hover:bg-yellow-950/35 focus:outline-hidden focus:ring-2 focus:ring-yellow-600 disabled:opacity-50"
+                        title={tr('adminUsers.unlockTitle', 'Clear the dormant lock and the password lock')}
+                      >
+                        <Unlock className="w-3.5 h-3.5 text-yellow-300" />
+                        <span>
+                          {unlockMutation.isPending && unlockMutation.variables?.userId === u.id
+                            ? tr('adminUsers.unlocking', 'Unlocking...')
+                            : tr('adminUsers.unlock', 'Unlock')}
+                        </span>
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <button

@@ -134,6 +134,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An account the dormant sweeper locked refuses the password until an
+	// admin unlocks it; same generic 401, the audit row carries the reason.
+	if user.DormantLockedAt != nil {
+		reason := jsonRaw(map[string]interface{}{"reason": "dormant", "dormant_locked_at": user.DormantLockedAt.UTC().Format(time.RFC3339)})
+		h.writeAuditLog(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
 	// H13: a locked account refuses the password without checking it. The
 	// response is the same generic 401 as a wrong password so the lock state
 	// is not observable from outside; the audit row carries the reason.

@@ -29,6 +29,10 @@ auth:
   accessRequests:
     enabled: true
     sweepSeconds: 5
+  # dormant-accounts.spec.ts backdates a user's activity in the database and
+  # triggers "sweep now"; the daily sweep never has anything to lock here.
+  dormantAccounts:
+    enabled: true
 ai:
   baseUrlAllowedHosts:
     - host.docker.internal

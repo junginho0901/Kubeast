@@ -36,8 +36,9 @@ type User struct {
 	FailedLogins    int        `json:"-"`
 	LastFailedLogin *time.Time `json:"-"`
 	LockedUntil     *time.Time `json:"-"`
-	AuthSource      string     `json:"auth_source"`   // "password" or "oidc" (how the account was created)
-	LastLoginAt     *time.Time `json:"last_login_at"` // last successful sign-in; nil = never
+	AuthSource      string     `json:"auth_source"`       // "password" or "oidc" (how the account was created)
+	LastLoginAt     *time.Time `json:"last_login_at"`     // last successful sign-in; nil = never
+	DormantLockedAt *time.Time `json:"dormant_locked_at"` // set by the dormant-account sweeper; nil = not locked
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
@@ -64,6 +65,11 @@ type UserResponse struct {
 	AuthSource string        `json:"auth_source"`
 	CreatedAt  time.Time     `json:"created_at"`
 	UpdatedAt  time.Time     `json:"updated_at"`
+	// Account state for the admin pages: last sign-in, the temporary password
+	// lock and the dormant lock (nil when not locked).
+	LastLoginAt     *time.Time `json:"last_login_at"`
+	LockedUntil     *time.Time `json:"locked_until,omitempty"`
+	DormantLockedAt *time.Time `json:"dormant_locked_at,omitempty"`
 }
 
 func (u *User) ToResponse() UserResponse {
@@ -76,9 +82,12 @@ func (u *User) ToResponse() UserResponse {
 			ID:   u.RoleID,
 			Name: u.RoleName,
 		},
-		AuthSource: u.AuthSource,
-		CreatedAt:  u.CreatedAt,
-		UpdatedAt:  u.UpdatedAt,
+		AuthSource:      u.AuthSource,
+		CreatedAt:       u.CreatedAt,
+		UpdatedAt:       u.UpdatedAt,
+		LastLoginAt:     u.LastLoginAt,
+		LockedUntil:     u.LockedUntil,
+		DormantLockedAt: u.DormantLockedAt,
 	}
 }
 

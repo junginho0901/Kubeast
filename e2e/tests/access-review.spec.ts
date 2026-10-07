@@ -105,7 +105,7 @@ test.describe('Access review', () => {
 
   test('each section exports as CSV with a BOM and a header row', async ({ request }) => {
     for (const [section, header] of [
-      ['users', 'email,name,team,auth_source,global_role,created_at,last_login_at,locked_until,cluster_roles,api_keys,temporary_grants,flags'],
+      ['users', 'email,name,team,auth_source,global_role,created_at,last_login_at,locked_until,dormant_locked_at,cluster_roles,api_keys,temporary_grants,flags'],
       ['cluster_roles', 'user_email,cluster,role,granted_via,expires_at,restore_role,flags'],
       ['api_keys', 'owner_email,name,key_prefix,clusters,role_ceiling,created_at,expires_at,last_used_at,last_used_ip,flags'],
       ['access_requests', 'requester_email,cluster,role,duration_minutes,reason,status,created_at,decided_by_email,decided_at,decision_note,expires_at,ended_at,end_reason'],

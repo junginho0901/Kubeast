@@ -401,6 +401,10 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
 		return
 	}
+	if user.DormantLockedAt != nil {
+		h.oidcFail(w, r, "account_dormant", user.Email, errDormant)
+		return
+	}
 
 	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
 	if err != nil {

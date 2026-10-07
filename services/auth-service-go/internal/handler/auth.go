@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dormant"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -17,6 +18,7 @@ type AuthHandler struct {
 	cfg        config.Config
 	auditStore audit.Store
 	oidc       *oidcClient
+	dormant    *dormant.Sweeper // "sweep now"; nil until SetDormantSweeper
 	// dummyHash is verified against when the login email does not exist, so
 	// an unknown address costs the same as a wrong password (no timing
 	// enumeration). Built once with the configured iteration count.

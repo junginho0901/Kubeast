@@ -16,6 +16,9 @@ func (c Config) Validate() error {
 	if c.AccessReview.Enabled && (c.AccessReview.DormantDays < 1 || c.AccessReview.IntervalDays < 1) {
 		return fmt.Errorf("ACCESS_REVIEW_DORMANT_DAYS and ACCESS_REVIEW_INTERVAL_DAYS must be at least 1 (got %d, %d)", c.AccessReview.DormantDays, c.AccessReview.IntervalDays)
 	}
+	if c.DormantAccounts.Enabled && (c.DormantAccounts.Days < 1 || c.DormantAccounts.SweepHours < 1) {
+		return fmt.Errorf("DORMANT_ACCOUNTS_DAYS and DORMANT_ACCOUNTS_SWEEP_HOURS must be at least 1 (got %d, %d)", c.DormantAccounts.Days, c.DormantAccounts.SweepHours)
+	}
 	if c.RetentionReviewDays < 0 {
 		return fmt.Errorf("RETENTION_REVIEW_DAYS must be 0 or positive (got %d)", c.RetentionReviewDays)
 	}

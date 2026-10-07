@@ -304,6 +304,10 @@ func (h *AuthHandler) ExchangeAPIKey(w http.ResponseWriter, r *http.Request) {
 		refuse("owner pending approval")
 		return
 	}
+	if user.DormantLockedAt != nil {
+		refuse("owner dormant")
+		return
+	}
 
 	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
 	if err != nil {
