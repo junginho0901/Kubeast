@@ -33,7 +33,16 @@ class ToolServerClient:
             "arguments": arguments or {},
         }
         response = await self.client.post("/tools/call", json=payload, headers=headers or None)
-        response.raise_for_status()
+        if response.is_error:
+            # tool-server answers {"error": "..."} with the reason (a refused
+            # write, a cluster 403); keep it instead of httpx's status line.
+            try:
+                reason = response.json().get("error")
+            except Exception:
+                reason = None
+            if reason:
+                raise Exception(str(reason))
+            response.raise_for_status()
         data = response.json()
         self.last_redacted = None
         if isinstance(data, dict) and data.get("error"):

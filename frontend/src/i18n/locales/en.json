@@ -1575,7 +1575,13 @@
     "yamlError": "Failed to load YAML.",
     "yamlUnsaved": "You have unsaved YAML changes. Discard them?",
     "selectNamespace": "Select a namespace",
-    "refreshForce": "Refresh (force refresh)"
+    "refreshForce": "Refresh (force refresh)",
+    "gitops": {
+      "managedBy": "Argo CD · {{app}}",
+      "blocked": "Managed by Argo CD — change it in Git. Writes from the console are refused.",
+      "warn": "Managed by Argo CD — a change made here is reverted on the next sync. Change it in Git.",
+      "confirm": "Argo CD application \"{{app}}\" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?"
+    }
   },
   "dashboard": {
     "optimization": {

@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	pkgconfig "github.com/junginho0901/kubeast/services/pkg/config"
+	"github.com/junginho0901/kubeast/services/pkg/gitops"
 	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 )
 
@@ -18,7 +19,10 @@ type Config struct {
 	// Multi-cluster
 	DeploymentMode string // "k8s" | "docker" — selects the kubeconfig Secret store
 	PodNamespace   string // namespace holding per-cluster kubeconfig Secrets (k8s mode)
-	KubeconfigDir  string // directory holding per-cluster kubeconfig files (docker mode)
+
+	// Argo CD guard (chart gitops.argocd)
+	Gitops        gitops.Config
+	KubeconfigDir string // directory holding per-cluster kubeconfig files (docker mode)
 
 	// Multi-cluster load / failure isolation (step 15). All have safe defaults
 	// and can be tuned/disabled via env (helm values). 0 disables where noted.
@@ -92,6 +96,7 @@ func Load() Config {
 
 		DeploymentMode: pkgconfig.GetEnv("DEPLOYMENT_MODE", "k8s"),
 		PodNamespace:   pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
+		Gitops:         gitops.LoadFromEnv(),
 		KubeconfigDir:  pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),
 
 		MaxClusters:             pkgconfig.GetEnvInt("MC_MAX_CLUSTERS", 20),

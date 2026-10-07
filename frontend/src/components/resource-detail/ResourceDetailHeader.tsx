@@ -8,10 +8,13 @@
 import { ArrowLeft, X, Info, FileCode, Trash2 } from 'lucide-react'
 import { TabId, kindIcon } from './utils'
 import { HelmReleaseBadge } from './HelmReleaseBadge'
+import { ArgoBadge } from './ArgoBadge'
+import type { ArgoManaged } from './gitops'
 
 interface Props {
   kind: string
   displayKind: string
+  argo?: { managed: ArgoManaged | null; url: string | null; blocked: boolean }
   ns: string | null | undefined
   name: string
   effectiveRawJson: any
@@ -28,6 +31,7 @@ interface Props {
 export function ResourceDetailHeader({
   kind,
   displayKind,
+  argo,
   ns,
   name,
   effectiveRawJson,
@@ -52,6 +56,7 @@ export function ResourceDetailHeader({
           </div>
           <h2 className="text-lg font-semibold text-white truncate">{name}</h2>
           <HelmReleaseBadge rawJson={effectiveRawJson} />
+          {argo && <ArgoBadge argo={argo.managed} url={argo.url} blocked={argo.blocked} />}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {canGoBack && (

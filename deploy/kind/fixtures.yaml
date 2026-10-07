@@ -1,6 +1,7 @@
 # Objects the e2e suite opens in the drawer on the dev cluster (`self`): a CronJob
 # with every policy field set, an Ingress with TLS, a StatefulSet with a volume
-# claim template, an HPA and a RuntimeClass. Applied by scripts/kind-deploy.sh.
+# claim template, an HPA, a RuntimeClass and a Deployment that carries Argo CD's
+# tracking annotation. Applied by scripts/kind-deploy.sh.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -102,3 +103,25 @@ kind: RuntimeClass
 metadata:
   name: e2e-fixture
 handler: runc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2e-argo-managed
+  namespace: default
+  annotations:
+    argocd.argoproj.io/tracking-id: e2e-app:apps/Deployment:default/e2e-argo-managed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e2e-argo-managed
+  template:
+    metadata:
+      labels:
+        app: e2e-argo-managed
+    spec:
+      containers:
+        - name: sleep
+          image: python:3.12-alpine
+          command: [sleep, infinity]

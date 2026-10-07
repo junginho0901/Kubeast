@@ -1591,6 +1591,12 @@
       "next": "다음",
       "prev": "이전",
       "range": "{{from}}-{{to}} / {{total}}"
+    },
+    "gitops": {
+      "managedBy": "Argo CD · {{app}}",
+      "blocked": "Argo CD가 관리합니다 — Git에서 바꾸세요. 콘솔에서의 쓰기는 거부됩니다.",
+      "warn": "Argo CD가 관리합니다 — 여기서 바꾼 내용은 다음 동기화 때 되돌아갑니다. Git에서 바꾸세요.",
+      "confirm": "Argo CD 애플리케이션 \"{{app}}\"이(가) 관리하는 객체입니다. 여기서 바꾸면 다음 동기화 때 되돌아갑니다. Git에서 바꾸는 것이 맞습니다. 그래도 진행할까요?"
     }
   },
   "dashboard": {

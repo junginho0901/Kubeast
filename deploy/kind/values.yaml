@@ -82,3 +82,7 @@ sessionRecording:
 features:
   prometheus:
     enabled: true
+gitops:
+  argocd:
+    enabled: true
+    mode: block

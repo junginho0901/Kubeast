@@ -170,3 +170,39 @@ tests:
         documentSelector:
           path: metadata.name
           value: kubeast-config
+
+  - it: leaves the Argo CD guard off, mode warn
+    asserts:
+      - equal:
+          path: data.GITOPS_ARGOCD_ENABLED
+          value: "false"
+      - equal:
+          path: data.GITOPS_ARGOCD_MODE
+          value: warn
+      - equal:
+          path: data.GITOPS_ARGOCD_TRACKING_ANNOTATION
+          value: argocd.argoproj.io/tracking-id
+      - equal:
+          path: data.GITOPS_ARGOCD_INSTANCE_LABEL
+          value: ""
+
+  - it: turns the Argo CD guard on in block mode with label tracking and a UI link
+    set:
+      gitops.argocd.enabled: true
+      gitops.argocd.mode: block
+      gitops.argocd.instanceLabel: argocd.argoproj.io/instance
+      gitops.argocd.url: https://argocd.example.com
+    asserts:
+      - equal:
+          path: data.GITOPS_ARGOCD_ENABLED
+          value: "true"
+      - equal:
+          path: data.GITOPS_ARGOCD_MODE
+          value: block
+      - equal:
+          path: data.GITOPS_ARGOCD_INSTANCE_LABEL
+          value: argocd.argoproj.io/instance
+      - equal:
+          path: data.GITOPS_ARGOCD_URL
+          value: https://argocd.example.com
+
