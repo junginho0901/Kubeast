@@ -26,6 +26,7 @@ const (
 	FlagNeverLoggedIn = "never_logged_in"
 	FlagDormant       = "dormant"
 	FlagLocked        = "locked"
+	FlagDormantLocked = "dormant_locked"
 	FlagTemporary     = "temporary"
 	FlagAdminRole     = "admin_role"
 	FlagExpired       = "expired"
@@ -57,6 +58,7 @@ type UserRow struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	LastLoginAt     *time.Time `json:"last_login_at"`
 	LockedUntil     *time.Time `json:"locked_until,omitempty"`
+	DormantLockedAt *time.Time `json:"dormant_locked_at,omitempty"`
 	ClusterRoles    int        `json:"cluster_roles"`
 	APIKeys         int        `json:"api_keys"`
 	TemporaryGrants int        `json:"temporary_grants"`
@@ -119,6 +121,7 @@ type Summary struct {
 	Dormant         int `json:"dormant"`
 	NeverLoggedIn   int `json:"never_logged_in"`
 	Locked          int `json:"locked"`
+	DormantLocked   int `json:"dormant_locked"`
 	ClusterGrants   int `json:"cluster_grants"`
 	TemporaryGrants int `json:"temporary_grants"`
 	APIKeysActive   int `json:"api_keys_active"`
@@ -223,6 +226,11 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 			row.Flags = append(row.Flags, FlagLocked)
 			rep.Summary.Locked++
 		}
+		if u.DormantLockedAt != nil {
+			row.DormantLockedAt = utcPtr(u.DormantLockedAt)
+			row.Flags = append(row.Flags, FlagDormantLocked)
+			rep.Summary.DormantLocked++
+		}
 		rep.Users = append(rep.Users, row)
 	}
 	rep.Summary.Users = len(rep.Users)
@@ -312,7 +320,7 @@ func hasAdminPermissions(perms []string) bool {
 func (r *Report) Counts() map[string]int {
 	return map[string]int{
 		"users": r.Summary.Users, "global_admins": r.Summary.GlobalAdmins, "dormant": r.Summary.Dormant, "never_logged_in": r.Summary.NeverLoggedIn,
-		"locked": r.Summary.Locked, "cluster_grants": r.Summary.ClusterGrants, "temporary_grants": r.Summary.TemporaryGrants,
+		"locked": r.Summary.Locked, "dormant_locked": r.Summary.DormantLocked, "cluster_grants": r.Summary.ClusterGrants, "temporary_grants": r.Summary.TemporaryGrants,
 		"api_keys_active": r.Summary.APIKeysActive, "api_keys_expiring": r.Summary.APIKeysExpiring, "api_keys_unused": r.Summary.APIKeysUnused,
 		"access_requests": r.Summary.AccessRequests, "roles": len(r.Roles),
 	}

@@ -110,7 +110,7 @@ func TestAccessReviewCSV(t *testing.T) {
 		}
 	}
 	header, rows := accessReviewCSV(rep, "users")
-	if header[0] != "email" || rows[0][6] != "2026-10-07T11:00:00Z" || rows[0][11] != "global_admin" {
+	if header[0] != "email" || header[8] != "dormant_locked_at" || rows[0][6] != "2026-10-07T11:00:00Z" || rows[0][12] != "global_admin" {
 		t.Errorf("users row = %v", rows[0])
 	}
 	_, rows = accessReviewCSV(rep, "access_requests")

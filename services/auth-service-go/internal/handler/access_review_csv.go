@@ -29,10 +29,10 @@ func accessReviewCSV(rep *accessreview.Report, section string) ([]string, [][]st
 	switch section {
 	case "users":
 		for _, u := range rep.Users {
-			rows = append(rows, csvCells(u.Email, u.Name, u.Team, u.AuthSource, u.GlobalRole, csvTime(&u.CreatedAt), csvTime(u.LastLoginAt), csvTime(u.LockedUntil),
+			rows = append(rows, csvCells(u.Email, u.Name, u.Team, u.AuthSource, u.GlobalRole, csvTime(&u.CreatedAt), csvTime(u.LastLoginAt), csvTime(u.LockedUntil), csvTime(u.DormantLockedAt),
 				strconv.Itoa(u.ClusterRoles), strconv.Itoa(u.APIKeys), strconv.Itoa(u.TemporaryGrants), strings.Join(u.Flags, ";")))
 		}
-		return []string{"email", "name", "team", "auth_source", "global_role", "created_at", "last_login_at", "locked_until", "cluster_roles", "api_keys", "temporary_grants", "flags"}, rows
+		return []string{"email", "name", "team", "auth_source", "global_role", "created_at", "last_login_at", "locked_until", "dormant_locked_at", "cluster_roles", "api_keys", "temporary_grants", "flags"}, rows
 	case "cluster_roles":
 		for _, g := range rep.ClusterRoles {
 			rows = append(rows, csvCells(g.UserEmail, g.Cluster, g.Role, g.GrantedVia, csvTime(g.ExpiresAt), g.RestoreRole, strings.Join(g.Flags, ";")))

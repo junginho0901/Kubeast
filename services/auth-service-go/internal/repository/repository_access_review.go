@@ -25,7 +25,7 @@ func (r *Repository) TouchLastLogin(ctx context.Context, userID string, now time
 func (r *Repository) ListUsersForReview(ctx context.Context) ([]model.User, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.auth_source, u.created_at, u.updated_at,
-		        u.locked_until, u.last_login_at
+		        u.locked_until, u.last_login_at, u.dormant_locked_at
 		   FROM auth_users u JOIN roles r ON r.id = u.role_id
 		  ORDER BY u.email`)
 	if err != nil {
@@ -36,7 +36,7 @@ func (r *Repository) ListUsersForReview(ctx context.Context) ([]model.User, erro
 	for rows.Next() {
 		var u model.User
 		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
-			&u.LockedUntil, &u.LastLoginAt); err != nil {
+			&u.LockedUntil, &u.LastLoginAt, &u.DormantLockedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, u)

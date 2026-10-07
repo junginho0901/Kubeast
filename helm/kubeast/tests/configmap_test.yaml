@@ -250,6 +250,41 @@ tests:
           path: data.RETENTION_REVIEW_DAYS
           value: "0"
 
+  - it: leaves dormant-account locking off with 90 days, admins exempt, a daily sweep
+    asserts:
+      - equal:
+          path: data.DORMANT_ACCOUNTS_ENABLED
+          value: "false"
+      - equal:
+          path: data.DORMANT_ACCOUNTS_DAYS
+          value: "90"
+      - equal:
+          path: data.DORMANT_ACCOUNTS_EXEMPT_ADMINS
+          value: "true"
+      - equal:
+          path: data.DORMANT_ACCOUNTS_SWEEP_HOURS
+          value: "24"
+
+  - it: turns dormant-account locking on with its own days, no admin exemption and an hourly sweep
+    set:
+      auth.dormantAccounts.enabled: true
+      auth.dormantAccounts.days: 45
+      auth.dormantAccounts.exemptAdmins: false
+      auth.dormantAccounts.sweepHours: 1
+    asserts:
+      - equal:
+          path: data.DORMANT_ACCOUNTS_ENABLED
+          value: "true"
+      - equal:
+          path: data.DORMANT_ACCOUNTS_DAYS
+          value: "45"
+      - equal:
+          path: data.DORMANT_ACCOUNTS_EXEMPT_ADMINS
+          value: "false"
+      - equal:
+          path: data.DORMANT_ACCOUNTS_SWEEP_HOURS
+          value: "1"
+
   - it: takes the quick-action windows from features.issues / features.optimization
     set:
       features.issues.eventWindowMinutes: 360

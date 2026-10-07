@@ -27,10 +27,10 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.U
 	var u model.User
 	err := r.pool.QueryRow(ctx,
 		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at,
-		        u.failed_logins, u.last_failed_login, u.locked_until, u.last_login_at
+		        u.failed_logins, u.last_failed_login, u.locked_until, u.last_login_at, u.dormant_locked_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.email = $1`, email,
 	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
-		&u.FailedLogins, &u.LastFailedLogin, &u.LockedUntil, &u.LastLoginAt)
+		&u.FailedLogins, &u.LastFailedLogin, &u.LockedUntil, &u.LastLoginAt, &u.DormantLockedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -40,9 +40,11 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.U
 func (r *Repository) GetUserByID(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at, u.last_login_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at,
+		        u.last_login_at, u.locked_until, u.dormant_locked_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1`, id,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt)
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
+		&u.LastLoginAt, &u.LockedUntil, &u.DormantLockedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -86,7 +88,8 @@ func (r *Repository) ResetLoginFailures(ctx context.Context, id string) error {
 
 func (r *Repository) ListUsers(ctx context.Context, limit, offset int) ([]model.User, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.auth_source, u.created_at, u.updated_at, u.last_login_at
+		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.auth_source, u.created_at, u.updated_at,
+		        u.last_login_at, u.locked_until, u.dormant_locked_at
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id
 		 ORDER BY u.created_at DESC, u.id DESC LIMIT $1 OFFSET $2`, limit, offset,
 	)
@@ -98,7 +101,8 @@ func (r *Repository) ListUsers(ctx context.Context, limit, offset int) ([]model.
 	var users []model.User
 	for rows.Next() {
 		var u model.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
+			&u.LastLoginAt, &u.LockedUntil, &u.DormantLockedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

@@ -26,6 +26,10 @@ data:
   ACCESS_REVIEW_ENABLED: {{ .Values.auth.accessReview.enabled | quote }}
   ACCESS_REVIEW_DORMANT_DAYS: {{ .Values.auth.accessReview.dormantDays | quote }}
   ACCESS_REVIEW_INTERVAL_DAYS: {{ .Values.auth.accessReview.intervalDays | quote }}
+  DORMANT_ACCOUNTS_ENABLED: {{ .Values.auth.dormantAccounts.enabled | quote }}
+  DORMANT_ACCOUNTS_DAYS: {{ .Values.auth.dormantAccounts.days | quote }}
+  DORMANT_ACCOUNTS_EXEMPT_ADMINS: {{ .Values.auth.dormantAccounts.exemptAdmins | quote }}
+  DORMANT_ACCOUNTS_SWEEP_HOURS: {{ .Values.auth.dormantAccounts.sweepHours | quote }}
   ALLOW_REGISTRATION: {{ .Values.auth.allowRegistration | quote }}
   BOOTSTRAP_DEMO_USERS: {{ .Values.auth.bootstrapDemoUsers | quote }}
   PASSWORD_MIN_LENGTH: {{ .Values.auth.passwordMinLength | quote }}

@@ -143,6 +143,18 @@ auth:
     enabled: true
     dormantDays: 90
     intervalDays: 90
+  # Dormant accounts: a sweeper locks every account with no sign-in and no API
+  # key use for `days` (creation counts as the first activity) and revokes its
+  # sessions; password login, SSO and API key exchange then refuse it until an
+  # admin unlocks it (Admin → Users). exemptAdmins leaves accounts whose role
+  # carries "*" or admin.* alone so the last administrator cannot be locked
+  # out. Off by default; an account locked earlier stays locked when the
+  # feature is turned off. Admin → Users also has "sweep now".
+  dormantAccounts:
+    enabled: false
+    days: 90
+    exemptAdmins: true
+    sweepHours: 24
 
 # --- Console metrics (the console's own health, not the target clusters') ---
 # Every backend service (auth, ai, k8s, session, tool-server) serves Prometheus

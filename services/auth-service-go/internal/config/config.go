@@ -79,6 +79,8 @@ type Config struct {
 	// AccessReview: the periodic "who has what" report and its sign-off
 	// (Admin → Access review).
 	AccessReview AccessReviewConfig
+	// DormantAccounts: lock accounts with no sign-in or API key use for Days.
+	DormantAccounts DormantAccountsConfig
 
 	// APIKeys: long-lived credentials a user issues for automation, exchanged
 	// for short access tokens (handler/api_keys.go).
@@ -164,6 +166,17 @@ type AccessReviewConfig struct {
 	IntervalDays int
 }
 
+// DormantAccountsConfig: the sweeper locks an account whose last activity
+// (sign-in, API key use, or creation) is older than Days, every SweepHours;
+// ExemptAdmins leaves accounts with "*" / admin.* permissions alone. An
+// account already locked stays locked when the feature is turned off.
+type DormantAccountsConfig struct {
+	Enabled      bool
+	Days         int
+	ExemptAdmins bool
+	SweepHours   int
+}
+
 // APIKeysConfig: whether keys may be issued and exchanged, and the longest
 // expiry a key may be given (days).
 type APIKeysConfig struct {
@@ -220,6 +233,12 @@ func Load() Config {
 			Enabled:      pkgconfig.GetEnvBool("ACCESS_REVIEW_ENABLED", true),
 			DormantDays:  pkgconfig.GetEnvInt("ACCESS_REVIEW_DORMANT_DAYS", 90),
 			IntervalDays: pkgconfig.GetEnvInt("ACCESS_REVIEW_INTERVAL_DAYS", 90),
+		},
+		DormantAccounts: DormantAccountsConfig{
+			Enabled:      pkgconfig.GetEnvBool("DORMANT_ACCOUNTS_ENABLED", false),
+			Days:         pkgconfig.GetEnvInt("DORMANT_ACCOUNTS_DAYS", 90),
+			ExemptAdmins: pkgconfig.GetEnvBool("DORMANT_ACCOUNTS_EXEMPT_ADMINS", true),
+			SweepHours:   pkgconfig.GetEnvInt("DORMANT_ACCOUNTS_SWEEP_HOURS", 24),
 		},
 		AuditSinksFile:      pkgconfig.GetEnv("AUDIT_SINKS_FILE", ""),
 		AuditSinkSecretsDir: pkgconfig.GetEnv("AUDIT_SINK_SECRETS_DIR", "/etc/kubeast/audit-sinks/secrets"),

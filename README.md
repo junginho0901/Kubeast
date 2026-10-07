@@ -536,6 +536,14 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 - 권한 `admin.review.read` · `admin.review.export` · `admin.review.signoff`(시스템 Admin 역할에 포함), 감사 액션도 같은 이름. 쓰기는 서명뿐이고 권한 변경은 기존 화면에서 합니다.
 - 끄려면 `auth.accessReview.enabled: false`(메뉴·API가 사라짐). 비용: 페이지를 열 때 조회 7번, 서명 1건당 스냅샷 수십 KB.
 
+### 휴면 계정 자동 잠금 (Dormant accounts)
+
+위 보고서가 휴면 계정을 **보여 주는** 것이라면, 이 기능은 사람이 안 봐도 **닫습니다**(ISMS-P 2.5.6 결함 사례 "6개월 이상 미접속 계정 활성", NIST 800-53 AC-2(3)). `auth.dormantAccounts.enabled: true`면 auth-service 안의 스위퍼가 `sweepHours`(24)마다 돌면서 `days`(90) 동안 **로그인도 API 키 교환도 없는 계정**(한 번도 안 쓴 계정은 생성일 기준)을 잠그고 그 계정의 세션을 회수합니다. 잠긴 계정은 비밀번호 로그인·SSO·API 키 교환이 모두 거부되고(응답은 일반 401, 사유는 감사 로그 `reason: dormant`), 관리자가 사용자 관리에서 **잠금 해제**를 눌러야 다시 들어옵니다.
+
+- `exemptAdmins: true`(기본)면 역할에 `*`나 `admin.*` 권한이 있는 계정은 잠그지 않습니다 — 마지막 관리자까지 잠기면 아무도 못 풀기 때문. 대신 접근 권한 검토 보고서에 `dormant`로 계속 보입니다.
+- 사용자 관리 화면: 잠긴 계정에 "휴면 잠김"/"잠김" 배지와 **잠금 해제** 버튼, 상단에 **휴면 계정 지금 점검**(스위퍼를 즉시 1회 실행, `admin.users.update`). 감사 액션: `user.account.dormant_lock`(actor `system`) · `admin.dormant.sweep` · `admin.users.unlock`.
+- 끄면 스위퍼가 멈추고 새로 잠그지 않지만, 이미 잠긴 계정은 풀 때까지 그대로입니다. 접근 권한 검토의 `dormantDays`(표시 기준)와는 별개 값이라 "60일부터 표시, 90일에 잠금"처럼 벌릴 수 있습니다.
+
 ### Argo CD 가드 (GitOps)
 
 Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tracking-id`, 값 `<앱>:<group>/<Kind>:<ns>/<이름>`)이 붙습니다. `gitops.argocd.enabled: true`면 콘솔이 그 표식을 읽어 드로어 머리에 "Argo CD · <앱>" 배지를 달고(`url`을 적으면 Argo CD 앱 페이지로 링크), 콘솔에서 그 객체를 바꾸려 할 때:

@@ -23,6 +23,7 @@ export interface AccessReviewUserRow {
   created_at: string
   last_login_at: string | null
   locked_until?: string
+  dormant_locked_at?: string
   cluster_roles: number
   api_keys: number
   temporary_grants: number
@@ -84,6 +85,7 @@ export interface AccessReviewSummary {
   dormant: number
   never_logged_in: number
   locked: number
+  dormant_locked: number
   cluster_grants: number
   temporary_grants: number
   api_keys_active: number

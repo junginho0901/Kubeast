@@ -10,6 +10,7 @@ import type {
   AIUsageResponse,
   AuditLogFilter,
   AuditLogListResponse,
+  DormantAccountsConfig,
   Member,
   Organization,
   RoleWithDetails,
@@ -77,6 +78,23 @@ export const adminApi = {
 
   adminDeleteUser: async (userId: string): Promise<void> => {
     await client.delete(`/auth/admin/users/${userId}`)
+  },
+
+  // Dormant accounts: clears the dormant lock and the password lock.
+  adminUnlockUser: async (userId: string): Promise<Member> => {
+    const { data } = await client.post(`/auth/admin/users/${userId}/unlock`)
+    return data
+  },
+
+  // One sweep now (the sweeper also runs on its own schedule).
+  adminDormantSweep: async (): Promise<{ cutoff: string; locked: number; users: string[] }> => {
+    const { data } = await client.post('/auth/admin/dormant-accounts/sweep')
+    return data
+  },
+
+  getDormantAccountsConfig: async (): Promise<DormantAccountsConfig> => {
+    const { data } = await client.get('/auth/dormant-accounts/config')
+    return { enabled: !!data?.enabled, days: Number(data?.days) || 0, exempt_admins: !!data?.exempt_admins }
   },
 
   // Per-cluster role grants (step 08/12). GET returns { clusterID: roleName }.

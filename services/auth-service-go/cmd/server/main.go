@@ -21,6 +21,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/accessrequests"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditsink"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dormant"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
@@ -164,6 +165,13 @@ func main() {
 	if cfg.AccessReview.Enabled {
 		slog.Info("access review enabled", "dormant_days", cfg.AccessReview.DormantDays, "interval_days", cfg.AccessReview.IntervalDays)
 	}
+	// Dormant accounts: lock accounts with no activity for Days, every
+	// SweepHours. The handler's "sweep now" uses the same sweeper.
+	dormantSweeper := dormant.Sweeper{Store: repo, Audit: auditStore, Days: cfg.DormantAccounts.Days, ExemptAdmins: cfg.DormantAccounts.ExemptAdmins}
+	if cfg.DormantAccounts.Enabled {
+		slog.Info("dormant accounts enabled", "days", cfg.DormantAccounts.Days, "sweep_hours", cfg.DormantAccounts.SweepHours, "exempt_admins", cfg.DormantAccounts.ExemptAdmins)
+		go dormant.Run(ctx, dormantSweeper, time.Duration(cfg.DormantAccounts.SweepHours)*time.Hour)
+	}
 
 	// Seed system roles and migrate auth_users.role → role_id
 	if err := repo.SeedSystemRoles(ctx); err != nil {
@@ -206,6 +214,7 @@ func main() {
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
+	authHandler.SetDormantSweeper(&dormantSweeper)
 	roleHandler := handler.NewRoleHandler(repo, auditStore)
 	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
@@ -344,6 +353,12 @@ func main() {
 			r.Post("/admin/access-review/signoff", authHandler.AdminAccessReviewSignoff)
 			r.Get("/admin/access-review/history", authHandler.AdminAccessReviewHistory)
 			r.Get("/admin/access-review/history/{id}", authHandler.AdminAccessReviewSnapshot)
+
+			// Dormant accounts: the config the console reads, "sweep now" and
+			// unlock (admin.users.update).
+			r.Get("/dormant-accounts/config", authHandler.DormantAccountsConfig)
+			r.Post("/admin/dormant-accounts/sweep", authHandler.AdminDormantSweep)
+			r.Post("/admin/users/{user_id}/unlock", authHandler.AdminUnlockUser)
 		})
 	})
 

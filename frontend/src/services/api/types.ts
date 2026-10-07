@@ -1303,6 +1303,19 @@ export interface Member {
   // How the account was created: 'password' (form/admin) or 'oidc' (single
   // sign-on, no password).
   auth_source?: 'password' | 'oidc'
+  // Account state on the admin list: last successful sign-in, the temporary
+  // password lock and the dormant lock (absent when not locked).
+  last_login_at?: string | null
+  locked_until?: string
+  dormant_locked_at?: string
+}
+
+// GET /auth/dormant-accounts/config — whether the dormant-account sweeper is
+// on (Admin → Users shows "sweep now" and the lock badges either way).
+export interface DormantAccountsConfig {
+  enabled: boolean
+  days: number
+  exempt_admins: boolean
 }
 
 // GET /auth/oidc/config — what the login page renders: the SSO button (when a

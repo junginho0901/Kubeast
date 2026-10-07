@@ -26,6 +26,7 @@ const FLAG_TONE: Record<string, string> = {
   dormant: 'bg-red-500/20 text-red-300',
   expired: 'bg-red-500/20 text-red-300',
   locked: 'bg-yellow-500/20 text-yellow-300',
+  dormant_locked: 'bg-red-500/20 text-red-300',
   never_logged_in: 'bg-yellow-500/20 text-yellow-300',
   expiring_30d: 'bg-yellow-500/20 text-yellow-300',
   unused_30d: 'bg-yellow-500/20 text-yellow-300',
