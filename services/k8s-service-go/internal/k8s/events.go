@@ -31,15 +31,27 @@ func (s *Service) GetEvents(ctx context.Context, namespace string, resourceName 
 
 	result := make([]map[string]interface{}, 0, len(eventList.Items))
 	for _, e := range eventList.Items {
+		// events.k8s.io/v1 writers (the scheduler among them) fill eventTime and
+		// series instead of lastTimestamp and count.
+		last := metav1.NewTime(eventTimestamp(e))
+		count := e.Count
+		if e.Series != nil {
+			if !e.Series.LastObservedTime.IsZero() {
+				last = metav1.NewTime(e.Series.LastObservedTime.Time)
+			}
+			if count == 0 {
+				count = e.Series.Count
+			}
+		}
 		result = append(result, map[string]interface{}{
 			"name":                e.Name,
 			"namespace":           e.Namespace,
 			"type":                e.Type,
 			"reason":              e.Reason,
 			"message":             e.Message,
-			"count":               e.Count,
+			"count":               count,
 			"first_timestamp":     toISO(&e.FirstTimestamp),
-			"last_timestamp":      toISO(&e.LastTimestamp),
+			"last_timestamp":      toISO(&last),
 			"reporting_component": e.ReportingController,
 			"involved_object": map[string]interface{}{
 				"kind":      e.InvolvedObject.Kind,

@@ -235,3 +235,12 @@ class K8sServiceClient:
         response = await self.client.get("/metrics/nodes")
         response.raise_for_status()
         return response.json()
+
+    async def get_optimization(self, namespace: str, window_hours: Optional[int] = None) -> Dict:
+        """네임스페이스 워크로드의 requests/limits 대비 사용량 표 (k8s-service가 계산)"""
+        params: Dict[str, object] = {"namespace": namespace}
+        if window_hours:
+            params["window"] = window_hours
+        response = await self.client.get("/optimization", params=params)
+        response.raise_for_status()
+        return response.json()

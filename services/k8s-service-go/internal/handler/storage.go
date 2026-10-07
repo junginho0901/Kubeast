@@ -9,10 +9,17 @@ import (
 
 // --- PVCs ---
 
-// GetAllPVCs handles GET /api/v1/pvcs.
+// GetAllPVCs handles GET /api/v1/pvcs. ?usage=true adds the kubelet usage
+// of each claim from Prometheus.
 func (h *Handler) GetAllPVCs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data, err := h.svc.GetAllPVCs(ctx)
+	var data []map[string]interface{}
+	var err error
+	if queryParamBool(r, "usage", false) {
+		data, err = h.svc.GetAllPVCsWithUsage(ctx)
+	} else {
+		data, err = h.svc.GetAllPVCs(ctx)
+	}
 	if err != nil {
 		h.handleError(w, err)
 		return
@@ -20,11 +27,17 @@ func (h *Handler) GetAllPVCs(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
-// GetPVCs handles GET /api/v1/namespaces/{namespace}/pvcs.
+// GetPVCs handles GET /api/v1/namespaces/{namespace}/pvcs (?usage=true as above).
 func (h *Handler) GetPVCs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
-	data, err := h.svc.GetPVCs(ctx, namespace)
+	var data []map[string]interface{}
+	var err error
+	if queryParamBool(r, "usage", false) {
+		data, err = h.svc.GetPVCsWithUsage(ctx, namespace)
+	} else {
+		data, err = h.svc.GetPVCs(ctx, namespace)
+	}
 	if err != nil {
 		h.handleError(w, err)
 		return

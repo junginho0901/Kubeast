@@ -7,12 +7,14 @@ import axios from 'axios'
 
 import { client } from './client'
 import type {
+  ClusterIssuesResponse,
   ClusterOverview,
   NamespaceDescribe,
   NamespaceInfo,
   NamespaceLimitRange,
   NamespacePod,
   NamespaceResourceQuota,
+  OptimizationResponse,
   PodInfo,
 } from './types'
 
@@ -21,6 +23,22 @@ export const clusterApi = {
     const { data } = await client.get('/cluster/overview', {
       params: { force_refresh: forceRefresh },
     })
+    return data
+  },
+
+  // Dashboard "Check issues". Omitted window = the server default
+  // (features.issues.eventWindowMinutes).
+  getClusterIssues: async (opts: { windowMinutes?: number; includeRestartHistory?: boolean } = {}): Promise<ClusterIssuesResponse> => {
+    const { data } = await client.get('/cluster/issues', {
+      params: { window: opts.windowMinutes, include_restart_history: opts.includeRestartHistory || undefined },
+    })
+    return data
+  },
+
+  // Dashboard "Optimization" table. Omitted window = the server default
+  // (features.optimization.windowHours).
+  getClusterOptimization: async (namespace: string, windowHours?: number): Promise<OptimizationResponse> => {
+    const { data } = await client.get('/cluster/optimization', { params: { namespace, window: windowHours } })
     return data
   },
 

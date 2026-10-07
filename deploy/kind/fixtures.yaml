@@ -125,3 +125,44 @@ spec:
         - name: sleep
           image: python:3.12-alpine
           command: [sleep, infinity]
+---
+# Deliberately broken, for the dashboard "Check issues" specs: a Deployment
+# no node can take (Pending pod, FailedScheduling events, then
+# ProgressDeadlineExceeded) and a Job that fails once and stops.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2e-unschedulable
+  namespace: default
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 60
+  selector:
+    matchLabels:
+      app: e2e-unschedulable
+  template:
+    metadata:
+      labels:
+        app: e2e-unschedulable
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: does-not-exist
+      containers:
+        - name: sleep
+          image: python:3.12-alpine
+          command: [sleep, infinity]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: e2e-failing-job
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fail
+          image: python:3.12-alpine
+          command: [sh, -c, "exit 1"]

@@ -29,8 +29,11 @@ interface Args {
   selectedResourceType: ResourceType | null
   selectedPodStatus: string | null
   isIssuesModalOpen: boolean
+  issuesWindowMinutes: number | null // null = server default
+  includeRestartHistory: boolean
   isStorageModalOpen: boolean
   isOptimizationModalOpen: boolean
+  optimizationNamespace: string
   storageActiveTab: 'pvcs' | 'pvs' | 'topology'
 }
 
@@ -38,8 +41,11 @@ export function useDashboardQueries({
   selectedResourceType,
   selectedPodStatus,
   isIssuesModalOpen,
+  issuesWindowMinutes,
+  includeRestartHistory,
   isStorageModalOpen,
   isOptimizationModalOpen,
+  optimizationNamespace,
   storageActiveTab,
 }: Args) {
   const queryClient = useQueryClient()
@@ -71,7 +77,25 @@ export function useDashboardQueries({
   const { data: allPods, isLoading: isLoadingPods } = useQuery({
     queryKey: ['all-pods', ck],
     queryFn: () => api.getAllPods(false), // 자동 갱신은 캐시 사용
-    enabled: selectedResourceType === 'pods' || selectedPodStatus !== null || isIssuesModalOpen,
+    enabled: selectedResourceType === 'pods' || selectedPodStatus !== null,
+  })
+
+  // Issues 모달 — k8s-service 가 파드·워크로드·노드·PVC·Warning 이벤트를 집계.
+  const { data: clusterIssues, isLoading: isLoadingIssues, error: issuesError } = useQuery({
+    queryKey: ['cluster-issues', ck, issuesWindowMinutes ?? 'default', includeRestartHistory],
+    queryFn: () => api.getClusterIssues({ windowMinutes: issuesWindowMinutes ?? undefined, includeRestartHistory }),
+    enabled: isIssuesModalOpen,
+    staleTime: 10000,
+    retry: false,
+  })
+
+  // Optimization 모달의 표 — requests/limits 대비 사용량 (window 는 서버 기본값).
+  const { data: optimizationTable, isLoading: isLoadingOptimizationTable, error: optimizationTableError } = useQuery({
+    queryKey: ['cluster-optimization', ck, optimizationNamespace],
+    queryFn: () => api.getClusterOptimization(optimizationNamespace),
+    enabled: isOptimizationModalOpen && !!optimizationNamespace,
+    staleTime: 30000,
+    retry: false,
   })
 
   // 전체 Services 목록 (모든 네임스페이스)
@@ -108,14 +132,14 @@ export function useDashboardQueries({
       )
       return deployments.flat()
     },
-    enabled: (selectedResourceType === 'deployments' || isIssuesModalOpen || isStorageModalOpen) && !!allNamespaces,
+    enabled: (selectedResourceType === 'deployments' || isStorageModalOpen) && !!allNamespaces,
   })
 
-  // 전체 PVC 목록
+  // 전체 PVC 목록 — Storage 모달이 열려 있을 때는 사용률(Prometheus)까지.
   const { data: allPVCs, isLoading: isLoadingPVCs } = useQuery({
-    queryKey: ['all-pvcs', ck],
-    queryFn: () => api.getPVCs(),
-    enabled: selectedResourceType === 'pvcs' || isIssuesModalOpen || isStorageModalOpen,
+    queryKey: ['all-pvcs', ck, isStorageModalOpen ? 'usage' : 'plain'],
+    queryFn: () => api.getPVCs(undefined, false, isStorageModalOpen),
+    enabled: selectedResourceType === 'pvcs' || isStorageModalOpen,
   })
 
   // 전체 PV 목록 (스토리지 분석용)
@@ -237,6 +261,12 @@ export function useDashboardQueries({
     isLoadingNamespaces,
     allPods,
     isLoadingPods,
+    clusterIssues,
+    isLoadingIssues,
+    issuesError,
+    optimizationTable,
+    isLoadingOptimizationTable,
+    optimizationTableError,
     allNamespaces,
     isLoadingAllNamespaces,
     allServices,

@@ -31,6 +31,8 @@ export interface DashboardContextValue {
   setIssuesSearchQuery: (q: string) => void
   includeRestartHistory: boolean
   setIncludeRestartHistory: (b: boolean) => void
+  issuesWindowMinutes: number | null // null = server default (features.issues.eventWindowMinutes)
+  setIssuesWindowMinutes: (m: number | null) => void
   closeIssuesModal: () => void
 
   // Storage 모달

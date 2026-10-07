@@ -84,3 +84,28 @@ export function formatAge(ms: number): string {
   if (minutes > 0) return `${minutes}m ago`
   return `${seconds}s ago`
 }
+
+/**
+ * formatBytes — binary units the way kubectl prints them ("1.5Gi", "512Mi").
+ */
+export function formatBytes(bytes: number | undefined | null): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '-'
+  const units = ['B', 'Ki', 'Mi', 'Gi', 'Ti']
+  let v = bytes
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i += 1
+  }
+  const text = i === 0 || v >= 100 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, '')
+  return `${text}${units[i]}`
+}
+
+/**
+ * formatMillicores — "250m" below one core, "1.5" cores above.
+ */
+export function formatMillicores(m: number | undefined | null): string {
+  if (m == null || !Number.isFinite(m) || m < 0) return '-'
+  if (m < 1000) return `${m}m`
+  return `${(m / 1000).toFixed(m % 1000 === 0 ? 0 : 2).replace(/0+$/, '').replace(/\.$/, '')}`
+}

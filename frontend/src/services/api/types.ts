@@ -631,6 +631,73 @@ export interface ClusterFeatures {
   gitops?: {
     argocd: { enabled: boolean; mode: 'warn' | 'block'; url: string; trackingAnnotation: string; instanceLabel: string }
   }
+  issues?: { eventWindowMinutes: number }
+  optimization?: { windowHours: number }
+}
+
+// /api/v1/cluster/issues — the dashboard's "Check issues": pods, workloads,
+// nodes, PVCs and the Warning events of the last window, one row per object.
+export interface ClusterIssue {
+  id: string
+  kind: string
+  namespace?: string
+  name: string
+  severity: 'critical' | 'warning' | 'info'
+  reason?: string
+  message?: string
+  last_seen?: string
+  count?: number
+}
+
+export interface ClusterIssuesResponse {
+  window_minutes: number
+  generated_at: string
+  issues: ClusterIssue[]
+}
+
+// /api/v1/cluster/optimization — requests and limits of each workload
+// container against its usage over the window; recommendations are CPU p95
+// and memory peak + 15%. Usage fields are absent when source is "none".
+export interface OptimizationRow {
+  kind: string
+  namespace: string
+  name: string
+  container: string
+  pods: number
+  cpu_request_m: number
+  cpu_limit_m: number
+  cpu_usage_m?: number
+  cpu_recommend_m?: number
+  mem_request_bytes: number
+  mem_limit_bytes: number
+  mem_usage_bytes?: number
+  mem_recommend_bytes?: number
+  flags: string[]
+}
+
+export interface OptimizationResponse {
+  namespace: string
+  window_hours: number
+  source: 'prometheus' | 'metrics-server' | 'none'
+  generated_at: string
+  rows: OptimizationRow[]
+  totals: {
+    pods: number
+    cpu_request_m: number
+    cpu_recommend_m: number
+    mem_request_bytes: number
+    mem_recommend_bytes: number
+  }
+}
+
+// kubelet_volume_stats_* via Prometheus; null when the driver reports no
+// stats or Prometheus does not scrape the kubelet.
+export interface PVCUsage {
+  used_bytes: number
+  capacity_bytes: number
+  percent: number
+  fills_in_days?: number
+  source: string
 }
 
 export interface DeviceClassItem {
@@ -980,6 +1047,7 @@ export interface PVCInfo {
   requested?: string
   access_modes: string[]
   created_at: string
+  usage?: PVCUsage | null // only with getPVCs(..., usage = true)
 }
 
 export interface PVInfo {

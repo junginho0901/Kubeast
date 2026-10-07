@@ -15,7 +15,9 @@ export type ResourceType =
 
 export type IssueSeverity = 'critical' | 'warning' | 'info'
 
-export type IssueKind = 'Pod' | 'Node' | 'Deployment' | 'PVC' | 'Metrics'
+// The Kubernetes kind the API reports ("Pod", "Deployment",
+// "PersistentVolumeClaim", …) or "Collector" for a list that failed.
+export type IssueKind = string
 
 export interface IssueItem {
   id: string
@@ -25,6 +27,8 @@ export interface IssueItem {
   subtitle?: string
   namespace?: string
   name?: string
+  lastSeen?: string
+  count?: number
 }
 
 export interface OptimizationUsage {

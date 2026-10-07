@@ -490,6 +490,13 @@ networkPolicy:
 features:
   prometheus:
     enabled: false
+  # Dashboard quick actions. "Check issues" reads Warning events this many
+  # minutes back; "Optimization" sizes requests from this many hours of usage
+  # (Prometheus; without it, one metrics-server sample).
+  issues:
+    eventWindowMinutes: 60
+  optimization:
+    windowHours: 24
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with
