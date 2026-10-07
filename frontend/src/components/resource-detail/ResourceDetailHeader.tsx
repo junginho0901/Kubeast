@@ -11,6 +11,7 @@ import { HelmReleaseBadge } from './HelmReleaseBadge'
 
 interface Props {
   kind: string
+  displayKind: string
   ns: string | null | undefined
   name: string
   effectiveRawJson: any
@@ -26,6 +27,7 @@ interface Props {
 
 export function ResourceDetailHeader({
   kind,
+  displayKind,
   ns,
   name,
   effectiveRawJson,
@@ -45,7 +47,7 @@ export function ResourceDetailHeader({
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-sm">{kindIcon(kind)}</span>
-            <span className="text-xs px-2 py-0.5 rounded-sm bg-slate-700 text-slate-300 font-medium">{kind}</span>
+            <span className="text-xs px-2 py-0.5 rounded-sm bg-slate-700 text-slate-300 font-medium">{displayKind}</span>
             {ns && <span className="text-xs text-slate-500">{ns}</span>}
           </div>
           <h2 className="text-lg font-semibold text-white truncate">{name}</h2>
@@ -95,7 +97,7 @@ export function ResourceDetailHeader({
             className="flex items-center gap-1.5 px-3 py-1 rounded-md border border-red-700/60 bg-red-900/20 text-red-300 hover:bg-red-900/40"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {t('common.deleteKind', { kind, defaultValue: 'Delete {{kind}}' })}
+            {t('common.deleteKind', { kind: displayKind, defaultValue: 'Delete {{kind}}' })}
           </button>
         )}
       </div>

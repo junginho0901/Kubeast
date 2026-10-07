@@ -381,7 +381,7 @@ export default function CustomResourceInstances() {
                     kind: 'CustomResourceInstance',
                     name: inst.name,
                     namespace: inst.namespace || undefined,
-                    rawJson: { group: inst.group, version: inst.version, crd_name: inst.crd_name, scope: inst.scope },
+                    rawJson: { kind: inst.kind, group: inst.group, version: inst.version, crd_name: inst.crd_name, scope: inst.scope },
                   })}
                 >
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{inst.name}</span></td>

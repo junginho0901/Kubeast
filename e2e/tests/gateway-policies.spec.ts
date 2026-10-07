@@ -3,10 +3,12 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // Gateway → Policies lists every policy kind the cluster serves — labelled
 // CRDs (GEP-713), the Envoy Gateway / Istio built-in table, configured
 // extras — and says which kinds it scanned. The rows are custom resources,
-// so the drawer is the generic one.
+// so the drawer is the generic one, named after the row's own kind; the
+// upstream BackendTLSPolicy opens its own drawer.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
+const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -51,6 +53,48 @@ test.describe('gateway policies', () => {
       // served, label discovery (not the built-in table) must be what found it
       const btls = body.kinds.find((k: { plural: string }) => k.plural === 'backendtlspolicies')
       if (btls) expect(btls.source).toBe('label')
+    }
+  })
+
+  test('a row opens a drawer named after its kind, not CustomResourceInstance', async ({ page, request }) => {
+    test.skip(!ADMIN_PASSWORD, 'E2E_USER_PASSWORD not set')
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const cluster = 'test2'
+    const res = await request.get(`/api/v1/cluster/gateway-policies/all?cluster=${cluster}`, { headers: admin, failOnStatusCode: false })
+    test.skip(!res.ok(), `${cluster} is not registered on this dev install`)
+    const kinds: { kind: string; group: string; version: string; plural: string }[] = (await res.json()).kinds
+    const xbtp = kinds.find((k) => k.plural === 'xbackendtrafficpolicies')
+    const btls = kinds.find((k) => k.plural === 'backendtlspolicies')
+    test.skip(!xbtp || !btls, `the Gateway API experimental CRDs are not installed on ${cluster}`)
+
+    const name = `e2e-policy-kind-${Date.now()}`
+    const target = 'spec:\n  targetRefs:\n  - group: ""\n    kind: Service\n    name: kubernetes\n'
+    const create = async (yaml: string) => {
+      const r = await request.post(`/api/v1/cluster/resources/yaml/create?cluster=${cluster}`, { headers: admin, data: { namespace: 'default', yaml } })
+      expect(r.ok(), await r.text()).toBeTruthy()
+    }
+    try {
+      await create(`apiVersion: ${xbtp!.group}/${xbtp!.version}\nkind: ${xbtp!.kind}\nmetadata:\n  name: ${name}\n  namespace: default\n${target}`)
+      await create(`apiVersion: ${btls!.group}/${btls!.version}\nkind: BackendTLSPolicy\nmetadata:\n  name: ${name}\n  namespace: default\n${target}  validation:\n    hostname: kubernetes.default.svc\n    wellKnownCACertificates: System\n`)
+      await page.goto(`/gateway/policies?cluster=${cluster}`)
+      const rowOf = (kind: string) => page.getByRole('row').filter({ hasText: name }).filter({ has: page.getByRole('cell', { name: kind, exact: true }) })
+      const drawer = page.locator(DRAWER).last()
+      const deleteButton = (kind: string) => drawer.getByRole('button', { name: new RegExp(`^(Delete ${kind}|${kind} 삭제)$`) })
+
+      await rowOf(xbtp!.kind).click()
+      await expect(drawer.getByText(xbtp!.kind, { exact: true }).first()).toBeVisible({ timeout: 15000 })
+      await expect(deleteButton(xbtp!.kind)).toBeVisible()
+      await expect(drawer).not.toContainText('CustomResourceInstance')
+      await page.keyboard.press('Escape')
+      await expect(drawer).toBeHidden()
+
+      await rowOf('BackendTLSPolicy').click()
+      await expect(drawer.getByText('BackendTLSPolicy', { exact: true }).first()).toBeVisible({ timeout: 15000 })
+      await expect(deleteButton('BackendTLSPolicy')).toBeVisible()
+      await expect(drawer).toContainText('kubernetes.default.svc')
+    } finally {
+      await request.delete(`/api/v1/cluster/custom-resources/${xbtp!.group}/${xbtp!.version}/${xbtp!.plural}/default/${name}?cluster=${cluster}`, { headers: admin, failOnStatusCode: false })
+      await request.delete(`/api/v1/cluster/namespaces/default/backendtlspolicies/${name}?cluster=${cluster}`, { headers: admin, failOnStatusCode: false })
     }
   })
 })

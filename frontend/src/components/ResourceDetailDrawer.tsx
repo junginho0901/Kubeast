@@ -72,6 +72,9 @@ export default function ResourceDetailDrawer() {
   const ns = target?.namespace
   const name = target?.name ?? ''
   const kind = target?.kind ?? ''
+  // The generic custom-resource drawer shows the object's own kind when the caller passes it.
+  const crKind = kind === 'CustomResourceInstance' ? target?.rawJson?.kind : undefined
+  const displayKind = typeof crKind === 'string' && crKind ? crKind : kind
   const { has } = usePermission()
   const canDelete = has(`resource.${kind.toLowerCase()}.delete`)
 
@@ -287,6 +290,7 @@ export default function ResourceDetailDrawer() {
       >
         <ResourceDetailHeader
           kind={kind}
+          displayKind={displayKind}
           ns={ns}
           name={name}
           effectiveRawJson={effectiveRawJson}
@@ -332,7 +336,7 @@ export default function ResourceDetailDrawer() {
                 showInlineApplied={false}
                 toast={applyToast}
                 labels={{
-                  title: `${kind}: ${name}`,
+                  title: `${displayKind}: ${name}`,
                   refresh: t('common.refresh', { defaultValue: 'Refresh' }),
                   copy: t('common.copy', { defaultValue: 'Copy' }),
                   edit: t('common.edit', { defaultValue: 'Edit' }),
@@ -359,13 +363,13 @@ export default function ResourceDetailDrawer() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-white mb-2">
-              {t('common.deleteKind', { kind, defaultValue: 'Delete {{kind}}' })}
+              {t('common.deleteKind', { kind: displayKind, defaultValue: 'Delete {{kind}}' })}
             </h3>
             <p className="text-sm text-slate-300 mb-4">
               {ns
                 // `ns` is i18next's namespace option, so the value goes in as `namespace`
-                ? t('common.deleteKindConfirmNs', { kind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
-                : t('common.deleteKindConfirm', { kind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
+                ? t('common.deleteKindConfirmNs', { kind: displayKind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
+                : t('common.deleteKindConfirm', { kind: displayKind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
             </p>
             {kind === 'Node' && (
               <p className="text-xs text-red-400 mb-4 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
