@@ -79,3 +79,6 @@ sessionRecording:
               kubernetes.io/metadata.name: kubeast-devtools
       ports:
         - {protocol: TCP, port: 7070}
+features:
+  prometheus:
+    enabled: true

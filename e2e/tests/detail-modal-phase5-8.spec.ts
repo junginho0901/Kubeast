@@ -29,7 +29,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Pod 없음')
 
     await row.click()
@@ -42,7 +42,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Node 없음')
 
     await row.click()
@@ -55,7 +55,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr:has-text("cluster-admin")').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan])):has-text("cluster-admin")').first()
     test.skip((await row.count()) === 0, 'cluster-admin CRB 없음')
 
     await row.click()
@@ -72,7 +72,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await selectNamespace(page, 'default')
     await waitTable(page)
 
-    const row = page.locator('tbody tr:has-text("kube-root-ca.crt")').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan])):has-text("kube-root-ca.crt")').first()
     test.skip((await row.count()) === 0, 'kube-root-ca.crt 없음')
 
     await row.click()
@@ -85,7 +85,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Node 없음')
 
     await row.click()
@@ -99,7 +99,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'EndpointSlice 없음')
 
     await row.click()
@@ -112,7 +112,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Service 없음')
 
     await row.click()
@@ -124,7 +124,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr:has-text("kube-system")').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan])):has-text("kube-system")').first()
     test.skip((await row.count()) === 0, 'kube-system 없음')
 
     await row.click()
@@ -133,11 +133,11 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('MEDIUM StatefulSet volumeClaimTemplates 표시 (있으면)', async ({ page }) => {
-    await page.goto('/workloads/statefulsets')
+    await page.goto('/workloads/statefulsets?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'StatefulSet 없음')
 
     await row.click()
@@ -150,7 +150,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr:has-text("kube-proxy")').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan])):has-text("kube-proxy")').first()
     test.skip((await row.count()) === 0, 'kube-proxy 없음')
 
     await row.click()
@@ -161,26 +161,27 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('MEDIUM CronJob 모든 policy 필드 표시 (있으면)', async ({ page }) => {
-    await page.goto('/workloads/cronjobs')
+    await page.goto('/workloads/cronjobs?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     if ((await row.count()) === 0) {
-      test.skip(true, 'CronJob 없음')
+      test.skip(true, 'self에 CronJob 없음 (deploy/kind/fixtures.yaml)')
       return
     }
     await row.click()
-    await expect(page.locator('text=/^CronJob Info$/').first()).toBeVisible({ timeout: 15000 })
-    await expect(page.locator('text=/Concurrency Policy/').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/^Schedule$/').first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('text=/^Concurrency Policy$/').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/^Starting Deadline$/').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('MEDIUM Ingress TLS Secret ResourceLink (있으면)', async ({ page }) => {
-    await page.goto('/network/ingresses')
+    await page.goto('/network/ingresses?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Ingress 없음')
 
     await row.click()
@@ -189,11 +190,11 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('MEDIUM HPA Metrics 정렬 (있으면)', async ({ page }) => {
-    await page.goto('/workloads/hpas')
+    await page.goto('/workloads/hpas?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     if ((await row.count()) === 0) {
       test.skip(true, 'HPA 없음')
       return
@@ -206,11 +207,11 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   // ===== LOW 7 (Lease skip) =====
 
   test('LOW PV Volume Attributes (CSI 일 때)', async ({ page }) => {
-    await page.goto('/storage')
+    await page.goto('/storage?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'PV 없음')
 
     await row.click()
@@ -219,12 +220,12 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('LOW PVC Data Source 행 (있으면)', async ({ page }) => {
-    await page.goto('/storage')
+    await page.goto('/storage?cluster=self')
     await page.waitForLoadState('networkidle')
     await selectNamespace(page, 'kube-system')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     if ((await row.count()) === 0) {
       test.skip(true, 'PVC 없음')
       return
@@ -238,7 +239,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Deployment 없음')
 
     await row.click()
@@ -248,11 +249,11 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('LOW NetworkPolicy egress namespaceSelector (있으면)', async ({ page }) => {
-    await page.goto('/network/networkpolicies')
+    await page.goto('/network/networkpolicies?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     if ((await row.count()) === 0) {
       test.skip(true, 'NetworkPolicy 없음')
       return
@@ -262,11 +263,11 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('LOW CRD printerColumns 표시 (있으면)', async ({ page }) => {
-    await page.goto('/custom-resources/groups')
+    await page.goto('/custom-resources/groups?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     if ((await row.count()) === 0) {
       test.skip(true, 'CRD 없음')
       return
@@ -276,11 +277,11 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
   })
 
   test('LOW RuntimeClass Schedulable Nodes (있으면)', async ({ page }) => {
-    await page.goto('/cluster/runtimeclasses')
+    await page.goto('/cluster/runtimeclasses?cluster=self')
     await page.waitForLoadState('networkidle')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     if ((await row.count()) === 0) {
       test.skip(true, 'RuntimeClass 없음')
       return
@@ -296,7 +297,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
     await waitTable(page)
 
     // system-cluster-critical 또는 system-node-critical 행 (둘 다 globalDefault=false 일 가능성)
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'PriorityClass 없음')
 
     await row.click()
@@ -325,7 +326,7 @@ test.describe('Phase 5.8 — detail modal polish 24 additions', () => {
       await page.goto(r)
       await page.waitForLoadState('networkidle')
       await waitTable(page)
-      const row = page.locator('tbody tr').first()
+      const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
       if ((await row.count()) > 0) {
         await row.click()
         await page.waitForTimeout(1500)

@@ -88,6 +88,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 # the bucket Job is re-run safe; drop the finished one so a changed spec applies (a Job's template is immutable)
 kubectl -n kubeast-devtools delete job s3-bucket --ignore-not-found >/dev/null 2>&1 || true
 kubectl apply -f "$ROOT/deploy/kind/devtools.yaml" >/dev/null
+kubectl apply -f "$ROOT/deploy/kind/fixtures.yaml" >/dev/null
 
 # 5. Install or upgrade from the chart. --wait fails loudly when a pod never becomes ready.
 echo "═══ helm upgrade --install ${RELEASE} (${NAMESPACE}) ═══"

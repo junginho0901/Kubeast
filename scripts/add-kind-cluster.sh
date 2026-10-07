@@ -13,8 +13,10 @@
 # normally (no insecure-skip needed).
 #
 # Usage:
-#   scripts/add-kind-cluster.sh <name> [--token <admin-jwt>] [--gateway http://localhost:30080]
+#   scripts/add-kind-cluster.sh <name> [--token <admin-jwt>] [--gateway http://localhost:30080] [--addons]
 #   scripts/add-kind-cluster.sh test2
+#   scripts/add-kind-cluster.sh default --addons   # the e2e suite's second cluster: metrics-server,
+#                                                   # kube-state-metrics, Prometheus (deploy/kind/second-cluster.yaml)
 #
 # Provide an admin JWT via --token or KUBEAST_TOKEN, or set
 # KUBEAST_EMAIL/KUBEAST_PASSWORD to log in automatically.
@@ -23,10 +25,12 @@ set -euo pipefail
 NAME="${1:?usage: add-kind-cluster.sh <name>}"; shift || true
 GATEWAY="${KUBEAST_GATEWAY:-http://localhost:30080}"
 TOKEN="${KUBEAST_TOKEN:-}"
+ADDONS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --token) TOKEN="$2"; shift 2;;
     --gateway) GATEWAY="$2"; shift 2;;
+    --addons) ADDONS=1; shift;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -61,6 +65,24 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 echo "═══ applying impersonation RBAC to '$NAME' ═══"
 kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f "$ROOT/helm/kubeast/files/impersonation-rbac.yaml"
+
+# 4c. Optional add-ons (deploy/kind/second-cluster.yaml). Images present on the host are imported
+#     the way kind-deploy.sh does it, so a node behind a proxy does not have to pull them.
+if [ "$ADDONS" = 1 ]; then
+  echo "═══ applying add-ons to '$NAME' ═══"
+  sed -n 's/^ *image: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$ROOT/deploy/kind/second-cluster.yaml" | sort -u \
+    | while IFS= read -r image; do
+      if docker image inspect "$image" >/dev/null 2>&1; then
+        docker save "$image" | docker exec --privileged -i "$CP" \
+          ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs - >/dev/null
+      fi
+    done
+  kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f "$ROOT/deploy/kind/second-cluster.yaml"
+  for d in kube-system/metrics-server kube-system/kube-state-metrics monitoring/prometheus; do  # node-exporter is a DaemonSet, checked below
+    kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n "${d%/*}" rollout status "deploy/${d#*/}" --timeout=3m
+  done
+  kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n monitoring rollout status ds/node-exporter --timeout=3m
+fi
 
 # 5. Register with kubeast as an external cluster.
 echo "═══ registering '$NAME' with kubeast ═══"
