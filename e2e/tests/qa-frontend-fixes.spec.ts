@@ -1,4 +1,6 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { test, expect } from '@playwright/test'
 
@@ -7,6 +9,15 @@ import { test, expect } from '@playwright/test'
 // is off; deleting from the drawer leaves no 404 in the console (the drawer
 // closes before the deleted object's describe is invalidated); the sidebar nav
 // scrolls instead of growing under the account box.
+
+// kubectl runs against KUBECONFIG when set, else the repo-local .kubeconfig-kind — never the shell's
+// default kubeconfig, which may be a real cluster.
+const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
+const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
+function kubectl(args: string[]): void {
+  if (!KUBECONFIG) throw new Error('KUBECONFIG is unset and .kubeconfig-kind is missing: refusing to run kubectl against the default kubeconfig')
+  execFileSync('kubectl', args, { stdio: 'ignore', env: { ...process.env, KUBECONFIG } })
+}
 
 test.describe('QA sweep frontend fixes', () => {
   test('login page hides "Create account" when registration is off', async ({ page, request }) => {
@@ -20,7 +31,7 @@ test.describe('QA sweep frontend fixes', () => {
 
   test('deleting from the drawer leaves no 404 in the console', async ({ page }) => {
     const name = `e2e-drawer-delete-${Date.now().toString(36)}`
-    execSync(`kubectl create configmap ${name} -n default --from-literal=k=v`, { stdio: ['ignore', 'ignore', 'inherit'] })
+    kubectl(['create', 'configmap', name, '-n', 'default', '--from-literal=k=v'])
     const errors: string[] = []
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
     try {
@@ -31,12 +42,12 @@ test.describe('QA sweep frontend fixes', () => {
       const dialog = page.locator('[role="dialog"], [role="alertdialog"], div.fixed.inset-0:has(button)').last()
       await dialog.getByRole('button', { name: /^delete$/i }).last().click()
       await expect.poll(() => {
-        try { execSync(`kubectl get configmap ${name} -n default`, { stdio: 'ignore' }); return 'present' } catch { return 'gone' }
+        try { kubectl(['get', 'configmap', name, '-n', 'default']); return 'present' } catch { return 'gone' }
       }, { timeout: 20000 }).toBe('gone')
       await page.waitForTimeout(1500)
       expect(errors.filter((e) => /404/.test(e)), errors.join('\n')).toEqual([])
     } finally {
-      execSync(`kubectl delete configmap ${name} -n default --ignore-not-found`, { stdio: 'ignore' })
+      kubectl(['delete', 'configmap', name, '-n', 'default', '--ignore-not-found'])
     }
   })
 

@@ -1,0 +1,104 @@
+# Objects the e2e suite opens in the drawer on the dev cluster (`self`): a CronJob
+# with every policy field set, an Ingress with TLS, a StatefulSet with a volume
+# claim template, an HPA and a RuntimeClass. Applied by scripts/kind-deploy.sh.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: e2e-fixture
+  namespace: default
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  suspend: true
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: sleep
+              image: python:3.12-alpine
+              command: [sleep, "1"]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: e2e-fixture
+  namespace: default
+spec:
+  tls:
+    - hosts: [fixture.example.com]
+      secretName: e2e-fixture-tls
+  rules:
+    - host: fixture.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes
+                port:
+                  number: 443
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: e2e-fixture
+  namespace: default
+spec:
+  serviceName: e2e-fixture
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e2e-fixture
+  template:
+    metadata:
+      labels:
+        app: e2e-fixture
+    spec:
+      containers:
+        - name: sleep
+          image: python:3.12-alpine
+          command: [sleep, infinity]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 10Mi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: e2e-fixture
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: e2e-fixture
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: e2e-fixture
+handler: runc

@@ -55,11 +55,11 @@ test.describe('Prometheus features — toggle + 4 detail modal sections + #5 eve
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
 
-    await page.goto('/workloads/hpas')
+    await page.goto('/workloads/hpas?cluster=self')
     await page.waitForLoadState('domcontentloaded')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'HPA 없음')
 
     await row.click()
@@ -77,12 +77,12 @@ test.describe('Prometheus features — toggle + 4 detail modal sections + #5 eve
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
 
-    await page.goto('/network/ingresses')
+    await page.goto('/network/ingresses?cluster=self')
     await page.waitForLoadState('domcontentloaded')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
-    test.skip((await row.count()) === 0, 'Ingress 없음')
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
+    test.skip((await row.count()) === 0, 'self에 Ingress 없음 (deploy/kind/fixtures.yaml)')
 
     await row.click()
     await page.waitForTimeout(3000)
@@ -107,7 +107,7 @@ test.describe('Prometheus features — toggle + 4 detail modal sections + #5 eve
     await page.waitForLoadState('domcontentloaded')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Node 없음')
 
     await row.click()
@@ -129,7 +129,7 @@ test.describe('Prometheus features — toggle + 4 detail modal sections + #5 eve
     await page.waitForLoadState('domcontentloaded')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
     test.skip((await row.count()) === 0, 'Pod 없음')
 
     await row.click()
@@ -237,13 +237,14 @@ test.describe('Prometheus toggle smoke — page error 0', () => {
     await page.waitForLoadState('domcontentloaded')
     await waitTable(page)
 
-    const row = page.locator('tbody tr').first()
-    test.skip((await row.count()) === 0, 'Namespace 없음')
+    // Resource Summary 는 파드가 있는 네임스페이스에서만 그려짐 — 어느 클러스터에나 있는 kube-system 으로
+    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan])):has-text("kube-system")').first()
+    test.skip((await row.count()) === 0, 'kube-system 네임스페이스 행 없음')
 
     await row.click()
     await page.waitForTimeout(3000)
 
-    // Resource Summary 는 항상 보임 (K8s API 기반)
+    // Resource Summary 는 K8s API 기반이라 Prometheus 없이도 보임
     // Real-time Resource Usage 는 Prometheus 의존 — 자동 발견 시 보임
     await expect(page.locator('text=/Resource Summary|Real-time Resource Usage/').first()).toBeVisible({ timeout: 15000 })
 
