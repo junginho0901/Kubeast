@@ -206,3 +206,24 @@ tests:
           path: data.GITOPS_ARGOCD_URL
           value: https://argocd.example.com
 
+  - it: gives the dashboard quick actions their default windows
+    asserts:
+      - equal:
+          path: data.ISSUES_EVENT_WINDOW_MINUTES
+          value: "60"
+      - equal:
+          path: data.OPTIMIZATION_WINDOW_HOURS
+          value: "24"
+
+  - it: takes the quick-action windows from features.issues / features.optimization
+    set:
+      features.issues.eventWindowMinutes: 360
+      features.optimization.windowHours: 168
+    asserts:
+      - equal:
+          path: data.ISSUES_EVENT_WINDOW_MINUTES
+          value: "360"
+      - equal:
+          path: data.OPTIMIZATION_WINDOW_HOURS
+          value: "168"
+

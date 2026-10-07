@@ -528,6 +528,14 @@ Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tra
 
 어노테이션은 그 객체 자신을 가리킬 때만 인정합니다(파드 템플릿을 따라 복사된 어노테이션은 무시). 아직 라벨 방식(`app.kubernetes.io/instance` 또는 `argocd-cm`의 `application.instanceLabelKey`)을 쓰는 설치는 `instanceLabel`에 그 키를 적으면 됩니다. Helm 릴리스 작업·노드 cordon/drain·새 객체 생성은 대상이 아닙니다.
 
+### 대시보드 빠른 작업 (이슈 · 최적화 · 스토리지)
+
+세 카드는 모두 k8s-service가 계산한 읽기 전용 결과를 보여 줍니다(AI 도구와 같은 숫자).
+
+- **이슈 확인** — `GET /api/v1/cluster/issues?window=<분>`: 파드(Phase·Ready·CrashLoopBackOff 등 대기/종료 사유·재시작), 워크로드(Deployment `ProgressDeadlineExceeded`·unavailable, StatefulSet·DaemonSet 미준비, Job 실패, CronJob 마지막 실행 실패, HPA 상한 도달), 노드(Ready≠True·압박 조건), PVC(미바인딩)에 최근 `window`분의 Warning 이벤트를 같은 객체 행에 붙여 "왜·언제·몇 번"을 보여 줍니다. 기본 범위는 `features.issues.eventWindowMinutes`(60), 화면에서 1h/6h/24h로 바꿀 수 있습니다. 행을 누르면 그 객체의 드로어가 열립니다.
+- **최적화 제안** — `GET /api/v1/cluster/optimization?namespace=…&window=<시간>`: 실행 중인 파드의 컨테이너별 requests/limits와 사용량(Prometheus가 있으면 최근 `window`시간의 CPU 95퍼센타일·메모리 최대, 없으면 metrics-server 순간값, 둘 다 없으면 "없음"으로 표기), 추천값(CPU = p95, 메모리 = 최대+15%, 최소 10m/100Mi — Robusta KRR의 simple 전략), 플래그(`cpu_over`·`cpu_under`·`mem_over`·`mem_under`·`no_cpu_request`·`no_mem_request`·`no_mem_limit`)를 표로 냅니다. 기본 범위는 `features.optimization.windowHours`(24). "AI 설명" 버튼은 이 표를 그대로 모델에 보내 왜 그런 수치인지·무엇부터 바꿀지 설명을 받습니다 — 숫자는 모델이 바꾸지 않습니다. 쓰기는 없습니다.
+- **스토리지 분석** — PVC 목록(`?usage=true`)에 Prometheus의 `kubelet_volume_stats_*`로 사용률·용량과 6시간 추세로 계산한 "n일 뒤 가득 참"을 붙입니다(`features.prometheus.enabled`가 켜져 있고 Prometheus가 kubelet `/metrics`를 긁어야 함). CSI 드라이버가 볼륨 통계를 내지 않으면(hostPath·local-path 등) N/A로 표시합니다. 85%/97% 색 경계와 "4일 내 가득 참"은 kube-prometheus의 `KubePersistentVolumeFillingUp` 규칙과 같습니다.
+
 ### 감사 싱크 (S3 · 웹훅 · 메일 · 파일)
 
 감사 로그의 1차 저장소는 DB이고, 싱크는 그 행을 **밖으로 복사**합니다. auth-service 한 replica가 싱크마다

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Server, Box, Database, HardDrive, TrendingUp } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { useClusterFeatures, usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useDashboard } from './DashboardContext'
 import { DashboardSkeleton } from './DashboardSkeleton'
@@ -23,7 +23,7 @@ import { useOptimizationStream } from './hooks/useOptimizationStream'
 import { useDashboardIssues } from './hooks/useDashboardIssues'
 import { useDashboardStorage } from './hooks/useDashboardStorage'
 import { useDashboardAIContext } from './hooks/useDashboardAIContext'
-import type { ResourceType } from './types'
+import type { IssueItem, ResourceType } from './types'
 import { unwrapOuterMarkdownFence, makeStreamingMarkdownRenderFriendly } from './utils'
 
 // Dashboard 의 거대 body. DashboardProvider 안에서만 mount.
@@ -47,6 +47,7 @@ export function DashboardBody() {
     isIssuesModalOpen, setIsIssuesModalOpen,
     issuesSearchQuery, setIssuesSearchQuery,
     includeRestartHistory, setIncludeRestartHistory,
+    issuesWindowMinutes, setIssuesWindowMinutes,
     closeIssuesModal,
     isStorageModalOpen, setIsStorageModalOpen,
     storageActiveTab, setStorageActiveTab,
@@ -84,6 +85,12 @@ export function DashboardBody() {
     isLoadingNamespaces,
     allPods,
     isLoadingPods,
+    clusterIssues,
+    isLoadingIssues,
+    issuesError,
+    optimizationTable,
+    isLoadingOptimizationTable,
+    optimizationTableError,
     allNamespaces,
     isLoadingAllNamespaces,
     allServices,
@@ -109,10 +116,14 @@ export function DashboardBody() {
     selectedResourceType,
     selectedPodStatus,
     isIssuesModalOpen,
+    issuesWindowMinutes,
+    includeRestartHistory,
     isStorageModalOpen,
     isOptimizationModalOpen,
+    optimizationNamespace,
     storageActiveTab,
   })
+  const defaultIssuesWindowMinutes = useClusterFeatures().data?.issues?.eventWindowMinutes ?? 60
 
   // 플로팅 AI 위젯의 "현재 화면 컨텍스트" snapshot — useDashboardAIContext hook 으로 분리
   useDashboardAIContext({ overview, nodes, topResources, allPods })
@@ -174,12 +185,15 @@ export function DashboardBody() {
   useEffect(() => {
     if (!isIssuesModalOpen) return
     // 모달을 열 때마다 최신 상태(특히 CrashLoopBackOff reason 등)를 다시 가져오도록 강제한다.
-    void queryClient.invalidateQueries({ queryKey: ['all-pods'], refetchType: 'active' })
-    void queryClient.invalidateQueries({ queryKey: ['all-pvcs'], refetchType: 'active' })
-    void queryClient.invalidateQueries({ queryKey: ['all-namespaces'], refetchType: 'active' })
-    void queryClient.invalidateQueries({ queryKey: ['all-deployments'], refetchType: 'active' })
-    void queryClient.invalidateQueries({ queryKey: ['nodes'], refetchType: 'active' })
+    void queryClient.invalidateQueries({ queryKey: ['cluster-issues'], refetchType: 'active' })
   }, [isIssuesModalOpen, queryClient])
+
+  // 이슈 행 클릭 → 그 객체의 드로어 (Collector 행은 열 곳이 없음).
+  const handleOpenIssue = (issue: IssueItem) => {
+    if (issue.kind === 'Collector' || !issue.name) return
+    closeIssuesModal()
+    openDetail({ kind: issue.kind, name: issue.name, namespace: issue.namespace })
+  }
 
   useEffect(() => {
     if (!isStorageModalOpen) return
@@ -337,15 +351,15 @@ export function DashboardBody() {
 
   const filteredResources = getFilteredResources()
 
-  // Issues derived computation: 270줄 inline → useDashboardIssues hook.
+  // Issues: 서버 집계(/cluster/issues)를 검색·정렬·그룹만 — useDashboardIssues hook.
   // ⚠️ 모든 hook 호출은 early return 보다 먼저 — `if (isLoading)` 이후에 두면
   // 첫 render(skeleton)와 두번째 render(본문) 사이 hook count 가 달라져
   // "Rendered more hooks than during the previous render" 가 터진다.
-  const { sortedIssues, issuesByKind, issuesSummary, isIssuesLoading } = useDashboardIssues({
-    allPods, nodes, allPVCs, allDeployments, topResources,
-    includeRestartHistory, issuesSearchQuery,
-    isIssuesModalOpen, isLoadingPods, isLoadingPVCs, isLoadingAllNamespaces, isLoadingDeployments,
-    tr,
+  const { sortedIssues, issuesByKind, kinds: issueKinds, issuesSummary, isIssuesLoading, generatedAt: issuesGeneratedAt } = useDashboardIssues({
+    issues: clusterIssues,
+    issuesSearchQuery,
+    isIssuesModalOpen,
+    isLoadingIssues,
   })
 
   // Storage 모달 derived (filter/sort/status counts) 도 hook 으로 — 위 hook 과
@@ -511,6 +525,9 @@ export function DashboardBody() {
         isLoadingNamespaces={isLoadingAllNamespaces}
         isDropdownOpen={isOptimizationNamespaceDropdownOpen}
         setIsDropdownOpen={setIsOptimizationNamespaceDropdownOpen}
+        table={optimizationTable}
+        isTableLoading={isLoadingOptimizationTable}
+        tableError={optimizationTableError ? ((optimizationTableError as any)?.response?.data?.detail || (optimizationTableError as Error).message) : undefined}
         isStreaming={isOptimizationStreaming}
         copied={optimizationCopied}
         fullMarkdown={optimizationMarkdown}
@@ -531,12 +548,19 @@ export function DashboardBody() {
         onClose={closeIssuesModal}
         includeRestartHistory={includeRestartHistory}
         setIncludeRestartHistory={setIncludeRestartHistory}
+        windowMinutes={issuesWindowMinutes}
+        setWindowMinutes={setIssuesWindowMinutes}
+        defaultWindowMinutes={defaultIssuesWindowMinutes}
         searchQuery={issuesSearchQuery}
         setSearchQuery={setIssuesSearchQuery}
         isLoading={isIssuesLoading}
+        error={issuesError ? ((issuesError as any)?.response?.data?.detail || (issuesError as Error).message) : undefined}
+        generatedAt={issuesGeneratedAt}
         sortedIssues={sortedIssues}
         issuesByKind={issuesByKind}
+        kinds={issueKinds}
         issuesSummary={issuesSummary}
+        onOpenIssue={handleOpenIssue}
       />
 
       <StorageModal

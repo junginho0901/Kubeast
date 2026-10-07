@@ -11,6 +11,8 @@ import { CheckCircle, ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 
+import { formatBytes } from '../utils'
+
 interface Props {
   open: boolean
   onClose: () => void
@@ -275,6 +277,32 @@ export function StorageModal({
                             <p className="text-xs text-slate-400">
                               {pvc.capacity || na} · {pvc.storage_class || na} · {tr('dashboard.storage.pvLabel', 'PV')}: {pvc.volume_name || na}
                             </p>
+                            {pvc.usage ? (
+                              <div className="flex flex-wrap items-center gap-2" data-testid="pvc-usage">
+                                <div className="h-1.5 w-32 rounded bg-slate-700 overflow-hidden" role="progressbar" aria-valuenow={pvc.usage.percent} aria-valuemin={0} aria-valuemax={100}>
+                                  <div
+                                    className={`h-full ${pvc.usage.percent >= 97 ? 'bg-red-500' : pvc.usage.percent >= 85 ? 'bg-yellow-400' : 'bg-emerald-500'}`}
+                                    style={{ width: `${Math.min(100, pvc.usage.percent)}%` }}
+                                  />
+                                </div>
+                                <span className={`text-xs ${pvc.usage.percent >= 97 ? 'text-red-300' : pvc.usage.percent >= 85 ? 'text-yellow-300' : 'text-slate-300'}`}>
+                                  {pvc.usage.percent}% · {formatBytes(pvc.usage.used_bytes)} / {formatBytes(pvc.usage.capacity_bytes)}
+                                </span>
+                                {pvc.usage.fills_in_days != null && pvc.usage.fills_in_days <= 4 && (
+                                  <span className="badge badge-error">
+                                    {tr('dashboard.storage.fillsIn', 'Full in {{days}}d', { days: pvc.usage.fills_in_days })}
+                                  </span>
+                                )}
+                              </div>
+                            ) : 'usage' in pvc ? (
+                              <p
+                                className="text-xs text-slate-500"
+                                data-testid="pvc-usage-na"
+                                title={tr('dashboard.storage.usageUnavailableHint', 'The CSI driver reports no volume stats, or Prometheus does not scrape the kubelet')}
+                              >
+                                {tr('dashboard.storage.usage', 'Usage')}: {na}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </div>

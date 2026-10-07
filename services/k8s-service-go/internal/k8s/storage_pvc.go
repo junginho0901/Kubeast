@@ -173,6 +173,7 @@ func (s *Service) DescribePVC(ctx context.Context, namespace, name string) (map[
 		result["events"] = formatEventList(events.Items)
 	}
 
+	attachPVCUsage([]map[string]interface{}{result}, s.pvcUsage(ctx))
 	return result, nil
 }
 

@@ -11,9 +11,10 @@ import type {
 
 export const storageApi = {
   // PVCs
-  getPVCs: async (namespace?: string, forceRefresh: boolean = false): Promise<PVCInfo[]> => {
+  // usage = true adds each claim's kubelet usage from Prometheus (PVCInfo.usage).
+  getPVCs: async (namespace?: string, forceRefresh: boolean = false, usage: boolean = false): Promise<PVCInfo[]> => {
     const { data } = await client.get('/cluster/pvcs', {
-      params: { namespace, force_refresh: forceRefresh },
+      params: { namespace, force_refresh: forceRefresh, usage: usage || undefined },
     })
     return data
   },

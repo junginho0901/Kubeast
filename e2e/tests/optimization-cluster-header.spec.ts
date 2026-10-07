@@ -19,9 +19,10 @@ test('optimization suggestion stream carries the selected cluster', async ({ pag
   await expect(open).toBeVisible({ timeout: 15000 })
   await open.click()
 
-  const generate = page.getByRole('button', { name: /^Generate$|^생성$/ })
-  await expect(generate).toBeEnabled({ timeout: 15000 })
-  await generate.click()
+  // The button waits for the deterministic table, then streams the explanation.
+  const explain = page.getByRole('button', { name: /^Explain with AI$|^AI 설명$/ })
+  await expect(explain).toBeEnabled({ timeout: 20000 })
+  await explain.click()
 
   await expect.poll(() => header, { timeout: 15000 }).toBe('self')
 })

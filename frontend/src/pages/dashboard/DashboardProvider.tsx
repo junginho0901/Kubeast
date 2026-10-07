@@ -11,6 +11,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [isIssuesModalOpen, setIsIssuesModalOpen] = useState(false)
   const [issuesSearchQuery, setIssuesSearchQuery] = useState<string>('')
   const [includeRestartHistory, setIncludeRestartHistory] = useState(false)
+  const [issuesWindowMinutes, setIssuesWindowMinutes] = useState<number | null>(null)
 
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false)
   const [storageActiveTab, setStorageActiveTab] = useState<'pvcs' | 'pvs' | 'topology'>('pvcs')
@@ -28,6 +29,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setIsIssuesModalOpen(false)
     setIssuesSearchQuery('')
     setIncludeRestartHistory(false)
+    setIssuesWindowMinutes(null)
   }
   const closeStorageModal = () => {
     setIsStorageModalOpen(false)
@@ -52,6 +54,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setIssuesSearchQuery,
     includeRestartHistory,
     setIncludeRestartHistory,
+    issuesWindowMinutes,
+    setIssuesWindowMinutes,
     closeIssuesModal,
     isStorageModalOpen,
     setIsStorageModalOpen,

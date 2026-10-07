@@ -24,6 +24,12 @@ type Config struct {
 	Gitops        gitops.Config
 	KubeconfigDir string // directory holding per-cluster kubeconfig files (docker mode)
 
+	// Dashboard quick actions (chart features.issues / features.optimization):
+	// how many minutes of Warning events "Check issues" reads, and how many
+	// hours of usage "Optimization" sizes requests from.
+	IssuesEventWindowMinutes int
+	OptimizationWindowHours  int
+
 	// Multi-cluster load / failure isolation (step 15). All have safe defaults
 	// and can be tuned/disabled via env (helm values). 0 disables where noted.
 	MaxClusters             int // LRU client-bundle pool size (memory bound)
@@ -98,6 +104,9 @@ func Load() Config {
 		PodNamespace:   pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
 		Gitops:         gitops.LoadFromEnv(),
 		KubeconfigDir:  pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),
+
+		IssuesEventWindowMinutes: pkgconfig.GetEnvInt("ISSUES_EVENT_WINDOW_MINUTES", 60),
+		OptimizationWindowHours:  pkgconfig.GetEnvInt("OPTIMIZATION_WINDOW_HOURS", 24),
 
 		MaxClusters:             pkgconfig.GetEnvInt("MC_MAX_CLUSTERS", 20),
 		HealthcheckIntervalSec:  pkgconfig.GetEnvInt("MC_HEALTHCHECK_INTERVAL_SEC", 60),

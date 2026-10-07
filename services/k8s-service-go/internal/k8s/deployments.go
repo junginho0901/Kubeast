@@ -188,6 +188,7 @@ func formatDeploymentDetail(d *appsv1.Deployment) map[string]interface{} {
 	}
 
 	status := "Progressing"
+	progressingReason := ""
 	for _, c := range d.Status.Conditions {
 		if c.Type == appsv1.DeploymentAvailable && c.Status == corev1.ConditionTrue {
 			status = "Available"
@@ -195,6 +196,7 @@ func formatDeploymentDetail(d *appsv1.Deployment) map[string]interface{} {
 		}
 		if c.Type == appsv1.DeploymentProgressing && c.Status == corev1.ConditionFalse {
 			status = "Failed"
+			progressingReason = c.Reason
 			break
 		}
 	}
@@ -207,17 +209,19 @@ func formatDeploymentDetail(d *appsv1.Deployment) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"name":               d.Name,
-		"namespace":          d.Namespace,
-		"replicas":           replicas,
-		"ready_replicas":     d.Status.ReadyReplicas,
-		"available_replicas": d.Status.AvailableReplicas,
-		"updated_replicas":   d.Status.UpdatedReplicas,
-		"image":              image,
-		"images":             images,
-		"labels":             d.Labels,
-		"selector":           selector,
-		"status":             status,
-		"created_at":         toISO(&d.CreationTimestamp),
+		"name":                 d.Name,
+		"namespace":            d.Namespace,
+		"replicas":             replicas,
+		"ready_replicas":       d.Status.ReadyReplicas,
+		"available_replicas":   d.Status.AvailableReplicas,
+		"updated_replicas":     d.Status.UpdatedReplicas,
+		"unavailable_replicas": d.Status.UnavailableReplicas,
+		"progressing_reason":   progressingReason,
+		"image":                image,
+		"images":               images,
+		"labels":               d.Labels,
+		"selector":             selector,
+		"status":               status,
+		"created_at":           toISO(&d.CreationTimestamp),
 	}
 }

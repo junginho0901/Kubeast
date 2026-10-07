@@ -56,13 +56,13 @@ async def suggest_optimization_stream(service: "AIService", namespace: str):
         draft_plan = observations.get("action_plan_md", "").strip()
 
         prompt = f"""
-    아래는 Kubernetes 네임스페이스의 관측 데이터(표)입니다. 이 표를 근거로 최적화 제안을 작성하세요.
+    아래는 Kubernetes 네임스페이스의 관측 데이터(표)입니다. 표의 수치는 k8s-service가 계산한 것이고, 추천값(recommend)은 CPU = 사용량 95퍼센타일, 메모리 = 최대 사용량 + 15%입니다. 이 표를 근거로 "왜 이런 수치가 나왔는지"와 "무엇부터 바꿀지"를 설명하세요.
 
     필수:
-    - 제안에 반드시 표의 리소스명/수치(util, request/limit, avg usage 등)를 인용해서 근거를 달아주세요.
-    - 표의 `usage`는 metrics-server 스냅샷(현재값)이며, 표의 `usage` 값은 파드별 스냅샷을 deployment 단위로 평균 낸 값입니다. `req/lim`은 컨테이너별 합(누락 시 과소추정)일 수 있습니다. 누락/불일치가 보이면 숫자 추천을 단정하지 말고 "먼저 YAML 확인/누락 보완"을 제안하세요.
+    - 제안에 반드시 표의 워크로드명/수치(request, usage, recommend, flags)를 인용해서 근거를 달아주세요.
+    - 'Usage source' 줄을 읽고 그 한계를 말하세요: metrics-server면 순간값이라 피크를 못 봤을 수 있고, 사용량이 없으면 수치 추천 대신 관측 수단부터 제안하세요.
     - 표에 없는 내용은 "추가 확인 필요"로 처리하고 추측하지 마세요.
-    - 아래 'Draft (rules-based)'에 있는 수치/추천값이 있다면 **수치를 변경하지 말고** 문장/구조만 다듬어 주세요.
+    - 아래 'Draft (rules-based)'의 수치/추천값은 **바꾸지 말고** 문장/구조만 다듬어 주세요.
 
 Observed data (markdown):
 {observations["observations_md"]}

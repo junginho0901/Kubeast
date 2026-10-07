@@ -114,6 +114,8 @@ data:
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
+  ISSUES_EVENT_WINDOW_MINUTES: {{ .Values.features.issues.eventWindowMinutes | quote }}
+  OPTIMIZATION_WINDOW_HOURS: {{ .Values.features.optimization.windowHours | quote }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
   GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}
