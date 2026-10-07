@@ -13,6 +13,12 @@ func (c Config) Validate() error {
 	if c.APIKeys.Enabled && c.APIKeys.MaxDays < 1 {
 		return fmt.Errorf("API_KEYS_MAX_DAYS must be at least 1 (got %d)", c.APIKeys.MaxDays)
 	}
+	if c.AccessReview.Enabled && (c.AccessReview.DormantDays < 1 || c.AccessReview.IntervalDays < 1) {
+		return fmt.Errorf("ACCESS_REVIEW_DORMANT_DAYS and ACCESS_REVIEW_INTERVAL_DAYS must be at least 1 (got %d, %d)", c.AccessReview.DormantDays, c.AccessReview.IntervalDays)
+	}
+	if c.RetentionReviewDays < 0 {
+		return fmt.Errorf("RETENTION_REVIEW_DAYS must be 0 or positive (got %d)", c.RetentionReviewDays)
+	}
 	if c.AccessRequests.Enabled {
 		if c.AccessRequests.MaxHours < 1 {
 			return fmt.Errorf("ACCESS_REQUESTS_MAX_HOURS must be at least 1 (got %d)", c.AccessRequests.MaxHours)

@@ -22,8 +22,9 @@ type Config struct {
 	// Data retention in days (0 = keep forever): audit log rows, and AI chat
 	// sessions with their messages and tool approvals. auth-service purges
 	// once at boot and then daily (internal/retention).
-	RetentionAuditDays int
-	RetentionChatDays  int
+	RetentionAuditDays  int
+	RetentionChatDays   int
+	RetentionReviewDays int // access review sign-offs (0 = keep forever)
 
 	// JWT
 	JWTIssuer         string
@@ -75,6 +76,9 @@ type Config struct {
 	// AccessRequests: a user asks for a higher role on a cluster for a bounded
 	// time and an admin approves (temporary per-cluster grants).
 	AccessRequests AccessRequestsConfig
+	// AccessReview: the periodic "who has what" report and its sign-off
+	// (Admin → Access review).
+	AccessReview AccessReviewConfig
 
 	// APIKeys: long-lived credentials a user issues for automation, exchanged
 	// for short access tokens (handler/api_keys.go).
@@ -151,6 +155,15 @@ type AccessRequestsConfig struct {
 	SweepSec int
 }
 
+// AccessReviewConfig: DormantDays flags an account with no sign-in for that
+// long; IntervalDays is how often a review is due, counted from the last
+// sign-off.
+type AccessReviewConfig struct {
+	Enabled      bool
+	DormantDays  int
+	IntervalDays int
+}
+
 // APIKeysConfig: whether keys may be issued and exchanged, and the longest
 // expiry a key may be given (days).
 type APIKeysConfig struct {
@@ -203,6 +216,11 @@ func Load() Config {
 			Roles:    pkgconfig.GetEnvList("ACCESS_REQUESTS_ROLES", "Write"),
 			SweepSec: pkgconfig.GetEnvInt("ACCESS_REQUESTS_SWEEP_SEC", 60),
 		},
+		AccessReview: AccessReviewConfig{
+			Enabled:      pkgconfig.GetEnvBool("ACCESS_REVIEW_ENABLED", true),
+			DormantDays:  pkgconfig.GetEnvInt("ACCESS_REVIEW_DORMANT_DAYS", 90),
+			IntervalDays: pkgconfig.GetEnvInt("ACCESS_REVIEW_INTERVAL_DAYS", 90),
+		},
 		AuditSinksFile:      pkgconfig.GetEnv("AUDIT_SINKS_FILE", ""),
 		AuditSinkSecretsDir: pkgconfig.GetEnv("AUDIT_SINK_SECRETS_DIR", "/etc/kubeast/audit-sinks/secrets"),
 		APIKeys: APIKeysConfig{
@@ -217,8 +235,9 @@ func Load() Config {
 		MigrationsMode: pkgconfig.GetEnv("MIGRATIONS_MODE", "startup"),
 		MigrateOnly:    pkgconfig.GetEnvBool("MIGRATE_ONLY", false),
 
-		RetentionAuditDays: pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
-		RetentionChatDays:  pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
+		RetentionAuditDays:  pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
+		RetentionChatDays:   pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
+		RetentionReviewDays: pkgconfig.GetEnvInt("RETENTION_REVIEW_DAYS", 1095),
 
 		JWTIssuer:            pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:          pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),

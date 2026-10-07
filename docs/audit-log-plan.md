@@ -82,6 +82,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트 |
 | `user.cluster.switch` | 사용자가 클러스터 피커로 활성 클러스터를 바꿈(`POST /api/v1/audit/cluster-switch`, 프론트가 전환 시 fire-and-forget). `cluster` = 새 클러스터, `after` = `{previous, new}`. 모든 인증 사용자가 기록 가능, DB 쓰기 실패도 204. v0.6.0 전 행은 `cluster.switch` |
 | `admin.audit.read` / `admin.audit.export` | 감사 로그 조회·CSV |
+| `admin.review.read` / `admin.review.export` / `admin.review.signoff` | 접근 권한 검토(Admin → Access review, `ACCESS_REVIEW_ENABLED`). 보고서 조회(`after.counts` = 섹션별 건수; 지난 서명의 스냅샷 열람은 `target_id` = 서명 id) · 섹션 CSV 내보내기(`after` = 섹션·행 수·`review_id`) · 검토 완료 서명(`access_reviews` 행 생성, `target_id` = 서명 id, `after` = 건수·메모). 실패는 `failure`로 남는다 |
 | `admin.retention.purge` | 보존 기간(`RETENTION_AUDIT_DAYS`·`RETENTION_CHAT_DAYS`)이 지난 감사·채팅 행 삭제 — auth-service의 일일 작업, actor `system`. `after`에 기간·기준 시각·삭제 행 수(감사·세션·툴 승인); 실패면 `failure` |
 | `ai.tool.helm_execute` | AI 승인 경로의 Helm 쓰기 실행 |
 

@@ -215,6 +215,41 @@ tests:
           path: data.OPTIMIZATION_WINDOW_HOURS
           value: "24"
 
+  - it: turns the access review on by default with 90-day windows and three-year sign-off retention
+    asserts:
+      - equal:
+          path: data.ACCESS_REVIEW_ENABLED
+          value: "true"
+      - equal:
+          path: data.ACCESS_REVIEW_DORMANT_DAYS
+          value: "90"
+      - equal:
+          path: data.ACCESS_REVIEW_INTERVAL_DAYS
+          value: "90"
+      - equal:
+          path: data.RETENTION_REVIEW_DAYS
+          value: "1095"
+
+  - it: turns the access review off and takes its windows from auth.accessReview / retention.reviewDays
+    set:
+      auth.accessReview.enabled: false
+      auth.accessReview.dormantDays: 180
+      auth.accessReview.intervalDays: 30
+      retention.reviewDays: 0
+    asserts:
+      - equal:
+          path: data.ACCESS_REVIEW_ENABLED
+          value: "false"
+      - equal:
+          path: data.ACCESS_REVIEW_DORMANT_DAYS
+          value: "180"
+      - equal:
+          path: data.ACCESS_REVIEW_INTERVAL_DAYS
+          value: "30"
+      - equal:
+          path: data.RETENTION_REVIEW_DAYS
+          value: "0"
+
   - it: takes the quick-action windows from features.issues / features.optimization
     set:
       features.issues.eventWindowMinutes: 360

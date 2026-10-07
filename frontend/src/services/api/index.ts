@@ -8,6 +8,7 @@
 // `api.helm.listReleases(...)`.
 
 import { accessRequestsApi } from './access_requests'
+import { accessReviewApi } from './access_review'
 import { adminApi } from './admin'
 import { aiApi } from './ai'
 import { apiKeysApi } from './api_keys'
@@ -34,6 +35,7 @@ export const api = {
   ...authApi,
   ...adminApi,
   ...accessRequestsApi,
+  ...accessReviewApi,
   ...apiKeysApi,
   ...recordingsApi,
   ...clusterApi,
