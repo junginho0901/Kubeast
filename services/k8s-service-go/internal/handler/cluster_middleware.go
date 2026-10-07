@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -57,6 +58,12 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		id := cluster.ID(c)
 		r = r.WithContext(cluster.WithID(r.Context(), id))
 
+		// An id the registry does not know is 404 here, once, instead of each
+		// handler answering differently (500, or 200 with an empty list).
+		if _, err := h.svc.For(r.Context(), id); errors.Is(err, cluster.ErrNotFound) {
+			response.Error(w, http.StatusNotFound, "cluster not found")
+			return
+		}
 		if h.svc.ClusterDown(id) {
 			response.Error(w, http.StatusServiceUnavailable, "cluster "+c+" is currently unreachable")
 			return
