@@ -189,7 +189,7 @@ test.describe('Dashboard refactor — UI verification', () => {
     const errors = await gotoDashboard(page)
 
     // DashboardPodNodeStatus 의 Pod status chart bar — 'Pod status' h2 근처
-    const podStatusH2 = page.locator('h2, h3').filter({ hasText: /Pod status|파드\s*상태/i }).first()
+    const podStatusH2 = page.locator('h2, h3').filter({ hasText: /Pod status|Pod\s*상태/i }).first()
     await expect(podStatusH2).toBeVisible({ timeout: 10000 })
 
     // chart 의 첫번째 bar (Running phase) — recharts 의 Bar 는 svg path

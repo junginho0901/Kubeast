@@ -88,7 +88,7 @@ npm run lint     # eslint, --max-warnings 0 (warnings fail)
 npm run test     # vitest run
 ```
 
-Frontend source under `frontend/src`: `pages/` (route-level, grouped by resource domain), `components/`, `hooks/`, `services/` (API clients), `i18n/` (ko/en via i18next). Heavy use of TanStack Query, Monaco editor, xterm.js (Node Shell), and React Flow / dagre / elkjs (Topology & Dependency graphs).
+Frontend source under `frontend/src`: `pages/` (route-level, grouped by resource domain), `components/`, `hooks/`, `services/` (API clients), `i18n/` (ko/en via i18next). Kubernetes kinds (`StatefulSet`, `ConfigMap`, `Namespace`, …) and screen names (sidebar items, page titles) are English in every locale; verbs, descriptions and notices are localized. Form labels share one style, `block text-xs font-semibold text-slate-400 mb-1` (the `CustomDropdown` label), and controls on one row share a height (`h-10`, or `h-8` next to a `size="sm"` dropdown). Heavy use of TanStack Query, Monaco editor, xterm.js (Node Shell), and React Flow / dagre / elkjs (Topology & Dependency graphs).
 
 ## E2E tests (Playwright)
 

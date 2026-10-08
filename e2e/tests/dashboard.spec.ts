@@ -13,7 +13,7 @@ test.describe('Dashboard', () => {
     await page.waitForLoadState('networkidle')
     // Two h1 on screen (sidebar 'Kubeast' + page title) — pick the
     // page title by its larger size class.
-    await expect(page.locator('h1.text-3xl').first()).toContainText(/Cluster Dashboard|클러스터/i)
+    await expect(page.locator('h1.text-3xl').first()).toContainText(/Dashboard/i)
 
     // Mask the dynamic data regions: pod-name hashes change on every
     // restart, CPU/Memory percentages refresh every 5s (the Prometheus

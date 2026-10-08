@@ -40,7 +40,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
 
   return (
     <div className="mb-6 overflow-visible">
-      <label className="block text-sm font-medium text-slate-400 mb-2">
+      <label className="block text-xs font-semibold text-slate-400 mb-1">
         {t('monitoring.namespace.label')}
       </label>
       <div className="relative w-full md:w-64" ref={containerRef}>

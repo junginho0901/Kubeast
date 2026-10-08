@@ -281,7 +281,7 @@ export default function Login() {
               <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
                 {mode === 'register' && (
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">
                       {tr('login.form.name', 'Name')}
                     </label>
                     <input
@@ -305,7 +305,7 @@ export default function Login() {
                 )}
 
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
                     {tr('login.form.email', 'Email')}
                   </label>
                   <input
@@ -319,7 +319,7 @@ export default function Login() {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
                     {tr('login.form.password', 'Password')}
                   </label>
                   <input
@@ -337,7 +337,7 @@ export default function Login() {
 
                 {mode === 'register' && (
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">
                       {tr('login.form.confirmPassword', 'Confirm password')}
                     </label>
                     <input

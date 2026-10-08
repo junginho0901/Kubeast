@@ -126,7 +126,7 @@ export default function UninstallModal({
         </label>
 
         <div className="mt-4">
-          <label className="block text-xs text-slate-400 mb-1">
+          <label className="block text-xs font-semibold text-slate-400 mb-1">
             {t('helmReleaseDetail.uninstall.confirmLabel', { name })}
           </label>
           <input

@@ -148,7 +148,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         {/* model selector — 2-tier dropdown */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-semibold text-slate-300">
+            <label className="text-xs font-semibold text-slate-400">
               {tr('setup.ai.model', 'Model')}
             </label>
             {currentProviderDef.models.length > 0 && (
@@ -201,7 +201,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         {/* API Key */}
         {currentProviderDef.needsApiKey && (
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-400 mb-1">
               {tr('setup.ai.apiKey', 'API key env var')}
             </label>
             <input
@@ -221,7 +221,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         {/* Base URL */}
         {currentProviderDef.needsBaseUrl && (
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-slate-400 mb-1">
               {tr('setup.ai.baseUrl', 'Base URL')}
             </label>
             <input

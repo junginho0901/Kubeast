@@ -117,7 +117,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
 
         <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-auto">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">
+            <label className="block text-xs font-semibold text-slate-400 mb-1">
               {tr('cluster.register.displayName', 'Display name')}
             </label>
             <input
@@ -133,7 +133,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
             <>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs text-slate-400">kubeconfig</label>
+                  <label className="block text-xs font-semibold text-slate-400">kubeconfig</label>
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
@@ -162,7 +162,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                 </p>
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('cluster.register.apiServerOptional', 'API server URL (optional)')}
                 </label>
                 <input

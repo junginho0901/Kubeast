@@ -70,12 +70,12 @@ export default function SessionRecordings() {
       <div className="card">
         <div className="flex flex-wrap items-end gap-3 mb-4">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">{tr('recordings.filter.user', 'User')}</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('recordings.filter.user', 'User')}</label>
             <input
               value={user}
               onChange={(e) => setUser(e.target.value)}
               placeholder="alice@example.com"
-              className="w-60 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white"
+              className="w-60 h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
             />
           </div>
           <div className="w-44">
@@ -93,7 +93,7 @@ export default function SessionRecordings() {
           <button
             type="button"
             onClick={() => setApplied({ user: user.trim(), kind })}
-            className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500"
+            className="h-10 rounded-lg bg-primary-600 px-3 text-sm font-medium text-white hover:bg-primary-500"
           >
             {tr('recordings.filter.apply', 'Search')}
           </button>

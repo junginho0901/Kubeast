@@ -216,55 +216,55 @@
     "advancedSearch": "Advanced Search (Beta)",
     "pods": "Pods",
     "deployments": "Deployments",
-    "statefulSets": "Stateful Sets",
-    "daemonSets": "Daemon Sets",
-    "replicaSets": "Replica Sets",
+    "statefulSets": "StatefulSets",
+    "daemonSets": "DaemonSets",
+    "replicaSets": "ReplicaSets",
     "jobs": "Jobs",
     "cronJobs": "CronJobs",
-    "pvcs": "Persistent Volume Claims",
-    "pvs": "Persistent Volumes",
-    "storageClasses": "Storage Classes",
-    "volumeAttachments": "Volume Attachments",
+    "pvcs": "PersistentVolumeClaims",
+    "pvs": "PersistentVolumes",
+    "storageClasses": "StorageClasses",
+    "volumeAttachments": "VolumeAttachments",
     "services": "Services",
     "endpoints": "Endpoints",
-    "endpointSlices": "Endpoint Slices",
+    "endpointSlices": "EndpointSlices",
     "ingresses": "Ingresses",
-    "ingressClasses": "Ingress Classes",
-    "networkPolicies": "Network Policies",
+    "ingressClasses": "IngressClasses",
+    "networkPolicies": "NetworkPolicies",
     "gateways": "Gateways",
-    "gatewayClasses": "Gateway Classes",
-    "httpRoutes": "HTTP Routes",
-    "grpcRoutes": "GRPC Routes",
-    "referenceGrants": "Reference Grants",
-    "backendTlsPolicies": "Backend TLS Policies",
+    "gatewayClasses": "GatewayClasses",
+    "httpRoutes": "HTTPRoutes",
+    "grpcRoutes": "GRPCRoutes",
+    "referenceGrants": "ReferenceGrants",
+    "backendTlsPolicies": "BackendTLSPolicies",
     "policies": "Policies",
     "gpu": "GPU (Beta)",
     "gpuDashboard": "GPU Dashboard",
     "gpuNodes": "GPU Nodes",
     "gpuPods": "GPU Pods",
-    "deviceClasses": "Device Classes",
-    "resourceClaims": "Resource Claims",
-    "resourceClaimTemplates": "Resource Claim Templates",
-    "resourceSlices": "Resource Slices",
-    "serviceAccounts": "Service Accounts",
+    "deviceClasses": "DeviceClasses",
+    "resourceClaims": "ResourceClaims",
+    "resourceClaimTemplates": "ResourceClaimTemplates",
+    "resourceSlices": "ResourceSlices",
+    "serviceAccounts": "ServiceAccounts",
     "roles": "Roles",
-    "clusterRoles": "Cluster Roles",
-    "roleBindings": "Role Bindings",
-    "clusterRoleBindings": "Cluster Role Bindings",
-    "configMaps": "Config Maps",
+    "clusterRoles": "ClusterRoles",
+    "roleBindings": "RoleBindings",
+    "clusterRoleBindings": "ClusterRoleBindings",
+    "configMaps": "ConfigMaps",
     "secrets": "Secrets",
-    "hpas": "Horizontal Pod Autoscalers",
-    "vpas": "Vertical Pod Autoscalers",
-    "pdbs": "Pod Disruption Budgets",
-    "resourceQuotas": "Resource Quotas",
-    "limitRanges": "Limit Ranges",
-    "priorityClasses": "Priority Classes",
-    "runtimeClasses": "Runtime Classes",
+    "hpas": "HorizontalPodAutoscalers",
+    "vpas": "VerticalPodAutoscalers",
+    "pdbs": "PodDisruptionBudgets",
+    "resourceQuotas": "ResourceQuotas",
+    "limitRanges": "LimitRanges",
+    "priorityClasses": "PriorityClasses",
+    "runtimeClasses": "RuntimeClasses",
     "leases": "Leases",
-    "mutatingWebhooks": "Mutating Webhook Configurations",
-    "validatingWebhooks": "Validating Webhook Configurations",
+    "mutatingWebhooks": "MutatingWebhookConfigurations",
+    "validatingWebhooks": "ValidatingWebhookConfigurations",
     "customInstances": "Custom Resource Instances",
-    "customGroups": "Custom Resource Definitions",
+    "customGroups": "CustomResourceDefinitions",
     "userManagement": "User Management",
     "roleManagement": "Role Management",
     "aiModels": "AI Models",
@@ -437,7 +437,7 @@
     }
   },
   "endpointSlicesPage": {
-    "title": "Endpoint Slices",
+    "title": "EndpointSlices",
     "subtitle": "Inspect and manage EndpointSlices across namespaces.",
     "create": "Create EndpointSlice",
     "createTitle": "Create EndpointSlice from YAML",
@@ -504,7 +504,7 @@
     }
   },
   "ingressClassesPage": {
-    "title": "Ingress Classes",
+    "title": "IngressClasses",
     "subtitle": "Inspect and manage cluster-scoped IngressClass resources.",
     "create": "Create IngressClass",
     "createTitle": "Create IngressClass from YAML",
@@ -533,7 +533,7 @@
     }
   },
   "networkPoliciesPage": {
-    "title": "Network Policies",
+    "title": "NetworkPolicies",
     "subtitle": "Inspect and manage NetworkPolicy resources across namespaces.",
     "create": "Create NetworkPolicy",
     "createTitle": "Create NetworkPolicy from YAML",
@@ -599,7 +599,7 @@
     }
   },
   "gatewayClassesPage": {
-    "title": "Gateway Classes",
+    "title": "GatewayClasses",
     "subtitle": "Inspect and manage cluster-scoped GatewayClass resources.",
     "create": "Create GatewayClass",
     "createTitle": "Create GatewayClass from YAML",
@@ -628,7 +628,7 @@
     }
   },
   "httpRoutesPage": {
-    "title": "HTTP Routes",
+    "title": "HTTPRoutes",
     "subtitle": "Inspect and manage Gateway API HTTPRoute resources across namespaces.",
     "create": "Create HTTPRoute",
     "createTitle": "Create HTTPRoute from YAML",
@@ -661,7 +661,7 @@
     }
   },
   "grpcRoutesPage": {
-    "title": "GRPC Routes",
+    "title": "GRPCRoutes",
     "subtitle": "Inspect and manage Gateway API GRPCRoute resources across namespaces.",
     "create": "Create GRPCRoute",
     "createTitle": "Create GRPCRoute from YAML",
@@ -694,7 +694,7 @@
     }
   },
   "referenceGrantsPage": {
-    "title": "Reference Grants",
+    "title": "ReferenceGrants",
     "subtitle": "Inspect and manage Gateway API ReferenceGrant resources across namespaces.",
     "create": "Create ReferenceGrant",
     "createTitle": "Create ReferenceGrant from YAML",
@@ -724,7 +724,7 @@
     }
   },
   "backendTLSPoliciesPage": {
-    "title": "Backend TLS Policies",
+    "title": "BackendTLSPolicies",
     "subtitle": "Inspect and manage Gateway API BackendTLSPolicy resources across namespaces.",
     "create": "Create BackendTLSPolicy",
     "createTitle": "Create BackendTLSPolicy from YAML",
@@ -791,7 +791,7 @@
     "noResults": "No policies found."
   },
   "statefulsets": {
-    "title": "Stateful Sets",
+    "title": "StatefulSets",
     "subtitle": "Inspect and manage StatefulSets across namespaces.",
     "create": "Create StatefulSet",
     "createTitle": "Create StatefulSet from YAML",
@@ -830,7 +830,7 @@
     }
   },
   "daemonsets": {
-    "title": "Daemon Sets",
+    "title": "DaemonSets",
     "subtitle": "Inspect scheduling health for DaemonSets across namespaces.",
     "create": "Create DaemonSet",
     "createTitle": "Create DaemonSet from YAML",
@@ -867,7 +867,7 @@
     }
   },
   "replicasets": {
-    "title": "Replica Sets",
+    "title": "ReplicaSets",
     "subtitle": "Inspect and manage ReplicaSets across namespaces.",
     "create": "Create ReplicaSet",
     "createTitle": "Create ReplicaSet from YAML",
@@ -972,7 +972,7 @@
     }
   },
   "hpas": {
-    "title": "Horizontal Pod Autoscalers",
+    "title": "HorizontalPodAutoscalers",
     "subtitle": "Manage horizontal pod autoscaling policies across namespaces.",
     "create": "Create HPA",
     "createTitle": "Create HPA from YAML",
@@ -1003,7 +1003,7 @@
     }
   },
   "vpas": {
-    "title": "Vertical Pod Autoscalers",
+    "title": "VerticalPodAutoscalers",
     "subtitle": "Manage vertical pod autoscaling recommendations across namespaces.",
     "create": "Create VPA",
     "createTitle": "Create VPA from YAML",
@@ -1035,7 +1035,7 @@
     }
   },
   "pdbs": {
-    "title": "Pod Disruption Budgets",
+    "title": "PodDisruptionBudgets",
     "subtitle": "Manage pod disruption budgets across namespaces.",
     "create": "Create PDB",
     "createTitle": "Create PDB from YAML",
@@ -1067,7 +1067,7 @@
     }
   },
   "priorityClasses": {
-    "title": "Priority Classes",
+    "title": "PriorityClasses",
     "subtitle": "Manage pod scheduling priority across the cluster.",
     "create": "Create Priority Class",
     "createTitle": "Create Priority Class from YAML",
@@ -1095,7 +1095,7 @@
     }
   },
   "runtimeClasses": {
-    "title": "Runtime Classes",
+    "title": "RuntimeClasses",
     "subtitle": "Manage container runtime configurations for the cluster.",
     "create": "Create Runtime Class",
     "createTitle": "Create Runtime Class from YAML",
@@ -1120,7 +1120,7 @@
     }
   },
   "mutatingWebhooks": {
-    "title": "Mutating Webhook Configurations",
+    "title": "MutatingWebhookConfigurations",
     "subtitle": "Manage mutating admission webhook configurations in the cluster.",
     "create": "Create",
     "createTitle": "Create Mutating Webhook Configuration from YAML",
@@ -1140,7 +1140,7 @@
     "noResults": "No mutating webhook configurations found."
   },
   "validatingWebhooks": {
-    "title": "Validating Webhook Configurations",
+    "title": "ValidatingWebhookConfigurations",
     "subtitle": "Manage validating admission webhook configurations in the cluster.",
     "create": "Create",
     "createTitle": "Create Validating Webhook Configuration from YAML",
@@ -1189,7 +1189,7 @@
     }
   },
   "resourceQuotas": {
-    "title": "Resource Quotas",
+    "title": "ResourceQuotas",
     "subtitle": "Manage resource quotas across namespaces.",
     "create": "Create Resource Quota",
     "createTitle": "Create ResourceQuota from YAML",
@@ -1217,7 +1217,7 @@
     }
   },
   "limitRanges": {
-    "title": "Limit Ranges",
+    "title": "LimitRanges",
     "subtitle": "Manage limit ranges across namespaces.",
     "create": "Create Limit Range",
     "createTitle": "Create LimitRange from YAML",
@@ -1245,7 +1245,7 @@
     }
   },
   "pvcs": {
-    "title": "Persistent Volume Claims",
+    "title": "PersistentVolumeClaims",
     "subtitle": "Inspect and manage PVCs across namespaces.",
     "create": "Create PVC",
     "createTitle": "Create PersistentVolumeClaim from YAML",
@@ -1279,7 +1279,7 @@
     }
   },
   "pvs": {
-    "title": "Persistent Volumes",
+    "title": "PersistentVolumes",
     "subtitle": "Inspect and manage persistent volumes across the cluster.",
     "create": "Create PV",
     "createTitle": "Create PersistentVolume from YAML",
@@ -1314,7 +1314,7 @@
     }
   },
   "storageclasses": {
-    "title": "Storage Classes",
+    "title": "StorageClasses",
     "subtitle": "Inspect and manage StorageClasses across the cluster.",
     "create": "Create StorageClass",
     "createTitle": "Create StorageClass from YAML",
@@ -1346,7 +1346,7 @@
     }
   },
   "volumeattachments": {
-    "title": "Volume Attachments",
+    "title": "VolumeAttachments",
     "subtitle": "Inspect cluster-wide volume attachment state and troubleshooting signals.",
     "create": "Create VolumeAttachment",
     "createTitle": "Create VolumeAttachment from YAML",
@@ -1556,7 +1556,7 @@
     "noSessions": "No chat history.",
     "rename": "Rename",
     "delete": "Delete",
-    "title": "AI Assistant",
+    "title": "AI Chat",
     "subtitle": "Ask the cluster in natural language and solve problems.",
     "emptyTitle": "Start a new chat",
     "emptySubtitle": "Click a question below or type your own.",
@@ -1595,7 +1595,7 @@
     ]
   },
   "monitoring": {
-    "title": "Resource Monitoring",
+    "title": "Monitoring",
     "subtitle": "Monitor real-time resource usage for nodes and pods.",
     "metricsUnavailable": "Metrics server not available for this cluster",
     "tabs": {
@@ -1789,7 +1789,7 @@
       "openHint": "Open details"
     },
     "metricsServerHint": "Check metrics-server status",
-    "title": "Cluster Dashboard",
+    "title": "Dashboard",
     "subtitle": "Get a quick overview of your Kubernetes cluster.",
     "clusterVersion": "Cluster version: {{version}}",
     "refreshTitle": "Force refresh",
@@ -2003,7 +2003,7 @@
       "downloading": "Downloading...",
       "loading": "Loading logs..."
     },
-    "title": "Cluster view",
+    "title": "Cluster View",
     "subtitle": "Review pod placement across nodes",
     "searchPlaceholder": "Search pod name...",
     "allNamespaces": "All namespaces",
@@ -2220,7 +2220,7 @@
     "sweepFailed": "The sweep failed.",
     "loading": "Loading...",
     "loadError": "Failed to load users.",
-    "title": "User management",
+    "title": "User Management",
     "subtitle": "Update user roles (read/write/admin).",
     "table": {
       "name": "Name",
@@ -2613,7 +2613,7 @@
     "pageInfo": "Page {{current}} / {{total}}"
   },
   "serviceAccountsPage": {
-    "title": "Service Accounts",
+    "title": "ServiceAccounts",
     "subtitle": "Manage ServiceAccounts across namespaces.",
     "searchPlaceholder": "Search by name or namespace...",
     "allNamespaces": "All namespaces",
@@ -2668,7 +2668,7 @@
     }
   },
   "roleBindingsPage": {
-    "title": "Role Bindings",
+    "title": "RoleBindings",
     "subtitle": "Manage RoleBindings across namespaces.",
     "searchPlaceholder": "Search by name, namespace, or role ref...",
     "allNamespaces": "All namespaces",
@@ -2696,7 +2696,7 @@
     }
   },
   "clusterRolesPage": {
-    "title": "Cluster Roles",
+    "title": "ClusterRoles",
     "subtitle": "Manage ClusterRoles across the cluster.",
     "searchPlaceholder": "Search by name...",
     "refresh": "Refresh",
@@ -2716,7 +2716,7 @@
     }
   },
   "clusterRoleBindingsPage": {
-    "title": "Cluster Role Bindings",
+    "title": "ClusterRoleBindings",
     "subtitle": "Manage ClusterRoleBindings across the cluster.",
     "searchPlaceholder": "Search by name or role ref...",
     "refresh": "Refresh",
@@ -2806,7 +2806,7 @@
     "maskedHint": "Values are hidden for read-only users."
   },
   "crdPage": {
-    "title": "Custom Resource Definitions",
+    "title": "CustomResourceDefinitions",
     "subtitle": "Manage Custom Resource Definitions registered in the cluster.",
     "searchPlaceholder": "Search by name, group, or kind...",
     "refresh": "Refresh",
@@ -2906,7 +2906,7 @@
     "success": "Rollback to revision {{revision}} initiated"
   },
   "timeline": {
-    "title": "Change History Timeline",
+    "title": "Change History",
     "subtitle": "View K8s events and resource changes in chronological order.",
     "selectNamespace": "Select Namespace",
     "allNamespaces": "All namespaces",
@@ -2937,7 +2937,7 @@
     "closeSummary": "Close Summary"
   },
   "adminOrg": {
-    "title": "Team management",
+    "title": "Team",
     "subtitle": "Manage the list of Teams that users can select during registration.",
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
@@ -3282,7 +3282,7 @@
     }
   },
   "adminAudit": {
-    "title": "Audit log",
+    "title": "Audit Logs",
     "subtitle": "Every write and every sensitive read, with who did it",
     "exportCsv": "Export CSV",
     "refreshing": "Loading...",
@@ -3349,7 +3349,7 @@
       "name": "Name",
       "selectors": "Selectors"
     },
-    "title": "Device Classes"
+    "title": "DeviceClasses"
   },
   "gpuDashboardPage": {
     "empty": "No GPU resources detected in this cluster.",
@@ -3481,7 +3481,7 @@
       "namespace": "Namespace",
       "requests": "Requests"
     },
-    "title": "Resource Claim Templates"
+    "title": "ResourceClaimTemplates"
   },
   "resourceClaimsPage": {
     "allNamespaces": "All Namespaces",
@@ -3506,7 +3506,7 @@
       "requests": "Requests",
       "status": "Status"
     },
-    "title": "Resource Claims"
+    "title": "ResourceClaims"
   },
   "resourceSlicesPage": {
     "matchCount": "{{count}} resource slices matched.",
@@ -3527,7 +3527,7 @@
       "node": "Node",
       "pool": "Pool"
     },
-    "title": "Resource Slices"
+    "title": "ResourceSlices"
   },
   "topology": {
     "title": "{{namespace}} Resource Definitions",

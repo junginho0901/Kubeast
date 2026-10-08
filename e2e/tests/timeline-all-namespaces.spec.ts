@@ -16,12 +16,12 @@ test.describe('timeline — all namespaces', () => {
     expect(Array.isArray(body.rollout_history)).toBe(true)
 
     const dropdown = page.getByTestId('timeline-namespace')
-    await expect(dropdown).toContainText(/All namespaces|전체 네임스페이스/)
+    await expect(dropdown).toContainText(/All namespaces|전체 Namespace/)
 
     // choose a namespace → the namespaced endpoint, and the trigger shows it
     await dropdown.click()
     const options = page.locator('.absolute.top-full button')
-    await expect(options.first()).toContainText(/All namespaces|전체 네임스페이스/)
+    await expect(options.first()).toContainText(/All namespaces|전체 Namespace/)
     expect(await options.count()).toBeGreaterThan(1)
     const chosen = (await options.nth(1).innerText()).trim()
     const namespaced = page.waitForResponse((r) =>

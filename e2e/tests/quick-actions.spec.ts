@@ -110,7 +110,7 @@ test.describe('Dashboard quick actions', () => {
     await expect(page.locator('h2').filter({ hasText: /Optimization suggestions|최적화 제안/ })).toBeVisible()
 
     // kube-system has pods with usage on the second cluster.
-    await page.locator('button[title="Select namespace"], button[title="네임스페이스 선택"]').first().click()
+    await page.locator('button[title="Select namespace"], button[title="Namespace 선택"]').first().click()
     await page.getByRole('button', { name: 'kube-system', exact: true }).click()
 
     await expect(page.getByTestId('optimization-table')).toBeVisible({ timeout: 20000 })

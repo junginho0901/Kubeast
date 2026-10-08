@@ -91,24 +91,24 @@ export default function AdminAIUsage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-        <label className="text-xs text-slate-400">
+        <label className="block text-xs font-semibold text-slate-400">
           {tr('adminAIUsage.since', '시작일')}
           <input
             type="date"
             value={sinceDay}
             max={untilDay}
             onChange={(e) => setSinceDay(e.target.value)}
-            className="mt-1 block rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 block h-8 rounded-sm border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100"
           />
         </label>
-        <label className="text-xs text-slate-400">
+        <label className="block text-xs font-semibold text-slate-400">
           {tr('adminAIUsage.until', '종료일')}
           <input
             type="date"
             value={untilDay}
             min={sinceDay}
             onChange={(e) => setUntilDay(e.target.value)}
-            className="mt-1 block rounded-sm border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 block h-8 rounded-sm border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100"
           />
         </label>
         <CustomDropdown

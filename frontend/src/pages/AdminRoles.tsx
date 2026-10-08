@@ -358,7 +358,7 @@ export default function AdminRoles() {
             {/* Form fields */}
             <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('adminRoles.form.name', 'Role Name')}
                 </label>
                 <input
@@ -370,7 +370,7 @@ export default function AdminRoles() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('adminRoles.form.desc', 'Description')}
                 </label>
                 <input
