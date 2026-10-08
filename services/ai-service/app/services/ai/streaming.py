@@ -38,12 +38,21 @@ def wrap_untrusted_context(block: str) -> str:
     return f"{UNTRUSTED_CONTEXT_OPEN}\n{block}\n{UNTRUSTED_CONTEXT_CLOSE}\n{UNTRUSTED_CONTEXT_NOTE}"
 
 
-async def suggest_optimization_stream(service: "AIService", namespace: str):
-    """리소스 최적화 제안 (SSE 스트리밍)"""
+async def suggest_optimization_stream(
+    service: "AIService",
+    namespace: str,
+    audit_actor: Optional[dict] = None,
+    audit_http: Optional[dict] = None,
+):
+    """리소스 최적화 제안 (SSE 스트리밍). 끝나면 ai.chat.complete(phase optimization) 1건."""
     import asyncio
     import json
     from app.config import settings
 
+    started = time.monotonic()
+    turn_usage = usage_acct.new_turn_usage()
+    finish_reason = None
+    err: Optional[Exception] = None
     try:
         observations = await service._build_optimization_observations(namespace)
         observed_md = observations["observations_md"].rstrip() + "\n\n---\n\n## 최적화 제안 (AI)\n\n"
@@ -113,11 +122,12 @@ Draft (rules-based, keep numbers unchanged):
             )
 
         stream_usage = None
-        finish_reason = None
         async for chunk in stream:
             if getattr(chunk, "usage", None) is not None:
                 stream_usage = chunk.usage
-            if chunk.choices and getattr(chunk.choices[0], "finish_reason", None) is not None:
+            if not chunk.choices:  # the usage-only final chunk of stream_options.include_usage
+                continue
+            if getattr(chunk.choices[0], "finish_reason", None) is not None:
                 finish_reason = chunk.choices[0].finish_reason
 
             delta = chunk.choices[0].delta
@@ -155,11 +165,40 @@ Draft (rules-based, keep numbers unchanged):
                 )
                 + "\n\n"
             )
-
-        yield "data: [DONE]\n\n"
+        usage_acct.add_usage(turn_usage, stream_usage)
+    except (asyncio.CancelledError, GeneratorExit):
+        # The client went away mid-stream (Starlette finalises the generator). The model has
+        # spent tokens, so the call is still accounted for; nothing may be awaited or yielded here.
+        if audit_actor:
+            _spawn(_audit_chat_complete(
+                service, None, audit_actor, audit_http,
+                turn_usage=turn_usage, tool_calls=0, iterations=1, started=started,
+                finish_reason="cancelled", message_length=0,
+                phase="optimization", target_type="namespace", target_id=namespace,
+            ))
+        raise
     except Exception as e:
+        err = e
         yield "data: " + json.dumps({"kind": "error", "error": str(e)}, ensure_ascii=False) + "\n\n"
-        yield "data: [DONE]\n\n"
+
+    await _audit_chat_complete(
+        service,
+        None,
+        audit_actor,
+        audit_http,
+        turn_usage=turn_usage,
+        tool_calls=0,
+        iterations=1,
+        started=started,
+        finish_reason=finish_reason,
+        message_length=0,
+        result="failure" if err else "success",
+        error=safe_error(err) if err else None,
+        phase="optimization",
+        target_type="namespace",
+        target_id=namespace,
+    )
+    yield "data: [DONE]\n\n"
 
 # Tasks started from cancellation paths; the loop only holds weak references,
 # so keep them here until they finish.
@@ -180,7 +219,7 @@ def _spawn(coro) -> None:
 
 async def _audit_chat_complete(
     service: "AIService",
-    session_id: str,
+    session_id: Optional[str],
     audit_actor: Optional[dict],
     audit_http: Optional[dict],
     *,
@@ -192,10 +231,14 @@ async def _audit_chat_complete(
     message_length: int,
     result: str = "success",
     error: Optional[str] = None,
+    phase: str = "chat",
+    target_type: str = "session",
+    target_id: Optional[str] = None,
 ) -> None:
-    """ai.chat.complete — one record per chat turn with the token usage summed
-    over every model call of the turn, tool-call count and duration. The
-    admin AI-usage view aggregates these; there is no hard limit."""
+    """ai.chat.complete — one record per chat turn (and per Optimization-page
+    AI explanation, `phase: optimization`) with the token usage summed over
+    every model call, tool-call count and duration. The admin AI-usage view
+    aggregates these; there is no hard limit."""
     if not audit_actor:
         return
     from app.services.audit_writer import write_audit
@@ -206,8 +249,8 @@ async def _audit_chat_complete(
         action="ai.chat.complete",
         actor_user_id=audit_actor.get("user_id"),
         actor_email=audit_actor.get("email"),
-        target_type="session",
-        target_id=session_id,
+        target_type=target_type,
+        target_id=target_id if target_id is not None else session_id,
         cluster=cluster,
         after=usage_acct.chat_complete_payload(
             session_id=session_id,
@@ -220,6 +263,7 @@ async def _audit_chat_complete(
             duration_ms=int((time.monotonic() - started) * 1000),
             finish_reason=finish_reason,
             message_length=message_length,
+            phase=phase,
         ),
         request_ip=(audit_http or {}).get("ip"),
         user_agent=(audit_http or {}).get("user_agent"),

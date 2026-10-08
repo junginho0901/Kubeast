@@ -8,6 +8,7 @@
 # 가드만 단위 테스트로 cover, 실제 streaming 흐름은 e2e (ai-chat.spec) +
 # 사용자 UI 검증으로.
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -32,8 +33,11 @@ def _make_service():
     return service
 
 
-def _make_stream_chunks(contents: list[str], usage=None, finish_reason="stop"):
-    """OpenAI streaming chunk 형식의 async iterable mock."""
+def _make_stream_chunks(contents: list[str], usage=None, finish_reason="stop", usage_only_tail=False):
+    """OpenAI streaming chunk 형식의 async iterable mock.
+
+    usage_only_tail=True 면 stream_options.include_usage 가 보내는 모양 그대로 —
+    usage 는 choices 가 빈 마지막 청크에만 실린다."""
     chunks = []
     for i, content in enumerate(contents):
         is_last = i == len(contents) - 1
@@ -44,9 +48,11 @@ def _make_stream_chunks(contents: list[str], usage=None, finish_reason="stop"):
         )
         chunk = SimpleNamespace(
             choices=[choice],
-            usage=usage if is_last else None,
+            usage=usage if is_last and not usage_only_tail else None,
         )
         chunks.append(chunk)
+    if usage_only_tail:
+        chunks.append(SimpleNamespace(choices=[], usage=usage))
 
     class FakeStream:
         def __aiter__(self):
@@ -160,3 +166,123 @@ async def test_stream_create_fallback_when_stream_options_unsupported():
     assert "stream_options" not in create_calls[1]
     # 정상 종료 (DONE 포함)
     assert events[-1] == "data: [DONE]\n\n"
+
+
+def _capture_audit(monkeypatch):
+    rows: list[dict] = []
+
+    async def fake_write_audit(**kw):
+        rows.append(kw)
+        return True
+
+    monkeypatch.setattr("app.services.audit_writer.write_audit", fake_write_audit)
+    return rows
+
+
+@pytest.mark.asyncio
+async def test_audit_row_per_optimization_run(monkeypatch):
+    """ai.chat.complete(phase optimization) 1건 — 토큰·target namespace·iterations 1."""
+    service = _make_service()
+    service.cluster_name = "self"
+    usage = SimpleNamespace(prompt_tokens=10, completion_tokens=20, total_tokens=30)
+    service.client.chat.completions.create = AsyncMock(
+        return_value=_make_stream_chunks(contents=["a", "b"], usage=usage, finish_reason="stop")
+    )
+    rows = _capture_audit(monkeypatch)
+    actor = {"user_id": "u1", "email": "u1@example.com"}
+    http = {"ip": "10.0.0.1", "user_agent": "ua", "request_id": "rid", "path": "/api/v1/ai/suggest-optimization/stream"}
+
+    events = [c async for c in suggest_optimization_stream(service, "kube-system", audit_actor=actor, audit_http=http)]
+
+    assert events[-1] == "data: [DONE]\n\n"
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["action"] == "ai.chat.complete"
+    assert row["result"] == "success"
+    assert row["actor_email"] == "u1@example.com"
+    assert (row["target_type"], row["target_id"]) == ("namespace", "kube-system")
+    assert row["cluster"] == "self"
+    assert row["path"] == http["path"]
+    after = row["after"]
+    assert after["phase"] == "optimization"
+    assert after["session_id"] is None
+    assert (after["prompt_tokens"], after["completion_tokens"], after["total_tokens"]) == (10, 20, 30)
+    assert (after["tool_calls"], after["iterations"]) == (0, 1)
+    assert after["finish_reason"] == "stop"
+    assert after["model"] == "gpt-4"
+
+
+@pytest.mark.asyncio
+async def test_usage_only_final_chunk_is_counted_not_an_error(monkeypatch):
+    """include_usage 의 마지막 청크(choices 비어 있음)는 토큰으로 세고 error 이벤트를 내지 않는다."""
+    service = _make_service()
+    usage = SimpleNamespace(prompt_tokens=7, completion_tokens=3, total_tokens=10)
+    service.client.chat.completions.create = AsyncMock(
+        return_value=_make_stream_chunks(contents=["x", "y"], usage=usage, usage_only_tail=True)
+    )
+    rows = _capture_audit(monkeypatch)
+
+    events = [
+        c async for c in suggest_optimization_stream(service, "default", audit_actor={"user_id": "u1", "email": "e"}, audit_http={})
+    ]
+
+    kinds = [json.loads(e[len("data: "):])["kind"] for e in events if e != "data: [DONE]\n\n"]
+    assert "error" not in kinds
+    assert kinds[-2:] == ["meta", "usage"]
+    assert rows[0]["result"] == "success"
+    assert rows[0]["after"]["total_tokens"] == 10
+    assert rows[0]["after"]["finish_reason"] == "stop"
+
+
+@pytest.mark.asyncio
+async def test_optimization_failure_is_audited_with_null_tokens(monkeypatch):
+    service = _make_service()
+    service._build_optimization_observations = AsyncMock(side_effect=RuntimeError("tool-server down"))
+    rows = _capture_audit(monkeypatch)
+
+    events = [
+        c
+        async for c in suggest_optimization_stream(
+            service, "default", audit_actor={"user_id": "u1", "email": "u1@example.com"}, audit_http={}
+        )
+    ]
+
+    assert json.loads(events[0][len("data: "):])["kind"] == "error"
+    assert events[-1] == "data: [DONE]\n\n"
+    assert len(rows) == 1
+    assert rows[0]["result"] == "failure"
+    assert "tool-server down" in rows[0]["error"]
+    assert rows[0]["after"]["phase"] == "optimization"
+    assert rows[0]["after"]["total_tokens"] is None
+
+
+@pytest.mark.asyncio
+async def test_cancelled_optimization_is_audited_as_cancelled(monkeypatch):
+    """클라이언트가 중간에 끊으면(generator 종료) finish_reason cancelled 행 1건, 토큰은 null."""
+    service = _make_service()
+    service.client.chat.completions.create = AsyncMock(return_value=_make_stream_chunks(contents=["a", "b", "c"]))
+    rows = _capture_audit(monkeypatch)
+    gen = suggest_optimization_stream(service, "default", audit_actor={"user_id": "u1", "email": "e"}, audit_http={})
+    await gen.__anext__()  # observed
+    await gen.__anext__()  # first answer chunk
+
+    await gen.aclose()  # the client went away
+    await asyncio.sleep(0.01)  # the spawned write runs on the loop
+
+    assert len(rows) == 1
+    assert rows[0]["after"]["finish_reason"] == "cancelled"
+    assert rows[0]["after"]["phase"] == "optimization"
+    assert rows[0]["after"]["total_tokens"] is None
+    assert rows[0]["result"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_optimization_without_actor_writes_no_audit_row(monkeypatch):
+    service = _make_service()
+    service.client.chat.completions.create = AsyncMock(return_value=_make_stream_chunks(contents=["a"]))
+    rows = _capture_audit(monkeypatch)
+
+    events = [c async for c in suggest_optimization_stream(service, "default")]
+
+    assert events[-1] == "data: [DONE]\n\n"
+    assert rows == []
