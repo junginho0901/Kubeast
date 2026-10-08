@@ -17,6 +17,8 @@ import { usePermission } from '@/hooks/usePermission'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
+import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
+import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 
 interface Props {
   name: string
@@ -34,6 +36,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [logLines, setLogLines] = useState(100)
   const [showLogs, setShowLogs] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
+  const logFilesAvailable = useLogFilesAvailable(namespace)
+  const [logSource, setLogSource] = useState<LogSource>('stdout')
+  const showLogFiles = logFilesAvailable && logSource === 'files'
   const [execTarget, setExecTarget] = useState<string | null>(null)
   const [execSelectContainer, setExecSelectContainer] = useState<string>('')
   const [execCommand, setExecCommand] = useState<string>('/bin/sh')
@@ -783,6 +788,26 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <div ref={logSectionRef}>
       <InfoSection title="Logs">
         <div className="space-y-3">
+          {logFilesAvailable && <LogSourceToggle size="sm" value={logSource} onChange={setLogSource} />}
+          {showLogFiles ? (
+            <LogFilesView
+              size="sm"
+              namespace={namespace}
+              pod={name}
+              container={logContainer}
+              leading={
+                <CustomDropdown
+                  size="sm"
+                  className="w-40"
+                  testId="pod-logs-container"
+                  value={logContainer}
+                  onChange={setLogContainer}
+                  options={containerNames.map((n: string) => ({ value: n, label: n }))}
+                />
+              }
+            />
+          ) : (
+          <>
           <div className="flex flex-wrap items-center gap-2">
             <CustomDropdown
               size="sm"
@@ -812,6 +837,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-[11px] text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
               {logsFetching ? dl('Loading...') : logData || dl('(no logs)')}
             </div>
+          )}
+          </>
           )}
         </div>
       </InfoSection>

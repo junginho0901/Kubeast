@@ -27,12 +27,14 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 			"menu.configuration", "menu.dashboard",
 			"resource.*.read",
 			"resource.helm.read",
+			"resource.pod.logfile",
 		}},
 		{"Write", "읽기/쓰기", []string{
 			"menu.*",
 			"resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete",
 			"resource.cronjob.suspend", "resource.cronjob.trigger",
 			"resource.secret.reveal",
+			"resource.pod.logfile",
 			// Helm: write role gets read + rollback + upgrade (values) + test.
 			// Uninstall stays out by default — per docs/helm-plan.md §6-2
 			// it requires Admin to reduce blast radius from accidental

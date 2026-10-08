@@ -91,6 +91,11 @@ sessionRecording:
 features:
   prometheus:
     enabled: true
+  # The e2e-logfile-writer fixture in default (deploy/kind/fixtures.yaml).
+  logFiles:
+    enabled: true
+    paths: [/var/log/app/*.log]
+    namespaces: [default]
 gitops:
   argocd:
     enabled: true

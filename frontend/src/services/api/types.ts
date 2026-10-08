@@ -633,6 +633,24 @@ export interface ClusterFeatures {
   }
   issues?: { eventWindowMinutes: number }
   optimization?: { windowHours: number }
+  // Log files inside containers; namespaces empty = every namespace.
+  logFiles?: { enabled: boolean; maxLines: number; namespaces: string[] }
+}
+
+// /api/v1/namespaces/{ns}/pods/{name}/logfiles — files only, no content.
+export interface LogFileList {
+  files: Array<{ path: string }>
+  patterns: string[]
+  max_lines: number
+}
+
+// …/logfiles/content — the last `lines` lines of one file.
+export interface LogFileContent {
+  container: string
+  path: string
+  lines: number
+  content: string
+  truncated: boolean
 }
 
 // /api/v1/cluster/issues — the dashboard's "Check issues": pods, workloads,

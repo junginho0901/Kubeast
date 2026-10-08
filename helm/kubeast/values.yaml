@@ -548,6 +548,21 @@ features:
     excludeNamespaces: [kube-system, kube-public, kube-node-lease]
     tlsWarnDays: 30
     tlsCriticalDays: 7
+  # Log files inside containers (Pod → Logs → Log files, permission
+  # resource.pod.logfile, in the Read and Write roles): for applications that
+  # write logs to files instead of stdout. Kubeast runs only "ls" and "tail"
+  # through the user's pods/exec, no shell, and reads only files matching
+  # paths (absolute; * and ? in the file name only, e.g. /var/log/app/*.log).
+  # namespaces limits which pods it works in; with impersonation on, the chart
+  # also binds pods/exec (kubeast:logfile-reader) to the Read and Write groups
+  # in those namespaces of this cluster (other clusters: apply the same
+  # template, helm template -s templates/logfiles-rbac.yaml). Each read is
+  # audited as k8s.pod.logfile.read. maxLines caps one read.
+  logFiles:
+    enabled: false
+    paths: []
+    namespaces: []
+    maxLines: 2000
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with

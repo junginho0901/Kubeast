@@ -1,7 +1,8 @@
 # Objects the e2e suite opens in the drawer on the dev cluster (`self`): a CronJob
 # with every policy field set, an Ingress with TLS, a StatefulSet with a volume
-# claim template, an HPA, a RuntimeClass and a Deployment that carries Argo CD's
-# tracking annotation. Applied by scripts/kind-deploy.sh.
+# claim template, an HPA, a RuntimeClass, a Deployment that carries Argo CD's
+# tracking annotation and an app that logs to files. Applied by
+# scripts/kind-deploy.sh.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -166,3 +167,44 @@ spec:
         - name: fail
           image: python:3.12-alpine
           command: [sh, -c, "exit 1"]
+---
+# For the log files view (features.logFiles in the dev values): an app that
+# writes its logs to files and nothing to stdout. Only the two *.log files
+# match the dev pattern; notes.txt and archive/ must stay out of the list.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2e-logfile-writer
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: e2e-logfile-writer
+  template:
+    metadata:
+      labels:
+        app: e2e-logfile-writer
+    spec:
+      containers:
+        - name: app
+          image: python:3.12-alpine
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /var/log/app/archive
+              echo "not a log" > /var/log/app/notes.txt
+              i=0
+              while true; do
+                i=$((i+1))
+                echo "$(date -u +%FT%TZ) request $i GET /health 200" >> /var/log/app/app.log
+                echo "$(date -u +%FT%TZ) access $i" >> /var/log/app/access.log
+                sleep 2
+              done
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log/app
+      volumes:
+        - name: logs
+          emptyDir: {}

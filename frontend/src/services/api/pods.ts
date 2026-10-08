@@ -3,7 +3,7 @@
 // the dedicated WebSocket multiplexer in /api/v1/ws).
 
 import { client } from './client'
-import type { PodInfo, PodRbacResponse } from './types'
+import type { LogFileContent, LogFileList, PodInfo, PodRbacResponse } from './types'
 
 export const podsApi = {
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
@@ -38,6 +38,28 @@ export const podsApi = {
       },
     )
     return typeof data === 'string' ? data : (data.logs ?? data.data ?? '')
+  },
+
+  // Log files inside the container (features.logFiles): the files the
+  // configured patterns cover, and the last lines of one of them.
+  listLogFiles: async (namespace: string, podName: string, container: string): Promise<LogFileList> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pods/${podName}/logfiles`, {
+      params: { container },
+    })
+    return data
+  },
+
+  getLogFileContent: async (
+    namespace: string,
+    podName: string,
+    container: string,
+    path: string,
+    lines: number,
+  ): Promise<LogFileContent> => {
+    const { data } = await client.get(`/cluster/namespaces/${namespace}/pods/${podName}/logfiles/content`, {
+      params: { container, path, lines },
+    })
+    return data
   },
 
   deletePod: async (namespace: string, podName: string, force: boolean = false): Promise<void> => {

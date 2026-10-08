@@ -171,6 +171,7 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		},
 		"issues":       map[string]interface{}{"eventWindowMinutes": h.cfg.IssuesEventWindowMinutes},
 		"optimization": map[string]interface{}{"windowHours": h.cfg.OptimizationWindowHours},
+		"logFiles":     map[string]interface{}{"enabled": h.cfg.LogFilesEnabled, "maxLines": h.cfg.LogFilesMaxLines, "namespaces": nonNilStrings(h.cfg.LogFilesNamespaces)},
 	})
 }
 

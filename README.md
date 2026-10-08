@@ -192,8 +192,8 @@ AI 어시스턴트가 활성화됩니다.
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인만 되고 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`) · Helm 읽기 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret을 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다 |
-| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · Helm rollback/upgrade/test · AI 툴 전부 | `kubeast:operator` = `edit` + viewer |
+| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`) · Helm 읽기 · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret을 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다 |
+| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창이 이 그룹 이름을 보여 준다 |
 
@@ -235,6 +235,7 @@ AI 어시스턴트가 활성화됩니다.
 - **Dependency Graph** — 워크로드 간 의존성 그래프
 - **Monitoring** — Prometheus 시계열 차트, 이상 감지, 상관 분석, GPU 심층 메트릭
 - **Node Shell** — 웹 기반 노드 터미널
+- **로그 파일** — 파일로 로그를 쓰는 앱의 컨테이너 안 로그를 허용 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, 아래 절)
 - **Advanced Search** — 표현식 기반 전역 리소스 탐색
 
 ### 🔐 인증 · 감사
@@ -536,7 +537,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 전제(없으면 해당 스펙은 실패하지 않고 사유를 남기며 건너뜀):
 
 - **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus(`deploy/kind/second-cluster.yaml`)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
-- **픽스처** — `deploy/kind/fixtures.yaml`(`kind-deploy.sh`가 적용): CronJob·TLS Ingress·StatefulSet·HPA·RuntimeClass·Argo CD 어노테이션 Deployment, 이슈 스펙용 깨진 객체 2(스케줄 안 되는 Deployment, 실패한 Job). dev 값은 `features.prometheus.enabled`가 켜져 있습니다.
+- **픽스처** — `deploy/kind/fixtures.yaml`(`kind-deploy.sh`가 적용): CronJob·TLS Ingress·StatefulSet·HPA·RuntimeClass·Argo CD 어노테이션 Deployment, 이슈 스펙용 깨진 객체 2(스케줄 안 되는 Deployment, 실패한 Job), 로그를 파일로만 쓰는 `e2e-logfile-writer`(`logfiles.spec.ts`용). dev 값은 `features.prometheus.enabled`와 `features.logFiles`(`/var/log/app/*.log`, `default`)가 켜져 있습니다.
 - **AI 스펙** — 기본 모델 1개(위 Ollama `ModelConfig`).
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인·Mailpit·웹훅 수신기)과 dev 값의 싱크·`sessionRecording.enabled`.
 - 리셋하면 위 데이터가 다 사라지므로 다시 만듭니다.
@@ -717,6 +718,25 @@ audit:
 sessionRecording:
   enabled: true
   s3: {bucket: kubeast-sessions, prefix: sessions/, region: ap-northeast-2}   # k8s-service 롤에 s3:PutObject·GetObject
+```
+
+### 컨테이너 안 로그 파일 (Log files)
+
+로그를 stdout이 아니라 **파일로 쓰는 앱**은 `kubectl logs`에도, Kubeast의 Logs 탭·AI 로그 툴에도 아무것도 안 보입니다(kubelet은 stdout/stderr만 모읍니다). 켜면(`features.logFiles.enabled`, 기본 off) Pod 상세의 Logs 탭과 Pod 드로어의 Logs 칸에 **컨테이너 출력 | 로그 파일** 전환이 생기고, 허용한 경로의 파일을 골라 마지막 N줄을 읽거나 실시간으로 따라갈 수 있습니다.
+
+- **고정 명령, 셸 없음**: k8s-service가 사용자 신원의 `pods/exec`로 `ls`·`tail`만 실행합니다 — 목록 `ls -1p -- <디렉터리>`, 읽기 `tail -n N -- <파일>`, 실시간 `ls -lindL -- <파일>`(크기·inode) + `tail -c +<오프셋> -- <파일>`(인자는 배열로 넘겨 셸을 거치지 않음). 읽을 수 있는 건 `paths` 패턴(절대 경로, `*`·`?`는 파일 이름에만 — 예 `/var/log/app/*.log`)에 맞는 파일뿐이고, `..`·`.`·겹친 `/`가 든 경로는 거부합니다. 패턴이 틀리면 k8s-service가 뜨지 않습니다.
+- **어디서**: `namespaces`를 적으면 그 네임스페이스의 파드에서만 됩니다(그 밖은 403). impersonation이 켜져 있으면 차트가 ClusterRole `kubeast:logfile-reader`(`pods/exec` create·get)를 만들고 **그 네임스페이스에만** Read·Write 그룹(`kubeast:viewer`·`kubeast:operator`)을 RoleBinding으로 묶습니다 — Admin 그룹은 이미 cluster-admin, Write 그룹은 기본 `edit`로 원래 exec가 됩니다. 다른 등록 클러스터에는 같은 렌더링을 적용합니다: `helm template kubeast helm/kubeast -s templates/logfiles-rbac.yaml -f <values> | kubectl --context <클러스터> apply -f -`.
+- **권한·감사**: `resource.pod.logfile`(Read·Write에 포함, 클러스터별). 파일 내용 읽기와 실시간 연결마다 `k8s.pod.logfile.read`(민감 조회 — 기록이 안 되면 503, `after` = 컨테이너·경로·줄 수·follow), 파일 목록은 이름만이라 기록하지 않습니다. 권한이 있는데 경로·네임스페이스 밖이거나 실행이 실패한 시도도 failure 행으로 남습니다.
+- **안 되는 경우**: `tail`·`ls`가 없는 이미지(distroless)는 422 "이 컨테이너에선 볼 수 없음", 컨테이너 사용자가 못 읽는 파일은 422, 없는 파일은 404. 파일 내용은 마스킹하지 않습니다(화면에 안내) — 로그에 비밀값이 찍히면 앱 쪽에서 막아야 합니다.
+- **실시간 보기 = 2초 폴링**: 긴 `tail -F` 하나를 띄우지 않습니다 — 컨테이너 런타임은 exec 클라이언트가 끊겨도 그 프로세스를 멈추지 않아서, 탭을 닫을 때마다 앱 컨테이너에 `tail`이 남습니다(실측). 대신 2초마다 마지막으로 읽은 바이트 뒤만 `tail -c +<오프셋>`(탐색이라 파일 크기와 무관)으로 읽고, 가끔 `ls -lindL`로 크기·inode를 봐서 잘림·교체(로그 회전)를 따라갑니다. 명령은 매번 바로 끝납니다. 20초마다 SSE 주석을 보내 프록시의 유휴 끊김(nginx 60초)을 막고, 끊기면 브라우저가 스스로 다시 붙지 않습니다(다시 붙으면 마지막 줄을 또 읽고 감사 행도 하나 더 생기므로). 한 번에 읽는 줄은 `maxLines`(기본 2000)까지입니다.
+
+```yaml
+features:
+  logFiles:
+    enabled: true
+    paths: [/var/log/app/*.log, /srv/app/log/production.log]
+    namespaces: [apps]       # 비우면 모든 네임스페이스(그때는 RoleBinding을 만들지 않으므로 Read 그룹은 클러스터가 거부)
+    maxLines: 2000
 ```
 
 ### 프론트엔드
