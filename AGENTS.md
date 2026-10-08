@@ -70,7 +70,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 - **성공뿐 아니라 실패도 기록**. 실패 시 `Result = audit.ResultFailure`, `Error` 필드 채움.
 - **DB 감사 행은 민감 동작의 선행 조건, stdout 미러만 best-effort.** 감사 DB에 기록할 수 없으면
-  쓰기·민감 읽기(Secret/Helm reveal, exec, 노드 셸, 로그, kubeconfig, AI 쓰기 툴)는 **503 `audit unavailable`**로
+  쓰기·민감 읽기(Secret/Helm reveal, exec, 노드 셸, 로그, 컨테이너 로그 파일, kubeconfig, AI 쓰기 툴)는 **503 `audit unavailable`**로
   거부한다(`AUDIT_FAIL_CLOSED`, 기본 true; 차트 `audit.failClosed`). 목록·조회는 계속된다.
   구현 = 변경 라우트는 `audit.RequireWritable` 미들웨어, 감사가 조건부인 GET 핸들러는 동작 전 `h.auditReady(r)` +
   `recordAudit*` 반환 오류 확인(`h.refuseUnaudited`). 이미 실행된 변경의 사후 쓰기 실패는 `audit.Guarded`가 세고
@@ -106,4 +106,13 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ## 빌드 / 배포
 
 - **빌드/배포는 항상 `scripts/rebuild-kind.sh` 를 통해 수행**한다. 직접 docker/kubectl 명령을 돌리지 않는다.
+  게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
+  ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
+
+## 컨테이너 exec
+
+- **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이
+  정리하지 않음). 서비스 코드에서 `tail -F`·대기하는 셸 같은 장기 명령을 exec로 돌리지 말고, 바로 끝나는 짧은 명령을
+  주기적으로 실행한다(예: 로그 파일 실시간 보기 = `tail -c +<오프셋>` 2초 폴링, `services/k8s-service-go/internal/handler/logfiles.go`).
+- exec 명령은 인자 배열로 넘기고 셸을 거치지 않는다. 사용자 입력이 들어가는 인자는 허용 목록으로 검증하고 `--`로 옵션 파싱을 끝낸다.
 - 로컬 실행은 [docker-compose.yml](docker-compose.yml) 참고.
