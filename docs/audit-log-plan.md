@@ -115,7 +115,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | 액션 | 뜻 |
 |---|---|
 | `ai.chat.send` | 채팅 메시지 수신(스트림 시작) |
-| `ai.chat.complete` | 채팅 턴 완료(오류로 끝나면 `failure`; 사용자가 중단·이탈하면 `finish_reason: cancelled`로 그때까지의 값) 또는 Optimization 화면의 AI 설명 완료. `after`에 `phase`(`chat` = 채팅 턴, `target_type: session` / `optimization` = AI 설명, 세션 없음, `target_type: namespace`·`target_id` = 네임스페이스, 모델 호출 1회라 `iterations 1`·`tool_calls 0`)·`provider`·`model`·`cluster`·`prompt_tokens`/`completion_tokens`/`total_tokens`(제공자가 usage를 안 보내면 null)·`tool_calls`·`iterations`·`duration_ms`·`finish_reason`. `cluster` 컬럼 = 턴이 실행된 클러스터(모든 `ai.*` 행 동일). admin AI 사용량 화면의 원본 |
+| `ai.chat.complete` | 채팅 턴 완료(오류로 끝나면 `failure`; 사용자가 중단·이탈하면 `finish_reason: cancelled`로 그때까지의 값) 또는 Optimization 화면의 AI 설명 완료(오류·중단도 같은 규칙). `after`에 `phase`(`chat` = 채팅 턴, `target_type: session` / `optimization` = AI 설명, 세션 없음, `target_type: namespace`·`target_id` = 네임스페이스, 모델 호출 1회라 `iterations 1`·`tool_calls 0`)·`provider`·`model`·`cluster`·`prompt_tokens`/`completion_tokens`/`total_tokens`(제공자가 usage를 안 보내면 null)·`tool_calls`·`iterations`·`duration_ms`·`finish_reason`. `cluster` 컬럼 = 턴이 실행된 클러스터(모든 `ai.*` 행 동일). Admin → AI Usage 화면의 원본 |
 | `ai.tool.call` | 모델이 읽기 툴 호출. `after`에 툴·인자·`redacted{count,kinds}` |
 | `ai.tool.approval_requested` / `ai.tool.approve` / `ai.tool.reject` | 쓰기 툴 승인 요청·승인·거절 |
 

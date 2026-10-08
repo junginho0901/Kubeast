@@ -240,11 +240,11 @@ AI 어시스턴트가 활성화됩니다.
 ### 🔐 인증 · 감사
 
 - JWT 기반 자체 인증(JWKS) — 조직(Organization) / 팀(Team) / 사용자 계층
-- **API 키** — 스크립트·CI용 자격(설정 → API 키). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함(아래 "API 키" 절)
+- **API 키** — 스크립트·CI용 자격(Settings → API keys). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함(아래 "API 키" 절)
 - **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, Helm 변경 등)를
   기록, 성공/실패 모두 추적
 - **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계(Admin → AI Usage). 한도는 없고 누가 얼마나 썼는지 본다; 제공자가 usage를 안 보낸 호출은 합계에서 빼고 건수로 표시
-- **i18n** — 한국어 · 영어
+- **i18n** — 한국어 · 영어. Kubernetes 리소스 종류(`StatefulSet`, `ConfigMap`, `Namespace` …)와 화면 이름(사이드바 항목·페이지 제목)은 두 언어 모두 영어로, 동사·설명·안내문만 번역합니다(예: "StatefulSet 생성", "전체 Namespace")
 
 ---
 
@@ -491,7 +491,7 @@ multicluster:
 ├── helm/kubeast/                    # Helm 차트 — 모든 설치 경로의 유일한 매니페스트 원본 (정본 nginx.conf = files/nginx.conf)
 ├── deploy/kind/                     # 로컬 kind 개발 설치 값 (values.yaml; 개인 값은 values.local.yaml, git 제외)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
-│   └── actions/                     # 옵트인 동작 스위트 — UI 동작 90개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
+│   └── actions/                     # 옵트인 동작 스위트 — UI 동작 92개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
 ├── scripts/                         # 빌드/배포/개발 스크립트
 ├── install.sh                       # K8s 원라인 설치
 ├── install-docker.sh                # Docker 원라인 설치
@@ -522,7 +522,7 @@ AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니
 
 ### API 키 (자동화)
 
-사람 로그인 대신 스크립트·CI가 쓰는 긴 자격입니다. 설정 → API 키에서 이름·만료(기본 30일, 상한은 차트
+사람 로그인 대신 스크립트·CI가 쓰는 긴 자격입니다. Settings → API keys에서 이름·만료(기본 30일, 상한은 차트
 `auth.apiKeys.maxDays`)·클러스터·역할 상한(기본 Read)을 정해 발급하면 값(`kbk_…`)이 한 번만 보입니다. 키는 그
 자체로 API를 부르지 않고 짧은 액세스 토큰으로 교환해 씁니다 — 토큰은 발급자가 그 순간 가진 권한을 키의 범위로
 잘라낸 것이라 발급자보다 많은 일을 할 수 없고, 키를 폐기하면 다음 교환부터 거부됩니다(관리자는 사용자 상세에서
@@ -556,10 +556,10 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 ### 휴면 계정 자동 잠금 (Dormant accounts)
 
-위 보고서가 휴면 계정을 **보여 주는** 것이라면, 이 기능은 사람이 안 봐도 **닫습니다**(ISMS-P 2.5.6 결함 사례 "6개월 이상 미접속 계정 활성", NIST 800-53 AC-2(3)). `auth.dormantAccounts.enabled: true`면 auth-service 안의 스위퍼가 `sweepHours`(24)마다 돌면서 `days`(90) 동안 **로그인도 API 키 교환도 없는 계정**(한 번도 안 쓴 계정은 생성일 기준)을 잠그고 그 계정의 세션을 회수합니다. 잠긴 계정은 비밀번호 로그인·SSO·API 키 교환이 모두 거부되고(응답은 일반 401, 사유는 감사 로그 `reason: dormant`), 관리자가 사용자 관리에서 **잠금 해제**를 눌러야 다시 들어옵니다.
+위 보고서가 휴면 계정을 **보여 주는** 것이라면, 이 기능은 사람이 안 봐도 **닫습니다**(ISMS-P 2.5.6 결함 사례 "6개월 이상 미접속 계정 활성", NIST 800-53 AC-2(3)). `auth.dormantAccounts.enabled: true`면 auth-service 안의 스위퍼가 `sweepHours`(24)마다 돌면서 `days`(90) 동안 **로그인도 API 키 교환도 없는 계정**(한 번도 안 쓴 계정은 생성일 기준)을 잠그고 그 계정의 세션을 회수합니다. 잠긴 계정은 비밀번호 로그인·SSO·API 키 교환이 모두 거부되고(응답은 일반 401, 사유는 감사 로그 `reason: dormant`), 관리자가 Admin → User Management에서 **잠금 해제**를 눌러야 다시 들어옵니다.
 
 - `exemptAdmins: true`(기본)면 역할에 `*`나 `admin.*` 권한이 있는 계정은 잠그지 않습니다 — 마지막 관리자까지 잠기면 아무도 못 풀기 때문. 대신 접근 권한 검토 보고서에 `dormant`로 계속 보입니다.
-- 사용자 관리 화면: 잠긴 계정에 "휴면 잠김"/"잠김" 배지와 **잠금 해제** 버튼, 상단에 **휴면 계정 지금 점검**(스위퍼를 즉시 1회 실행, `admin.users.update`). 감사 액션: `user.account.dormant_lock`(actor `system`) · `admin.dormant.sweep` · `admin.users.unlock`.
+- Admin → User Management: 잠긴 계정에 "휴면 잠김"/"잠김" 배지와 **잠금 해제** 버튼, 상단에 **휴면 계정 지금 점검**(스위퍼를 즉시 1회 실행, `admin.users.update`). 감사 액션: `user.account.dormant_lock`(actor `system`) · `admin.dormant.sweep` · `admin.users.unlock`.
 - 끄면 스위퍼가 멈추고 새로 잠그지 않지만, 이미 잠긴 계정은 풀 때까지 그대로입니다. 접근 권한 검토의 `dormantDays`(표시 기준)와는 별개 값이라 "60일부터 표시, 90일에 잠금"처럼 벌릴 수 있습니다.
 
 ### Argo CD 가드 (GitOps)
@@ -655,7 +655,8 @@ audit:
 - **저장**: k8s-service가 로컬 볼륨에 쓰고 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(운영 권장, 감사 S3 싱크와 같은 필드) · `database`(세션당 1 MiB, S3 없는 작은 설치) · `file`(PVC). S3 키는 파일로 마운트돼 k8s-service의 IRSA 신원을 건드리지 않습니다.
 - **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다.
 - **실패**: 녹화를 시작하지 못하면(로컬 볼륨에 못 씀) 세션을 거부합니다(`required: true`). 저장소 업로드가 실패하거나 조각 하나가 30초 안에 끝나지 않아도 세션은 계속되고, 재시도하며 알람 `KubeastSessionRecordingUploadStalled`로 드러납니다. 세션당 `maxBytes`(기본 64 MiB)를 넘으면 녹화만 멈춥니다.
-- **다시보기**: Admin → 세션 기록(권한 `admin.sessions.read`)에서 재생·`.cast`·텍스트 사본 내려받기, 감사 화면의 exec 행에서도 재생. 녹화를 열 때마다 `admin.session.read`가 감사에 남습니다.
+- **다시보기**: Admin → Session recordings(권한 `admin.sessions.read`)에서 재생·`.cast`·텍스트 사본 내려받기, Audit Logs의 exec 행에서도 재생. 녹화를 열 때마다 `admin.session.read`가 감사에 남습니다.
+- **재생기와 CSP**: 재생기(asciinema-player)는 터미널을 WebAssembly로 돌립니다. 그래서 게이트웨이가 보내는 CSP의 `script-src`에 `'wasm-unsafe-eval'`이 들어 있습니다(`'unsafe-eval'`은 아님, `helm/kubeast/files/nginx.conf`). 앞단 Ingress·프록시가 CSP 헤더를 덮어쓰면 같은 값을 허용해야 재생됩니다 — 빠지면 ▶ 버튼과 `--:--`에서 멈춥니다.
 - **보존**: 원격 객체는 버킷 수명주기·Object Lock에 맡기고, 목록 행은 `retention.auditDays`를 따릅니다.
 
 ```yaml
