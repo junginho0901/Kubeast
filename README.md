@@ -198,6 +198,8 @@ AI 어시스턴트가 활성화됩니다.
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창이 이 그룹 이름을 보여 준다 |
 
 - **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall. `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`은 Write에 없고, 필요하면 커스텀 역할에 넣는다.
+  - 클러스터 쪽에서 보면 Write 그룹(`kubeast:operator`)은 기본 `edit` ClusterRole에 `pods/exec`가 들어 있어 원래 모든 네임스페이스에서 exec가 된다 — Pod exec를 Admin 전용으로 만드는 것은 Kubeast의 앱 권한이다. 그래서 Kubeast의 impersonation 자격(`kubeast-impersonator`)은 그 그룹들 전체 권한과 같은 무게로 지켜야 한다.
+  - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read·Write도 쓴다. 이를 위해 차트는 적어 둔 네임스페이스에만 Read 그룹(`kubeast:viewer`)에 `pods/exec`를 묶는다(아래 "컨테이너 안 로그 파일" 절).
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하고 감사 행 없이는 거부된다(fail-closed). **읽기 API**는 "그 클러스터에 역할이 있나"(클러스터 미들웨어, deny-by-default) + 클러스터의 RBAC(viewer 그룹)으로 막힌다. `menu.*`는 화면 메뉴만 가린다.
 - 네임스페이스 단위 권한은 없다(클러스터 단위). 팀별로 네임스페이스를 나누려면 커스텀 역할을 만들고 그 클러스터에서 `kubeast:role:<이름>` 그룹을 RoleBinding으로 묶는다.
 - `auth.impersonation.enabled=false`는 데모용이다: k8s-service가 `cluster-admin`, tool-server가 `*`로 돌고 읽기 API는 클러스터 부여만으로 열린다.
@@ -242,7 +244,7 @@ AI 어시스턴트가 활성화됩니다.
 
 - JWT 기반 자체 인증(JWKS) — 조직(Organization) / 팀(Team) / 사용자 계층
 - **API 키** — 스크립트·CI용 자격(Settings → API keys). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함(아래 "API 키" 절)
-- **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, Helm 변경 등)를
+- **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, 컨테이너 로그 파일 열람, Helm 변경 등)를
   기록, 성공/실패 모두 추적
 - **클러스터 위생 점검** — Pod Security Standards·이미지 태그·리소스·Namespace 정책·RBAC·TLS 만료를 보는 사람 권한으로 읽어 한 장으로, CSV/JSON과 클러스터별 월간 서명(Admin → Cluster hygiene, 아래 절)
 - **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계(Admin → AI Usage). 한도는 없고 누가 얼마나 썼는지 본다; 제공자가 usage를 안 보낸 호출은 합계에서 빼고 건수로 표시
