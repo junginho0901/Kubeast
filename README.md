@@ -195,7 +195,7 @@ AI 어시스턴트가 활성화됩니다.
 | **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`) · Helm 읽기 · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret을 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다 |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
-| 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`) |
+| 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창이 이 그룹 이름을 보여 준다 |
 
 - **Admin만 되는 것**: Pod exec · Node shell · cordon/drain · 워크로드 rollback · Helm uninstall. `resource.pod.exec`·`resource.node.cordon/drain/shell`·`resource.workload.rollback`·`resource.helm.uninstall`은 Write에 없고, 필요하면 커스텀 역할에 넣는다.
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하고 감사 행 없이는 거부된다(fail-closed). **읽기 API**는 "그 클러스터에 역할이 있나"(클러스터 미들웨어, deny-by-default) + 클러스터의 RBAC(viewer 그룹)으로 막힌다. `menu.*`는 화면 메뉴만 가린다.
@@ -512,6 +512,7 @@ multicluster:
 scripts/kind-deploy.sh                        # 처음: kind 생성 + 이미지 빌드·적재 + helm install
 scripts/rebuild-kind.sh ai-service frontend   # 특정 서비스 재빌드+배포
 scripts/rebuild-kind.sh --all                 # 전체
+scripts/rebuild-kind.sh gateway               # nginx.conf만: 릴리스 값 그대로 helm upgrade(이미지 빌드 없음)
 scripts/reset-and-deploy.sh [--keep|--db]     # 전체 재생성 / 릴리스·DB만 재설치 / DB만 비우기
 ```
 

@@ -5,6 +5,8 @@ import { test, expect, type APIRequestContext, type Browser } from '@playwright/
 //    says so instead of "No secrets found"
 //  - a user with no cluster grant sees the "no accessible cluster" notice, the
 //    footer says so, and no resource page mounts (no cluster API 403 storm)
+//  - a custom role the cluster has not bound is told which group it acts as
+//    (banner) and the role form shows that group while the name is typed
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -64,6 +66,8 @@ test.describe('non-admin UI notices', () => {
       await expect(banner).toBeVisible({ timeout: 20000 })
       await expect(banner).toContainText(/permission|권한/)
       await expect(banner).toContainText('roles')
+      // a built-in role acts as a group the chart binds: no custom-role hint
+      await expect(page.getByTestId('forbidden-custom-role-hint')).toHaveCount(0)
       // another page resets the banner; a page the viewer may read shows none
       await page.goto('/workloads/pods?cluster=self')
       await expect(page.getByRole('heading', { level: 1, name: /^(Pods|파드)$/ })).toBeVisible()
@@ -92,6 +96,49 @@ test.describe('non-admin UI notices', () => {
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })
     }
+  })
+
+  // A custom role acts on the cluster as kubeast:role:<slug>; the dev cluster
+  // neither allows nor binds that group, so every list is refused — the banner
+  // names the group and the chart setting instead of a bare "no permission".
+  test('a custom role without a cluster binding sees which group the cluster refuses', async ({ browser, request }) => {
+    const admin = await adminHeaders(request)
+    const user = await createUser(request, admin, 'customrole')
+    const roleName = `E2E Hint ${Date.now()}`
+    let roleId: number | undefined
+    try {
+      const role = await request.post('/api/v1/auth/admin/roles', {
+        headers: admin,
+        data: { name: roleName, description: 'e2e', permissions: ['menu.workloads', 'resource.*.read'] },
+      })
+      expect(role.status(), await role.text()).toBe(201)
+      roleId = (await role.json()).id as number
+      const grant = await request.put(`/api/v1/auth/admin/users/${user.id}/cluster-roles/self`, { headers: admin, data: { role: roleName } })
+      expect(grant.status()).toBe(200)
+      const { ctx, page } = await userPage(browser, user.email, user.password)
+      const pods = await ctx.request.get('/api/v1/cluster/namespaces/default/pods?cluster=self')
+      expect(pods.status(), 'the cluster refuses the unbound group').toBe(403)
+      await page.goto('/workloads/pods?cluster=self')
+      await expect(page.getByTestId('forbidden-banner')).toBeVisible({ timeout: 20000 })
+      const hint = page.getByTestId('forbidden-custom-role-hint')
+      await expect(hint).toContainText(`kubeast:role:${roleName.toLowerCase().replace(/ /g, '-')}`)
+      await expect(hint).toContainText('auth.impersonation.customRoles')
+      await ctx.close()
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${user.id}`, { headers: admin })
+      if (roleId) await request.delete(`/api/v1/auth/admin/roles/${roleId}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
+
+  test('the role form shows the group a custom role will act as', async ({ page }) => {
+    await page.goto('/admin/roles')
+    await page.getByRole('button', { name: /^(Create Role|역할 생성)$/ }).click()
+    const name = page.getByPlaceholder(/InfraManager/)
+    await expect(page.getByTestId('role-group-hint')).toHaveCount(0)
+    await name.fill('Infra Manager')
+    await expect(page.getByTestId('role-group-hint')).toContainText('kubeast:role:infra-manager')
+    await name.fill('Read')
+    await expect(page.getByTestId('role-group-hint')).toHaveCount(0)
   })
 
   test('a user with no cluster grant gets the notice and no cluster requests', async ({ browser, request }) => {
