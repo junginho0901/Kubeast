@@ -521,6 +521,27 @@ AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니
 `kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:8b`, `host.docker.internal:11434`
 — dev 값이 그 주소를 `ai.baseUrlAllowedHosts`와 NetworkPolicy에서 허용)로 등록하면 되고, 리셋 뒤에도 다시 적용합니다.
 
+### E2E 테스트 (Playwright)
+
+`e2e/`는 개발 서버가 아니라 **dev kind 클러스터의 게이트웨이**(`E2E_BASE_URL`, 기본 `http://localhost:30080`)를 상대로 돌고, 공유 클러스터 상태를 바꾸므로 한 번에 하나씩(`workers: 1`) 실행합니다. 화면 비교 스펙은 main에서 찍은 기준 이미지와 비교합니다.
+
+```bash
+export KUBECONFIG=$PWD/.kubeconfig-kind      # kubectl을 부르는 스펙이 dev kind만 보게(기본 kubeconfig 금지)
+export E2E_USER_EMAIL=admin E2E_USER_PASSWORD="$(kubectl -n kubeast get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d)"
+cd e2e && npx playwright test                 # 전체
+npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
+```
+
+전제(없으면 해당 스펙은 실패하지 않고 사유를 남기며 건너뜀):
+
+- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus(`deploy/kind/second-cluster.yaml`)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
+- **픽스처** — `deploy/kind/fixtures.yaml`(`kind-deploy.sh`가 적용): CronJob·TLS Ingress·StatefulSet·HPA·RuntimeClass·Argo CD 어노테이션 Deployment, 이슈 스펙용 깨진 객체 2(스케줄 안 되는 Deployment, 실패한 Job). dev 값은 `features.prometheus.enabled`가 켜져 있습니다.
+- **AI 스펙** — 기본 모델 1개(위 Ollama `ModelConfig`).
+- **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인·Mailpit·웹훅 수신기)과 dev 값의 싱크·`sessionRecording.enabled`.
+- 리셋하면 위 데이터가 다 사라지므로 다시 만듭니다.
+
+`e2e/actions/`는 옵트인 동작 스위트(UI 동작 92개를 두 번째 클러스터에 실행하고 `kubectl`로 확인, 약 12분)라 기본 실행에 들어가지 않습니다: `E2E_ACTIONS=1 npx playwright test --project=actions` — 전제는 [e2e/actions/README.md](e2e/actions/README.md).
+
 ### API 키 (자동화)
 
 사람 로그인 대신 스크립트·CI가 쓰는 긴 자격입니다. Settings → API keys에서 이름·만료(기본 30일, 상한은 차트
