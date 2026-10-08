@@ -8,6 +8,7 @@ import {
   Box,
   Boxes,
   ClipboardCheck,
+  ShieldCheck,
   Clock,
   Database,
   FileBox,
@@ -174,6 +175,16 @@ export default function Layout() {
     enabled: isAdmin,
   })
   const accessReviewOn = !!accessReviewConfig?.enabled
+  // Cluster hygiene: shown to admins who can read it, when the installation has it on.
+  const canReadHygiene = isAdmin && hasPermission('admin.hygiene.read')
+  const { data: hygieneConfig } = useQuery({
+    queryKey: ['hygiene', 'config'],
+    queryFn: api.getHygieneConfig,
+    staleTime: 60_000,
+    retry: false,
+    enabled: canReadHygiene,
+  })
+  const hygieneOn = canReadHygiene && !!hygieneConfig?.enabled
 
   const storageTabMatch = (tab: string, pathname: string, search: string) => {
     if (!pathname.startsWith('/storage')) return false
@@ -343,6 +354,9 @@ export default function Layout() {
         ...(accessReviewOn
           ? [{ name: t('nav.accessReview', { defaultValue: 'Access review' }), href: '/admin/access-review', icon: ClipboardCheck, testId: 'nav-access-review' }]
           : []),
+        ...(hygieneOn
+          ? [{ name: t('nav.clusterHygiene', { defaultValue: 'Cluster hygiene' }), href: '/admin/cluster-hygiene', icon: ShieldCheck, testId: 'nav-cluster-hygiene' }]
+          : []),
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
         { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
@@ -351,7 +365,7 @@ export default function Layout() {
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn])
 
   const activeGroup = useMemo(() => {
     for (const group of navGroups) {

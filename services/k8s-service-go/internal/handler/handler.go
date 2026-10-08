@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -27,6 +29,10 @@ type Handler struct {
 	auditStore audit.Writer
 	helmSvc    *helm.Service
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
+	// hygieneStore keeps cluster hygiene sign-offs (nil in tests: no history).
+	hygieneStore hygiene.Store
+	// hygieneScan replaces svc.CollectHygiene in tests.
+	hygieneScan func(ctx context.Context, opts k8s.HygieneOptions) (k8s.HygieneReport, error)
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).

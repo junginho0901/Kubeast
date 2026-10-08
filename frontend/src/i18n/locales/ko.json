@@ -28,6 +28,100 @@
       "empty": "API 키 없음"
     }
   },
+  "clusterHygiene": {
+    "title": "Cluster hygiene",
+    "subtitle": "클러스터를 내 권한으로 읽어 설정상 위험을 모은다 — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, ServiceAccount 토큰, RBAC, TLS 만료. 검토하고 내보내고 서명한다.",
+    "cluster": "클러스터",
+    "refresh": "다시 점검",
+    "scanning": "점검 중...",
+    "loading": "불러오는 중...",
+    "empty": "표시할 항목이 없습니다.",
+    "exempt": "예외",
+    "exemptReason": "예외: {{reason}}",
+    "pods": "Pod {{count}}개",
+    "search": "Namespace, 이름, 내용 검색...",
+    "truncated": "앞의 5000건만 표시합니다. 건수에는 전부 들어 있습니다.",
+    "collectors": "다음 목록을 읽지 못해 해당 점검을 건너뛰었습니다:",
+    "lastReview": "마지막 서명 {{when}} · {{who}}",
+    "noReview": "아직 서명 없음",
+    "nextDue": "다음 기한 {{when}}",
+    "overdue": "{{when}}부터 기한 지남",
+    "intervalHint": "{{days}}일마다 서명 기한이 돌아옵니다.",
+    "generatedAt": "점검 시각 {{when}} · 제외한 Namespace: {{namespaces}}",
+    "open": "열기",
+    "noHistory": "이 클러스터는 아직 서명된 적이 없습니다.",
+    "severity": {
+      "critical": "치명",
+      "warning": "경고",
+      "info": "참고"
+    },
+    "filter": {
+      "allSeverities": "모든 심각도",
+      "allChecks": "모든 점검"
+    },
+    "tab": {
+      "findings": "발견",
+      "checks": "점검 항목",
+      "history": "지난 서명"
+    },
+    "col": {
+      "severity": "심각도",
+      "check": "점검",
+      "object": "대상",
+      "message": "내용",
+      "findings": "발견",
+      "refs": "근거",
+      "reviewedAt": "서명 시각",
+      "reviewedBy": "서명자",
+      "note": "메모",
+      "counts": "치명 / 경고 / 참고 / 예외"
+    },
+    "checks": {
+      "pss": {
+        "privileged": "privileged 컨테이너",
+        "host-namespaces": "호스트 네임스페이스 공유(hostNetwork·hostPID·hostIPC)",
+        "hostpath": "hostPath 볼륨",
+        "host-ports": "hostPort",
+        "capabilities": "baseline 밖 capability 추가",
+        "other-baseline": "기타 baseline 위반(HostProcess·프로브 host·AppArmor·SELinux·/proc·seccomp·sysctl)",
+        "restricted": "restricted 미충족"
+      },
+      "image": {
+        "latest": "latest 태그 또는 태그 없는 이미지"
+      },
+      "resources": {
+        "memory-limit": "메모리 limit 없음",
+        "requests": "CPU·메모리 requests 없음"
+      },
+      "ns": {
+        "pss-label": "PSS enforce 라벨 없는 Namespace",
+        "network-policy": "NetworkPolicy 없는 Namespace",
+        "default-used": "default Namespace 사용"
+      },
+      "sa": {
+        "default-token": "default ServiceAccount 토큰 마운트"
+      },
+      "rbac": {
+        "cluster-admin": "cluster-admin 바인딩",
+        "wildcard": "와일드카드 Role·ClusterRole"
+      },
+      "tls": {
+        "expiry": "TLS 인증서 만료"
+      }
+    },
+    "snapshot": {
+      "viewing": "{{when}}에 {{who}}가 서명한 보고서를 보고 있습니다.",
+      "back": "지금으로"
+    },
+    "signoff": {
+      "title": "이 클러스터 서명",
+      "hint": "지금 보고서를 내 이름·시각·메모와 함께 저장합니다. 먼저 고치거나 예외 처리하세요(어노테이션 kubeast.io/hygiene-exempt · kubeast.io/hygiene-exempt-reason).",
+      "notePlaceholder": "발견 사항과 조치(선택)",
+      "button": "서명",
+      "saved": "{{when}}에 서명했습니다.",
+      "failed": "서명을 저장하지 못했습니다."
+    }
+  },
   "accessReview": {
     "title": "Access review",
     "subtitle": "지금 누가 무엇을 할 수 있는지: 계정·클러스터별 역할·API 키·마지막 검토 이후의 임시 권한·역할. 검토하고, 내려받고, 서명합니다.",
@@ -194,6 +288,7 @@
   "nav": {
     "accessRequests": "Access requests",
     "accessReview": "Access review",
+    "clusterHygiene": "Cluster hygiene",
     "core": "Core",
     "cluster": "Cluster",
     "workloads": "Workloads",

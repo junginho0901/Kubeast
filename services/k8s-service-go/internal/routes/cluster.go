@@ -22,6 +22,13 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/issues", h.GetClusterIssues)
 	r.Get("/api/v1/optimization", h.GetClusterOptimization)
 
+	// Cluster hygiene report (Admin → Cluster hygiene)
+	r.Get("/api/v1/hygiene/config", h.HygieneConfig)
+	r.Get("/api/v1/hygiene", h.GetHygiene)
+	r.Post("/api/v1/hygiene/signoff", h.SignoffHygiene)
+	r.Get("/api/v1/hygiene/history", h.HygieneHistory)
+	r.Get("/api/v1/hygiene/snapshot/{id}", h.HygieneSnapshot)
+
 	// Namespaces
 	r.Get("/api/v1/namespaces", h.GetNamespaces)
 	r.Post("/api/v1/namespaces", h.CreateNamespace)

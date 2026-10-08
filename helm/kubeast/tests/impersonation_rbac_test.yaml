@@ -1,0 +1,19 @@
+suite: impersonation RBAC — the fixed groups the chart binds on its own cluster
+templates:
+  - impersonation-rbac.yaml
+tests:
+  - it: exempts the kubeast:admin cluster-admin binding from the hygiene report, with the reason
+    documentSelector:
+      path: metadata.name
+      value: kubeast:admin
+    asserts:
+      - isKind:
+          of: ClusterRoleBinding
+      - equal:
+          path: roleRef.name
+          value: cluster-admin
+      - equal:
+          path: metadata.annotations["kubeast.io/hygiene-exempt"]
+          value: rbac.cluster-admin
+      - isNotEmpty:
+          path: metadata.annotations["kubeast.io/hygiene-exempt-reason"]

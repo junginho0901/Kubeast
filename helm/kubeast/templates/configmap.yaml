@@ -128,6 +128,11 @@ data:
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
   ISSUES_EVENT_WINDOW_MINUTES: {{ .Values.features.issues.eventWindowMinutes | quote }}
   OPTIMIZATION_WINDOW_HOURS: {{ .Values.features.optimization.windowHours | quote }}
+  HYGIENE_ENABLED: {{ .Values.features.hygiene.enabled | quote }}
+  HYGIENE_INTERVAL_DAYS: {{ .Values.features.hygiene.intervalDays | quote }}
+  HYGIENE_EXCLUDE_NAMESPACES: {{ join "," .Values.features.hygiene.excludeNamespaces | quote }}
+  HYGIENE_TLS_WARN_DAYS: {{ .Values.features.hygiene.tlsWarnDays | quote }}
+  HYGIENE_TLS_CRITICAL_DAYS: {{ .Values.features.hygiene.tlsCriticalDays | quote }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
   GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}

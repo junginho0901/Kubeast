@@ -28,6 +28,100 @@
       "empty": "No API keys"
     }
   },
+  "clusterHygiene": {
+    "title": "Cluster hygiene",
+    "subtitle": "Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, Namespace policy, ServiceAccount tokens, RBAC and TLS expiry. Review, export, sign off.",
+    "cluster": "Cluster",
+    "refresh": "Scan again",
+    "scanning": "Scanning...",
+    "loading": "Loading...",
+    "empty": "Nothing to show.",
+    "exempt": "Exempt",
+    "exemptReason": "Exempt: {{reason}}",
+    "pods": "{{count}} Pods",
+    "search": "Search Namespace, name, message...",
+    "truncated": "Only the first 5000 findings are shown; the counts include all of them.",
+    "collectors": "Could not read these lists, so their checks were skipped:",
+    "lastReview": "Last sign-off {{when}} by {{who}}",
+    "noReview": "Not signed off yet",
+    "nextDue": "Next due {{when}}",
+    "overdue": "Overdue since {{when}}",
+    "intervalHint": "A sign-off is due every {{days}} days.",
+    "generatedAt": "Scanned {{when}} · Namespaces not checked: {{namespaces}}",
+    "open": "Open",
+    "noHistory": "This cluster has not been signed off yet.",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "Info"
+    },
+    "filter": {
+      "allSeverities": "All severities",
+      "allChecks": "All checks"
+    },
+    "tab": {
+      "findings": "Findings",
+      "checks": "Checks",
+      "history": "Past sign-offs"
+    },
+    "col": {
+      "severity": "Severity",
+      "check": "Check",
+      "object": "Object",
+      "message": "Details",
+      "findings": "Findings",
+      "refs": "Basis",
+      "reviewedAt": "Signed off",
+      "reviewedBy": "By",
+      "note": "Note",
+      "counts": "Critical / warning / info / exempt"
+    },
+    "checks": {
+      "pss": {
+        "privileged": "Privileged containers",
+        "host-namespaces": "Host namespaces (hostNetwork, hostPID, hostIPC)",
+        "hostpath": "hostPath volumes",
+        "host-ports": "hostPort",
+        "capabilities": "Capabilities beyond baseline",
+        "other-baseline": "Other baseline violations (HostProcess, probe host, AppArmor, SELinux, /proc, seccomp, sysctls)",
+        "restricted": "Restricted not met"
+      },
+      "image": {
+        "latest": "latest or untagged images"
+      },
+      "resources": {
+        "memory-limit": "No memory limit",
+        "requests": "No CPU/memory requests"
+      },
+      "ns": {
+        "pss-label": "Namespace without a PSS enforce label",
+        "network-policy": "Namespace without a NetworkPolicy",
+        "default-used": "default Namespace in use"
+      },
+      "sa": {
+        "default-token": "default ServiceAccount token mounted"
+      },
+      "rbac": {
+        "cluster-admin": "cluster-admin bindings",
+        "wildcard": "Wildcard Roles and ClusterRoles"
+      },
+      "tls": {
+        "expiry": "TLS certificate expiry"
+      }
+    },
+    "snapshot": {
+      "viewing": "Viewing the report as signed off on {{when}} by {{who}}.",
+      "back": "Back to now"
+    },
+    "signoff": {
+      "title": "Sign off this cluster",
+      "hint": "Stores the report as it stands with your name, the time and your note. Fix or exempt findings first (annotations kubeast.io/hygiene-exempt and kubeast.io/hygiene-exempt-reason).",
+      "notePlaceholder": "Findings and actions taken (optional)",
+      "button": "Sign off",
+      "saved": "Signed off at {{when}}.",
+      "failed": "The sign-off was not saved."
+    }
+  },
   "accessReview": {
     "title": "Access review",
     "subtitle": "Who can do what right now: accounts, per-cluster grants, API keys, temporary grants since the last review, roles. Review, export, sign off.",
@@ -194,6 +288,7 @@
   "nav": {
     "accessRequests": "Access requests",
     "accessReview": "Access review",
+    "clusterHygiene": "Cluster hygiene",
     "core": "Core",
     "cluster": "Cluster",
     "workloads": "Workloads",
