@@ -3748,7 +3748,7 @@
   },
   "adminAIUsage": {
     "title": "AI 사용량",
-    "subtitle": "채팅 턴마다 남는 ai.chat.complete 감사 기록의 집계 — 요청·토큰·툴 호출. 한도는 없고, 누가 얼마나 썼는지 본다.",
+    "subtitle": "채팅 턴과 Optimization의 AI 설명마다 남는 ai.chat.complete 감사 기록의 집계 — 요청·토큰·툴 호출. 한도는 없고, 누가 얼마나 썼는지 본다.",
     "since": "시작일",
     "until": "종료일",
     "groupBy": "기준",

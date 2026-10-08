@@ -422,16 +422,18 @@ async def floating_session_chat(
 
 @router.get("/suggest-optimization/stream")
 async def suggest_optimization_stream(
+    request: Request,
     namespace: str,
     authorization: str = Depends(bearer_or_cookie),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """리소스 최적화 제안 (SSE 스트리밍)"""
     ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
+    actor, http = _extract_audit_meta(request, authorization)
 
     try:
         return StreamingResponse(
-            ai_service.suggest_optimization_stream(namespace),
+            ai_service.suggest_optimization_stream(namespace, audit_actor=actor, audit_http=http),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

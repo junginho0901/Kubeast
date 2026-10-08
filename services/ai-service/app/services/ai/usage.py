@@ -38,7 +38,7 @@ def add_usage(totals: dict[str, Any], usage: Any) -> dict[str, Any]:
 
 def chat_complete_payload(
     *,
-    session_id: str,
+    session_id: Optional[str],
     provider: Optional[str],
     model: Optional[str],
     cluster: Optional[str],
@@ -48,12 +48,16 @@ def chat_complete_payload(
     duration_ms: int,
     finish_reason: Optional[str] = None,
     message_length: int = 0,
+    phase: str = "chat",
 ) -> dict[str, Any]:
     """The `after` payload of ai.chat.complete. Token fields are null when the
     provider sent no usage (an OpenAI-compatible endpoint that ignores
-    stream_options.include_usage), so sums in the admin view skip them."""
+    stream_options.include_usage), so sums in the admin view skip them.
+    `phase` is `chat` for a chat turn and `optimization` for the Optimization
+    page's AI explanation, which has no session."""
     seen = bool(usage.get("seen"))
     return {
+        "phase": phase,
         "session_id": session_id,
         "provider": provider,
         "model": model,

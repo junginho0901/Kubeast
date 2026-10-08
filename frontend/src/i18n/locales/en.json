@@ -3562,7 +3562,7 @@
   },
   "adminAIUsage": {
     "title": "AI Usage",
-    "subtitle": "Aggregation of the ai.chat.complete audit record written per chat turn — requests, tokens, tool calls. No quota; see who used how much.",
+    "subtitle": "Aggregation of the ai.chat.complete audit record written per chat turn and per Optimization AI explanation — requests, tokens, tool calls. No quota; see who used how much.",
     "since": "From",
     "until": "To",
     "groupBy": "Group by",

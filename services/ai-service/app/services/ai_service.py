@@ -186,8 +186,15 @@ class AIService:
             sanitized = sanitized[:max_chars] + "\n... (truncated) ..."
         return sanitized
 
-    async def suggest_optimization_stream(self, namespace: str):
-        async for chunk in streaming_module.suggest_optimization_stream(self, namespace):
+    async def suggest_optimization_stream(
+        self,
+        namespace: str,
+        audit_actor: Optional[dict] = None,
+        audit_http: Optional[dict] = None,
+    ):
+        async for chunk in streaming_module.suggest_optimization_stream(
+            self, namespace, audit_actor=audit_actor, audit_http=audit_http
+        ):
             yield chunk
 
     def _parse_cpu_quantity_to_m(self, value: Optional[str]) -> Optional[int]:

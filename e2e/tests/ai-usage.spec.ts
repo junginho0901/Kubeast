@@ -72,4 +72,41 @@ test.describe('AI usage accounting', () => {
     await expect(page.getByRole('heading', { name: /AI 사용량|AI Usage/i })).toBeVisible()
     await expect(page.getByTestId('ai-usage-table').getByText(EMAIL, { exact: true })).toBeVisible({ timeout: 15_000 })
   })
+
+  test('an Optimization AI explanation is recorded as ai.chat.complete with phase optimization', async ({ request }) => {
+    test.setTimeout(240_000) // the dev model takes ~30 s for the explanation; the whole stream is awaited
+    const token = await adminToken(request)
+    const since = new Date(Date.now() - 60_000).toISOString()
+
+    // The request the Optimization page makes; the response is the whole SSE stream.
+    const stream = await request.get('/api/v1/ai/suggest-optimization/stream', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream', 'X-Cluster-Name': 'self' },
+      params: { namespace: 'kube-system' },
+      timeout: 180_000,
+    })
+    expect(stream.ok(), await stream.text()).toBeTruthy()
+    const body = await stream.text()
+    expect(body).toContain('data: [DONE]')
+    expect(body, 'the model answered').not.toContain('"kind": "error"')
+
+    const audit = await request.get('/api/v1/auth/admin/audit-logs', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { action: 'ai.chat.complete', since, limit: 20 },
+    })
+    expect(audit.ok()).toBeTruthy()
+    const { items } = (await audit.json()) as { items: Array<Record<string, any>> }
+    const row = items.find((it) => (it.After ?? it.after ?? {}).phase === 'optimization')
+    expect(row, JSON.stringify(items.map((it) => it.After ?? it.after))).toBeTruthy()
+    const after = row!.After ?? row!.after
+    expect(row!.TargetType ?? row!.target_type).toBe('namespace')
+    expect(row!.TargetID ?? row!.target_id).toBe('kube-system')
+    expect(row!.Result ?? row!.result).toBe('success')
+    expect(after.session_id).toBeNull()
+    expect(after.iterations).toBe(1)
+    expect(after.tool_calls).toBe(0)
+    expect(after.model).toBeTruthy()
+    expect(after.duration_ms).toBeGreaterThan(0)
+    // tokens are either numbers (provider sent usage) or null (it did not) — never missing
+    expect(['number', 'object']).toContain(typeof after.total_tokens)
+  })
 })
