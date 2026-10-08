@@ -25,5 +25,8 @@ export function usePermission() {
   const has = (perm: string, clusterID?: string): boolean =>
     hasPermission(matrix, perm, clusterID ?? currentCluster)
 
-  return { has, permissions: matrix, role: me?.role ?? null }
+  // The role name granted on the selected cluster (cluster_roles), if any.
+  const clusterRole = (currentCluster && me?.cluster_roles?.[currentCluster]) || null
+
+  return { has, permissions: matrix, role: me?.role ?? null, clusterRole }
 }
