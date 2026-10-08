@@ -40,6 +40,15 @@ type Config struct {
 	HygieneTLSWarnDays       int
 	HygieneTLSCriticalDays   int
 
+	// Log files inside containers (chart features.logFiles). Off = the routes
+	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
+	// name only) can be listed or read; with LogFilesNamespaces set, only pods
+	// in those namespaces. LogFilesMaxLines caps the lines one read returns.
+	LogFilesEnabled    bool
+	LogFilesPaths      []string
+	LogFilesNamespaces []string
+	LogFilesMaxLines   int
+
 	// Multi-cluster load / failure isolation (step 15). All have safe defaults
 	// and can be tuned/disabled via env (helm values). 0 disables where noted.
 	MaxClusters             int // LRU client-bundle pool size (memory bound)
@@ -123,6 +132,11 @@ func Load() Config {
 		HygieneExcludeNamespaces: pkgconfig.LookupEnvList("HYGIENE_EXCLUDE_NAMESPACES", "kube-system,kube-public,kube-node-lease"),
 		HygieneTLSWarnDays:       pkgconfig.GetEnvInt("HYGIENE_TLS_WARN_DAYS", 30),
 		HygieneTLSCriticalDays:   pkgconfig.GetEnvInt("HYGIENE_TLS_CRITICAL_DAYS", 7),
+
+		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
+		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),
+		LogFilesNamespaces: pkgconfig.GetEnvList("LOG_FILES_NAMESPACES", ""),
+		LogFilesMaxLines:   pkgconfig.GetEnvInt("LOG_FILES_MAX_LINES", 2000),
 
 		MaxClusters:             pkgconfig.GetEnvInt("MC_MAX_CLUSTERS", 20),
 		HealthcheckIntervalSec:  pkgconfig.GetEnvInt("MC_HEALTHCHECK_INTERVAL_SEC", 60),

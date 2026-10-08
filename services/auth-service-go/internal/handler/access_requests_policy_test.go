@@ -39,13 +39,13 @@ func TestValidateAccessRequestInput(t *testing.T) {
 func TestUncoveredPermissions_WriteCeiling(t *testing.T) {
 	write := []string{
 		"menu.*", "resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete",
-		"resource.cronjob.suspend", "resource.cronjob.trigger", "resource.secret.reveal",
+		"resource.cronjob.suspend", "resource.cronjob.trigger", "resource.secret.reveal", "resource.pod.logfile",
 		"resource.helm.read", "resource.helm.rollback", "resource.helm.upgrade", "resource.helm.test", "ai.tool.*",
 	}
 	if got := uncoveredPermissions(write, write); got != nil {
 		t.Fatalf("Write within Write: %v", got)
 	}
-	read := []string{"menu.workloads", "menu.dashboard", "resource.*.read", "resource.helm.read"}
+	read := []string{"menu.workloads", "menu.dashboard", "resource.*.read", "resource.helm.read", "resource.pod.logfile"}
 	if got := uncoveredPermissions(read, write); got != nil {
 		t.Fatalf("Read within Write: %v", got)
 	}

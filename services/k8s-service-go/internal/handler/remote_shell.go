@@ -57,6 +57,19 @@ func execURL(cs kubernetes.Interface, namespace, pod, container, command string)
 		}, scheme.ParameterCodec).URL()
 }
 
+// commandURL is the exec subresource URL for one fixed command (argv, no
+// shell) with stdout and stderr only: no TTY, no stdin.
+func commandURL(cs kubernetes.Interface, namespace, pod, container string, argv []string) *url.URL {
+	return cs.CoreV1().RESTClient().Post().
+		Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: container,
+			Command:   argv,
+			Stdout:    true,
+			Stderr:    true,
+		}, scheme.ParameterCodec).URL()
+}
+
 // attachURL is the attach subresource URL of the pod on cs's cluster.
 func attachURL(cs kubernetes.Interface, namespace, pod, container string) *url.URL {
 	return cs.CoreV1().RESTClient().Post().

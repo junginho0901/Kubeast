@@ -133,6 +133,17 @@ data:
   HYGIENE_EXCLUDE_NAMESPACES: {{ join "," .Values.features.hygiene.excludeNamespaces | quote }}
   HYGIENE_TLS_WARN_DAYS: {{ .Values.features.hygiene.tlsWarnDays | quote }}
   HYGIENE_TLS_CRITICAL_DAYS: {{ .Values.features.hygiene.tlsCriticalDays | quote }}
+{{- with .Values.features.logFiles }}
+  LOG_FILES_ENABLED: {{ .enabled | quote }}
+{{- if .enabled }}
+{{- if not .paths }}
+  {{- fail "features.logFiles.paths is required when features.logFiles.enabled (absolute paths, * and ? in the file name only)" }}
+{{- end }}
+  LOG_FILES_PATHS: {{ join "," .paths | quote }}
+  LOG_FILES_NAMESPACES: {{ join "," .namespaces | quote }}
+  LOG_FILES_MAX_LINES: {{ .maxLines | quote }}
+{{- end }}
+{{- end }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
   GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}

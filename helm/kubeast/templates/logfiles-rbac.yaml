@@ -1,0 +1,42 @@
+{{- with .Values.features.logFiles }}
+{{- if and .enabled $.Values.auth.impersonation.enabled .namespaces }}
+# Log files view (features.logFiles): Kubeast runs ls and tail through
+# pods/exec as the signed-in user, so the Read and Write groups get pods/exec
+# in the listed namespaces only (the Admin group is cluster-admin already).
+# Kubeast fixes the command; the cluster grant is plain pods/exec. Apply the
+# same rendering to every registered cluster that should offer the view:
+#   helm template kubeast helm/kubeast -s templates/logfiles-rbac.yaml -f <values> | kubectl --context <cluster> apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeast:logfile-reader
+  labels:
+    {{- include "kubeast.labels" $ | nindent 4 }}
+rules:
+  # create opens the exec stream (also for WebSocket upgrades since Kubernetes 1.35); get serves older API servers.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+{{- range .namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubeast:logfile-reader
+  namespace: {{ . }}
+  labels:
+    {{- include "kubeast.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeast:logfile-reader
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: kubeast:viewer
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: kubeast:operator
+{{- end }}
+{{- end }}
+{{- end }}

@@ -15,6 +15,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/helm"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -33,6 +34,10 @@ type Handler struct {
 	hygieneStore hygiene.Store
 	// hygieneScan replaces svc.CollectHygiene in tests.
 	hygieneScan func(ctx context.Context, opts k8s.HygieneOptions) (k8s.HygieneReport, error)
+	// logFilePatterns are the files the log files view may read (parsed at boot).
+	logFilePatterns logfiles.Patterns
+	// logFileExec replaces the container exec in tests.
+	logFileExec containerCommandFunc
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).

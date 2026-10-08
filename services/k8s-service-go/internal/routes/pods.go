@@ -16,6 +16,10 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	// SSE — 단방향 log stream 이라 WebSocket 보다 SSE 가 적합 (자동 reconnect +
 	// curl 디버깅 + retry 안 함수 안 defer 가 inotify watcher 누수 해결).
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/logs/stream", h.PodLogsSSE)
+	// Log files inside the container (features.logFiles): fixed ls / tail through pods/exec.
+	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/logfiles", h.ListLogFiles)
+	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/logfiles/content", h.GetLogFileContent)
+	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/logfiles/stream", h.LogFileStream)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/rbac", h.GetPodRBAC)
 	r.Delete("/api/v1/namespaces/{namespace}/pods/{pod_name}", h.DeletePod)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/exec/ws", h.PodExecWS)

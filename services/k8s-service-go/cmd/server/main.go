@@ -23,6 +23,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -142,6 +143,18 @@ func main() {
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
 	h.SetHygieneStore(hygiene.NewStore(pgPool))
+
+	// Log files view (off unless LOG_FILES_ENABLED): a bad path pattern stops
+	// the service instead of widening what can be read.
+	if cfg.LogFilesEnabled {
+		patterns, err := logfiles.Parse(cfg.LogFilesPaths)
+		if err != nil {
+			slog.Error("invalid log files configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetLogFilePatterns(patterns)
+		slog.Info("log files view enabled", "paths", patterns.List(), "namespaces", cfg.LogFilesNamespaces, "max_lines", cfg.LogFilesMaxLines)
+	}
 
 	// Terminal session recording (off unless SESSION_RECORDING_ENABLED): the
 	// output of pod exec / node shell as asciicast, uploaded in parts while

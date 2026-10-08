@@ -251,6 +251,7 @@ func allPermissions() []map[string]interface{} {
 		}},
 		{"category": "Pod", "permissions": []perm{
 			{"resource.pod.exec", "Pod exec"},
+			{"resource.pod.logfile", "Read log files inside containers"},
 		}},
 		{"category": "Workload", "permissions": []perm{
 			{"resource.workload.restart", "Restart"},

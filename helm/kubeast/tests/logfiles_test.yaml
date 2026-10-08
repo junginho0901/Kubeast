@@ -1,0 +1,107 @@
+suite: Log files view — env, required paths, and pods/exec bound only in the listed namespaces
+templates:
+  - configmap.yaml
+  - logfiles-rbac.yaml
+tests:
+  - it: is off by default and binds nothing
+    asserts:
+      - equal:
+          path: data.LOG_FILES_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - notExists:
+          path: data.LOG_FILES_PATHS
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - hasDocuments:
+          count: 0
+        template: logfiles-rbac.yaml
+
+  - it: refuses to turn on without paths
+    set:
+      features.logFiles.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: features.logFiles.paths is required
+        template: configmap.yaml
+
+  - it: hands the settings to k8s-service and binds pods/exec to the Read and Write groups per namespace
+    set:
+      features.logFiles.enabled: true
+      features.logFiles.paths: [/var/log/app/*.log, /srv/app/log/production.log]
+      features.logFiles.namespaces: [apps, web]
+      features.logFiles.maxLines: 1000
+    asserts:
+      - equal:
+          path: data.LOG_FILES_PATHS
+          value: /var/log/app/*.log,/srv/app/log/production.log
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.LOG_FILES_NAMESPACES
+          value: apps,web
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - equal:
+          path: data.LOG_FILES_MAX_LINES
+          value: "1000"
+        template: configmap.yaml
+        documentSelector:
+          path: metadata.name
+          value: kubeast-config
+      - hasDocuments:
+          count: 3
+        template: logfiles-rbac.yaml
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: ["pods/exec"]
+              verbs: ["create", "get"]
+        template: logfiles-rbac.yaml
+        documentIndex: 0
+      - equal:
+          path: metadata.namespace
+          value: web
+        template: logfiles-rbac.yaml
+        documentIndex: 2
+      - equal:
+          path: subjects
+          value:
+            - apiGroup: rbac.authorization.k8s.io
+              kind: Group
+              name: kubeast:viewer
+            - apiGroup: rbac.authorization.k8s.io
+              kind: Group
+              name: kubeast:operator
+        template: logfiles-rbac.yaml
+        documentIndex: 1
+
+  - it: binds nothing without namespaces
+    set:
+      features.logFiles.enabled: true
+      features.logFiles.paths: [/var/log/app/*.log]
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: logfiles-rbac.yaml
+
+  - it: binds nothing when impersonation is off
+    set:
+      features.logFiles.enabled: true
+      features.logFiles.paths: [/var/log/app/*.log]
+      features.logFiles.namespaces: [apps]
+      auth.impersonation.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: logfiles-rbac.yaml
