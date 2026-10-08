@@ -23,9 +23,9 @@ test.describe('drawer labels in Korean', () => {
     await expect(drawer).toBeVisible({ timeout: 15000 })
     await drawer.getByRole('button', { name: /^(정보|Info)$/ }).first().click().catch(() => {})
 
-    // descriptive labels → Korean
+    // descriptive labels → Korean (a Kubernetes kind such as Namespace stays English)
     await expect(drawer.getByText('이름', { exact: true }).first()).toBeVisible()
-    await expect(drawer.getByText('네임스페이스', { exact: true }).first()).toBeVisible()
+    await expect(drawer.getByText('Namespace', { exact: true }).first()).toBeVisible()
     await expect(drawer.getByText('생성 시각', { exact: true }).first()).toBeVisible()
     // Kubernetes field names → still English
     await expect(drawer.getByText('UID', { exact: true }).first()).toBeVisible()

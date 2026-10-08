@@ -52,7 +52,7 @@ function CustomDropdown<T extends string | number>({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`w-full ${minWidth} px-2 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
+        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
       >
         <span className="font-medium truncate">{selected?.label ?? '-'}</span>
         <ChevronDown
@@ -315,7 +315,7 @@ export default function AdminAudit() {
       {/* Filters */}
       <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.service', 'Service')}
             <CustomDropdown
               value={draft.service ?? ''}
@@ -328,7 +328,7 @@ export default function AdminAudit() {
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300" data-testid="audit-cluster-filter">
+          <label className="flex flex-col text-xs font-semibold text-slate-400" data-testid="audit-cluster-filter">
             {tr('adminAudit.filter.cluster', 'Cluster')}
             <CustomDropdown
               value={draft.cluster ?? ''}
@@ -341,29 +341,29 @@ export default function AdminAudit() {
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.action', 'Action')}
             <input
               type="text"
               placeholder="k8s.pod.delete"
-              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.action ?? ''}
               onChange={(e) => setDraft({ ...draft, action: e.target.value || undefined })}
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.actor', '사용자 이메일')}
             <input
               type="text"
               placeholder="user@kubeast.io"
-              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.result', '결과')}
             <CustomDropdown
               value={draft.result ?? ''}
@@ -381,21 +381,21 @@ export default function AdminAudit() {
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.namespace', 'Namespace')}
             <input
               type="text"
-              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.namespace ?? ''}
               onChange={(e) => setDraft({ ...draft, namespace: e.target.value || undefined })}
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.since', '시작 시각')}
             <input
               type="datetime-local"
-              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.since ? draft.since.slice(0, 16) : ''}
               onChange={(e) =>
                 setDraft({
@@ -406,11 +406,11 @@ export default function AdminAudit() {
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.until', '종료 시각')}
             <input
               type="datetime-local"
-              className="mt-1 rounded-sm bg-slate-900 border border-slate-600 px-2 py-1.5 text-sm text-white"
+              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.until ? draft.until.slice(0, 16) : ''}
               onChange={(e) =>
                 setDraft({
@@ -421,7 +421,7 @@ export default function AdminAudit() {
             />
           </label>
 
-          <label className="flex flex-col text-xs text-slate-300">
+          <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.limit', '페이지당 건수')}
             <CustomDropdown
               value={draft.limit ?? 50}

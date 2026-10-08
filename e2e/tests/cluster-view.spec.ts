@@ -15,8 +15,8 @@ test.describe('ClusterView', () => {
     ).toBeVisible()
 
     // 검색 input + 네임스페이스 드롭다운
-    await expect(page.getByPlaceholder(/Search pod name|파드 이름/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /All namespaces|모든 네임스페이스/i })).toBeVisible()
+    await expect(page.getByPlaceholder(/Search pod name|Pod 이름/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /All namespaces|모든 Namespace/i })).toBeVisible()
   })
 
   test('initial render — full page screenshot', async ({ page }) => {
@@ -40,7 +40,7 @@ test.describe('ClusterView', () => {
     await page.goto('/cluster-view')
     await page.waitForLoadState('networkidle')
 
-    const search = page.getByPlaceholder(/Search pod name|파드 이름/i)
+    const search = page.getByPlaceholder(/Search pod name|Pod 이름/i)
     await search.fill('exec-test-pod')
 
     // 검색 결과로 좁혀지면 X (clear) 버튼 노출 (input 옆 X 아이콘)
@@ -56,7 +56,7 @@ test.describe('ClusterView', () => {
     await page.goto('/cluster-view')
     await page.waitForLoadState('networkidle')
 
-    const dropdown = page.getByRole('button', { name: /All namespaces|모든 네임스페이스/i })
+    const dropdown = page.getByRole('button', { name: /All namespaces|모든 Namespace/i })
     await dropdown.click()
 
     // 드롭다운 열리면 'default' option 노출 (admin 계정 / kubeast 클러스터)

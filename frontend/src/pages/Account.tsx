@@ -251,7 +251,7 @@ export default function Account() {
 
             <form onSubmit={onSubmit} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('account.password.current', 'Current password')}
                 </label>
                 <input
@@ -265,7 +265,7 @@ export default function Account() {
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('account.password.new', 'New password')}
                 </label>
                 <input
@@ -279,7 +279,7 @@ export default function Account() {
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('account.password.confirm', 'Confirm new password')}
                 </label>
                 <input

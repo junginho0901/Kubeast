@@ -178,7 +178,7 @@ export function PodLogsTab({
       <div className="flex items-end gap-4 pb-4 shrink-0 border-b border-slate-700">
         {/* 컨테이너 선택 - 커스텀 드롭다운 */}
         <div className="flex-1 relative" ref={containerDropdownRef}>
-          <label className="text-sm text-slate-400 mb-2 block">
+          <label className="block text-xs font-semibold text-slate-400 mb-1">
             {tr('clusterView.logs.containerLabel', 'Container')}
           </label>
           <button
@@ -264,7 +264,7 @@ export function PodLogsTab({
 
         {/* 다운로드 줄 수 선택 - 커스텀 드롭다운 */}
         <div className="relative" ref={tailLinesDropdownRef}>
-          <label className="text-sm text-slate-400 mb-2 block">
+          <label className="block text-xs font-semibold text-slate-400 mb-1">
             {tr('clusterView.logs.downloadLines', 'Log download lines')}
           </label>
           <button
@@ -306,7 +306,7 @@ export function PodLogsTab({
 
         {/* 다운로드 버튼 */}
         <div>
-          <label className="text-sm text-slate-400 mb-2 block invisible">
+          <label className="block text-xs font-semibold text-slate-400 mb-1 invisible">
             {tr('clusterView.logs.download', 'Download')}
           </label>
           <button

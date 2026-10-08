@@ -1,6 +1,6 @@
 {
   "apiKeys": {
-    "title": "API 키",
+    "title": "API keys",
     "subtitle": "스크립트·CI용 자격입니다. 키는 짧은 액세스 토큰으로 교환해 쓰며, 내 권한을 넘는 일은 할 수 없습니다.",
     "create": "키 발급",
     "name": "이름",
@@ -29,7 +29,7 @@
     }
   },
   "accessReview": {
-    "title": "접근 권한 검토",
+    "title": "Access review",
     "subtitle": "지금 누가 무엇을 할 수 있는지: 계정·클러스터별 역할·API 키·마지막 검토 이후의 임시 권한·역할. 검토하고, 내려받고, 서명합니다.",
     "refresh": "새로고침",
     "loading": "불러오는 중...",
@@ -125,7 +125,7 @@
     }
   },
   "accessRequests": {
-    "title": "권한 요청",
+    "title": "Access requests",
     "disabled": "이 설치에서는 권한 요청이 꺼져 있습니다 (auth.accessRequests.enabled).",
     "empty": "요청이 없습니다.",
     "until": "{{time}}까지",
@@ -192,89 +192,89 @@
     }
   },
   "nav": {
-    "accessRequests": "권한 요청",
-    "accessReview": "접근 권한 검토",
+    "accessRequests": "Access requests",
+    "accessReview": "Access review",
     "core": "Core",
     "cluster": "Cluster",
     "workloads": "Workloads",
     "storage": "Storage",
     "network": "Network",
-    "gateway": "Gateway (베타)",
+    "gateway": "Gateway (Beta)",
     "security": "Security",
     "configuration": "Configuration",
     "customResources": "Custom Resources",
     "helm": "Helm",
     "admin": "Admin",
-    "dashboard": "대시보드",
-    "clusterView": "클러스터 뷰",
-    "monitoring": "리소스 모니터링",
-    "aiChat": "AI 챗",
-    "namespaces": "네임스페이스",
-    "nodes": "노드",
-    "resourceGraph": "리소스 그래프",
-    "timeline": "변경 이력",
-    "advancedSearch": "고급 검색 (베타)",
-    "pods": "파드",
-    "deployments": "디플로이먼트",
-    "statefulSets": "스테이트풀셋",
-    "daemonSets": "데몬셋",
-    "replicaSets": "레플리카셋",
-    "jobs": "잡",
-    "cronJobs": "크론잡",
-    "pvcs": "퍼시스턴트 볼륨 클레임",
-    "pvs": "퍼시스턴트 볼륨",
-    "storageClasses": "스토리지 클래스",
-    "volumeAttachments": "볼륨 어태치먼트",
-    "services": "서비스",
-    "endpoints": "엔드포인트",
-    "endpointSlices": "엔드포인트 슬라이스",
-    "ingresses": "인그레스",
-    "ingressClasses": "인그레스 클래스",
-    "networkPolicies": "네트워크 폴리시",
-    "gateways": "게이트웨이",
-    "gatewayClasses": "게이트웨이 클래스",
-    "httpRoutes": "HTTP 라우트",
-    "grpcRoutes": "GRPC 라우트",
-    "referenceGrants": "레퍼런스 그랜트",
-    "backendTlsPolicies": "백엔드 TLS 폴리시",
-    "policies": "정책",
-    "gpu": "GPU (베타)",
-    "gpuDashboard": "GPU 대시보드",
-    "gpuNodes": "GPU 노드",
-    "gpuPods": "GPU 파드",
-    "deviceClasses": "디바이스 클래스",
-    "resourceClaims": "리소스 클레임",
-    "resourceClaimTemplates": "리소스 클레임 템플릿",
-    "resourceSlices": "리소스 슬라이스",
-    "serviceAccounts": "서비스 어카운트",
-    "roles": "롤",
-    "clusterRoles": "클러스터 롤",
-    "roleBindings": "롤 바인딩",
-    "clusterRoleBindings": "클러스터 롤 바인딩",
-    "configMaps": "컨피그맵",
-    "secrets": "시크릿",
-    "hpas": "수평 파드 오토스케일러",
-    "vpas": "수직 파드 오토스케일러",
-    "pdbs": "파드 디스럽션 버짓",
-    "resourceQuotas": "리소스 쿼터",
-    "limitRanges": "리밋 레인지",
-    "priorityClasses": "우선순위 클래스",
-    "runtimeClasses": "런타임 클래스",
-    "leases": "리스",
-    "mutatingWebhooks": "변경 웹훅 구성",
-    "validatingWebhooks": "검증 웹훅 구성",
-    "customInstances": "커스텀 리소스 인스턴스",
-    "customGroups": "커스텀 리소스 정의",
-    "userManagement": "유저 관리",
-    "roleManagement": "역할 관리",
-    "aiModels": "AI 모델 설정",
-    "nodeShell": "노드 셸",
-    "auditLogs": "감사 로그",
-    "organizations": "팀",
+    "dashboard": "Dashboard",
+    "clusterView": "Cluster View",
+    "monitoring": "Monitoring",
+    "aiChat": "AI Chat",
+    "namespaces": "Namespaces",
+    "nodes": "Nodes",
+    "resourceGraph": "Resource Graph",
+    "timeline": "Change History",
+    "advancedSearch": "Advanced Search (Beta)",
+    "pods": "Pods",
+    "deployments": "Deployments",
+    "statefulSets": "StatefulSets",
+    "daemonSets": "DaemonSets",
+    "replicaSets": "ReplicaSets",
+    "jobs": "Jobs",
+    "cronJobs": "CronJobs",
+    "pvcs": "PersistentVolumeClaims",
+    "pvs": "PersistentVolumes",
+    "storageClasses": "StorageClasses",
+    "volumeAttachments": "VolumeAttachments",
+    "services": "Services",
+    "endpoints": "Endpoints",
+    "endpointSlices": "EndpointSlices",
+    "ingresses": "Ingresses",
+    "ingressClasses": "IngressClasses",
+    "networkPolicies": "NetworkPolicies",
+    "gateways": "Gateways",
+    "gatewayClasses": "GatewayClasses",
+    "httpRoutes": "HTTPRoutes",
+    "grpcRoutes": "GRPCRoutes",
+    "referenceGrants": "ReferenceGrants",
+    "backendTlsPolicies": "BackendTLSPolicies",
+    "policies": "Policies",
+    "gpu": "GPU (Beta)",
+    "gpuDashboard": "GPU Dashboard",
+    "gpuNodes": "GPU Nodes",
+    "gpuPods": "GPU Pods",
+    "deviceClasses": "DeviceClasses",
+    "resourceClaims": "ResourceClaims",
+    "resourceClaimTemplates": "ResourceClaimTemplates",
+    "resourceSlices": "ResourceSlices",
+    "serviceAccounts": "ServiceAccounts",
+    "roles": "Roles",
+    "clusterRoles": "ClusterRoles",
+    "roleBindings": "RoleBindings",
+    "clusterRoleBindings": "ClusterRoleBindings",
+    "configMaps": "ConfigMaps",
+    "secrets": "Secrets",
+    "hpas": "HorizontalPodAutoscalers",
+    "vpas": "VerticalPodAutoscalers",
+    "pdbs": "PodDisruptionBudgets",
+    "resourceQuotas": "ResourceQuotas",
+    "limitRanges": "LimitRanges",
+    "priorityClasses": "PriorityClasses",
+    "runtimeClasses": "RuntimeClasses",
+    "leases": "Leases",
+    "mutatingWebhooks": "MutatingWebhookConfigurations",
+    "validatingWebhooks": "ValidatingWebhookConfigurations",
+    "customInstances": "Custom Resource Instances",
+    "customGroups": "CustomResourceDefinitions",
+    "userManagement": "User Management",
+    "roleManagement": "Role Management",
+    "aiModels": "AI Models",
+    "nodeShell": "Node Shell",
+    "auditLogs": "Audit Logs",
+    "organizations": "Team",
     "helmReleases": "Releases",
-    "clusters": "클러스터",
-    "aiUsage": "AI 사용량",
-    "sessionRecordings": "세션 기록"
+    "clusters": "Clusters",
+    "aiUsage": "AI Usage",
+    "sessionRecordings": "Session recordings"
   },
   "layout": {
     "accountTitle": "설정",
@@ -290,30 +290,30 @@
     "noAccessibleCluster": "접근 가능한 클러스터 없음"
   },
   "pods": {
-    "title": "파드",
-    "subtitle": "네임스페이스 전반의 파드 상태와 배치를 확인합니다.",
+    "title": "Pods",
+    "subtitle": "Namespace 전반의 Pod 상태와 배치를 확인합니다.",
     "topStatusReasons": "주요 상태 사유",
-    "create": "파드 생성",
-    "createTitle": "YAML로 파드 생성",
-    "delete": "파드 삭제",
-    "deleteTitle": "파드 삭제",
-    "deleteConfirm": "\"{{namespace}}\" 네임스페이스의 파드 \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
-    "searchPlaceholder": "파드 이름 검색...",
+    "create": "Pod 생성",
+    "createTitle": "YAML로 Pod 생성",
+    "delete": "Pod 삭제",
+    "deleteTitle": "Pod 삭제",
+    "deleteConfirm": "\"{{namespace}}\" Namespace의 Pod \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
+    "searchPlaceholder": "Pod 이름 검색...",
     "refresh": "새로고침",
     "forceRefreshTitle": "새로고침 (강제 갱신)",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 파드가 검색되었습니다",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 Pod가 검색되었습니다",
     "topReasonTitle": "Top reason 요약",
     "podsCount": "pods: {{count}}",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "ready": "준비됨",
       "status": "상태",
       "restarts": "재시작",
       "age": "생성 시각",
-      "node": "노드",
-      "podIp": "파드 IP"
+      "node": "Node",
+      "podIp": "Pod IP"
     },
     "stats": {
       "total": "전체",
@@ -324,10 +324,10 @@
       "restarting": "재시작 중",
       "completed": "완료"
     },
-    "noResults": "파드가 없습니다.",
+    "noResults": "Pod가 없습니다.",
     "exec": {
       "connectingTo": "{{pod}}/{{container}}에 연결 중...",
-      "noShell": "이 컨테이너에는 \"{{command}}\"이(가) 없습니다 — 이미지에 셸이 없거나(distroless) 다른 경로에 있습니다. 다른 셸(bash, ash)이나 파드의 다른 컨테이너를 고르세요.",
+      "noShell": "이 컨테이너에는 \"{{command}}\"이(가) 없습니다 — 이미지에 셸이 없거나(distroless) 다른 경로에 있습니다. 다른 셸(bash, ash)이나 Pod의 다른 컨테이너를 고르세요.",
       "connected": "연결됨.",
       "connectionError": "연결 오류.",
       "disconnected": "연결 종료.",
@@ -339,17 +339,17 @@
     }
   },
   "deployments": {
-    "title": "디플로이먼트",
-    "subtitle": "네임스페이스 전반의 롤아웃 상태를 확인합니다.",
-    "create": "디플로이먼트 생성",
-    "createTitle": "YAML로 디플로이먼트 생성",
+    "title": "Deployments",
+    "subtitle": "Namespace 전반의 롤아웃 상태를 확인합니다.",
+    "create": "Deployment 생성",
+    "createTitle": "YAML로 Deployment 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "디플로이먼트 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 디플로이먼트가 검색되었습니다.",
+    "searchPlaceholder": "Deployment 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 Deployment가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "ready": "준비됨",
       "updated": "최신 반영",
@@ -364,25 +364,25 @@
       "degraded": "저하",
       "unavailable": "비가용"
     },
-    "noResults": "디플로이먼트를 찾을 수 없습니다.",
+    "noResults": "Deployment를 찾을 수 없습니다.",
     "delete": {
-      "button": "디플로이먼트 삭제",
-      "title": "디플로이먼트 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 디플로이먼트 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Deployment 삭제",
+      "title": "Deployment 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 Deployment \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "servicesPage": {
-    "title": "서비스",
-    "subtitle": "네임스페이스 전반의 서비스를 조회하고 관리합니다.",
+    "title": "Services",
+    "subtitle": "Namespace 전반의 서비스를 조회하고 관리합니다.",
     "create": "서비스 생성",
     "createTitle": "YAML로 서비스 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "서비스 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 서비스가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "type": "타입",
       "clusterIp": "클러스터 IP",
@@ -401,21 +401,21 @@
     "delete": {
       "button": "서비스 삭제",
       "title": "서비스 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 서비스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "confirm": "\"{{namespace}}\" Namespace의 서비스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "endpointsPage": {
-    "title": "엔드포인트",
-    "subtitle": "네임스페이스 전반의 엔드포인트를 조회하고 관리합니다.",
-    "create": "엔드포인트 생성",
-    "createTitle": "YAML로 엔드포인트 생성",
+    "title": "Endpoints",
+    "subtitle": "Namespace 전반의 Endpoints를 조회하고 관리합니다.",
+    "create": "Endpoints 생성",
+    "createTitle": "YAML로 Endpoints 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "엔드포인트 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 엔드포인트가 검색되었습니다.",
+    "searchPlaceholder": "Endpoints 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 Endpoints가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "addresses": "주소",
       "ports": "포트",
@@ -429,30 +429,30 @@
       "withNotReady": "NotReady 포함",
       "totalAddresses": "전체 주소 수"
     },
-    "noResults": "엔드포인트를 찾을 수 없습니다.",
+    "noResults": "Endpoints를 찾을 수 없습니다.",
     "delete": {
-      "button": "엔드포인트 삭제",
-      "title": "엔드포인트 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 엔드포인트 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Endpoints 삭제",
+      "title": "Endpoints 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 Endpoints \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "endpointSlicesPage": {
-    "title": "엔드포인트 슬라이스",
-    "subtitle": "네임스페이스 전반의 EndpointSlice를 조회하고 관리합니다.",
-    "create": "엔드포인트 슬라이스 생성",
+    "title": "EndpointSlices",
+    "subtitle": "Namespace 전반의 EndpointSlice를 조회하고 관리합니다.",
+    "create": "EndpointSlice 생성",
     "createTitle": "YAML로 EndpointSlice 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "엔드포인트 슬라이스 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 엔드포인트 슬라이스가 검색되었습니다.",
+    "searchPlaceholder": "EndpointSlice 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 EndpointSlice가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "service": "서비스",
       "addressType": "주소 타입",
       "ports": "포트",
-      "endpoints": "엔드포인트",
+      "endpoints": "Endpoints",
       "total": "전체",
       "ready": "준비됨",
       "notReady": "준비 안 됨",
@@ -462,27 +462,27 @@
       "total": "전체",
       "withReady": "Ready 포함",
       "withNotReady": "NotReady 포함",
-      "totalEndpoints": "전체 엔드포인트 수"
+      "totalEndpoints": "전체 Endpoints 수"
     },
-    "noResults": "엔드포인트 슬라이스를 찾을 수 없습니다.",
+    "noResults": "EndpointSlice를 찾을 수 없습니다.",
     "delete": {
-      "button": "엔드포인트 슬라이스 삭제",
-      "title": "엔드포인트 슬라이스 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 엔드포인트 슬라이스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "EndpointSlice 삭제",
+      "title": "EndpointSlice 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 EndpointSlice \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "ingressesPage": {
-    "title": "인그레스",
-    "subtitle": "네임스페이스 전반의 인그레스를 조회하고 관리합니다.",
-    "create": "인그레스 생성",
-    "createTitle": "YAML로 인그레스 생성",
+    "title": "Ingresses",
+    "subtitle": "Namespace 전반의 Ingress를 조회하고 관리합니다.",
+    "create": "Ingress 생성",
+    "createTitle": "YAML로 Ingress 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "인그레스 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 인그레스가 검색되었습니다.",
+    "searchPlaceholder": "Ingress 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 Ingress가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "class": "클래스",
       "hosts": "호스트",
@@ -496,22 +496,22 @@
       "withTls": "TLS 사용",
       "withAddress": "주소 할당"
     },
-    "noResults": "인그레스를 찾을 수 없습니다.",
+    "noResults": "Ingress를 찾을 수 없습니다.",
     "delete": {
-      "button": "인그레스 삭제",
-      "title": "인그레스 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 인그레스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Ingress 삭제",
+      "title": "Ingress 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 Ingress \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "ingressClassesPage": {
-    "title": "인그레스 클래스",
+    "title": "IngressClasses",
     "subtitle": "클러스터 범위 IngressClass 리소스를 조회하고 관리합니다.",
-    "create": "인그레스 클래스 생성",
-    "createTitle": "YAML로 인그레스 클래스 생성",
+    "create": "IngressClass 생성",
+    "createTitle": "YAML로 IngressClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "인그레스 클래스 이름 검색...",
-    "matchCount": "{{count}}개의 인그레스 클래스가 검색되었습니다.",
+    "searchPlaceholder": "IngressClass 이름 검색...",
+    "matchCount": "{{count}}개의 IngressClass가 검색되었습니다.",
     "table": {
       "name": "이름",
       "controller": "컨트롤러",
@@ -525,25 +525,25 @@
       "withParameters": "파라미터 있음",
       "withAnnotations": "어노테이션 있음"
     },
-    "noResults": "인그레스 클래스를 찾을 수 없습니다.",
+    "noResults": "IngressClass를 찾을 수 없습니다.",
     "delete": {
-      "button": "인그레스 클래스 삭제",
-      "title": "인그레스 클래스 삭제",
-      "confirm": "인그레스 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "IngressClass 삭제",
+      "title": "IngressClass 삭제",
+      "confirm": "IngressClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "networkPoliciesPage": {
-    "title": "네트워크 정책",
-    "subtitle": "네임스페이스 전반의 NetworkPolicy 리소스를 조회하고 관리합니다.",
-    "create": "네트워크 정책 생성",
-    "createTitle": "YAML로 네트워크 정책 생성",
+    "title": "NetworkPolicies",
+    "subtitle": "Namespace 전반의 NetworkPolicy 리소스를 조회하고 관리합니다.",
+    "create": "NetworkPolicy 생성",
+    "createTitle": "YAML로 NetworkPolicy 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "네트워크 정책 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 네트워크 정책이 검색되었습니다.",
+    "searchPlaceholder": "NetworkPolicy 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 NetworkPolicy이 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "podSelector": "Pod 셀렉터",
       "types": "타입",
@@ -558,25 +558,25 @@
       "defaultDenyEgress": "기본 Egress 차단",
       "selectsAllPods": "모든 Pod 선택"
     },
-    "noResults": "네트워크 정책을 찾을 수 없습니다.",
+    "noResults": "NetworkPolicy을 찾을 수 없습니다.",
     "delete": {
-      "button": "네트워크 정책 삭제",
-      "title": "네트워크 정책 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 네트워크 정책 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "NetworkPolicy 삭제",
+      "title": "NetworkPolicy 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 NetworkPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "gatewaysPage": {
-    "title": "게이트웨이",
-    "subtitle": "네임스페이스 전반의 Gateway API Gateway를 조회하고 관리합니다.",
-    "create": "게이트웨이 생성",
-    "createTitle": "YAML로 게이트웨이 생성",
+    "title": "Gateways",
+    "subtitle": "Namespace 전반의 Gateway API Gateway를 조회하고 관리합니다.",
+    "create": "Gateway 생성",
+    "createTitle": "YAML로 Gateway 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "게이트웨이 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 게이트웨이가 검색되었습니다.",
+    "searchPlaceholder": "Gateway 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 Gateway가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "class": "클래스 이름",
       "status": "조건",
@@ -591,22 +591,22 @@
       "accepted": "Accepted",
       "withAddress": "주소 할당"
     },
-    "noResults": "게이트웨이를 찾을 수 없습니다.",
+    "noResults": "Gateway를 찾을 수 없습니다.",
     "delete": {
-      "button": "게이트웨이 삭제",
-      "title": "게이트웨이 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 게이트웨이 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Gateway 삭제",
+      "title": "Gateway 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 Gateway \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "gatewayClassesPage": {
-    "title": "게이트웨이 클래스",
+    "title": "GatewayClasses",
     "subtitle": "클러스터 범위 GatewayClass 리소스를 조회하고 관리합니다.",
-    "create": "게이트웨이 클래스 생성",
-    "createTitle": "YAML로 게이트웨이 클래스 생성",
+    "create": "GatewayClass 생성",
+    "createTitle": "YAML로 GatewayClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "게이트웨이 클래스 이름 검색...",
-    "matchCount": "{{count}}개의 게이트웨이 클래스가 검색되었습니다.",
+    "searchPlaceholder": "GatewayClass 이름 검색...",
+    "matchCount": "{{count}}개의 GatewayClass가 검색되었습니다.",
     "table": {
       "name": "이름",
       "controller": "컨트롤러",
@@ -620,25 +620,25 @@
       "withParameters": "파라미터 있음",
       "withAnnotations": "어노테이션 있음"
     },
-    "noResults": "게이트웨이 클래스를 찾을 수 없습니다.",
+    "noResults": "GatewayClass를 찾을 수 없습니다.",
     "delete": {
-      "button": "게이트웨이 클래스 삭제",
-      "title": "게이트웨이 클래스 삭제",
-      "confirm": "게이트웨이 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "GatewayClass 삭제",
+      "title": "GatewayClass 삭제",
+      "confirm": "GatewayClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "httpRoutesPage": {
-    "title": "HTTP 라우트",
-    "subtitle": "네임스페이스 전반의 Gateway API HTTPRoute 리소스를 조회하고 관리합니다.",
-    "create": "HTTP 라우트 생성",
-    "createTitle": "YAML로 HTTP 라우트 생성",
+    "title": "HTTPRoutes",
+    "subtitle": "Namespace 전반의 Gateway API HTTPRoute 리소스를 조회하고 관리합니다.",
+    "create": "HTTPRoute 생성",
+    "createTitle": "YAML로 HTTPRoute 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "HTTPRoute 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 HTTPRoute가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "hostnames": "호스트명",
       "parentRefs": "부모 참조",
@@ -655,23 +655,23 @@
     },
     "noResults": "HTTPRoute를 찾을 수 없습니다.",
     "delete": {
-      "button": "HTTP 라우트 삭제",
-      "title": "HTTP 라우트 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 HTTPRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "HTTPRoute 삭제",
+      "title": "HTTPRoute 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 HTTPRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "grpcRoutesPage": {
-    "title": "GRPC 라우트",
-    "subtitle": "네임스페이스 전반의 Gateway API GRPCRoute 리소스를 조회하고 관리합니다.",
-    "create": "GRPC 라우트 생성",
-    "createTitle": "YAML로 GRPC 라우트 생성",
+    "title": "GRPCRoutes",
+    "subtitle": "Namespace 전반의 Gateway API GRPCRoute 리소스를 조회하고 관리합니다.",
+    "create": "GRPCRoute 생성",
+    "createTitle": "YAML로 GRPCRoute 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "GRPCRoute 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 GRPCRoute가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "hostnames": "호스트명",
       "parentRefs": "부모 참조",
@@ -688,23 +688,23 @@
     },
     "noResults": "GRPCRoute를 찾을 수 없습니다.",
     "delete": {
-      "button": "GRPC 라우트 삭제",
-      "title": "GRPC 라우트 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 GRPCRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "GRPCRoute 삭제",
+      "title": "GRPCRoute 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 GRPCRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "referenceGrantsPage": {
-    "title": "레퍼런스 그랜트",
-    "subtitle": "네임스페이스 전반의 Gateway API ReferenceGrant 리소스를 조회하고 관리합니다.",
-    "create": "레퍼런스 그랜트 생성",
-    "createTitle": "YAML로 레퍼런스 그랜트 생성",
+    "title": "ReferenceGrants",
+    "subtitle": "Namespace 전반의 Gateway API ReferenceGrant 리소스를 조회하고 관리합니다.",
+    "create": "ReferenceGrant 생성",
+    "createTitle": "YAML로 ReferenceGrant 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "ReferenceGrant 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 ReferenceGrant가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "from": "From",
       "to": "To",
@@ -718,23 +718,23 @@
     },
     "noResults": "ReferenceGrant를 찾을 수 없습니다.",
     "delete": {
-      "button": "레퍼런스 그랜트 삭제",
-      "title": "레퍼런스 그랜트 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 ReferenceGrant \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "ReferenceGrant 삭제",
+      "title": "ReferenceGrant 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 ReferenceGrant \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "backendTLSPoliciesPage": {
-    "title": "백엔드 TLS 폴리시",
-    "subtitle": "네임스페이스 전반의 Gateway API BackendTLSPolicy 리소스를 조회하고 관리합니다.",
-    "create": "백엔드 TLS 폴리시 생성",
-    "createTitle": "YAML로 백엔드 TLS 폴리시 생성",
+    "title": "BackendTLSPolicies",
+    "subtitle": "Namespace 전반의 Gateway API BackendTLSPolicy 리소스를 조회하고 관리합니다.",
+    "create": "BackendTLSPolicy 생성",
+    "createTitle": "YAML로 BackendTLSPolicy 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "BackendTLSPolicy 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 BackendTLSPolicy가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "targetRef": "대상 참조",
       "status": "상태",
@@ -747,24 +747,24 @@
     },
     "noResults": "BackendTLSPolicy를 찾을 수 없습니다.",
     "delete": {
-      "button": "백엔드 TLS 폴리시 삭제",
-      "title": "백엔드 TLS 폴리시 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 BackendTLSPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "BackendTLSPolicy 삭제",
+      "title": "BackendTLSPolicy 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 BackendTLSPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "policiesPage": {
-    "title": "정책",
+    "title": "Policies",
     "subtitle": "클러스터에 설치된 모든 구현체의 Gateway API 정책을 한곳에서 봅니다.",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "이름, 네임스페이스, 종류, 대상으로 검색...",
+    "searchPlaceholder": "이름, Namespace, 종류, 대상으로 검색...",
     "allKinds": "전체 종류",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개가 검색되었습니다.",
     "table": {
       "kind": "종류",
       "name": "이름",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "target": "대상",
       "accepted": "수락",
       "age": "생성 시각"
@@ -791,16 +791,16 @@
     "noResults": "정책이 없습니다."
   },
   "statefulsets": {
-    "title": "스테이트풀셋",
-    "subtitle": "네임스페이스 전반의 StatefulSet 상태를 확인하고 관리합니다.",
-    "create": "스테이트풀셋 생성",
-    "createTitle": "YAML로 스테이트풀셋 생성",
+    "title": "StatefulSets",
+    "subtitle": "Namespace 전반의 StatefulSet 상태를 확인하고 관리합니다.",
+    "create": "StatefulSet 생성",
+    "createTitle": "YAML로 StatefulSet 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "스테이트풀셋 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "searchPlaceholder": "StatefulSet 이름 검색...",
+    "allNamespaces": "전체 Namespace",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "ready": "준비됨",
       "upToDate": "최신 반영",
@@ -822,25 +822,25 @@
       "prev": "이전",
       "next": "다음"
     },
-    "noResults": "스테이트풀셋을 찾을 수 없습니다.",
+    "noResults": "StatefulSet을 찾을 수 없습니다.",
     "delete": {
-      "button": "스테이트풀셋 삭제",
-      "title": "스테이트풀셋 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 스테이트풀셋 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "StatefulSet 삭제",
+      "title": "StatefulSet 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 StatefulSet \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "daemonsets": {
-    "title": "데몬셋",
-    "subtitle": "네임스페이스 전반의 DaemonSet 스케줄링 상태를 확인합니다.",
-    "create": "데몬셋 생성",
-    "createTitle": "YAML로 데몬셋 생성",
+    "title": "DaemonSets",
+    "subtitle": "Namespace 전반의 DaemonSet 스케줄링 상태를 확인합니다.",
+    "create": "DaemonSet 생성",
+    "createTitle": "YAML로 DaemonSet 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "데몬셋 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 데몬셋이 검색되었습니다.",
+    "searchPlaceholder": "DaemonSet 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 DaemonSet이 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "ready": "준비됨",
       "current": "현재",
@@ -848,7 +848,7 @@
       "updated": "업데이트됨",
       "available": "가용",
       "status": "상태",
-      "nodeSelector": "노드 셀렉터",
+      "nodeSelector": "Node 셀렉터",
       "images": "이미지",
       "age": "생성 시각"
     },
@@ -859,25 +859,25 @@
       "degraded": "저하",
       "unavailable": "비가용"
     },
-    "noResults": "데몬셋을 찾을 수 없습니다.",
+    "noResults": "DaemonSet을 찾을 수 없습니다.",
     "delete": {
-      "button": "데몬셋 삭제",
-      "title": "데몬셋 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 데몬셋 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "DaemonSet 삭제",
+      "title": "DaemonSet 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 DaemonSet \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "replicasets": {
-    "title": "레플리카셋",
-    "subtitle": "네임스페이스 전반의 ReplicaSet 상태를 확인하고 관리합니다.",
-    "create": "레플리카셋 생성",
-    "createTitle": "YAML로 레플리카셋 생성",
+    "title": "ReplicaSets",
+    "subtitle": "Namespace 전반의 ReplicaSet 상태를 확인하고 관리합니다.",
+    "create": "ReplicaSet 생성",
+    "createTitle": "YAML로 ReplicaSet 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "레플리카셋 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 레플리카셋이 검색되었습니다.",
+    "searchPlaceholder": "ReplicaSet 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 ReplicaSet이 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "current": "현재",
       "desired": "목표",
@@ -897,25 +897,25 @@
       "degraded": "저하",
       "unavailable": "비가용"
     },
-    "noResults": "레플리카셋을 찾을 수 없습니다.",
+    "noResults": "ReplicaSet을 찾을 수 없습니다.",
     "delete": {
-      "button": "레플리카셋 삭제",
-      "title": "레플리카셋 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 레플리카셋 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "ReplicaSet 삭제",
+      "title": "ReplicaSet 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 ReplicaSet \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "jobs": {
-    "title": "잡",
-    "subtitle": "네임스페이스 전반의 Job 상태를 확인하고 관리합니다.",
-    "create": "잡 생성",
-    "createTitle": "YAML로 잡 생성",
+    "title": "Jobs",
+    "subtitle": "Namespace 전반의 Job 상태를 확인하고 관리합니다.",
+    "create": "Job 생성",
+    "createTitle": "YAML로 Job 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "잡 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 잡이 검색되었습니다.",
+    "searchPlaceholder": "Job 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 Job이 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "completions": "완료/병렬",
       "status": "상태",
@@ -930,25 +930,25 @@
       "running": "실행 중",
       "failed": "실패"
     },
-    "noResults": "잡을 찾을 수 없습니다.",
+    "noResults": "Job을 찾을 수 없습니다.",
     "delete": {
-      "button": "잡 삭제",
-      "title": "잡 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 잡 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Job 삭제",
+      "title": "Job 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 Job \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "cronjobs": {
-    "title": "크론잡",
-    "subtitle": "네임스페이스 전반의 CronJob 상태를 확인하고 관리합니다.",
-    "create": "크론잡 생성",
-    "createTitle": "YAML로 크론잡 생성",
+    "title": "CronJobs",
+    "subtitle": "Namespace 전반의 CronJob 상태를 확인하고 관리합니다.",
+    "create": "CronJob 생성",
+    "createTitle": "YAML로 CronJob 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "크론잡 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개의 크론잡이 검색되었습니다.",
+    "searchPlaceholder": "CronJob 이름 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개의 CronJob이 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "schedule": "스케줄",
       "suspend": "중지",
@@ -964,25 +964,25 @@
       "suspended": "중지됨",
       "scheduled": "실행 이력"
     },
-    "noResults": "크론잡을 찾을 수 없습니다.",
+    "noResults": "CronJob을 찾을 수 없습니다.",
     "delete": {
-      "button": "크론잡 삭제",
-      "title": "크론잡 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 크론잡 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "CronJob 삭제",
+      "title": "CronJob 삭제",
+      "confirm": "\"{{namespace}}\" Namespace의 CronJob \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "hpas": {
-    "title": "수평 파드 오토스케일러",
-    "subtitle": "네임스페이스 전반의 수평 파드 오토스케일링 정책을 관리합니다.",
+    "title": "HorizontalPodAutoscalers",
+    "subtitle": "Namespace 전반의 수평 Pod 오토스케일링 정책을 관리합니다.",
     "create": "HPA 생성",
     "createTitle": "YAML로 HPA 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "HPA 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 HPA가 검색되었습니다",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "reference": "대상",
       "min": "최소",
@@ -999,21 +999,21 @@
     "delete": {
       "button": "HPA 삭제",
       "title": "HPA 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 HPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "confirm": "\"{{namespace}}\" Namespace의 HPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "vpas": {
-    "title": "수직 파드 오토스케일러",
-    "subtitle": "네임스페이스 전반의 수직 파드 오토스케일링 권장 사항을 관리합니다.",
+    "title": "VerticalPodAutoscalers",
+    "subtitle": "Namespace 전반의 수직 Pod 오토스케일링 권장 사항을 관리합니다.",
     "create": "VPA 생성",
     "createTitle": "YAML로 VPA 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "VPA 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 VPA가 검색되었습니다",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "reference": "대상",
       "mode": "모드",
@@ -1031,21 +1031,21 @@
     "delete": {
       "button": "VPA 삭제",
       "title": "VPA 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 VPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "confirm": "\"{{namespace}}\" Namespace의 VPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "pdbs": {
-    "title": "파드 디스럽션 버짓",
-    "subtitle": "네임스페이스 전반의 PDB를 관리합니다.",
+    "title": "PodDisruptionBudgets",
+    "subtitle": "Namespace 전반의 PDB를 관리합니다.",
     "create": "PDB 생성",
     "createTitle": "YAML로 PDB 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "이름으로 PDB 검색...",
-    "allNamespaces": "모든 네임스페이스",
+    "allNamespaces": "모든 Namespace",
     "matchCount": "{{count}}개 PDB 일치.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "minAvailable": "최소 가용",
       "maxUnavailable": "최대 불가용",
@@ -1063,18 +1063,18 @@
     "delete": {
       "button": "PDB 삭제",
       "title": "PDB 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 PDB \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "confirm": "\"{{namespace}}\" Namespace의 PDB \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "priorityClasses": {
-    "title": "우선순위 클래스",
-    "subtitle": "클러스터 전반의 파드 스케줄링 우선순위를 관리합니다.",
-    "create": "우선순위 클래스 생성",
-    "createTitle": "YAML로 우선순위 클래스 생성",
+    "title": "PriorityClasses",
+    "subtitle": "클러스터 전반의 Pod 스케줄링 우선순위를 관리합니다.",
+    "create": "PriorityClass 생성",
+    "createTitle": "YAML로 PriorityClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 우선순위 클래스 검색...",
-    "matchCount": "{{count}}개 우선순위 클래스 일치.",
+    "searchPlaceholder": "이름으로 PriorityClass 검색...",
+    "matchCount": "{{count}}개 PriorityClass 일치.",
     "table": {
       "name": "이름",
       "value": "값",
@@ -1087,22 +1087,22 @@
       "globalDefault": "글로벌 기본값",
       "preempting": "선점 가능"
     },
-    "noResults": "우선순위 클래스가 없습니다.",
+    "noResults": "PriorityClass가 없습니다.",
     "delete": {
-      "button": "우선순위 클래스 삭제",
-      "title": "우선순위 클래스 삭제",
-      "confirm": "우선순위 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이것은 클러스터 수준 리소스입니다."
+      "button": "PriorityClass 삭제",
+      "title": "PriorityClass 삭제",
+      "confirm": "PriorityClass \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이것은 클러스터 수준 리소스입니다."
     }
   },
   "runtimeClasses": {
-    "title": "런타임 클래스",
+    "title": "RuntimeClasses",
     "subtitle": "클러스터의 컨테이너 런타임 구성을 관리합니다.",
-    "create": "런타임 클래스 생성",
-    "createTitle": "YAML로 런타임 클래스 생성",
+    "create": "RuntimeClass 생성",
+    "createTitle": "YAML로 RuntimeClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름 또는 핸들러로 런타임 클래스 검색...",
-    "matchCount": "{{count}}개 런타임 클래스 일치.",
+    "searchPlaceholder": "이름 또는 핸들러로 RuntimeClass 검색...",
+    "matchCount": "{{count}}개 RuntimeClass 일치.",
     "table": {
       "name": "이름",
       "handler": "핸들러",
@@ -1112,18 +1112,18 @@
       "total": "전체",
       "uniqueHandlers": "고유 핸들러"
     },
-    "noResults": "런타임 클래스가 없습니다.",
+    "noResults": "RuntimeClass가 없습니다.",
     "delete": {
-      "button": "런타임 클래스 삭제",
-      "title": "런타임 클래스 삭제",
-      "confirm": "런타임 클래스 \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이것은 클러스터 수준 리소스입니다."
+      "button": "RuntimeClass 삭제",
+      "title": "RuntimeClass 삭제",
+      "confirm": "RuntimeClass \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이것은 클러스터 수준 리소스입니다."
     }
   },
   "mutatingWebhooks": {
-    "title": "변경 웹훅 구성",
+    "title": "MutatingWebhookConfigurations",
     "subtitle": "클러스터의 변경(Mutating) 어드미션 웹훅 구성을 관리합니다.",
     "create": "생성",
-    "createTitle": "YAML로 변경 웹훅 구성 생성",
+    "createTitle": "YAML로 MutatingWebhookConfiguration 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "이름으로 검색...",
@@ -1137,13 +1137,13 @@
       "total": "전체 구성",
       "totalWebhooks": "전체 웹훅"
     },
-    "noResults": "변경 웹훅 구성이 없습니다."
+    "noResults": "MutatingWebhookConfiguration이 없습니다."
   },
   "validatingWebhooks": {
-    "title": "검증 웹훅 구성",
+    "title": "ValidatingWebhookConfigurations",
     "subtitle": "클러스터의 검증(Validating) 어드미션 웹훅 구성을 관리합니다.",
     "create": "생성",
-    "createTitle": "YAML로 검증 웹훅 구성 생성",
+    "createTitle": "YAML로 ValidatingWebhookConfiguration 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "이름으로 검색...",
@@ -1157,21 +1157,21 @@
       "total": "전체 구성",
       "totalWebhooks": "전체 웹훅"
     },
-    "noResults": "검증 웹훅 구성이 없습니다."
+    "noResults": "ValidatingWebhookConfiguration이 없습니다."
   },
   "leases": {
-    "title": "리스",
-    "subtitle": "네임스페이스 전반의 코디네이션 리스를 관리합니다.",
-    "create": "리스 생성",
-    "createTitle": "YAML로 리스 생성",
+    "title": "Leases",
+    "subtitle": "Namespace 전반의 코디네이션 Lease를 관리합니다.",
+    "create": "Lease 생성",
+    "createTitle": "YAML로 Lease 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름 또는 홀더로 리스 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개 리스 일치.",
+    "searchPlaceholder": "이름 또는 홀더로 Lease 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개 Lease 일치.",
     "table": {
       "name": "이름",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "holder": "홀더",
       "duration": "유지 시간 (초)",
       "age": "생성 시간"
@@ -1181,26 +1181,26 @@
       "withHolder": "홀더 있음",
       "withoutHolder": "홀더 없음"
     },
-    "noResults": "리스가 없습니다.",
+    "noResults": "Lease가 없습니다.",
     "delete": {
-      "button": "리스 삭제",
-      "title": "리스 삭제",
-      "confirm": "리스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Lease 삭제",
+      "title": "Lease 삭제",
+      "confirm": "Lease \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "resourceQuotas": {
-    "title": "리소스 쿼터",
-    "subtitle": "네임스페이스 전반의 리소스 쿼터를 관리합니다.",
-    "create": "리소스 쿼터 생성",
-    "createTitle": "YAML로 리소스 쿼터 생성",
+    "title": "ResourceQuotas",
+    "subtitle": "Namespace 전반의 ResourceQuota를 관리합니다.",
+    "create": "ResourceQuota 생성",
+    "createTitle": "YAML로 ResourceQuota 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 리소스 쿼터 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개 리소스 쿼터 일치.",
+    "searchPlaceholder": "이름으로 ResourceQuota 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개 ResourceQuota 일치.",
     "table": {
       "name": "이름",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "requests": "리소스 수",
       "age": "생성 시간"
     },
@@ -1209,56 +1209,56 @@
       "withCpu": "CPU 쿼터 있음",
       "withMemory": "메모리 쿼터 있음"
     },
-    "noResults": "리소스 쿼터가 없습니다.",
+    "noResults": "ResourceQuota가 없습니다.",
     "delete": {
-      "button": "리소스 쿼터 삭제",
-      "title": "리소스 쿼터 삭제",
-      "confirm": "리소스 쿼터 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "ResourceQuota 삭제",
+      "title": "ResourceQuota 삭제",
+      "confirm": "ResourceQuota \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "limitRanges": {
-    "title": "리밋 레인지",
-    "subtitle": "네임스페이스 전반의 리밋 레인지를 관리합니다.",
-    "create": "리밋 레인지 생성",
-    "createTitle": "YAML로 리밋 레인지 생성",
+    "title": "LimitRanges",
+    "subtitle": "Namespace 전반의 LimitRange를 관리합니다.",
+    "create": "LimitRange 생성",
+    "createTitle": "YAML로 LimitRange 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "이름으로 리밋 레인지 검색...",
-    "allNamespaces": "전체 네임스페이스",
-    "matchCount": "{{count}}개 리밋 레인지 일치.",
+    "searchPlaceholder": "이름으로 LimitRange 검색...",
+    "allNamespaces": "전체 Namespace",
+    "matchCount": "{{count}}개 LimitRange 일치.",
     "table": {
       "name": "이름",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "types": "타입",
       "age": "생성 시간"
     },
     "stats": {
       "total": "전체",
       "containerLimits": "컨테이너 리밋",
-      "podLimits": "파드 리밋"
+      "podLimits": "Pod 리밋"
     },
-    "noResults": "리밋 레인지가 없습니다.",
+    "noResults": "LimitRange가 없습니다.",
     "delete": {
-      "button": "리밋 레인지 삭제",
-      "title": "리밋 레인지 삭제",
-      "confirm": "리밋 레인지 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "LimitRange 삭제",
+      "title": "LimitRange 삭제",
+      "confirm": "LimitRange \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "pvcs": {
-    "title": "퍼시스턴트 볼륨 클레임",
-    "subtitle": "네임스페이스 전반의 PVC 상태를 확인하고 관리합니다.",
+    "title": "PersistentVolumeClaims",
+    "subtitle": "Namespace 전반의 PVC 상태를 확인하고 관리합니다.",
     "create": "PVC 생성",
     "createTitle": "YAML로 PersistentVolumeClaim 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
     "searchPlaceholder": "PVC 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개의 PVC가 검색되었습니다.",
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "status": "상태",
-      "storageClass": "스토리지 클래스",
+      "storageClass": "StorageClass",
       "volume": "볼륨",
       "requested": "요청량",
       "capacity": "용량",
@@ -1275,11 +1275,11 @@
     "delete": {
       "button": "PVC 삭제",
       "title": "PVC 삭제",
-      "confirm": "\"{{namespace}}\" 네임스페이스의 PVC \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "confirm": "\"{{namespace}}\" Namespace의 PVC \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "pvs": {
-    "title": "퍼시스턴트 볼륨",
+    "title": "PersistentVolumes",
     "subtitle": "클러스터 전반의 PV 상태를 확인하고 관리합니다.",
     "create": "PV 생성",
     "createTitle": "YAML로 PersistentVolume 생성",
@@ -1290,7 +1290,7 @@
     "table": {
       "name": "이름",
       "status": "상태",
-      "storageClass": "스토리지 클래스",
+      "storageClass": "StorageClass",
       "capacity": "용량",
       "accessModes": "접근 모드",
       "reclaimPolicy": "반환 정책",
@@ -1314,14 +1314,14 @@
     }
   },
   "storageclasses": {
-    "title": "스토리지 클래스",
+    "title": "StorageClasses",
     "subtitle": "클러스터 전반의 StorageClass 상태를 확인하고 관리합니다.",
-    "create": "스토리지 클래스 생성",
+    "create": "StorageClass 생성",
     "createTitle": "YAML로 StorageClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "스토리지 클래스 이름 검색...",
-    "matchCount": "{{count}}개의 스토리지 클래스가 검색되었습니다.",
+    "searchPlaceholder": "StorageClass 이름 검색...",
+    "matchCount": "{{count}}개의 StorageClass가 검색되었습니다.",
     "table": {
       "name": "이름",
       "provisioner": "프로비저너",
@@ -1338,27 +1338,27 @@
       "expandable": "확장 가능",
       "waitForFirstConsumer": "WaitForFirstConsumer"
     },
-    "noResults": "스토리지 클래스를 찾을 수 없습니다.",
+    "noResults": "StorageClass를 찾을 수 없습니다.",
     "delete": {
-      "button": "스토리지 클래스 삭제",
-      "title": "스토리지 클래스 삭제",
+      "button": "StorageClass 삭제",
+      "title": "StorageClass 삭제",
       "confirm": "StorageClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
     }
   },
   "volumeattachments": {
-    "title": "볼륨 어태치먼트",
+    "title": "VolumeAttachments",
     "subtitle": "클러스터 전반의 볼륨 attach 상태와 문제 신호를 확인합니다.",
     "create": "VolumeAttachment 생성",
     "createTitle": "YAML로 VolumeAttachment 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "이름, PV, 노드, Attacher로 VolumeAttachment 검색...",
+    "searchPlaceholder": "이름, PV, Node, Attacher로 VolumeAttachment 검색...",
     "matchCount": "{{count}}개의 VolumeAttachment가 검색되었습니다.",
     "table": {
       "name": "이름",
       "attacher": "Attacher",
-      "persistentVolume": "퍼시스턴트 볼륨",
-      "node": "노드",
+      "persistentVolume": "PersistentVolume",
+      "node": "Node",
       "attached": "Attach 상태",
       "error": "오류",
       "age": "생성 시각"
@@ -1377,16 +1377,16 @@
     }
   },
   "nodes": {
-    "title": "노드",
-    "subtitle": "클러스터 노드 상태와 용량을 확인합니다.",
-    "create": "노드 생성",
-    "createTitle": "YAML로 노드 생성",
-    "searchPlaceholder": "노드 이름 검색...",
+    "title": "Nodes",
+    "subtitle": "클러스터 Node 상태와 용량을 확인합니다.",
+    "create": "Node 생성",
+    "createTitle": "YAML로 Node 생성",
+    "searchPlaceholder": "Node 이름 검색...",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "noResults": "노드를 찾을 수 없습니다.",
+    "noResults": "Node를 찾을 수 없습니다.",
     "top": {
-      "title": "리소스 사용량 상위 노드",
+      "title": "리소스 사용량 상위 Node",
       "loading": "메트릭 로딩 중...",
       "error": "메트릭을 불러올 수 없습니다.",
       "empty": "메트릭 데이터가 없습니다.",
@@ -1416,34 +1416,34 @@
       "drainInProgress": "드레인 진행 중입니다. 작업이 일시적으로 비활성화됩니다.",
       "schedulingInProgress": "스케줄링 변경 중입니다. 작업이 일시적으로 비활성화됩니다.",
       "debug": "디버그",
-      "debugDisabled": "디버그 셸은 Linux 노드에서만 지원됩니다."
+      "debugDisabled": "디버그 셸은 Linux Node에서만 지원됩니다."
     },
     "delete": {
-      "button": "노드 삭제",
-      "title": "노드 삭제",
-      "confirm": "노드 \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
-      "warning": "노드를 삭제하면 해당 노드에 스케줄된 워크로드에 영향이 생길 수 있습니다."
+      "button": "Node 삭제",
+      "title": "Node 삭제",
+      "confirm": "Node \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
+      "warning": "Node를 삭제하면 해당 Node에 스케줄된 워크로드에 영향이 생길 수 있습니다."
     },
     "drain": {
-      "title": "노드 드레인",
-      "confirm": "노드 {{name}}를 드레인할까요?",
-      "warning": "드레인은 해당 노드의 파드를 축출합니다. 영향 범위를 충분히 이해한 후 진행하세요.",
+      "title": "Node 드레인",
+      "confirm": "Node {{name}}를 드레인할까요?",
+      "warning": "드레인은 해당 Node의 Pod를 축출합니다. 영향 범위를 충분히 이해한 후 진행하세요.",
       "confirmButton": "드레인",
-      "error": "노드 드레인에 실패했습니다.",
+      "error": "Node 드레인에 실패했습니다.",
       "status": {
         "title": "드레인 상태",
         "id": "ID",
         "pending": "대기",
         "pendingMessage": "요청이 접수되었습니다. 시작을 대기 중입니다...",
         "draining": "진행 중",
-        "progressMessage": "노드에서 파드를 축출하는 중입니다...",
+        "progressMessage": "Node에서 Pod를 축출하는 중입니다...",
         "success": "완료",
-        "doneMessage": "노드 드레인이 완료되었습니다.",
+        "doneMessage": "Node 드레인이 완료되었습니다.",
         "error": "실패"
       }
     },
     "detail": {
-      "title": "노드 상세",
+      "title": "Node 상세",
       "subtitle": "kubectl describe node {{name}} 결과",
       "summary": {
         "ready": "Ready",
@@ -1457,7 +1457,7 @@
         "yaml": "YAML"
       },
       "yaml": {
-        "title": "노드 YAML",
+        "title": "Node YAML",
         "refresh": "새로고침",
         "copy": "복사",
         "edit": "편집",
@@ -1473,9 +1473,9 @@
         "refreshing": "새로고침 중...",
         "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
       },
-      "loading": "노드 상세 로딩 중...",
-      "error": "노드 상세를 불러오지 못했습니다.",
-      "notFound": "노드 상세 정보가 없습니다.",
+      "loading": "Node 상세 로딩 중...",
+      "error": "Node 상세를 불러오지 못했습니다.",
+      "notFound": "Node 상세 정보가 없습니다.",
       "uptime": "업타임",
       "cpuUsage": "CPU 사용량",
       "memoryUsage": "메모리 사용량",
@@ -1487,7 +1487,7 @@
       "noMetrics": "메트릭 없음 (metrics-server 미설치)",
       "labels": "라벨",
       "annotations": "어노테이션",
-      "pods": "파드",
+      "pods": "Pod",
       "eventsTitle": "이벤트",
       "events": "이벤트",
       "createdAt": "생성 시각",
@@ -1509,12 +1509,12 @@
       "prometheus": "실시간 메트릭"
     },
     "pods": {
-      "search": "파드 필터...",
+      "search": "Pod 필터...",
       "prev": "이전",
       "next": "다음",
       "table": {
         "name": "이름",
-        "namespace": "네임스페이스",
+        "namespace": "Namespace",
         "ready": "준비됨",
         "status": "상태",
         "restarts": "재시작",
@@ -1558,7 +1558,7 @@
     "noSessions": "대화 내역이 없습니다",
     "rename": "제목 바꾸기",
     "delete": "삭제",
-    "title": "AI 어시스턴트",
+    "title": "AI Chat",
     "subtitle": "자연어로 클러스터를 질의하고 문제를 해결하세요",
     "emptyTitle": "새 대화를 시작하세요",
     "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요",
@@ -1597,7 +1597,7 @@
     ]
   },
   "monitoring": {
-    "title": "리소스 모니터링",
+    "title": "Monitoring",
     "subtitle": "Node 및 Pod의 실시간 리소스 사용량을 모니터링하세요",
     "metricsUnavailable": "이 클러스터에 메트릭 서버가 없습니다",
     "tabs": {
@@ -1611,14 +1611,14 @@
     },
     "pods": {
       "title": "Pod 리소스 사용량",
-      "subtitle": "네임스페이스별 필터링 지원",
+      "subtitle": "Namespace별 필터링 지원",
       "totalPods": "총 Pod 수",
       "totalCpu": "총 CPU 사용량",
       "totalMemory": "총 Memory 사용량",
       "errorTitle": "Pod 메트릭을 불러오는 중 오류가 발생했습니다",
       "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
       "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
-      "noPodsInNamespace": "{{namespace}} 네임스페이스에 Pod가 없습니다"
+      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다"
     },
     "autoRefresh": "5초마다 자동 갱신",
     "metricTimestamp": "메트릭 기준 수집 시각: {{time}}",
@@ -1626,11 +1626,11 @@
     "loading": "데이터를 불러오는 중...",
     "metricsServerHint": "metrics-server가 설치되어 있는지 확인하세요",
     "namespace": {
-      "label": "네임스페이스 선택",
-      "placeholder": "네임스페이스를 선택하세요",
-      "all": "전체 네임스페이스",
-      "promptTitle": "네임스페이스를 선택하세요",
-      "promptSubtitle": "Pod 리소스 사용량을 확인하려면 위에서 네임스페이스를 선택하세요"
+      "label": "Namespace 선택",
+      "placeholder": "Namespace를 선택하세요",
+      "all": "전체 Namespace",
+      "promptTitle": "Namespace를 선택하세요",
+      "promptSubtitle": "Pod 리소스 사용량을 확인하려면 위에서 Namespace를 선택하세요"
     },
     "table": {
       "pod": "Pod",
@@ -1674,7 +1674,7 @@
     "next": "다음",
     "paginationRange": "{{total}}개 중 {{start}}-{{end}} 표시",
     "paginationEmpty": "0개 중 0 표시",
-    "selectNamespace": "네임스페이스를 선택하세요",
+    "selectNamespace": "Namespace를 선택하세요",
     "refreshForce": "새로고침 (강제 갱신)",
     "noOptions": "옵션 없음",
     "loadingEditor": "에디터 로딩 중...",
@@ -1701,9 +1701,9 @@
       "missingMeta": "서버가 meta(finish reason)를 보내지 않았습니다. ai-service가 재빌드/재시작되지 않았을 수 있습니다.",
       "title": "최적화 제안",
       "subtitle": "워크로드 컨테이너별 requests/limits와 사용량을 비교합니다. 추천값 = CPU 95퍼센타일, 메모리 최대 +15%.",
-      "selectNamespaceTitle": "네임스페이스 선택",
-      "selectNamespace": "네임스페이스 선택",
-      "noNamespaces": "표시할 네임스페이스가 없습니다",
+      "selectNamespaceTitle": "Namespace 선택",
+      "selectNamespace": "Namespace 선택",
+      "noNamespaces": "표시할 Namespace가 없습니다",
       "runTitle": "이 표를 AI에게 설명해 달라고 요청",
       "running": "설명 중...",
       "run": "AI 설명",
@@ -1716,7 +1716,7 @@
       "table": {
         "workload": "워크로드",
         "container": "컨테이너",
-        "pods": "파드",
+        "pods": "Pod",
         "cpuReqLim": "CPU 요청 / 제한",
         "cpuUsage": "CPU 사용",
         "cpuRecommend": "CPU 추천",
@@ -1736,13 +1736,13 @@
       },
       "tableLoading": "표를 계산하는 중...",
       "tableError": "표를 불러오지 못했습니다",
-      "tableEmpty": "이 네임스페이스에 실행 중인 파드가 없습니다",
+      "tableEmpty": "이 Namespace에 실행 중인 Pod가 없습니다",
       "stopTitle": "중지",
       "stop": "중지",
       "copyTitle": "결과 복사",
       "copied": "복사됨",
       "copy": "복사",
-      "namespaceBadge": "네임스페이스 {{namespace}}",
+      "namespaceBadge": "Namespace {{namespace}}",
       "tokensBadge": "토큰 {{used}}{{max}}",
       "finishReason": "응답이 stop으로 끝나지 않아 잘렸을 수 있습니다 ({{reason}})",
       "streamError": "스트림 오류",
@@ -1750,31 +1750,31 @@
       "generating": "모델에게 표 설명을 요청하는 중...",
       "failed": "설명 생성에 실패했습니다",
       "retry": "재시도",
-      "selectPrompt": "네임스페이스를 선택하면 표를 불러옵니다.",
+      "selectPrompt": "Namespace를 선택하면 표를 불러옵니다.",
       "promptNote": "“AI 설명”은 이 표를 그대로 모델에 보내 왜 이런 수치인지·무엇부터 바꿀지 설명을 받습니다. 숫자는 바뀌지 않습니다.",
       "observedData": "모델에 보낸 표",
       "writing": "AI가 작성 중입니다…"
     },
     "loading": "데이터를 불러오는 중...",
     "stats": {
-      "namespaces": "네임스페이스",
-      "pods": "파드",
+      "namespaces": "Namespace",
+      "pods": "Pod",
       "services": "서비스",
-      "deployments": "디플로이먼트",
+      "deployments": "Deployment",
       "pvcs": "PVCs",
-      "nodes": "노드"
+      "nodes": "Node"
     },
     "issues": {
       "kind": {
-        "node": "노드",
-        "deployment": "디플로이먼트",
-        "statefulset": "스테이트풀셋",
-        "daemonset": "데몬셋",
-        "job": "잡",
-        "cronjob": "크론잡",
+        "node": "Node",
+        "deployment": "Deployment",
+        "statefulset": "StatefulSet",
+        "daemonset": "DaemonSet",
+        "job": "Job",
+        "cronjob": "CronJob",
         "horizontalpodautoscaler": "HPA",
         "persistentvolumeclaim": "PVC",
-        "pod": "파드",
+        "pod": "Pod",
         "collector": "수집"
       },
       "severity": {
@@ -1783,7 +1783,7 @@
         "info": "정보"
       },
       "title": "이슈",
-      "subtitle": "파드·워크로드·노드·PVC와 최근 {{window}}의 Warning 이벤트를 모아 원인과 마지막 메시지를 보여줍니다.",
+      "subtitle": "Pod·워크로드·Node·PVC와 최근 {{window}}의 Warning 이벤트를 모아 원인과 마지막 메시지를 보여줍니다.",
       "totalLabel": "합계",
       "totalCount": "{{count}}",
       "criticalLabel": "심각",
@@ -1793,8 +1793,8 @@
       "window": "이벤트 범위",
       "windowHint": "이 시간 안의 Warning 이벤트를 해당 객체에 붙입니다.",
       "includeRestarts": "재시작 기록 포함",
-      "includeRestartsHint": "현재 정상(Running/Ready)인 파드의 과거 재시작도 정보로 포함합니다.",
-      "searchPlaceholder": "이슈 검색(이름/네임스페이스/메시지)...",
+      "includeRestartsHint": "현재 정상(Running/Ready)인 Pod의 과거 재시작도 정보로 포함합니다.",
+      "searchPlaceholder": "이슈 검색(이름/Namespace/메시지)...",
       "loading": "이슈 수집 중...",
       "error": "이슈를 수집하지 못했습니다",
       "none": "이슈가 없습니다",
@@ -1805,22 +1805,22 @@
       "openHint": "상세 열기"
     },
     "metricsServerHint": "metrics-server 상태를 확인하세요",
-    "title": "클러스터 대시보드",
+    "title": "Dashboard",
     "subtitle": "쿠버네티스 클러스터를 한눈에 확인합니다.",
     "clusterVersion": "클러스터 버전: {{version}}",
     "refreshTitle": "강제 새로고침",
     "refresh": "새로고침",
     "podStatus": {
-      "title": "파드 상태",
-      "subtitle": "상태별 파드를 보려면 클릭"
+      "title": "Pod 상태",
+      "subtitle": "상태별 Pod를 보려면 클릭"
     },
     "nodeStatus": {
-      "title": "노드 상태",
-      "subtitle": "상태별 노드를 보려면 클릭"
+      "title": "Node 상태",
+      "subtitle": "상태별 Node를 보려면 클릭"
     },
     "topPods": {
-      "title": "리소스 사용 상위 5개 파드",
-      "metricsError": "파드 메트릭을 가져오지 못했습니다"
+      "title": "리소스 사용 상위 5개 Pod",
+      "metricsError": "Pod 메트릭을 가져오지 못했습니다"
     },
     "autoRefresh": "5초마다 자동 갱신",
     "topResources": {
@@ -1833,11 +1833,11 @@
     "cpu": "CPU",
     "memory": "메모리",
     "topNodes": {
-      "title": "리소스 사용 상위 3개 노드",
-      "metricsError": "노드 메트릭을 가져오지 못했습니다"
+      "title": "리소스 사용 상위 3개 Node",
+      "metricsError": "Node 메트릭을 가져오지 못했습니다"
     },
     "nodes": {
-      "title": "노드"
+      "title": "Node"
     },
     "nodeCard": {
       "versionLabel": "버전",
@@ -1879,8 +1879,8 @@
         "pvs": "PV",
         "topology": "토폴로지"
       },
-      "namespaceFilter": "네임스페이스 필터",
-      "allNamespaces": "전체 네임스페이스",
+      "namespaceFilter": "Namespace 필터",
+      "allNamespaces": "전체 Namespace",
       "searchPlaceholder": "검색(이름/상태/StorageClass/Claim)...",
       "loading": "스토리지 데이터를 불러오는 중...",
       "noPVC": "표시할 PVC가 없습니다",
@@ -1889,7 +1889,7 @@
       "reclaimLabel": "회수 정책",
       "claimLabel": "Claim",
       "topologyTitle": "스토리지 토폴로지",
-      "topologySummary": "노드: {{nodes}} · 엣지: {{edges}}",
+      "topologySummary": "Node: {{nodes}} · 엣지: {{edges}}",
       "noTopologyEdges": "표시할 토폴로지 엣지가 없습니다",
       "topologyLimit": "최대 50개 엣지만 표시",
       "topologyLoading": "토폴로지 로딩 중...",
@@ -1901,23 +1901,23 @@
       "loading": "로딩 중...",
       "total": "총 {{count}}",
       "searchPlaceholder": "검색...",
-      "namespaceSummary": "파드: {{pods}} | 서비스: {{services}} | 디플로이먼트: {{deployments}}",
+      "namespaceSummary": "Pod: {{pods}} | 서비스: {{services}} | Deployment: {{deployments}}",
       "noSearchResults": "검색 결과가 없습니다",
-      "noNamespaces": "네임스페이스가 없습니다",
-      "noPods": "파드가 없습니다",
+      "noNamespaces": "Namespace가 없습니다",
+      "noPods": "Pod가 없습니다",
       "typeLabel": "타입",
       "clusterIpLabel": "클러스터 IP",
       "noServices": "서비스가 없습니다",
       "replicasLabel": "레플리카",
-      "noDeployments": "디플로이먼트가 없습니다",
+      "noDeployments": "Deployment가 없습니다",
       "noPVCs": "PVC가 없습니다",
       "versionLabel": "버전",
       "internalIpLabel": "내부 IP",
       "rolesLabel": "역할",
-      "noNodes": "노드가 없습니다"
+      "noNodes": "Node가 없습니다"
     },
     "nodeModal": {
-      "title": "노드 상세",
+      "title": "Node 상세",
       "componentStatus": "컴포넌트 상태",
       "componentTable": {
         "name": "이름",
@@ -1945,7 +1945,7 @@
     },
     "live": "실시간",
     "disk": "디스크",
-    "pods": "파드",
+    "pods": "Pod",
     "clusterMetrics": "클러스터 리소스 사용률"
   },
   "clusterView": {
@@ -1988,7 +1988,7 @@
         "resourceNames": "(이름: {{names}})",
         "nonResourceUrls": "Non-resource URLs"
       },
-      "roleBindingsTitle": "RoleBindings (네임스페이스)",
+      "roleBindingsTitle": "RoleBindings (Namespace)",
       "matchingLabel": "매칭",
       "rulesCount": "rules: {{count}}",
       "resolveFailed": "resolve 실패",
@@ -2024,19 +2024,19 @@
       "loading": "로그를 불러오는 중...",
       "empty": "로그가 없습니다."
     },
-    "title": "클러스터 뷰",
-    "subtitle": "노드별 파드 배치를 확인합니다",
-    "searchPlaceholder": "파드 이름 검색...",
-    "allNamespaces": "전체 네임스페이스",
+    "title": "Cluster View",
+    "subtitle": "Node별 Pod 배치를 확인합니다",
+    "searchPlaceholder": "Pod 이름 검색...",
+    "allNamespaces": "전체 Namespace",
     "loading": "데이터를 불러오는 중...",
     "searchResults": "검색 결과",
     "countSuffix": "개",
     "searchResultsTotal": "(전체 {{count}}개 중)",
-    "noSearchResults": "\"{{query}}\"에 대한 파드를 찾을 수 없습니다",
+    "noSearchResults": "\"{{query}}\"에 대한 Pod를 찾을 수 없습니다",
     "nodePodsCount": "{{count}}개 Pod",
     "restarts": "재시작: {{count}}",
     "podDeleting": "삭제 중...",
-    "noPods": "파드가 없습니다",
+    "noPods": "Pod가 없습니다",
     "tabs": {
       "summary": "요약",
       "logs": "로그",
@@ -2052,7 +2052,7 @@
       "kind": "종류",
       "kindPod": "Pod",
       "state": "상태",
-      "node": "노드",
+      "node": "Node",
       "createdAt": "생성 시각"
     },
     "containers": {
@@ -2077,8 +2077,8 @@
     "describe": {
       "basicInfo": "기본 정보",
       "name": "이름",
-      "namespace": "네임스페이스",
-      "node": "노드",
+      "namespace": "Namespace",
+      "node": "Node",
       "phase": "상태",
       "createdAt": "생성 시각",
       "podIp": "Pod IP",
@@ -2103,14 +2103,14 @@
   },
   "namespaces": {
     "loading": "데이터를 불러오는 중...",
-    "title": "네임스페이스",
-    "subtitle": "클러스터의 모든 네임스페이스를 확인하고 리소스를 관리하세요",
+    "title": "Namespaces",
+    "subtitle": "클러스터의 모든 Namespace를 확인하고 리소스를 관리하세요",
     "refresh": "새로고침",
-    "searchPlaceholder": "네임스페이스 검색...",
-    "matchCount": "{{count}}개의 네임스페이스가 검색되었습니다",
+    "searchPlaceholder": "Namespace 검색...",
+    "matchCount": "{{count}}개의 Namespace가 검색되었습니다",
     "created": "생성",
     "noSearchResults": "검색 결과가 없습니다",
-    "empty": "네임스페이스가 없습니다",
+    "empty": "Namespace가 없습니다",
     "table": {
       "name": "이름",
       "status": "상태",
@@ -2124,11 +2124,11 @@
       "withLabels": "라벨 있음"
     },
     "detail": {
-      "title": "네임스페이스 상세",
+      "title": "Namespace 상세",
       "subtitle": "kubectl describe namespace {{name}} 결과",
-      "loading": "네임스페이스 상세 로딩 중...",
-      "error": "네임스페이스 상세를 불러오지 못했습니다.",
-      "notFound": "네임스페이스 상세 정보가 없습니다.",
+      "loading": "Namespace 상세 로딩 중...",
+      "error": "Namespace 상세를 불러오지 못했습니다.",
+      "notFound": "Namespace 상세 정보가 없습니다.",
       "basicInfo": "기본 정보",
       "name": "이름",
       "status": "상태",
@@ -2148,7 +2148,7 @@
         "yaml": "YAML"
       },
       "yaml": {
-        "title": "네임스페이스 YAML",
+        "title": "Namespace YAML",
         "refresh": "새로고침",
         "copy": "복사",
         "edit": "편집",
@@ -2197,33 +2197,33 @@
         "status": "상태",
         "ready": "준비",
         "restarts": "재시작",
-        "node": "노드",
+        "node": "Node",
         "age": "생성 시각"
       }
     },
     "create": {
-      "button": "네임스페이스 생성",
-      "title": "새 네임스페이스 생성",
-      "namePlaceholder": "네임스페이스 이름 입력",
+      "button": "Namespace 생성",
+      "title": "새 Namespace 생성",
+      "namePlaceholder": "Namespace 이름 입력",
       "nameHelp": "소문자, 숫자, 하이픈만 사용 가능 (63자 이내)",
       "nameInvalid": "유효하지 않은 이름입니다. 소문자/숫자/하이픈만 사용하고 영숫자로 시작/끝나야 합니다.",
       "nameTooLong": "이름은 63자 이내여야 합니다.",
       "creating": "생성 중...",
       "submit": "생성",
       "cancel": "취소",
-      "success": "네임스페이스 '{{name}}'이(가) 생성되었습니다.",
-      "error": "네임스페이스 생성에 실패했습니다.",
-      "exists": "이미 존재하는 네임스페이스입니다."
+      "success": "Namespace '{{name}}'이(가) 생성되었습니다.",
+      "error": "Namespace 생성에 실패했습니다.",
+      "exists": "이미 존재하는 Namespace입니다."
     },
     "delete": {
-      "button": "네임스페이스 삭제",
-      "title": "네임스페이스 삭제",
-      "confirm": "네임스페이스 \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, 네임스페이스 내 모든 리소스가 삭제됩니다.",
-      "warning": "⚠ 이 네임스페이스의 모든 리소스(Pod, Service, Deployment 등)가 영구적으로 삭제됩니다.",
+      "button": "Namespace 삭제",
+      "title": "Namespace 삭제",
+      "confirm": "Namespace \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, Namespace 내 모든 리소스가 삭제됩니다.",
+      "warning": "⚠ 이 Namespace의 모든 리소스(Pod, Service, Deployment 등)가 영구적으로 삭제됩니다.",
       "cancel": "취소",
       "submit": "삭제",
       "deleting": "삭제 중...",
-      "error": "네임스페이스 삭제에 실패했습니다."
+      "error": "Namespace 삭제에 실패했습니다."
     }
   },
   "admin": {
@@ -2236,9 +2236,9 @@
       "empty": "등록된 모델이 없습니다.",
       "advanced": "고급 (로컬 / 셀프호스트)",
       "options": "생성 옵션 (JSON)",
-      "optionsHint": "표준 파라미터(temperature, top_p, seed, max_tokens)는 모든 프로바이더에 전달됩니다. 프로바이더 전용 키(예: num_ctx)는 best-effort이며 OpenAI 호환 엔드포인트에서는 무시될 수 있습니다.",
+      "optionsHint": "표준 파라미터(temperature, top_p, seed, max_tokens)는 모든 프로바이더에 전달됩니다. 프로바이더 전용 키(예: num_ctx)는 best-effort이며 OpenAI 호환 Endpoints에서는 무시될 수 있습니다.",
       "caCert": "CA 인증서 (PEM)",
-      "caCertHint": "셀프호스트 HTTPS 엔드포인트의 자체 서명 CA를 신뢰합니다. 비우면 시스템 CA를 사용합니다.",
+      "caCertHint": "셀프호스트 HTTPS Endpoints의 자체 서명 CA를 신뢰합니다. 비우면 시스템 CA를 사용합니다.",
       "active": "활성",
       "disabled": "비활성",
       "noKeyEnv": "키 환경변수 없음",
@@ -2264,7 +2264,7 @@
       "test": "연결 테스트",
       "update": "수정",
       "create": "생성",
-      "testFailedHint": "연결 테스트에 실패했습니다. Kubernetes Secret에 새 API 키를 최근에 추가했다면 ai-service 파드를 재시작해야 새 환경변수를 읽습니다.",
+      "testFailedHint": "연결 테스트에 실패했습니다. Kubernetes Secret에 새 API 키를 최근에 추가했다면 ai-service Pod를 재시작해야 새 환경변수를 읽습니다.",
       "checking": "확인 중…",
       "checkHealth": "서비스 상태 확인"
     },
@@ -2292,7 +2292,7 @@
     "sweepFailed": "점검에 실패했습니다.",
     "loading": "로딩 중...",
     "loadError": "유저 목록을 불러오지 못했습니다.",
-    "title": "유저 관리",
+    "title": "User Management",
     "subtitle": "유저 권한(read/write/admin)을 변경합니다.",
     "table": {
       "name": "이름",
@@ -2413,7 +2413,7 @@
       "updating": "변경 중...",
       "submit": "비밀번호 변경"
     },
-    "title": "설정",
+    "title": "Settings",
     "subtitle": "프로필, 비밀번호, 언어를 관리합니다.",
     "profile": {
       "title": "내 정보",
@@ -2424,14 +2424,14 @@
       "role": "Role"
     },
     "nodeShell": {
-      "title": "노드 셸",
-      "subtitle": "노드 디버그 셸 설정을 관리합니다.",
-      "enable": "노드 셸 사용",
-      "enableHint": "노드 상세 화면에 디버그 셸 액션을 표시합니다.",
-      "namespace": "네임스페이스",
+      "title": "Node 셸",
+      "subtitle": "Node 디버그 셸 설정을 관리합니다.",
+      "enable": "Node 셸 사용",
+      "enableHint": "Node 상세 화면에 디버그 셸 액션을 표시합니다.",
+      "namespace": "Namespace",
       "image": "리눅스 이미지",
-      "imageHint": "서버 허용 목록에 있어야 합니다(Helm nodeShell.images / NODE_SHELL_IMAGES). 셸 파드는 항상 전용 특권 네임스페이스에서 실행됩니다.",
-      "namespaceHint": "참고용: 서버는 셸 파드를 항상 설정된 특권 네임스페이스(NODE_SHELL_NAMESPACE)에 만듭니다."
+      "imageHint": "서버 허용 목록에 있어야 합니다(Helm nodeShell.images / NODE_SHELL_IMAGES). 셸 Pod는 항상 전용 특권 Namespace에서 실행됩니다.",
+      "namespaceHint": "참고용: 서버는 셸 Pod를 항상 설정된 특권 Namespace(NODE_SHELL_NAMESPACE)에 만듭니다."
     }
   },
   "storage": {
@@ -2442,10 +2442,10 @@
       "volumeAttachments": "VolumeAttachment 이름 검색...",
       "action": "검색"
     },
-    "title": "스토리지",
+    "title": "Storage",
     "refreshTitle": "새로고침 (강제 갱신)",
     "refresh": "새로고침",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "columns": {
       "compactTitle": "핵심 컬럼만 표시",
       "compact": "기본",
@@ -2604,8 +2604,8 @@
     "submitLoading": "적용 중..."
   },
   "resourceGraph": {
-    "title": "리소스 그래프",
-    "allNamespaces": "전체 네임스페이스",
+    "title": "Resource Graph",
+    "allNamespaces": "전체 Namespace",
     "search": "리소스 검색...",
     "filter": "필터",
     "legend": "범례",
@@ -2621,31 +2621,31 @@
     "featureFilteringDesc": "리소스 타입, 상태,\n엣지 타입별 필터",
     "featureInteractionTitle": "인터랙션",
     "featureInteractionDesc": "호버로 프리뷰,\n클릭으로 상세 보기",
-    "selectNamespaceHint": "왼쪽 상단 드롭다운에서 네임스페이스를 선택하세요",
+    "selectNamespaceHint": "왼쪽 상단 드롭다운에서 Namespace를 선택하세요",
     "legendRunning": "실행 중 / 활성",
     "legendPending": "대기 중",
     "legendFailed": "실패 / 오류",
     "glance": {
       "status": "상태",
       "ready": "준비",
-      "namespace": "네임스페이스",
-      "node": "노드",
+      "namespace": "Namespace",
+      "node": "Node",
       "owner": "소유자",
       "instance": "인스턴스"
     },
     "nodeCount": "리소스 {{n}}개",
     "edgeCount": "연결 {{n}}개",
-    "selectNamespace": "네임스페이스 선택...",
+    "selectNamespace": "Namespace 선택...",
     "clearSelection": "선택 해제"
   },
   "advancedSearch": {
-    "title": "고급 검색",
+    "title": "Advanced Search",
     "subtitle": "JavaScript 표현식으로 Kubernetes 리소스를 검색합니다",
     "selectResources": "리소스 선택",
     "filterResources": "리소스 필터...",
     "selectAll": "전체 선택",
     "clearAll": "선택 해제",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "queryPlaceholder": "JavaScript 표현식으로 리소스를 검색하세요...",
     "searching": "검색 중...",
     "resultsCount": "{{count}}건 결과",
@@ -2661,18 +2661,18 @@
     "tooManyResults": "{{total}}건의 결과를 찾았습니다. 처음 {{max}}건만 표시합니다.",
     "examplesTitle": "쿼리 예시",
     "examples": {
-      "podsNotRunning": "Running 상태가 아닌 파드 찾기",
+      "podsNotRunning": "Running 상태가 아닌 Pod 찾기",
       "labelApp": "app=nginx 라벨이 있는 모든 리소스",
-      "replicasOver3": "레플리카가 3개 초과인 디플로이먼트",
-      "restartsOver5": "재시작 5회 초과 파드",
+      "replicasOver3": "레플리카가 3개 초과인 Deployment",
+      "restartsOver5": "재시작 5회 초과 Pod",
       "configMapWithData": "data가 있는 ConfigMap",
-      "completedJobs": "완료된 활성 잡",
+      "completedJobs": "완료된 활성 Job",
       "loadBalancerServices": "LoadBalancer 타입 서비스",
       "pendingPvcs": "Pending 상태인 PVC"
     },
     "colKind": "종류",
     "colName": "이름",
-    "colNamespace": "네임스페이스",
+    "colNamespace": "Namespace",
     "colStatus": "상태",
     "colAge": "나이",
     "colActions": "작업",
@@ -2708,97 +2708,97 @@
     "beta": "베타"
   },
   "serviceAccountsPage": {
-    "title": "서비스 어카운트",
-    "subtitle": "네임스페이스별 서비스 어카운트를 관리합니다.",
-    "searchPlaceholder": "이름 또는 네임스페이스로 검색...",
-    "allNamespaces": "모든 네임스페이스",
+    "title": "ServiceAccounts",
+    "subtitle": "Namespace별 ServiceAccount를 관리합니다.",
+    "searchPlaceholder": "이름 또는 Namespace로 검색...",
+    "allNamespaces": "모든 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "서비스 어카운트 생성",
-    "createTitle": "YAML로 서비스 어카운트 생성",
-    "noResults": "서비스 어카운트가 없습니다.",
+    "create": "ServiceAccount 생성",
+    "createTitle": "YAML로 ServiceAccount 생성",
+    "noResults": "ServiceAccount가 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
-      "withSecrets": "시크릿 보유",
-      "totalSecrets": "총 시크릿"
+      "withSecrets": "Secret 보유",
+      "totalSecrets": "총 Secret"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
-      "secrets": "시크릿",
+      "secrets": "Secret",
       "age": "생성 경과"
     },
     "delete": {
-      "button": "서비스 어카운트 삭제",
-      "title": "서비스 어카운트 삭제",
-      "confirm": "서비스 어카운트 \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "button": "ServiceAccount 삭제",
+      "title": "ServiceAccount 삭제",
+      "confirm": "ServiceAccount \"{{name}}\"을(를) 삭제하시겠습니까?"
     }
   },
   "rolesPage": {
-    "title": "롤",
-    "subtitle": "네임스페이스별 롤을 관리합니다.",
-    "searchPlaceholder": "이름 또는 네임스페이스로 검색...",
-    "allNamespaces": "모든 네임스페이스",
+    "title": "Roles",
+    "subtitle": "Namespace별 Role을 관리합니다.",
+    "searchPlaceholder": "이름 또는 Namespace로 검색...",
+    "allNamespaces": "모든 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "롤 생성",
-    "createTitle": "YAML로 롤 생성",
-    "noResults": "롤이 없습니다.",
+    "create": "Role 생성",
+    "createTitle": "YAML로 Role 생성",
+    "noResults": "Role이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
       "totalRules": "총 규칙"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "rules": "규칙",
       "age": "생성 경과"
     },
     "delete": {
-      "button": "롤 삭제",
-      "title": "롤 삭제",
-      "confirm": "롤 \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "button": "Role 삭제",
+      "title": "Role 삭제",
+      "confirm": "Role \"{{name}}\"을(를) 삭제하시겠습니까?"
     }
   },
   "roleBindingsPage": {
-    "title": "롤 바인딩",
-    "subtitle": "네임스페이스별 롤 바인딩을 관리합니다.",
-    "searchPlaceholder": "이름, 네임스페이스 또는 롤 참조로 검색...",
-    "allNamespaces": "모든 네임스페이스",
+    "title": "RoleBindings",
+    "subtitle": "Namespace별 RoleBinding을 관리합니다.",
+    "searchPlaceholder": "이름, Namespace 또는 Role 참조로 검색...",
+    "allNamespaces": "모든 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "롤 바인딩 생성",
-    "createTitle": "YAML로 롤 바인딩 생성",
-    "noResults": "롤 바인딩이 없습니다.",
+    "create": "RoleBinding 생성",
+    "createTitle": "YAML로 RoleBinding 생성",
+    "noResults": "RoleBinding이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
       "totalSubjects": "총 대상"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
-      "roleRef": "롤 참조",
+      "roleRef": "Role 참조",
       "subjects": "대상",
       "age": "생성 경과"
     },
     "delete": {
-      "button": "롤 바인딩 삭제",
-      "title": "롤 바인딩 삭제",
-      "confirm": "롤 바인딩 \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "button": "RoleBinding 삭제",
+      "title": "RoleBinding 삭제",
+      "confirm": "RoleBinding \"{{name}}\"을(를) 삭제하시겠습니까?"
     }
   },
   "clusterRolesPage": {
-    "title": "클러스터 롤",
+    "title": "ClusterRoles",
     "subtitle": "클러스터 전체의 ClusterRole을 관리합니다.",
     "searchPlaceholder": "이름으로 검색...",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "클러스터 롤 생성",
-    "createTitle": "YAML로 클러스터 롤 생성",
-    "noResults": "클러스터 롤이 없습니다.",
+    "create": "ClusterRole 생성",
+    "createTitle": "YAML로 ClusterRole 생성",
+    "noResults": "ClusterRole이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -2811,14 +2811,14 @@
     }
   },
   "clusterRoleBindingsPage": {
-    "title": "클러스터 롤 바인딩",
+    "title": "ClusterRoleBindings",
     "subtitle": "클러스터 전체의 ClusterRoleBinding을 관리합니다.",
-    "searchPlaceholder": "이름 또는 롤 참조로 검색...",
+    "searchPlaceholder": "이름 또는 Role 참조로 검색...",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "클러스터 롤 바인딩 생성",
-    "createTitle": "YAML로 클러스터 롤 바인딩 생성",
-    "noResults": "클러스터 롤 바인딩이 없습니다.",
+    "create": "ClusterRoleBinding 생성",
+    "createTitle": "YAML로 ClusterRoleBinding 생성",
+    "noResults": "ClusterRoleBinding이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -2826,48 +2826,48 @@
     },
     "table": {
       "name": "이름",
-      "roleRef": "롤 참조",
+      "roleRef": "Role 참조",
       "subjects": "대상",
       "age": "생성 경과"
     }
   },
   "configMapsPage": {
-    "title": "컨피그맵",
-    "subtitle": "네임스페이스별 컨피그맵을 관리합니다.",
-    "searchPlaceholder": "이름 또는 네임스페이스로 검색...",
-    "allNamespaces": "모든 네임스페이스",
+    "title": "ConfigMaps",
+    "subtitle": "Namespace별 ConfigMap을 관리합니다.",
+    "searchPlaceholder": "이름 또는 Namespace로 검색...",
+    "allNamespaces": "모든 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "컨피그맵 생성",
-    "createTitle": "YAML로 컨피그맵 생성",
-    "noResults": "컨피그맵이 없습니다.",
+    "create": "ConfigMap 생성",
+    "createTitle": "YAML로 ConfigMap 생성",
+    "noResults": "ConfigMap이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
       "totalKeys": "총 데이터 키"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "data": "데이터",
       "age": "생성 경과"
     },
     "delete": {
-      "button": "컨피그맵 삭제",
-      "title": "컨피그맵 삭제",
-      "confirm": "컨피그맵 \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "button": "ConfigMap 삭제",
+      "title": "ConfigMap 삭제",
+      "confirm": "ConfigMap \"{{name}}\"을(를) 삭제하시겠습니까?"
     }
   },
   "secretsPage": {
-    "title": "시크릿",
-    "subtitle": "네임스페이스별 시크릿을 관리합니다.",
-    "searchPlaceholder": "이름, 네임스페이스 또는 타입으로 검색...",
-    "allNamespaces": "모든 네임스페이스",
+    "title": "Secrets",
+    "subtitle": "Namespace별 Secret을 관리합니다.",
+    "searchPlaceholder": "이름, Namespace 또는 타입으로 검색...",
+    "allNamespaces": "모든 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "create": "시크릿 생성",
-    "createTitle": "YAML로 시크릿 생성",
-    "noResults": "시크릿이 없습니다.",
+    "create": "Secret 생성",
+    "createTitle": "YAML로 Secret 생성",
+    "noResults": "Secret이 없습니다.",
     "forbidden": "이 클러스터에서 Secret을 조회할 권한이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
@@ -2875,16 +2875,16 @@
       "opaque": "Opaque"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "type": "타입",
       "data": "데이터",
       "age": "생성 경과"
     },
     "delete": {
-      "button": "시크릿 삭제",
-      "title": "시크릿 삭제",
-      "confirm": "시크릿 \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "button": "Secret 삭제",
+      "title": "Secret 삭제",
+      "confirm": "Secret \"{{name}}\"을(를) 삭제하시겠습니까?"
     }
   },
   "secretInfo": {
@@ -2906,7 +2906,7 @@
     "user": "사용자"
   },
   "crdPage": {
-    "title": "Custom Resource Definitions",
+    "title": "CustomResourceDefinitions",
     "subtitle": "클러스터에 등록된 Custom Resource Definition을 관리합니다.",
     "searchPlaceholder": "이름, 그룹, Kind로 검색...",
     "refresh": "새로고침",
@@ -2917,7 +2917,7 @@
     "noResults": "Custom Resource Definition이 없습니다.",
     "stats": {
       "total": "전체",
-      "namespaced": "네임스페이스 범위",
+      "namespaced": "Namespace 범위",
       "cluster": "클러스터 범위"
     },
     "table": {
@@ -2932,7 +2932,7 @@
   "crInstancesPage": {
     "title": "Custom Resource Instances",
     "subtitle": "모든 CRD에 걸친 커스텀 리소스 인스턴스를 조회합니다.",
-    "searchPlaceholder": "이름, 네임스페이스, Kind, 그룹으로 검색...",
+    "searchPlaceholder": "이름, Namespace, Kind, 그룹으로 검색...",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "allKinds": "모든 Kind",
@@ -2941,11 +2941,11 @@
     "stats": {
       "total": "전체 인스턴스",
       "kinds": "Kind 수",
-      "namespaces": "네임스페이스"
+      "namespaces": "Namespace"
     },
     "table": {
       "name": "이름",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "kind": "Kind",
       "group": "그룹",
       "age": "생성 경과"
@@ -3006,10 +3006,10 @@
     "success": "리비전 {{revision}}으로 롤백이 시작되었습니다"
   },
   "timeline": {
-    "title": "변경 이력 타임라인",
+    "title": "Change History",
     "subtitle": "K8s 이벤트와 리소스 변경 이력을 시간순으로 확인합니다.",
-    "selectNamespace": "네임스페이스 선택",
-    "allNamespaces": "전체 네임스페이스",
+    "selectNamespace": "Namespace 선택",
+    "allNamespaces": "전체 Namespace",
     "timeRange": "시간 범위",
     "1h": "1시간",
     "6h": "6시간",
@@ -3037,10 +3037,10 @@
     "closeSummary": "요약 닫기",
     "remaining": "({{n}}개 남음)",
     "via": "{{source}} 경유",
-    "namespace": "네임스페이스"
+    "namespace": "Namespace"
   },
   "adminOrg": {
-    "title": "팀 관리",
+    "title": "Team",
     "subtitle": "회원가입 시 선택할 수 있는 팀 목록을 관리합니다.",
     "teamTitle": "팀",
     "teamSubtitle": "팀 / 그룹",
@@ -3074,7 +3074,7 @@
         "all": "전체",
         "menu": "메뉴",
         "resources": "리소스",
-        "node": "노드",
+        "node": "Node",
         "pod": "Pod",
         "workload": "워크로드",
         "secret": "Secret",
@@ -3091,7 +3091,7 @@
         "menu_storage": "스토리지",
         "menu_security": "보안",
         "menu_cluster": "클러스터",
-        "menu_gateway": "게이트웨이",
+        "menu_gateway": "Gateway",
         "menu_gpu": "GPU",
         "menu_helm": "Helm",
         "menu_configuration": "설정",
@@ -3103,7 +3103,7 @@
         "resource_all_delete": "모든 리소스 삭제",
         "resource_node_cordon": "Cordon/Uncordon",
         "resource_node_drain": "Drain",
-        "resource_node_shell": "노드 셸",
+        "resource_node_shell": "Node 셸",
         "resource_pod_exec": "Pod Exec",
         "resource_workload_restart": "재시작",
         "resource_workload_rollback": "롤백",
@@ -3181,7 +3181,7 @@
     "updateError": "역할을 수정하지 못했습니다"
   },
   "gpuDashboardPage": {
-    "title": "GPU 대시보드",
+    "title": "GPU Dashboard",
     "subtitle": "클러스터 전체 GPU 리소스 개요",
     "empty": "이 클러스터에서 GPU 리소스가 감지되지 않았습니다.",
     "error": "GPU 데이터를 불러오지 못했습니다. 클러스터에 일시적으로 접속할 수 없을 수 있습니다.",
@@ -3215,13 +3215,13 @@
       "core": "코어",
       "mem": "메모리",
       "temp": "온도",
-      "pod": "파드"
+      "pod": "Pod"
     },
     "nodeAllocation": {
-      "title": "노드별 GPU 할당",
+      "title": "Node별 GPU 할당",
       "ready": "정상",
       "notReady": "비정상",
-      "empty": "사용 가능한 GPU 노드가 없습니다."
+      "empty": "사용 가능한 GPU Node가 없습니다."
     },
     "modelDist": {
       "title": "GPU 모델",
@@ -3233,27 +3233,27 @@
     },
     "recentPods": {
       "title": "최근 GPU Pod",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
-      "node": "노드",
+      "node": "Node",
       "gpus": "GPU",
       "status": "상태",
       "age": "Age"
     }
   },
   "gpuNodes": {
-    "title": "GPU 노드",
-    "subtitle": "GPU 노드 상태, 용량 및 모델 정보입니다.",
+    "title": "GPU Nodes",
+    "subtitle": "GPU Node 상태, 용량 및 모델 정보입니다.",
     "metrics": "메트릭",
     "refresh": "새로고침",
-    "searchPlaceholder": "노드 이름, GPU 모델, 드라이버 버전으로 검색...",
-    "noResults": "GPU 노드를 찾을 수 없습니다.",
+    "searchPlaceholder": "Node 이름, GPU 모델, 드라이버 버전으로 검색...",
+    "noResults": "GPU Node를 찾을 수 없습니다.",
     "modelDistribution": "GPU 모델 분포",
     "realtimeMetrics": "실시간 GPU 사용률",
     "capacity": "용량",
     "allocatable": "할당 가능",
     "stats": {
-      "total": "전체 노드",
+      "total": "전체 Node",
       "ready": "정상",
       "notReady": "비정상",
       "capacity": "GPU 용량",
@@ -3269,51 +3269,51 @@
       "status": "상태",
       "migStrategy": "MIG 전략"
     },
-    "nodeCountOne": "노드 {{n}}개",
-    "nodeCount": "노드 {{n}}개",
+    "nodeCountOne": "Node {{n}}개",
+    "nodeCount": "Node {{n}}개",
     "avgCore": "평균 코어",
     "avgMem": "평균 메모리"
   },
   "gpuPods": {
-    "title": "GPU Pod",
+    "title": "GPU Pods",
     "subtitle": "클러스터에서 GPU 리소스를 사용하는 Pod입니다.",
     "metrics": "메트릭",
     "refresh": "새로고침",
-    "searchPlaceholder": "Pod 이름, 네임스페이스 또는 노드로 검색...",
+    "searchPlaceholder": "Pod 이름, Namespace 또는 Node로 검색...",
     "noResults": "GPU Pod를 찾을 수 없습니다.",
-    "nodeUsage": "노드별 GPU 사용량",
+    "nodeUsage": "Node별 GPU 사용량",
     "statusDistribution": "상태 분포",
     "stats": {
       "total": "전체 Pod",
       "running": "실행 중",
       "pending": "대기 중",
       "failed": "실패",
-      "namespaces": "네임스페이스",
+      "namespaces": "Namespace",
       "gpuRequested": "요청 GPU"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
-      "node": "노드",
+      "node": "Node",
       "gpus": "GPU",
       "status": "상태",
       "age": "Age",
       "gpuUtil": "GPU 사용률",
       "memUtil": "메모리 사용률"
     },
-    "podCountOne": "파드 {{n}}개",
-    "podCount": "파드 {{n}}개"
+    "podCountOne": "Pod {{n}}개",
+    "podCount": "Pod {{n}}개"
   },
   "deviceClassesPage": {
-    "title": "디바이스 클래스",
+    "title": "DeviceClasses",
     "subtitle": "동적 리소스 할당(DRA)을 위한 DeviceClass 리소스를 관리합니다.",
     "create": "DeviceClass 생성",
     "createTitle": "YAML로 DeviceClass 생성",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "디바이스 클래스 이름으로 검색...",
-    "noResults": "디바이스 클래스를 찾을 수 없습니다.",
-    "matchCount": "{{count}}개의 디바이스 클래스가 일치합니다.",
+    "searchPlaceholder": "DeviceClass 이름으로 검색...",
+    "noResults": "DeviceClass를 찾을 수 없습니다.",
+    "matchCount": "{{count}}개의 DeviceClass가 일치합니다.",
     "stats": {
       "total": "전체",
       "withConditions": "Condition 있음"
@@ -3326,7 +3326,7 @@
     }
   },
   "resourceClaimsPage": {
-    "title": "Resource Claims",
+    "title": "ResourceClaims",
     "subtitle": "DRA ResourceClaim 리소스를 관리합니다.",
     "create": "ResourceClaim 생성",
     "createTitle": "YAML로 ResourceClaim 생성",
@@ -3335,7 +3335,7 @@
     "searchPlaceholder": "ResourceClaim 이름으로 검색...",
     "noResults": "ResourceClaim을 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceClaim이 일치합니다.",
-    "allNamespaces": "모든 네임스페이스",
+    "allNamespaces": "모든 Namespace",
     "stats": {
       "total": "전체",
       "allocated": "할당됨",
@@ -3343,7 +3343,7 @@
       "pending": "대기 중"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "requests": "요청",
       "status": "상태",
@@ -3351,7 +3351,7 @@
     }
   },
   "resourceClaimTemplatesPage": {
-    "title": "Resource Claim Templates",
+    "title": "ResourceClaimTemplates",
     "subtitle": "DRA ResourceClaimTemplate 리소스를 관리합니다.",
     "create": "ResourceClaimTemplate 생성",
     "createTitle": "YAML로 ResourceClaimTemplate 생성",
@@ -3360,32 +3360,32 @@
     "searchPlaceholder": "ResourceClaimTemplate 이름으로 검색...",
     "noResults": "ResourceClaimTemplate을 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceClaimTemplate이 일치합니다.",
-    "allNamespaces": "모든 네임스페이스",
+    "allNamespaces": "모든 Namespace",
     "stats": {
       "total": "전체"
     },
     "table": {
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "name": "이름",
       "requests": "요청",
       "age": "Age"
     }
   },
   "resourceSlicesPage": {
-    "title": "Resource Slices",
-    "subtitle": "노드가 광고하는 DRA ResourceSlice 리소스를 조회합니다.",
+    "title": "ResourceSlices",
+    "subtitle": "Node가 광고하는 DRA ResourceSlice 리소스를 조회합니다.",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
-    "searchPlaceholder": "리소스 슬라이스 이름, 노드, 드라이버 또는 풀로 검색...",
-    "noResults": "리소스 슬라이스를 찾을 수 없습니다.",
-    "matchCount": "{{count}}개의 리소스 슬라이스가 일치합니다.",
+    "searchPlaceholder": "ResourceSlice 이름, Node, 드라이버 또는 풀로 검색...",
+    "noResults": "ResourceSlice를 찾을 수 없습니다.",
+    "matchCount": "{{count}}개의 ResourceSlice가 일치합니다.",
     "stats": {
       "total": "전체",
       "totalDevices": "전체 디바이스"
     },
     "table": {
       "name": "이름",
-      "node": "노드",
+      "node": "Node",
       "driver": "드라이버",
       "pool": "풀",
       "devices": "디바이스",
@@ -3396,7 +3396,7 @@
     "title": "Helm Releases",
     "subtitle": "클러스터에 설치된 Helm Release를 조회하고 관리합니다.",
     "refresh": "새로고침",
-    "allNamespaces": "전체 네임스페이스",
+    "allNamespaces": "전체 Namespace",
     "searchPlaceholder": "Release 이름 검색...",
     "matchCount": "{{count}}개의 Release가 검색되었습니다.",
     "forbidden": "이 클러스터에서 Helm Release를 조회할 권한이 없습니다.",
@@ -3415,7 +3415,7 @@
     },
     "table": {
       "name": "이름",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "revision": "리비전",
       "status": "상태",
       "chart": "차트",
@@ -3442,7 +3442,7 @@
       "status": "상태",
       "updated": "업데이트",
       "description": "설명",
-      "namespace": "네임스페이스",
+      "namespace": "Namespace",
       "resourceCount": "리소스 수",
       "imageCount": "이미지 수"
     },
@@ -3468,7 +3468,7 @@
       "col": {
         "kind": "종류",
         "name": "이름",
-        "namespace": "네임스페이스"
+        "namespace": "Namespace"
       }
     },
     "rollback": {
@@ -3641,7 +3641,7 @@
     }
   },
   "adminAudit": {
-    "title": "감사 로그",
+    "title": "Audit Logs",
     "subtitle": "모든 쓰기 작업과 민감 열람 내역",
     "exportCsv": "CSV 내보내기",
     "refreshing": "불러오는 중...",
@@ -3711,7 +3711,7 @@
   },
   "resources": {
     "title": "{{namespace}} 리소스",
-    "subtitle": "네임스페이스의 모든 리소스를 확인하고 관리하세요",
+    "subtitle": "Namespace의 모든 리소스를 확인하고 관리하세요",
     "searchPlaceholder": "{{kind}} 이름 검색...",
     "replicasetError": "ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
     "fullSelectorTitle": "전체 selector: {{selector}}",
@@ -3724,7 +3724,7 @@
     "owner": "소유자",
     "type": "유형",
     "ports": "포트",
-    "namespace": "네임스페이스",
+    "namespace": "Namespace",
     "capacity": "용량",
     "requested": "요청 용량",
     "volume": "볼륨"
@@ -3739,7 +3739,7 @@
     "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다",
     "title": "{{namespace}} 네트워크",
     "ports": "포트",
-    "pods": "파드",
+    "pods": "Pod",
     "levelError": "오류",
     "levelWarn": "경고",
     "readyCount": "준비 {{n}}",
@@ -3747,7 +3747,7 @@
     "readyOfTotal": "준비 {{ready}} / 전체 {{total}}"
   },
   "adminAIUsage": {
-    "title": "AI 사용량",
+    "title": "AI Usage",
     "subtitle": "채팅 턴과 Optimization의 AI 설명마다 남는 ai.chat.complete 감사 기록의 집계 — 요청·토큰·툴 호출. 한도는 없고, 누가 얼마나 썼는지 본다.",
     "since": "시작일",
     "until": "종료일",
@@ -3793,11 +3793,11 @@
     "egressIsolation": "Egress 격리",
     "on": "켜짐",
     "off": "꺼짐",
-    "nsDefaultDenyIngress": "네임스페이스에 default-deny ingress 정책 있음",
-    "nsDefaultDenyEgress": "네임스페이스에 default-deny egress 정책 있음",
-    "selectsAllPods": "모든 파드 선택",
+    "nsDefaultDenyIngress": "Namespace에 default-deny ingress 정책 있음",
+    "nsDefaultDenyEgress": "Namespace에 default-deny egress 정책 있음",
+    "selectsAllPods": "모든 Pod 선택",
     "ruleCounts": "ingress 규칙 {{ingress}} · egress 규칙 {{egress}}",
-    "allPods": "모든 파드",
+    "allPods": "모든 Pod",
     "ingressAllow": "Ingress 허용",
     "egressAllow": "Egress 허용",
     "allSources": "(모든 출발지)",
@@ -3823,7 +3823,7 @@
       "topReasons": "Top reason 요약",
       "podsCount": "pods: {{count}}",
       "restarts": "재시작: {{count}}",
-      "node": "노드",
+      "node": "Node",
       "ready": "준비"
     },
     "hpa": {
@@ -3846,8 +3846,8 @@
   },
   "yamlCreate": {
     "clusterScoped": "클러스터 범위 리소스: metadata.namespace는 사용되지 않습니다.",
-    "namespaceOverride": "네임스페이스 지정: {{namespace}}",
-    "namespaceFromYaml": "네임스페이스는 YAML의 metadata.namespace에서 읽습니다 (없으면 default).",
+    "namespaceOverride": "Namespace 지정: {{namespace}}",
+    "namespaceFromYaml": "Namespace는 YAML의 metadata.namespace에서 읽습니다 (없으면 default).",
     "failed": "리소스 생성에 실패했습니다",
     "cancel": "취소",
     "create": "생성",
@@ -3864,7 +3864,7 @@
   "detail": {
     "(none)": "(없음)",
     "Name": "이름",
-    "Namespace": "네임스페이스",
+    "Namespace": "Namespace",
     "Created": "생성 시각",
     "Start Time": "시작 시각",
     "Deletion Timestamp": "삭제 예정 시각",
@@ -3876,16 +3876,16 @@
     "Not Ready": "준비 안 됨",
     "Restarts": "재시작",
     "Total Restarts": "총 재시작",
-    "Node": "노드",
-    "Node Name": "노드 이름",
-    "Nominated Node": "지명된 노드",
-    "Suitable Nodes": "적합한 노드",
+    "Node": "Node",
+    "Node Name": "Node 이름",
+    "Nominated Node": "지명된 Node",
+    "Suitable Nodes": "적합한 Node",
     "Roles": "역할",
-    "Pod": "파드",
-    "Pods": "파드",
-    "Backing Pods": "대상 파드",
-    "Violating Pods": "위반 파드",
-    "Pod Template": "파드 템플릿",
+    "Pod": "Pod",
+    "Pods": "Pod",
+    "Backing Pods": "대상 Pod",
+    "Violating Pods": "위반 Pod",
+    "Pod Template": "Pod 템플릿",
     "Container": "컨테이너",
     "Containers": "컨테이너",
     "Init Containers": "초기화 컨테이너",
@@ -3948,7 +3948,7 @@
     "Address Type": "주소 유형",
     "Ready Addresses": "준비된 주소",
     "Not Ready Addresses": "준비 안 된 주소",
-    "Endpoint Status": "엔드포인트 상태",
+    "Endpoint Status": "Endpoints 상태",
     "Scheduling": "스케줄링",
     "Priority": "우선순위",
     "Value": "값",
@@ -4033,24 +4033,24 @@
     "expand": "펼치기",
     "Search keys...": "키 검색...",
     "Filter...": "필터...",
-    "Linux only": "Linux 노드만",
+    "Linux only": "Linux Node만",
     "Helm release {{release}}": "Helm 릴리스 {{release}}",
-    "Used By Pods ({{n}})": "사용 중인 파드 ({{n}})",
-    "Using Pods ({{n}})": "사용 중인 파드 ({{n}})",
+    "Used By Pods ({{n}})": "사용 중인 Pod ({{n}})",
+    "Using Pods ({{n}})": "사용 중인 Pod ({{n}})",
     "Used By ServiceAccounts ({{n}})": "사용 중인 ServiceAccount ({{n}})",
     "Used By ResourceClaims ({{n}})": "사용 중인 ResourceClaim ({{n}})",
     "Used By Ingresses ({{n}})": "사용 중인 Ingress ({{n}})",
-    "Pods ({{n}})": "파드 ({{n}})",
+    "Pods ({{n}})": "Pod ({{n}})",
     "Images ({{n}})": "이미지 ({{n}})",
     "Metrics ({{n}})": "메트릭 ({{n}})",
-    "Matching Pods ({{n}})": "셀렉터에 맞는 파드 ({{n}})",
-    "Affected Pods ({{n}})": "적용 대상 파드 ({{n}})",
-    "Protected Pods ({{n}})": "보호 대상 파드 ({{n}})",
-    "Violating Pods ({{n}})": "위반 파드 ({{n}})",
-    "Schedulable Nodes ({{n}})": "스케줄 가능한 노드 ({{n}})",
+    "Matching Pods ({{n}})": "셀렉터에 맞는 Pod ({{n}})",
+    "Affected Pods ({{n}})": "적용 대상 Pod ({{n}})",
+    "Protected Pods ({{n}})": "보호 대상 Pod ({{n}})",
+    "Violating Pods ({{n}})": "위반 Pod ({{n}})",
+    "Schedulable Nodes ({{n}})": "스케줄 가능한 Node ({{n}})",
     "Device Allocations ({{n}})": "디바이스 할당 ({{n}})",
-    "Pods Using This ServiceAccount ({{n}})": "이 ServiceAccount를 쓰는 파드 ({{n}})",
-    "Bound Pods via ServiceAccount Subjects ({{n}})": "ServiceAccount Subject로 묶인 파드 ({{n}})",
+    "Pods Using This ServiceAccount ({{n}})": "이 ServiceAccount를 쓰는 Pod ({{n}})",
+    "Bound Pods via ServiceAccount Subjects ({{n}})": "ServiceAccount Subject로 묶인 Pod ({{n}})",
     "Referenced By RoleBindings ({{n}}{{more}})": "참조하는 RoleBinding ({{n}}{{more}})",
     "Referenced By ClusterRoleBindings ({{n}}{{more}})": "참조하는 ClusterRoleBinding ({{n}}{{more}})",
     "Rule Conflict Warnings ({{n}})": "규칙 충돌 경고 ({{n}})",
@@ -4063,9 +4063,9 @@
     "Binary Data Keys ({{n}})": "바이너리 데이터 키 ({{n}})",
     "Data": "데이터",
     "Data ({{n}}{{total}})": "데이터 ({{n}}{{total}})",
-    "Bound Chain — PV → PVC → Pods ({{n}})": "연결 체인 — PV → PVC → 파드 ({{n}})",
+    "Bound Chain — PV → PVC → Pods ({{n}})": "연결 체인 — PV → PVC → Pod ({{n}})",
     "Image Pull History ({{n}}, last 1h)": "이미지 풀 이력 ({{n}}, 최근 1시간)",
-    "Resource Summary (sum across {{n}} pods)": "리소스 요약 (파드 {{n}}개 합계)",
+    "Resource Summary (sum across {{n}} pods)": "리소스 요약 (Pod {{n}}개 합계)",
     "Affected Resources ({{kinds}} kinds, {{ops}} ops)": "영향받는 리소스 (종류 {{kinds}}개, 작업 {{ops}}개)",
     "Effective Permissions ({{n}} bindings)": "실효 권한 (바인딩 {{n}}개)",
     "Effective Permissions (1 binding)": "실효 권한 (바인딩 1개)",
@@ -4098,8 +4098,8 @@
     "avg {{avg}} · max {{max}}": "평균 {{avg}} · 최대 {{max}}",
     "1 rescale · {{samples}} samples": "스케일 변경 1회 · 샘플 {{samples}}개",
     "{{n}} rescales · {{samples}} samples": "스케일 변경 {{n}}회 · 샘플 {{samples}}개",
-    "Showing first {{n}} pods.": "처음 {{n}}개 파드를 표시합니다.",
-    "Showing first 20 of {{n}} nodes.": "노드 {{n}}개 중 처음 20개를 표시합니다.",
+    "Showing first {{n}} pods.": "처음 {{n}}개 Pod를 표시합니다.",
+    "Showing first 20 of {{n}} nodes.": "Node {{n}}개 중 처음 20개를 표시합니다.",
     "Showing first 50 ClusterRoleBindings (truncated for performance).": "ClusterRoleBinding은 처음 50개만 표시합니다(성능 때문에 잘림).",
     "No other instance of {{kind}} in the cluster.": "클러스터에 다른 {{kind}} 인스턴스가 없습니다.",
     "Multiple globalDefault PriorityClasses ({{n}}) — only one is honored": "globalDefault PriorityClass가 {{n}}개 — 하나만 적용됩니다",
@@ -4111,26 +4111,26 @@
     "Same (apiGroup, resource) is covered by multiple rules — verbs are unioned at evaluation time but the duplication may be unintentional.": "같은 (apiGroup, resource)를 여러 규칙이 다룹니다 — 평가 때 verbs는 합쳐지지만 의도하지 않은 중복일 수 있습니다.",
     "No ClusterRoleBinding references this ClusterRole.": "이 ClusterRole을 참조하는 ClusterRoleBinding이 없습니다.",
     "No Ingress in the cluster uses this IngressClass.": "클러스터에 이 IngressClass를 쓰는 Ingress가 없습니다.",
-    "No Node matches scheduling.nodeSelector.": "scheduling.nodeSelector에 맞는 노드가 없습니다.",
+    "No Node matches scheduling.nodeSelector.": "scheduling.nodeSelector에 맞는 Node가 없습니다.",
     "No ResourceClaim currently allocates a device from this slice.": "이 슬라이스의 디바이스를 할당받은 ResourceClaim이 없습니다.",
     "No ResourceClaim in the cluster references this DeviceClass.": "클러스터에 이 DeviceClass를 참조하는 ResourceClaim이 없습니다.",
-    "No RoleBinding in this namespace references this Role.": "이 네임스페이스에 이 Role을 참조하는 RoleBinding이 없습니다.",
+    "No RoleBinding in this namespace references this Role.": "이 Namespace에 이 Role을 참조하는 RoleBinding이 없습니다.",
     "No RoleBinding or ClusterRoleBinding binds this ServiceAccount.": "이 ServiceAccount를 묶는 RoleBinding·ClusterRoleBinding이 없습니다.",
-    "No ServiceAccount in this namespace references this Secret.": "이 네임스페이스에 이 Secret을 참조하는 ServiceAccount가 없습니다.",
+    "No ServiceAccount in this namespace references this Secret.": "이 Namespace에 이 Secret을 참조하는 ServiceAccount가 없습니다.",
     "No listener status data available to determine attached routes.": "연결된 Route를 판단할 리스너 상태 데이터가 없습니다.",
-    "No other EndpointSlice for this Service in the namespace.": "이 네임스페이스에 이 Service의 다른 EndpointSlice가 없습니다.",
-    "No pod currently mounts this PVC.": "이 PVC를 마운트한 파드가 없습니다.",
-    "No pod in the cluster uses this PriorityClass.": "클러스터에 이 PriorityClass를 쓰는 파드가 없습니다.",
-    "No pod in the cluster uses this RuntimeClass.": "클러스터에 이 RuntimeClass를 쓰는 파드가 없습니다.",
-    "No pod in this namespace currently violates this LimitRange.": "이 네임스페이스에 이 LimitRange를 위반하는 파드가 없습니다.",
-    "No pod in this namespace directly references this Secret.": "이 네임스페이스에 이 Secret을 직접 참조하는 파드가 없습니다.",
-    "No pod in this namespace references this ConfigMap.": "이 네임스페이스에 이 ConfigMap을 참조하는 파드가 없습니다.",
-    "No pod in this namespace references this ResourceClaim.": "이 네임스페이스에 이 ResourceClaim을 참조하는 파드가 없습니다.",
-    "No pod in this namespace uses this ServiceAccount.": "이 네임스페이스에 이 ServiceAccount를 쓰는 파드가 없습니다.",
-    "No pod matches this selector.": "이 셀렉터에 맞는 파드가 없습니다.",
-    "No pods match this selector.": "이 셀렉터에 맞는 파드가 없습니다.",
-    "No pods match this podSelector.": "이 podSelector에 맞는 파드가 없습니다.",
-    "No pod uses any of the bound ServiceAccounts.": "묶인 ServiceAccount를 쓰는 파드가 없습니다.",
+    "No other EndpointSlice for this Service in the namespace.": "이 Namespace에 이 Service의 다른 EndpointSlice가 없습니다.",
+    "No pod currently mounts this PVC.": "이 PVC를 마운트한 Pod가 없습니다.",
+    "No pod in the cluster uses this PriorityClass.": "클러스터에 이 PriorityClass를 쓰는 Pod가 없습니다.",
+    "No pod in the cluster uses this RuntimeClass.": "클러스터에 이 RuntimeClass를 쓰는 Pod가 없습니다.",
+    "No pod in this namespace currently violates this LimitRange.": "이 Namespace에 이 LimitRange를 위반하는 Pod가 없습니다.",
+    "No pod in this namespace directly references this Secret.": "이 Namespace에 이 Secret을 직접 참조하는 Pod가 없습니다.",
+    "No pod in this namespace references this ConfigMap.": "이 Namespace에 이 ConfigMap을 참조하는 Pod가 없습니다.",
+    "No pod in this namespace references this ResourceClaim.": "이 Namespace에 이 ResourceClaim을 참조하는 Pod가 없습니다.",
+    "No pod in this namespace uses this ServiceAccount.": "이 Namespace에 이 ServiceAccount를 쓰는 Pod가 없습니다.",
+    "No pod matches this selector.": "이 셀렉터에 맞는 Pod가 없습니다.",
+    "No pods match this selector.": "이 셀렉터에 맞는 Pod가 없습니다.",
+    "No pods match this podSelector.": "이 podSelector에 맞는 Pod가 없습니다.",
+    "No pod uses any of the bound ServiceAccounts.": "묶인 ServiceAccount를 쓰는 Pod가 없습니다.",
     "No replica sets owned by this deployment yet.": "이 Deployment가 소유한 ReplicaSet이 아직 없습니다.",
     "Some detailed PV fields are unavailable right now.": "지금은 PV 상세 필드 일부를 볼 수 없습니다.",
     "Some detailed PVC fields are unavailable right now.": "지금은 PVC 상세 필드 일부를 볼 수 없습니다.",
@@ -4151,7 +4151,7 @@
     "Attach Error": "연결 오류",
     "Detach Error": "분리 오류",
     "Attach/Detach Errors": "연결/분리 오류",
-    "Backend Pod Resource Usage": "백엔드 파드 리소스 사용량",
+    "Backend Pod Resource Usage": "백엔드 Pod 리소스 사용량",
     "Real-time Resource Usage": "실시간 리소스 사용량",
     "Scaling History (24h)": "스케일링 이력 (24시간)",
     "Response Time": "응답 시간",
@@ -4165,7 +4165,7 @@
     "Write": "쓰기",
     "Receive": "수신",
     "Transmit": "송신",
-    "Per-Pod CPU (millicores)": "파드당 CPU (밀리코어)",
+    "Per-Pod CPU (millicores)": "Pod당 CPU (밀리코어)",
     "Period (s)": "기간 (초)",
     "Metric Name": "메트릭 이름",
     "Bound PVCs / Total PVCs": "바인딩된 PVC / 전체 PVC",
@@ -4182,16 +4182,16 @@
     "Holder": "보유자",
     "Current Healthy": "현재 정상",
     "Desired Healthy": "목표 정상",
-    "Expected Pods": "예상 파드",
+    "Expected Pods": "예상 Pod",
     "Disruptions Allowed": "허용 중단 수",
     "Device": "디바이스",
     "Devices": "디바이스",
     "Device Path": "디바이스 경로",
     "Slices": "슬라이스",
     "Slice Count": "슬라이스 수",
-    "Endpoints": "엔드포인트",
-    "Endpoints (Ready / Total)": "엔드포인트 (준비 / 전체)",
-    "Not Ready Endpoints": "준비 안 된 엔드포인트",
+    "Endpoints": "Endpoints",
+    "Endpoints (Ready / Total)": "Endpoints (준비 / 전체)",
+    "Not Ready Endpoints": "준비 안 된 Endpoints",
     "Ready Targets": "준비된 대상",
     "Not Ready Targets": "준비 안 된 대상",
     "Ready / Total": "준비 / 전체",
@@ -4211,7 +4211,7 @@
     "Last Successful": "마지막 성공",
     "Lease Age": "Lease 경과 시간",
     "Misscheduled": "잘못 스케줄됨",
-    "Misscheduled Pods": "잘못 스케줄된 파드",
+    "Misscheduled Pods": "잘못 스케줄된 Pod",
     "Mode": "모드",
     "Provided": "제공됨",
     "Provisioning Success Rate": "프로비저닝 성공률",
@@ -4230,13 +4230,13 @@
     "Top": "요약",
     "Transitions": "전이 횟수",
     "Unavailable": "사용 불가",
-    "Unavailable Pods": "사용 불가 파드",
+    "Unavailable Pods": "사용 불가 Pod",
     "Volume": "볼륨",
     "Hostname": "호스트 이름",
     "Hostname:": "호스트 이름:",
     "Name:": "이름:",
-    "Namespace:": "네임스페이스:",
-    "Node:": "노드:",
+    "Namespace:": "Namespace:",
+    "Node:": "Node:",
     "Kind:": "종류:",
     "Port:": "포트:",
     "Protocol:": "프로토콜:",
@@ -4244,8 +4244,8 @@
     "Claim": "클레임"
   },
   "recordings": {
-    "title": "세션 기록",
-    "subtitle": "Pod exec·노드 셸 터미널에서 사용자가 본 화면입니다. 녹화를 열면 감사 로그에 남습니다.",
+    "title": "Session recordings",
+    "subtitle": "Pod exec·Node 셸 터미널에서 사용자가 본 화면입니다. 녹화를 열면 감사 로그에 남습니다.",
     "refresh": "새로고침",
     "disabled": "이 설치에서는 세션 기록이 꺼져 있습니다(sessionRecording.enabled). 이전 녹화는 계속 보입니다.",
     "filter": {
@@ -4256,7 +4256,7 @@
     "kind": {
       "all": "전체",
       "exec": "Pod exec",
-      "nodeShell": "노드 셸"
+      "nodeShell": "Node 셸"
     },
     "col": {
       "started": "시작",

@@ -211,7 +211,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
             </div>
 
             <div className="mt-4 space-y-3">
-              <label className="block text-xs text-slate-400">
+              <label className="block text-xs font-semibold text-slate-400">
                 {tr('accessRequests.modal.role', 'Role')}
                 <CustomDropdown
                   testId="access-request-role"
@@ -221,7 +221,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                   options={(config?.roles ?? []).filter((r) => r !== myRoles[target]).map((r) => ({ value: r, label: r, testId: `access-request-role-opt-${r}` }))}
                 />
               </label>
-              <label className="block text-xs text-slate-400">
+              <label className="block text-xs font-semibold text-slate-400">
                 {tr('accessRequests.modal.duration', 'Duration')}
                 <CustomDropdown
                   testId="access-request-duration"
@@ -231,7 +231,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                   options={durations.map((m) => ({ value: String(m), label: formatDuration(m), testId: `access-request-duration-opt-${m}` }))}
                 />
               </label>
-              <label className="block text-xs text-slate-400">
+              <label className="block text-xs font-semibold text-slate-400">
                 {tr('accessRequests.modal.reason', 'Reason')}
                 <textarea
                   data-testid="access-request-reason"

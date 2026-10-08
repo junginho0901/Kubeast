@@ -16,7 +16,7 @@ async function gotoAIChat(page: Page) {
   })
   await page.goto('/ai-chat')
   await page.waitForLoadState('networkidle')
-  await expect(page.getByRole('heading', { name: /AI.*어시스턴트|AI.*Assistant/i })).toBeVisible({ timeout: 10000 })
+  await expect(page.getByRole('heading', { name: /AI.*(어시스턴트|Assistant|Chat)/i })).toBeVisible({ timeout: 10000 })
   return errors
 }
 
@@ -33,7 +33,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     const errors = await gotoAIChat(page)
 
     // Sidebar (좌측)
-    const sidebar = page.locator('text=/AI Assistant|AI 어시스턴트/i').first()
+    const sidebar = page.locator('text=/AI Chat|AI Assistant|AI 어시스턴트/i').first()
     await expect(sidebar).toBeVisible()
 
     // Welcome (메시지 0개) — quick questions 보임

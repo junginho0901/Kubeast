@@ -29,8 +29,8 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
   test('Provider mount — page error 0 + 헤더 + 검색 + 드롭다운 보임', async ({ page }) => {
     const errors = await gotoClusterView(page)
 
-    await expect(page.getByPlaceholder(/Search pod name|파드 이름/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /All namespaces|모든 네임스페이스/i })).toBeVisible()
+    await expect(page.getByPlaceholder(/Search pod name|Pod 이름/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /All namespaces|모든 Namespace/i })).toBeVisible()
 
     assertNoCriticalErrors(errors)
   })
@@ -91,7 +91,7 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
   test('namespace dropdown — 선택 → 닫힘 + selectedNamespace 반영', async ({ page }) => {
     const errors = await gotoClusterView(page)
 
-    const dropdown = page.getByRole('button', { name: /All namespaces|모든 네임스페이스/i })
+    const dropdown = page.getByRole('button', { name: /All namespaces|모든 Namespace/i })
     await dropdown.click()
 
     // default option 클릭 (사이드바 ClusterPicker 버튼도 "default" 라벨을 가지므로 제외)
@@ -115,7 +115,7 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
   test('search input — 검색 → 필터링 → X clear', async ({ page }) => {
     const errors = await gotoClusterView(page)
 
-    const search = page.getByPlaceholder(/Search pod name|파드 이름/i)
+    const search = page.getByPlaceholder(/Search pod name|Pod 이름/i)
     await search.fill('nonexistent-xyz')
     await page.waitForTimeout(500)
 

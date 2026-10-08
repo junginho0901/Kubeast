@@ -16,7 +16,7 @@ async function box(l: Locator) {
 // always exist on the dev cluster.
 async function openGraph(page: Page) {
   await page.goto('/cluster/resource-graph?cluster=self')
-  await page.getByRole('button', { name: /Select Namespace|네임스페이스 선택/ }).click()
+  await page.getByRole('button', { name: /Select Namespace|Namespace 선택/ }).click()
   for (const ns of ['kube-system', 'kubeast']) {
     await page.getByRole('button', { name: ns, exact: true }).click()
   }

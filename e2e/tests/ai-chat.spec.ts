@@ -17,7 +17,7 @@ test.describe('AI Chat', () => {
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.getByRole('heading', { name: /AI.*어시스턴트|AI.*Assistant/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /AI.*(어시스턴트|Assistant|Chat)/i })).toBeVisible()
     await expect(page.getByPlaceholder(PLACEHOLDER_RE)).toBeVisible()
     await expect(page.getByRole('button', { name: SEND_RE })).toBeVisible()
   })

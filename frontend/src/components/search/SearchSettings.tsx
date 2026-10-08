@@ -42,14 +42,14 @@ export default function SearchSettings({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-2 z-50 w-80 bg-slate-800 border border-slate-600 rounded-xl shadow-2xl p-4 space-y-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">
+              <label className="block text-xs font-semibold text-slate-400 mb-1">
                 {t('advancedSearch.maxItemsLabel', 'Max items per resource')}
               </label>
               <input
                 ref={maxItemsRef}
                 type="number"
                 defaultValue={maxItemsPerResource}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-hidden focus:border-sky-500"
+                className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-hidden focus:border-sky-500"
               />
               <p className="mt-1 text-[11px] text-slate-500">
                 {t('advancedSearch.maxItemsHelp', 'Resources exceeding this limit will be excluded to prevent slowdowns.')}
@@ -57,7 +57,7 @@ export default function SearchSettings({
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">
+              <label className="block text-xs font-semibold text-slate-400 mb-1">
                 {t('advancedSearch.refetchLabel', 'Refetch interval')}
               </label>
               <CustomDropdown

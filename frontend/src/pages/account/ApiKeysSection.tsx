@@ -215,18 +215,18 @@ export default function ApiKeysSection() {
 
             <div className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">{tr('apiKeys.name', 'Name')}</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('apiKeys.name', 'Name')}</label>
                 <input
                   data-testid="api-key-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={64}
                   placeholder={tr('apiKeys.namePlaceholder', 'e.g. deploy pipeline')}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                  className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('apiKeys.expires', 'Expires in (days)')}
                   <span className="ml-1 text-slate-500">{tr('apiKeys.expiresHint', 'up to {{max}}', { max: maxDays })}</span>
                 </label>
@@ -237,11 +237,11 @@ export default function ApiKeysSection() {
                   max={maxDays}
                   value={days}
                   onChange={(e) => setDays(Number(e.target.value))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                  className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">{tr('apiKeys.clusters', 'Clusters')}</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('apiKeys.clusters', 'Clusters')}</label>
                 {clusters.length === 0 ? (
                   <p className="text-xs text-slate-500">{allLabel}</p>
                 ) : (
