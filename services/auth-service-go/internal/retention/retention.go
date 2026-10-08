@@ -145,16 +145,23 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
 	var err error
 	if !auditCutoff.IsZero() {
+		// Only the prefix of the hash chain goes: a row sealed after newer rows
+		// (chain_seq above the oldest kept one) stays until the chain reaches it,
+		// so the kept range verifies without a gap (internal/auditchain).
+		var minKept int64
+		if err := p.Pool.QueryRow(ctx, `SELECT COALESCE(MIN(chain_seq), 9223372036854775807) FROM auth_audit_logs WHERE created_at >= $1`, auditCutoff).Scan(&minKept); err != nil {
+			return res, fmt.Errorf("audit log: chain floor: %w", err)
+		}
 		if p.AuditFloor != nil {
 			floor, ferr := p.AuditFloor(ctx)
 			if ferr != nil {
 				return res, fmt.Errorf("audit log: sink floor: %w", ferr)
 			}
 			res.AuditRows, err = deleteBatched(ctx, p.Pool,
-				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND id <= $3 ORDER BY id LIMIT $2)`, auditCutoff, floor)
+				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND id <= $3 AND (chain_seq IS NULL OR chain_seq < $4) ORDER BY id LIMIT $2)`, auditCutoff, floor, minKept)
 		} else {
 			res.AuditRows, err = deleteBatched(ctx, p.Pool,
-				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 ORDER BY id LIMIT $2)`, auditCutoff)
+				`DELETE FROM auth_audit_logs WHERE id IN (SELECT id FROM auth_audit_logs WHERE created_at < $1 AND (chain_seq IS NULL OR chain_seq < $3) ORDER BY id LIMIT $2)`, auditCutoff, minKept)
 		}
 		if err != nil {
 			return res, fmt.Errorf("audit log: %w", err)

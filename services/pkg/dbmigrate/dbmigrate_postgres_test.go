@@ -25,7 +25,7 @@ const testDatabaseURLEnv = "DBMIGRATE_TEST_DATABASE_URL"
 // session, k8s and controller tables) — the list the services relied on the
 // old per-service CREATE TABLE code for.
 var expectedTables = []string{
-	"access_requests", "access_reviews", "api_keys", "audit_sink_cursors", "auth_audit_logs", "auth_users", "cluster_setup", "clusters", "messages",
+	"access_requests", "access_reviews", "api_keys", "audit_anchors", "audit_sink_cursors", "auth_audit_logs", "auth_users", "cluster_setup", "clusters", "messages",
 	"model_configs", "organizations", "role_permissions", "roles", "session_contexts", "session_recording_parts", "session_recordings",
 	"sessions", "tool_approvals", "user_cluster_roles",
 }

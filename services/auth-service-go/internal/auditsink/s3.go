@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -81,11 +82,61 @@ func newS3Sink(s SinkConfig) (Sink, error) {
 // first event (UTC). A resent batch lands on the same key.
 func (s *s3Sink) objectKey(events []Event) string {
 	first, last := events[0], events[len(events)-1]
+	return s.fullKey(fmt.Sprintf("%s/%012d-%012d.ndjson.gz", first.Time.UTC().Format("2006/01/02/15"), first.ID, last.ID))
+}
+
+// fullKey puts key under the sink's prefix.
+func (s *s3Sink) fullKey(key string) string {
 	prefix := strings.Trim(s.cfg.Prefix, "/")
 	if prefix != "" {
 		prefix += "/"
 	}
-	return fmt.Sprintf("%s%s/%012d-%012d.ndjson.gz", prefix, first.Time.UTC().Format("2006/01/02/15"), first.ID, last.ID)
+	return prefix + strings.TrimLeft(key, "/")
+}
+
+func (s *s3Sink) applySSE(in *s3.PutObjectInput) {
+	switch s.cfg.SSE {
+	case "AES256":
+		in.ServerSideEncryption = types.ServerSideEncryptionAes256
+	case "aws:kms":
+		in.ServerSideEncryption = types.ServerSideEncryptionAwsKms
+		if s.cfg.KMSKeyID != "" {
+			in.SSEKMSKeyId = aws.String(s.cfg.KMSKeyID)
+		}
+	}
+}
+
+// ObjectStore is an s3 sink used as a plain object store: the audit chain
+// writes its digests under the sink's prefix (keys are relative to it).
+type ObjectStore interface {
+	PutObject(ctx context.Context, key string, body []byte, contentType string, meta map[string]string) error
+	GetObject(ctx context.Context, key string) ([]byte, error)
+}
+
+func (s *s3Sink) PutObject(ctx context.Context, key string, body []byte, contentType string, meta map[string]string) error {
+	sum := md5.Sum(body)
+	in := &s3.PutObjectInput{
+		Bucket:      aws.String(s.cfg.Bucket),
+		Key:         aws.String(s.fullKey(key)),
+		Body:        bytes.NewReader(body),
+		ContentType: aws.String(contentType),
+		ContentMD5:  aws.String(base64.StdEncoding.EncodeToString(sum[:])),
+		Metadata:    meta,
+	}
+	s.applySSE(in)
+	if _, err := s.client.PutObject(ctx, in); err != nil {
+		return fmt.Errorf("s3 put %s: %w", aws.ToString(in.Key), err)
+	}
+	return nil
+}
+
+func (s *s3Sink) GetObject(ctx context.Context, key string) ([]byte, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.cfg.Bucket), Key: aws.String(s.fullKey(key))})
+	if err != nil {
+		return nil, fmt.Errorf("s3 get %s: %w", s.fullKey(key), err)
+	}
+	defer out.Body.Close()
+	return io.ReadAll(out.Body)
 }
 
 func ndjsonGzip(events []Event) ([]byte, error) {
@@ -119,15 +170,7 @@ func (s *s3Sink) Send(ctx context.Context, events []Event) error {
 		ContentType: aws.String("application/gzip"),
 		ContentMD5:  aws.String(base64.StdEncoding.EncodeToString(sum[:])),
 	}
-	switch s.cfg.SSE {
-	case "AES256":
-		in.ServerSideEncryption = types.ServerSideEncryptionAes256
-	case "aws:kms":
-		in.ServerSideEncryption = types.ServerSideEncryptionAwsKms
-		if s.cfg.KMSKeyID != "" {
-			in.SSEKMSKeyId = aws.String(s.cfg.KMSKeyID)
-		}
-	}
+	s.applySSE(in)
 	if _, err := s.client.PutObject(ctx, in); err != nil {
 		return fmt.Errorf("s3 put %s: %w", aws.ToString(in.Key), err)
 	}

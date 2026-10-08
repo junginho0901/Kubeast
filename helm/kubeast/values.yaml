@@ -329,6 +329,19 @@ audit:
   # does not survive the pod — use a PVC for anything you keep, e.g.
   # {persistentVolumeClaim: {claimName: kubeast-audit}}. Empty = emptyDir.
   fileSinkVolume: {}
+  # Tamper evidence for the audit rows (internal/auditchain): auth-service
+  # chains every row to the one sealed before it (sha256, every sealSeconds)
+  # and, when anchor.sink names an s3 sink above, writes the chain head there
+  # as a digest every anchor.hours (under <prefix>digests/). Admin → Audit log
+  # shows the chain state, verifies a range and anchors on demand. Turn on
+  # Object Lock on that bucket: the digest outside the database is what a
+  # rewritten database cannot match.
+  integrity:
+    enabled: true
+    sealSeconds: 10
+    anchor:
+      sink: ""
+      hours: 24
 
 # --- Data retention ---
 # Days to keep rows before auth-service deletes them (once at boot, then daily;

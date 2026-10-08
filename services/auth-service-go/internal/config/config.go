@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -81,6 +82,9 @@ type Config struct {
 	AccessReview AccessReviewConfig
 	// DormantAccounts: lock accounts with no sign-in or API key use for Days.
 	DormantAccounts DormantAccountsConfig
+	// AuditIntegrity: hash-chain the audit rows and anchor the chain head in
+	// an S3 sink (internal/auditchain).
+	AuditIntegrity AuditIntegrityConfig
 
 	// APIKeys: long-lived credentials a user issues for automation, exchanged
 	// for short access tokens (handler/api_keys.go).
@@ -177,6 +181,30 @@ type DormantAccountsConfig struct {
 	SweepHours   int
 }
 
+// AuditIntegrityConfig: the sealer chains new audit rows every SealSeconds;
+// with AnchorSink (the name of an s3 sink in the sinks file) the anchorer
+// writes the chain head there every AnchorHours.
+type AuditIntegrityConfig struct {
+	Enabled     bool
+	SealSeconds int
+	AnchorSink  string
+	AnchorHours int
+}
+
+// Validate rejects a zero or negative seal interval or anchor period.
+func (c AuditIntegrityConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.SealSeconds < 1 {
+		return fmt.Errorf("AUDIT_INTEGRITY_SEAL_SEC must be at least 1 (got %d)", c.SealSeconds)
+	}
+	if c.AnchorSink != "" && c.AnchorHours < 1 {
+		return fmt.Errorf("AUDIT_INTEGRITY_ANCHOR_HOURS must be at least 1 (got %d)", c.AnchorHours)
+	}
+	return nil
+}
+
 // APIKeysConfig: whether keys may be issued and exchanged, and the longest
 // expiry a key may be given (days).
 type APIKeysConfig struct {
@@ -239,6 +267,12 @@ func Load() Config {
 			Days:         pkgconfig.GetEnvInt("DORMANT_ACCOUNTS_DAYS", 90),
 			ExemptAdmins: pkgconfig.GetEnvBool("DORMANT_ACCOUNTS_EXEMPT_ADMINS", true),
 			SweepHours:   pkgconfig.GetEnvInt("DORMANT_ACCOUNTS_SWEEP_HOURS", 24),
+		},
+		AuditIntegrity: AuditIntegrityConfig{
+			Enabled:     pkgconfig.GetEnvBool("AUDIT_INTEGRITY_ENABLED", true),
+			SealSeconds: pkgconfig.GetEnvInt("AUDIT_INTEGRITY_SEAL_SEC", 10),
+			AnchorSink:  pkgconfig.GetEnv("AUDIT_INTEGRITY_ANCHOR_SINK", ""),
+			AnchorHours: pkgconfig.GetEnvInt("AUDIT_INTEGRITY_ANCHOR_HOURS", 24),
 		},
 		AuditSinksFile:      pkgconfig.GetEnv("AUDIT_SINKS_FILE", ""),
 		AuditSinkSecretsDir: pkgconfig.GetEnv("AUDIT_SINK_SECRETS_DIR", "/etc/kubeast/audit-sinks/secrets"),

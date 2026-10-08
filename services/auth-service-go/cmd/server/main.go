@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/accessrequests"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditchain"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditsink"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dormant"
@@ -173,6 +174,35 @@ func main() {
 		go dormant.Run(ctx, dormantSweeper, time.Duration(cfg.DormantAccounts.SweepHours)*time.Hour)
 	}
 
+	// Audit log integrity: seal new audit rows into the hash chain every
+	// SealSeconds and, with an anchor sink, write the chain head there every
+	// AnchorHours. The handler's status / verify / "anchor now" share the store.
+	if err := cfg.AuditIntegrity.Validate(); err != nil {
+		slog.Error("invalid audit integrity configuration", "error", err)
+		os.Exit(1)
+	}
+	var auditChain *handler.AuditChain
+	var chainSealer *auditchain.Sealer
+	var chainAnchorer *auditchain.Anchorer
+	if cfg.AuditIntegrity.Enabled {
+		chainStore := auditchain.PG{Pool: pool}
+		chainSealer = &auditchain.Sealer{Store: chainStore}
+		auditChain = &handler.AuditChain{Store: chainStore, Verifier: auditchain.Verifier{Store: chainStore}}
+		if name := cfg.AuditIntegrity.AnchorSink; name != "" {
+			objects, ok := sinks.ObjectStore(name)
+			if !ok {
+				slog.Error("audit integrity: the anchor sink is not an s3 sink in the sinks file", "sink", name)
+				os.Exit(1)
+			}
+			chainAnchorer = &auditchain.Anchorer{Store: chainStore, Objects: objects, Sink: name, Audit: auditStore}
+			auditChain.Verifier.Objects = objects
+			auditChain.Anchorer = chainAnchorer
+			go chainAnchorer.Run(ctx, time.Duration(cfg.AuditIntegrity.AnchorHours)*time.Hour)
+		}
+		go chainSealer.Run(ctx, time.Duration(cfg.AuditIntegrity.SealSeconds)*time.Second)
+		slog.Info("audit integrity enabled", "seal_seconds", cfg.AuditIntegrity.SealSeconds, "anchor_sink", cfg.AuditIntegrity.AnchorSink, "anchor_hours", cfg.AuditIntegrity.AnchorHours)
+	}
+
 	// Seed system roles and migrate auth_users.role → role_id
 	if err := repo.SeedSystemRoles(ctx); err != nil {
 		slog.Error("failed to seed system roles", "error", err)
@@ -215,6 +245,7 @@ func main() {
 	// Handlers
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
 	authHandler.SetDormantSweeper(&dormantSweeper)
+	authHandler.SetAuditChain(auditChain)
 	roleHandler := handler.NewRoleHandler(repo, auditStore)
 	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
@@ -232,6 +263,9 @@ func main() {
 	m := metrics.New("auth")
 	m.Route = metrics.ChiRoute
 	m.Registry.MustRegister(sinks.Collector())
+	if chainSealer != nil {
+		m.Registry.MustRegister(auditchain.Collector(chainSealer, chainAnchorer))
+	}
 	r.Use(m.Middleware)
 
 	// CORS only for listed origins. With none listed the middleware is not
@@ -359,6 +393,12 @@ func main() {
 			r.Get("/dormant-accounts/config", authHandler.DormantAccountsConfig)
 			r.Post("/admin/dormant-accounts/sweep", authHandler.AdminDormantSweep)
 			r.Post("/admin/users/{user_id}/unlock", authHandler.AdminUnlockUser)
+
+			// Audit log integrity: chain status, a verification run
+			// (admin.audit.read) and "anchor now" (admin.audit.export).
+			r.Get("/admin/audit/integrity", authHandler.AuditIntegrityStatus)
+			r.Post("/admin/audit/integrity/verify", authHandler.AdminAuditVerify)
+			r.Post("/admin/audit/integrity/anchor", authHandler.AdminAuditAnchor)
 		})
 	})
 

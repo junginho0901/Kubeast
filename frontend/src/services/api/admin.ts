@@ -8,8 +8,11 @@ import type {
   AdminResetPasswordResponse,
   AIUsageQuery,
   AIUsageResponse,
+  AuditAnchor,
+  AuditIntegrityStatus,
   AuditLogFilter,
   AuditLogListResponse,
+  AuditVerifyReport,
   DormantAccountsConfig,
   Member,
   Organization,
@@ -95,6 +98,23 @@ export const adminApi = {
   getDormantAccountsConfig: async (): Promise<DormantAccountsConfig> => {
     const { data } = await client.get('/auth/dormant-accounts/config')
     return { enabled: !!data?.enabled, days: Number(data?.days) || 0, exempt_admins: !!data?.exempt_admins }
+  },
+
+  // Audit log integrity (hash chain + S3 anchors): the chain state, one
+  // verification (no range = since the last anchor) and one anchor now.
+  getAuditIntegrity: async (): Promise<AuditIntegrityStatus> => {
+    const { data } = await client.get('/auth/admin/audit/integrity')
+    return data
+  },
+
+  adminAuditVerify: async (body: { from_seq?: number; to_seq?: number; anchors?: boolean } = {}): Promise<AuditVerifyReport> => {
+    const { data } = await client.post('/auth/admin/audit/integrity/verify', body)
+    return data
+  },
+
+  adminAuditAnchor: async (): Promise<AuditAnchor> => {
+    const { data } = await client.post('/auth/admin/audit/integrity/anchor')
+    return data
   },
 
   // Per-cluster role grants (step 08/12). GET returns { clusterID: roleName }.

@@ -44,6 +44,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
   - 요청 경로를 막지 않는다 — 싱크가 실패하면 커서가 멈추고 재시도(지수 백오프, 최대 5분)하며, 메트릭 `kubeast_audit_sink_pending`·`_failures_total`·`_last_success_timestamp_seconds`와 알람 `KubeastAuditSinkStalled`로 드러난다. 전송 결과는 감사 행으로 남기지 않는다(감사가 감사를 낳는 루프).
   - 내보내는 레코드(snake_case): `id, time, service, action, result, error, actor_user_id, actor_email, target_type, target_id, target_email, cluster, namespace, path, request_ip, user_agent, request_id, before, after` — DB 행 그대로(마스킹은 기록 때 이미 됨).
   - 설정: 차트 `audit.sinks[]`(비밀은 Secret 이름만), Object Lock(WORM)은 버킷 기본 보존에 맡기고 Kubeast는 `s3:PutObject`만 쓴다.
+- **무결성(해시 체인 · 앵커, `AUDIT_INTEGRITY_*`, 차트 `audit.integrity`)**: auth-service의 sealer가 `AUDIT_INTEGRITY_SEAL_SEC`(기본 10초)마다 아직 봉인 안 된 행을 id 순으로 묶어 `chain_seq`(봉인 순번)·`prev_hash`·`row_hash = sha256(prev_hash ‖ 0x1e ‖ 정규화 행)`을 채운다(정규화 식 = `internal/auditchain.CanonSQL`, Postgres가 만든 문자열이라 psql 한 줄로 재계산 가능). 쓰기 경로는 그대로(서비스들은 INSERT만). `AUDIT_INTEGRITY_ANCHOR_SINK`에 s3 싱크 이름을 주면 `AUDIT_INTEGRITY_ANCHOR_HOURS`(기본 24)마다 체인 머리를 다이제스트 JSON(`{version, created_at, from_seq, to_seq, rows, head_hash, prev_anchor{object_key, hash}, access_reviews[{id, reviewed_at, hash}], hash_algorithm}`)으로 그 싱크 버킷의 `<prefix>digests/YYYY/MM/DD/<HHMMSS>Z-<from>-<to>.json`에 쓰고(새 행이 없어도 쓴다, 메타데이터 `anchor-hash`) `audit_anchors`에 남긴다. 관리자(`admin.audit.read`)는 `GET /api/v1/auth/admin/audit/integrity`로 상태를, `POST …/integrity/verify {from_seq?, to_seq?, anchors?}`로 구간 재계산(기본 = 마지막 앵커부터, 상한 200,000행 → 413; 결과 `{ok, first_bad_seq, reason: hash_mismatch|chain_break|gap|anchor_mismatch, anchors[{head_ok, object_ok, reviews_ok}]}`)을, `admin.audit.export`는 `POST …/integrity/anchor`로 즉시 앵커를 얻는다. 봉인 전 창(≤ SEAL_SEC)에 지워진 행은 못 잡고, 앵커 버킷의 Object Lock이 신뢰 근거다(다이제스트에 서명은 없음).
 
 ## 5. 카탈로그
 
@@ -87,6 +88,9 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `admin.users.unlock` | 관리자(`admin.users.update`)가 휴면 잠금·비밀번호 실패 잠금을 풂 — target = 계정, `before` = `{dormant_locked_at, locked_until}` |
 | `admin.review.read` / `admin.review.export` / `admin.review.signoff` | 접근 권한 검토(Admin → Access review, `ACCESS_REVIEW_ENABLED`). 보고서 조회(`after.counts` = 섹션별 건수; 지난 서명의 스냅샷 열람은 `target_id` = 서명 id) · 섹션 CSV 내보내기(`after` = 섹션·행 수·`review_id`) · 검토 완료 서명(`access_reviews` 행 생성, `target_id` = 서명 id, `after` = 건수·메모). 실패는 `failure`로 남는다 |
 | `admin.retention.purge` | 보존 기간(`RETENTION_AUDIT_DAYS`·`RETENTION_CHAT_DAYS`)이 지난 감사·채팅 행 삭제 — auth-service의 일일 작업, actor `system`. `after`에 기간·기준 시각·삭제 행 수(감사·세션·툴 승인); 실패면 `failure` |
+| `audit.chain.anchor` | 감사 로그 해시 체인의 주기 앵커(`AUDIT_INTEGRITY_ANCHOR_SINK`·`_HOURS`) — actor `system`, `target_id` = 싱크 이름, `after` = `{from_seq, to_seq, rows, object_key, anchor_hash, sink}`; 싱크 쓰기 실패는 `failure` |
+| `admin.audit.verify` | 관리자(`admin.audit.read`)의 체인 검증 — `after` = `{from_seq, to_seq, rows, ok, first_bad_seq, reason, anchors, objects}`; 범위 초과(413)·오류는 `failure` |
+| `admin.audit.anchor` | 관리자(`admin.audit.export`)의 "지금 앵커" — `after`는 `audit.chain.anchor`와 같음, actor = 관리자 |
 | `ai.tool.helm_execute` | AI 승인 경로의 Helm 쓰기 실행 |
 
 **k8s-service (`k8s` / `helm`)** — 모든 행의 `cluster` = 요청이 가리킨 클러스터 id(`?cluster=` / 세션 기본값). `request_ip` = 게이트웨이가 본 클라이언트 주소(`X-Real-IP`; `X-Forwarded-For`는 읽지 않음, 앞단 프록시는 차트 `gateway.trustedProxies`).
@@ -135,12 +139,14 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 
 - DB 행은 `RETENTION_AUDIT_DAYS`(차트 `retention.auditDays`, 기본 0 = 무기한)가 지난 것만 auth-service가 매일 지운다(관리자 화면은 조회·CSV만). 싱크가 하나라도 있으면 **모든 싱크가 보낸 행까지만** 지운다 — 멈춘 싱크가 있으면 기간이 지나도 남는다.
 - 장기 보관은 S3 싱크(+ 버킷 Object Lock 기본 보존)로: DB는 콘솔 화면·CSV·fail-closed에 필요한 기간만(S3를 켰다면 90일 정도 권장).
+- 해시 체인이 켜져 있으면 purge는 **체인 접두만** 지운다: 보존 기간 안 행 중 가장 작은 `chain_seq`보다 뒤에 봉인된 옛 행(늦게 커밋된 행)은 체인이 거기 닿을 때까지 남는다. `audit_anchors`는 지우지 않는다(작고, 지난 구간의 증거).
 - stdout 사본은 클러스터 운영자의 로그 파이프라인 정책(수집·보존·잠금)에 따른다.
 
 ## 7. 확인 방법
 
 - 단위: `services/pkg/audit` 테스트(스토어·마스킹·stdout 줄 형식).
 - e2e: 쓰기 동작 뒤 `GET /api/v1/auth/admin/audit-logs?action=<name>`에 행이 있고, 파드 로그에 `"event":"audit"` 줄이 같은 수만큼 있는지.
+- 무결성: `internal/auditchain` 테스트(해시·봉인 순서·변경/삭제/끼워넣기 탐지·앵커 다이제스트·구간 독립) + e2e `audit-integrity.spec.ts`(행 봉인 → psql 한 줄 재계산 일치 → DB에서 행 고침 → `hash_mismatch` 그 순번 → 원복 → 앵커 → 스탠드인 객체·`object_ok`). Kubeast 없이 psql로: `select chain_seq, encode(row_hash,'hex') = encode(sha256(prev_hash || '\x1e'::bytea || convert_to(<CanonSQL>, 'UTF8')), 'hex') from auth_audit_logs where chain_seq between a and b order by chain_seq;` + 앞 행 `row_hash` = 이 행 `prev_hash`, 마지막 행 = 다이제스트 `head_hash`.
 
 ## 8. 개발 규칙 영속화
 

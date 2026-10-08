@@ -62,6 +62,11 @@ audit:
         - {protocol: TCP, port: 7070}
         - {protocol: TCP, port: 8080}
         - {protocol: TCP, port: 1025}
+  # Audit rows chained (chart default) and the chain head anchored in the S3 stand-in (bucket kubeast-audit,
+  # audit/digests/) — what e2e/tests/audit-integrity.spec.ts checks.
+  integrity:
+    anchor:
+      sink: dev-s3
 networkPolicy:
   allowExternalEgressCIDRs:
     # Ollama on the laptop: Docker Desktop puts host.docker.internal in 192.168.65.0/24
