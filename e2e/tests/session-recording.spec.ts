@@ -139,6 +139,9 @@ test.describe.serial('session recording', () => {
     const modal = page.getByTestId('recording-player-modal')
     await expect(modal).toBeVisible()
     await expect(modal.locator('.ap-player, .ap-wrapper').first()).toBeVisible({ timeout: 15_000 })
+    // Playback, not just the player: the terminal is WebAssembly and only runs when the gateway's CSP lets it compile.
+    await expect(modal.locator('.ap-overlay-start')).toHaveCount(0, { timeout: 15_000 })
+    await expect(modal.locator('.ap-timer')).toHaveText(/\d\d:\d\d/, { timeout: 15_000 })
     await expect(page.getByTestId('recording-download-text')).toHaveAttribute('href', new RegExp(`${recordingId}/cast\\?format=text`))
     await page.keyboard.press('Escape')
 
