@@ -243,6 +243,7 @@ AI 어시스턴트가 활성화됩니다.
 - **API 키** — 스크립트·CI용 자격(Settings → API keys). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함(아래 "API 키" 절)
 - **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, Helm 변경 등)를
   기록, 성공/실패 모두 추적
+- **클러스터 위생 점검** — Pod Security Standards·이미지 태그·리소스·Namespace 정책·RBAC·TLS 만료를 보는 사람 권한으로 읽어 한 장으로, CSV/JSON과 클러스터별 월간 서명(Admin → Cluster hygiene, 아래 절)
 - **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계(Admin → AI Usage). 한도는 없고 누가 얼마나 썼는지 본다; 제공자가 usage를 안 보낸 호출은 합계에서 빼고 건수로 표시
 - **i18n** — 한국어 · 영어. Kubernetes 리소스 종류(`StatefulSet`, `ConfigMap`, `Namespace` …)와 화면 이름(사이드바 항목·페이지 제목)은 두 언어 모두 영어로, 동사·설명·안내문만 번역합니다(예: "StatefulSet 생성", "전체 Namespace")
 
@@ -553,6 +554,37 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 - **검토 완료** 버튼이 메모와 함께 그 시점 보고서를 통째로 저장합니다(`access_reviews`, 보존 `retention.reviewDays` 기본 3년). 지난 검토는 목록에서 열어 보고 그때 CSV로 다시 내려받을 수 있습니다.
 - 권한 `admin.review.read` · `admin.review.export` · `admin.review.signoff`(시스템 Admin 역할에 포함), 감사 액션도 같은 이름. 쓰기는 서명뿐이고 권한 변경은 기존 화면에서 합니다.
 - 끄려면 `auth.accessReview.enabled: false`(메뉴·API가 사라짐). 비용: 페이지를 열 때 조회 7번, 서명 1건당 스냅샷 수십 KB.
+
+### 클러스터 위생 점검 (Cluster hygiene)
+
+클러스터에 지금 떠 있는 것의 **설정상 위험**을 한 장으로 모으고, 월간 점검을 했다는 서명을 남깁니다(ISMS-P 2.10.2 보안설정 모니터링·2.11.2 정기 점검). 이슈 확인이 "지금 터진 문제"라면 이건 정상 동작 중이어도 위험한 설정입니다. 외부 스캐너를 깔지 않고, Admin → Cluster hygiene에서 클러스터를 고르면 k8s-service가 **보는 사람의 신원**(impersonation)으로 파드·Namespace·NetworkPolicy·RBAC·`kubernetes.io/tls` Secret을 읽어 그 자리에서 판정합니다(백그라운드 작업 없음). 못 읽은 목록은 숨기지 않고 "건너뛴 점검"으로 보여 줍니다.
+
+| 점검 | 근거 | 심각도 |
+|---|---|---|
+| privileged · 호스트 네임스페이스(hostNetwork/PID/IPC) | Pod Security Standards baseline · CIS 5.2.2~5.2.5 | 치명 |
+| hostPath · hostPort · baseline 밖 capability · 기타 baseline(HostProcess·프로브 host·AppArmor·SELinux·/proc·seccomp Unconfined·sysctl) | PSS baseline(v1.37 표의 허용값 그대로) · CIS 5.2.8~5.2.12 | 경고 |
+| restricted 미충족(권한 상승·non-root·seccomp·drop ALL·볼륨 종류) | PSS restricted · CIS 5.2.6/5.2.7 | 참고 |
+| `:latest`·태그 없는 이미지(digest 고정은 통과) · 메모리 limit 없음 | Kubernetes Images · 보안 체크리스트 | 경고 |
+| CPU·메모리 requests 없음 | 보안 체크리스트 | 참고 |
+| PSS `enforce` 라벨 없는 Namespace · NetworkPolicy 없는 Namespace | 보안 체크리스트 · CIS 5.2.1/5.3.2 | 경고 |
+| `default` Namespace 사용 · default ServiceAccount 토큰 마운트 | CIS 5.6.4 · 5.1.5/5.1.6 | 참고 |
+| cluster-admin 바인딩(기본 `cluster-admin`·`kubeadm:cluster-admins`·`system:`·`eks:` 제외) · `*` 동사/리소스 Role·ClusterRole | CIS 5.1.1 · 5.1.3 | 경고 |
+| TLS 인증서 만료(지남·`tlsCriticalDays` 이내 = 치명, `tlsWarnDays` 이내 = 경고) — 서버에서 `tls.crt`만 파싱, 응답엔 만료일·대상 이름만 | 보안 체크리스트 · cert-manager는 수명 2/3에서 갱신 | 치명/경고 |
+
+- 같은 워크로드의 파드는 한 줄로 묶습니다(Deployment·StatefulSet·DaemonSet·Job, 파드 수 표시). 시스템 Namespace(`excludeNamespaces`, 기본 kube-system·kube-public·kube-node-lease)는 워크로드·Namespace·Role·TLS 점검에서 뺍니다.
+- **예외**: 객체(파드는 템플릿)나 그 Namespace에 `kubeast.io/hygiene-exempt: "image.latest,pss.hostpath"`(또는 `*`)와 `kubeast.io/hygiene-exempt-reason: <사유>`를 붙이면 그 항목은 "예외(사유)"로 남고 건수에서 따로 셉니다. 사유가 없으면 예외로 치지 않고 그렇다고 적습니다. 차트가 만드는 `kubeast:admin` 바인딩은 이 방식으로 이미 예외입니다.
+- **내보내기·서명**: CSV(BOM·CRLF, 수식 문자 무력화)·JSON을 내려받고, 클러스터별로 메모와 함께 서명하면 그 순간 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안). 화면에 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다. n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 가져가면 됩니다.
+- 권한: `admin.hygiene.read`(보기·이력) · `admin.hygiene.export` · `admin.hygiene.signoff`(Admin에 포함). 감사: 조회 `k8s.hygiene.scan`(Secret을 읽으므로 민감 조회 — 기록이 안 되면 503), `admin.hygiene.export` · `admin.hygiene.signoff` · `admin.hygiene.read`(스냅샷). 보고서는 읽기만 하고 아무것도 고치지 않습니다 — 고치는 건 gitops로.
+
+```yaml
+features:
+  hygiene:
+    enabled: true            # false = 메뉴·API 404
+    intervalDays: 30
+    excludeNamespaces: [kube-system, kube-public, kube-node-lease]
+    tlsWarnDays: 30
+    tlsCriticalDays: 7
+```
 
 ### 휴면 계정 자동 잠금 (Dormant accounts)
 

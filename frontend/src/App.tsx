@@ -32,6 +32,7 @@ const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations'))
 const AdminRoles = lazy(() => import('./pages/AdminRoles'))
 const AdminAccessRequests = lazy(() => import('./pages/admin/AccessRequests'))
 const AdminAccessReview = lazy(() => import('./pages/admin/AccessReview'))
+const AdminClusterHygiene = lazy(() => import('./pages/admin/ClusterHygiene'))
 const AdminSessionRecordings = lazy(() => import('./pages/admin/SessionRecordings'))
 const Account = lazy(() => import('./pages/Account'))
 const HPAs = lazy(() => import('./pages/workloads/HPAs'))
@@ -167,6 +168,7 @@ function App() {
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />
             <Route path="admin/access-requests" element={<RequireAdmin><AdminAccessRequests /></RequireAdmin>} />
             <Route path="admin/access-review" element={<RequirePermission permission="admin.review.read"><AdminAccessReview /></RequirePermission>} />
+            <Route path="admin/cluster-hygiene" element={<RequirePermission permission="admin.hygiene.read"><AdminClusterHygiene /></RequirePermission>} />
             <Route path="admin/session-recordings" element={<RequirePermission permission="admin.sessions.read"><AdminSessionRecordings /></RequirePermission>} />
           </Route>
           </Routes>

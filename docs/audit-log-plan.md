@@ -105,6 +105,8 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `k8s.pod.exec` / `k8s.pod.logs.read` | Pod exec, 로그 읽기(민감 읽기). exec는 세션 기록이 켜져 있으면 `after.recording_id`; 기록을 시작하지 못해 거부한 세션은 failure 행(`error` = 사유) |
 | `admin.session.read` | 세션 기록 본문 열람·내려받기(asciicast 또는 텍스트 사본, `admin.sessions.read`). target = 녹화 id, `after` = `{kind, cluster, target, user_email, format}` |
 | `k8s.secret.reveal` | Secret 값 열람(민감 읽기) |
+| `k8s.hygiene.scan` | 클러스터 위생 점검 보고서 조회(Admin → Cluster hygiene, `admin.hygiene.read`, `HYGIENE_ENABLED`). 사용자 신원으로 파드·네임스페이스·NetworkPolicy·RBAC와 `kubernetes.io/tls` Secret(인증서 만료일만 씀)을 읽으므로 민감 읽기 — 기록이 안 되면 503. target = 클러스터, `after` = `{counts: {critical, warning, info, exempt}, findings, collector_failures}`; 목록을 못 읽은 것은 보고서의 Collector 행 |
+| `admin.hygiene.export` / `admin.hygiene.signoff` / `admin.hygiene.read` | 위생 점검 CSV·JSON 내보내기(`admin.hygiene.export`, 스캔을 포함한 한 줄, `after` = 건수·`format`) · 클러스터별 서명(`admin.hygiene.signoff`, `hygiene_reviews` 행 생성, `target_id` = 서명 id, `after` = 건수·메모) · 지난 서명의 스냅샷 열람(`admin.hygiene.read`, `target_id` = 서명 id). 실패는 `failure` |
 | `k8s.cronjob.trigger` / `.suspend` / `.resume` | CronJob 조작 |
 | `k8s.cluster.kubeconfig.read` | tool-server가 클러스터 kubeconfig를 읽음(민감 읽기) |
 | `helm.release.reveal` | 릴리스의 manifest·values·hooks·diff를 **마스킹 없이** 읽음 — `resource.secret.reveal` 보유자만(없으면 Secret 문서 제거·민감 값 마스킹 후 반환, 기록 없음). `after.section` = manifest/values/hooks/diff/detail |
@@ -138,6 +140,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 ## 6. 보존
 
 - DB 행은 `RETENTION_AUDIT_DAYS`(차트 `retention.auditDays`, 기본 0 = 무기한)가 지난 것만 auth-service가 매일 지운다(관리자 화면은 조회·CSV만). 싱크가 하나라도 있으면 **모든 싱크가 보낸 행까지만** 지운다 — 멈춘 싱크가 있으면 기간이 지나도 남는다.
+- 검토 서명(접근 권한 검토 `access_reviews`, 클러스터 위생 점검 `hygiene_reviews`, 스냅샷 포함)은 `RETENTION_REVIEW_DAYS`(차트 `retention.reviewDays`, 기본 1095일)가 지나면 같은 일일 작업이 지운다(`admin.retention.purge`의 `after.access_reviews`·`hygiene_reviews`).
 - 장기 보관은 S3 싱크(+ 버킷 Object Lock 기본 보존)로: DB는 콘솔 화면·CSV·fail-closed에 필요한 기간만(S3를 켰다면 90일 정도 권장).
 - 해시 체인이 켜져 있으면 purge는 **체인 접두만** 지운다: 보존 기간 안 행 중 가장 작은 `chain_seq`보다 뒤에 봉인된 옛 행(늦게 커밋된 행)은 체인이 거기 닿을 때까지 남는다. `audit_anchors`는 지우지 않는다(작고, 지난 구간의 증거).
 - stdout 사본은 클러스터 운영자의 로그 파이프라인 정책(수집·보존·잠금)에 따른다.

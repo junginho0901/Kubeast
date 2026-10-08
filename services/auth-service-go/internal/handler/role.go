@@ -295,6 +295,9 @@ func allPermissions() []map[string]interface{} {
 			{"admin.review.read", "View the access review report"},
 			{"admin.review.export", "Export the access review (CSV)"},
 			{"admin.review.signoff", "Sign off an access review"},
+			{"admin.hygiene.read", "View the cluster hygiene report"},
+			{"admin.hygiene.export", "Export the cluster hygiene report (CSV/JSON)"},
+			{"admin.hygiene.signoff", "Sign off a cluster hygiene report"},
 		}},
 	}
 	return categories

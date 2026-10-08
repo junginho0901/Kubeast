@@ -131,6 +131,9 @@ metadata:
   name: kubeast:admin
   labels:
     app.kubernetes.io/part-of: kubeast
+  annotations:
+    kubeast.io/hygiene-exempt: rbac.cluster-admin
+    kubeast.io/hygiene-exempt-reason: Kubeast Admin role (impersonation group)
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

@@ -21,6 +21,7 @@ import { customResourcesApi } from './custom_resources'
 import { gatewayApi } from './gateway'
 import { gpuApi } from './gpu'
 import { helmApi } from './helm'
+import { hygieneApi } from './hygiene'
 import { metricsApi } from './metrics'
 import { modelConfigApi } from './model_config'
 import { networkApi } from './network'
@@ -36,6 +37,7 @@ export const api = {
   ...adminApi,
   ...accessRequestsApi,
   ...accessReviewApi,
+  ...hygieneApi,
   ...apiKeysApi,
   ...recordingsApi,
   ...clusterApi,

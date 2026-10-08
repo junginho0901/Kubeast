@@ -36,7 +36,8 @@ const Action = "admin.retention.purge"
 const BatchSize = 5000
 
 // Config is the retention policy. Zero means keep forever. ReviewDays covers
-// access review sign-offs (access_reviews, snapshot included).
+// sign-offs with their snapshots: access reviews (access_reviews) and cluster
+// hygiene reviews (hygiene_reviews).
 type Config struct {
 	AuditDays  int
 	ChatDays   int
@@ -80,6 +81,7 @@ type Result struct {
 	ToolApprovals     int64 `json:"tool_approvals"`
 	SessionRecordings int64 `json:"session_recordings"` // index rows (and database-stored parts); objects in S3/files are the store's to expire
 	AccessReviews     int64 `json:"access_reviews"`
+	HygieneReviews    int64 `json:"hygiene_reviews"`
 }
 
 // Purger executes the policy against a database.
@@ -124,7 +126,7 @@ func (p Purger) RunOnce(ctx context.Context) Result {
 		slog.Error("retention: purge failed", "error", err, "deleted", res)
 	} else {
 		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals, "session_recordings", res.SessionRecordings,
-			"access_reviews", res.AccessReviews, "audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays)
+			"access_reviews", res.AccessReviews, "hygiene_reviews", res.HygieneReviews, "audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays)
 	}
 	p.record(ctx, now, res, err)
 	return res
@@ -201,6 +203,11 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 		if err != nil {
 			return res, fmt.Errorf("access reviews: %w", err)
 		}
+		res.HygieneReviews, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM hygiene_reviews WHERE id IN (SELECT id FROM hygiene_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, reviewCutoff)
+		if err != nil {
+			return res, fmt.Errorf("hygiene reviews: %w", err)
+		}
 	}
 	return res, nil
 }
@@ -238,6 +245,7 @@ func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr er
 		"review_days":        p.Cfg.ReviewDays,
 		"review_cutoff":      nullableTime(p.Cfg.ReviewCutoff(now)),
 		"access_reviews":     res.AccessReviews,
+		"hygiene_reviews":    res.HygieneReviews,
 	})
 	rec := audit.Record{
 		Service:    audit.ServiceAdmin,

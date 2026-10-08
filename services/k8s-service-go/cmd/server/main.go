@@ -21,6 +21,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/handler"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
@@ -140,6 +141,7 @@ func main() {
 
 	// Init handler
 	h := handler.New(k8sSvc, cfg, auditStore)
+	h.SetHygieneStore(hygiene.NewStore(pgPool))
 
 	// Terminal session recording (off unless SESSION_RECORDING_ENABLED): the
 	// output of pod exec / node shell as asciicast, uploaded in parts while

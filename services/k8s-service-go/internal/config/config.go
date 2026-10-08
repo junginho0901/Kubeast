@@ -30,6 +30,16 @@ type Config struct {
 	IssuesEventWindowMinutes int
 	OptimizationWindowHours  int
 
+	// Cluster hygiene report (chart features.hygiene). Off = the routes answer
+	// 404. A sign-off falls due every HygieneIntervalDays; the excluded
+	// namespaces are left out of the workload and namespace checks; a TLS
+	// certificate this close to expiry is a warning / critical finding.
+	HygieneEnabled           bool
+	HygieneIntervalDays      int
+	HygieneExcludeNamespaces []string
+	HygieneTLSWarnDays       int
+	HygieneTLSCriticalDays   int
+
 	// Multi-cluster load / failure isolation (step 15). All have safe defaults
 	// and can be tuned/disabled via env (helm values). 0 disables where noted.
 	MaxClusters             int // LRU client-bundle pool size (memory bound)
@@ -107,6 +117,12 @@ func Load() Config {
 
 		IssuesEventWindowMinutes: pkgconfig.GetEnvInt("ISSUES_EVENT_WINDOW_MINUTES", 60),
 		OptimizationWindowHours:  pkgconfig.GetEnvInt("OPTIMIZATION_WINDOW_HOURS", 24),
+
+		HygieneEnabled:           pkgconfig.GetEnvBool("HYGIENE_ENABLED", true),
+		HygieneIntervalDays:      pkgconfig.GetEnvInt("HYGIENE_INTERVAL_DAYS", 30),
+		HygieneExcludeNamespaces: pkgconfig.LookupEnvList("HYGIENE_EXCLUDE_NAMESPACES", "kube-system,kube-public,kube-node-lease"),
+		HygieneTLSWarnDays:       pkgconfig.GetEnvInt("HYGIENE_TLS_WARN_DAYS", 30),
+		HygieneTLSCriticalDays:   pkgconfig.GetEnvInt("HYGIENE_TLS_CRITICAL_DAYS", 7),
 
 		MaxClusters:             pkgconfig.GetEnvInt("MC_MAX_CLUSTERS", 20),
 		HealthcheckIntervalSec:  pkgconfig.GetEnvInt("MC_HEALTHCHECK_INTERVAL_SEC", 60),

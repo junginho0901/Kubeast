@@ -215,6 +215,48 @@ tests:
           path: data.OPTIMIZATION_WINDOW_HOURS
           value: "24"
 
+  - it: turns the cluster hygiene report on by default with a 30-day interval and the system namespaces excluded
+    asserts:
+      - equal:
+          path: data.HYGIENE_ENABLED
+          value: "true"
+      - equal:
+          path: data.HYGIENE_INTERVAL_DAYS
+          value: "30"
+      - equal:
+          path: data.HYGIENE_EXCLUDE_NAMESPACES
+          value: kube-system,kube-public,kube-node-lease
+      - equal:
+          path: data.HYGIENE_TLS_WARN_DAYS
+          value: "30"
+      - equal:
+          path: data.HYGIENE_TLS_CRITICAL_DAYS
+          value: "7"
+
+  - it: takes the hygiene settings from features.hygiene (an empty exclusion list checks every namespace)
+    set:
+      features.hygiene.enabled: false
+      features.hygiene.intervalDays: 7
+      features.hygiene.excludeNamespaces: []
+      features.hygiene.tlsWarnDays: 45
+      features.hygiene.tlsCriticalDays: 14
+    asserts:
+      - equal:
+          path: data.HYGIENE_ENABLED
+          value: "false"
+      - equal:
+          path: data.HYGIENE_INTERVAL_DAYS
+          value: "7"
+      - equal:
+          path: data.HYGIENE_EXCLUDE_NAMESPACES
+          value: ""
+      - equal:
+          path: data.HYGIENE_TLS_WARN_DAYS
+          value: "45"
+      - equal:
+          path: data.HYGIENE_TLS_CRITICAL_DAYS
+          value: "14"
+
   - it: turns the access review on by default with 90-day windows and three-year sign-off retention
     asserts:
       - equal:

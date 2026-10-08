@@ -353,7 +353,7 @@ audit:
 retention:
   auditDays: 0
   chatDays: 0
-  # Access review sign-offs (three years; 0 = keep forever).
+  # Access review and cluster hygiene sign-offs (three years; 0 = keep forever).
   reviewDays: 1095
 
 # --- Schema migrations ---
@@ -534,6 +534,20 @@ features:
     eventWindowMinutes: 60
   optimization:
     windowHours: 24
+  # Cluster hygiene report (Admin → Cluster hygiene, permissions
+  # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
+  # resources, namespace policy, service account tokens, RBAC and TLS expiry,
+  # read as the caller when the page asks (no background scan). A sign-off
+  # falls due every intervalDays. Excluded namespaces skip the workload,
+  # namespace, Role and TLS checks; an object (or its namespace) can opt out of
+  # a check with the annotations kubeast.io/hygiene-exempt: "<check>,<check>|*"
+  # and kubeast.io/hygiene-exempt-reason (required).
+  hygiene:
+    enabled: true
+    intervalDays: 30
+    excludeNamespaces: [kube-system, kube-public, kube-node-lease]
+    tlsWarnDays: 30
+    tlsCriticalDays: 7
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with
