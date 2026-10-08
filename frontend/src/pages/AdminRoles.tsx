@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Trash2, Shield, X, Check, Users } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { usePermission } from '@/hooks/usePermission'
+import { customRoleGroup } from '@/utils/roleGroup'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
 
@@ -381,6 +382,16 @@ export default function AdminRoles() {
                 />
               </div>
             </div>
+
+            {!editingRole?.is_system && customRoleGroup(formName) && (
+              <p data-testid="role-group-hint" className="-mt-2 mb-5 text-xs text-slate-400">
+                {tr(
+                  'adminRoles.groupHint',
+                  'On a cluster this role acts as the Kubernetes group {{group}}. Each cluster must allow and bind that group (chart auth.impersonation.customRoles), or every request there is refused.',
+                  { group: customRoleGroup(formName) },
+                )}
+              </p>
+            )}
 
             {/* Permission grid */}
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">

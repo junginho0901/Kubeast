@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { ShieldAlert } from 'lucide-react'
 import { resetForbidden, useForbiddenLabels } from '@/services/forbiddenStore'
 import { joinResources } from '@/utils/forbiddenResource'
+import { usePermission } from '@/hooks/usePermission'
+import { customRoleGroup } from '@/utils/roleGroup'
 
 // Shown above the page when a cluster list request answered 403 for the
 // signed-in user. The forbidden store collects those responses (the API
@@ -14,6 +16,11 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
   const { t } = useTranslation()
   const location = useLocation()
   const resources = useForbiddenLabels()
+  const { clusterRole, permissions } = usePermission()
+  // A custom role acts on the cluster as its own group; until the cluster
+  // allows and binds it, every request is refused — say which group that is.
+  const isGlobalAdmin = (permissions['*'] ?? []).includes('*')
+  const group = isGlobalAdmin ? null : customRoleGroup(clusterRole)
 
   useEffect(() => {
     resetForbidden()
@@ -35,6 +42,16 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
             resources: joinResources(resources),
           })}
         </div>
+        {group && (
+          <div data-testid="forbidden-custom-role-hint" className="mt-1 text-amber-100/80">
+            {t('layout.forbidden.customRole', {
+              defaultValue:
+                'Your role "{{role}}" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).',
+              role: clusterRole,
+              group,
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

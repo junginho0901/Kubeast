@@ -377,7 +377,8 @@
     "logout": "로그아웃",
     "forbidden": {
       "title": "권한 없음",
-      "body": "이 클러스터에서 {{resources}}을(를) 볼 권한이 없습니다. 아래 목록은 읽을 수 있는 것만 보여 줍니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요."
+      "body": "이 클러스터에서 {{resources}}을(를) 볼 권한이 없습니다. 아래 목록은 읽을 수 있는 것만 보여 줍니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
+      "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles)."
     },
     "clusterChecking": "연결 확인 중...",
     "clusterConnected": "클러스터 연결됨",
@@ -3254,6 +3255,7 @@
     "createError": "역할을 만들지 못했습니다",
     "createTitle": "역할 생성",
     "customNote": "이 역할에 줄 권한을 고르세요(본인이 가진 권한만)",
+    "groupHint": "클러스터에서 이 역할은 Kubernetes 그룹 {{group}}(으)로 동작합니다. 클러스터마다 이 그룹을 허용·바인딩해야 하고(차트 auth.impersonation.customRoles), 그렇지 않으면 그 클러스터의 모든 요청이 거부됩니다.",
     "delete": "삭제",
     "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
     "edit": "편집",

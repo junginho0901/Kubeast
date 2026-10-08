@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-kubeast}"
 NAMESPACE="${NAMESPACE:-kubeast}"
+RELEASE="${RELEASE:-kubeast}"
 IMAGE_TAG="${IMAGE_TAG:-local}"
 WAIT="${WAIT:-true}"
 DEFAULT_KUBECONFIG_PATH="/tmp/kubeast-kubeconfig"
@@ -66,7 +67,7 @@ list_services() {
     "  frontend" \
     "  tool-server" \
     "  model-config-controller-go" \
-    "  gateway (ConfigMap only, no image build)"
+    "  gateway (no image build: helm upgrade with the release's values re-renders nginx.conf)"
 }
 
 if ! command -v kind >/dev/null 2>&1; then
@@ -170,16 +171,16 @@ if ! kind get clusters | grep -qx "$KIND_CLUSTER_NAME"; then
   exit 1
 fi
 
+# The gateway ConfigMap is chart output (helm/kubeast/files/nginx.conf), so it is re-rendered through helm with
+# the values the release already has: helm keeps owning it, and the gateway Deployment's checksum annotation
+# rolls the pods when nginx.conf changed. (Writing it with kubectl apply made kubectl the field owner, and the
+# next helm upgrade — server-side apply in Helm 4 — stopped on the conflict.)
 update_gateway() {
-  echo "═══ Updating gateway ConfigMap ═══"
-  kubectl create configmap gateway-nginx \
-    --from-file=nginx.conf="$ROOT/helm/kubeast/files/nginx.conf" \
-    -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-
-  echo "═══ Rolling out gateway ═══"
-  kubectl -n "$NAMESPACE" rollout restart deploy/gateway
+  echo "═══ Updating gateway (helm upgrade ${RELEASE} --reset-then-reuse-values) ═══"
   if [[ "$WAIT" == "true" ]]; then
-    kubectl -n "$NAMESPACE" rollout status deploy/gateway --timeout=180s
+    helm upgrade "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" --reset-then-reuse-values --wait --timeout 5m
+  else
+    helm upgrade "$RELEASE" "$ROOT/helm/kubeast" -n "$NAMESPACE" --reset-then-reuse-values
   fi
 }
 
