@@ -26,6 +26,19 @@ tests:
         template: gateway.yaml
         documentIndex: 0
 
+  - it: lets the session recording player compile WebAssembly without opening JS eval
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: "script-src 'self' 'wasm-unsafe-eval';"
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: " 'unsafe-eval'"
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: takes the client address from the peer unless proxies are trusted
     asserts:
       - matchRegex:

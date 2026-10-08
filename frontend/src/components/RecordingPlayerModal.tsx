@@ -31,6 +31,7 @@ export default function RecordingPlayerModal({ recordingId, title, onClose }: Pr
         const [lib] = await Promise.all([import('asciinema-player'), import('asciinema-player/dist/bundle/asciinema-player.css')])
         if (cancelled || !holder.current) return
         player = lib.create({ url: recordingCastUrl(recordingId), fetchOpts: { credentials: 'same-origin' } }, holder.current, {
+          autoPlay: true,
           fit: 'width',
           terminalFontSize: '13px',
           idleTimeLimit: 2,
