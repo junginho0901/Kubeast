@@ -1,7 +1,7 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, AuditLogEntry, AuditLogFilter } from '@/services/api'
+import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
@@ -109,6 +109,37 @@ export default function AdminAudit() {
     refetchOnMount: true,
   })
 
+  // Audit log integrity: the chain state, one verification (since the last
+  // anchor, with the digest objects when a sink is set) and "anchor now".
+  const { data: integrity, refetch: refetchIntegrity } = useQuery({
+    queryKey: ['admin-audit-integrity'],
+    queryFn: () => api.getAuditIntegrity(),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+  const [verifyReport, setVerifyReport] = useState<AuditVerifyReport | null>(null)
+  const [integrityError, setIntegrityError] = useState<string | null>(null)
+  const failureText = (e: unknown) => {
+    const err = e as { response?: { data?: { detail?: string } }; message?: string }
+    return err?.response?.data?.detail || err?.message || 'failed'
+  }
+  const verifyMutation = useMutation({
+    mutationFn: () => api.adminAuditVerify({ anchors: !!integrity?.anchor_sink }),
+    onSuccess: (rep) => {
+      setVerifyReport(rep)
+      setIntegrityError(null)
+    },
+    onError: (e) => setIntegrityError(failureText(e)),
+  })
+  const anchorMutation = useMutation({
+    mutationFn: () => api.adminAuditAnchor(),
+    onSuccess: () => {
+      setIntegrityError(null)
+      refetchIntegrity()
+    },
+    onError: (e) => setIntegrityError(failureText(e)),
+  })
+
   const { data: clusters = [] } = useQuery({
     queryKey: ['clusters-all'],
     queryFn: () => clustersApi.listClusters(false),
@@ -207,6 +238,79 @@ export default function AdminAudit() {
           </button>
         </div>
       </div>
+
+      {integrity?.enabled && (
+        <div
+          className="rounded-lg bg-slate-800/50 border border-slate-700 px-4 py-3 flex flex-wrap items-center gap-3 text-sm"
+          data-testid="audit-integrity"
+        >
+          <span className="text-slate-300">
+            {tr('adminAudit.integrity.sealed', '무결성: #{{seq}}까지 봉인', { seq: integrity.sealed_through_seq })}
+            {integrity.unsealed_rows > 0 && (
+              <span className="text-slate-500"> ({tr('adminAudit.integrity.unsealed', '미봉인 {{n}}', { n: integrity.unsealed_rows })})</span>
+            )}
+          </span>
+          <span className="text-slate-600">·</span>
+          <span className="text-slate-300" data-testid="audit-integrity-anchor-state">
+            {integrity.last_anchor
+              ? tr('adminAudit.integrity.lastAnchor', '마지막 앵커 {{when}} (#{{seq}} → {{sink}})', {
+                  when: new Date(integrity.last_anchor.created_at).toLocaleString(),
+                  seq: integrity.last_anchor.to_seq,
+                  sink: integrity.last_anchor.sink,
+                })
+              : integrity.anchor_sink
+                ? tr('adminAudit.integrity.noAnchorYet', '앵커 아직 없음 ({{sink}})', { sink: integrity.anchor_sink })
+                : tr('adminAudit.integrity.anchorOff', '앵커 꺼짐 (싱크 없음)')}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => verifyMutation.mutate()}
+              disabled={verifyMutation.isPending}
+              data-testid="audit-integrity-verify"
+              className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+            >
+              {verifyMutation.isPending ? tr('adminAudit.integrity.verifying', '검증 중...') : tr('adminAudit.integrity.verify', '검증')}
+            </button>
+            {integrity.anchor_sink && (
+              <button
+                type="button"
+                onClick={() => anchorMutation.mutate()}
+                disabled={anchorMutation.isPending}
+                data-testid="audit-integrity-anchor"
+                className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+              >
+                {anchorMutation.isPending ? tr('adminAudit.integrity.anchoring', '앵커 중...') : tr('adminAudit.integrity.anchorNow', '지금 앵커')}
+              </button>
+            )}
+          </div>
+          {(verifyReport || integrityError) && (
+            <div className="basis-full text-xs" data-testid="audit-integrity-result">
+              {integrityError ? (
+                <span className="text-red-400">{integrityError}</span>
+              ) : verifyReport?.ok ? (
+                <span className="text-green-400">
+                  {tr('adminAudit.integrity.ok', '✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치', {
+                    from: verifyReport.from_seq,
+                    to: verifyReport.to_seq,
+                    rows: verifyReport.rows,
+                    anchors: verifyReport.anchors.length,
+                  })}
+                </span>
+              ) : (
+                <span className="text-red-400">
+                  {tr('adminAudit.integrity.bad', '✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})', {
+                    from: verifyReport?.from_seq,
+                    to: verifyReport?.to_seq,
+                    reason: verifyReport?.reason,
+                    seq: verifyReport?.first_bad_seq ?? '',
+                  })}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4">

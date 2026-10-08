@@ -285,6 +285,55 @@ tests:
           path: data.DORMANT_ACCOUNTS_SWEEP_HOURS
           value: "1"
 
+  - it: chains the audit rows by default with a 10 s seal and no anchor sink
+    asserts:
+      - equal:
+          path: data.AUDIT_INTEGRITY_ENABLED
+          value: "true"
+      - equal:
+          path: data.AUDIT_INTEGRITY_SEAL_SEC
+          value: "10"
+      - equal:
+          path: data.AUDIT_INTEGRITY_ANCHOR_SINK
+          value: ""
+      - equal:
+          path: data.AUDIT_INTEGRITY_ANCHOR_HOURS
+          value: "24"
+
+  - it: anchors the chain to a named s3 sink
+    set:
+      audit.sinks:
+        - name: archive
+          type: s3
+          s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
+      audit.integrity.sealSeconds: 60
+      audit.integrity.anchor.sink: archive
+      audit.integrity.anchor.hours: 1
+    asserts:
+      - equal:
+          path: data.AUDIT_INTEGRITY_SEAL_SEC
+          value: "60"
+        documentIndex: 0
+      - equal:
+          path: data.AUDIT_INTEGRITY_ANCHOR_SINK
+          value: archive
+        documentIndex: 0
+      - equal:
+          path: data.AUDIT_INTEGRITY_ANCHOR_HOURS
+          value: "1"
+        documentIndex: 0
+
+  - it: refuses an anchor sink that is not an s3 sink
+    set:
+      audit.sinks:
+        - name: slack
+          type: webhook
+          webhook: {format: slack, url: https://example.com/hook}
+      audit.integrity.anchor.sink: slack
+    asserts:
+      - failedTemplate:
+          errorPattern: audit.integrity.anchor.sink
+
   - it: takes the quick-action windows from features.issues / features.optimization
     set:
       features.issues.eventWindowMinutes: 360

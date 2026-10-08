@@ -3646,6 +3646,19 @@
     "exportCsv": "CSV 내보내기",
     "refreshing": "불러오는 중...",
     "refresh": "새로고침",
+    "integrity": {
+      "sealed": "무결성: #{{seq}}까지 봉인",
+      "unsealed": "미봉인 {{n}}",
+      "lastAnchor": "마지막 앵커 {{when}} (#{{seq}} → {{sink}})",
+      "noAnchorYet": "앵커 아직 없음 ({{sink}})",
+      "anchorOff": "앵커 꺼짐 (싱크 없음)",
+      "verify": "검증",
+      "verifying": "검증 중...",
+      "anchorNow": "지금 앵커",
+      "anchoring": "앵커 중...",
+      "ok": "✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치",
+      "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})"
+    },
     "filter": {
       "service": "Service",
       "any": "전체",

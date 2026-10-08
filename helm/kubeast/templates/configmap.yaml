@@ -115,6 +115,10 @@ data:
   AUDIT_SINKS_FILE: /etc/kubeast/audit-sinks/sinks.yaml
   AUDIT_SINK_SECRETS_DIR: /etc/kubeast/audit-sinks/secrets
   {{- end }}
+  AUDIT_INTEGRITY_ENABLED: {{ .Values.audit.integrity.enabled | quote }}
+  AUDIT_INTEGRITY_SEAL_SEC: {{ .Values.audit.integrity.sealSeconds | quote }}
+  AUDIT_INTEGRITY_ANCHOR_SINK: {{ .Values.audit.integrity.anchor.sink | quote }}
+  AUDIT_INTEGRITY_ANCHOR_HOURS: {{ .Values.audit.integrity.anchor.hours | quote }}
   MIGRATIONS_MODE: {{ .Values.migrations.mode | quote }}
   RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}
   RETENTION_CHAT_DAYS: {{ .Values.retention.chatDays | quote }}
@@ -129,6 +133,16 @@ data:
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}
   GITOPS_ARGOCD_INSTANCE_LABEL: {{ .Values.gitops.argocd.instanceLabel | quote }}
   GITOPS_ARGOCD_URL: {{ .Values.gitops.argocd.url | quote }}
+{{- with .Values.audit.integrity.anchor.sink }}
+{{- $want := toString . }}
+{{- $found := false }}
+{{- range $.Values.audit.sinks }}
+{{- if and (eq (toString .name) $want) (eq (toString .type) "s3") }}{{- $found = true }}{{- end }}
+{{- end }}
+{{- if not $found }}
+{{- fail (printf "audit.integrity.anchor.sink: %q is not an s3 sink in audit.sinks" $want) }}
+{{- end }}
+{{- end }}
 {{- if .Values.audit.sinks }}
 {{- $seen := dict }}
 {{- range .Values.audit.sinks }}

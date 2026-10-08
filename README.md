@@ -603,6 +603,31 @@ retention:
 로컬 kind에는 `deploy/kind/devtools.yaml`(S3 대용 versitygw + Object Lock 버킷, Mailpit, 웹훅 수신기)이 `kind-deploy.sh`로
 함께 올라가고 dev 값이 싱크 3개를 그쪽으로 향합니다. 메일 수신함은 `kubectl -n kubeast-devtools port-forward svc/mailpit 8025`.
 
+### 감사 로그 무결성 (해시 체인 · S3 앵커)
+
+감사 행을 나중에 고치거나 지웠는지 알 수 있게 합니다. auth-service가 `audit.integrity.sealSeconds`(기본 10초)마다 새 행을 앞 행의 해시를 포함한 sha256으로 묶고(`chain_seq`·`prev_hash`·`row_hash`), `audit.integrity.anchor.sink`에 S3 싱크 이름을 적으면 `anchor.hours`(기본 24)마다 체인 머리를 다이제스트 JSON으로 그 버킷의 `<prefix>digests/`에 씁니다. Admin → 감사 로그 상단 띠에서 봉인 위치와 마지막 앵커를 보고, **검증**(기본 = 마지막 앵커부터, 싱크 객체 대조 포함)과 **지금 앵커**를 누를 수 있습니다. 둘 다 감사 행(`admin.audit.verify`·`admin.audit.anchor`)으로 남고, 주기 앵커는 `audit.chain.anchor`(actor `system`)입니다.
+
+```yaml
+audit:
+  sinks:
+    - name: archive
+      type: s3
+      s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
+  integrity:
+    enabled: true        # 기본값: 체인만(의존성 없음)
+    sealSeconds: 10
+    anchor:
+      sink: archive      # 위 s3 싱크의 이름. 비우면 앵커 없음
+      hours: 24
+```
+
+- **신뢰 근거는 버킷의 Object Lock**입니다. DB와 S3를 둘 다 고칠 수 있는 사람은 앵커도 다시 쓸 수 있으니, 다이제스트가 놓이는 버킷에 기본 보존을 거세요. 다이제스트에 서명은 없습니다.
+- **독립 검증**: Kubeast 없이 psql로 같은 식을 재계산할 수 있습니다(`services/auth-service-go/internal/auditchain`의 `CanonSQL`, [docs/audit-log-plan.md](docs/audit-log-plan.md) §7).
+- **한계**: 봉인 전 창(≤ `sealSeconds`)에 지워진 행은 못 잡습니다. 껐다 켠 구간은 검증 결과에 앵커 없음으로 드러납니다. 보존(`retention.auditDays`)은 체인 접두만 지웁니다.
+- 메트릭 `kubeast_audit_chain_sealed_seq` · `kubeast_audit_chain_unsealed_rows` · `kubeast_audit_anchor_last_timestamp_seconds`.
+
+로컬 kind는 dev 값이 `dev-s3` 스탠드인에 앵커합니다(`e2e/tests/audit-integrity.spec.ts`).
+
 ### 세션 기록 (exec · 노드 셸)
 
 켜면(`sessionRecording.enabled`, 기본 off) Pod exec와 노드 셸 터미널에 **찍힌 출력**(사용자가 본 화면 — 친 명령은

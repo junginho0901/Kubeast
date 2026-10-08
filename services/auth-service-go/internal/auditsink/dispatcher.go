@@ -79,6 +79,18 @@ func (d *Dispatcher) Names() []string {
 	return out
 }
 
+// ObjectStore returns the s3 sink called name as an object store (the audit
+// chain anchors its digests there), or false when no s3 sink has that name.
+func (d *Dispatcher) ObjectStore(name string) (ObjectStore, bool) {
+	for _, s := range d.sinks {
+		if s.cfg.Name == name && s.cfg.Type == "s3" {
+			os, ok := s.sink.(ObjectStore)
+			return os, ok
+		}
+	}
+	return nil, false
+}
+
 // Run elects a leader and, while this replica holds the lock, runs one loop
 // per sink. It returns when ctx ends.
 func (d *Dispatcher) Run(ctx context.Context) {

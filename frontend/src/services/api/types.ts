@@ -1318,6 +1318,52 @@ export interface DormantAccountsConfig {
   exempt_admins: boolean
 }
 
+// GET /auth/admin/audit/integrity — the audit hash chain: how far it is
+// sealed and the last digest anchored in the S3 sink (null = none yet).
+export interface AuditAnchor {
+  id: number
+  created_at: string
+  from_seq: number
+  to_seq: number
+  rows: number
+  anchor_hash: string
+  sink: string
+  object_key: string
+  actor: string
+}
+
+export interface AuditIntegrityStatus {
+  enabled: boolean
+  seal_seconds?: number
+  anchor_sink?: string
+  anchor_hours?: number
+  oldest_seq: number
+  sealed_through_seq: number
+  unsealed_rows: number
+  last_anchor: AuditAnchor | null
+}
+
+export interface AuditAnchorCheck {
+  id: number
+  to_seq: number
+  object_key: string
+  head_ok: boolean
+  object_ok?: boolean
+  reviews_ok?: boolean
+  error?: string
+}
+
+// POST /auth/admin/audit/integrity/verify — one recomputation of a range.
+export interface AuditVerifyReport {
+  from_seq: number
+  to_seq: number
+  rows: number
+  ok: boolean
+  first_bad_seq?: number
+  reason?: string // hash_mismatch | chain_break | gap | anchor_mismatch
+  anchors: AuditAnchorCheck[]
+}
+
 // GET /auth/oidc/config — what the login page renders: the SSO button (when a
 // provider is configured) and whether the password form is shown.
 export interface OIDCLoginConfig {

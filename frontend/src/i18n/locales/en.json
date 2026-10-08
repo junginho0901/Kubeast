@@ -3287,6 +3287,19 @@
     "exportCsv": "Export CSV",
     "refreshing": "Loading...",
     "refresh": "Refresh",
+    "integrity": {
+      "sealed": "Integrity: sealed through #{{seq}}",
+      "unsealed": "{{n}} unsealed",
+      "lastAnchor": "last anchor {{when}} (#{{seq}} → {{sink}})",
+      "noAnchorYet": "no anchor yet ({{sink}})",
+      "anchorOff": "anchoring off (no sink)",
+      "verify": "Verify",
+      "verifying": "Verifying...",
+      "anchorNow": "Anchor now",
+      "anchoring": "Anchoring...",
+      "ok": "✓ #{{from}}–#{{to}}: {{rows}} rows intact, {{anchors}} anchor(s) match",
+      "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}"
+    },
     "filter": {
       "service": "Service",
       "any": "All",
