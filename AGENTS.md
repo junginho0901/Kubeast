@@ -114,5 +114,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이
   정리하지 않음). 서비스 코드에서 `tail -F`·대기하는 셸 같은 장기 명령을 exec로 돌리지 말고, 바로 끝나는 짧은 명령을
   주기적으로 실행한다(예: 로그 파일 실시간 보기 = `tail -c +<오프셋>` 2초 폴링, `services/k8s-service-go/internal/handler/logfiles.go`).
+  사람이 쓰는 대화형 터미널(Pod exec·노드 셸)은 예외지만, 브라우저가 `exit` 없이 끊기면 서버가 셸에 Ctrl-C·Ctrl-D를 보내고
+  끝나기를 잠깐 기다린 뒤 끊는다(`remote_shell.go` `streamShell`) — 이걸 빼면 끊길 때마다 컨테이너에 셸이 남는다.
 - exec 명령은 인자 배열로 넘기고 셸을 거치지 않는다. 사용자 입력이 들어가는 인자는 허용 목록으로 검증하고 `--`로 옵션 파싱을 끝낸다.
 - 로컬 실행은 [docker-compose.yml](docker-compose.yml) 참고.

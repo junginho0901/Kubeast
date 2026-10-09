@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
@@ -83,15 +84,61 @@ func attachURL(cs kubernetes.Interface, namespace, pod, container string) *url.U
 		}, scheme.ParameterCodec).URL()
 }
 
-// streamShell bridges the browser terminal on conn to the pod stream at u,
-// run on that cluster with cfg's identity. Browser frames are raw keystrokes;
-// pod output goes back as channel frames. It returns when the process ends,
-// the browser goes away, or ctx ends; a non-zero exit status is reported on
-// the error channel and is not an error here.
+// readFrames reads the browser's frames from conn (the socket's only reader)
+// until it fails — the browser went away — and then closes the channel.
+func readFrames(ctx context.Context, conn *websocket.Conn) <-chan []byte {
+	in := make(chan []byte)
+	go func() {
+		defer close(in)
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			select {
+			case in <- data:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return in
+}
+
+// shellHangup is what the bridge types when the browser goes away under a
+// shell: Ctrl-C ends the foreground job and clears the line, then Ctrl-D ends
+// the shell (twice, for a shell started from the first one). A process started
+// through exec or attach keeps running in the container after the stream
+// drops, so this is said before closing. The keys go one at a time: a Ctrl-D
+// that arrives with the Ctrl-C is lost while the shell handles the interrupt.
+var (
+	shellHangup      = [][]byte{{0x03}, {0x04}, {0x04}}
+	shellHangupPause = 300 * time.Millisecond
+	shellHangupGrace = 2 * time.Second
+)
+
+func hangUp(w io.Writer) {
+	for i, key := range shellHangup {
+		if i > 0 {
+			time.Sleep(shellHangupPause)
+		}
+		if _, err := w.Write(key); err != nil {
+			return
+		}
+	}
+}
+
+// streamShell bridges the browser terminal to the pod stream at u, run on
+// that cluster with cfg's identity. Browser frames arrive on in (readFrames)
+// as raw keystrokes; pod output goes back on conn as channel frames. It
+// returns when the process ends, the browser goes away, or ctx ends; a
+// non-zero exit status is reported on the error channel and is not an error
+// here. When the browser goes away first, the shell is hung up and given
+// shellHangupGrace to end before the stream is cut.
 //
 // With rec set, the terminal output (what the user sees, not keystrokes) is
 // also written to the recording, after a one-line notice that it is.
-func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u *url.URL, rec *recording.Session) error {
+func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session) error {
 	exec, err := newShellExecutor(cfg, u)
 	if err != nil {
 		return err
@@ -107,6 +154,7 @@ func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u 
 		}
 	}
 	stdinR, stdinW := io.Pipe()
+	streamDone := make(chan struct{})
 	go func() {
 		defer cancel()
 		defer stdinW.Close()
@@ -114,17 +162,18 @@ func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u 
 		if _, err := stdinW.Write([]byte("\r")); err != nil {
 			return
 		}
-		for {
-			_, data, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
+		for data := range in {
 			if len(data) == 0 {
 				continue
 			}
 			if _, err := stdinW.Write(data); err != nil {
 				return
 			}
+		}
+		go hangUp(stdinW)
+		select {
+		case <-streamDone:
+		case <-time.After(shellHangupGrace):
 		}
 	}()
 
@@ -134,6 +183,7 @@ func streamShell(ctx context.Context, conn *websocket.Conn, cfg *rest.Config, u 
 		Stderr: out.channel(shellStderr),
 		Tty:    true,
 	})
+	close(streamDone)
 	_ = stdinR.Close()
 	var exit utilexec.CodeExitError
 	if errors.As(err, &exit) {

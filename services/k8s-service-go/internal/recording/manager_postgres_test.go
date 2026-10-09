@@ -235,3 +235,46 @@ func TestPostgresShutdownUploadsLiveSessionsAsInterrupted(t *testing.T) {
 		t.Fatalf("cast %q err %v", cast, err)
 	}
 }
+
+func TestPostgresListPages(t *testing.T) {
+	pool := freshDB(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	m, _ := New(Config{Enabled: true, MaxBytes: 1 << 20, ChunkSeconds: 30, SpoolDir: filepath.Join(dir, "spool"), Storage: "database"}, pool)
+	base := time.Date(2026, 10, 9, 8, 0, 0, 0, time.UTC)
+	var ids []string // oldest first
+	for i := 0; i < 5; i++ {
+		at := base.Add(time.Duration(i) * time.Minute)
+		m.now = func() time.Time { return at }
+		s, err := m.Start(ctx, Meta{Kind: "exec", Cluster: "default", Target: fmt.Sprintf("p%d", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Close()
+		ids = append(ids, s.ID)
+	}
+	m.flush(ctx)
+	page := func(limit, offset int) []string {
+		list, err := m.List(ctx, Filter{Limit: limit, Offset: offset})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, r := range list {
+			got = append(got, r.ID)
+		}
+		return got
+	}
+	if got := page(2, 0); len(got) != 2 || got[0] != ids[4] || got[1] != ids[3] {
+		t.Fatalf("page 1 = %v, want newest two", got)
+	}
+	if got := page(2, 2); len(got) != 2 || got[0] != ids[2] || got[1] != ids[1] {
+		t.Fatalf("page 2 = %v", got)
+	}
+	if got := page(2, 4); len(got) != 1 || got[0] != ids[0] {
+		t.Fatalf("page 3 = %v, want the oldest only", got)
+	}
+	if got := page(2, -3); len(got) != 2 || got[0] != ids[4] {
+		t.Fatalf("negative offset = %v, want the first page", got)
+	}
+}

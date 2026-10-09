@@ -59,6 +59,7 @@ type Filter struct {
 	Cluster string
 	Kind    string
 	Limit   int
+	Offset  int // rows to skip, for paging
 }
 
 // List returns recordings, newest first. It works whether or not recording
@@ -67,9 +68,12 @@ func (m *Manager) List(ctx context.Context, f Filter) ([]Recording, error) {
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 200
 	}
+	if f.Offset < 0 {
+		f.Offset = 0
+	}
 	rows, err := m.pool.Query(ctx, `SELECT `+recordingColumns+` FROM session_recordings
 		WHERE ($1 = '' OR user_email ILIKE '%' || $1 || '%') AND ($2 = '' OR cluster = $2) AND ($3 = '' OR kind = $3)
-		ORDER BY started_at DESC LIMIT $4`, f.User, f.Cluster, f.Kind, f.Limit)
+		ORDER BY started_at DESC, id LIMIT $4 OFFSET $5`, f.User, f.Cluster, f.Kind, f.Limit, f.Offset)
 	if err != nil {
 		return nil, err
 	}

@@ -18,20 +18,33 @@ function formatBytes(n: number): string {
   return `${(n / (1 << 20)).toFixed(1)} MiB`
 }
 
+const PAGE_SIZE = 50
+
+// An interrupted recording keeps only what was uploaded before the server
+// stopped; the rest was written to a spool file that is gone.
+function keptBytes(r: SessionRecording): number {
+  return r.status === 'interrupted' ? r.uploaded_bytes : r.bytes || r.uploaded_bytes
+}
+
 export default function SessionRecordings() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   const [user, setUser] = useState('')
   const [kind, setKind] = useState('')
   const [applied, setApplied] = useState({ user: '', kind: '' })
+  const [page, setPage] = useState(1)
   const [playing, setPlaying] = useState<SessionRecording | null>(null)
 
   const { data: config } = useQuery({ queryKey: ['recordings', 'config'], queryFn: api.getRecordingsConfig, staleTime: 60_000 })
-  const { data: rows = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['recordings', 'list', applied],
-    queryFn: () => api.listRecordings(applied),
+  // One row past the page tells whether there is a next page.
+  const { data = [], isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['recordings', 'list', applied, page],
+    queryFn: () => api.listRecordings({ ...applied, limit: PAGE_SIZE + 1, offset: (page - 1) * PAGE_SIZE }),
     refetchInterval: 15_000,
   })
+  const rows = data.slice(0, PAGE_SIZE)
+  const hasNext = data.length > PAGE_SIZE
+  const first = (page - 1) * PAGE_SIZE + 1
 
   const statusClass: Record<string, string> = {
     recording: 'bg-sky-900/40 text-sky-300 border-sky-800/60',
@@ -92,7 +105,10 @@ export default function SessionRecordings() {
           </div>
           <button
             type="button"
-            onClick={() => setApplied({ user: user.trim(), kind })}
+            onClick={() => {
+              setApplied({ user: user.trim(), kind })
+              setPage(1)
+            }}
             className="h-10 rounded-lg bg-primary-600 px-3 text-sm font-medium text-white hover:bg-primary-500"
           >
             {tr('recordings.filter.apply', 'Search')}
@@ -128,12 +144,26 @@ export default function SessionRecordings() {
                       {r.namespace ? `${r.namespace}/` : ''}{r.target}{r.container ? ` (${r.container})` : ''}
                     </td>
                     <td className="px-3 py-2 text-slate-300">{r.cluster}</td>
-                    <td className="px-3 py-2 text-right text-slate-300">
-                      {formatBytes(r.bytes || r.uploaded_bytes)}
+                    <td
+                      className="px-3 py-2 text-right text-slate-300"
+                      title={keptBytes(r) < r.bytes ? tr('recordings.sizeKept', '{{kept}} kept of {{recorded}} recorded', { kept: formatBytes(keptBytes(r)), recorded: formatBytes(r.bytes) }) : undefined}
+                    >
+                      {formatBytes(keptBytes(r))}
                       {r.truncated && <span className="ml-1 text-amber-300" title={tr('recordings.truncated', 'Recording stopped at the size limit')}>✂</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} title={r.last_error ?? ''}>
+                      <span
+                        className={`inline-block rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`}
+                        title={
+                          r.status === 'interrupted'
+                            ? r.parts === 0
+                              ? tr('recordings.interruptedNothing', 'The server stopped before the first part was uploaded: nothing to play')
+                              : tr('recordings.interruptedPartial', 'The server stopped during the recording: only the parts uploaded before are kept')
+                            : r.last_error
+                              ? tr('recordings.lastError', 'Last error: {{error}}', { error: r.last_error })
+                              : undefined
+                        }
+                      >
                         {tr(`recordings.status.${r.status}`, r.status)}
                       </span>
                     </td>
@@ -154,6 +184,23 @@ export default function SessionRecordings() {
             </tbody>
           </table>
         </div>
+
+        {(page > 1 || hasNext) && (
+          <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-700" data-testid="recordings-pager">
+            <div className="text-xs text-slate-400">
+              {rows.length > 0 ? `${first}–${first + rows.length - 1}` : ''}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+                {tr('common.prev', 'Prev')}
+              </button>
+              <span className="text-xs text-slate-300 min-w-[48px] text-center">{page}</span>
+              <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+                {tr('common.next', 'Next')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {playing && (

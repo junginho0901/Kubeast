@@ -406,11 +406,12 @@ metrics:
 # INTERNAL_API_TOKEN을 X-Internal-Token으로 요구한다(차트가 생성·보존). 회전 = 값 교체 후
 # auth-service·k8s-service·tool-server 롤아웃. secrets.existingSecret를 쓰면 그 Secret에 넣는다.
 
-# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
+# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록(첫 항목이 기본).
+# 이미지는 IfNotPresent로 받으므로 버전을 고정(또는 사내 미러 주소) — 이미 받은 노드는 레지스트리에 안 감
 nodeShell:
   enabled: false
   images:
-    - docker.io/library/busybox:latest
+    - docker.io/library/busybox:1.38.0
 
 # 파드 보안 (Pod Security Standards restricted 기본). 사용자 네임스페이스를
 # 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true
@@ -713,7 +714,8 @@ audit:
 "This session is recorded" 한 줄이 먼저 찍히고, 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
 
 - **저장**: k8s-service가 로컬 볼륨에 쓰고 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(운영 권장, 감사 S3 싱크와 같은 필드) · `database`(세션당 1 MiB, S3 없는 작은 설치) · `file`(PVC). S3 키는 파일로 마운트돼 k8s-service의 IRSA 신원을 건드리지 않습니다.
-- **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다.
+- **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다. 목록의 크기는 남은(올라간) 크기이고, 올라간 조각이 없으면 재생 버튼이 꺼집니다.
+- **터미널이 끊길 때**: 브라우저 탭을 닫거나 네트워크가 끊겨 터미널이 `exit` 없이 사라지면, k8s-service가 셸에 Ctrl-C·Ctrl-D를 보내 끝냅니다(컨테이너 런타임은 끊긴 exec의 프로세스를 정리하지 않음). 편집기처럼 이를 무시하는 프로그램이 앞에 떠 있으면 남을 수 있습니다.
 - **실패**: 녹화를 시작하지 못하면(로컬 볼륨에 못 씀) 세션을 거부합니다(`required: true`). 저장소 업로드가 실패하거나 조각 하나가 30초 안에 끝나지 않아도 세션은 계속되고, 재시도하며 알람 `KubeastSessionRecordingUploadStalled`로 드러납니다. 세션당 `maxBytes`(기본 64 MiB)를 넘으면 녹화만 멈춥니다.
 - **다시보기**: Admin → Session recordings(권한 `admin.sessions.read`)에서 재생·`.cast`·텍스트 사본 내려받기, Audit Logs의 exec 행에서도 재생. 녹화를 열 때마다 `admin.session.read`가 감사에 남습니다.
 - **재생기와 CSP**: 재생기(asciinema-player)는 터미널을 WebAssembly로 돌립니다. 그래서 게이트웨이가 보내는 CSP의 `script-src`에 `'wasm-unsafe-eval'`이 들어 있습니다(`'unsafe-eval'`은 아님, `helm/kubeast/files/nginx.conf`). 앞단 Ingress·프록시가 CSP 헤더를 덮어쓰면 같은 값을 허용해야 재생됩니다 — 빠지면 ▶ 버튼과 `--:--`에서 멈춥니다.

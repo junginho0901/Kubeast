@@ -101,7 +101,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `k8s.namespace.create` / `k8s.namespace.apply` | 네임스페이스 생성·적용 |
 | `k8s.yaml.create` / `k8s.yaml.apply` | YAML로 생성·적용 |
 | `k8s.node.cordon` / `.uncordon` / `.drain` / `.edit` / `.delete` | 노드 조작 |
-| `k8s.node.shell` | 노드 셸(민감 읽기). 세션 기록이 켜져 있으면 `after.recording_id` |
+| `k8s.node.shell` | 노드 셸(민감 읽기). 시도 하나에 행 하나 — 디버그 Pod가 실행돼 셸을 넘기기 직전에 success, 시작하지 못하면 failure(`error` = 사유: 허용 목록에 없는 이미지 · Pod 생성 실패 · 시작 시간 초과와 마지막 대기 사유 · 셸 전에 Pod가 끝남 · 창을 닫음). 감사 저장소가 행을 못 받으면 Pod를 만들기 전에 503, success 행을 못 쓰면 셸을 넘기지 않음. 세션 기록이 켜져 있으면 `after.recording_id`(시작하지 못한 시도의 녹화는 지움) |
 | `k8s.pod.exec` / `k8s.pod.logs.read` | Pod exec, 로그 읽기(민감 읽기). exec는 세션 기록이 켜져 있으면 `after.recording_id`; 기록을 시작하지 못해 거부한 세션은 failure 행(`error` = 사유). 로그는 한 번 읽기와 실시간 보기(`…/logs/stream`, 연결마다 한 줄, `after.follow = true`) 모두 기록 — 기록이 안 되면 한 번 읽기는 503, 실시간은 첫 줄 전에 끊음 |
 | `k8s.access.denied` | 쓰기·민감 동작을 앱 권한이 거부함 — 권한 이름이 `.read`로 끝나지 않는 것(생성·편집·삭제·exec·노드 셸·Secret 값·로그 파일·롤백 등)과 `admin.*`. 읽기 거부는 기록하지 않음(화면이 목록을 자동으로 불러와 행이 쌓임). result = failure, `error` = 거부 문구, `after` = `{permission, method, path}`, cluster = 요청의 클러스터 |
 | `k8s.pod.logfile.read` | 컨테이너 안 로그 파일 읽기(Pod 상세 → 로그 파일, `resource.pod.logfile`, `LOG_FILES_ENABLED`). 고정 명령(`tail`)을 사용자 신원의 `pods/exec`로 실행하므로 민감 읽기 — 기록이 안 되면 503. 본문·실시간 보기마다 한 줄, 파일 목록은 기록하지 않음. target = 파드, `after` = `{container, path, lines, follow}`. `resource.pod.logfile`이 없으면 403 + `k8s.access.denied` 한 줄; 권한이 있는데 허용 패턴·네임스페이스 밖이거나, Kubernetes가 exec를 거부하거나, 파일·`tail`이 없으면 failure 행(`error` = 사유) |

@@ -67,7 +67,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
   useEffect(() => {
     tRef.current = t
   }, [t])
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'error' | 'closed'>('connecting')
 
   useEffect(() => {
     const term = new Terminal({
@@ -155,6 +155,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       if (event.code === 1008) {
         handleUnauthorized()
       }
+      setStatus((prev) => (prev === 'error' ? prev : 'closed'))
       term.writeln(tRef.current('pods.exec.disconnected', { defaultValue: 'Disconnected.' }))
     }
 
@@ -199,7 +200,9 @@ export default function PodExecTerminal({ podName, namespace, container, command
               ? t('pods.exec.statusConnecting', { defaultValue: 'Connecting...' })
               : status === 'connected'
                 ? t('pods.exec.statusConnected', { defaultValue: 'Connected' })
-                : t('pods.exec.statusError', { defaultValue: 'Connection error' })}
+                : status === 'closed'
+                  ? t('pods.exec.statusClosed', { defaultValue: 'Disconnected' })
+                  : t('pods.exec.statusError', { defaultValue: 'Connection error' })}
           </p>
         </div>
         <button

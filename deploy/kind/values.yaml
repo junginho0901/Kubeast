@@ -74,6 +74,11 @@ networkPolicy:
       port: 11434
 nodeShell:
   enabled: true
+  # The second image never resolves (.invalid): e2e/tests/node-shell.spec.ts uses it for the wait reason
+  # (ErrImagePull) and for closing the terminal while the pod is still starting.
+  images:
+    - docker.io/library/busybox:1.38.0
+    - registry.invalid/kubeast/e2e-missing:1
 # Terminal session recording into the S3 stand-in (bucket kubeast-sessions), parts every 10 s — what
 # e2e/tests/session-recording.spec.ts checks.
 sessionRecording:
