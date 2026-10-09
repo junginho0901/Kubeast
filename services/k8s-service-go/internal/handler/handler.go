@@ -65,7 +65,7 @@ func (h *Handler) requirePermission(r *http.Request, perm string) error {
 		return fmt.Errorf("unauthorized")
 	}
 	if !payload.HasPermission(perm) {
-		return fmt.Errorf("forbidden: requires %s permission", perm)
+		return h.denied(r, perm, fmt.Errorf("forbidden: requires %s permission", perm))
 	}
 	return nil
 }
@@ -83,9 +83,32 @@ func (h *Handler) requirePermissionForCluster(r *http.Request, perm string) erro
 	}
 	cid, _ := cluster.FromContext(r.Context())
 	if !payload.HasPermissionForCluster(perm, string(cid)) {
-		return fmt.Errorf("forbidden: requires %s permission in cluster %q", perm, cid)
+		return h.denied(r, perm, fmt.Errorf("forbidden: requires %s permission in cluster %q", perm, cid))
 	}
 	return nil
+}
+
+// canForCluster asks whether the user holds perm in the request's cluster —
+// for shaping a response (masking, a button), not for refusing it: nothing is recorded.
+func (h *Handler) canForCluster(r *http.Request, perm string) bool {
+	payload, ok := auth.FromContext(r.Context())
+	if !ok {
+		return false
+	}
+	cid, _ := cluster.FromContext(r.Context())
+	return payload.HasPermissionForCluster(perm, string(cid))
+}
+
+// denied records a refused write or sensitive action as k8s.access.denied
+// (best effort) and returns err. Refused reads are not recorded: the screens
+// load lists on their own, so those rows would only pile up.
+func (h *Handler) denied(r *http.Request, perm string, err error) error {
+	if strings.HasSuffix(perm, ".read") && !strings.HasPrefix(perm, "admin.") {
+		return err
+	}
+	after := audit.MustJSON(map[string]interface{}{"permission": perm, "method": r.Method, "path": r.URL.Path})
+	_ = h.recordAuditWithPayload(r, "k8s.access.denied", "permission", perm, "", err, nil, after)
+	return err
 }
 
 // queryParam returns a query parameter value or a default.

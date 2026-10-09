@@ -20,6 +20,7 @@ from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
 from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.redact import redact_text
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -826,7 +827,9 @@ async def session_chat_stream(
         
         # 세션 제목 자동 생성 (첫 메시지인 경우)
         if len(messages_history) <= 1:  # 시스템 메시지 + 첫 사용자 메시지
-            title = message[:50] + "..." if len(message) > 50 else message
+            # The list shows the title on every visit: mask credentials as for model input.
+            text, _ = redact_text(message)
+            title = text[:50] + "..." if len(text) > 50 else text
             if title_prefix:
                 title = title_prefix + title
             await db.update_session_title(session_id, title)
