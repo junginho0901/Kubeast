@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
+import { nodeShellStatusLines, parseNodeShellStatus } from '@/utils/nodeShellStatus'
 
 interface NodeShellTerminalProps {
   nodeName: string
@@ -42,7 +43,9 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
   useEffect(() => {
     tRef.current = t
   }, [t])
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  // connecting: socket opening · starting: the debug pod is coming up ·
+  // connected: the shell is attached · error / closed: it ended.
+  const [status, setStatus] = useState<'connecting' | 'starting' | 'connected' | 'error' | 'closed'>('connecting')
 
   useEffect(() => {
     const term = new Terminal({
@@ -79,14 +82,21 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
     const decoder = new TextDecoder()
 
     ws.onopen = () => {
-      setStatus('connected')
+      setStatus('starting')
       term.writeln(tRef.current('nodes.shell.connected', 'Connected.'))
       term.focus()
     }
 
     ws.onmessage = (event) => {
       if (typeof event.data === 'string') {
-        term.writeln(event.data)
+        const s = parseNodeShellStatus(event.data)
+        if (s) {
+          for (const line of nodeShellStatusLines(s, tRef.current)) term.writeln(line)
+          if (s.status === 'starting') setStatus('connected')
+          else if (s.status !== 'waiting') setStatus('error')
+        } else {
+          term.writeln(event.data)
+        }
         return
       }
       const buffer = new Uint8Array(event.data)
@@ -110,6 +120,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       if (event.code === 1008) {
         handleUnauthorized()
       }
+      setStatus((prev) => (prev === 'error' ? prev : 'closed'))
       term.writeln(tRef.current('nodes.shell.disconnected', 'Disconnected.'))
     }
 
@@ -148,9 +159,13 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
           <p className="text-xs text-slate-400">
             {status === 'connecting'
               ? t('nodes.shell.statusConnecting', 'Connecting...')
-              : status === 'connected'
-                ? t('nodes.shell.statusConnected', 'Connected')
-                : t('nodes.shell.statusError', 'Connection error')}
+              : status === 'starting'
+                ? t('nodes.shell.statusStarting', 'Starting the debug Pod...')
+                : status === 'connected'
+                  ? t('nodes.shell.statusConnected', 'Connected')
+                  : status === 'closed'
+                    ? t('nodes.shell.statusClosed', 'Disconnected')
+                    : t('nodes.shell.statusError', 'Connection error')}
           </p>
         </div>
         <button

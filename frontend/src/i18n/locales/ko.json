@@ -431,6 +431,7 @@
       "statusConnecting": "연결 중...",
       "statusConnected": "연결됨",
       "statusError": "연결 오류",
+      "statusClosed": "연결 종료",
       "openExec": "터미널 열기"
     }
   },
@@ -1635,7 +1636,20 @@
       "disconnected": "연결 종료.",
       "statusConnecting": "연결 중...",
       "statusConnected": "연결됨",
-      "statusError": "연결 오류"
+      "statusError": "연결 오류",
+      "statusStarting": "디버그 Pod 시작 중...",
+      "statusClosed": "연결 종료",
+      "status": {
+        "waiting": "디버그 Pod가 시작되기를 기다리는 중...",
+        "waitingReason": "대기 중: {{detail}}",
+        "starting": "디버그 Pod가 실행됨. 셸에 연결하는 중...",
+        "timeout": "디버그 Pod가 {{seconds}}초 안에 시작되지 않았습니다.",
+        "lastState": "마지막 상태: {{detail}}",
+        "exited": "셸이 열리기 전에 디버그 Pod가 끝났습니다: {{detail}}",
+        "failed": "디버그 Pod를 시작하지 못했습니다: {{detail}}",
+        "imageRejected": "허용되지 않은 이미지입니다: {{detail}}",
+        "auditUnavailable": "감사 로그를 남길 수 없어 셸을 열지 않았습니다."
+      }
     }
   },
   "aiChat": {
@@ -2556,7 +2570,8 @@
       "namespace": "Namespace",
       "image": "리눅스 이미지",
       "imageHint": "서버 허용 목록에 있어야 합니다(Helm nodeShell.images / NODE_SHELL_IMAGES). 셸 Pod는 항상 전용 특권 Namespace에서 실행됩니다.",
-      "namespaceHint": "참고용: 서버는 셸 Pod를 항상 설정된 특권 Namespace(NODE_SHELL_NAMESPACE)에 만듭니다."
+      "namespaceHint": "참고용: 서버는 셸 Pod를 항상 설정된 특권 Namespace(NODE_SHELL_NAMESPACE)에 만듭니다.",
+      "imagePlaceholder": "서버 기본값(허용 목록의 첫 이미지)"
     }
   },
   "storage": {
@@ -4397,6 +4412,10 @@
     "loading": "불러오는 중…",
     "empty": "녹화가 없습니다",
     "truncated": "크기 상한에서 녹화가 멈췄습니다",
+    "interruptedNothing": "서버가 첫 조각을 올리기 전에 멈춰 재생할 내용이 없습니다",
+    "interruptedPartial": "서버가 녹화 중에 멈췄습니다. 그 전에 올라간 부분만 남아 있습니다",
+    "sizeKept": "녹화 {{recorded}} 중 남은 {{kept}}",
+    "lastError": "마지막 오류: {{error}}",
     "play": "재생",
     "status": {
       "recording": "녹화 중",

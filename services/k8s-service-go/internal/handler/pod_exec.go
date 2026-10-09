@@ -85,7 +85,7 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("pod exec attached", "pod", podName, "namespace", namespace, "container", container)
-	if err := streamShell(ctx, conn, cfg, execURL(cs, namespace, podName, container, command), rec); err != nil {
+	if err := streamShell(ctx, conn, readFrames(ctx, conn), cfg, execURL(cs, namespace, podName, container, command), rec); err != nil {
 		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,12 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
+)
+
+// How long the debug pod has to start, and how often it is checked.
+var (
+	nodeShellStartSec     = 90
+	nodeShellPollInterval = time.Second
 )
 
 var debugUpgrader = websocket.Upgrader{
@@ -46,7 +53,9 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	namespace := h.cfg.NodeShellNamespace
 	image, imageErr := nodeShellImage(h.cfg.NodeShellImages, r.URL.Query().Get("image"))
 
-	// Audit at connection time (per §11 Q2); no session without the row. With
+	// One audit row per attempt, written once the outcome is known: success
+	// when the shell is handed over (before the attach), failure with the
+	// reason otherwise. A store that cannot take a row refuses up front. With
 	// session recording on, the terminal output is recorded too (recording_id).
 	if rerr := h.auditReady(r); rerr != nil {
 		h.refuseUnaudited(w, r, rerr)
@@ -60,41 +69,45 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if werr := h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, nil,
-		nil, audit.MustJSON(payload)); werr != nil {
+	fail := func(err error) {
 		h.recorder.Abort(rec)
-		h.refuseUnaudited(w, r, werr)
-		return
+		_ = h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, err, nil, audit.MustJSON(payload))
 	}
-	defer rec.Close()
 
 	conn, err := debugUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("debug shell ws upgrade failed", "err", err)
+		fail(fmt.Errorf("websocket upgrade: %w", err))
 		return
 	}
 	defer conn.Close()
 	conn.SetReadLimit(terminalFrameMaxBytes)
 
 	if imageErr != nil {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("\r\n"+imageErr.Error()+"\r\n"))
+		fail(imageErr)
+		writeShellStatus(conn, shellStatus{Status: shellImageRejected, Message: imageErr.Error()})
 		return
 	}
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	// The socket's reader from here on: closing the window while the pod is
+	// still starting ends the wait (and deletes the pod) instead of the timeout.
+	in := readFrames(ctx, conn)
 
 	// Clients for the cluster selected on the request (not the default one).
 	clientset, err := h.svc.ClientsetFor(ctx)
 	if err != nil {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\ncluster client: %v\r\n", err)))
+		fail(fmt.Errorf("cluster client: %w", err))
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: fmt.Sprintf("cluster client: %v", err)})
 		return
 	}
 	// The attach runs as the signed-in user, like the pod calls above: the
 	// executor builds its transport from this config, identity included.
 	restConfig, err := h.svc.UserRESTConfigFor(ctx)
 	if err != nil {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\ncluster config: %v\r\n", err)))
+		fail(fmt.Errorf("cluster config: %w", err))
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: fmt.Sprintf("cluster config: %v", err)})
 		return
 	}
 
@@ -120,11 +133,14 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 			AutomountServiceAccountToken: boolPtr(false),
 			Containers: []corev1.Container{
 				{
-					Name:    "debugger",
-					Image:   image,
-					Command: []string{"/bin/sh"},
-					Stdin:   true,
-					TTY:     true,
+					Name:  "debugger",
+					Image: image,
+					// A node that already has the image opens the shell without
+					// reaching the registry (a `:latest` image would default to Always).
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"/bin/sh"},
+					Stdin:           true,
+					TTY:             true,
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: boolPtr(true),
 					},
@@ -148,14 +164,17 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ensureNodeShellNamespace(ctx, clientset, namespace); err != nil {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\nfailed to prepare namespace %s: %v\r\n", namespace, err)))
+		err = fmt.Errorf("prepare namespace %s: %w", namespace, err)
+		fail(err)
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: err.Error()})
 		return
 	}
 	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
 	if err != nil {
-		msg := fmt.Sprintf("failed to create debug pod: %v", err)
-		slog.Error(msg)
-		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))
+		err = fmt.Errorf("create debug pod: %w", err)
+		slog.Error("debug shell", "err", err)
+		fail(err)
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: err.Error()})
 		return
 	}
 
@@ -178,38 +197,67 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		slog.Info("debug shell pod deleted", "pod", podName)
 	}()
 
-	// Wait for pod to be running
-	conn.WriteMessage(websocket.TextMessage, []byte("Waiting for debug pod to start...\r\n"))
-	timeout := time.After(90 * time.Second)
-	ticker := time.NewTicker(1 * time.Second)
+	// Wait for the pod to run, telling the terminal why it is not yet
+	// (ContainerCreating, ImagePullBackOff, …) each time the reason changes.
+	writeShellStatus(conn, shellStatus{Status: shellWaiting})
+	timeout := time.After(time.Duration(nodeShellStartSec) * time.Second)
+	ticker := time.NewTicker(nodeShellPollInterval)
 	defer ticker.Stop()
 
-	podRunning := false
-	for !podRunning {
+	var lastReason, lastMessage string
+	for running := false; !running; {
 		select {
 		case <-ctx.Done():
+			fail(ctx.Err())
 			return
+		case _, open := <-in:
+			if !open { // the window closed before the shell opened
+				fail(errors.New("closed before the shell opened"))
+				return
+			}
 		case <-timeout:
-			conn.WriteMessage(websocket.TextMessage, []byte("Timeout waiting for debug pod to start.\r\n"))
+			err := fmt.Errorf("debug pod did not start within %d s", nodeShellStartSec)
+			if lastReason != "" {
+				err = fmt.Errorf("%w: %s %s", err, lastReason, lastMessage)
+			}
+			fail(err)
+			writeShellStatus(conn, shellStatus{Status: shellTimeout, Reason: lastReason, Message: lastMessage, Seconds: nodeShellStartSec})
 			return
 		case <-ticker.C:
 			pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 			if err != nil {
 				continue
 			}
-			if pod.Status.Phase == corev1.PodRunning {
-				podRunning = true
-			} else if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-				conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Debug pod exited with phase: %s\r\n", pod.Status.Phase)))
+			switch state, reason, message := podStartState(pod); state {
+			case podStartRunning:
+				running = true
+			case podStartEnded:
+				fail(fmt.Errorf("debug pod ended before the shell opened: %s %s", reason, message))
+				writeShellStatus(conn, shellStatus{Status: shellExited, Reason: reason, Message: message})
 				return
+			default:
+				if reason != lastReason || message != lastMessage {
+					lastReason, lastMessage = reason, message
+					if reason != "" {
+						writeShellStatus(conn, shellStatus{Status: shellWaiting, Reason: reason, Message: message})
+					}
+				}
 			}
 		}
 	}
 
-	conn.WriteMessage(websocket.TextMessage, []byte("Debug pod running. Attaching...\r\n"))
+	if werr := h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, nil,
+		nil, audit.MustJSON(payload)); werr != nil {
+		h.recorder.Abort(rec)
+		slog.WarnContext(r.Context(), "audit: refusing unrecorded action", "method", r.Method, "path", r.URL.Path, "error", werr)
+		writeShellStatus(conn, shellStatus{Status: shellAuditUnavailable})
+		return
+	}
+	defer rec.Close()
+	writeShellStatus(conn, shellStatus{Status: shellStarting})
 
 	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
-	if err := streamShell(ctx, conn, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec); err != nil {
+	if err := streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec); err != nil {
 		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
 		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))

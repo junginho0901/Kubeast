@@ -426,6 +426,7 @@
       "statusConnecting": "Connecting...",
       "statusConnected": "Connected",
       "statusError": "Connection error",
+      "statusClosed": "Disconnected",
       "openExec": "Open terminal"
     },
     "create": "Create Pod",
@@ -1631,7 +1632,20 @@
       "disconnected": "Disconnected.",
       "statusConnecting": "Connecting...",
       "statusConnected": "Connected",
-      "statusError": "Connection error"
+      "statusError": "Connection error",
+      "statusStarting": "Starting the debug Pod...",
+      "statusClosed": "Disconnected",
+      "status": {
+        "waiting": "Waiting for the debug Pod to start...",
+        "waitingReason": "Waiting: {{detail}}",
+        "starting": "The debug Pod is running. Attaching...",
+        "timeout": "The debug Pod did not start within {{seconds}} s.",
+        "lastState": "Last state: {{detail}}",
+        "exited": "The debug Pod ended before the shell opened: {{detail}}",
+        "failed": "Could not start the debug Pod: {{detail}}",
+        "imageRejected": "Image not allowed: {{detail}}",
+        "auditUnavailable": "The audit log is unavailable, so the shell was not opened."
+      }
     },
     "create": "Create Node",
     "createTitle": "Create Node from YAML"
@@ -2481,7 +2495,8 @@
       "enable": "Enable Node Shell",
       "enableHint": "Show debug shell action in node details.",
       "namespace": "Namespace",
-      "image": "Linux image"
+      "image": "Linux image",
+      "imagePlaceholder": "Server default (first image on the allow list)"
     }
   },
   "storage": {
@@ -3797,6 +3812,10 @@
     "loading": "Loading…",
     "empty": "No recordings",
     "truncated": "Recording stopped at the size limit",
+    "interruptedNothing": "The server stopped before the first part was uploaded: nothing to play",
+    "interruptedPartial": "The server stopped during the recording: only the parts uploaded before are kept",
+    "sizeKept": "{{kept}} kept of {{recorded}} recorded",
+    "lastError": "Last error: {{error}}",
     "play": "Play",
     "status": {
       "recording": "Recording",

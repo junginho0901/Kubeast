@@ -15,7 +15,7 @@ export default function AdminNodeShell() {
     saveNodeShellSettings({
       isEnabled: nodeShellEnabled,
       namespace: nodeShellNamespace.trim() || 'default',
-      linuxImage: nodeShellImage.trim() || 'docker.io/library/busybox:latest',
+      linuxImage: nodeShellImage.trim(),
     })
   }, [nodeShellEnabled, nodeShellNamespace, nodeShellImage])
 
@@ -93,6 +93,7 @@ export default function AdminNodeShell() {
               type="text"
               value={nodeShellImage}
               onChange={(e) => setNodeShellImage(e.target.value)}
+              placeholder={tr('account.nodeShell.imagePlaceholder', 'Server default (first image on the allow list)')}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200"
             />
             <p className="mt-1 text-[11px] text-slate-500">

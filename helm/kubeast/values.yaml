@@ -185,12 +185,14 @@ metrics:
 
 # --- Node shell (privileged debug pod on a node) ---
 # Off by default. When on, the pod runs in `namespace` (created with the
-# Pod Security "privileged" label) with an image from the allow list.
+# Pod Security "privileged" label) with an image from the allow list; the
+# first is the default. Images are pulled IfNotPresent, so pin a version (or
+# point at a registry mirror) — a node that has the image needs no registry.
 nodeShell:
   enabled: false
   namespace: kubeast-node-shell
   images:
-    - docker.io/library/busybox:latest
+    - docker.io/library/busybox:1.38.0
   timeoutSeconds: 3600
 
 # --- Terminal session recording ---
