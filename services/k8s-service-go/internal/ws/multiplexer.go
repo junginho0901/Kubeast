@@ -97,8 +97,19 @@ func (m *Multiplexer) SubscriptionCount() int {
 	return len(m.subs)
 }
 
-// effectiveClusterID mirrors the HTTP ClusterMiddleware: an empty clusterId
-// falls back to the registry default, so that is what must be authorized.
+// subscriptionCluster is the cluster a REQUEST targets: its own clusterId, or
+// the connection's cluster that the HTTP ClusterMiddleware resolved.
+func subscriptionCluster(ctx context.Context, id string) string {
+	if id == "" {
+		if c, ok := cluster.FromContext(ctx); ok {
+			return string(c)
+		}
+	}
+	return id
+}
+
+// effectiveClusterID is what an empty clusterId is authorized as when no
+// connection cluster is known (the connection always carries one in the server).
 func effectiveClusterID(id string) string {
 	if id == "" {
 		return string(cluster.Default)
@@ -213,6 +224,7 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(message, &req); err != nil {
 			continue
 		}
+		req.ClusterID = subscriptionCluster(ctx, req.ClusterID)
 
 		key := fmt.Sprintf("%s:%s:%s?%s", wsID, req.ClusterID, req.Path, req.Query)
 

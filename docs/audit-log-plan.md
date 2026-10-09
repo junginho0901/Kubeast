@@ -56,7 +56,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 
 코드에서 추출(2026-09-27). 서비스별.
 
-**auth-service (`auth` / `admin`)**
+**auth-service (`auth` / `admin`)** — `cluster`는 클러스터에 대한 행(역할 부여·접근 요청·클러스터 전환 등)만 채우고, 로그인처럼 클러스터와 무관한 행은 비운다.
 
 | 액션 | 뜻 |
 |---|---|
@@ -93,7 +93,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `admin.audit.anchor` | 관리자(`admin.audit.export`)의 "지금 앵커" — `after`는 `audit.chain.anchor`와 같음, actor = 관리자 |
 | `ai.tool.helm_execute` | AI 승인 경로의 Helm 쓰기 실행 |
 
-**k8s-service (`k8s` / `helm`)** — 모든 행의 `cluster` = 요청이 가리킨 클러스터 id(`?cluster=` / 세션 기본값). `request_ip` = 게이트웨이가 본 클라이언트 주소(`X-Real-IP`; `X-Forwarded-For`는 읽지 않음, 앞단 프록시는 차트 `gateway.trustedProxies`).
+**k8s-service (`k8s` / `helm`)** — 모든 행의 `cluster` = 요청이 가리킨 클러스터 id(`?cluster=`, 없으면 레지스트리 기본 클러스터 — self 클러스터, 없으면 가장 먼저 등록한 것). `request_ip` = 게이트웨이가 본 클라이언트 주소(`X-Real-IP`; `X-Forwarded-For`는 읽지 않음, 앞단 프록시는 차트 `gateway.trustedProxies`).
 
 | 액션 | 뜻 |
 |---|---|
@@ -113,7 +113,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `helm.release.reveal` | 릴리스의 manifest·values·hooks·diff를 **마스킹 없이** 읽음 — `resource.secret.reveal` 보유자만(없으면 Secret 문서 제거·민감 값 마스킹 후 반환, 기록 없음). `after.section` = manifest/values/hooks/diff/detail |
 | `helm.release.upgrade` / `.rollback` / `.uninstall` / `.test` | Helm 쓰기(dry-run은 기록하지 않음; uninstall은 `?confirm=<release>` 필수) |
 
-**ai-service (`ai`)**
+**ai-service (`ai`)** — `cluster` = 요청의 `X-Cluster-Name`, 없으면 k8s-service가 정한 기본 클러스터(`GET /api/v1/cluster/current`). 세션 관리처럼 클러스터와 무관한 행은 비운다.
 
 | 액션 | 뜻 |
 |---|---|

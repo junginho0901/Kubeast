@@ -90,6 +90,10 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	// tool parameter, so drop it from the args passed to the handler.
 	clusterID, _ := req.Arguments["cluster"].(string)
 	delete(req.Arguments, "cluster")
+	if clusterID == "" {
+		respondJSON(w, http.StatusBadRequest, ToolCallResponse{Error: "cluster is required"})
+		return
+	}
 
 	// The arguments are the model's: refuse anything that kubectl would read
 	// as a flag instead of a name (argcheck.go) before touching the cluster.

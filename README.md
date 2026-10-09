@@ -561,6 +561,8 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
   -H "Authorization: Bearer $TOKEN" -H "X-Cluster-Name: prod"
 ```
 
+`?cluster=`를 빼면 레지스트리 기본 클러스터(self 클러스터, 없으면 가장 먼저 등록한 것)로 가고 권한도 그 클러스터로 검사합니다. 어느 클러스터인지는 `GET /api/v1/cluster/current`(`{"id": "…"}`)로 확인합니다.
+
 끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
 
 ### 접근 권한 검토 (Access review)

@@ -34,9 +34,9 @@ export default function ClusterPicker() {
   // auto-select, this corrects a selection left over from a previous login: a
   // cluster the current user can't access (or any stale id) must not stay
   // selected, or the axios interceptor keeps sending ?cluster=<it> and the
-  // server now 403s every read. Prefer the canonical default (id "default", the
-  // server's fallback) over registry order. With no accessible cluster, clear
-  // the selection so no ?cluster= is sent at all.
+  // server now 403s every read. Prefer the cluster the initial Setup registers
+  // (id "default") over registry order. With no accessible cluster, clear the
+  // selection so no ?cluster= is sent at all.
   useEffect(() => {
     if (isLoading) return
     if (clusters.length === 0) {

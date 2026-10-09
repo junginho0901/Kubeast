@@ -105,7 +105,6 @@ def _emit_stdout(record: dict[str, Any]) -> None:
 
 
 SERVICE_AI = "ai"
-DEFAULT_CLUSTER = "default"
 
 
 _INSERT_SQL = text(
@@ -153,7 +152,7 @@ async def write_audit(
 
     Postgres-only — when DATABASE_URL points to sqlite (local dev) the table
     doesn't exist and we skip silently. `cluster` is the cluster the request
-    acted on; callers that do not know it leave it unset (DEFAULT_CLUSTER).
+    acted on; callers that do not know it leave it unset (stored empty).
     """
     global write_failures
     _emit_stdout(
@@ -166,7 +165,7 @@ async def write_audit(
             "actor_email": actor_email or None,
             "target_type": target_type or None,
             "target_id": target_id or None,
-            "cluster": cluster or DEFAULT_CLUSTER,
+            "cluster": cluster or None,
             "namespace": namespace or None,
             "path": path or None,
             "request_ip": request_ip or None,
@@ -199,7 +198,7 @@ async def write_audit(
                     "user_agent": user_agent or None,
                     "request_id": request_id or None,
                     "path": path or None,
-                    "cluster": cluster or DEFAULT_CLUSTER,
+                    "cluster": cluster or None,
                     "namespace": namespace or None,
                     "result": result,
                     "error": error or None,

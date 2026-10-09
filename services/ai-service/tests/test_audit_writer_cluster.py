@@ -1,4 +1,4 @@
-"""write_audit fills the `cluster` column from the caller and falls back to DEFAULT_CLUSTER."""
+"""write_audit fills the `cluster` column from the caller and leaves it empty when unknown."""
 import pytest
 
 from app.services import audit_writer
@@ -57,10 +57,11 @@ async def test_cluster_column_from_caller(captured):
     assert captured[0]["action"] == "ai.chat.complete"
 
 
-async def test_cluster_column_defaults_when_unset_or_empty(captured):
+async def test_cluster_column_empty_when_unset(captured):
+    # Not a cluster that happens to be called "default".
     await audit_writer.write_audit(action="ai.chat.send")
     await audit_writer.write_audit(action="ai.chat.send", cluster="")
-    assert [c["cluster"] for c in captured] == [audit_writer.DEFAULT_CLUSTER] * 2
+    assert [c["cluster"] for c in captured] == [None] * 2
 
 
 async def test_stdout_mirror_carries_the_same_cluster(captured, monkeypatch, capsys):
