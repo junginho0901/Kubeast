@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -22,9 +21,8 @@ import (
 //
 // Logs the read itself as "admin.audit.read" (meta-audit).
 func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.audit.read") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.read")
+	if !ok {
 		return
 	}
 

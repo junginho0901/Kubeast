@@ -64,13 +64,14 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `user.login.locked` | 비밀번호 실패가 `LOGIN_MAX_FAILURES`(기본 5)회에 닿아 계정이 `LOGIN_LOCKOUT_MINUTES`(기본 15)분 잠김. `after` = `{failures, locked_until}`. 응답은 잠금 여부와 무관하게 `Invalid credentials` 401 |
 | `user.logout` | 로그아웃(토큰 서명만 검증, 만료 무시하고 actor 기록) |
 | `user.token.refresh` | 액세스 토큰 갱신. 세션 절대 수명(`SESSION_ABSOLUTE_HOURS`, 기본 8 h — 마지막 로그인 `auth_time` 기준)을 넘긴 갱신은 401로 거부되고 같은 액션에 `after.reason = session_absolute_lifetime`(+ `auth_time`, `limit_hours`)로 남는다 |
-| `user.password.change` / `user.password.reset` | 비밀번호 변경·재설정 |
+| `user.password.change` / `user.password.reset` | 비밀번호 변경·재설정. 변경에서 현재 비밀번호가 틀리면 `user.password.change` failure(`error` = `password_mismatch`) |
+| `admin.access.denied` | 관리자 API(사용자·역할·조직·클러스터 등록·접근 요청 결정·API 키 관리·휴면·접근 권한 검토·감사 로그)를 앱 권한이 거부함 — 권한이 모두 `admin.*`라 읽기 거부도 남긴다. result failure, `after` = `{permission, method, path}`. 일반 사용자 화면은 이 API를 부르지 않는다(권한 있는 화면에서만) |
 | `user.account.provision` | OIDC 첫 로그인으로 계정 생성(JIT) |
 | `user.register` | 자기 가입(`ALLOW_REGISTRATION`) → `Pending` 역할. actor = target = 새 계정 |
-| `user.role.update` / `user.role.sync` | 계정 등급 변경 / OIDC 그룹 동기화. 대량 API(`PATCH /admin/users/bulk-role`)는 계정마다 1행, `after.bulk = true` |
+| `user.role.update` / `user.role.sync` | 계정 등급 변경 / OIDC 그룹 동기화. 대량 API(`PATCH /admin/users/bulk-role`)는 계정마다 1행, `after.bulk = true`. 자기 등급 변경 시도·상한 위반은 거부되고 `failure`로 남는다 |
 | `user.create` / `user.update` / `user.delete` | 관리자의 계정 생성·수정·삭제. 대량 생성(`POST /admin/users/bulk`)은 계정마다 1행, `after.bulk = true` |
 | `user.cluster_role.set` / `user.cluster_role.unset` | 클러스터별 Read/Write/Admin 부여·회수. 직접 부여는 영구 — 그 뒤에 있던 승인된 권한 요청은 `superseded`/`revoked`로 닫힌다 |
-| `access.request.create` / `.cancel` | 사용자가 이미 권한이 있는 클러스터에 더 높은 역할을 기간 한정으로 요청 / 본인이 대기 중 요청을 취소(`ACCESS_REQUESTS_ENABLED`). actor = target = 요청자, `cluster` = 대상 클러스터, `after` = `{request_id, role, current_role, duration_minutes, reason}` |
+| `access.request.create` / `.cancel` | 사용자가 이미 권한이 있는 클러스터에 더 높은 역할을 기간 한정으로 요청 / 본인이 대기 중 요청을 취소(`ACCESS_REQUESTS_ENABLED`). actor = target = 요청자, `cluster` = 대상 클러스터, `after` = `{request_id, role, current_role, duration_minutes, reason}`. 권한이 없는 클러스터에 대한 요청은 거부되고 `access.request.create` failure로 남는다 |
 | `access.request.approve` / `.reject` | 관리자(`admin.users.update`, 본인 요청 불가, 상한 규칙)의 결정. 승인 = 임시 부여(`user_cluster_roles.expires_at`) + 요청자 토큰 폐기, `after`에 `expires_at`·`note`. 본인 요청·상한 위반 거부도 `failure`로 남는다 |
 | `access.request.expire` | 대기 요청이 24 h 동안 결정되지 않아 소멸(`after.end_reason = not_reviewed`). actor `system` |
 | `access.grant.expire` | 임시 부여가 기간을 다해 이전 역할로 복귀(`after.restored_role`, 없으면 `null` = 부여 삭제) + 토큰 폐기. actor `system`, 스위퍼 `ACCESS_REQUESTS_SWEEP_SEC`(기본 60 s) |

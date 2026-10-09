@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -28,9 +27,8 @@ var exportColumns = []string{
 // so spreadsheets open non-ASCII text correctly). Requires the
 // admin.audit.export permission and records the export itself.
 func (h *AuthHandler) AdminExportAuditLogs(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.audit.export") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.export")
+	if !ok {
 		return
 	}
 	filter := auditFilterFromQuery(r)

@@ -55,6 +55,7 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	showAll := payload.HasPermission(auth.PermClustersList)
 	accessibleOnly := r.URL.Query().Get("accessibleOnly") == "true"
 	if !accessibleOnly && !showAll {
+		recordDenied(h.auditStore, r, payload, auth.PermClustersList)
 		response.Error(w, http.StatusForbidden, "forbidden: requires "+auth.PermClustersList)
 		return
 	}
@@ -86,7 +87,7 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 
 // RegisterCluster handles POST /api/v1/clusters (mode: external | self).
 func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersCreate)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate)
 	if !ok {
 		return
 	}
@@ -179,7 +180,7 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 
 // DeleteCluster handles DELETE /api/v1/clusters/{id}.
 func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersDelete)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersDelete)
 	if !ok {
 		return
 	}
@@ -207,7 +208,7 @@ func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) 
 
 // UpdateCluster handles PATCH /api/v1/clusters/{id} (display_name / api_server_url).
 func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersUpdate)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersUpdate)
 	if !ok {
 		return
 	}
@@ -338,7 +339,7 @@ func (h *ClustersHandler) invalidateToolServer(r *http.Request, id cluster.ID) {
 // TestCluster handles POST /api/v1/clusters/{id}/test — re-validates a
 // registered cluster's connection and records the health result.
 func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersList)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersList)
 	if !ok {
 		return
 	}
@@ -369,7 +370,7 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 // ValidateCluster handles POST /api/v1/clusters/validate — a pre-registration
 // connection test that writes nothing. Used by the "test connection" button.
 func (h *ClustersHandler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requirePerm(w, r, auth.PermClustersCreate); !ok {
+	if _, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate); !ok {
 		return
 	}
 	var req model.ValidateClusterRequest

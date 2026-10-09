@@ -9,7 +9,6 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dormant"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -41,9 +40,8 @@ var errDormant = errors.New("account locked as dormant")
 // sweep now (admin.users.update), recorded as admin.dormant.sweep with the
 // accounts it locked.
 func (h *AuthHandler) AdminDormantSweep(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.update")
+	if !ok {
 		return
 	}
 	if !h.cfg.DormantAccounts.Enabled || h.dormant == nil {
@@ -78,9 +76,8 @@ func (h *AuthHandler) AdminDormantSweep(w http.ResponseWriter, r *http.Request) 
 // dormant lock and the password lock (admin.users.update), recorded as
 // admin.users.unlock.
 func (h *AuthHandler) AdminUnlockUser(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.update")
+	if !ok {
 		return
 	}
 	userID := chi.URLParam(r, "user_id")

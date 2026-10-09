@@ -12,7 +12,6 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -69,9 +68,8 @@ func (h *RoleHandler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 
 // CreateRole handles POST /auth/admin/roles
 func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.roles.create") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.roles.create")
+	if !ok {
 		return
 	}
 
@@ -111,9 +109,8 @@ func (h *RoleHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 
 // UpdateRole handles PUT /auth/admin/roles/{id}
 func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.roles.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.roles.update")
+	if !ok {
 		return
 	}
 
@@ -177,9 +174,8 @@ func (h *RoleHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 
 // DeleteRole handles DELETE /auth/admin/roles/{id}
 func (h *RoleHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.roles.delete") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.roles.delete")
+	if !ok {
 		return
 	}
 

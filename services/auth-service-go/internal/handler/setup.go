@@ -55,7 +55,7 @@ func (h *SetupHandler) GetSetupPublic(w http.ResponseWriter, r *http.Request) {
 // GetSetup handles GET /auth/setup/status (admin). "Configured" means at least
 // one cluster is registered (the cluster_setup single-row table is retired).
 func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requirePerm(w, r, auth.PermClustersCreate); !ok {
+	if _, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate); !ok {
 		return
 	}
 	id, err := h.registry.Default(r.Context())
@@ -93,7 +93,7 @@ func (h *SetupHandler) GetSetup(w http.ResponseWriter, r *http.Request) {
 // the DB row is inserted. k8s-service picks it up on the next request; nothing
 // is restarted.
 func (h *SetupHandler) PostSetup(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersCreate)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate)
 	if !ok {
 		return
 	}

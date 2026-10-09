@@ -213,7 +213,7 @@ func (h *AuthHandler) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request) {
 
 // AdminListUserAPIKeys lists another user's keys (admin.users.update).
 func (h *AuthHandler) AdminListUserAPIKeys(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requirePerm(w, r, "admin.users.update"); !ok {
+	if _, ok := requirePerm(h.auditStore, w, r, "admin.users.update"); !ok {
 		return
 	}
 	keys, err := h.repo.ListAPIKeys(r.Context(), chi.URLParam(r, "user_id"))
@@ -226,7 +226,7 @@ func (h *AuthHandler) AdminListUserAPIKeys(w http.ResponseWriter, r *http.Reques
 
 // AdminDeleteUserAPIKey revokes another user's key (admin.users.update).
 func (h *AuthHandler) AdminDeleteUserAPIKey(w http.ResponseWriter, r *http.Request) {
-	actor, ok := requirePerm(w, r, "admin.users.update")
+	actor, ok := requirePerm(h.auditStore, w, r, "admin.users.update")
 	if !ok {
 		return
 	}

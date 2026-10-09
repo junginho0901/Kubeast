@@ -444,6 +444,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !security.VerifyPassword(req.CurrentPassword, user.PasswordHash) {
+		h.writeAuditFailure(r, "user.password.change", &payload.UserID, &user.Email, &user.ID, &user.Email, "password_mismatch", nil)
 		response.Error(w, http.StatusUnauthorized, "Invalid current password")
 		return
 	}

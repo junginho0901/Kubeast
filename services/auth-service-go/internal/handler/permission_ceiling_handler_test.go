@@ -46,12 +46,17 @@ func TestCreateRole_RefusesUnknownAndWiderPermissions(t *testing.T) {
 }
 
 func TestAdminUpdateUser_RefusesOwnRoleChange(t *testing.T) {
-	h := &AuthHandler{} // repo stays nil: the check runs before the lookup
+	store := &memAuditStore{}
+	h := &AuthHandler{auditStore: store} // repo stays nil: the check runs before the lookup
 	r := chi.NewRouter()
 	r.Patch("/auth/admin/users/{user_id}", h.AdminUpdateUser)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, limitedAdminRequest(http.MethodPatch, "/auth/admin/users/la", `{"role_id":1}`))
 	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "own role") {
 		t.Fatalf("own role change: %d %s", w.Code, w.Body.String())
+	}
+	if len(store.written) != 1 || store.written[0].Action != "user.role.update" || store.written[0].Result != audit.ResultFailure ||
+		store.written[0].TargetID != "la" || store.written[0].Error != "cannot change your own role" {
+		t.Fatalf("the refusal must be audited as a failure: %+v", store.written)
 	}
 }
