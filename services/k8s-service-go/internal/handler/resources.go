@@ -2,8 +2,8 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -133,13 +133,9 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 	response.JSON(w, http.StatusOK, map[string]interface{}{"yaml": data})
 }
 
-// ApplyResourceYAML handles POST /api/v1/resources/yaml/apply.
+// ApplyResourceYAML handles POST /api/v1/resources/yaml/apply. It needs the
+// edit permission of the kind the resource type resolves to.
 func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermissionForCluster(r, "resource.yaml.apply"); err != nil {
-		h.handleError(w, err)
-		return
-	}
-
 	var body struct {
 		ResourceType string `json:"resource_type"`
 		Namespace    string `json:"namespace"`
@@ -155,15 +151,17 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 		body.Name = body.ResourceName
 	}
 
-	// Node YAML apply requires node.edit permission
-	if strings.EqualFold(body.ResourceType, "nodes") || strings.EqualFold(body.ResourceType, "node") {
-		if err := h.requirePermissionForCluster(r, "resource.node.edit"); err != nil {
-			h.handleError(w, err)
-			return
-		}
+	ctx := r.Context()
+	kind, err := h.svc.ResourceKind(ctx, body.ResourceType)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	if err := h.requirePermissionForCluster(r, "resource."+permResource(kind)+".edit"); err != nil {
+		h.handleError(w, err)
+		return
 	}
 
-	ctx := r.Context()
 	data, err := h.svc.ApplyResourceYAML(ctx, body.ResourceType, body.Namespace, body.Name, body.YAML)
 	h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, err,
 		nil, audit.MustJSON(map[string]interface{}{
@@ -177,13 +175,9 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, data)
 }
 
-// CreateResourcesFromYAML handles POST /api/v1/resources/yaml/create.
+// CreateResourcesFromYAML handles POST /api/v1/resources/yaml/create. Every
+// document needs the create permission of its kind.
 func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request) {
-	if err := h.requirePermissionForCluster(r, "resource.yaml.apply"); err != nil {
-		h.handleError(w, err)
-		return
-	}
-
 	var body struct {
 		YAML      string `json:"yaml"`
 		Namespace string `json:"namespace"`
@@ -191,6 +185,14 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
+	}
+	// A decode error is the service's to report; the documents before it are the ones it creates.
+	kinds, _ := k8s.YAMLKinds(body.YAML)
+	for _, kind := range kinds {
+		if err := h.requirePermissionForCluster(r, "resource."+permResource(kind)+".create"); err != nil {
+			h.handleError(w, err)
+			return
+		}
 	}
 
 	ctx := r.Context()

@@ -70,11 +70,34 @@ test.describe('RBAC matrix (role × action)', () => {
       expect(await status(read, 'delete', DELETE_CONFIGMAP), 'Read cannot delete').toBe(403)
       expect(await status(read, 'post', CORDON), 'Read cannot cordon').toBe(403)
 
+      // YAML create / edit: each document needs resource.<kind>.create, an edit the resource's resource.<kind>.edit.
+      const cm = `e2e-rbac-write-${ts}`
+      const cmYaml = (v: string) => `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${cm}\n  namespace: default\ndata:\n  k: ${v}\n`
+      const post = async (headers: Headers, path: string, data: object) =>
+        (await request.post(`${path}?cluster=${CLUSTER}`, { headers, data, failOnStatusCode: false })).status()
+      const CREATE = '/api/v1/cluster/resources/yaml/create'
+      const APPLY = '/api/v1/cluster/resources/yaml/apply'
+      const applyBody = (v: string) => ({ resource_type: 'configmaps', namespace: 'default', name: cm, yaml: cmYaml(v) })
+      expect(await post(read, CREATE, { yaml: cmYaml('one'), namespace: 'default' }), 'Read cannot create').toBe(403)
+      expect(await post(read, APPLY, applyBody('two')), 'Read cannot edit').toBe(403)
+
       // Write: Secrets and deletes reach the cluster; node actions stay Admin-only.
       const write = await grant('Write')
       expect(await status(write, 'get', SECRETS), 'Write lists Secrets').toBe(200)
       expect(await status(write, 'delete', DELETE_CONFIGMAP), 'Write may delete (object missing)').toBe(404)
       expect(await status(write, 'post', CORDON), 'Write cannot cordon').toBe(403)
+
+      // Write creates and edits through YAML; a cluster-scoped kind passes the app and is refused by the cluster's `edit` role.
+      try {
+        expect(await post(write, CREATE, { yaml: cmYaml('one'), namespace: 'default' }), 'Write creates a ConfigMap').toBe(200)
+        expect(await post(write, APPLY, applyBody('two')), 'Write edits it').toBe(200)
+        const yaml = await (await request.get(`/api/v1/cluster/resources/yaml?resource_type=configmaps&resource_name=${cm}&namespace=default&cluster=${CLUSTER}`, { headers: admin })).text()
+        expect(yaml, 'the edit landed').toContain('k: two')
+        const clusterRole = `apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: ${cm}\nrules: []\n`
+        expect(await post(write, CREATE, { yaml: clusterRole }), 'the cluster refuses a ClusterRole from Write').toBe(403)
+      } finally {
+        await request.delete(`/api/v1/cluster/namespaces/default/configmaps/${cm}?cluster=${CLUSTER}`, { headers: admin, failOnStatusCode: false })
+      }
 
       // Admin on this cluster: node actions reach the cluster; a cluster the user holds nothing on stays closed.
       const adminHere = await grant('Admin')

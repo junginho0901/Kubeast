@@ -54,9 +54,27 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 // ResolveResource resolves a resource type string to a GroupVersionResource.
 // It accepts formats like: "pods", "deployments.apps", "gateways.gateway.networking.k8s.io"
 func (s *Service) ResolveResource(ctx context.Context, resourceType string) (schema.GroupVersionResource, bool, error) {
+	m, err := s.resolveResourceMatch(ctx, resourceType)
+	return m.gvr, m.namespaced, err
+}
+
+// ResourceKind is the kind of the resource a resource type string resolves to
+// ("horizontalpodautoscalers" → "HorizontalPodAutoscaler").
+func (s *Service) ResourceKind(ctx context.Context, resourceType string) (string, error) {
+	m, err := s.resolveResourceMatch(ctx, resourceType)
+	return m.kind, err
+}
+
+type resourceMatch struct {
+	gvr        schema.GroupVersionResource
+	namespaced bool
+	kind       string
+}
+
+func (s *Service) resolveResourceMatch(ctx context.Context, resourceType string) (resourceMatch, error) {
 	lists, err := s.GetAPIResources(ctx)
 	if err != nil {
-		return schema.GroupVersionResource{}, false, err
+		return resourceMatch{}, err
 	}
 
 	// Split into resource name and optional group
@@ -68,11 +86,7 @@ func (s *Service) ResolveResource(ctx context.Context, resourceType string) (sch
 	}
 
 	// Two-pass: prefer core/apps/batch groups first, then fall back to any match
-	type match struct {
-		gvr        schema.GroupVersionResource
-		namespaced bool
-	}
-	var coreMatch, anyMatch *match
+	var coreMatch, anyMatch *resourceMatch
 
 	for _, list := range lists {
 		gv, err := schema.ParseGroupVersion(list.GroupVersion)
@@ -103,13 +117,14 @@ func (s *Service) ResolveResource(ctx context.Context, resourceType string) (sch
 			}
 
 			if matched {
-				m := &match{
+				m := &resourceMatch{
 					gvr: schema.GroupVersionResource{
 						Group:    gv.Group,
 						Version:  gv.Version,
 						Resource: r.Name,
 					},
 					namespaced: r.Namespaced,
+					kind:       r.Kind,
 				}
 				// Prefer core API groups (empty, apps, batch, networking.k8s.io, etc.)
 				if gv.Group == "" || gv.Group == "apps" || gv.Group == "batch" ||
@@ -126,13 +141,13 @@ func (s *Service) ResolveResource(ctx context.Context, resourceType string) (sch
 	}
 
 	if coreMatch != nil {
-		return coreMatch.gvr, coreMatch.namespaced, nil
+		return *coreMatch, nil
 	}
 	if anyMatch != nil {
-		return anyMatch.gvr, anyMatch.namespaced, nil
+		return *anyMatch, nil
 	}
 
-	return schema.GroupVersionResource{}, false, fmt.Errorf("resource type %q not found", resourceType)
+	return resourceMatch{}, fmt.Errorf("resource type %q not found", resourceType)
 }
 
 // GetAPIResourcesFlat returns all API resources as a flat list of maps.
