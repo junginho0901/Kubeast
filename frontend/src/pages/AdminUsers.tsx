@@ -8,6 +8,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { useAdminUserData } from './admin-users/useAdminUserData'
 import { ReauthModal } from './admin-users/ReauthModal'
 import { CreateUserModal } from './admin-users/CreateUserModal'
+import { useConfirm } from '@/services/confirm'
 import { UserDetailModal } from './admin-users/UserDetailModal'
 
 export default function AdminUsers() {
@@ -15,6 +16,7 @@ export default function AdminUsers() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
+  const confirm = useConfirm()
   const [limit] = useState(100)
   const [offset] = useState(0)
   const [roleDrafts, setRoleDrafts] = useState<Record<string, number>>({})
@@ -523,13 +525,13 @@ export default function AdminUsers() {
                     <button
                       type="button"
                       disabled={isResetting || isBlocked}
-                      onClick={() => {
+                      onClick={async () => {
                         const targetLabel = u.email ?? u.name
-                        const ok = window.confirm(
-                          tr('adminUsers.resetPasswordConfirm', 'Generate a new random password?\n\nTarget: {{target}}', {
-                            target: targetLabel,
-                          })
-                        )
+                        const ok = await confirm({
+                          title: tr('adminUsers.resetPasswordTitle', 'Issue temporary password'),
+                          message: tr('adminUsers.resetPasswordConfirm', 'Generate a new random password?\n\nTarget: {{target}}', { target: targetLabel }),
+                          confirmLabel: tr('adminUsers.reset', 'Reset PW'),
+                        })
                         if (!ok) return
                         resetPasswordMutation.mutate({ userId: u.id, targetLabel })
                       }}
@@ -547,8 +549,12 @@ export default function AdminUsers() {
                       <button
                         type="button"
                         disabled={isBlocked || (unlockMutation.isPending && unlockMutation.variables?.userId === u.id)}
-                        onClick={() => {
-                          const ok = window.confirm(tr('adminUsers.unlockConfirm', 'Unlock this account?\n\nTarget: {{target}}', { target: u.email ?? u.name }))
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: tr('adminUsers.unlockDialogTitle', 'Unlock account'),
+                            message: tr('adminUsers.unlockConfirm', 'Unlock this account?\n\nTarget: {{target}}', { target: u.email ?? u.name }),
+                            confirmLabel: tr('adminUsers.unlock', 'Unlock'),
+                          })
                           if (!ok) return
                           unlockMutation.mutate({ userId: u.id })
                         }}
@@ -569,14 +575,13 @@ export default function AdminUsers() {
                     <button
                       type="button"
                       disabled={isDeleting || isSelf || isBlocked}
-                      onClick={() => {
-                        const ok = window.confirm(
-                          tr(
-                            'adminUsers.deleteConfirm',
-                            'Delete this user?\\n\\nTarget: {{target}}\\n\\n* Deletions cannot be easily undone.',
-                            { target: u.email ?? u.name }
-                          )
-                        )
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: tr('adminUsers.deleteTitle', 'Delete user'),
+                          message: tr('adminUsers.deleteConfirm', 'Delete this user?\n\nTarget: {{target}}\n\n* Deletions cannot be easily undone.', { target: u.email ?? u.name }),
+                          confirmLabel: tr('adminUsers.delete', 'Delete'),
+                          danger: true,
+                        })
                         if (!ok) return
                         deleteUserMutation.mutate({ userId: u.id })
                       }}
@@ -627,7 +632,7 @@ export default function AdminUsers() {
 
       {/* Pending approval modal */}
       {pendingModalOpen && (
-        <ModalOverlay>
+        <ModalOverlay onClose={() => setPendingModalOpen(false)}>
           <div
             className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"
@@ -744,7 +749,7 @@ export default function AdminUsers() {
 
       {/* Bulk upload modal */}
       {bulkUploadModalOpen && (
-        <ModalOverlay>
+        <ModalOverlay onClose={() => { setBulkUploadModalOpen(false); setBulkUploadResult(null) }}>
           <div
             className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"

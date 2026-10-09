@@ -5,12 +5,14 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { usePermission } from '@/hooks/usePermission'
+import { useConfirm } from '@/services/confirm'
 
 export default function AdminOrganizations() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
+  const confirm = useConfirm()
 
   const [newTeam, setNewTeam] = useState('')
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
@@ -66,7 +68,10 @@ export default function AdminOrganizations() {
         onSubmit={(e) => {
           e.preventDefault()
           const name = inputValue.trim()
-          if (!name) return
+          if (!name) {
+            e.currentTarget.querySelector('input')?.focus()
+            return
+          }
           createMutation.mutate({ type, name })
         }}
       >
@@ -78,7 +83,7 @@ export default function AdminOrganizations() {
         />
         <button
           type="submit"
-          disabled={!inputValue.trim() || createMutation.isPending}
+          disabled={createMutation.isPending}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
@@ -122,8 +127,13 @@ export default function AdminOrganizations() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const ok = window.confirm(tr('adminOrg.deleteConfirm', 'Delete "{{name}}"?', { name: item.name }))
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: tr('adminOrg.deleteDialogTitle', 'Delete team'),
+                    message: tr('adminOrg.deleteConfirm', 'Delete team "{{name}}"?', { name: item.name }),
+                    confirmLabel: tr('adminOrg.deleteTitle', 'Delete'),
+                    danger: true,
+                  })
                   if (!ok) return
                   deleteMutation.mutate({ id: item.id, type: item.type })
                 }}

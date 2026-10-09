@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/services/api'
-import { ChevronDown, KeyRound, Languages, User, X } from 'lucide-react'
+import { ChevronDown, KeyRound, Languages, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import ClusterAccessSection from './account/ClusterAccessSection'
 import ApiKeysSection from './account/ApiKeysSection'
 
@@ -205,51 +206,43 @@ export default function Account() {
       </div>
 
       {passwordModalOpen && (
-        <ModalOverlay onClose={closePasswordModal}>
-          <div
-            className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label={tr('account.password.title', 'Change password')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-cyan-500/10">
-                  <KeyRound className="w-6 h-6 text-cyan-400" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    {tr('account.password.title', 'Change password')}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {tr('account.password.subtitle', 'Verify your current password')}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closePasswordModal}
-                className="rounded-lg border border-slate-700 bg-slate-900/40 p-2 text-slate-300 hover:bg-slate-700/40"
-                aria-label={tr('account.password.close', 'Close')}
-              >
-                <X className="h-4 w-4" />
-              </button>
+        <ModalFrame
+          size="md"
+          icon={
+            <div className="p-2 rounded-lg bg-cyan-500/10 shrink-0">
+              <KeyRound className="w-6 h-6 text-cyan-400" />
             </div>
-
+          }
+          title={tr('account.password.title', 'Change password')}
+          subtitle={tr('account.password.subtitle', 'Verify your current password')}
+          onClose={closePasswordModal}
+          testId="password-dialog"
+          footer={
+            <>
+              <button type="button" onClick={closePasswordModal} className={modalButton.cancel}>
+                {tr('account.password.cancel', 'Cancel')}
+              </button>
+              <button type="submit" form="password-change-form" disabled={isBusy} className={modalButton.primary}>
+                {isBusy
+                  ? tr('account.password.updating', 'Updating...')
+                  : tr('account.password.submit', 'Update password')}
+              </button>
+            </>
+          }
+        >
             {success && (
-              <div className="mt-4 rounded-lg border border-green-900/40 bg-green-950/30 px-3 py-2 text-sm text-green-200">
+              <div className="mb-4 rounded-lg border border-green-900/40 bg-green-950/30 px-3 py-2 text-sm text-green-200">
                 {success}
               </div>
             )}
 
             {(localError || changePasswordMutation.isError) && (
-              <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+              <div className="mb-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
                 {localError ?? tr('account.password.failed', 'Failed to change password.')}
               </div>
             )}
 
-            <form onSubmit={onSubmit} className="mt-4 space-y-4">
+            <form id="password-change-form" onSubmit={onSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('account.password.current', 'Current password')}
@@ -292,27 +285,8 @@ export default function Account() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closePasswordModal}
-                  className="rounded-lg border border-slate-700 bg-slate-900/40 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700/40"
-                >
-                  {tr('account.password.cancel', 'Cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isBusy}
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isBusy
-                    ? tr('account.password.updating', 'Updating...')
-                    : tr('account.password.submit', 'Update password')}
-                </button>
-              </div>
             </form>
-          </div>
-        </ModalOverlay>
+        </ModalFrame>
       )}
     </div>
   )

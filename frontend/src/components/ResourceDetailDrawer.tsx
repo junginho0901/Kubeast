@@ -24,7 +24,11 @@ import { argoAppUrl, detectArgoApp } from './resource-detail/gitops'
 import { useResourceYaml } from './resource-detail/useResourceYaml'
 import { ResourceDetailHeader } from './resource-detail/ResourceDetailHeader'
 import YamlEditor from './YamlEditor'
-import { ModalOverlay } from './ModalOverlay'
+import { ModalFrame } from './ModalFrame'
+import { modalButton } from './modalStyles'
+import { TypeToConfirm, WarningBox } from './TypeToConfirm'
+import { systemObject, type SystemReason } from './resource-detail/systemObject'
+import { useConfirm } from '@/services/confirm'
 
 import NodeInfo from './resource-detail/NodeInfo'
 import NamespaceInfo from './resource-detail/NamespaceInfo'
@@ -63,6 +67,15 @@ import CRDInfo from './resource-detail/CRDInfo'
 import CustomResourceInstanceInfo from './resource-detail/CustomResourceInstanceInfo'
 import GenericInfo from './resource-detail/GenericInfo'
 
+const SYSTEM_REASON_EN: Record<SystemReason, string> = {
+  immortalNamespace: 'Kubernetes keeps this namespace.',
+  systemNamespace: 'It belongs to a Kubernetes system namespace (kube-system, kube-public, kube-node-lease).',
+  node: 'It is a node of the cluster.',
+  crd: 'Deleting a CustomResourceDefinition deletes every object of its kind.',
+  helm: 'Helm manages it: the next upgrade recreates it or the release drifts.',
+  bootstrap: 'It is part of the Kubernetes default RBAC (kubernetes.io/bootstrapping).',
+  systemRbac: 'It is a system permission (system:*, cluster-admin).',
+}
 
 export default function ResourceDetailDrawer() {
   const { t } = useTranslation()
@@ -113,13 +126,14 @@ export default function ResourceDetailDrawer() {
   // rawJson does not carry: fetch the full object for the badge when needed.
   const argoCfg = useClusterFeatures().data?.gitops?.argocd
   const rawJsonLacksAnnotations = !!target?.rawJson && !((target.rawJson as Record<string, unknown>).metadata as Record<string, unknown> | undefined)?.annotations
+  // the delete window's system-object check reads labels and annotations too
   const needsRawJsonFetch = !!target
-    && (!target.rawJson || (!!argoCfg?.enabled && rawJsonLacksAnnotations))
+    && (!target.rawJson || ((!!argoCfg?.enabled || deleteDialogOpen) && rawJsonLacksAnnotations))
     && !SELF_LOADING_KINDS.has(kind)
     && !UNRESOLVABLE_KINDS.has(kind)
     && !!name
 
-  const { data: fetchedRawJson } = useQuery({
+  const { data: fetchedRawJson, isFetching: rawJsonFetching } = useQuery({
     queryKey: ['resource-json', kind, ns, name],
     queryFn: () => api.getResourceJson(kindToPlural(kind), name, ns || undefined),
     enabled: needsRawJsonFetch,
@@ -134,10 +148,16 @@ export default function ResourceDetailDrawer() {
   const argoBlocked = !!argoManaged && argoCfg?.mode === 'block'
   const argo = argoCfg?.enabled ? { managed: argoManaged, url: argoManaged ? argoAppUrl(argoCfg, argoManaged.app) : null, blocked: argoBlocked } : undefined
   const argoWarnText = t('common.gitops.confirm', { app: argoManaged?.app ?? '', defaultValue: 'Argo CD application "{{app}}" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?' })
+  const confirm = useConfirm()
   const handleApplyYamlGuarded = async (rawYaml: string) => {
-    if (argoManaged && !argoBlocked && !window.confirm(argoWarnText)) return
+    if (argoManaged && !argoBlocked && !(await confirm({ title: t('common.gitops.confirmTitle', { defaultValue: 'Managed by Argo CD' }), message: argoWarnText, confirmLabel: t('common.gitops.applyAnyway', { defaultValue: 'Apply anyway' }) }))) return
     await handleApplyYaml(rawYaml)
   }
+
+  // re-QA #38: system objects ask for the name; the namespaces the API server keeps get a notice
+  const system = systemObject(kind, ns, name, ((fetchedRawJson ?? effectiveRawJson) as { metadata?: { labels?: Record<string, string>; annotations?: Record<string, string> } } | undefined)?.metadata)
+  const systemMetaPending = deleteDialogOpen && rawJsonLacksAnnotations && !fetchedRawJson && rawJsonFetching
+  const [typedName, setTypedName] = useState('')
 
 
   // 플로팅 AI 위젯용 오버레이 스냅샷 (Info/YAML 2탭만)
@@ -194,9 +214,14 @@ export default function ResourceDetailDrawer() {
 
 
 
-  const confirmDiscardYaml = () => {
+  const confirmDiscardYaml = async () => {
     if (!isYamlDirty) return true
-    return window.confirm(t('common.yamlUnsaved', { defaultValue: 'You have unsaved YAML changes. Discard them?' }))
+    return confirm({
+      title: t('common.yamlUnsavedTitle', { defaultValue: 'Unsaved YAML' }),
+      message: t('common.yamlUnsaved', { defaultValue: 'You have unsaved YAML changes. Discard them?' }),
+      confirmLabel: t('common.discard', { defaultValue: 'Discard' }),
+      danger: true,
+    })
   }
 
   const resetDrawerState = () => {
@@ -206,8 +231,8 @@ export default function ResourceDetailDrawer() {
     setYamlRefreshNonce(0)
   }
 
-  const handleClose = () => {
-    if (!confirmDiscardYaml()) return
+  const handleClose = async () => {
+    if (!(await confirmDiscardYaml())) return
     close()
     resetDrawerState()
   }
@@ -218,9 +243,9 @@ export default function ResourceDetailDrawer() {
     handleCloseRef.current = handleClose
   })
 
-  const handleTabChange = (next: TabId) => {
+  const handleTabChange = async (next: TabId) => {
     if (tab === next) return
-    if (tab === 'yaml' && !confirmDiscardYaml()) return
+    if (tab === 'yaml' && !(await confirmDiscardYaml())) return
     setTab(next)
   }
 
@@ -316,14 +341,15 @@ export default function ResourceDetailDrawer() {
           argo={argo}
           tab={tab}
           onClose={handleClose}
-          onGoBack={() => {
-            if (!confirmDiscardYaml()) return
+          onGoBack={async () => {
+            if (!(await confirmDiscardYaml())) return
             resetDrawerState()
             goBack()
           }}
           onTabChange={handleTabChange}
           onDeleteClick={() => {
             setDeleteError(null)
+            setTypedName('')
             setDeleteDialogOpen(true)
           }}
           t={t}
@@ -375,60 +401,69 @@ export default function ResourceDetailDrawer() {
       </div>
 
       {deleteDialogOpen && (
-        <ModalOverlay onClose={() => { if (!deleteMutation.isPending) setDeleteDialogOpen(false) }}>
-          <div
-            className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md mx-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-white mb-2">
-              {t('common.deleteKind', { kind: displayKind, defaultValue: 'Delete {{kind}}' })}
-            </h3>
-            <p className="text-sm text-slate-300 mb-4">
-              {ns
-                // `ns` is i18next's namespace option, so the value goes in as `namespace`
-                ? t('common.deleteKindConfirmNs', { kind: displayKind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
-                : t('common.deleteKindConfirm', { kind: displayKind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
-            </p>
-            {argoManaged && !argoBlocked && (
-              <p className="text-xs text-amber-300 mb-4 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">{argoWarnText}</p>
-            )}
-            {kind === 'Node' && (
-              <p className="text-xs text-red-400 mb-4 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                {t('nodes.delete.warning', {
-                  defaultValue: 'Deleting a node can disrupt workloads scheduled on it.',
-                })}
-              </p>
-            )}
-            {kind === 'Namespace' && (
-              <p className="text-xs text-red-400 mb-4 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                {t('namespaces.delete.warning', {
-                  defaultValue: 'All resources in this namespace will be permanently deleted.',
-                })}
-              </p>
-            )}
-            {deleteError && <p className="text-sm text-red-400 mb-3">{deleteError}</p>}
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteDialogOpen(false)}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
-              >
+        <ModalFrame
+          size="sm"
+          title={t('common.deleteKind', { kind: displayKind, defaultValue: 'Delete {{kind}}' })}
+          onClose={() => setDeleteDialogOpen(false)}
+          busy={deleteMutation.isPending}
+          testId="delete-dialog"
+          footer={system.blocked ? (
+            <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)}>
+              {t('common.close', { defaultValue: 'Close' })}
+            </button>
+          ) : (
+            <>
+              <button type="button" className={modalButton.cancel} onClick={() => setDeleteDialogOpen(false)} disabled={deleteMutation.isPending}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 type="button"
+                data-testid="delete-dialog-confirm"
+                className={modalButton.danger}
                 onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+                disabled={deleteMutation.isPending || systemMetaPending || (system.reasons.length > 0 && typedName !== name)}
               >
                 {deleteMutation.isPending
                   ? t('common.deleting', { defaultValue: 'Deleting...' })
                   : t('common.delete', { defaultValue: 'Delete' })}
               </button>
-            </div>
-          </div>
-        </ModalOverlay>
+            </>
+          )}
+        >
+          {system.blocked ? (
+            <p className="text-sm text-slate-300 break-keep" data-testid="delete-refused">
+              {t('common.deleteRefused', { kind: displayKind, name, defaultValue: 'Kubernetes does not allow deleting {{kind}} "{{name}}".' })}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-slate-300 break-keep">
+                {ns
+                  // `ns` is i18next's namespace option, so the value goes in as `namespace`
+                  ? t('common.deleteKindConfirmNs', { kind: displayKind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
+                  : t('common.deleteKindConfirm', { kind: displayKind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
+              </p>
+              {argoManaged && !argoBlocked && (
+                <p className="mt-3 text-xs text-amber-300 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg break-keep">{argoWarnText}</p>
+              )}
+              {kind === 'Node' && (
+                <WarningBox>{t('nodes.delete.warning', { defaultValue: 'Deleting a node can disrupt workloads scheduled on it.' })}</WarningBox>
+              )}
+              {kind === 'Namespace' && (
+                <WarningBox>{t('namespaces.delete.warning', { defaultValue: 'All resources in this namespace will be permanently deleted.' })}</WarningBox>
+              )}
+              {system.reasons.length > 0 && (
+                <>
+                  <WarningBox>
+                    {[t('common.systemObject.title', { defaultValue: 'This is a system object.' }),
+                      ...system.reasons.map((r) => `· ${t(`common.systemObject.${r}`, { defaultValue: SYSTEM_REASON_EN[r] })}`)].join('\n')}
+                  </WarningBox>
+                  <TypeToConfirm expected={name} value={typedName} onChange={setTypedName} />
+                </>
+              )}
+            </>
+          )}
+          {deleteError && <p className="mt-3 text-sm text-red-400 break-keep">{deleteError}</p>}
+        </ModalFrame>
       )}
     </>
   )

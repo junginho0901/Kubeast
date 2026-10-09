@@ -5,6 +5,7 @@ import type { Session } from '@/services/api'
 import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { Message } from '../types'
+import { useConfirm } from '@/services/confirm'
 
 // AIChat 의 메인 핸들러 swarm: send / stop / new chat / select / delete /
 // multi-select 토글 / 일괄 삭제 / select all / deselect all.
@@ -61,6 +62,7 @@ export function useChatHandlers({
   t,
 }: Params) {
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
 
   const handleStop = async () => {
     const snapshot = chatStreamManager.getState()
@@ -238,9 +240,12 @@ export function useChatHandlers({
     e.stopPropagation()
     const isStreamingThisSession = isStreaming && streamState.sessionId === sessionId
 
-    const ok = isStreamingThisSession
-      ? confirm(t('aiChat.confirmDeleteStreaming'))
-      : confirm(t('aiChat.confirmDelete'))
+    const ok = await confirm({
+      title: t('aiChat.deleteTitle', { defaultValue: 'Delete chat' }),
+      message: isStreamingThisSession ? t('aiChat.confirmDeleteStreaming') : t('aiChat.confirmDelete'),
+      confirmLabel: t('aiChat.delete', { defaultValue: 'Delete' }),
+      danger: true,
+    })
 
     if (!ok) return
 
@@ -274,11 +279,14 @@ export function useChatHandlers({
     const includesStreaming =
       isStreaming && !!streamState.sessionId && selectedSessionIds.has(streamState.sessionId)
 
-    const ok = includesStreaming
-      ? confirm(
-          t('aiChat.confirmDeleteSelectedWithStreaming', { count: selectedSessionIds.size }),
-        )
-      : confirm(t('aiChat.confirmDeleteSelected', { count: selectedSessionIds.size }))
+    const ok = await confirm({
+      title: t('aiChat.deleteTitle', { defaultValue: 'Delete chat' }),
+      message: includesStreaming
+        ? t('aiChat.confirmDeleteSelectedWithStreaming', { count: selectedSessionIds.size })
+        : t('aiChat.confirmDeleteSelected', { count: selectedSessionIds.size }),
+      confirmLabel: t('aiChat.delete', { defaultValue: 'Delete' }),
+      danger: true,
+    })
 
     if (ok) {
       if (includesStreaming) {

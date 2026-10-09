@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ConnectionResult } from '@/services/api/clusters'
 
 interface Props {
@@ -91,15 +92,26 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
     }`
 
   return (
-    <ModalOverlay onClose={onClose}>
-      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-800 shadow-2xl">
-        <div className="px-6 pt-5 pb-3 border-b border-slate-700">
-          <h2 className="text-lg font-bold text-white">
-            {tr('cluster.register.title', 'Register cluster')}
-          </h2>
-        </div>
-
-        <div className="flex gap-2 px-6 border-b border-slate-700">
+    <ModalFrame
+      size="md"
+      body="scroll"
+      title={tr('cluster.register.title', 'Register cluster')}
+      onClose={onClose}
+      busy={submitting}
+      testId="register-cluster-dialog"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={modalButton.cancel} disabled={submitting}>
+            {tr('common.cancel', 'Cancel')}
+          </button>
+          <button type="button" data-testid="register-submit" onClick={register} disabled={!canRegister || submitting} className={modalButton.primary}>
+            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {tr('cluster.register.submit', 'Register')}
+          </button>
+        </>
+      }
+    >
+        <div className="flex gap-2 border-b border-slate-700">
           <button type="button" className={tabClass(tab === 'external')} onClick={() => setTab('external')}>
             {tr('cluster.register.external', 'External')}
           </button>
@@ -115,7 +127,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
           </button>
         </div>
 
-        <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-auto">
+        <div className="py-4 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1">
               {tr('cluster.register.displayName', 'Display name')}
@@ -201,23 +213,6 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
 
           {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
-
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-700">
-          <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-slate-700/40">
-            {tr('common.cancel', 'Cancel')}
-          </button>
-          <button
-            type="button"
-            data-testid="register-submit"
-            onClick={register}
-            disabled={!canRegister || submitting}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
-          >
-            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {tr('cluster.register.submit', 'Register')}
-          </button>
-        </div>
-      </div>
-    </ModalOverlay>
+    </ModalFrame>
   )
 }
