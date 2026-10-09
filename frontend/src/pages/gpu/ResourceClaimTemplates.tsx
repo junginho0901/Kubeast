@@ -176,7 +176,7 @@ export default function ResourceClaimTemplates() {
 
   const createResourceClaimTemplateYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
-    return `apiVersion: resource.k8s.io/v1beta1
+    return `apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
   name: example-gpu-claim-template
@@ -186,7 +186,8 @@ spec:
     devices:
       requests:
         - name: gpu
-          deviceClassName: example-gpu-class
+          exactly:
+            deviceClassName: example-gpu-class
 `
   }, [selectedNamespace])
 

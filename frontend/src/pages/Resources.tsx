@@ -334,7 +334,7 @@ export default function Resources() {
                 <div>
                   <h3 className="text-lg font-bold text-white">{rs.name}</h3>
                   <p className="text-sm text-slate-400 mt-1">{rs.image || '-'}</p>
-                  {rs.owner && <p className="text-xs text-slate-500 mt-1">{t('resources.owner', 'Owner')}: {rs.owner}</p>}
+                  {rs.owner_deployment && <p className="text-xs text-slate-500 mt-1">{t('resources.owner', 'Owner')}: {rs.owner_deployment}</p>}
                   {rs.selector && Object.keys(rs.selector).length > 0 && (() => {
                     const full = rs.selector || {}
                     const compact = compactSelector(full)

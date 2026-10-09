@@ -81,7 +81,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `admin.users.create` / `.read` / `.update` / `.delete` | 관리자 사용자 관리 |
 | `admin.roles.create` / `.update` / `.delete` | 역할 생성·수정·삭제. `before`/`after` = `{name, description, permissions}` — 권한 목록 변경이 그대로 남는다 |
 | `admin.organizations.create` / `.delete` | 조직(팀) 생성·삭제. `after`/`before` = `{type, name}` |
-| `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트 |
+| `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트. API 서버 주소를 비워 등록하면 연결 확인이 본 주소가 들어가고, 주소가 빈 클러스터는 연결 테스트가 채움(`.test`의 `after.server`) |
 | `user.cluster.switch` | 사용자가 클러스터 피커로 활성 클러스터를 바꿈(`POST /api/v1/audit/cluster-switch`, 프론트가 전환 시 fire-and-forget). `cluster` = 새 클러스터, `after` = `{previous, new}`. 모든 인증 사용자가 기록 가능, DB 쓰기 실패도 204. v0.6.0 전 행은 `cluster.switch` |
 | `admin.audit.read` / `admin.audit.export` | 감사 로그 조회·CSV |
 | `user.account.dormant_lock` | 휴면 계정 스위퍼(`DORMANT_ACCOUNTS_ENABLED`)가 활동(로그인·API 키 교환·생성) 없이 `DORMANT_ACCOUNTS_DAYS`가 지난 계정을 잠금 — actor `system`, target = 계정, `after` = `{last_activity, days, exempt_admins}`. 잠긴 계정의 로그인은 `user.login.failed` `reason: dormant`(OIDC는 `account_dormant`), 키 교환은 `user.apikey.exchange` failure `owner dormant` |

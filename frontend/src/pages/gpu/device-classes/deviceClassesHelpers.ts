@@ -85,7 +85,7 @@ export function applyDeviceClassWatchEvent(
 
 export function deviceClassToRawJson(item: DeviceClassItem): Record<string, unknown> {
   return {
-    apiVersion: 'resource.k8s.io/v1beta1',
+    apiVersion: 'resource.k8s.io/v1',
     kind: 'DeviceClass',
     metadata: {
       name: item.name,

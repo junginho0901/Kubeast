@@ -265,7 +265,8 @@ endpoints:
             <button
               type="button"
               onClick={() => setCreateDialogOpen(true)}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-secondary flex items-center gap-2"
+              title={tr('common.controllerManaged', 'Kubernetes usually creates this object itself')}
             >
               <Plus className="w-4 h-4" />
               {tr('endpointSlicesPage.create', 'Create EndpointSlice')}

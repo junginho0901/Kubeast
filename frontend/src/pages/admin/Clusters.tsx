@@ -124,7 +124,7 @@ export default function AdminClusters() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-300">{c.mode}</td>
-                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]">{c.api_server_url || '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]">{c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '—')}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${healthDotClass(res ? (res.healthy ? 'healthy' : 'unhealthy') : c.health_status)}`} />

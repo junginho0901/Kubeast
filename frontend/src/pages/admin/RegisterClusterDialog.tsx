@@ -168,7 +168,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                 <input
                   value={apiServerURL}
                   onChange={(e) => setApiServerURL(e.target.value)}
-                  placeholder="https://10.0.0.1:6443"
+                  placeholder={tr('cluster.register.apiServerPlaceholder', 'Empty = the server in the kubeconfig')}
                   className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-white"
                 />
               </div>

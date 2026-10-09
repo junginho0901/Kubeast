@@ -180,6 +180,14 @@ func formatHPADetail(hpa *autoscalingv2.HorizontalPodAutoscaler) map[string]inte
 		result["min_replicas"] = *minReplicas
 	}
 
+	scalingActive := false
+	for _, c := range hpa.Status.Conditions {
+		if c.Type == autoscalingv2.ScalingActive {
+			scalingActive = c.Status == corev1.ConditionTrue
+		}
+	}
+	result["scaling_active"] = scalingActive
+
 	if hpa.Status.LastScaleTime != nil {
 		result["last_scale_time"] = toISO(hpa.Status.LastScaleTime)
 	}

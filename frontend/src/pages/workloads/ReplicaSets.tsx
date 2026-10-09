@@ -67,11 +67,11 @@ export default function ReplicaSets() {
     const q = searchQuery.toLowerCase()
     return replicasets.filter((rs) => {
       const imagesText = (rs.images || []).join(',')
-      const containersText = (rs.container_names || []).join(',')
+      const containersText = (rs.containers || []).join(',')
       const selectorText = Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(',')
       return rs.name.toLowerCase().includes(q)
         || rs.namespace.toLowerCase().includes(q)
-        || (rs.owner || '').toLowerCase().includes(q)
+        || (rs.owner_deployment || '').toLowerCase().includes(q)
         || (rs.status || '').toLowerCase().includes(q)
         || imagesText.toLowerCase().includes(q)
         || containersText.toLowerCase().includes(q)
@@ -120,7 +120,7 @@ export default function ReplicaSets() {
         case 'status':
           return rs.status || ''
         case 'containers':
-          return (rs.container_names || []).join(',')
+          return (rs.containers || []).join(',')
         case 'images':
           return (rs.images || []).join(',')
         case 'selector':
@@ -182,7 +182,7 @@ export default function ReplicaSets() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'replicas', 'ready_replicas', 'available_replicas', 'owner', 'status'],
+          pickFields: ['name', 'namespace', 'replicas', 'current_replicas', 'ready_replicas', 'available_replicas', 'owner_deployment', 'status'],
           linkBuilder: (r) => {
             const rs = r as unknown as ReplicaSetInfo
             return buildResourceLink('ReplicaSet', rs.namespace, rs.name)

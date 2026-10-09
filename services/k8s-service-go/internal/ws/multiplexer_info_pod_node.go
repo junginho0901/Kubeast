@@ -185,8 +185,8 @@ func podToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 						container["restart_count"] = rc
 						totalRestarts += rc
 					}
-					container["state"] = containerStateStrFromMap(cs["state"])
-					container["last_state"] = containerStateStrFromMap(cs["lastState"])
+					container["state"] = containerStateFromMap(cs["state"])
+					container["last_state"] = containerStateFromMap(cs["lastState"])
 				}
 				containers = append(containers, container)
 				totalContainers++
@@ -215,7 +215,7 @@ func podToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 					if rc, ok := toInt64(cs["restartCount"]); ok {
 						ic["restart_count"] = rc
 					}
-					ic["state"] = containerStateStrFromMap(cs["state"])
+					ic["state"] = containerStateFromMap(cs["state"])
 				}
 				initContainers = append(initContainers, ic)
 			}

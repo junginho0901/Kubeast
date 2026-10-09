@@ -102,10 +102,11 @@ func (s *Service) DescribeNode(ctx context.Context, name string) (map[string]int
 		"os_image":                  node.Status.NodeInfo.OSImage,
 		"container_runtime_version": node.Status.NodeInfo.ContainerRuntimeVersion,
 		"kubelet_version":           node.Status.NodeInfo.KubeletVersion,
-		"kube_proxy_version":        node.Status.NodeInfo.KubeProxyVersion,
 		"operating_system":          node.Status.NodeInfo.OperatingSystem,
 		"architecture":              node.Status.NodeInfo.Architecture,
 	}
+	result["pod_cidr"] = node.Spec.PodCIDR
+	result["pod_cidrs"] = node.Spec.PodCIDRs
 
 	// Images
 	images := make([]map[string]interface{}, 0, len(node.Status.Images))

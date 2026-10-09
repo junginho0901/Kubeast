@@ -101,29 +101,31 @@ func selectorMatchLabels(spec map[string]interface{}) interface{} {
 	return map[string]string{}
 }
 
-// containerStateStrFromMap — formatPodDetail 의 containerStateStr 와 동일 logic.
-// state map ({waiting/running/terminated} 중 하나) 을 단일 string 으로 직렬화.
-func containerStateStrFromMap(v interface{}) string {
-	state, ok := v.(map[string]interface{})
-	if !ok || state == nil {
-		return ""
+// containerStateFromMap — the same shape as containerStateStr in the list
+// endpoint (pods_format.go): {running|waiting|terminated: {...}} in snake_case.
+func containerStateFromMap(v interface{}) map[string]interface{} {
+	result := map[string]interface{}{}
+	state, _ := v.(map[string]interface{})
+	if r, ok := state["running"].(map[string]interface{}); ok {
+		result["running"] = map[string]interface{}{"started_at": strOrEmpty(r["startedAt"])}
 	}
-	if w, ok := state["waiting"].(map[string]interface{}); ok && w != nil {
-		if r, _ := w["reason"].(string); r != "" {
-			return r
+	if w, ok := state["waiting"].(map[string]interface{}); ok {
+		result["waiting"] = map[string]interface{}{
+			"reason":  strOrEmpty(w["reason"]),
+			"message": strOrEmpty(w["message"]),
 		}
-		return "Waiting"
 	}
-	if _, ok := state["running"].(map[string]interface{}); ok {
-		return "Running"
-	}
-	if t, ok := state["terminated"].(map[string]interface{}); ok && t != nil {
-		if r, _ := t["reason"].(string); r != "" {
-			return r
+	if t, ok := state["terminated"].(map[string]interface{}); ok {
+		exitCode, _ := toInt64(t["exitCode"])
+		result["terminated"] = map[string]interface{}{
+			"exit_code":   exitCode,
+			"reason":      strOrEmpty(t["reason"]),
+			"message":     strOrEmpty(t["message"]),
+			"started_at":  strOrEmpty(t["startedAt"]),
+			"finished_at": strOrEmpty(t["finishedAt"]),
 		}
-		return "Terminated"
 	}
-	return ""
+	return result
 }
 
 // strOrEmpty — interface{} 가 string 이면 그대로, 아니면 빈 string.

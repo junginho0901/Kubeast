@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -144,14 +142,9 @@ func (s *Service) CreateResourcesFromYAML(ctx context.Context, yamlStr, defaultN
 			return results, fmt.Errorf("YAML document missing apiVersion or kind")
 		}
 
-		gvr, namespaced, err := s.ResolveResource(ctx, strings.ToLower(kind))
+		gvr, namespaced, err := s.ResolveKind(ctx, apiVersion, kind)
 		if err != nil {
-			// Try with plural forms or group
-			gv, _ := schema.ParseGroupVersion(apiVersion)
-			gvr, namespaced, err = s.ResolveResource(ctx, strings.ToLower(kind)+"."+gv.Group)
-			if err != nil {
-				return results, fmt.Errorf("resolve resource for %s/%s: %w", apiVersion, kind, err)
-			}
+			return results, err
 		}
 
 		namespace := resolveCreateNamespace(obj.GetNamespace(), defaultNamespace, namespaced)

@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,21 +35,41 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 		return cached, nil
 	}
 
-	_, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
+	groups, lists, err := s.discoveryCtx(ctx).ServerGroupsAndResources()
 	if err != nil {
 		return nil, fmt.Errorf("discover API resources: %w", err)
 	}
 
+	result := preferredFirst(groups, lists)
+	s.apiResourcesCache[cid] = result
+	s.apiResourcesAt[cid] = time.Now()
+	return result, nil
+}
+
+// preferredFirst orders discovery lists so each group's preferred version comes
+// before its other versions (then by group/version), since discovery returns
+// them in no fixed order and the first match wins in resolveResourceMatch.
+func preferredFirst(groups []*metav1.APIGroup, lists []*metav1.APIResourceList) []metav1.APIResourceList {
+	preferred := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		if g != nil {
+			preferred[g.PreferredVersion.GroupVersion] = true
+		}
+	}
 	result := make([]metav1.APIResourceList, 0, len(lists))
 	for _, list := range lists {
 		if list != nil {
 			result = append(result, *list)
 		}
 	}
-
-	s.apiResourcesCache[cid] = result
-	s.apiResourcesAt[cid] = time.Now()
-	return result, nil
+	sort.SliceStable(result, func(i, j int) bool {
+		pi, pj := preferred[result[i].GroupVersion], preferred[result[j].GroupVersion]
+		if pi != pj {
+			return pi
+		}
+		return result[i].GroupVersion < result[j].GroupVersion
+	})
+	return result
 }
 
 // ResourceServed reports whether the request's cluster serves resource in
@@ -85,6 +106,30 @@ func (s *Service) ResolveResource(ctx context.Context, resourceType string) (sch
 func (s *Service) ResourceKind(ctx context.Context, resourceType string) (string, error) {
 	m, err := s.resolveResourceMatch(ctx, resourceType)
 	return m.kind, err
+}
+
+// ResolveKind resolves an object's apiVersion and kind to the resource that
+// serves it in exactly that group and version.
+func (s *Service) ResolveKind(ctx context.Context, apiVersion, kind string) (schema.GroupVersionResource, bool, error) {
+	gv, err := schema.ParseGroupVersion(apiVersion)
+	if err != nil {
+		return schema.GroupVersionResource{}, false, fmt.Errorf("invalid apiVersion %q: %w", apiVersion, err)
+	}
+	lists, err := s.GetAPIResources(ctx)
+	if err != nil {
+		return schema.GroupVersionResource{}, false, err
+	}
+	for _, l := range lists {
+		if l.GroupVersion != gv.String() {
+			continue
+		}
+		for _, r := range l.APIResources {
+			if r.Kind == kind && !strings.Contains(r.Name, "/") {
+				return gv.WithResource(r.Name), r.Namespaced, nil
+			}
+		}
+	}
+	return schema.GroupVersionResource{}, false, fmt.Errorf("%s %s is not served by this cluster", apiVersion, kind)
 }
 
 type resourceMatch struct {

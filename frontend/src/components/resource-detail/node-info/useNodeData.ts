@@ -5,6 +5,16 @@ import { useNodeShellSettings } from '@/services/nodeShellSettings'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
+import { formatBytes } from '@/pages/dashboard/utils'
+import { parseQuantityToBytes } from '@/pages/storage/pvcs/pvcHelpers'
+
+// Byte-valued node resources shown in binary units ("977896124416" → "910.7Gi").
+export function formatCapacity(key: string, value: string | undefined): string {
+  if (value == null) return '-'
+  if (key !== 'memory' && key !== 'ephemeral-storage' && !key.startsWith('hugepages-')) return value
+  const bytes = parseQuantityToBytes(value)
+  return bytes == null ? value : formatBytes(bytes)
+}
 
 type DrainStatus = 'idle' | 'pending' | 'draining' | 'success' | 'error'
 
@@ -224,8 +234,8 @@ export function useNodeData(name: string) {
     ])
     return [...keys].sort().map((key) => ({
       key,
-      capacity: capacity[key] ?? '-',
-      allocatable: allocatable[key] ?? '-',
+      capacity: formatCapacity(key, capacity[key]),
+      allocatable: formatCapacity(key, allocatable[key]),
     }))
   }, [nodeDescribe?.capacity, nodeDescribe?.allocatable])
 
