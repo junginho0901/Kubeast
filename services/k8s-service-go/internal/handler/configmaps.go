@@ -103,7 +103,7 @@ func (h *Handler) DescribeSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+	canReveal := h.canForCluster(r, "resource.secret.reveal")
 	if canReveal {
 		if rerr := h.auditReady(r); rerr != nil {
 			h.refuseUnaudited(w, r, rerr)
@@ -131,7 +131,7 @@ func (h *Handler) GetSecretYAML(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+	canReveal := h.canForCluster(r, "resource.secret.reveal")
 	if canReveal {
 		if rerr := h.auditReady(r); rerr != nil {
 			h.refuseUnaudited(w, r, rerr)

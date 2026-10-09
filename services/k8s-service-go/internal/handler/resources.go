@@ -102,7 +102,7 @@ func (h *Handler) GetGenericResourceYAML(w http.ResponseWriter, r *http.Request)
 	// Secrets take the dedicated path: values only with resource.secret.reveal
 	// (audited), masked otherwise, and never through the YAML cache.
 	if h.isSecretResourceType(r, resourceType) {
-		canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+		canReveal := h.canForCluster(r, "resource.secret.reveal")
 		if canReveal {
 			if rerr := h.auditReady(r); rerr != nil {
 				h.refuseUnaudited(w, r, rerr)
@@ -226,7 +226,7 @@ func (h *Handler) DescribeGenericResource(w http.ResponseWriter, r *http.Request
 
 	// Secrets take the dedicated describe (values masked without reveal).
 	if h.isSecretResourceType(r, resourceType) {
-		canReveal := h.requirePermissionForCluster(r, "resource.secret.reveal") == nil
+		canReveal := h.canForCluster(r, "resource.secret.reveal")
 		if canReveal {
 			if rerr := h.auditReady(r); rerr != nil {
 				h.refuseUnaudited(w, r, rerr)

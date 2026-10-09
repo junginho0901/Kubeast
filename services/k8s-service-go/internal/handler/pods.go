@@ -157,6 +157,11 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 		h.handleError(w, err)
 		return
 	}
+	// A sensitive read: not served while the audit store cannot record it.
+	if rerr := h.auditReady(r); rerr != nil {
+		h.refuseUnaudited(w, r, rerr)
+		return
+	}
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
 	container := queryParam(r, "container", "")
@@ -167,6 +172,7 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
+	after, _ := json.Marshal(map[string]interface{}{"container": container, "tail_lines": tailLines, "follow": true})
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -184,9 +190,16 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 	stream, err := h.retryStreamPodLogs(ctx, w, flusher, namespace, name, container, int64(tailLines))
 	if err != nil {
 		// 이미 client 에 error 이벤트 전송됨
+		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
 		return
 	}
 	defer stream.Close()
+	// One audit row per stream; no line is sent unless it is stored.
+	if werr := h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, nil, nil, after); werr != nil {
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE("audit unavailable"))
+		flusher.Flush()
+		return
+	}
 
 	// Line scanner — 큰 로그 줄도 받게 64KiB → 1MiB buffer.
 	scanner := bufio.NewScanner(stream)

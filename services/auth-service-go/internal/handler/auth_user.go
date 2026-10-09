@@ -114,7 +114,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if !passwordLoginAllowed(h.cfg, req.Email) {
 		email := req.Email
 		reason := jsonRaw(map[string]interface{}{"reason": "password_login_disabled"})
-		h.writeAuditLog(r, "user.login.failed", nil, nil, nil, &email, nil, reason)
+		h.writeAuditFailure(r, "user.login.failed", nil, nil, nil, &email, "password_login_disabled", reason)
 		response.Error(w, http.StatusForbidden, "Password login is disabled; use single sign-on")
 		return
 	}
@@ -129,7 +129,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		// actor 자리에는 안 둠).
 		email := req.Email
 		reason := jsonRaw(map[string]interface{}{"reason": "user_not_found"})
-		h.writeAuditLog(r, "user.login.failed", nil, nil, nil, &email, nil, reason)
+		h.writeAuditFailure(r, "user.login.failed", nil, nil, nil, &email, "user_not_found", reason)
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -138,7 +138,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// admin unlocks it; same generic 401, the audit row carries the reason.
 	if user.DormantLockedAt != nil {
 		reason := jsonRaw(map[string]interface{}{"reason": "dormant", "dormant_locked_at": user.DormantLockedAt.UTC().Format(time.RFC3339)})
-		h.writeAuditLog(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, "dormant", reason)
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -156,7 +156,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	if state.isLocked(now) {
 		reason := jsonRaw(map[string]interface{}{"reason": "locked", "locked_until": state.LockedUntil.Format(time.RFC3339)})
-		h.writeAuditLog(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, "locked", reason)
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -173,10 +173,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			slog.Error("login lockout: save failure state", "err", err)
 		}
 		reason := jsonRaw(map[string]interface{}{"reason": "password_mismatch", "failures": next.Failures})
-		h.writeAuditLog(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, "password_mismatch", reason)
 		if locked {
 			after := jsonRaw(map[string]interface{}{"failures": next.Failures, "locked_until": next.LockedUntil.Format(time.RFC3339)})
-			h.writeAuditLog(r, "user.login.locked", &user.ID, &user.Email, &user.ID, &user.Email, nil, after)
+			h.writeAuditFailure(r, "user.login.locked", &user.ID, &user.Email, &user.ID, &user.Email, "too_many_failures", after)
 		}
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
 		return
@@ -298,7 +298,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	if limit := time.Duration(h.cfg.SessionAbsoluteHours) * time.Hour; limit > 0 && time.Since(authTime) > limit {
 		reason := jsonRaw(map[string]interface{}{"reason": "session_absolute_lifetime", "auth_time": authTime.UTC().Format(time.RFC3339), "limit_hours": h.cfg.SessionAbsoluteHours})
-		h.writeAuditLog(r, "user.token.refresh", &user.ID, &user.Email, &user.ID, &user.Email, nil, reason)
+		h.writeAuditFailure(r, "user.token.refresh", &user.ID, &user.Email, &user.ID, &user.Email, "session_absolute_lifetime", reason)
 		h.clearAuthCookie(w, r)
 		response.Error(w, http.StatusUnauthorized, "Session expired; sign in again")
 		return

@@ -58,7 +58,21 @@ func (h *AuthHandler) AdminListAuditLogs(w http.ResponseWriter, r *http.Request)
 // --- Helpers ---
 
 func (h *AuthHandler) writeAuditLog(r *http.Request, action string, actorID, actorEmail, targetID, targetEmail *string, before, after *json.RawMessage) {
+	h.writeAudit(r, action, actorID, actorEmail, targetID, targetEmail, before, after, "")
+}
+
+// writeAuditFailure records a refused or failed auth event — result failure,
+// error = reason — so the audit log's result filter finds it.
+func (h *AuthHandler) writeAuditFailure(r *http.Request, action string, actorID, actorEmail, targetID, targetEmail *string, reason string, after *json.RawMessage) {
+	h.writeAudit(r, action, actorID, actorEmail, targetID, targetEmail, nil, after, reason)
+}
+
+func (h *AuthHandler) writeAudit(r *http.Request, action string, actorID, actorEmail, targetID, targetEmail *string, before, after *json.RawMessage, failure string) {
 	rec := audit.FromHTTPRequest(r)
+	if failure != "" {
+		rec.Result = audit.ResultFailure
+		rec.Error = failure
+	}
 	rec.Service = audit.ServiceAuth
 	rec.Action = action
 	rec.TargetType = "user"

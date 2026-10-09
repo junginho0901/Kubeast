@@ -108,6 +108,29 @@ test.describe('AI tool results are redacted', () => {
     expect(withRedaction.length, JSON.stringify(items.slice(0, 3))).toBeGreaterThanOrEqual(1)
   })
 
+  test('a credential in the first message does not become the conversation title', async ({ request }) => {
+    test.setTimeout(150_000)
+    const headers = { Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const titlePw = `title-pw-${STAMP}`
+    const created = await request.post('/api/v1/sessions', { headers, data: {} })
+    expect(created.ok(), await created.text()).toBeTruthy()
+    const id = ((await created.json()).id ?? (await created.json()).session_id) as string
+    try {
+      const chat = await request.post(`/api/v1/ai/sessions/${id}/chat?cluster=${CLUSTER}`, {
+        headers: { ...headers, 'X-Cluster-Name': CLUSTER },
+        data: { message: `DB_PASSWORD=${titlePw} 로 접속하는 앱의 ConfigMap 예시를 한 줄로` },
+        timeout: 120_000,
+      })
+      expect(chat.ok(), `chat ${chat.status()}`).toBeTruthy()
+      await chat.text() // the title is written once the turn ends
+      const title = ((await (await request.get(`/api/v1/sessions/${id}`, { headers })).json()).title ?? '') as string
+      expect(title, 'the title is set from the first message').toContain('DB_PASSWORD=')
+      expect(title).not.toContain(titlePw)
+    } finally {
+      await request.delete(`/api/v1/sessions/${id}`, { headers })
+    }
+  })
+
   test('a Secret is readable for the assistant but its values are stripped', async ({ page }) => {
     await page.goto(`/ai-chat?cluster=${CLUSTER}`)
     await page.waitForLoadState('networkidle')
