@@ -101,4 +101,55 @@ test.describe('audit gaps', () => {
       for (const id of users) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: admin, failOnStatusCode: false })
     }
   })
+
+  // The auth-service side of #61 B: a refused admin API call, an admin's own
+  // role change, an access request on a cluster without a grant and a wrong
+  // current password are failure rows (they left no row).
+  test('auth-service refusals are failure rows', async ({ request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const roles = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
+    const memberRole = ((Array.isArray(roles) ? roles : roles.items) as Array<{ id: number; name: string }>).find((r) => r.name === 'Member')!.id
+    const ts = Date.now()
+    const email = `e2e-audit-auth-${ts}@kubeast.local`
+    const password = 'e2e-audit-auth-throwaway'
+    const created = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E audit auth', email, password, role_id: memberRole } })
+    expect(created.status(), await created.text()).toBe(201)
+    const userId = (await created.json()).id as string
+    try {
+      const since = new Date(Date.now() - 2000).toISOString()
+      const member = await login(request, email, password)
+
+      // a member asks an admin endpoint
+      expect((await request.get('/api/v1/auth/admin/users', { headers: member, failOnStatusCode: false })).status()).toBe(403)
+      // the admin tries to change their own role (refused before any change)
+      const me = await (await request.get('/api/v1/auth/me', { headers: admin })).json()
+      const self = await request.patch(`/api/v1/auth/admin/users/${me.id}`, { headers: admin, data: { role_id: memberRole }, failOnStatusCode: false })
+      expect(self.status()).toBe(403)
+      // a wrong current password
+      const pw = await request.post('/api/v1/auth/change-password', { headers: member, data: { current_password: 'not-the-password', new_password: 'e2e-audit-auth-new-1' }, failOnStatusCode: false })
+      expect(pw.status()).toBe(401)
+      // an access request on a cluster the member holds nothing on (when the feature is on)
+      const arCfg = await (await request.get('/api/v1/auth/access-requests/config', { headers: member })).json()
+      if (arCfg.enabled) {
+        const ar = await request.post('/api/v1/auth/access-requests', {
+          headers: member, data: { cluster_id: CLUSTER, role: arCfg.roles[0], duration_minutes: 30, reason: 'e2e: no grant' }, failOnStatusCode: false,
+        })
+        expect(ar.status()).toBe(403)
+      }
+
+      await expect
+        .poll(async () => (await rows(request, admin, { action: 'admin.access.denied', since })).filter((r) => r.ActorEmail === email).map((r) => `${r.Result} ${r.TargetID} ${r.After?.method} ${r.After?.path}`), { timeout: 10_000 })
+        .toEqual(['failure admin.users.read GET /api/v1/auth/admin/users'])
+      const own = (await rows(request, admin, { action: 'user.role.update', result: 'failure', since })).filter((r) => r.TargetID === me.id)
+      expect(own.map((r) => r.Error), 'the own role change').toEqual(['cannot change your own role'])
+      const pwRows = (await rows(request, admin, { action: 'user.password.change', since })).filter((r) => r.TargetID === userId)
+      expect(pwRows.map((r) => `${r.Result} ${r.Error}`), 'the wrong current password').toEqual(['failure password_mismatch'])
+      if (arCfg.enabled) {
+        const arRows = (await rows(request, admin, { action: 'access.request.create', since })).filter((r) => r.TargetID === userId)
+        expect(arRows.map((r) => `${r.Result} ${r.Error} ${r.Cluster}`), 'the request without a grant').toEqual([`failure no grant on the cluster ${CLUSTER}`])
+      }
+    } finally {
+      await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: admin, failOnStatusCode: false })
+    }
+  })
 })

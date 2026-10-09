@@ -91,6 +91,8 @@ func (h *AuthHandler) CreateAccessRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if grant == nil {
+		self := &repository.AccessRequest{UserID: payload.UserID, UserEmail: payload.Email, ClusterID: in.ClusterID, Role: in.Role}
+		h.auditAccessRequest(r, auditAccessRequestCreate, payload, self, map[string]any{"role": in.Role}, errors.New("no grant on the cluster"))
 		response.Error(w, http.StatusForbidden, "You have no access to this cluster to escalate; ask an admin for a grant first")
 		return
 	}
