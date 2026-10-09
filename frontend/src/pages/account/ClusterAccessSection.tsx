@@ -10,6 +10,7 @@ import type { Member } from '@/services/api/types'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
+import AccessHelp from '@/components/AccessHelp'
 import { formatDuration, formatWhen } from '@/pages/admin/accessRequestFormat'
 
 // Settings → Cluster access: the signed-in user's role on each cluster, a
@@ -111,7 +112,10 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
           {tr('accessRequests.mine.globalAdmin', 'Global admin — you reach every cluster already; nothing to request.')}
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-400">{tr('accessRequests.mine.noClusters', 'You have no cluster access yet. Ask an admin for a grant first.')}</p>
+        <div>
+          <p className="text-sm text-slate-400">{tr('accessRequests.mine.noClusters', 'You have no cluster access yet. Ask an admin for a grant first.')}</p>
+          <AccessHelp className="mt-2 text-sm" />
+        </div>
       ) : (
         <div className="space-y-1.5">
           {rows.map(({ cluster, role: current }) => {

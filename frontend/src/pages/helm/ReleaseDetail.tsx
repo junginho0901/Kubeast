@@ -161,9 +161,16 @@ export default function HelmReleaseDetailPage() {
   }
 
   if (detailQuery.isError || !detailQuery.data) {
+    // Not found, no permission and a failed request read differently (re-QA #44).
+    const status = (detailQuery.error as { response?: { status?: number } } | null)?.response?.status
+    const key = status === 403 ? 'forbidden' : !detailQuery.isError || status === 404 ? 'notFound' : 'loadFailed'
     return (
-      <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-        {t('helmReleaseDetail.error.notFound')}
+      <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200" data-testid={`helm-release-${key}`}>
+        {key === 'forbidden'
+          ? t('helmReleaseDetail.error.forbidden', { defaultValue: 'You do not have permission to view this release in this cluster.' })
+          : key === 'notFound'
+            ? t('helmReleaseDetail.error.notFound')
+            : t('helmReleaseDetail.error.loadFailed', { code: status ?? '-', defaultValue: 'Could not load the release (server error {{code}}).' })}
       </div>
     )
   }

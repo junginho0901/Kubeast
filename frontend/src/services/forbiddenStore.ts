@@ -6,7 +6,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { FORBIDDEN_EVENT } from './api/client'
-import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
+import { forbiddenResourceFromUrl, listSegmentFromUrl as segmentFromUrl } from '@/utils/forbiddenResource'
 
 const segments = new Set<string>()
 const labels = new Set<string>()
@@ -16,15 +16,6 @@ let version = 0
 const notify = () => {
   version += 1
   for (const l of listeners) l()
-}
-
-// /cluster/vpas/all → "vpas"; /cluster/namespaces/web/rolebindings → "rolebindings"
-const segmentFromUrl = (url: string): string => {
-  const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
-  const parts = path.replace(/^\/api\/v1/, '').replace(/^\/cluster\//, '').split('/').filter(Boolean)
-  if (parts.length === 0) return ''
-  if (parts[0] === 'namespaces') return parts.length >= 3 ? parts[2] : 'namespaces'
-  return parts[0]
 }
 
 if (typeof window !== 'undefined') {

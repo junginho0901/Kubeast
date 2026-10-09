@@ -29,6 +29,10 @@ auth:
   accessRequests:
     enabled: true
     sweepSeconds: 5
+  # e2e/tests/notices.spec.ts checks a user with no cluster sees this.
+  accessHelp:
+    text: "Ask the platform team in #kubeast-access."
+    url: https://example.com/kubeast-access
   # dormant-accounts.spec.ts backdates a user's activity in the database and
   # triggers "sweep now"; the daily sweep never has anything to lock here.
   dormantAccounts:

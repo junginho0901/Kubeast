@@ -1,32 +1,67 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForbidden } from '@/services/forbiddenStore'
+import { useListStatus } from '@/services/listStatusStore'
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 
 interface Props {
   colSpan: number
-  /** API path segment of the list ("pods", "vpas", "rolebindings") — the one the 403 came back for */
+  /** API path segment of the list ("pods", "vpas", "rolebindings") — the one the request was for */
   resource: string
   /** The page's own "No … found." text */
   children: ReactNode
   className?: string
 }
 
-// The empty row of a list table. When the list request answered 403 the row
-// says so instead of "No … found." (which would read as "the cluster has
-// none"); otherwise it renders the page's own empty text.
+// The empty row of a list table. "No … found." would read as "the cluster has
+// none", so the row says what really happened when it knows: the kind is not
+// installed on the cluster (its CRD is missing), the list failed on the
+// server (with a retry), or the request answered 403. Otherwise it renders
+// the page's own empty text.
 export function TableEmptyRow({ colSpan, resource, children, className = 'py-6 px-4 text-center text-slate-400' }: Props) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const forbidden = useForbidden(resource)
+  const status = useListStatus(resource)
+  const kind = forbiddenResourceFromUrl(`/cluster/${resource}`)
+
+  let body: ReactNode = children
+  let testId: string | undefined
+  if (status?.state === 'notInstalled') {
+    testId = 'table-not-installed'
+    body = t('common.notInstalledEmpty', {
+      resource: kind,
+      defaultValue: '{{resource}} is not installed on this cluster (no CustomResourceDefinition).',
+    })
+  } else if (status?.state === 'error') {
+    testId = 'table-load-error'
+    body = (
+      <>
+        {status.code
+          ? t('common.loadErrorEmpty', { resource: kind, code: status.code, defaultValue: 'Could not load {{resource}} (server error {{code}}).' })
+          : t('common.loadErrorEmptyNetwork', { resource: kind, defaultValue: 'Could not load {{resource}} (no response from the server).' })}
+        <button
+          type="button"
+          onClick={() => void queryClient.refetchQueries({ type: 'active' })}
+          className="ml-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400"
+          data-testid="table-load-error-retry"
+        >
+          {t('common.retry', { defaultValue: 'Retry' })}
+        </button>
+      </>
+    )
+  } else if (forbidden) {
+    testId = 'table-forbidden'
+    body = t('common.forbiddenEmpty', {
+      resource: kind,
+      defaultValue: 'You do not have permission to view {{resource}} in this cluster.',
+    })
+  }
   return (
     <tr>
-      <td colSpan={colSpan} className={className} data-testid={forbidden ? 'table-forbidden' : undefined}>
-        {forbidden
-          ? t('common.forbiddenEmpty', {
-              resource: forbiddenResourceFromUrl(`/cluster/${resource}`),
-              defaultValue: 'You do not have permission to view {{resource}} in this cluster.',
-            })
-          : children}
+      <td colSpan={colSpan} className={className} data-testid={testId}>
+        {body}
       </td>
     </tr>
   )

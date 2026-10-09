@@ -44,9 +44,10 @@ func RegisterConfiguration(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/hpas/{name}/yaml", h.GetHPAYAML)
 	r.Delete("/api/v1/namespaces/{namespace}/hpas/{name}", h.DeleteHPA)
 
-	// VPA
-	r.Get("/api/v1/vpas/all", h.GetAllVPAs)
-	r.Get("/api/v1/namespaces/{namespace}/vpas", h.GetVPAs)
+	// VPA (a CRD: lists answer "not installed" where it is missing)
+	vpa := h.ListIfServed("autoscaling.k8s.io", "verticalpodautoscalers")
+	r.With(vpa).Get("/api/v1/vpas/all", h.GetAllVPAs)
+	r.With(vpa).Get("/api/v1/namespaces/{namespace}/vpas", h.GetVPAs)
 	r.Get("/api/v1/namespaces/{namespace}/vpas/{name}/describe", h.DescribeVPA)
 	r.Get("/api/v1/namespaces/{namespace}/vpas/{name}/yaml", h.GetVPAYAML)
 	r.Delete("/api/v1/namespaces/{namespace}/vpas/{name}", h.DeleteVPA)

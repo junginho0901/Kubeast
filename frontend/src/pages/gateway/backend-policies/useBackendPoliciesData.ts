@@ -5,6 +5,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useNotInstalled } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import {
@@ -66,7 +67,8 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
     ),
   })
   const { has } = usePermission()
-  const canCreate = has(config.permissionCreate)
+  const notInstalled = useNotInstalled(config.queryKeyPrefix[1])
+  const canCreate = has(config.permissionCreate) && !notInstalled
 
   useKubeWatchList({
     enabled: true,

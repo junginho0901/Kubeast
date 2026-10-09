@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -38,8 +38,7 @@ export default function IngressClasses() {
     queryKey: ['network', 'ingressclasses'],
     queryFn: () => api.getIngressClasses(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.ingressclass.create')
+  const canCreate = useCanCreate('resource.ingressclass.create', { group: 'networking.k8s.io', resource: 'ingressclasses' })
 
   useKubeWatchList({
     enabled: true,

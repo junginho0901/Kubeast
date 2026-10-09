@@ -13,7 +13,7 @@ export function ArgoBadge({ argo, url, blocked }: { argo: ArgoManaged | null; ur
     ? t('common.gitops.blocked', { defaultValue: 'Managed by Argo CD — change it in Git. Writes from the console are refused.' })
     : t('common.gitops.warn', { defaultValue: 'Managed by Argo CD — a change made here is reverted on the next sync. Change it in Git.' })
   const cls = 'mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200'
-  return url ? (
+  const badge = url ? (
     <a href={url} target="_blank" rel="noreferrer" className={cls} title={hint} data-testid="argo-badge">
       <GitBranch className="w-3 h-3" />
       <span className="font-medium">{label}</span>
@@ -23,5 +23,13 @@ export function ArgoBadge({ argo, url, blocked }: { argo: ArgoManaged | null; ur
       <GitBranch className="w-3 h-3" />
       <span className="font-medium">{label}</span>
     </span>
+  )
+  // In block mode the write buttons are gone; say why instead of a tooltip only.
+  if (!blocked) return badge
+  return (
+    <>
+      {badge}
+      <p className="mt-1 text-xs text-amber-200/80" data-testid="argo-blocked-hint">{hint}</p>
+    </>
   )
 }

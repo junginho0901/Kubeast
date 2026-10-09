@@ -201,10 +201,11 @@ AI 어시스턴트가 활성화됩니다.
   - 클러스터 쪽에서 보면 Write 그룹(`kubeast:operator`)은 기본 `edit` ClusterRole에 `pods/exec`가 들어 있어 원래 모든 네임스페이스에서 exec가 된다 — Pod exec를 Admin 전용으로 만드는 것은 Kubeast의 앱 권한이다. 그래서 Kubeast의 impersonation 자격(`kubeast-impersonator`)은 그 그룹들 전체 권한과 같은 무게로 지켜야 한다.
   - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read·Write도 쓴다. 이를 위해 차트는 적어 둔 네임스페이스에만 Read 그룹(`kubeast:viewer`)에 `pods/exec`를 묶는다(아래 "컨테이너 안 로그 파일" 절).
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하고 감사 행 없이는 거부된다(fail-closed). **읽기 API**는 "그 클러스터에 역할이 있나"(클러스터 미들웨어, deny-by-default) + 클러스터의 RBAC(viewer 그룹)으로 막힌다. `menu.*`는 화면 메뉴만 가린다.
-- **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 본다. 이름은 Kind 소문자, 단 HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 Kind(CR 등)는 `customresource`. Write 그룹의 `edit`는 클러스터 범위 객체(Namespace·ClusterRole·StorageClass 등)를 만들 수 없어 그건 클러스터가 거부한다.
+- **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 본다. 이름은 Kind 소문자, 단 HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 Kind(CR 등)는 `customresource`. Write 그룹의 `edit`는 클러스터 범위 객체(Namespace·ClusterRole·StorageClass 등)를 만들 수 없어 그건 클러스터가 거부한다 — 그래서 그 화면들(클러스터 범위 15종 + Role·RoleBinding)의 생성 버튼은 앱 권한에 더해 클러스터에 직접 묻는다(`GET /api/v1/cluster/can-i?verb=create&group=&resource=`, 사용자 신원의 SelfSubjectAccessReview = `kubectl auth can-i`). 클러스터가 안 된다고 하면 버튼이 없다.
 - 네임스페이스 단위 권한은 없다(클러스터 단위). 팀별로 네임스페이스를 나누려면 커스텀 역할을 만들고 그 클러스터에서 `kubeast:role:<이름>` 그룹을 RoleBinding으로 묶는다.
 - `auth.impersonation.enabled=false`는 데모용이다: k8s-service가 `cluster-admin`, tool-server가 `*`로 돌고 읽기 API는 클러스터 부여만으로 열린다.
-- 회귀 확인: `e2e/tests/rbac-matrix.spec.ts`(역할 × 동작 403/200 표) · `permission-ceiling.spec.ts`(남에게 자기 이상 못 줌) · `reader-ui-notices.spec.ts`(Read의 화면 안내).
+- **목록이 비었을 때 화면이 하는 말**: 권한이 없으면(403) "볼 권한이 없습니다"(위쪽 배너 + 표), 서버 오류·응답 없음이면 "불러오지 못했습니다(서버 오류 503)" + 다시 시도, 클러스터에 그 CRD가 없으면(Gateway API·VPA) "설치되어 있지 않습니다"(k8s-service가 discovery로 보고 빈 목록에 `X-Kubeast-Not-Installed` 헤더 — 역할과 무관하게 같은 답, 생성 버튼 없음). 그 밖엔 "없습니다". 없는 주소는 404 화면.
+- 회귀 확인: `e2e/tests/rbac-matrix.spec.ts`(역할 × 동작 403/200 표) · `permission-ceiling.spec.ts`(남에게 자기 이상 못 줌) · `reader-ui-notices.spec.ts`(Read의 화면 안내) · `notices.spec.ts`(서버 오류·설치 안 됨·404·생성 버튼 can-i·권한 요청 안내).
 
 ### ☸️ Kubernetes 리소스 관리
 
@@ -373,6 +374,12 @@ auth:
     enabled: false
     maxHours: 8
     roles: [Write]
+  # 클러스터가 하나도 없는 사용자에게 "어디서 권한을 요청하나" — 대시보드·Settings의
+  # "접근 가능한 클러스터 없음" 아래에 보인다. 한 줄 문구 + http(s) 링크(사내 요청 양식 등).
+  # #이 들어가면 따옴표로 감싼다(YAML 주석). 비우면 일반 문구만
+  accessHelp:
+    text: ""
+    url: ""
 
 # EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
 aws:

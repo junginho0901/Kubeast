@@ -32,8 +32,25 @@ client.interceptors.request.use((config) => {
   return config
 })
 
+const isClusterRead = (config: { method?: string; url?: string } | undefined): boolean =>
+  String(config?.method || 'get').toLowerCase() === 'get' && String(config?.url || '').startsWith('/cluster/')
+
+const dispatchListStatus = (detail: ListStatusDetail) => {
+  try {
+    window.dispatchEvent(new CustomEvent(LIST_STATUS_EVENT, { detail }))
+  } catch { /* non-browser */ }
+}
+
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // A cluster read that answered: "not installed" when the server says the
+    // cluster does not serve the kind, otherwise it clears an earlier failure.
+    if (isClusterRead(response.config)) {
+      const url = String(response.config.url)
+      dispatchListStatus(response.headers?.['x-kubeast-not-installed'] ? { url, state: 'notInstalled' } : { url, state: 'ok' })
+    }
+    return response
+  },
   (error) => {
     const status = error?.response?.status
     const url = String(error?.config?.url || '')
@@ -53,12 +70,23 @@ client.interceptors.response.use(
         window.dispatchEvent(new CustomEvent(FORBIDDEN_EVENT, { detail: { url, detail: error?.response?.data?.detail } }))
       } catch { /* non-browser */ }
     }
+    // A cluster read that failed on the server or on the way (5xx, timeout):
+    // the table says "could not load" instead of "no … found". metrics-server
+    // missing is a known state with its own notices, not a failure.
+    if (isClusterRead(error?.config) && (status === undefined || status >= 500) && !axios.isCancel(error) &&
+        !isMetricsUnavailableResponse(error)) {
+      dispatchListStatus({ url, state: 'error', code: status })
+    }
     return Promise.reject(error)
   },
 )
 
 /** Dispatched on window for every 403 on a GET /cluster/... request (detail: { url, detail }). */
 export const FORBIDDEN_EVENT = 'kubeast:forbidden'
+
+/** Dispatched on window for every GET /cluster/... outcome other than 403: ok, not installed, failed (5xx / network). */
+export const LIST_STATUS_EVENT = 'kubeast:list-status'
+export type ListStatusDetail = { url: string; state: 'ok' | 'notInstalled' | 'error'; code?: number }
 
 // Internal — used by domain files that want to fall through to a
 // "metrics-server unavailable" branch instead of bubbling the error.

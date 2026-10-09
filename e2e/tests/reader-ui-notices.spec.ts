@@ -65,7 +65,9 @@ test.describe('non-admin UI notices', () => {
       const banner = page.getByTestId('forbidden-banner')
       await expect(banner).toBeVisible({ timeout: 20000 })
       await expect(banner).toContainText(/permission|권한/)
-      await expect(banner).toContainText('roles')
+      // the Kubernetes kind name (re-QA #42), not "roles"
+      await expect(banner).toContainText('Role')
+      await expect(banner).not.toContainText('roles')
       // a built-in role acts as a group the chart binds: no custom-role hint
       await expect(page.getByTestId('forbidden-custom-role-hint')).toHaveCount(0)
       // another page resets the banner; a page the viewer may read shows none

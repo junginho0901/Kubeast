@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -37,8 +37,7 @@ export default function StorageClasses() {
     queryKey: ['storage', 'storageclasses'],
     queryFn: () => api.getStorageClasses(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.storageclass.create')
+  const canCreate = useCanCreate('resource.storageclass.create', { group: 'storage.k8s.io', resource: 'storageclasses' })
 
   useKubeWatchList({
     enabled: true,

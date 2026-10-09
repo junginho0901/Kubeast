@@ -51,6 +51,28 @@ func (s *Service) GetAPIResources(ctx context.Context) ([]metav1.APIResourceList
 	return result, nil
 }
 
+// ResourceServed reports whether the request's cluster serves resource in
+// group (any version) — false when its CRD is not installed. A discovery
+// failure counts as served, so the caller lists as it would without the check.
+func (s *Service) ResourceServed(ctx context.Context, group, resource string) bool {
+	lists, err := s.GetAPIResources(ctx)
+	if err != nil {
+		return true
+	}
+	for _, l := range lists {
+		gv, err := schema.ParseGroupVersion(l.GroupVersion)
+		if err != nil || gv.Group != group {
+			continue
+		}
+		for _, r := range l.APIResources {
+			if r.Name == resource {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ResolveResource resolves a resource type string to a GroupVersionResource.
 // It accepts formats like: "pods", "deployments.apps", "gateways.gateway.networking.k8s.io"
 func (s *Service) ResolveResource(ctx context.Context, resourceType string) (schema.GroupVersionResource, bool, error) {

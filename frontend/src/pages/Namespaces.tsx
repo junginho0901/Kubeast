@@ -6,7 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { RefreshCw, Search, Plus } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import {
   sortNamespaces,
   type NamespaceInfo,
@@ -50,8 +50,7 @@ export default function Namespaces() {
     },
   })
 
-  const { has } = usePermission()
-  const isWriteRole = has('resource.namespace.create')
+  const isWriteRole = useCanCreate('resource.namespace.create', { group: '', resource: 'namespaces' })
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (key !== sortKey) {
