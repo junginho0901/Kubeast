@@ -21,6 +21,8 @@ data:
   ACCESS_REQUESTS_MAX_HOURS: {{ .Values.auth.accessRequests.maxHours | quote }}
   ACCESS_REQUESTS_ROLES: {{ join "," .Values.auth.accessRequests.roles | quote }}
   ACCESS_REQUESTS_SWEEP_SEC: {{ .Values.auth.accessRequests.sweepSeconds | quote }}
+  ACCESS_HELP_TEXT: {{ .Values.auth.accessHelp.text | default "" | quote }}
+  ACCESS_HELP_URL: {{ .Values.auth.accessHelp.url | default "" | quote }}
   API_KEYS_ENABLED: {{ .Values.auth.apiKeys.enabled | quote }}
   API_KEYS_MAX_DAYS: {{ .Values.auth.apiKeys.maxDays | quote }}
   ACCESS_REVIEW_ENABLED: {{ .Values.auth.accessReview.enabled | quote }}

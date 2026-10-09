@@ -4,7 +4,7 @@ import { api, type DeviceClassItem } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import {
@@ -29,8 +29,7 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
     queryKey: ['gpu', 'deviceclasses'],
     queryFn: () => api.getDeviceClasses(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.deviceclass.create')
+  const canCreate = useCanCreate('resource.deviceclass.create', { group: 'resource.k8s.io', resource: 'deviceclasses' })
 
   useKubeWatchList({
     enabled: true,

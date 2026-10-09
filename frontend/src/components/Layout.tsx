@@ -33,6 +33,7 @@ import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
 import ForbiddenBanner from './ForbiddenBanner'
+import AccessHelp from './AccessHelp'
 import { ResourceDetailProvider } from './ResourceDetailProvider'
 import ResourceDetailDrawer from './LazyResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
@@ -145,8 +146,8 @@ export default function Layout() {
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
   // A non-admin with zero accessible clusters can't view any resource page;
   // the account page (profile, language, sign-out) needs no cluster.
-  const noAccessibleCluster =
-    !isAdmin && !isClustersLoading && accessibleClusters.length === 0 && location.pathname !== '/account'
+  const hasNoCluster = !isAdmin && !isClustersLoading && accessibleClusters.length === 0
+  const noAccessibleCluster = hasNoCluster && location.pathname !== '/account'
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ core: true })
 
   // Access requests (temporary role grants): the admin menu item appears only
@@ -517,7 +518,7 @@ export default function Layout() {
 
             <div className="-mx-6 mt-4 border-t border-slate-700" />
             <div className="mt-3 flex items-center gap-2 text-sm text-slate-400" data-testid="cluster-status">
-              {noAccessibleCluster ? (
+              {hasNoCluster ? (
                 <>
                   <div className="w-2 h-2 bg-slate-500 rounded-full"></div>
                   <span>{t('layout.noAccessibleCluster', { defaultValue: 'No accessible cluster' })}</span>
@@ -568,6 +569,7 @@ export default function Layout() {
                       'You have not been granted access to any cluster yet. Ask an administrator to grant you a role on a cluster.',
                   })}
                 </p>
+                <AccessHelp className="mt-3 max-w-md text-sm" />
               </div>
             ) : !isAdmin && isClustersLoading ? (
               // Until the accessible-cluster list is known, a non-admin's

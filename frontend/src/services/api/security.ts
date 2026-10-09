@@ -12,6 +12,13 @@ import type {
 } from './types'
 
 export const securityApi = {
+  // Whether the cluster lets the signed-in user do verb on resource
+  // (SelfSubjectAccessReview — kubectl auth can-i). Empty namespace = every namespace.
+  canI: async (q: { verb: string; group: string; resource: string; namespace?: string }): Promise<boolean> => {
+    const { data } = await client.get('/cluster/can-i', { params: { ...q, namespace: q.namespace || undefined } })
+    return !!data?.allowed
+  },
+
   // ServiceAccounts
   getServiceAccounts: async (namespace: string, forceRefresh = false): Promise<ServiceAccountInfo[]> => {
     const { data } = await client.get(`/cluster/namespaces/${namespace}/serviceaccounts`, {

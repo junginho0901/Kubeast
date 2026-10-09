@@ -68,6 +68,7 @@ const ResourceClaims = lazy(() => import('./pages/gpu/ResourceClaims'))
 const ResourceClaimTemplates = lazy(() => import('./pages/gpu/ResourceClaimTemplates'))
 const ResourceSlices = lazy(() => import('./pages/gpu/ResourceSlices'))
 const ServiceAccounts = lazy(() => import('./pages/security/ServiceAccounts'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 const Roles = lazy(() => import('./pages/security/Roles'))
 const RoleBindings = lazy(() => import('./pages/security/RoleBindings'))
 const ClusterRoles = lazy(() => import('./pages/security/ClusterRoles'))
@@ -170,6 +171,7 @@ function App() {
             <Route path="admin/access-review" element={<RequirePermission permission="admin.review.read"><AdminAccessReview /></RequirePermission>} />
             <Route path="admin/cluster-hygiene" element={<RequirePermission permission="admin.hygiene.read"><AdminClusterHygiene /></RequirePermission>} />
             <Route path="admin/session-recordings" element={<RequirePermission permission="admin.sessions.read"><AdminSessionRecordings /></RequirePermission>} />
+            <Route path="*" element={<NotFound />} />
           </Route>
           </Routes>
         </Suspense>

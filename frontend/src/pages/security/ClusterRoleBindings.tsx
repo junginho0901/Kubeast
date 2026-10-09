@@ -10,7 +10,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -100,8 +100,7 @@ export default function ClusterRoleBindings() {
     queryKey: ['security', 'clusterrolebindings'],
     queryFn: () => api.getClusterRoleBindings(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.clusterrolebinding.create')
+  const canCreate = useCanCreate('resource.clusterrolebinding.create', { group: 'rbac.authorization.k8s.io', resource: 'clusterrolebindings' })
 
   useKubeWatchList({
     enabled: true,

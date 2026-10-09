@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ShieldAlert } from 'lucide-react'
 import { resetForbidden, useForbiddenLabels } from '@/services/forbiddenStore'
+import { resetListStatus } from '@/services/listStatusStore'
 import { joinResources } from '@/utils/forbiddenResource'
 import { usePermission } from '@/hooks/usePermission'
 import { customRoleGroup } from '@/utils/roleGroup'
@@ -24,6 +25,7 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
 
   useEffect(() => {
     resetForbidden()
+    resetListStatus()
   }, [location.pathname, clusterKey])
 
   if (resources.length === 0) return null
@@ -38,7 +40,7 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
         <div className="font-medium text-amber-200">{t('layout.forbidden.title', { defaultValue: 'No permission' })}</div>
         <div className="mt-0.5 text-amber-100/90">
           {t('layout.forbidden.body', {
-            defaultValue: 'You do not have permission to view {{resources}} in this cluster. The list below only shows what you can read; ask an administrator for a role that includes it.',
+            defaultValue: 'You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.',
             resources: joinResources(resources),
           })}
         </div>

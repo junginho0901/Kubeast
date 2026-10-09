@@ -377,7 +377,7 @@
     "logout": "로그아웃",
     "forbidden": {
       "title": "권한 없음",
-      "body": "이 클러스터에서 {{resources}}을(를) 볼 권한이 없습니다. 아래 목록은 읽을 수 있는 것만 보여 줍니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
+      "body": "이 클러스터에서 {{resources}}을(를) 볼 권한이 없습니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
       "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles)."
     },
     "clusterChecking": "연결 확인 중...",
@@ -1757,6 +1757,10 @@
     "none": "(없음)",
     "empty": "-",
     "forbiddenEmpty": "이 클러스터에서 {{resource}}을(를) 볼 권한이 없습니다.",
+    "notInstalledEmpty": "이 클러스터에는 {{resource}}이(가) 설치되어 있지 않습니다(CustomResourceDefinition 없음).",
+    "loadErrorEmpty": "{{resource}}을(를) 불러오지 못했습니다(서버 오류 {{code}}).",
+    "loadErrorEmptyNetwork": "{{resource}}을(를) 불러오지 못했습니다(서버 응답 없음).",
+    "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
     "deleteKindConfirm": "{{kind}} \"{{name}}\"을(를) 삭제할까요?",
     "deleteKindConfirmNs": "\"{{namespace}}\"의 {{kind}} \"{{name}}\"을(를) 삭제할까요?",
@@ -3653,7 +3657,9 @@
       "applying": "언인스톨 중..."
     },
     "error": {
-      "notFound": "Release를 찾을 수 없습니다."
+      "notFound": "Release를 찾을 수 없습니다.",
+      "forbidden": "이 클러스터에서 이 Release를 볼 권한이 없습니다.",
+      "loadFailed": "Release를 불러오지 못했습니다(서버 오류 {{code}})."
     }
   },
   "floatingChat": {
@@ -3779,7 +3785,8 @@
     },
     "noAccess": {
       "body": "아직 접근 권한을 받은 클러스터가 없습니다. 관리자에게 클러스터 역할을 요청하세요.",
-      "title": "접근 가능한 클러스터 없음"
+      "title": "접근 가능한 클러스터 없음",
+      "helpLink": "권한 요청하러 가기"
     }
   },
   "adminAudit": {
@@ -4209,6 +4216,7 @@
     "Image Pull History ({{n}}, last 1h)": "이미지 풀 이력 ({{n}}, 최근 1시간)",
     "Resource Summary (sum across {{n}} pods)": "리소스 요약 (Pod {{n}}개 합계)",
     "Affected Resources ({{kinds}} kinds, {{ops}} ops)": "영향받는 리소스 (종류 {{kinds}}개, 작업 {{ops}}개)",
+    "Effective Permissions": "실효 권한",
     "Effective Permissions ({{n}} bindings)": "실효 권한 (바인딩 {{n}}개)",
     "Effective Permissions (1 binding)": "실효 권한 (바인딩 1개)",
     "Effective Permissions ({{n}} bindings, loading…)": "실효 권한 (바인딩 {{n}}개, 로딩 중…)",
@@ -4258,6 +4266,8 @@
     "No ResourceClaim in the cluster references this DeviceClass.": "클러스터에 이 DeviceClass를 참조하는 ResourceClaim이 없습니다.",
     "No RoleBinding in this namespace references this Role.": "이 Namespace에 이 Role을 참조하는 RoleBinding이 없습니다.",
     "No RoleBinding or ClusterRoleBinding binds this ServiceAccount.": "이 ServiceAccount를 묶는 RoleBinding·ClusterRoleBinding이 없습니다.",
+    "You may not list {{kinds}} here, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}} 목록을 볼 권한이 없어 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",
+    "Could not load {{kinds}}, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}}을(를) 불러오지 못해 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",
     "No ServiceAccount in this namespace references this Secret.": "이 Namespace에 이 Secret을 참조하는 ServiceAccount가 없습니다.",
     "No listener status data available to determine attached routes.": "연결된 Route를 판단할 리스너 상태 데이터가 없습니다.",
     "No other EndpointSlice for this Service in the namespace.": "이 Namespace에 이 Service의 다른 EndpointSlice가 없습니다.",
@@ -4466,5 +4476,10 @@
       "name": "이름",
       "type": "유형"
     }
+  },
+  "notFound": {
+    "title": "페이지를 찾을 수 없습니다",
+    "body": "{{path}} 주소에 해당하는 화면이 없습니다.",
+    "home": "대시보드로 가기"
   }
 }

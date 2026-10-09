@@ -6,7 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import {
   nodeYamlTemplate,
@@ -39,8 +39,7 @@ export default function ClusterNodes() {
     queryKey: ['cluster', 'nodes'],
     queryFn: () => api.getNodes(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.node.create')
+  const canCreate = useCanCreate('resource.node.create', { group: '', resource: 'nodes' })
 
   useKubeWatchList({
     enabled: true,

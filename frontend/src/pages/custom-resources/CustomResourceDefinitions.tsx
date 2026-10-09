@@ -10,7 +10,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -107,8 +107,7 @@ export default function CustomResourceDefinitions() {
     queryKey: ['custom-resources', 'crds'],
     queryFn: () => api.getCRDs(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.crd.create')
+  const canCreate = useCanCreate('resource.crd.create', { group: 'apiextensions.k8s.io', resource: 'customresourcedefinitions' })
 
   useKubeWatchList({
     enabled: true,

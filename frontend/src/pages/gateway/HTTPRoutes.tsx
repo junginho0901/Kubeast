@@ -8,6 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useNotInstalled } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -50,7 +51,8 @@ export default function HTTPRoutes() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.httproute.create')
+  const notInstalled = useNotInstalled('httproutes')
+  const canCreate = has('resource.httproute.create') && !notInstalled
 
   useKubeWatchList({
     enabled: true,

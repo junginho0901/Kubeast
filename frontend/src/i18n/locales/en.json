@@ -377,7 +377,7 @@
     "logout": "Log out",
     "forbidden": {
       "title": "No permission",
-      "body": "You do not have permission to view {{resources}} in this cluster. The list below only shows what you can read; ask an administrator for a role that includes it.",
+      "body": "You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.",
       "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles)."
     },
     "clusterChecking": "Checking connection...",
@@ -1754,6 +1754,10 @@
     "none": "None",
     "empty": "-",
     "forbiddenEmpty": "You do not have permission to view {{resource}} in this cluster.",
+    "notInstalledEmpty": "{{resource}} is not installed on this cluster (no CustomResourceDefinition).",
+    "loadErrorEmpty": "Could not load {{resource}} (server error {{code}}).",
+    "loadErrorEmptyNetwork": "Could not load {{resource}} (no response from the server).",
+    "retry": "Retry",
     "deleteKind": "Delete {{kind}}",
     "deleteKindConfirm": "Are you sure you want to delete {{kind}} \"{{name}}\"?",
     "deleteKindConfirmNs": "Are you sure you want to delete {{kind}} \"{{name}}\" in \"{{namespace}}\"?",
@@ -3292,7 +3296,9 @@
       "applying": "Uninstalling..."
     },
     "error": {
-      "notFound": "Release not found."
+      "notFound": "Release not found.",
+      "forbidden": "You do not have permission to view this release in this cluster.",
+      "loadFailed": "Could not load the release (server error {{code}})."
     }
   },
   "floatingChat": {
@@ -3828,5 +3834,10 @@
       "text": "Text",
       "close": "Close"
     }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "There is no screen at {{path}}.",
+    "home": "Go to the dashboard"
   }
 }

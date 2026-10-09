@@ -17,9 +17,11 @@ interface Props {
   namespace?: string
   kind: string
   rawJson?: Record<string, unknown>
+  /** Argo CD manages the object in block mode: no rollback button (the server refuses it, 409) */
+  writesBlocked?: boolean
 }
 
-export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) {
+export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlocked = false }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
 
@@ -96,7 +98,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson }: Props) 
         getWorkloadMetric={getWorkloadMetric}
       />
 
-      <InfoSection title="Basic Info" actions={isRollbackKind && has('resource.workload.rollback') ? (
+      <InfoSection title="Basic Info" actions={isRollbackKind && has('resource.workload.rollback') && !writesBlocked ? (
         <button
           onClick={() => setRollbackDialogOpen(true)}
           className="text-xs px-2 py-1 rounded-sm border border-slate-700 bg-slate-800 text-white hover:border-slate-500"

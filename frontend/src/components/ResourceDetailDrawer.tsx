@@ -284,7 +284,7 @@ export default function ResourceDetailDrawer() {
     if (kind === 'ValidatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="ValidatingWebhookConfiguration" rawJson={effectiveRawJson} />
     if (kind === 'CustomResourceDefinition') return <CRDInfo name={name} rawJson={effectiveRawJson} />
     if (kind === 'CustomResourceInstance') return <CustomResourceInstanceInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
-    if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
+    if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} writesBlocked={argoBlocked} />
     if (NETWORK_KINDS.has(kind)) return <NetworkInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
     if (CONFIG_STORAGE_KINDS.has(kind)) return <ConfigStorageInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />
     return <GenericInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} />

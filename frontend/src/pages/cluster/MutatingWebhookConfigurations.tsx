@@ -10,7 +10,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -103,8 +103,7 @@ export default function MutatingWebhookConfigurations() {
     queryKey: ['cluster', 'mutatingwebhookconfigurations'],
     queryFn: () => api.getMutatingWebhookConfigurations(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.mutatingwebhookconfiguration.create')
+  const canCreate = useCanCreate('resource.mutatingwebhookconfiguration.create', { group: 'admissionregistration.k8s.io', resource: 'mutatingwebhookconfigurations' })
 
   useKubeWatchList({
     enabled: true,

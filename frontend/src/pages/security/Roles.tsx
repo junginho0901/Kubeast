@@ -10,7 +10,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -113,8 +113,7 @@ export default function Roles() {
         ? api.getAllRoles(false)
         : api.getRoles(selectedNamespace, false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.role.create')
+  const canCreate = useCanCreate('resource.role.create', { group: 'rbac.authorization.k8s.io', resource: 'roles', namespace: selectedNamespace })
 
   useKubeWatchList({
     enabled: true,

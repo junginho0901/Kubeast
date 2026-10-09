@@ -8,6 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useNotInstalled } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -46,7 +47,8 @@ export default function VPAs() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.vpa.create')
+  const notInstalled = useNotInstalled('vpas')
+  const canCreate = has('resource.vpa.create') && !notInstalled
 
   useKubeWatchList({
     enabled: true,

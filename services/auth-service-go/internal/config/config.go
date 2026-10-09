@@ -159,6 +159,10 @@ type AccessRequestsConfig struct {
 	MaxHours int
 	Roles    []string
 	SweepSec int
+	// HelpText / HelpURL tell a user with no cluster where to ask for one
+	// (shown with "no accessible cluster"); empty = the generic sentence.
+	HelpText string
+	HelpURL  string
 }
 
 // AccessReviewConfig: DormantDays flags an account with no sign-in for that
@@ -256,6 +260,8 @@ func Load() Config {
 			MaxHours: pkgconfig.GetEnvInt("ACCESS_REQUESTS_MAX_HOURS", 8),
 			Roles:    pkgconfig.GetEnvList("ACCESS_REQUESTS_ROLES", "Write"),
 			SweepSec: pkgconfig.GetEnvInt("ACCESS_REQUESTS_SWEEP_SEC", 60),
+			HelpText: pkgconfig.GetEnv("ACCESS_HELP_TEXT", ""),
+			HelpURL:  pkgconfig.GetEnv("ACCESS_HELP_URL", ""),
 		},
 		AccessReview: AccessReviewConfig{
 			Enabled:      pkgconfig.GetEnvBool("ACCESS_REVIEW_ENABLED", true),

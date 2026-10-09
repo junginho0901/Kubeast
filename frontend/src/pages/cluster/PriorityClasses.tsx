@@ -10,7 +10,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -110,8 +110,7 @@ export default function PriorityClasses() {
     queryKey: ['cluster', 'priorityclasses'],
     queryFn: () => api.getPriorityClasses(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.priorityclass.create')
+  const canCreate = useCanCreate('resource.priorityclass.create', { group: 'scheduling.k8s.io', resource: 'priorityclasses' })
 
   useKubeWatchList({
     enabled: true,

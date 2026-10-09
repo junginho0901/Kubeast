@@ -10,7 +10,7 @@ import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
@@ -108,8 +108,7 @@ export default function RuntimeClasses() {
     queryKey: ['cluster', 'runtimeclasses'],
     queryFn: () => api.getRuntimeClasses(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.runtimeclass.create')
+  const canCreate = useCanCreate('resource.runtimeclass.create', { group: 'node.k8s.io', resource: 'runtimeclasses' })
 
   useKubeWatchList({
     enabled: true,

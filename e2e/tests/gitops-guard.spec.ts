@@ -73,6 +73,10 @@ test.describe('Argo CD guard', () => {
     const drawer = page.locator(DRAWER).last()
     await expect(drawer.getByTestId('argo-badge')).toContainText('e2e-app', { timeout: 15000 })
     await expect(drawer.getByRole('button', { name: /^(delete\b|.*삭제$)/i })).toHaveCount(0)
+    // re-QA #62: no rollback either (the server refuses it with 409), and the drawer says why
+    await expect(drawer.getByTestId('argo-blocked-hint')).toBeVisible()
+    await expect(drawer.getByText(/^(Basic Info|기본 정보)$/).first()).toBeVisible()
+    await expect(drawer.getByRole('button', { name: /^(rollback|롤백)$/i })).toHaveCount(0)
     await drawer.getByRole('button', { name: /^yaml$/i }).click()
     await expect(drawer.getByRole('button', { name: /^(edit|편집)$/i })).toHaveCount(0)
 
@@ -83,5 +87,6 @@ test.describe('Argo CD guard', () => {
     await expect(drawer.getByText('e2e-fixture', { exact: true }).first()).toBeVisible({ timeout: 15000 })
     await expect(drawer.getByTestId('argo-badge')).toHaveCount(0)
     await expect(drawer.getByRole('button', { name: /^(delete\b|.*삭제$)/i })).toHaveCount(1)
+    await expect(drawer.getByTestId('argo-blocked-hint')).toHaveCount(0)
   })
 })
