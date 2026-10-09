@@ -14,9 +14,9 @@ import (
 
 // ClusterMiddleware reads the ?cluster= query parameter and stores the target
 // cluster ID in the request context. Cluster-aware service methods read it via
-// the *Ctx accessors. When absent, no cluster is set and the service falls back
-// to the registry's default cluster — so existing single-cluster callers keep
-// working unchanged.
+// the *Ctx accessors. When absent, the registry's default cluster is resolved
+// once here and used for the access check, the data and the audit/recording
+// cluster alike — so existing single-cluster callers keep working unchanged.
 //
 // Step 15 (failure isolation): a request to a cluster the health checker has
 // marked down returns 503 immediately (fail-fast) instead of waiting out the
@@ -26,36 +26,36 @@ import (
 // success clears it.
 func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := r.URL.Query().Get("cluster")
-
-		// Per-cluster access gate. Ordinary read handlers (overview, lists, detail)
-		// do not each call requirePermissionForCluster, so without this baseline
-		// check any authenticated user could read a cluster's data just by hitting
-		// the endpoint. Gate the EFFECTIVE cluster: the explicit ?cluster=, or
-		// "default" — what the service falls back to when it's omitted (see
-		// ctxClusterID). Gating only the explicit case would let a user with no
-		// grant read the default cluster by simply leaving ?cluster= off. Require a
-		// per-cluster grant (Perms[id]) or the global admin entry (Perms["*"]);
-		// deny-by-default (00-COMMON §2-3).
-		effective := c
-		if effective == "" {
-			effective = "default"
-		}
 		payload, ok := auth.FromContext(r.Context())
 		if !ok {
 			response.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		if len(payload.Perms["*"]) == 0 && len(payload.Perms[effective]) == 0 {
-			response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+effective)
-			return
-		}
 
-		if c == "" {
-			next.ServeHTTP(w, r)
+		id := cluster.ID(r.URL.Query().Get("cluster"))
+		if id == "" {
+			def, err := h.svc.DefaultClusterID(r.Context())
+			if errors.Is(err, cluster.ErrNotFound) {
+				response.Error(w, http.StatusNotFound, "cluster not found")
+				return
+			}
+			if err != nil {
+				response.Error(w, http.StatusServiceUnavailable, "cluster registry unavailable")
+				return
+			}
+			id = def
+		}
+		c := string(id)
+
+		// Per-cluster access gate. Ordinary read handlers (overview, lists, detail)
+		// do not each call requirePermissionForCluster, so without this baseline
+		// check any authenticated user could read a cluster's data just by hitting
+		// the endpoint. Require a per-cluster grant (Perms[id]) or the global admin
+		// entry (Perms["*"]); deny-by-default (00-COMMON §2-3).
+		if len(payload.Perms["*"]) == 0 && len(payload.Perms[c]) == 0 {
+			response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+c)
 			return
 		}
-		id := cluster.ID(c)
 		r = r.WithContext(cluster.WithID(r.Context(), id))
 
 		// An id the registry does not know is 404 here, once, instead of each

@@ -293,6 +293,12 @@ func (s *Service) For(ctx context.Context, id cluster.ID) (*clientBundle, error)
 	return v.(*clientBundle), nil
 }
 
+// DefaultClusterID is the registry's default cluster: what a request without
+// ?cluster= targets.
+func (s *Service) DefaultClusterID(ctx context.Context) (cluster.ID, error) {
+	return s.registry.Default(ctx)
+}
+
 // Default returns the bundle for the registry's default cluster.
 func (s *Service) Default(ctx context.Context) (*clientBundle, error) {
 	id, err := s.registry.Default(ctx)

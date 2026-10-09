@@ -24,7 +24,13 @@ class K8sServiceClient:
         # user's headers and params belong to this instance.
         params = {"cluster": cluster_name} if cluster_name else None
         self.client = ScopedClient(self.base_url, timeout=30.0, headers=headers, params=params)
-    
+
+    async def get_current_cluster(self) -> str:
+        """The cluster k8s-service targets for this client (its default when none is named)."""
+        response = await self.client.get("/current")
+        response.raise_for_status()
+        return response.json()["id"]
+
     async def get_namespaces(self) -> List[Dict]:
         """네임스페이스 목록 조회"""
         response = await self.client.get("/namespaces")

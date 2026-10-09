@@ -157,15 +157,15 @@ test.describe('helm per-cluster (step 04b)', () => {
     expect(Array.isArray((await res.json()).items)).toBeTruthy()
   })
 
-  test('helm release set is the same with and without ?cluster= (default fallback)', async ({
-    request,
-  }) => {
-    const withParam = await request.get('/api/v1/helm/releases?cluster=default', { headers: auth })
+  test('helm release set without ?cluster= is the registry default cluster\'s', async ({ request }) => {
+    const current = (await (await request.get('/api/v1/cluster/current', { headers: auth })).json()).id as string
+    expect(current, 'the registry default cluster').toBeTruthy()
+    const withParam = await request.get(`/api/v1/helm/releases?cluster=${current}`, { headers: auth })
     const noParam = await request.get('/api/v1/helm/releases', { headers: auth })
     expect(withParam.status()).toBe(200)
     expect(noParam.status()).toBe(200)
     const names = (b: { items: { name: string }[] }) => b.items.map((r) => r.name).sort()
-    // Absent ?cluster= falls back to the default cluster → identical releases.
+    // Absent ?cluster= is the registry default (not a cluster that is merely called "default").
     expect(names(await noParam.json())).toEqual(names(await withParam.json()))
   })
 })

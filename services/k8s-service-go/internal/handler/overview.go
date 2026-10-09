@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -37,6 +38,13 @@ func (h *Handler) GetClusterConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, data)
+}
+
+// GetCurrentCluster handles GET /api/v1/current: the cluster this request
+// targets, as ClusterMiddleware resolved it (the registry default without ?cluster=).
+func (h *Handler) GetCurrentCluster(w http.ResponseWriter, r *http.Request) {
+	id, _ := cluster.FromContext(r.Context())
+	response.JSON(w, http.StatusOK, map[string]string{"id": string(id)})
 }
 
 // GetComponentStatuses handles GET /api/v1/componentstatuses.

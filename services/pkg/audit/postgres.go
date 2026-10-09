@@ -16,7 +16,6 @@ import (
 type PostgresStore struct {
 	pool           *pgxpool.Pool
 	defaultService string // fallback when Record.Service is empty
-	defaultCluster string // fallback when Record.Cluster is empty
 }
 
 // NewPostgresStore creates a PostgresStore. The defaultService is used as
@@ -26,7 +25,6 @@ func NewPostgresStore(pool *pgxpool.Pool, defaultService string) *PostgresStore 
 	return &PostgresStore{
 		pool:           pool,
 		defaultService: defaultService,
-		defaultCluster: "default",
 	}
 }
 
@@ -42,9 +40,6 @@ func (s *PostgresStore) Ping(ctx context.Context) error {
 func (s *PostgresStore) Write(ctx context.Context, rec Record) (int64, error) {
 	if rec.Service == "" {
 		rec.Service = s.defaultService
-	}
-	if rec.Cluster == "" {
-		rec.Cluster = s.defaultCluster
 	}
 	if rec.Result == "" {
 		rec.Result = ResultSuccess

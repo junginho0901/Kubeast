@@ -5,6 +5,8 @@ import copy
 import logging
 from typing import Optional
 
+import httpx
+
 from fastapi import APIRouter, Header, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from app.models.ai import SessionChatRequest
@@ -145,9 +147,27 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
     # service clients live only on this copy. Mutating the shared instance
     # here would let a request that is still streaming pick up the next
     # request's user and cluster.
+    if not cluster_name:
+        # No X-Cluster-Name: take the cluster k8s-service resolves (its registry
+        # default), so permissions, tool calls and audit rows name that one.
+        from app.services.k8s_client import K8sServiceClient
+        try:
+            cluster_name = await K8sServiceClient(authorization=authorization).get_current_cluster()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=e.response.status_code, detail=_upstream_detail(e.response)) from e
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail="k8s-service unavailable") from e
+
     service = copy.copy(_cached_ai_service)
     service.update_authorization(authorization, cluster_name=cluster_name)
     return service
+
+
+def _upstream_detail(response) -> str:
+    try:
+        return str(response.json().get("detail") or response.text)
+    except ValueError:
+        return response.text
 
 
 @router.post("/sessions/{session_id}/chat")

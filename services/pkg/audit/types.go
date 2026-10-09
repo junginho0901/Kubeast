@@ -45,7 +45,7 @@ type Record struct {
 	TargetEmail string // populated when TargetType == "user"
 
 	// Scope
-	Cluster   string // "default" — multi-cluster ready
+	Cluster   string // cluster id the action targeted; empty when it targets none
 	Namespace string // K8s namespace (when applicable)
 
 	// Payload — arbitrary before/after snapshots.
