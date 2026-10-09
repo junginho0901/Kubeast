@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Trash2, Shield, X, Check, Users } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import { usePermission } from '@/hooks/usePermission'
 import { customRoleGroup } from '@/utils/roleGroup'
+import { useConfirm } from '@/services/confirm'
 
 type PermCategory = { category: string; permissions: Array<{ key: string; description: string }> }
 
@@ -18,6 +21,7 @@ export default function AdminRoles() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...opts })
+  const confirm = useConfirm()
 
   const [editingRole, setEditingRole] = useState<RoleWithDetails | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -230,9 +234,14 @@ export default function AdminRoles() {
                       </button>
                       {!role.is_system && (
                         <button
-                          onClick={() => {
-                            if (window.confirm(tr('adminRoles.deleteConfirm', 'Delete "{{name}}"?', { name: role.name })))
-                              deleteMutation.mutate(role.id)
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: tr('adminRoles.deleteTitle', 'Delete role'),
+                              message: tr('adminRoles.deleteConfirm', 'Delete role "{{name}}"?', { name: role.name }),
+                              confirmLabel: tr('adminRoles.delete', 'Delete'),
+                              danger: true,
+                            })
+                            if (ok) deleteMutation.mutate(role.id)
                           }}
                           disabled={deleteMutation.isPending}
                           className="rounded-sm p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
@@ -330,32 +339,38 @@ export default function AdminRoles() {
 
       {/* Create / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
-                  <Shield className="h-5 w-5 text-primary-400" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    {editingRole
-                      ? tr('adminRoles.editTitle', 'Edit Role')
-                      : tr('adminRoles.createTitle', 'Create Role')}
-                  </h2>
-                  <p className="text-sm text-slate-400">
-                    {editingRole?.is_system
-                      ? tr('adminRoles.systemNote', 'System role: name and permissions are fixed; only the description can change')
-                      : tr('adminRoles.customNote', 'Select permissions for this role (only ones you hold yourself)')}
-                  </p>
-                </div>
-              </div>
-              <button onClick={closeModal} className="rounded-sm p-1.5 text-slate-400 hover:text-white hover:bg-slate-800">
-                <X className="w-5 h-5" />
-              </button>
+        <ModalFrame
+          size="lg"
+          body="fill"
+          testId="role-dialog"
+          icon={
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
+              <Shield className="h-5 w-5 text-primary-400" />
             </div>
-
+          }
+          title={editingRole ? tr('adminRoles.editTitle', 'Edit Role') : tr('adminRoles.createTitle', 'Create Role')}
+          subtitle={editingRole?.is_system
+            ? tr('adminRoles.systemNote', 'System role: name and permissions are fixed; only the description can change')
+            : tr('adminRoles.customNote', 'Select permissions for this role (only ones you hold yourself)')}
+          onClose={closeModal}
+          busy={isSaving}
+          footerStart={<span className="text-xs text-slate-500">{tr('adminRoles.selectedCount', '{{count}} permissions selected', { count: formPerms.size })}</span>}
+          footer={
+            <>
+              <button type="button" onClick={closeModal} className={modalButton.cancel} disabled={isSaving}>
+                {tr('adminRoles.cancel', 'Cancel')}
+              </button>
+              <button type="button" onClick={handleSubmit} disabled={isSaving} className={modalButton.primary}>
+                <Check className="w-4 h-4" />
+                {isSaving
+                  ? tr('adminRoles.saving', 'Saving...')
+                  : editingRole
+                    ? tr('adminRoles.save', 'Save')
+                    : tr('adminRoles.createBtn', 'Create')}
+              </button>
+            </>
+          }
+        >
             {/* Form fields */}
             <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
@@ -431,34 +446,7 @@ export default function AdminRoles() {
               </div>
             )}
 
-            {/* Footer */}
-            <div className="mt-5 flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                {tr('adminRoles.selectedCount', '{{count}} permissions selected', { count: formPerms.size })}
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={closeModal}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
-                >
-                  {tr('adminRoles.cancel', 'Cancel')}
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSaving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50 transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                  {isSaving
-                    ? tr('adminRoles.saving', 'Saving...')
-                    : editingRole
-                      ? tr('adminRoles.save', 'Save')
-                      : tr('adminRoles.createBtn', 'Create')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </ModalFrame>
       )}
     </div>
   )

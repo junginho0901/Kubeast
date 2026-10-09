@@ -6,7 +6,8 @@
 
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { RoleWithDetails } from '@/services/api'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import CustomDropdown from '@/components/CustomDropdown'
 
 interface NewUser {
@@ -32,6 +33,8 @@ interface Props {
   tr: (key: string, fallback: string, opts?: any) => string
 }
 
+const inputClass = 'w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600'
+
 export function CreateUserModal({
   open,
   newUser,
@@ -43,113 +46,100 @@ export function CreateUserModal({
   tr,
 }: Props) {
   if (!open) return null
+  const incomplete = !newUser.name || !newUser.email || !newUser.password || !newUser.role_id
   return (
-    <ModalOverlay>
-      <div
-        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-label={tr('adminUsers.createUserTitle', 'Add user')}
-        onClick={(e) => e.stopPropagation()}
+    <ModalFrame
+      size="md"
+      title={tr('adminUsers.createUserTitle', 'Add user')}
+      subtitle={tr('adminUsers.createUserSubtitle', 'Create a new user account with a specified role.')}
+      onClose={onClose}
+      busy={mutation.isPending}
+      testId="create-user-dialog"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={modalButton.cancel} disabled={mutation.isPending}>
+            {tr('adminUsers.form.cancel', 'Cancel')}
+          </button>
+          <button type="submit" form="create-user-form" disabled={mutation.isPending || incomplete} className={modalButton.primary}>
+            {mutation.isPending
+              ? tr('adminUsers.form.creating', 'Creating...')
+              : tr('adminUsers.form.create', 'Create')}
+          </button>
+        </>
+      }
+    >
+      <form
+        id="create-user-form"
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (incomplete) return
+          mutation.mutate()
+        }}
       >
-        <h2 className="text-lg font-semibold text-white">
-          {tr('adminUsers.createUserTitle', 'Add user')}
-        </h2>
-        <p className="mt-1 text-sm text-slate-400">
-          {tr('adminUsers.createUserSubtitle', 'Create a new user account with a specified role.')}
-        </p>
-
-        <form
-          className="mt-5 space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (!newUser.name || !newUser.email || !newUser.password || !newUser.role_id) return
-            mutation.mutate()
-          }}
-        >
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.name', 'Name')}</label>
-            <input
-              value={newUser.name}
-              onChange={(e) => onChangeNewUser((p) => ({ ...p, name: e.target.value }))}
-              className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
-              placeholder={tr('adminUsers.form.namePlaceholder', 'Jane Doe')}
-              autoFocus
-            />
-          </div>
-
-          <CustomDropdown
-            label={tr('adminUsers.form.team', 'Team')}
-            placeholder={tr('adminUsers.form.selectTeam', 'Select Team')}
-            options={teamOptions.map((o) => ({ value: o.name, label: o.name }))}
-            value={newUser.team}
-            onChange={(v) => onChangeNewUser((p) => ({ ...p, team: v }))}
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.name', 'Name')}</label>
+          <input
+            value={newUser.name}
+            onChange={(e) => onChangeNewUser((p) => ({ ...p, name: e.target.value }))}
+            className={inputClass}
+            placeholder={tr('adminUsers.form.namePlaceholder', 'Jane Doe')}
+            autoFocus
           />
+        </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.email', 'Email')}</label>
-            <input
-              value={newUser.email}
-              onChange={(e) => onChangeNewUser((p) => ({ ...p, email: e.target.value }))}
-              className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
-              placeholder="user@example.com"
-              type="email"
-            />
+        <CustomDropdown
+          label={tr('adminUsers.form.team', 'Team')}
+          placeholder={tr('adminUsers.form.selectTeam', 'Select Team')}
+          options={teamOptions.map((o) => ({ value: o.name, label: o.name }))}
+          value={newUser.team}
+          onChange={(v) => onChangeNewUser((p) => ({ ...p, team: v }))}
+        />
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.email', 'Email')}</label>
+          <input
+            value={newUser.email}
+            onChange={(e) => onChangeNewUser((p) => ({ ...p, email: e.target.value }))}
+            className={inputClass}
+            placeholder="user@example.com"
+            type="email"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.password', 'Password')}</label>
+          <input
+            value={newUser.password}
+            onChange={(e) => onChangeNewUser((p) => ({ ...p, password: e.target.value }))}
+            className={inputClass}
+            placeholder={tr('adminUsers.form.passwordPlaceholder', 'Initial password')}
+            type="password"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.role', 'Role')}</label>
+          {/* Global role = account level only. Admin (global superuser) or
+              Member (access via per-cluster grants). Read/Write are granted
+              per-cluster, not globally. */}
+          <CustomDropdown
+            testId="create-user-role"
+            value={String(newUser.role_id || 0)}
+            onChange={(v) => onChangeNewUser((p) => ({ ...p, role_id: Number(v) }))}
+            options={[
+              { value: '0', label: tr('adminUsers.form.selectRole', 'Select role') },
+              ...roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => ({ value: String(r.id), label: r.name.toUpperCase() })),
+            ]}
+          />
+        </div>
+
+        {mutation.isError && (
+          <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+            {tr('adminUsers.createUserError', 'Failed to create user.')}
           </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.password', 'Password')}</label>
-            <input
-              value={newUser.password}
-              onChange={(e) => onChangeNewUser((p) => ({ ...p, password: e.target.value }))}
-              className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
-              placeholder={tr('adminUsers.form.passwordPlaceholder', 'Initial password')}
-              type="password"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('adminUsers.form.role', 'Role')}</label>
-            {/* Global role = account level only. Admin (global superuser) or
-                Member (access via per-cluster grants). Read/Write are granted
-                per-cluster, not globally. */}
-            <CustomDropdown
-              testId="create-user-role"
-              value={String(newUser.role_id || 0)}
-              onChange={(v) => onChangeNewUser((p) => ({ ...p, role_id: Number(v) }))}
-              options={[
-                { value: '0', label: tr('adminUsers.form.selectRole', 'Select role') },
-                ...roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => ({ value: String(r.id), label: r.name.toUpperCase() })),
-              ]}
-            />
-          </div>
-
-          {mutation.isError && (
-            <div className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
-              {tr('adminUsers.createUserError', 'Failed to create user.')}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              {tr('adminUsers.form.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending || !newUser.name || !newUser.email || !newUser.password || !newUser.role_id}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
-            >
-              {mutation.isPending
-                ? tr('adminUsers.form.creating', 'Creating...')
-                : tr('adminUsers.form.create', 'Create')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </ModalOverlay>
+        )}
+      </form>
+    </ModalFrame>
   )
 }

@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Check, Copy, KeySquare, Loader2, X } from 'lucide-react'
+import { Check, Copy, KeySquare, Loader2 } from 'lucide-react'
 
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import type { CreatedAPIKey } from '@/services/api/api_keys'
 import CustomDropdown from '@/components/CustomDropdown'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
 import { formatScope } from './apiKeyFormat'
 
@@ -197,23 +198,31 @@ export default function ApiKeysSection() {
       )}
 
       {open && (
-        <ModalOverlay onClose={() => create.isPending || setOpen(false)}>
-          <div
-            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label={tr('apiKeys.create', 'Create key')}
-            data-testid="api-key-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-white">{tr('apiKeys.create', 'Create key')}</h3>
-              <button type="button" onClick={() => setOpen(false)} className="text-slate-400 hover:text-white" aria-label={tr('apiKeys.cancel', 'Cancel')}>
-                <X className="w-5 h-5" />
+        <ModalFrame
+          size="md"
+          title={tr('apiKeys.create', 'Create key')}
+          onClose={() => setOpen(false)}
+          busy={create.isPending}
+          testId="api-key-modal"
+          footer={
+            <>
+              <button type="button" onClick={() => setOpen(false)} className={modalButton.cancel} disabled={create.isPending}>
+                {tr('apiKeys.cancel', 'Cancel')}
               </button>
-            </div>
-
-            <div className="mt-4 space-y-4">
+              <button
+                type="button"
+                data-testid="api-key-submit"
+                disabled={create.isPending || name.trim() === '' || days < 1 || days > maxDays}
+                onClick={() => create.mutate()}
+                className={modalButton.primary}
+              >
+                {create.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                {tr('apiKeys.issue', 'Issue key')}
+              </button>
+            </>
+          }
+        >
+            <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">{tr('apiKeys.name', 'Name')}</label>
                 <input
@@ -267,24 +276,7 @@ export default function ApiKeysSection() {
               <p className="text-xs text-slate-500">{tr('apiKeys.ceilingHint', 'The key never exceeds your own role on a cluster.')}</p>
               {error && <p className="text-sm text-red-300" data-testid="api-key-error">{error}</p>}
             </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700">
-                {tr('apiKeys.cancel', 'Cancel')}
-              </button>
-              <button
-                type="button"
-                data-testid="api-key-submit"
-                disabled={create.isPending || name.trim() === '' || days < 1 || days > maxDays}
-                onClick={() => create.mutate()}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
-              >
-                {create.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                {tr('apiKeys.issue', 'Issue key')}
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
+        </ModalFrame>
       )}
     </div>
   )

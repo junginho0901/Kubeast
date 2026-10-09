@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Upload, Loader2 } from 'lucide-react'
 
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import { clustersApi, type ClusterMeta } from '@/services/api/clusters'
 
 // Edit a registered cluster: rename, and (external only) rotate its kubeconfig
@@ -56,13 +57,25 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
   }
 
   return (
-    <ModalOverlay onClose={saving ? () => {} : onClose}>
-      <div className="w-136 max-w-full rounded-xl border border-slate-700 bg-slate-800 p-6">
-        <h3 className="text-lg font-bold text-white">
-          {tr('cluster.edit.title', 'Edit cluster')} — {cluster.id}
-        </h3>
-
-        <label className="mt-4 block text-xs font-semibold text-slate-400">
+    <ModalFrame
+      size="md"
+      title={`${tr('cluster.edit.title', 'Edit cluster')} — ${cluster.id}`}
+      onClose={onClose}
+      busy={saving}
+      testId="edit-cluster-dialog"
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={saving} className={modalButton.cancel}>
+            {tr('common.cancel', 'Cancel')}
+          </button>
+          <button type="button" data-testid="edit-submit" onClick={save} disabled={!canSave} className={modalButton.primary}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {tr('common.save', 'Save')}
+          </button>
+        </>
+      }
+    >
+        <label className="block text-xs font-semibold text-slate-400">
           {tr('cluster.register.displayName', 'Display name')}
         </label>
         <input
@@ -106,26 +119,6 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
             {error}
           </div>
         )}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700/40 disabled:opacity-50"
-          >
-            {tr('common.cancel', 'Cancel')}
-          </button>
-          <button
-            data-testid="edit-submit"
-            onClick={save}
-            disabled={!canSave}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {tr('common.save', 'Save')}
-          </button>
-        </div>
-      </div>
-    </ModalOverlay>
+    </ModalFrame>
   )
 }

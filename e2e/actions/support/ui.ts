@@ -81,6 +81,11 @@ export function dialog(page: Page): Locator {
     .last()
 }
 
+/** OK on the in-app confirm window (ConfirmProvider) that admin deletes and resets open. */
+export async function acceptConfirm(page: Page): Promise<void> {
+  await page.getByTestId('confirm-dialog-ok').click({ timeout: 10000 })
+}
+
 export async function confirmDialog(page: Page, re: RegExp): Promise<void> {
   const d = dialog(page)
   await d.waitFor({ state: 'visible', timeout: 10000 })

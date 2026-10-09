@@ -46,6 +46,7 @@ export function PodLogsTab({
   const [isTailLinesDropdownOpen, setIsTailLinesDropdownOpen] = useState(false)
   const [downloadTailLines, setDownloadTailLines] = useState<number>(1000)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadFailed, setDownloadFailed] = useState(false)
   const logFilesAvailable = useLogFilesAvailable(pod.namespace)
   const [source, setSource] = useState<LogSource>('stdout')
   const showFiles = logFilesAvailable && source === 'files'
@@ -150,6 +151,7 @@ export function PodLogsTab({
   const handleDownloadLogs = async () => {
     if (!selectedContainer) return
     setIsDownloading(true)
+    setDownloadFailed(false)
     try {
       const downloadedLogs = await api.getPodLogs(
         pod.namespace,
@@ -175,7 +177,7 @@ export function PodLogsTab({
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Log download failed:', error)
-      alert(tr('clusterView.logs.downloadError', 'Failed to download logs.'))
+      setDownloadFailed(true)
     } finally {
       setIsDownloading(false)
     }
@@ -348,6 +350,9 @@ export function PodLogsTab({
               ? tr('clusterView.logs.downloading', 'Downloading...')
               : tr('clusterView.logs.download', 'Download')}
           </button>
+          {downloadFailed && (
+            <span className="text-xs text-red-400" role="alert">{tr('clusterView.logs.downloadError', 'Failed to download logs.')}</span>
+          )}
         </div>
       </div>
 

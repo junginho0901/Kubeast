@@ -11,6 +11,7 @@ import type { Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { BASE_URL, EXTRA_KIND, NS, NS2, TARGET_CLUSTER, exists, jsonpath, kubectl, sleep, until } from './env'
 import {
+  acceptConfirm,
   api,
   changePassword,
   clickButton,
@@ -353,7 +354,8 @@ def('team-add', 'auth-service:POST:/admin/organizations', 'admin/organizations',
 
 def('team-delete', 'auth-service:DELETE:/admin/organizations/{id}', 'admin/organizations', async (page) => {
   const row = page.locator('li, tr, div').filter({ hasText: TEAM }).last()
-  await row.getByRole('button').last().click() // the trash button; window.confirm is auto-accepted
+  await row.getByRole('button').last().click() // the trash button
+  await acceptConfirm(page)
   await sleep(800)
 }, async (page) => {
   const r = await api(page, 'GET', '/api/v1/auth/organizations?type=team')
@@ -464,7 +466,8 @@ def('cluster-access-revoke', 'auth-service:DELETE:/admin/users/{user_id}/cluster
 
 def('user-reset-password', 'auth-service:POST:/admin/users/{user_id}/reset-password', 'admin/users', async (page, ctx) => {
   const row = await userRow(page, USER_EMAIL)
-  await row.locator('button').filter({ hasText: /reset pw|비밀번호/i }).first().click() // window.confirm auto-accepted
+  await row.locator('button').filter({ hasText: /reset pw|비밀번호/i }).first().click()
+  await acceptConfirm(page)
   await sleep(2000)
   ctx.note = (await uiText(page)).join(' | ').slice(0, 160)
 }, async (page, ctx) => {
@@ -489,7 +492,8 @@ def('user-role-change', 'auth-service:PATCH:/admin/users/{user_id}', 'admin/user
 
 def('user-delete', 'auth-service:DELETE:/admin/users/{user_id}', 'admin/users', async (page) => {
   const row = await userRow(page, USER_EMAIL)
-  await row.getByRole('button', { name: /delete|삭제/i }).first().click() // window.confirm auto-accepted
+  await row.getByRole('button', { name: /delete|삭제/i }).first().click()
+  await acceptConfirm(page)
   await sleep(1000)
 }, async (page) => {
   const u = await findUser(page, USER_EMAIL)
@@ -532,8 +536,10 @@ def('role-edit', 'auth-service:PUT:/admin/roles/{id}', 'admin/roles', async (pag
 def('role-delete', 'auth-service:DELETE:/admin/roles/{id}', 'admin/roles', async (page) => {
   const row = page.locator('tr').filter({ hasText: QROLE }).first()
   const trash = row.locator('button[title="Delete"]')
-  if (await trash.count()) await trash.first().click() // custom roles have a trash button; window.confirm auto-accepted
-  else {
+  if (await trash.count()) {
+    await trash.first().click() // custom roles have a trash button
+    await acceptConfirm(page)
+  } else {
     await row.locator('button[title="Edit"]').first().click() // pencil → edit dialog → Delete
     const d = dialog(page)
     await d.waitFor({ state: 'visible', timeout: 10000 })
@@ -801,9 +807,8 @@ def('model-config-update', 'ai-service:PATCH:/api/v1/ai/model-configs/{config_id
 })
 
 def('model-config-delete', 'ai-service:DELETE:/api/v1/ai/model-configs/{config_id}', 'admin/ai-models', async (page) => {
-  await modelCard(page).locator('button[title="Delete"], button[title*="elete"]').first().click() // window.confirm auto-accepted
-  const d = dialog(page)
-  if (await d.isVisible().catch(() => false)) await d.getByRole('button', { name: /^delete$|삭제/i }).last().click()
+  await modelCard(page).locator('button[title="Delete"], button[title*="elete"]').first().click()
+  await acceptConfirm(page)
   await sleep(2000)
 }, async (page) => {
   const ok = !list((await api(page, 'GET', '/api/v1/ai/model-configs')).body).some((m: any) => m.name === MODEL)

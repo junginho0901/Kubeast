@@ -1695,6 +1695,7 @@
     "send": "전송",
     "confirmDeleteStreaming": "현재 답변 생성 중입니다. 중단하고 이 대화를 삭제하시겠습니까?",
     "confirmDelete": "이 대화를 삭제하시겠습니까?",
+    "deleteTitle": "대화 삭제",
     "confirmDeleteSelectedWithStreaming": "선택한 {{count}}개의 대화를 삭제하시겠습니까?\\n(현재 답변 생성 중인 대화가 포함되어 있어 중단 후 삭제됩니다.)",
     "confirmDeleteSelected": "선택한 {{count}}개의 대화를 삭제하시겠습니까?",
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
@@ -1763,8 +1764,8 @@
     "loadErrorEmptyNetwork": "{{resource}}을(를) 불러오지 못했습니다(서버 응답 없음).",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
-    "deleteKindConfirm": "{{kind}} \"{{name}}\"을(를) 삭제할까요?",
-    "deleteKindConfirmNs": "\"{{namespace}}\"의 {{kind}} \"{{name}}\"을(를) 삭제할까요?",
+    "deleteKindConfirm": "{{kind}} \"{{name}}\" 삭제를 진행할까요?",
+    "deleteKindConfirmNs": "\"{{namespace}}\" Namespace의 {{kind}} \"{{name}}\" 삭제를 진행할까요?",
     "unknown": "알 수 없음",
     "close": "닫기",
     "info": "정보",
@@ -1782,6 +1783,20 @@
     "readonly": "읽기 전용",
     "yamlError": "YAML을 불러오지 못했습니다.",
     "yamlUnsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?",
+    "yamlUnsavedTitle": "저장하지 않은 YAML",
+    "discard": "버리기",
+    "confirm": "확인",
+    "typeToConfirm": "확인하려면 이름을 그대로 입력하세요",
+    "deleteRefused": "쿠버네티스는 {{kind}} \"{{name}}\" 삭제를 허용하지 않습니다.",
+    "systemObject": {
+      "title": "시스템 객체입니다.",
+      "systemNamespace": "쿠버네티스 시스템 Namespace(kube-system·kube-public·kube-node-lease)에 속한 객체입니다.",
+      "node": "클러스터의 Node입니다.",
+      "crd": "CustomResourceDefinition을 지우면 그 종류의 객체가 모두 지워집니다.",
+      "helm": "Helm이 관리합니다. 다음 업그레이드 때 다시 생기거나 릴리스가 어긋납니다.",
+      "bootstrap": "쿠버네티스 기본 RBAC(kubernetes.io/bootstrapping)입니다.",
+      "systemRbac": "시스템 권한(system:*, cluster-admin)입니다."
+    },
     "cancel": "취소",
     "delete": "삭제",
     "deleting": "삭제 중...",
@@ -1808,7 +1823,9 @@
       "managedBy": "Argo CD · {{app}}",
       "blocked": "Argo CD가 관리합니다 — Git에서 바꾸세요. 콘솔에서의 쓰기는 거부됩니다.",
       "warn": "Argo CD가 관리합니다 — 여기서 바꾼 내용은 다음 동기화 때 되돌아갑니다. Git에서 바꾸세요.",
-      "confirm": "Argo CD 애플리케이션 \"{{app}}\"이(가) 관리하는 객체입니다. 여기서 바꾸면 다음 동기화 때 되돌아갑니다. Git에서 바꾸는 것이 맞습니다. 그래도 진행할까요?"
+      "confirm": "Argo CD 애플리케이션 \"{{app}}\"이(가) 관리하는 객체입니다. 여기서 바꾸면 다음 동기화 때 되돌아갑니다. Git에서 바꾸는 것이 맞습니다. 그래도 진행할까요?",
+      "confirmTitle": "Argo CD가 관리하는 객체",
+      "applyAnyway": "그래도 적용"
     }
   },
   "dashboard": {
@@ -2390,7 +2407,8 @@
       "activate": "활성화",
       "closeEdit": "편집 닫기",
       "editTitle": "편집",
-      "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
+      "deleteConfirm": "\"{{name}}\" 모델을 삭제할까요?",
+      "deleteTitle": "모델 삭제",
       "name": "이름",
       "namePlaceholder": "예: my-gpt4",
       "provider": "프로바이더",
@@ -2429,6 +2447,7 @@
     "unlocking": "해제 중...",
     "unlockTitle": "휴면 잠금과 비밀번호 실패 잠금을 풉니다",
     "unlockConfirm": "이 계정의 잠금을 풀까요?\n\n대상: {{target}}",
+    "unlockDialogTitle": "계정 잠금 해제",
     "sweepDormant": "휴면 계정 지금 점검",
     "sweeping": "점검 중...",
     "sweepTitle": "{{days}}일 동안 로그인·API 키 사용이 없는 계정을 잠급니다(매일 자동으로도 실행)",
@@ -3193,7 +3212,8 @@
     "add": "추가",
     "addError": "추가에 실패했습니다. 이미 존재할 수 있습니다.",
     "empty": "등록된 항목이 없습니다.",
-    "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
+    "deleteConfirm": "\"{{name}}\" 팀을 삭제할까요?",
+    "deleteDialogTitle": "팀 삭제",
     "deleteTitle": "삭제",
     "viewMembers": "소속 사용자 보기",
     "teamMembers": "팀 소속 사용자",
@@ -3307,7 +3327,8 @@
     "customNote": "이 역할에 줄 권한을 고르세요(본인이 가진 권한만)",
     "groupHint": "클러스터에서 이 역할은 Kubernetes 그룹 {{group}}(으)로 동작합니다. 클러스터마다 이 그룹을 허용·바인딩해야 하고(차트 auth.impersonation.customRoles), 그렇지 않으면 그 클러스터의 모든 요청이 거부됩니다.",
     "delete": "삭제",
-    "deleteConfirm": "\"{{name}}\"을(를) 삭제할까요?",
+    "deleteConfirm": "\"{{name}}\" 역할을 삭제할까요?",
+    "deleteTitle": "역할 삭제",
     "edit": "편집",
     "editTitle": "역할 편집",
     "form": {
@@ -4007,11 +4028,11 @@
   },
   "podDeleteModal": {
     "title": "Pod 삭제",
-    "question": "Pod <kbd>{{name}}</kbd>를 삭제할까요?",
+    "question": "Pod <kbd>{{name}}</kbd> 삭제를 진행할까요?",
     "warning": "리소스 삭제는 위험할 수 있습니다. 삭제 효과를 충분히 이해한 뒤 진행하세요. 가능하면 변경 전 다른 사람의 리뷰를 받는 것을 권장합니다.",
     "force": "강제 삭제",
     "forceHint": "체크 시 grace period를 무시하고 즉시 삭제합니다",
-    "confirm": "확인"
+    "confirm": "삭제"
   },
   "detail": {
     "(none)": "(없음)",

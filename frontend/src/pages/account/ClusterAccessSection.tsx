@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, Loader2, X } from 'lucide-react'
+import { KeyRound, Loader2 } from 'lucide-react'
 
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import type { AccessRequest } from '@/services/api/access_requests'
 import type { Member } from '@/services/api/types'
 import CustomDropdown from '@/components/CustomDropdown'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
 import AccessHelp from '@/components/AccessHelp'
 import { formatDuration, formatWhen } from '@/pages/admin/accessRequestFormat'
@@ -192,29 +193,32 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
       )}
 
       {target && (
-        <ModalOverlay onClose={() => create.isPending || setTarget(null)}>
-          <div
-            className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-label={tr('accessRequests.modal.title', 'Request temporary access')}
-            data-testid="access-request-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">{tr('accessRequests.modal.title', 'Request temporary access')}</h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  {clusters.find((c) => c.id === target)?.display_name ?? target}
-                  {myRoles[target] && ` · ${tr('accessRequests.modal.current', 'current role: {{role}}', { role: myRoles[target] })}`}
-                </p>
-              </div>
-              <button type="button" onClick={() => setTarget(null)} className="text-slate-400 hover:text-white" aria-label={tr('accessRequests.modal.close', 'Close')}>
-                <X className="w-5 h-5" />
+        <ModalFrame
+          size="md"
+          title={tr('accessRequests.modal.title', 'Request temporary access')}
+          subtitle={`${clusters.find((c) => c.id === target)?.display_name ?? target}${myRoles[target] ? ` · ${tr('accessRequests.modal.current', 'current role: {{role}}', { role: myRoles[target] })}` : ''}`}
+          onClose={() => setTarget(null)}
+          busy={create.isPending}
+          testId="access-request-modal"
+          footer={
+            <>
+              <button type="button" onClick={() => setTarget(null)} className={modalButton.cancel} disabled={create.isPending}>
+                {tr('accessRequests.modal.cancel', 'Cancel')}
               </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                data-testid="access-request-submit"
+                disabled={create.isPending || !role || !reason.trim()}
+                onClick={() => create.mutate()}
+                className={modalButton.primary}
+              >
+                {create.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                {tr('accessRequests.modal.submit', 'Send request')}
+              </button>
+            </>
+          }
+        >
+            <div className="space-y-3">
               <label className="block text-xs font-semibold text-slate-400">
                 {tr('accessRequests.modal.role', 'Role')}
                 <CustomDropdown
@@ -249,24 +253,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               </label>
               {error && <div className="text-sm text-red-300" data-testid="access-request-error">{error}</div>}
             </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setTarget(null)} className="rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
-                {tr('accessRequests.modal.cancel', 'Cancel')}
-              </button>
-              <button
-                type="button"
-                data-testid="access-request-submit"
-                disabled={create.isPending || !role || !reason.trim()}
-                onClick={() => create.mutate()}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
-              >
-                {create.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                {tr('accessRequests.modal.submit', 'Send request')}
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
+        </ModalFrame>
       )}
     </div>
   )

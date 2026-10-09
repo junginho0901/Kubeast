@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
 import { api } from '@/services/api'
 import { isValidNsName } from './namespaceHelpers'
 
@@ -35,64 +36,53 @@ export default function NamespaceCreateDialog({ onClose, onCreated, tr }: Props)
   }
 
   return (
-    <ModalOverlay onClose={onClose}>
-      <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md mx-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-white mb-4">
-          {tr('namespaces.create.title', 'Create New Namespace')}
-        </h3>
-        <div className="space-y-3">
-          <div>
-            <input
-              type="text"
-              value={newNsName}
-              onChange={(e) => {
-                setNewNsName(e.target.value.toLowerCase())
-                setCreateError(null)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleCreate()
-                }
-              }}
-              placeholder={tr('namespaces.create.namePlaceholder', 'Enter namespace name')}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
-              autoFocus
-            />
-            <p className="mt-1 text-xs text-slate-400">
-              {tr('namespaces.create.nameHelp', 'Lowercase, numbers, and hyphens only (max 63 chars)')}
-            </p>
-            {newNsName && !isValidNsName(newNsName) && (
-              <p className="mt-1 text-xs text-red-400">
-                {newNsName.length > 63
-                  ? tr('namespaces.create.nameTooLong', 'Name must be 63 characters or less.')
-                  : tr('namespaces.create.nameInvalid', 'Invalid name.')}
-              </p>
-            )}
-            {createError && <p className="mt-1 text-xs text-red-400">{createError}</p>}
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800"
-            >
-              {tr('namespaces.create.cancel', 'Cancel')}
-            </button>
-            <button
-              onClick={handleCreate}
-              disabled={!isValidNsName(newNsName) || isCreating}
-              className="btn btn-primary px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating
-                ? tr('namespaces.create.creating', 'Creating...')
-                : tr('namespaces.create.submit', 'Create')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </ModalOverlay>
+    <ModalFrame
+      size="sm"
+      title={tr('namespaces.create.title', 'Create New Namespace')}
+      onClose={onClose}
+      busy={isCreating}
+      testId="namespace-create-dialog"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={modalButton.cancel} disabled={isCreating}>
+            {tr('namespaces.create.cancel', 'Cancel')}
+          </button>
+          <button type="button" onClick={handleCreate} disabled={!isValidNsName(newNsName) || isCreating} className={modalButton.primary}>
+            {isCreating
+              ? tr('namespaces.create.creating', 'Creating...')
+              : tr('namespaces.create.submit', 'Create')}
+          </button>
+        </>
+      }
+    >
+      <input
+        type="text"
+        value={newNsName}
+        onChange={(e) => {
+          setNewNsName(e.target.value.toLowerCase())
+          setCreateError(null)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            handleCreate()
+          }
+        }}
+        placeholder={tr('namespaces.create.namePlaceholder', 'Enter namespace name')}
+        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+        autoFocus
+      />
+      <p className="mt-1 text-xs text-slate-400">
+        {tr('namespaces.create.nameHelp', 'Lowercase, numbers, and hyphens only (max 63 chars)')}
+      </p>
+      {newNsName && !isValidNsName(newNsName) && (
+        <p className="mt-1 text-xs text-red-400">
+          {newNsName.length > 63
+            ? tr('namespaces.create.nameTooLong', 'Name must be 63 characters or less.')
+            : tr('namespaces.create.nameInvalid', 'Invalid name.')}
+        </p>
+      )}
+      {createError && <p className="mt-1 text-xs text-red-400">{createError}</p>}
+    </ModalFrame>
   )
 }

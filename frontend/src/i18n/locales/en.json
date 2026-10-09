@@ -1693,6 +1693,7 @@
     "send": "Send",
     "confirmDeleteStreaming": "An answer is still generating. Stop and delete this chat?",
     "confirmDelete": "Delete this chat?",
+    "deleteTitle": "Delete chat",
     "confirmDeleteSelectedWithStreaming": "Delete {{count}} selected chats?\\n(A chat that is currently generating will be stopped and removed.)",
     "confirmDeleteSelected": "Delete {{count}} selected chats?",
     "errorAnswer": "Sorry, an error occurred while generating the answer: {{error}}",
@@ -1786,13 +1787,29 @@
     "refreshing": "Refreshing...",
     "yamlError": "Failed to load YAML.",
     "yamlUnsaved": "You have unsaved YAML changes. Discard them?",
+    "yamlUnsavedTitle": "Unsaved YAML",
+    "discard": "Discard",
+    "confirm": "Confirm",
+    "typeToConfirm": "Type the name to confirm",
+    "deleteRefused": "Kubernetes does not allow deleting {{kind}} \"{{name}}\".",
+    "systemObject": {
+      "title": "This is a system object.",
+      "systemNamespace": "It belongs to a Kubernetes system namespace (kube-system, kube-public, kube-node-lease).",
+      "node": "It is a node of the cluster.",
+      "crd": "Deleting a CustomResourceDefinition deletes every object of its kind.",
+      "helm": "Helm manages it: the next upgrade recreates it or the release drifts.",
+      "bootstrap": "It is part of the Kubernetes default RBAC (kubernetes.io/bootstrapping).",
+      "systemRbac": "It is a system permission (system:*, cluster-admin)."
+    },
     "selectNamespace": "Select a namespace",
     "refreshForce": "Refresh (force refresh)",
     "gitops": {
       "managedBy": "Argo CD · {{app}}",
       "blocked": "Managed by Argo CD — change it in Git. Writes from the console are refused.",
       "warn": "Managed by Argo CD — a change made here is reverted on the next sync. Change it in Git.",
-      "confirm": "Argo CD application \"{{app}}\" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?"
+      "confirm": "Argo CD application \"{{app}}\" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?",
+      "confirmTitle": "Managed by Argo CD",
+      "applyAnyway": "Apply anyway"
     }
   },
   "dashboard": {
@@ -2357,6 +2374,7 @@
     "unlocking": "Unlocking...",
     "unlockTitle": "Clear the dormant lock and the password lock",
     "unlockConfirm": "Unlock this account?\n\nTarget: {{target}}",
+    "unlockDialogTitle": "Unlock account",
     "sweepDormant": "Sweep dormant now",
     "sweeping": "Sweeping...",
     "sweepTitle": "Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)",
@@ -2386,7 +2404,7 @@
     },
     "resetting": "Resetting...",
     "reset": "Reset PW",
-    "deleteConfirm": "Delete this user?\\\\n\\\\nTarget: {{target}}\\\\n\\\\n* Deletions cannot be easily undone.",
+    "deleteConfirm": "Delete this user?\n\nTarget: {{target}}\n\n* Deletions cannot be easily undone.",
     "deleteSelfBlocked": "You cannot delete your own account.",
     "deleteTitle": "Delete user",
     "deleting": "Deleting...",
@@ -3090,7 +3108,8 @@
     "add": "Add",
     "addError": "Failed to add. It may already exist.",
     "empty": "No items registered.",
-    "deleteConfirm": "Delete \"{{name}}\"?",
+    "deleteConfirm": "Delete team \"{{name}}\"?",
+    "deleteDialogTitle": "Delete team",
     "deleteTitle": "Delete",
     "viewMembers": "View members",
     "teamMembers": "Team members",
@@ -3184,6 +3203,8 @@
     "usersWithRole": "Users with this global (account-level) role",
     "usersWithRoleNote": "This counts the global role only. Per-cluster access (Read/Write on a cluster) is granted separately in cluster access.",
     "noUsers": "No users assigned to this role.",
+    "deleteConfirm": "Delete role \"{{name}}\"?",
+    "deleteTitle": "Delete role",
     "closeUsers": "Close",
     "col": {
       "userName": "Name",
@@ -3419,6 +3440,8 @@
     },
     "aiModels": {
       "add": "Add Model",
+      "deleteConfirm": "Delete model \"{{name}}\"?",
+      "deleteTitle": "Delete model",
       "advanced": "Advanced (local / self-hosted)",
       "caCert": "CA certificate (PEM)",
       "caCertHint": "Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.",
