@@ -776,8 +776,7 @@ export interface ReplicaSetInfo {
   available_replicas: number
   image: string
   images?: string[]
-  container_names?: string[]
-  owner?: string | null
+  containers?: string[]
   owner_deployment?: string
   owner_references?: Array<{
     kind?: string | null
@@ -868,6 +867,7 @@ export interface HPAInfo {
   max_replicas: number
   current_replicas?: number | null
   desired_replicas?: number | null
+  scaling_active?: boolean
   metrics: Array<Record<string, any>>
   conditions: Array<Record<string, any>>
   last_scale_time?: string | null

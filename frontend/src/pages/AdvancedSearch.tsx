@@ -6,6 +6,7 @@ import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import ResourceTypePicker, { ResourceTypeOption } from '@/components/search/ResourceTypePicker'
 import { NON_LISTABLE } from '@/components/search/nonListable'
+import { flattenApiResources } from '@/components/search/apiResources'
 import SearchQueryEditor from '@/components/search/SearchQueryEditor'
 import SearchResultTable from '@/components/search/SearchResultTable'
 import SearchExamples from '@/components/search/SearchExamples'
@@ -59,18 +60,10 @@ export default function AdvancedSearch() {
     staleTime: 120_000,
   })
 
-  const extraResources = useMemo<ResourceTypeOption[]>(() => {
-    if (!apiResources || !Array.isArray(apiResources)) return []
-    return apiResources
-      .filter((r: any) => r.name && r.kind)
-      .map((r: any) => ({
-        name: r.name as string,
-        kind: r.kind as string,
-        group: (r.group_version?.split('/')[0]) ?? 'core',
-        namespaced: r.namespaced ?? true,
-        verbs: (r.verbs ?? []) as string[],
-      }))
-  }, [apiResources])
+  const extraResources = useMemo<ResourceTypeOption[]>(
+    () => (Array.isArray(apiResources) ? flattenApiResources(apiResources) : []),
+    [apiResources],
+  )
 
   const resourceTypes = useMemo(() => [...selectedResources], [selectedResources])
 

@@ -58,7 +58,7 @@ export function getReplicaSetStatusColor(status: string): string {
 export function replicaSetToWorkloadRawJson(replicaset: ReplicaSetInfo): Record<string, unknown> {
   const labels = replicaset.selector || { app: replicaset.name }
   const containers = (replicaset.images || []).map((image, idx) => ({
-    name: replicaset.container_names?.[idx] || `container-${idx + 1}`,
+    name: replicaset.containers?.[idx] || `container-${idx + 1}`,
     image,
   }))
 

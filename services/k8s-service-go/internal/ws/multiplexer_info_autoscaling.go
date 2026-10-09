@@ -34,10 +34,17 @@ func hpaToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 
 	var currentReplicas, desiredReplicas int64
 	var lastScaleTime interface{}
+	scalingActive := false
 	if status != nil {
 		currentReplicas, _ = toInt64(status["currentReplicas"])
 		desiredReplicas, _ = toInt64(status["desiredReplicas"])
 		lastScaleTime = status["lastScaleTime"]
+		conds, _ := status["conditions"].([]interface{})
+		for _, c := range conds {
+			if cm, _ := c.(map[string]interface{}); cm != nil && cm["type"] == "ScalingActive" {
+				scalingActive = cm["status"] == "True"
+			}
+		}
 	}
 
 	// metrics — spec.metrics 와 status.currentMetrics 의 simplified merge.
@@ -75,6 +82,7 @@ func hpaToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"max_replicas":     maxReplicas,
 		"current_replicas": currentReplicas,
 		"desired_replicas": desiredReplicas,
+		"scaling_active":   scalingActive,
 		"metrics":          metrics,
 		"labels":           metadata["labels"],
 		"created_at":       metadata["creationTimestamp"],

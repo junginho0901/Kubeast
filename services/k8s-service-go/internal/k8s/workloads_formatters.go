@@ -201,6 +201,7 @@ func formatReplicaSetDetail(rs *appsv1.ReplicaSet) map[string]interface{} {
 		"name":               rs.Name,
 		"namespace":          rs.Namespace,
 		"replicas":           replicas,
+		"current_replicas":   rs.Status.Replicas,
 		"ready_replicas":     rs.Status.ReadyReplicas,
 		"available_replicas": rs.Status.AvailableReplicas,
 		"image":              image,

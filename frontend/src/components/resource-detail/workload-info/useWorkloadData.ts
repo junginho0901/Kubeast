@@ -241,7 +241,7 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
         desired: describe.replicas_status.desired ?? 0,
         current: describe.replicas_status.current ?? 0,
         ready: describe.replicas_status.ready ?? 0,
-        updated: describe.replicas_status.updated ?? 0,
+        updated: describe.replicas_status.updated ?? '-',
         available: describe.replicas_status.available ?? 0,
       }
     }

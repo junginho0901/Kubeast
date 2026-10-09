@@ -412,7 +412,7 @@
       "notReady": "Not Ready",
       "pending": "Pending",
       "error": "Error",
-      "restarting": "Restarting",
+      "restarted": "Restarted",
       "completed": "Completed"
     },
     "noResults": "No pods found.",
@@ -1751,6 +1751,7 @@
   },
   "common": {
     "notAvailable": "N/A",
+    "controllerManaged": "Kubernetes usually creates this object itself",
     "none": "None",
     "empty": "-",
     "forbiddenEmpty": "You do not have permission to view {{resource}} in this cluster.",
@@ -3382,7 +3383,8 @@
       "empty": "No clusters registered yet.",
       "test": "Test",
       "delete": "Delete",
-      "unhealthy": "unhealthy"
+      "unhealthy": "unhealthy",
+      "inCluster": "In-cluster"
     },
     "register": {
       "title": "Register cluster",
@@ -3392,6 +3394,7 @@
       "displayName": "Display name",
       "upload": "Upload",
       "apiServerOptional": "API server URL (optional)",
+      "apiServerPlaceholder": "Empty = the server in the kubeconfig",
       "execHint": "EKS: register an exec kubeconfig (aws-iam-authenticator) with no static credentials; only allow-listed plugins run.",
       "test": "Test connection",
       "testFailed": "Failed",

@@ -74,8 +74,9 @@ export default function HPAs() {
     let active = 0
     let inactive = 0
 
+    // active = the controller can compute a scale (condition ScalingActive=True)
     for (const h of filteredHPAs) {
-      if ((h.current_replicas ?? 0) > 0) active += 1
+      if (h.scaling_active) active += 1
       else inactive += 1
     }
 

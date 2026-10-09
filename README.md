@@ -138,7 +138,7 @@ grep DEFAULT_ADMIN_PASSWORD .env
 (마법사와 그 API는 관리자 권한이 필요합니다). **로그인 후 즉시 비밀번호를 변경하세요.**
 
 - **In-cluster** — Kubeast가 떠 있는 그 클러스터를 ServiceAccount 권한으로 자동 연결
-- **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터)
+- **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터). API 서버 주소를 비워 두면 연결 확인 때 실제로 붙은 주소가 들어가고, 주소 없이 등록된 클러스터는 **Admin > Clusters**의 연결 테스트가 채웁니다
 
 **EKS 클러스터**는 IAM으로 인증합니다. k8s-service·tool-server 이미지에 `aws-iam-authenticator`가 들어 있으므로 kubeconfig에는 정적 자격증명 대신 exec 플러그인을 적습니다. Kubeast 파드의 IRSA 롤(`values.yaml`의 `aws.irsaRoleArn`)이 `-r`의 대상 롤을 AssumeRole하고, 대상 클러스터의 access entry가 그 롤을 Kubernetes 그룹에 매핑합니다(그룹 권한은 `helm/kubeast/files/impersonation-rbac.yaml`).
 

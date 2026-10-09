@@ -2,7 +2,7 @@
 //
 // frontend/src/pages/gpu/ResourceClaims.tsx 의
 // normalizeWatchResourceClaimObject / applyResourceClaimWatchEvent 추출.
-// raw k8s ResourceClaim (resource.k8s.io/v1beta1) object 를 API list 형태
+// raw k8s ResourceClaim (resource.k8s.io) object 를 API list 형태
 // (ResourceClaimItem) 로 정규화 — **allocation_status 판정** = status.allocation
 // 존재 시 'Allocated', status.reservedFor 존재 시 'Reserved', 그 외 null
 // (= UI 에서 Pending 으로 표기). request_count 는 spec.devices.requests 배열

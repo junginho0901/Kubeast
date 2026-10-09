@@ -14,10 +14,7 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
     typeof obj?.namespace === 'string' &&
     typeof obj?.replicas === 'number'
   ) {
-    return {
-      current_replicas: obj?.current_replicas ?? obj?.replicas ?? 0,
-      ...obj,
-    } as ReplicaSetInfo
+    return obj as ReplicaSetInfo
   }
 
   const metadata = obj?.metadata ?? {}
@@ -32,9 +29,7 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
   const availableReplicas = status?.availableReplicas ?? 0
 
   const ownerReferences = Array.isArray(metadata?.ownerReferences) ? metadata.ownerReferences : []
-  const owner = ownerReferences.length > 0 && ownerReferences[0]?.kind && ownerReferences[0]?.name
-    ? `${ownerReferences[0].kind}/${ownerReferences[0].name}`
-    : null
+  const ownerDeployment = ownerReferences.find((r: any) => r?.kind === 'Deployment')?.name ?? ''
 
   const selector = spec?.selector?.matchLabels ?? {}
   const images = containers.map((container: any) => container?.image).filter(Boolean)
@@ -49,8 +44,8 @@ export function normalizeWatchReplicaSetObject(obj: any): ReplicaSetInfo {
     available_replicas: availableReplicas,
     image: images[0] ?? '',
     images,
-    container_names: containerNames,
-    owner,
+    containers: containerNames,
+    owner_deployment: ownerDeployment,
     owner_references: ownerReferences.map((r: any) => ({
       kind: r?.kind ?? null,
       name: r?.name ?? null,

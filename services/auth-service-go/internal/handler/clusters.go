@@ -122,11 +122,12 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, uid, err = probeKubeconfig(r, h.cfg, *req.Kubeconfig)
-		if err != nil {
-			response.Error(w, http.StatusBadRequest, "Connection test failed: "+err.Error())
+		probe, perr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
+		if perr != nil {
+			response.Error(w, http.StatusBadRequest, "Connection test failed: "+perr.Error())
 			return
 		}
+		uid = probe.UID
 		// Reject a kubeconfig that points at a cluster we already manage (same
 		// physical cluster under a different name) — matched by the kube-system
 		// namespace UID fingerprint.
@@ -137,7 +138,8 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
-		if req.APIServerURL != nil {
+		apiURL = probe.Server
+		if req.APIServerURL != nil && *req.APIServerURL != "" {
 			apiURL = *req.APIServerURL
 		}
 		meta, err = h.registry.AddExternal(r.Context(), req.DisplayName, *req.Kubeconfig, apiURL, uid, payload.Email, h.secrets)
@@ -242,11 +244,12 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, newUID, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
+		probe, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
 		if verr != nil {
 			response.Error(w, http.StatusBadRequest, "Connection test failed: "+verr.Error())
 			return
 		}
+		newUID := probe.UID
 		storedUID, _ := h.registry.ClusterUID(r.Context(), id)
 		if storedUID != "" && newUID != "" && storedUID != newUID {
 			response.Error(w, http.StatusConflict,
@@ -363,6 +366,14 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 	if uerr := h.registry.UpdateHealth(r.Context(), id, status); uerr != nil {
 		slog.Warn("cluster: update health failed", "id", id, "err", uerr)
 	}
+	// Clusters registered without an API server address get the one the probe saw.
+	if result.Server != "" {
+		if meta, merr := h.registry.GetMeta(r.Context(), id); merr == nil && meta.APIServerURL == "" {
+			if _, uerr := h.registry.UpdateMeta(r.Context(), id, nil, &result.Server); uerr != nil {
+				slog.Warn("cluster: fill api server url failed", "id", id, "err", uerr)
+			}
+		}
+	}
 	h.audit(r, "admin.cluster.test", payload, string(id), nil, result, nil)
 	response.JSON(w, http.StatusOK, result)
 }
@@ -406,21 +417,21 @@ func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.C
 		return model.ClusterConnectionResult{Healthy: true, Message: "in-cluster ServiceAccount"}
 	}
 	var (
-		ver string
-		err error
+		probe probeResult
+		err   error
 	)
 	switch {
 	case info.ID != "":
-		ver, _, err = probeCluster(r, h.cfg, info.ID)
+		probe, err = probeCluster(r, h.cfg, info.ID)
 	case info.KubeconfigBlob != "":
-		ver, _, err = probeKubeconfig(r, h.cfg, info.KubeconfigBlob)
+		probe, err = probeKubeconfig(r, h.cfg, info.KubeconfigBlob)
 	default:
 		return model.ClusterConnectionResult{Healthy: false, Message: "no kubeconfig available"}
 	}
 	if err != nil {
 		return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
 	}
-	return model.ClusterConnectionResult{Healthy: true, ServerVersion: ver}
+	return model.ClusterConnectionResult{Healthy: true, ServerVersion: probe.ServerVersion, Server: probe.Server}
 }
 
 // validateKubeconfigYAML performs the cheap structural checks (valid YAML with
