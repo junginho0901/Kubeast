@@ -51,3 +51,37 @@ export function parsePermissions(raw: unknown): PermissionMatrix {
   }
   return out
 }
+
+// permResource is the <name> in resource.<name>.<verb> for a kind, as the
+// backend names it (permResource in services/k8s-service-go/internal/handler/
+// perm_resource.go — keep the lists the same): the lower-cased kind, a short
+// name for six kinds, and "customresource" for any kind without its own name.
+// The short names and the drawer's CustomResourceInstance are accepted too.
+const PERM_RESOURCE_ALIASES: Record<string, string> = {
+  horizontalpodautoscaler: 'hpa',
+  verticalpodautoscaler: 'vpa',
+  poddisruptionbudget: 'pdb',
+  persistentvolume: 'pv',
+  persistentvolumeclaim: 'pvc',
+  customresourcedefinition: 'crd',
+  customresourceinstance: 'customresource',
+}
+
+const PERM_RESOURCES = new Set([
+  'pod', 'deployment', 'statefulset', 'daemonset', 'replicaset', 'job', 'cronjob',
+  'service', 'endpoints', 'endpointslice', 'ingress', 'ingressclass', 'networkpolicy',
+  'configmap', 'secret', 'serviceaccount',
+  'role', 'rolebinding', 'clusterrole', 'clusterrolebinding',
+  'namespace', 'node', 'storageclass', 'volumeattachment',
+  'resourcequota', 'limitrange', 'priorityclass', 'runtimeclass', 'lease',
+  'mutatingwebhookconfiguration', 'validatingwebhookconfiguration',
+  'gateway', 'gatewayclass', 'httproute', 'grpcroute', 'referencegrant', 'backendtlspolicy',
+  'deviceclass', 'resourceclaim', 'resourceclaimtemplate', 'resourceslice',
+  'hpa', 'vpa', 'pdb', 'pv', 'pvc', 'crd',
+])
+
+export function permResource(kind: string): string {
+  const k = kind.toLowerCase()
+  const name = PERM_RESOURCE_ALIASES[k] ?? k
+  return PERM_RESOURCES.has(name) ? name : 'customresource'
+}

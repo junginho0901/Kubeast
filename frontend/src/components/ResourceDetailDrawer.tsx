@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from './ResourceDetailContext'
 import { usePermission } from '@/hooks/usePermission'
+import { permResource } from '@/utils/permissions'
 import { useAIContext } from '@/hooks/useAIContext'
 import { useModalStackEntry } from '@/hooks/useModalStack'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -78,7 +79,7 @@ export default function ResourceDetailDrawer() {
   const crKind = kind === 'CustomResourceInstance' ? target?.rawJson?.kind : undefined
   const displayKind = typeof crKind === 'string' && crKind ? crKind : kind
   const { has } = usePermission()
-  const canDelete = has(`resource.${kind.toLowerCase()}.delete`)
+  const canDelete = has(`resource.${permResource(kind)}.delete`)
 
   const {
     deleteDialogOpen,
@@ -90,7 +91,7 @@ export default function ResourceDetailDrawer() {
     target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
     close,
   })
-  const canEditYaml = has(`resource.${kind.toLowerCase()}.edit`)
+  const canEditYaml = has(`resource.${permResource(kind)}.edit`)
 
   const {
     yamlData,

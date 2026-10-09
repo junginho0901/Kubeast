@@ -77,6 +77,28 @@ func resolveCreateNamespace(yamlNs, defaultNs string, namespaced bool) string {
 	return "default"
 }
 
+// YAMLKinds is the kind of every document CreateResourcesFromYAML would create,
+// decoded the same way: the documents before a decode error, and that error.
+func YAMLKinds(yamlStr string) ([]string, error) {
+	decoder := yaml.NewDecoder(bufio.NewReader(bytes.NewBufferString(yamlStr)))
+	var kinds []string
+	for {
+		var rawObj map[string]interface{}
+		err := decoder.Decode(&rawObj)
+		if err == io.EOF {
+			return kinds, nil
+		}
+		if err != nil {
+			return kinds, err
+		}
+		if rawObj == nil {
+			continue
+		}
+		kind, _ := rawObj["kind"].(string)
+		kinds = append(kinds, kind)
+	}
+}
+
 // CreateResourcesFromYAML creates resources from a YAML string, supporting multi-document YAML.
 //
 // Namespace 결정 우선순위 (namespaced 리소스에 한해):
