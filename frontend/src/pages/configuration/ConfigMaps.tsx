@@ -366,7 +366,7 @@ data:
               {pagedItems.map((cm, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${cm.namespace}/${cm.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ConfigMap', name: cm.name, namespace: cm.namespace })}>
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{cm.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={cm.namespace}>{cm.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cm.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{cm.data_count}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cm.created_at)}</td>

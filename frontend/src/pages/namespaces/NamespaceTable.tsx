@@ -70,7 +70,7 @@ export default function NamespaceTable({
                   {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
                 </span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[30%]">
+              <th className="col-optional text-left py-3 px-4 w-[30%]">
                 {tr('namespaces.table.labels', 'Labels')}
               </th>
               <th className="col-low text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('age')}>
@@ -96,7 +96,7 @@ export default function NamespaceTable({
                   <td className="py-3 px-4">
                     <span className={`badge ${getStatusColor(ns.status)}`}>{ns.status}</span>
                   </td>
-                  <td className="col-low py-3 px-4 text-xs">
+                  <td className="col-optional py-3 px-4 text-xs">
                     <div className="flex flex-nowrap items-center gap-1 max-w-full overflow-hidden min-w-0 whitespace-nowrap">
                       {labelEntries.length > 0
                         ? labelEntries.slice(0, 2).map(([k, v]) => (

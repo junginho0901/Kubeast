@@ -127,7 +127,7 @@ export default function ClusterHygiene() {
   )
 
   return (
-    <div className="space-y-4">
+    <div className="page-scrolls space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -151,7 +151,7 @@ export default function ClusterHygiene() {
           <button
             onClick={() => refetch()}
             disabled={isFetching || !!viewId || !cluster}
-            className="h-10 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-white flex items-center gap-2 whitespace-nowrap"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
             {tr('clusterHygiene.refresh', 'Scan again')}
@@ -290,15 +290,15 @@ export default function ClusterHygiene() {
                   {findings.map((f, i) => (
                     <tr key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`} className="border-t border-slate-700/60 text-slate-300 align-top" data-testid="hygiene-finding-row">
                       <td className="px-3 py-2">{badge(f)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{checkTitle(f.check)}</td>
-                      <td className="px-3 py-2">{f.namespace || '-'}</td>
+                      <td className="px-3 py-2">{checkTitle(f.check)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{f.namespace || '-'}</td>
                       <td className="px-3 py-2">
-                        <span className="text-white">{f.kind}/{f.name}</span>
+                        <span className="text-white">{f.kind}/<wbr />{f.name}</span>
                         {f.container && <span className="text-slate-400"> · {f.container}</span>}
                         {f.pods && f.pods > 1 ? <span className="text-slate-500"> · {tr('clusterHygiene.pods', '{{count}} Pods', { count: f.pods })}</span> : null}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="break-all">{findingText(tr, f)}</span>
+                        <span className="block min-w-[200px] [overflow-wrap:anywhere]">{findingText(tr, f)}</span>
                         {f.exempt && f.exempt_reason && <div className="text-xs text-slate-400 mt-0.5">{tr('clusterHygiene.exemptReason', 'Exempt: {{reason}}', { reason: f.exempt_reason })}</div>}
                       </td>
                     </tr>

@@ -126,7 +126,7 @@ export function ReferenceGrantTable({
                   rawJson: referenceGrantToRawJson(item),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatFrom(item)}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTo(item)}</span></td>
@@ -135,7 +135,7 @@ export function ReferenceGrantTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 6 : 5} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 5 : 4} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -146,7 +146,7 @@ export function ReferenceGrantTable({
             )}
 
             {sortedReferenceGrantsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 6 : 5} resource="referencegrants">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 5 : 4} resource="referencegrants">
                 {tr('referenceGrantsPage.noResults', 'No ReferenceGrants found.')}
               </TableEmptyRow>
             )}

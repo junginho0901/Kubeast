@@ -56,7 +56,8 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
 
   const renderPeer = (peer: any) => {
     const parts: string[] = []
-    if (peer.ipBlock) parts.push(`CIDR: ${peer.ipBlock.cidr}${peer.ipBlock.except ? ` (except ${peer.ipBlock.except.join(', ')})` : ''}`)
+    // an empty except list printed "(except )"
+    if (peer.ipBlock) parts.push(`CIDR: ${peer.ipBlock.cidr}${peer.ipBlock.except?.length ? ` (except ${peer.ipBlock.except.join(', ')})` : ''}`)
     if (peer.namespaceSelector?.matchLabels) parts.push(`ns: ${Object.entries(peer.namespaceSelector.matchLabels).map(([k, v]) => `${k}=${v}`).join(',')}`)
     if (peer.podSelector) {
       const labels = Object.entries(peer.podSelector.matchLabels || {}).map(([k, v]) => `${k}=${v}`).join(',')

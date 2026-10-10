@@ -370,7 +370,7 @@ export default function AdminUsers() {
               onClick={() => sweepMutation.mutate()}
               disabled={sweepMutation.isPending}
               data-testid="dormant-sweep-now"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="btn btn-secondary flex items-center gap-2 disabled:opacity-50"
               title={tr('adminUsers.sweepTitle', 'Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)', { days: dormantConfig.days })}
             >
               <Lock className="w-4 h-4" />
@@ -380,7 +380,7 @@ export default function AdminUsers() {
           <button
             type="button"
             onClick={() => { setBulkUploadResult(null); setBulkUploadModalOpen(true) }}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
+            className="btn btn-secondary flex items-center gap-2"
           >
             <Upload className="w-4 h-4" />
             {tr('adminUsers.bulkUpload', 'Bulk upload')}
@@ -388,7 +388,7 @@ export default function AdminUsers() {
           <button
             type="button"
             onClick={() => setCreateModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
+            className="btn btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             {tr('adminUsers.createUser', 'Add user')}

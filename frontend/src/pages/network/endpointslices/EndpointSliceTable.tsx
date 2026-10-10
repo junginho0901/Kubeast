@@ -105,10 +105,10 @@ export function EndpointSliceTable({
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('service')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.service', 'Service')}{renderSortIcon('service')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.addressType', 'Address Type')}{renderSortIcon('addressType')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
+              <th className="col-optional text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[280px]">
@@ -143,11 +143,11 @@ export function EndpointSliceTable({
                     rawJson: endpointSliceToRawJson(es),
                   })}
                 >
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{es.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={es.namespace}>{es.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{es.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{es.service_name || '-'}</span></td>
-                  <td className="col-low py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
-                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatEndpointPreview(es)}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{es.endpoints_total || 0}</td>
                   <td className="py-3 px-4 text-xs font-mono">{es.endpoints_ready || 0}</td>
@@ -158,7 +158,7 @@ export function EndpointSliceTable({
             })}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 11 : 10} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 10 : 9} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -169,7 +169,7 @@ export function EndpointSliceTable({
             )}
 
             {sortedEndpointSlicesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 11 : 10} resource="endpointslices">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 10 : 9} resource="endpointslices">
                 {tr('endpointSlicesPage.noResults', 'No endpoint slices found.')}
               </TableEmptyRow>
             )}

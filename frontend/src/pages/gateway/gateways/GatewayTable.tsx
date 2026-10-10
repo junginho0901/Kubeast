@@ -112,7 +112,7 @@ export function GatewayTable({
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('routes')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.attachedRoutes', 'Attached Routes')}{renderSortIcon('routes')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -133,19 +133,19 @@ export function GatewayTable({
                   rawJson: gatewayToRawJson(gateway),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{gateway.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={gateway.namespace}><span className="block truncate">{gateway.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{gateway.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.gateway_class_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.status || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.listeners_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.attached_routes || 0}</td>
-                <td className="col-low py-3 px-4 text-xs font-mono">{gateway.addresses_count || 0}</td>
+                <td className="col-optional py-3 px-4 text-xs font-mono">{gateway.addresses_count || 0}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(gateway.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -156,7 +156,7 @@ export function GatewayTable({
             )}
 
             {sortedGatewaysLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="gateways">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="gateways">
                 {tr('gatewaysPage.noResults', 'No gateways found.')}
               </TableEmptyRow>
             )}

@@ -6,7 +6,8 @@
 // 이 모두 부모 (drawer) 가 관리하기 때문. 구조만 분리하는 thin presentational.
 
 import { ArrowLeft, X, Info, FileCode, Trash2 } from 'lucide-react'
-import { TabId, kindIcon } from './utils'
+import { kindIconComponent } from '@/components/kindIcons'
+import { TabId } from './utils'
 import { HelmReleaseBadge } from './HelmReleaseBadge'
 import { ArgoBadge } from './ArgoBadge'
 import type { ArgoManaged } from './gitops'
@@ -44,13 +45,14 @@ export function ResourceDetailHeader({
   onDeleteClick,
   t,
 }: Props) {
+  const KindIcon = kindIconComponent(kind)
   return (
     <>
       {/* Header */}
       <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700 shrink-0">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm">{kindIcon(kind)}</span>
+            <KindIcon className="w-4 h-4 text-slate-400" aria-hidden />
             <span className="text-xs px-2 py-0.5 rounded-sm bg-slate-700 text-slate-300 font-medium">{displayKind}</span>
             {ns && <span className="text-xs text-slate-500">{ns}</span>}
           </div>

@@ -317,7 +317,7 @@ export default function ResourceSlices() {
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('node')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.node', 'Node')}{renderSortIcon('node')}</span>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
+                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.driver', 'Driver')}{renderSortIcon('driver')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('pool')}>
@@ -344,7 +344,7 @@ export default function ResourceSlices() {
                 >
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.node_name ?? '-'}</span></td>
-                  <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
+                  <td className="col-optional py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.pool_name ?? '-'}</span></td>
                   <td className="py-3 px-4 text-xs">{item.device_count ?? 0}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>

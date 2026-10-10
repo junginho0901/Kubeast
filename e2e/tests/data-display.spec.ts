@@ -52,6 +52,9 @@ test.describe('data display matches the cluster', () => {
     const current = kubectl(`-n default get rs ${rs} -o 'jsonpath={.status.replicas}'`) || '0'
     const containers = kubectl(`-n default get rs ${rs} -o 'jsonpath={.spec.template.spec.containers[*].name}'`)
 
+    // wide enough for every column: the list folds Owner and the other low columns while the table (1740 px) is
+    // wider than its box
+    await page.setViewportSize({ width: 2200, height: 900 })
     await page.goto(`/workloads/replicasets?cluster=${CLUSTER}`)
     const cells = await rowCells(page, rs)
     expect(cells[await columnIndex(page, /^Current/)]).toBe(current)

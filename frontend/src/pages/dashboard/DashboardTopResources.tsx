@@ -32,7 +32,8 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
           <h2 className="text-xl font-bold text-white">
             {tr('dashboard.topPods.title', 'Top 5 pods by resource usage')}
           </h2>
-          <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>
+          {/* only while there is data to refresh — with no metrics it promised updates that never come */}
+          {(topResources?.top_pods?.length ?? 0) > 0 && <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>}
         </div>
         {isLoading && !topResources ? (
           // 초기 로딩: 스켈레톤 표시
@@ -125,7 +126,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, metric
           <h2 className="text-xl font-bold text-white">
             {tr('dashboard.topNodes.title', 'Top 3 nodes by resource usage')}
           </h2>
-          <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>
+          {(topResources?.top_nodes?.length ?? 0) > 0 && <p className="text-xs text-slate-400">{tr('dashboard.autoRefresh', 'Auto refresh every 5 seconds')}</p>}
         </div>
         {isLoading && !topResources ? (
           // 초기 로딩: 스켈레톤 표시

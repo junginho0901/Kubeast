@@ -177,7 +177,7 @@ export default function AccessReview() {
         <button
           onClick={() => refetch()}
           disabled={isFetching || !!viewId}
-          className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white flex items-center gap-2"
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           {tr('accessReview.refresh', 'Refresh')}
@@ -267,7 +267,7 @@ export default function AccessReview() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('accessReview.search', 'Search...')}
-              className="ml-auto h-9 px-3 bg-slate-700 text-white rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
+              className="ml-auto h-10 px-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
             />
             <button
               onClick={() => download(tab)}

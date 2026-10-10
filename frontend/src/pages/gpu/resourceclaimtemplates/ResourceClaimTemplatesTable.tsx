@@ -115,7 +115,7 @@ export function ResourceClaimTemplatesTable({
                   namespace: item.namespace,
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{item.request_count || 0}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>

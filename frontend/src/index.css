@@ -55,6 +55,14 @@
     cursor: pointer;
   }
 
+  /* Korean breaks lines between any two syllables by default ("시/스템", "새로고/침"); keep-all breaks only
+     at spaces (CSS Text 3), and a single word longer than its box still wraps (overflow-wrap) instead of
+     spilling out. <html lang> follows the UI language (i18n/index.ts). */
+  html:lang(ko) body {
+    word-break: keep-all;
+    overflow-wrap: break-word; /* not `anywhere`: that also shrinks a table column's minimum width */
+  }
+
   /* Browser autofill paints its own light background over the dark inputs
      (Chrome: a pale yellow/blue fill with dark text). Keep the field's own
      colours: the inset shadow covers the fill, the text colour is forced. */
@@ -136,17 +144,48 @@ body {
     line-height: 1;
   }
 
-  /* List tables: a column marked col-low (Age, Namespace, IPs, images …) folds
-     below the xl breakpoint; the value stays available in the row's drawer.
-     The table's min-width is released at the same point so the remaining
-     columns can fit the narrower content area. */
-  @media (max-width: 1279.98px) {
-    .col-low {
-      display: none;
-    }
-    .card > .overflow-x-auto > table {
-      min-width: 0;
-    }
+  /* List tables too wide for their scroll box (useAdaptiveTable sets data-fold):
+     col-optional columns (images, selectors, ports …) fold first, col-low columns
+     (Namespace, Age, IPs) only when narrowing the rest is not enough; the value
+     stays available in the row's drawer. A folded column keeps its slot at zero
+     width (not display: none), so the empty row's colSpan and the filler rows,
+     which count every column, still line up. The table's min-width is released
+     at the same time (!important: the w-[…]/px-…/text-…/min-w-[…] utilities sit
+     in a later layer). A col-low value stays on one line, cut with an ellipsis
+     when its column is narrowed. */
+  [data-fold] .col-optional,
+  [data-fold='low'] .col-low {
+    width: 0 !important;
+    padding: 0 !important;
+    border: 0;
+    font-size: 0 !important;
+    overflow: hidden;
+    visibility: hidden;
+  }
+  [data-fold] .col-optional *,
+  [data-fold='low'] .col-low * {
+    display: none;
+  }
+  [data-fold] > table {
+    min-width: 0 !important;
+  }
+  td.col-low {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* A page that scrolls past the screen (long admin tables): room under its last row so the floating AI chat
+     button (fixed, bottom-right) does not sit on the last values or buttons at the end of the page. Pages
+     sized to the screen (list tables) keep their height. */
+  .page-scrolls {
+    padding-bottom: 4rem;
+  }
+
+  /* The sidebar menu scrolls: a fade over its bottom 24px shows that items go on below the account box. At the
+     end of the list only the menu's own bottom padding (py-6 = 24px) sits under the fade. */
+  .sidebar-nav {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
   }
 
   /* useAdaptiveTable marks the scroll wrapper while the table overflows it:

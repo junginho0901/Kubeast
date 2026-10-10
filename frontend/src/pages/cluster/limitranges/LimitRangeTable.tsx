@@ -103,7 +103,7 @@ export function LimitRangeTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{lr.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{lr.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={lr.namespace}>{lr.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{getLimitTypes(lr)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(lr.created_at)}</td>

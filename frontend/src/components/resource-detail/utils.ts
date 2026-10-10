@@ -5,7 +5,7 @@
 //
 // 분류:
 // - 상수: WORKLOAD_KINDS / NETWORK_KINDS / CONFIG_STORAGE_KINDS / SELF_LOADING_KINDS / UNRESOLVABLE_KINDS
-// - 매핑: kindToPlural (Kind → API 복수형) / kindIcon (Kind → 이모지)
+// - 매핑: kindToPlural (Kind → API 복수형) — Kind 아이콘은 components/kindIcons.ts(사이드바와 공용)
 // - Helm: extractHelmRelease (배지 컴포넌트는 HelmReleaseBadge.tsx)
 // - Secret: decodeSecretYaml / encodeSecretYaml (data ↔ stringData base64 변환)
 
@@ -159,36 +159,3 @@ export function kindToPlural(kind: string): string {
   return map[kind] ?? kind.toLowerCase()
 }
 
-export function kindIcon(kind: string): string {
-  const map: Record<string, string> = {
-    Node: '🖥️', Namespace: '📦', Pod: '🔵', Deployment: '🚀', StatefulSet: '📊',
-    DaemonSet: '👾', ReplicaSet: '📋', Job: '⚡', CronJob: '⏰',
-    Service: '🌐', Ingress: '🔀', NetworkPolicy: '🛡️',
-    IngressClass: '🧩',
-    EndpointSlice: '🧩',
-    Gateway: '🚪',
-    GatewayClass: '🚏',
-    HTTPRoute: '🧭',
-    GRPCRoute: '📡',
-    ReferenceGrant: '🔗',
-    BackendTLSPolicy: '🔒',
-    DeviceClass: '🎮',
-    ResourceClaim: '📋',
-    ResourceClaimTemplate: '📄',
-    ResourceSlice: '🧩',
-    ServiceAccount: '👤', Role: '🔐', RoleBinding: '🔗', ClusterRole: '🔐', ClusterRoleBinding: '🔗',
-    ConfigMap: '📝', Secret: '🔑', PersistentVolume: '💾', PersistentVolumeClaim: '💿',
-    StorageClass: '🗄️', VolumeAttachment: '🔗', HorizontalPodAutoscaler: '📈', VerticalPodAutoscaler: '📊',
-    PodDisruptionBudget: '🛡️',
-    PriorityClass: '⚡',
-    RuntimeClass: '🔧',
-    Lease: '🤝',
-    ResourceQuota: '📊',
-    LimitRange: '📏',
-    MutatingWebhookConfiguration: '🔄',
-    ValidatingWebhookConfiguration: '✅',
-    CustomResourceDefinition: '🧩',
-    CustomResourceInstance: '📦',
-  }
-  return map[kind] ?? '📄'
-}

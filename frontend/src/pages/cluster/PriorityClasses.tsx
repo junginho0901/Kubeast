@@ -353,7 +353,7 @@ description: "Sample priority class"
                     {tr('priorityClasses.table.globalDefault', 'Global Default')}{renderSortIcon('globalDefault')}
                   </span>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('preemptionPolicy')}>
+                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('preemptionPolicy')}>
                   <span className="inline-flex items-center gap-1">
                     {tr('priorityClasses.table.preemptionPolicy', 'Preemption Policy')}{renderSortIcon('preemptionPolicy')}
                   </span>
@@ -386,7 +386,7 @@ description: "Sample priority class"
                       <span className="text-xs text-slate-400">False</span>
                     )}
                   </td>
-                  <td className="col-low py-3 px-4 text-xs font-mono">{pc.preemption_policy}</td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono">{pc.preemption_policy}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pc.created_at)}</td>
                 </tr>
               ))}

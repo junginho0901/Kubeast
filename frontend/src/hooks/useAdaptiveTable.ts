@@ -1,17 +1,50 @@
 import { useEffect, useRef } from 'react'
 import { useAdaptiveRowsPerPage } from './useAdaptiveRowsPerPage'
 
-// Marks the scroll wrapper with data-scroll-more="left|right|both" while the
-// table is wider than the wrapper, so index.css can paint an edge fade + chevron
-// (background-attachment: scroll keeps it pinned to the wrapper's edge). Without
-// it a wide table at 1024–1440 px just looks cut off.
-function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement | null>) {
+// A table wider than its scroll wrapper is fitted in steps, each only when the
+// one before is not enough: fold the col-optional columns (images, selectors,
+// ports …), narrow the columns left by up to a fifth, then fold the col-low
+// columns too (Namespace, Age, IPs) and narrow again. Measured with every column
+// shown in the same frame, so nothing paints in between.
+const MIN_SCALE = 0.8
+
+function fitTable(body: HTMLElement) {
+  const head = (body.firstElementChild as HTMLTableElement | null)?.tHead?.rows[0]
+  const cells = head ? Array.from(head.cells) : []
+  for (const cell of cells) cell.style.width = ''
+  body.removeAttribute('data-fold')
+  if (body.scrollWidth <= body.clientWidth + 1) return
+  for (const level of ['optional', 'low']) {
+    body.setAttribute('data-fold', level)
+    const scale = body.clientWidth / body.scrollWidth
+    if (scale >= 1) return
+    if (scale >= MIN_SCALE) {
+      const widths = cells.map((cell) => cell.getBoundingClientRect().width)
+      cells.forEach((cell, i) => {
+        if (widths[i] > 0) cell.style.width = `${Math.floor(widths[i] * scale)}px`
+      })
+      return
+    }
+  }
+}
+
+// Fits the table (above) on every size change, and marks the scroll wrapper
+// with data-scroll-more="left|right|both" while what is left still overflows,
+// so index.css can paint an edge fade + chevron (background-attachment: scroll
+// keeps it pinned to the wrapper's edge). Without it a wide table just looks
+// cut off. recalculationKey re-attaches it to a wrapper that mounts after a spinner.
+function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement | null>, recalculationKey?: string | number) {
   useEffect(() => {
     const body = bodyRef.current
     if (!body) return
     let frameId = 0
+    let refold = true
     const update = () => {
       frameId = 0
+      if (refold) {
+        refold = false
+        fitTable(body)
+      }
       const more = body.scrollWidth - body.clientWidth
       const left = body.scrollLeft > 1
       const right = more - body.scrollLeft > 1
@@ -22,23 +55,28 @@ function useScrollMoreHint(bodyRef: React.RefObject<HTMLElement | null>) {
     const schedule = () => {
       if (!frameId) frameId = requestAnimationFrame(update)
     }
+    const resized = () => {
+      refold = true
+      schedule()
+    }
     schedule()
     body.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
+    window.addEventListener('resize', resized)
     let observer: ResizeObserver | null = null
     if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(schedule)
+      observer = new ResizeObserver(resized)
       observer.observe(body)
       if (body.firstElementChild) observer.observe(body.firstElementChild)
     }
     return () => {
       if (frameId) cancelAnimationFrame(frameId)
       body.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', schedule)
+      window.removeEventListener('resize', resized)
       observer?.disconnect()
       body.removeAttribute('data-scroll-more')
+      body.removeAttribute('data-fold')
     }
-  }, [bodyRef])
+  }, [bodyRef, recalculationKey])
 }
 
 interface UseAdaptiveTableOptions {
@@ -75,7 +113,7 @@ export function useAdaptiveTable(options: UseAdaptiveTableOptions = {}) {
     theadRef,
     rowRef: firstRowRef,
   })
-  useScrollMoreHint(bodyRef)
+  useScrollMoreHint(bodyRef, options.recalculationKey)
 
   return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage }
 }

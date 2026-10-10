@@ -78,13 +78,13 @@ export default function AdminOrganizations() {
         <input
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+          className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
         />
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
           {tr('adminOrg.add', 'Add')}

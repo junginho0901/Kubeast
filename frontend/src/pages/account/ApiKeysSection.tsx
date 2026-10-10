@@ -109,7 +109,7 @@ export default function ApiKeysSection() {
           type="button"
           data-testid="api-key-create-open"
           onClick={openModal}
-          className="shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500"
+          className="btn btn-primary shrink-0"
         >
           {tr('apiKeys.create', 'Create key')}
         </button>

@@ -72,7 +72,7 @@ export default function AdminAIUsage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="page-scrolls space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">{tr('adminAIUsage.title', 'AI 사용량')}</h1>
@@ -83,7 +83,7 @@ export default function AdminAIUsage() {
         <button
           type="button"
           onClick={() => refetch()}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700"
+          className="btn btn-primary flex items-center gap-2"
         >
           <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           {tr('common.refresh', '새로고침')}
@@ -158,7 +158,7 @@ export default function AdminAIUsage() {
             ) : (
               rows.map((r) => (
                 <tr key={r.key} className="border-t border-slate-800 hover:bg-slate-900/40">
-                  <td className="px-3 py-2 text-slate-100">{r.key || '-'}</td>
+                  <td className="px-3 py-2 text-slate-100"><span className="block max-w-[240px] truncate" title={r.key || undefined}>{r.key || '-'}</span></td>
                   <td className="px-3 py-2 text-right text-slate-200">{fmtInt(r.requests)}</td>
                   <td className="px-3 py-2 text-right text-slate-300">{fmtInt(r.prompt_tokens)}</td>
                   <td className="px-3 py-2 text-right text-slate-300">{fmtInt(r.completion_tokens)}</td>
@@ -176,7 +176,7 @@ export default function AdminAIUsage() {
                   <td className="px-3 py-2 text-right text-slate-300">{fmtInt(r.tool_calls)}</td>
                   <td className="px-3 py-2 text-right text-slate-300">{(r.avg_duration_ms / 1000).toFixed(1)}</td>
                   <td className={`px-3 py-2 text-right ${r.failures > 0 ? 'text-red-300' : 'text-slate-500'}`}>{fmtInt(r.failures)}</td>
-                  <td className="px-3 py-2 text-slate-400">{r.last_at ? new Date(r.last_at).toLocaleString() : '-'}</td>
+                  <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{r.last_at ? new Date(r.last_at).toLocaleString() : '-'}</td>
                 </tr>
               ))
             )}

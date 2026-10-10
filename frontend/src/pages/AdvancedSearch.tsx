@@ -241,7 +241,7 @@ export default function AdvancedSearch() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <Search className="w-7 h-7 text-sky-400" />
             {t('advancedSearch.title', 'Advanced Search')}
             <BetaTag label={t('common.beta', 'Beta')} size="md" />
@@ -253,7 +253,7 @@ export default function AdvancedSearch() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm text-slate-300 transition-colors disabled:opacity-50"
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           {t('advancedSearch.refresh', 'Refresh')}

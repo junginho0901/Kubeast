@@ -80,7 +80,7 @@ export function LeaseTable({
                   {tr('leases.table.holder', 'Holder')}{renderSortIcon('holder')}
                 </span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('duration')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('duration')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('leases.table.duration', 'Duration (s)')}{renderSortIcon('duration')}
                 </span>
@@ -102,10 +102,10 @@ export function LeaseTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{l.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{l.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={l.namespace}>{l.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{l.holder_identity || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono">{l.lease_duration_seconds ?? '-'}</td>
+                <td className="col-optional py-3 px-4 text-xs font-mono">{l.lease_duration_seconds ?? '-'}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(l.created_at)}</td>
               </tr>
             ))}

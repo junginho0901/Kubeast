@@ -27,7 +27,7 @@ export default function AdminAIModels() {
       {/* header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100 flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary-400" />
             {tr('admin.aiModels.title', 'AI Model Configuration')}
           </h1>
@@ -38,7 +38,7 @@ export default function AdminAIModels() {
         {!isCreating && editingId === null && (
           <button
             onClick={openCreateForm}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-500"
+            className="btn btn-primary flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
             {tr('admin.aiModels.add', 'Add Model')}

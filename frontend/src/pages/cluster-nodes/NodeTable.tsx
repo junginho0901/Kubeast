@@ -60,25 +60,25 @@ export default function NodeTable({
         <table className="w-full text-sm min-w-[980px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => onSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.status', 'Status')}{renderSortIcon('status')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('roles')}>
+              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('roles')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.roles', 'Roles')}{renderSortIcon('roles')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('cpu')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('cpu')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.cpu', 'CPU')}{renderSortIcon('cpu')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => onSort('memory')}>
+              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('memory')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.memory', 'Memory')}{renderSortIcon('memory')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => onSort('version')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('version')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.version', 'Version')}{renderSortIcon('version')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('internal_ip')}>
+              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('internal_ip')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.internalIp', 'Internal IP')}{renderSortIcon('internal_ip')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('external_ip')}>

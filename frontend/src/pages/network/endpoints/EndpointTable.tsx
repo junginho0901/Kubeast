@@ -104,7 +104,7 @@ export function EndpointTable({
               <th className="text-left py-3 px-4 w-[320px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('ports')}>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointsPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
@@ -131,10 +131,10 @@ export function EndpointTable({
                   rawJson: endpointToRawJson(ep),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{ep.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={ep.namespace}>{ep.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{ep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAddresses(ep)}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(ep.ports)}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(ep.ports)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{ep.ready_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{ep.not_ready_count || 0}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(ep.created_at)}</td>
@@ -142,7 +142,7 @@ export function EndpointTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 7 : 6} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -153,7 +153,7 @@ export function EndpointTable({
             )}
 
             {sortedEndpointsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="endpoints">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 7 : 6} resource="endpoints">
                 {tr('endpointsPage.noResults', 'No endpoints found.')}
               </TableEmptyRow>
             )}

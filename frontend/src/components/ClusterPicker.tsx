@@ -85,7 +85,8 @@ export default function ClusterPicker() {
         <span className="flex-1 truncate text-sm text-white">
           {selected?.display_name ?? currentCluster ?? tr('cluster.picker.select', 'Select cluster')}
         </span>
-        {selected?.is_self_cluster && (
+        {/* "self" says this is the cluster Kubeast runs in — left out when that is already the name */}
+        {selected?.is_self_cluster && selected.display_name !== 'self' && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300 shrink-0">
             self
           </span>

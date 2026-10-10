@@ -54,8 +54,7 @@ test.describe('QA sweep frontend fixes', () => {
   test('the sidebar nav scrolls under the account box instead of overlapping it (900px)', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/admin/users')
-    // The page heading, not the sidebar brand (also an h1): both are present
-    // once the lazy admin chunk has rendered, so a bare level-1 lookup races.
+    // Waits for the page heading: the lazy admin chunk renders after the sidebar.
     await expect(page.getByRole('heading', { level: 1, name: /user management|유저 관리/i })).toBeVisible()
     const nav = page.getByTestId('sidebar-nav')
     const logout = page.getByRole('button', { name: /log ?out|로그아웃/i })

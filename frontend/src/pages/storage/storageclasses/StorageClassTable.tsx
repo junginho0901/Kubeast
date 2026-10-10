@@ -106,10 +106,10 @@ export function StorageClassTable({
               <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('bindingMode')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.volumeBindingMode', 'Volume Binding Mode')}{renderSortIcon('bindingMode')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
+              <th className="col-optional text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.allowVolumeExpansion', 'Allow Volume Expansion')}{renderSortIcon('allowExpansion')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
+              <th className="col-optional text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
@@ -132,8 +132,8 @@ export function StorageClassTable({
                 <td className="py-3 px-4 text-xs">{sc.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.reclaim_policy || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.volume_binding_mode || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
-                <td className="col-low py-3 px-4 text-xs">{Object.keys(sc.parameters || {}).length}</td>
+                <td className="col-optional py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
+                <td className="col-optional py-3 px-4 text-xs">{Object.keys(sc.parameters || {}).length}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(sc.created_at)}</td>
               </tr>
             ))}

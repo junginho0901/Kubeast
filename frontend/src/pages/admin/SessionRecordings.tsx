@@ -26,6 +26,10 @@ function keptBytes(r: SessionRecording): number {
   return r.status === 'interrupted' ? r.uploaded_bytes : r.bytes || r.uploaded_bytes
 }
 
+function targetText(r: SessionRecording): string {
+  return `${r.namespace ? `${r.namespace}/` : ''}${r.target}${r.container ? ` (${r.container})` : ''}`
+}
+
 export default function SessionRecordings() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
@@ -54,7 +58,7 @@ export default function SessionRecordings() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-scrolls space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary-600/20 rounded-lg">
@@ -68,7 +72,7 @@ export default function SessionRecordings() {
         <button
           type="button"
           onClick={() => refetch()}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700"
+          className="btn btn-primary flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} /> {tr('recordings.refresh', 'Refresh')}
         </button>
@@ -87,7 +91,7 @@ export default function SessionRecordings() {
             <input
               value={user}
               onChange={(e) => setUser(e.target.value)}
-              placeholder="alice@example.com"
+              placeholder="user@example.com"
               className="w-60 h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-white"
             />
           </div>
@@ -138,10 +142,10 @@ export default function SessionRecordings() {
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-slate-700" data-testid={`recording-row-${r.id}`}>
                     <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{formatWhen(r.started_at)}</td>
-                    <td className="px-3 py-2 text-slate-200">{r.user_email || '-'}</td>
+                    <td className="px-3 py-2 text-slate-200"><span className="block max-w-[200px] truncate" title={r.user_email || undefined}>{r.user_email || '-'}</span></td>
                     <td className="px-3 py-2 text-slate-300">{r.kind === 'exec' ? tr('recordings.kind.exec', 'Pod exec') : tr('recordings.kind.nodeShell', 'Node shell')}</td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-200">
-                      {r.namespace ? `${r.namespace}/` : ''}{r.target}{r.container ? ` (${r.container})` : ''}
+                      <span className="block max-w-[280px] truncate" title={targetText(r)}>{targetText(r)}</span>
                     </td>
                     <td className="px-3 py-2 text-slate-300">{r.cluster}</td>
                     <td
@@ -153,7 +157,7 @@ export default function SessionRecordings() {
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`inline-block rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`}
+                        className={`inline-block whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`}
                         title={
                           r.status === 'interrupted'
                             ? r.parts === 0
@@ -173,7 +177,7 @@ export default function SessionRecordings() {
                         disabled={r.parts === 0}
                         onClick={() => setPlaying(r)}
                         data-testid={`recording-play-${r.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
                       >
                         <Play className="w-3.5 h-3.5" /> {tr('recordings.play', 'Play')}
                       </button>

@@ -105,10 +105,10 @@ export function JobTable({
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('duration')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -129,7 +129,7 @@ export function JobTable({
                   rawJson: jobToWorkloadRawJson(job),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{job.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={job.namespace}>{job.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{job.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">
                   {(job.succeeded ?? 0)}/{(job.completions ?? '-')}
@@ -138,8 +138,8 @@ export function JobTable({
                   <span className={`badge ${getJobStatusColor(job.status)}`}>{job.status || '-'}</span>
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">{job.duration || formatDuration(job.duration_seconds)}</td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.containers || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(job.images || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(job.created_at)}</td>
               </tr>
             ))}

@@ -4,31 +4,31 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   Activity,
-  ArrowRight,
-  Box,
-  Boxes,
+  Bot,
+  Building2,
+  ChartColumn,
   ClipboardCheck,
-  ShieldCheck,
-  Clock,
-  Database,
-  FileBox,
-  FileCode,
+  Cloud,
   FileSearch,
   Film,
-  HardDrive,
-  Key,
+  Gauge,
+  History,
+  Hourglass,
+  IdCard,
   Layers,
   LayoutDashboard,
   LogOut,
+  MemoryStick,
   MessageSquare,
-  Network,
-  Package,
+  Microchip,
+  ScrollText,
   Search,
-  Server,
-  Shield,
-  Terminal,
+  ShieldCheck,
+  SquareTerminal,
+  Users,
   Waypoints,
 } from 'lucide-react'
+import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { logoutSession } from '@/services/auth'
@@ -45,6 +45,7 @@ import ClusterSwitchProgress from './ClusterSwitchProgress'
 import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
+import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 
 type NavItem = {
   name: string
@@ -102,12 +103,28 @@ export default function Layout() {
   })
 
   // The nav scrolls on short viewports: keep the current page's entry in view
-  // (deep links into the ADMIN section land below the fold otherwise). Runs
-  // again once `me` resolves: the account box under the nav renders then and
-  // shrinks the nav, which pushed the entry scrolled a moment earlier under it.
+  // (deep links into the ADMIN section land below the fold otherwise). The
+  // entry's group opens with a 200 ms transition and the account box under the
+  // nav renders once `me` resolves, both after this runs — so it scrolls again
+  // whenever the nav changes size during the first second after a page change
+  // (later on, the user's own scrolling wins).
   useEffect(() => {
-    const active = document.querySelector<HTMLElement>(`nav a[href="${CSS.escape(location.pathname)}"]`)
-    active?.scrollIntoView({ block: 'nearest' })
+    const nav = document.querySelector<HTMLElement>('[data-testid="sidebar-nav"]')
+    const scroll = () =>
+      nav?.querySelector<HTMLElement>(`a[href="${CSS.escape(location.pathname)}"]`)?.scrollIntoView({ block: 'nearest' })
+    scroll()
+    if (!nav || typeof ResizeObserver === 'undefined') return
+    const until = Date.now() + 1000
+    const observer = new ResizeObserver(() => {
+      if (Date.now() < until) scroll()
+    })
+    observer.observe(nav)
+    for (const child of Array.from(nav.children)) observer.observe(child)
+    const timer = window.setTimeout(scroll, 300)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timer)
+    }
   }, [location.pathname, isMeLoading])
 
   useEffect(() => {
@@ -208,39 +225,39 @@ export default function Layout() {
         { name: t('nav.monitoring'), href: '/monitoring', icon: Activity },
         { name: t('nav.aiChat'), href: '/ai-chat', icon: MessageSquare },
         { name: t('nav.resourceGraph'), href: '/cluster/resource-graph', icon: Waypoints },
-        { name: t('nav.timeline'), href: '/timeline', icon: Clock },
+        { name: t('nav.timeline'), href: '/timeline', icon: History },
       ],
     },
     {
       id: 'cluster',
       label: t('nav.cluster'),
       items: [
-        { name: t('nav.namespaces'), href: '/cluster/namespaces', icon: Boxes },
-        { name: t('nav.nodes'), href: '/cluster/nodes', icon: Server },
+        { name: t('nav.namespaces'), href: '/cluster/namespaces', icon: K.Namespace },
+        { name: t('nav.nodes'), href: '/cluster/nodes', icon: K.Node },
         { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search, tag: t('common.beta') },
-        { name: t('nav.priorityClasses'), href: '/cluster/priorityclasses', icon: Activity },
-        { name: t('nav.runtimeClasses'), href: '/cluster/runtimeclasses', icon: Server },
-        { name: t('nav.leases'), href: '/cluster/leases', icon: Clock },
-        { name: t('nav.resourceQuotas'), href: '/cluster/resourcequotas', icon: Database },
-        { name: t('nav.limitRanges'), href: '/cluster/limitranges', icon: Layers },
-        { name: t('nav.mutatingWebhooks'), href: '/cluster/mutatingwebhookconfigurations', icon: FileCode },
-        { name: t('nav.validatingWebhooks'), href: '/cluster/validatingwebhookconfigurations', icon: FileCode },
+        { name: t('nav.priorityClasses'), href: '/cluster/priorityclasses', icon: K.PriorityClass },
+        { name: t('nav.runtimeClasses'), href: '/cluster/runtimeclasses', icon: K.RuntimeClass },
+        { name: t('nav.leases'), href: '/cluster/leases', icon: K.Lease },
+        { name: t('nav.resourceQuotas'), href: '/cluster/resourcequotas', icon: K.ResourceQuota },
+        { name: t('nav.limitRanges'), href: '/cluster/limitranges', icon: K.LimitRange },
+        { name: t('nav.mutatingWebhooks'), href: '/cluster/mutatingwebhookconfigurations', icon: K.MutatingWebhookConfiguration },
+        { name: t('nav.validatingWebhooks'), href: '/cluster/validatingwebhookconfigurations', icon: K.ValidatingWebhookConfiguration },
       ],
     },
     {
       id: 'workloads',
       label: t('nav.workloads'),
       items: [
-        { name: t('nav.pods'), href: '/workloads/pods', icon: Box },
-        { name: t('nav.deployments'), href: '/workloads/deployments', icon: Layers },
-        { name: t('nav.statefulSets'), href: '/workloads/statefulsets', icon: Database },
-        { name: t('nav.daemonSets'), href: '/workloads/daemonsets', icon: Server },
-        { name: t('nav.replicaSets'), href: '/workloads/replicasets', icon: Boxes },
-        { name: t('nav.jobs'), href: '/workloads/jobs', icon: FileBox },
-        { name: t('nav.cronJobs'), href: '/workloads/cronjobs', icon: Clock },
-        { name: t('nav.hpas'), href: '/workloads/hpas', icon: Activity },
-        { name: t('nav.vpas'), href: '/workloads/vpas', icon: Activity },
-        { name: t('nav.pdbs'), href: '/workloads/pdbs', icon: Shield },
+        { name: t('nav.pods'), href: '/workloads/pods', icon: K.Pod },
+        { name: t('nav.deployments'), href: '/workloads/deployments', icon: K.Deployment },
+        { name: t('nav.statefulSets'), href: '/workloads/statefulsets', icon: K.StatefulSet },
+        { name: t('nav.daemonSets'), href: '/workloads/daemonsets', icon: K.DaemonSet },
+        { name: t('nav.replicaSets'), href: '/workloads/replicasets', icon: K.ReplicaSet },
+        { name: t('nav.jobs'), href: '/workloads/jobs', icon: K.Job },
+        { name: t('nav.cronJobs'), href: '/workloads/cronjobs', icon: K.CronJob },
+        { name: t('nav.hpas'), href: '/workloads/hpas', icon: K.HorizontalPodAutoscaler },
+        { name: t('nav.vpas'), href: '/workloads/vpas', icon: K.VerticalPodAutoscaler },
+        { name: t('nav.pdbs'), href: '/workloads/pdbs', icon: K.PodDisruptionBudget },
       ],
     },
     {
@@ -250,25 +267,25 @@ export default function Layout() {
         {
           name: t('nav.pvcs'),
           href: '/storage?tab=pvcs',
-          icon: Database,
+          icon: K.PersistentVolumeClaim,
           match: (pathname, search) => storageTabMatch('pvcs', pathname, search),
         },
         {
           name: t('nav.pvs'),
           href: '/storage?tab=pvs',
-          icon: HardDrive,
+          icon: K.PersistentVolume,
           match: (pathname, search) => storageTabMatch('pvs', pathname, search),
         },
         {
           name: t('nav.storageClasses'),
           href: '/storage?tab=storageclasses',
-          icon: Layers,
+          icon: K.StorageClass,
           match: (pathname, search) => storageTabMatch('storageclasses', pathname, search),
         },
         {
           name: t('nav.volumeAttachments'),
           href: '/storage?tab=volumeattachments',
-          icon: Waypoints,
+          icon: K.VolumeAttachment,
           match: (pathname, search) => storageTabMatch('volumeattachments', pathname, search),
         },
       ],
@@ -277,12 +294,12 @@ export default function Layout() {
       id: 'network',
       label: t('nav.network'),
       items: [
-        { name: t('nav.services'), href: '/network/services', icon: Network },
-        { name: t('nav.endpoints'), href: '/network/endpoints', icon: Server },
-        { name: t('nav.endpointSlices'), href: '/network/endpointslices', icon: Waypoints },
-        { name: t('nav.ingresses'), href: '/network/ingresses', icon: ArrowRight },
-        { name: t('nav.ingressClasses'), href: '/network/ingressclasses', icon: FileCode },
-        { name: t('nav.networkPolicies'), href: '/network/networkpolicies', icon: Shield },
+        { name: t('nav.services'), href: '/network/services', icon: K.Service },
+        { name: t('nav.endpoints'), href: '/network/endpoints', icon: K.Endpoints },
+        { name: t('nav.endpointSlices'), href: '/network/endpointslices', icon: K.EndpointSlice },
+        { name: t('nav.ingresses'), href: '/network/ingresses', icon: K.Ingress },
+        { name: t('nav.ingressClasses'), href: '/network/ingressclasses', icon: K.IngressClass },
+        { name: t('nav.networkPolicies'), href: '/network/networkpolicies', icon: K.NetworkPolicy },
       ],
     },
     {
@@ -290,13 +307,13 @@ export default function Layout() {
       label: t('nav.gateway'),
       tag: t('common.beta'),
       items: [
-        { name: t('nav.gateways'), href: '/gateway/gateways', icon: Waypoints },
-        { name: t('nav.gatewayClasses'), href: '/gateway/gatewayclasses', icon: FileCode },
-        { name: t('nav.httpRoutes'), href: '/gateway/httproutes', icon: ArrowRight },
-        { name: t('nav.grpcRoutes'), href: '/gateway/grpcroutes', icon: ArrowRight },
-        { name: t('nav.referenceGrants'), href: '/gateway/referencegrants', icon: Key },
-        { name: t('nav.backendTlsPolicies'), href: '/gateway/backendtlspolicies', icon: Shield },
-        { name: t('nav.policies'), href: '/gateway/policies', icon: Network },
+        { name: t('nav.gateways'), href: '/gateway/gateways', icon: K.Gateway },
+        { name: t('nav.gatewayClasses'), href: '/gateway/gatewayclasses', icon: K.GatewayClass },
+        { name: t('nav.httpRoutes'), href: '/gateway/httproutes', icon: K.HTTPRoute },
+        { name: t('nav.grpcRoutes'), href: '/gateway/grpcroutes', icon: K.GRPCRoute },
+        { name: t('nav.referenceGrants'), href: '/gateway/referencegrants', icon: K.ReferenceGrant },
+        { name: t('nav.backendTlsPolicies'), href: '/gateway/backendtlspolicies', icon: K.BackendTLSPolicy },
+        { name: t('nav.policies'), href: '/gateway/policies', icon: ScrollText },
       ],
     },
     {
@@ -304,32 +321,32 @@ export default function Layout() {
       label: t('nav.gpu'),
       tag: t('common.beta'),
       items: [
-        { name: t('nav.gpuDashboard'), href: '/gpu/dashboard', icon: LayoutDashboard },
-        { name: t('nav.gpuNodes'), href: '/gpu/nodes', icon: Server },
-        { name: t('nav.gpuPods'), href: '/gpu/pods', icon: Box },
-        { name: t('nav.deviceClasses'), href: '/gpu/deviceclasses', icon: FileCode },
-        { name: t('nav.resourceClaims'), href: '/gpu/resourceclaims', icon: FileBox },
-        { name: t('nav.resourceClaimTemplates'), href: '/gpu/resourceclaimtemplates', icon: Layers },
-        { name: t('nav.resourceSlices'), href: '/gpu/resourceslices', icon: HardDrive },
+        { name: t('nav.gpuDashboard'), href: '/gpu/dashboard', icon: Gauge },
+        { name: t('nav.gpuNodes'), href: '/gpu/nodes', icon: MemoryStick },
+        { name: t('nav.gpuPods'), href: '/gpu/pods', icon: Microchip },
+        { name: t('nav.deviceClasses'), href: '/gpu/deviceclasses', icon: K.DeviceClass },
+        { name: t('nav.resourceClaims'), href: '/gpu/resourceclaims', icon: K.ResourceClaim },
+        { name: t('nav.resourceClaimTemplates'), href: '/gpu/resourceclaimtemplates', icon: K.ResourceClaimTemplate },
+        { name: t('nav.resourceSlices'), href: '/gpu/resourceslices', icon: K.ResourceSlice },
       ],
     },
     {
       id: 'security',
       label: t('nav.security'),
       items: [
-        { name: t('nav.serviceAccounts'), href: '/security/serviceaccounts', icon: Key },
-        { name: t('nav.roles'), href: '/security/roles', icon: Shield },
-        { name: t('nav.clusterRoles'), href: '/security/clusterroles', icon: Shield },
-        { name: t('nav.roleBindings'), href: '/security/rolebindings', icon: Shield },
-        { name: t('nav.clusterRoleBindings'), href: '/security/clusterrolebindings', icon: Shield },
+        { name: t('nav.serviceAccounts'), href: '/security/serviceaccounts', icon: K.ServiceAccount },
+        { name: t('nav.roles'), href: '/security/roles', icon: K.Role },
+        { name: t('nav.clusterRoles'), href: '/security/clusterroles', icon: K.ClusterRole },
+        { name: t('nav.roleBindings'), href: '/security/rolebindings', icon: K.RoleBinding },
+        { name: t('nav.clusterRoleBindings'), href: '/security/clusterrolebindings', icon: K.ClusterRoleBinding },
       ],
     },
     {
       id: 'configuration',
       label: t('nav.configuration'),
       items: [
-        { name: t('nav.configMaps'), href: '/configuration/configmaps', icon: FileCode },
-        { name: t('nav.secrets'), href: '/configuration/secrets', icon: Key },
+        { name: t('nav.configMaps'), href: '/configuration/configmaps', icon: K.ConfigMap },
+        { name: t('nav.secrets'), href: '/configuration/secrets', icon: K.Secret },
       ],
     },
     {
@@ -337,15 +354,15 @@ export default function Layout() {
       label: t('nav.helm'),
       requiredPermission: 'menu.helm',
       items: [
-        { name: t('nav.helmReleases'), href: '/helm/releases', icon: Package },
+        { name: t('nav.helmReleases'), href: '/helm/releases', icon: K.HelmRelease },
       ],
     },
     {
       id: 'customResources',
       label: t('nav.customResources'),
       items: [
-        { name: t('nav.customInstances'), href: '/custom-resources/instances', icon: FileBox },
-        { name: t('nav.customGroups'), href: '/custom-resources/groups', icon: FileCode },
+        { name: t('nav.customInstances'), href: '/custom-resources/instances', icon: K.CustomResourceInstance },
+        { name: t('nav.customGroups'), href: '/custom-resources/groups', icon: K.CustomResourceDefinition },
       ],
     },
     {
@@ -353,29 +370,29 @@ export default function Layout() {
       label: t('nav.admin'),
       adminOnly: true,
       items: [
-        { name: t('nav.clusters', { defaultValue: 'Clusters' }), href: '/admin/clusters', icon: Server },
-        { name: t('nav.userManagement'), href: '/admin/users', icon: Shield },
-        { name: t('nav.roleManagement'), href: '/admin/roles', icon: Key },
+        { name: t('nav.clusters', { defaultValue: 'Clusters' }), href: '/admin/clusters', icon: Cloud },
+        { name: t('nav.userManagement'), href: '/admin/users', icon: Users },
+        { name: t('nav.roleManagement'), href: '/admin/roles', icon: IdCard },
         ...(accessRequestsOn
-          ? [{ name: t('nav.accessRequests', { defaultValue: 'Access requests' }), href: '/admin/access-requests', icon: Clock, badge: pendingAccessCount, testId: 'nav-access-requests' }]
+          ? [{ name: t('nav.accessRequests', { defaultValue: 'Access Requests' }), href: '/admin/access-requests', icon: Hourglass, badge: pendingAccessCount, testId: 'nav-access-requests' }]
           : []),
         ...(accessReviewOn
-          ? [{ name: t('nav.accessReview', { defaultValue: 'Access review' }), href: '/admin/access-review', icon: ClipboardCheck, testId: 'nav-access-review' }]
+          ? [{ name: t('nav.accessReview', { defaultValue: 'Access Review' }), href: '/admin/access-review', icon: ClipboardCheck, testId: 'nav-access-review' }]
           : []),
         ...(hygieneOn
-          ? [{ name: t('nav.clusterHygiene', { defaultValue: 'Cluster hygiene' }), href: '/admin/cluster-hygiene', icon: ShieldCheck, testId: 'nav-cluster-hygiene' }]
+          ? [{ name: t('nav.clusterHygiene', { defaultValue: 'Cluster Hygiene' }), href: '/admin/cluster-hygiene', icon: ShieldCheck, testId: 'nav-cluster-hygiene' }]
           : []),
-        { name: t('nav.organizations'), href: '/admin/organizations', icon: Boxes },
-        { name: t('nav.aiModels'), href: '/admin/ai-models', icon: MessageSquare },
+        { name: t('nav.organizations'), href: '/admin/organizations', icon: Building2 },
+        { name: t('nav.aiModels'), href: '/admin/ai-models', icon: Bot },
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
-        { name: t('nav.sessionRecordings', { defaultValue: 'Session recordings' }), href: '/admin/session-recordings', icon: Film, testId: 'nav-session-recordings' },
-        { name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: Activity },
-        { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: Terminal },
+        { name: t('nav.sessionRecordings', { defaultValue: 'Session Recordings' }), href: '/admin/session-recordings', icon: Film, testId: 'nav-session-recordings' },
+        { name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: ChartColumn },
+        { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ],
     },
   ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn])
 
-  const activeGroup = useMemo(() => {
+  const active = useMemo(() => {
     for (const group of navGroups) {
       if (group.adminOnly && !isAdmin) continue
       if (group.requiredPermission && !hasPermission(group.requiredPermission)) continue
@@ -385,11 +402,20 @@ export default function Layout() {
           : item.exact
             ? location.pathname === item.href
             : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
-        if (isActive) return group.id
+        if (isActive) return { group: group.id, name: item.name }
       }
     }
     return null
   }, [isAdmin, location.pathname, location.search, navGroups, hasPermission])
+  const activeGroup = active?.group ?? null
+
+  // Browser tab: "<screen> · Kubeast" (WCAG 2.4.2 Page Titled) — the sidebar's name for the page, or the route's
+  // screen name for pages the sidebar does not list (Settings, a Helm release).
+  useEffect(() => {
+    const meta = resolveRouteMeta(location.pathname)
+    const name = active?.name ?? (meta.titleKey ? t(meta.titleKey) : '')
+    document.title = name ? `${name} · Kubeast` : 'Kubeast'
+  }, [active, location.pathname, t])
 
   useEffect(() => {
     if (!activeGroup) return
@@ -430,7 +456,8 @@ export default function Layout() {
           <div className="flex items-center gap-3 px-6 border-b border-slate-700 h-[100px]">
             <Activity className="w-8 h-8 text-primary-500" />
             <div>
-              <h1 className="text-xl font-bold text-white">Kubeast</h1>
+              {/* not an <h1>: the page title is the one heading of each screen */}
+              <p className="text-xl font-bold text-white">Kubeast</p>
               <p className="text-xs text-slate-400">K8s DevOps Platform</p>
             </div>
           </div>
@@ -439,7 +466,7 @@ export default function Layout() {
 
           {/* min-h-0: a flex child defaults to min-height:auto, so without it the nav grows
               past the sidebar and the ADMIN items end up under the account box */}
-          <nav data-testid="sidebar-nav" className="flex-1 min-h-0 px-4 py-6 space-y-2 overflow-y-auto">
+          <nav data-testid="sidebar-nav" className="sidebar-nav flex-1 min-h-0 px-4 py-6 space-y-2 overflow-y-auto">
             {navGroups
               .filter((group) => {
                 if (group.adminOnly && !isAdmin) return false
@@ -479,13 +506,15 @@ export default function Layout() {
                             key={item.href}
                             to={item.href}
                             data-testid={item.testId}
+                            title={item.name}
                             className={`
                               flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
                               ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}
                             `}
                           >
-                            {Icon && <Icon className="w-4 h-4" />}
-                            <span className="font-medium">{item.name}</span>
+                            {/* shrink-0: a long name squeezed the icon; truncate: the long kind names ran out of the bar */}
+                            {Icon && <Icon className="w-4 h-4 shrink-0" />}
+                            <span className="min-w-0 truncate font-medium">{item.name}</span>
                             {item.tag && <BetaTag label={item.tag} />}
                             {item.badge ? (
                               <span
@@ -513,7 +542,7 @@ export default function Layout() {
             >
               <div className="text-[11px] text-slate-400">{t('layout.account')}</div>
               <div className="mt-0.5 truncate text-sm text-white">{me?.name ?? '...'}</div>
-              <div className="truncate text-xs text-slate-400">{me?.email ?? ''}</div>
+              {me?.email && me.email !== me.name && <div className="truncate text-xs text-slate-400">{me.email}</div>}
             </Link>
 
             <button

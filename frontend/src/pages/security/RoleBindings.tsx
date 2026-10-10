@@ -377,7 +377,7 @@ subjects:
               {pagedItems.map((rb, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${rb.namespace}/${rb.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'RoleBinding', name: rb.name, namespace: rb.namespace })}>
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{rb.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={rb.namespace}>{rb.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rb.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate" title={`${rb.role_ref_kind}/${rb.role_ref_name}`}>
                     <span className="text-slate-400">{rb.role_ref_kind}/</span>{rb.role_ref_name}

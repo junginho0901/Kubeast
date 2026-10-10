@@ -131,7 +131,7 @@ export function DaemonSetTable({
                 </span>
               </th>
               <th className="text-left py-3 px-4 w-[200px]">{tr('daemonsets.table.nodeSelector', 'Node Selector')}</th>
-              <th className="col-low text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('daemonsets.table.images', 'Images')}{renderSortIcon('images')}
                 </span>
@@ -156,7 +156,7 @@ export function DaemonSetTable({
                   rawJson: daemonSetToWorkloadRawJson(daemonset),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{daemonset.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={daemonset.namespace}>{daemonset.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{daemonset.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.ready}/{daemonset.desired}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.current}</td>
@@ -171,13 +171,13 @@ export function DaemonSetTable({
                     {Object.entries(daemonset.node_selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}
                   </span>
                 </td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(daemonset.images || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(daemonset.images || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(daemonset.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 12 : 11} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 11 : 10} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -188,7 +188,7 @@ export function DaemonSetTable({
             )}
 
             {sortedDaemonSetsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 12 : 11} resource="daemonsets">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 11 : 10} resource="daemonsets">
                 {tr('daemonsets.noResults', 'No daemonsets found.')}
               </TableEmptyRow>
             )}

@@ -356,7 +356,7 @@ export default function CustomResourceInstances() {
                     <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
                       <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
                     </th>
-                    <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
+                    <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                       <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                     </th>
                   </>
@@ -389,7 +389,7 @@ export default function CustomResourceInstances() {
                   {!kindFilter && (
                     <>
                       <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.kind}</span></td>
-                      <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.group}</span></td>
+                      <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.group}</span></td>
                     </>
                   )}
                   {showDynamicCols && printerColumns.map((col) => (
@@ -418,7 +418,7 @@ export default function CustomResourceInstances() {
                 </TableEmptyRow>
               )}
             </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={6} />
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={totalColCount} />
           </table>
         </div>
 
