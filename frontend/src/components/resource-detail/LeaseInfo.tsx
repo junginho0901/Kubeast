@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, KeyValueTags, EventsTable, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { humanDuration } from '@/utils/time'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
 interface Props {
@@ -42,13 +43,8 @@ export default function LeaseInfo({ name, namespace }: Props) {
   const expiresInSeconds = (renewTime && leaseDuration != null)
     ? Math.floor((new Date(renewTime).getTime() + (leaseDuration as number) * 1000 - nowMs) / 1000)
     : null
-  const fmtDur = (s: number): string => {
-    if (s < 0) return `${-s}s ago (expired)`
-    if (s < 60) return `${s}s`
-    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
-    if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
-    return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`
-  }
+  // durations as kubectl prints them; a lease past its renew time says how long ago it expired
+  const fmtDur = (s: number) => (s < 0 ? <Tx text="expired {{age}} ago" values={{ age: humanDuration(-s) }} /> : humanDuration(s))
 
   return (
     <div className="space-y-4">

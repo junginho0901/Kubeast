@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { IngressInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { PageSizeSelect } from '@/components/PageSizeSelect'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAddresses,
@@ -162,17 +163,20 @@ export function IngressTable({
         </table>
       </div>
 
-      {totalPages > 1 && (
+      {sortedIngressesLength > 0 && (
         <div className="flex items-center justify-between text-xs text-slate-400 px-4 py-3 border-t border-slate-700 shrink-0">
-          <span>
-            {(() => {
-              const total = sortedIngressesLength
-              if (total === 0) return tr('common.pagination.empty', '0')
-              const from = (currentPage - 1) * rowsPerPage + 1
-              const to = Math.min(currentPage * rowsPerPage, total)
-              return tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', { from, to, total })
-            })()}
-          </span>
+          <div className="flex items-center gap-4">
+            <PageSizeSelect />
+            <span>
+              {(() => {
+                const total = sortedIngressesLength
+                if (total === 0) return tr('common.pagination.empty', '0')
+                const from = (currentPage - 1) * rowsPerPage + 1
+                const to = Math.min(currentPage * rowsPerPage, total)
+                return tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', { from, to, total })
+              })()}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"

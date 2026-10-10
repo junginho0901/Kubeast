@@ -28,6 +28,8 @@ interface CustomDropdownProps {
   testId?: string
   /** Trigger height: sm = h-8 text-xs (inline toolbars), md = h-10 (default), lg = h-12 (next to h-12 search fields) */
   size?: 'sm' | 'md' | 'lg'
+  /** 'up' opens the panel above the trigger (a control at the bottom of the screen) */
+  placement?: 'down' | 'up'
 }
 
 const TRIGGER_SIZE: Record<NonNullable<CustomDropdownProps['size']>, string> = {
@@ -50,6 +52,7 @@ export default function CustomDropdown({
   disabled = false,
   testId,
   size = 'md',
+  placement = 'down',
 }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -98,7 +101,7 @@ export default function CustomDropdown({
 
       {/* dropdown panel */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-200 max-h-[260px] overflow-y-auto">
+        <div className={`absolute ${placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'} left-0 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-200 max-h-[260px] overflow-y-auto`}>
           {options.map((opt) => {
             const isSelected = opt.value === value
             return (

@@ -6,8 +6,4 @@ export function formatDuration(minutes: number): string {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
-export function formatWhen(iso?: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
-}
+export { formatTime as formatWhen } from '@/utils/time'

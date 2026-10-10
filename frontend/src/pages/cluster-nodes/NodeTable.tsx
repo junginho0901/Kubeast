@@ -1,6 +1,7 @@
 import { RefObject } from 'react'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { PageSizeSelect } from '@/components/PageSizeSelect'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
@@ -113,7 +114,7 @@ export default function NodeTable({
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.version || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.internal_ip || '-'}</span></td>
                   <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{node.external_ip || '-'}</span></td>
-                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.age)}</span></td>
+                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.created_at)}</span></td>
                 </tr>
               )
             })}
@@ -140,7 +141,8 @@ export default function NodeTable({
       </div>
       {sortedNodesCount > 0 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
+          <div className="flex items-center gap-4 text-xs text-slate-400">
+            <PageSizeSelect />
             {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
               start: (currentPage - 1) * rowsPerPage + 1,
               end: Math.min(currentPage * rowsPerPage, sortedNodesCount),

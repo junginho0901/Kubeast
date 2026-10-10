@@ -5,16 +5,15 @@ import { RefreshCw } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import type { AIUsageGroup, AIUsageRow } from '@/services/api'
+import { formatDate, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
+import { DateTextInput } from '@/components/DateTextInput'
 
 // Admin view over the ai.chat.complete audit records: who used the assistant
 // how much in a period (requests, tokens, tool calls). Visibility instead of a
 // quota — the operator decides what to do when a bill looks wrong.
 
 const DAY_MS = 24 * 60 * 60 * 1000
-
-function toDateInput(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
+const PAGE_SIZE = 25
 
 function fmtInt(n: number): string {
   return Number.isFinite(n) ? Math.round(n).toLocaleString() : '-'
@@ -25,23 +24,31 @@ export default function AdminAIUsage() {
   const tr = (key: string, fallback: string, options?: Record<string, unknown>) =>
     t(key, { defaultValue: fallback, ...options })
 
-  const [sinceDay, setSinceDay] = useState(() => toDateInput(new Date(Date.now() - 30 * DAY_MS)))
-  const [untilDay, setUntilDay] = useState(() => toDateInput(new Date()))
+  const [sinceDay, setSinceDay] = useState(() => formatDate(Date.now() - 30 * DAY_MS))
+  const [untilDay, setUntilDay] = useState(() => formatDate(Date.now()))
   const [group, setGroup] = useState<AIUsageGroup>('user')
+  const [page, setPage] = useState(1)
 
-  // Days are inclusive on both ends; the API takes [since, until).
-  const query = useMemo(
-    () => ({
-      since: new Date(`${sinceDay}T00:00:00`).toISOString(),
-      until: new Date(new Date(`${untilDay}T00:00:00`).getTime() + DAY_MS).toISOString(),
-      group,
-    }),
-    [sinceDay, untilDay, group],
-  )
+  // Days are inclusive on both ends; the API takes [since, until). A day that is
+  // not typed as YYYY-MM-DD yet keeps the last report on screen.
+  const { query, rangeOk } = useMemo(() => {
+    const since = parseTypedTime(sinceDay)
+    const until = parseTypedTime(untilDay)
+    return {
+      rangeOk: !!since && !!until && since <= until,
+      query: {
+        since: since?.toISOString() ?? '',
+        until: until ? new Date(until.getTime() + DAY_MS).toISOString() : '',
+        group,
+      },
+    }
+  }, [sinceDay, untilDay, group])
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin-ai-usage', query],
     queryFn: () => api.adminAIUsage(query),
+    enabled: rangeOk,
+    placeholderData: (previous) => previous,
     // Each read is itself audited (admin.audit.read), so no background polling.
     staleTime: 60_000,
     refetchInterval: false,
@@ -49,6 +56,10 @@ export default function AdminAIUsage() {
   })
 
   const rows: AIUsageRow[] = useMemo(() => data?.rows ?? [], [data?.rows])
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const partialTokens = rows.some((r) => r.token_requests < r.requests)
   const totals = useMemo(
     () =>
       rows.reduce(
@@ -93,23 +104,11 @@ export default function AdminAIUsage() {
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
         <label className="block text-xs font-semibold text-slate-400">
           {tr('adminAIUsage.since', '시작일')}
-          <input
-            type="date"
-            value={sinceDay}
-            max={untilDay}
-            onChange={(e) => setSinceDay(e.target.value)}
-            className="mt-1 block h-8 rounded-sm border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100"
-          />
+          <DateTextInput value={sinceDay} onChange={(v) => { setSinceDay(v); setPage(1) }} className="h-8" testId="ai-usage-since" />
         </label>
         <label className="block text-xs font-semibold text-slate-400">
           {tr('adminAIUsage.until', '종료일')}
-          <input
-            type="date"
-            value={untilDay}
-            min={sinceDay}
-            onChange={(e) => setUntilDay(e.target.value)}
-            className="mt-1 block h-8 rounded-sm border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100"
-          />
+          <DateTextInput value={untilDay} onChange={(v) => { setUntilDay(v); setPage(1) }} className="h-8" testId="ai-usage-until" />
         </label>
         <CustomDropdown
           size="sm"
@@ -117,7 +116,7 @@ export default function AdminAIUsage() {
           label={tr('adminAIUsage.groupBy', '기준')}
           testId="ai-usage-group"
           value={group}
-          onChange={(v) => setGroup(v as AIUsageGroup)}
+          onChange={(v) => { setGroup(v as AIUsageGroup); setPage(1) }}
           options={(['user', 'model', 'cluster'] as AIUsageGroup[]).map((g) => ({ value: g, label: groupLabel[g] }))}
         />
         <div className="ml-auto text-xs text-slate-400">
@@ -156,7 +155,7 @@ export default function AdminAIUsage() {
                 </td>
               </tr>
             ) : (
-              rows.map((r) => (
+              pageRows.map((r) => (
                 <tr key={r.key} className="border-t border-slate-800 hover:bg-slate-900/40">
                   <td className="px-3 py-2 text-slate-100"><span className="block max-w-[240px] truncate" title={r.key || undefined}>{r.key || '-'}</span></td>
                   <td className="px-3 py-2 text-right text-slate-200">{fmtInt(r.requests)}</td>
@@ -176,14 +175,35 @@ export default function AdminAIUsage() {
                   <td className="px-3 py-2 text-right text-slate-300">{fmtInt(r.tool_calls)}</td>
                   <td className="px-3 py-2 text-right text-slate-300">{(r.avg_duration_ms / 1000).toFixed(1)}</td>
                   <td className={`px-3 py-2 text-right ${r.failures > 0 ? 'text-red-300' : 'text-slate-500'}`}>{fmtInt(r.failures)}</td>
-                  <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{r.last_at ? new Date(r.last_at).toLocaleString() : '-'}</td>
+                  <td className="px-3 py-2 text-slate-400 whitespace-nowrap" title={utcTitle(r.last_at)}>{formatTime(r.last_at)}</td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+        {pageCount > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-800 px-3 py-2 text-xs text-slate-400" data-testid="ai-usage-pager">
+            <span>
+              {tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', {
+                from: (currentPage - 1) * PAGE_SIZE + 1,
+                to: Math.min(currentPage * PAGE_SIZE, rows.length),
+                total: rows.length,
+              })}
+            </span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-sm border border-slate-600 px-3 py-1.5 text-slate-300 hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
+                {tr('common.prev', 'Prev')}
+              </button>
+              <span className="min-w-[48px] text-center text-slate-300">{currentPage} / {pageCount}</span>
+              <button type="button" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= pageCount} className="rounded-sm border border-slate-600 px-3 py-1.5 text-slate-300 hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
+                {tr('common.next', 'Next')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <p className="text-xs text-slate-500">
+        {partialTokens && <span className="mr-1 text-amber-400" data-testid="ai-usage-partial-legend">* {tr('adminAIUsage.partialLegend', 'Some requests have no token count from the provider; the row total leaves them out.')}</span>}
         {tr('adminAIUsage.note', 'Token counts are added up only when the provider sends the usage value in its response.')}
       </p>
     </div>

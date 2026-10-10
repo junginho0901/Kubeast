@@ -8,13 +8,17 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { CronJobInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { PageSizeSelect } from '@/components/PageSizeSelect'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
   formatTimestamp,
   cronJobToWorkloadRawJson,
+  nextRunOf,
+  nextRunTitle,
   type SortKey,
 } from './cronJobHelpers'
+import { absoluteTitle } from '@/utils/time'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -104,9 +108,10 @@ export function CronJobTable({
               <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('active')}>
                 <span className="inline-flex items-center gap-1">{tr('cronjobs.table.active', 'Active')}{renderSortIcon('active')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('lastSchedule')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('lastSchedule')}>
                 <span className="inline-flex items-center gap-1">{tr('cronjobs.table.lastSchedule', 'Last Schedule')}{renderSortIcon('lastSchedule')}</span>
               </th>
+              <th className="text-left py-3 px-4 w-[180px]">{tr('cronjobs.table.nextRun', 'Next Run')}</th>
               <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
                 <span className="inline-flex items-center gap-1">{tr('cronjobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
               </th>
@@ -140,7 +145,8 @@ export function CronJobTable({
                   </span>
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">{cronjob.active || 0}</td>
-                <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatTimestamp(cronjob.last_schedule_time)}</span></td>
+                <td className="py-3 px-4 text-xs font-mono" title={absoluteTitle(cronjob.last_schedule_time)}>{formatAge(cronjob.last_schedule_time)}</td>
+                <td className="py-3 px-4 text-xs font-mono" title={nextRunTitle(cronjob, tr)}><span className="block truncate">{formatTimestamp(nextRunOf(cronjob))}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(cronjob.containers || []).join(', ') || '-'}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(cronjob.images || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cronjob.created_at)}</td>
@@ -148,7 +154,7 @@ export function CronJobTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 10 : 9} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -159,18 +165,19 @@ export function CronJobTable({
             )}
 
             {sortedCronJobsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="cronjobs">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 10 : 9} resource="cronjobs">
                 {tr('cronjobs.noResults', 'No cronjobs found.')}
               </TableEmptyRow>
             )}
           </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedCronJobs.length} columnCount={8 + (showNamespaceColumn ? 1 : 0)} />
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedCronJobs.length} columnCount={9 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
 
       {sortedCronJobsLength > 0 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
+          <div className="flex items-center gap-4 text-xs text-slate-400">
+            <PageSizeSelect />
             {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
               start: (currentPage - 1) * rowsPerPage + 1,
               end: Math.min(currentPage * rowsPerPage, sortedCronJobsLength),

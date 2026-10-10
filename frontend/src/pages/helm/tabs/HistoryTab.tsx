@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { History as HistoryIcon, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
+import { formatTime, utcTitle } from '@/utils/time'
 import RollbackModal from '../modals/RollbackModal'
 import RevisionDetailModal from '../modals/RevisionDetailModal'
 
@@ -77,8 +78,8 @@ export default function HistoryTab({
                   <td className="px-3 py-2 text-slate-300">{h.status}</td>
                   <td className="px-3 py-2 text-slate-300">{h.chartVersion}</td>
                   <td className="px-3 py-2 text-slate-300">{h.appVersion}</td>
-                  <td className="px-3 py-2 text-slate-400">
-                    {h.updated ? new Date(h.updated).toLocaleString() : '-'}
+                  <td className="px-3 py-2 text-slate-400 whitespace-nowrap" title={utcTitle(h.updated)}>
+                    {formatTime(h.updated)}
                   </td>
                   <td className="px-3 py-2 text-slate-300">{h.description}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">

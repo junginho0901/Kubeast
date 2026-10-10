@@ -6,6 +6,7 @@ import type { ResourceQuotaInfo } from '@/services/api'
 import { useTranslation, Trans } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { PageSizeSelect } from '@/components/PageSizeSelect'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceQuotaHelpers'
 
@@ -126,7 +127,8 @@ export function ResourceQuotaTable({
       </div>
       {sortedResourceQuotasLength > 0 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
+          <div className="flex items-center gap-4 text-xs text-slate-400">
+            <PageSizeSelect />
             {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
               start: (currentPage - 1) * rowsPerPage + 1,
               end: Math.min(currentPage * rowsPerPage, sortedResourceQuotasLength),

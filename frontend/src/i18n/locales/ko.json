@@ -1066,7 +1066,8 @@
       "lastSchedule": "마지막 실행",
       "containers": "컨테이너",
       "images": "이미지",
-      "age": "경과 시간"
+      "age": "경과 시간",
+      "nextRun": "다음 실행"
     },
     "stats": {
       "total": "전체",
@@ -1078,7 +1079,10 @@
     "delete": {
       "button": "CronJob 삭제",
       "title": "CronJob 삭제"
-    }
+    },
+    "nextRunTitle": "UTC {{utc}} · {{zone}}",
+    "nextRunSuspended": "중지됨: 예정된 실행 없음",
+    "controllerZone": "컨트롤러 시간대(지정 없음 — 이 브라우저 시간대로 계산)"
   },
   "hpas": {
     "title": "HorizontalPodAutoscalers",
@@ -1826,7 +1830,12 @@
       "confirmTitle": "Argo CD가 관리하는 객체",
       "applyAnyway": "그래도 적용"
     },
-    "beta": "베타"
+    "beta": "베타",
+    "dateFormatHint": "{{format}} 형식으로 입력하세요.",
+    "pageSize": {
+      "label": "페이지당 건수",
+      "fit": "맞춤"
+    }
   },
   "dashboard": {
     "optimization": {
@@ -1921,7 +1930,7 @@
       "criticalLabel": "심각",
       "warningLabel": "경고",
       "infoLabel": "정보",
-      "generatedAt": "수집 {{age}}",
+      "generatedAt": "{{age}} 전 수집",
       "window": "이벤트 범위",
       "windowHint": "이 시간 안의 Warning 이벤트를 해당 객체에 붙입니다.",
       "includeRestarts": "재시작 기록 포함",
@@ -1932,7 +1941,7 @@
       "none": "이슈가 없습니다",
       "noneHint": "필터/검색어를 확인하세요.",
       "count": "{{count}}",
-      "lastSeen": "마지막 {{age}}",
+      "lastSeen": "마지막 {{age}} 전",
       "countTimes": "×{{count}}",
       "openHint": "상세 열기"
     },
@@ -3961,7 +3970,8 @@
     "lastAt": "마지막",
     "empty": "이 기간에 AI 채팅 기록이 없습니다.",
     "partialTokens": "{{n}}건은 제공자가 토큰 수를 보내지 않아 합계에 없습니다.",
-    "note": "토큰 수는 AI 제공자가 응답에 usage 값을 보낼 때만 집계합니다. 원본 기록은 감사 로그에서 동작 ai.chat.complete로 걸러 보고 CSV로 내보낼 수 있습니다."
+    "note": "토큰 수는 AI 제공자가 응답에 usage 값을 보낼 때만 집계합니다. 원본 기록은 감사 로그에서 동작 ai.chat.complete로 걸러 보고 CSV로 내보낼 수 있습니다.",
+    "partialLegend": "제공자가 토큰 수를 보내지 않은 요청이 있어 그 행의 합계에서 빠졌습니다."
   },
   "networkOverview": {
     "none": "없음",
@@ -4495,7 +4505,10 @@
     "section:Volume Claim Templates": "볼륨 클레임 템플릿",
     "Lease Time": "유지 시간",
     "None": "없음",
-    "Configured": "설정됨"
+    "Configured": "설정됨",
+    "Next Run": "다음 실행",
+    "Time Zone": "시간대",
+    "expired {{age}} ago": "{{age}} 전 만료"
   },
   "recordings": {
     "title": "Session Recordings",

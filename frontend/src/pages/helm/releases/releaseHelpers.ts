@@ -1,4 +1,5 @@
 import type { HelmReleaseSummary } from '@/services/api'
+import { formatTime } from '@/utils/time'
 
 export type SortKey =
   | null
@@ -22,12 +23,7 @@ export const HELM_DOCS_URL = 'https://helm.sh/docs/'
 export const HELM_INSTALL_GUIDE_URL = 'https://helm.sh/docs/intro/using_helm/'
 
 export function formatUpdated(iso: string): string {
-  if (!iso) return '-'
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
+  return formatTime(iso)
 }
 
 export function statusBadge(status: string): string {

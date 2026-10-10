@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
+import { formatTime, parseTypedTime, utcTitle } from '@/utils/time'
+import { DateTextInput } from '@/components/DateTextInput'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
@@ -94,6 +96,8 @@ export default function AdminAudit() {
 
   // Local draft for inputs; committed to `filter` on "Apply".
   const [draft, setDraft] = useState<AuditLogFilter>(filter)
+  const [sinceText, setSinceText] = useState(() => (filter.since ? formatTime(filter.since).slice(0, 16) : ''))
+  const [untilText, setUntilText] = useState(() => (filter.until ? formatTime(filter.until).slice(0, 16) : ''))
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin-audit-logs', filter],
@@ -153,14 +157,27 @@ export default function AdminAudit() {
   const page = Math.floor(offset / limit) + 1
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
+  // The time range is typed as local YYYY-MM-DD HH:mm; the API takes RFC 3339.
+  const typedRange = (text: string) => {
+    if (!text.trim()) return { ok: true, iso: undefined }
+    const d = parseTypedTime(text, true)
+    return { ok: !!d, iso: d?.toISOString() }
+  }
+  const since = typedRange(sinceText)
+  const until = typedRange(untilText)
+  const rangeOk = since.ok && until.ok
+
   const applyFilter = () => {
-    setFilter({ ...draft, offset: 0 })
+    if (!rangeOk) return
+    setFilter({ ...draft, since: since.iso, until: until.iso, offset: 0 })
     setExpandedId(null)
   }
 
   const resetFilter = () => {
     const next: AuditLogFilter = { limit, offset: 0 }
     setDraft(next)
+    setSinceText('')
+    setUntilText('')
     setFilter(next)
     setExpandedId(null)
   }
@@ -204,12 +221,7 @@ export default function AdminAudit() {
   }
 
   const fmtTime = (iso: string) => {
-    try {
-      const d = new Date(iso)
-      return d.toLocaleString()
-    } catch {
-      return iso
-    }
+    return formatTime(iso)
   }
 
   return (
@@ -254,7 +266,7 @@ export default function AdminAudit() {
           <span className="text-slate-300" data-testid="audit-integrity-anchor-state">
             {integrity.last_anchor
               ? tr('adminAudit.integrity.lastAnchor', '마지막 앵커 {{when}} (#{{seq}} → {{sink}})', {
-                  when: new Date(integrity.last_anchor.created_at).toLocaleString(),
+                  when: formatTime(integrity.last_anchor.created_at),
                   seq: integrity.last_anchor.to_seq,
                   sink: integrity.last_anchor.sink,
                 })
@@ -393,32 +405,12 @@ export default function AdminAudit() {
 
           <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.since', '시작 시각')}
-            <input
-              type="datetime-local"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
-              value={draft.since ? draft.since.slice(0, 16) : ''}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  since: e.target.value ? new Date(e.target.value).toISOString() : undefined,
-                })
-              }
-            />
+            <DateTextInput withTime value={sinceText} onChange={setSinceText} testId="audit-filter-since" />
           </label>
 
           <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.until', '종료 시각')}
-            <input
-              type="datetime-local"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
-              value={draft.until ? draft.until.slice(0, 16) : ''}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  until: e.target.value ? new Date(e.target.value).toISOString() : undefined,
-                })
-              }
-            />
+            <DateTextInput withTime value={untilText} onChange={setUntilText} testId="audit-filter-until" />
           </label>
 
           <label className="flex flex-col text-xs font-semibold text-slate-400">
@@ -435,7 +427,8 @@ export default function AdminAudit() {
         <div className="flex gap-2 mt-3">
           <button
             onClick={applyFilter}
-            className="inline-flex items-center gap-1 rounded-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white"
+            disabled={!rangeOk}
+            className="inline-flex items-center gap-1 rounded-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Search className="w-4 h-4" /> {tr('adminAudit.apply', '조회')}
           </button>
@@ -558,12 +551,12 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
         }`}
         onClick={onToggle}
       >
-        <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtTime(entry.CreatedAt)}</td>
-        <td className="px-3 py-2 text-slate-200"><span className="block max-w-[220px] truncate" title={entry.ActorEmail || undefined}>{entry.ActorEmail || '-'}</span></td>
+        <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(entry.CreatedAt)}>{fmtTime(entry.CreatedAt)}</td>
+        <td className="px-3 py-2 text-slate-200"><span className="block max-w-[170px] truncate" title={entry.ActorEmail || undefined}>{entry.ActorEmail || '-'}</span></td>
         <td className="px-3 py-2 text-slate-300" title={entry.Service || undefined}>{entry.Service ? tr(`adminAudit.area.${entry.Service}`, entry.Service) : '-'}</td>
         <td className="px-3 py-2 font-mono text-xs text-slate-200">{entry.Action}</td>
-        <td className="px-3 py-2 text-slate-300"><span className="block max-w-[240px] truncate" title={targetDisplay}>{targetDisplay}</span></td>
-        <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{entry.Namespace || '-'}</td>
+        <td className="px-3 py-2 text-slate-300"><span className="block max-w-[190px] truncate" title={targetDisplay}>{targetDisplay}</span></td>
+        <td className="px-3 py-2 text-slate-400"><span className="block max-w-[120px] truncate" title={entry.Namespace || undefined}>{entry.Namespace || '-'}</span></td>
         <td className="px-3 py-2">
           {resultBadge(entry.Result || 'success')}
           {recordingId && (

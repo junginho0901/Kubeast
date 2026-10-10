@@ -2,6 +2,8 @@
 // contained — kept in this file so the main page does not have 50
 // lines of utility prelude before the component body.
 
+import { humanDuration } from '@/utils/time'
+
 /**
  * unwrapOuterMarkdownFence — if the streamed answer is wrapped in a
  * ``` fence (LLMs sometimes do this for the entire response), strip
@@ -70,19 +72,9 @@ export function parseReady(ready: unknown): { ready: number; total: number } | n
   return { ready: readyCount, total: totalCount }
 }
 
-/**
- * formatAge — short human-readable elapsed duration ("3h ago").
- * Caller passes (now - then) in milliseconds.
- */
+/** An elapsed time in milliseconds, as kubectl prints an age ("ago" is in the sentence around it). */
 export function formatAge(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000))
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-  if (days > 0) return `${days}d ago`
-  if (hours > 0) return `${hours}h ago`
-  if (minutes > 0) return `${minutes}m ago`
-  return `${seconds}s ago`
+  return humanDuration(Math.max(0, ms) / 1000)
 }
 
 /**

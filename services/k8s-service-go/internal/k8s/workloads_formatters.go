@@ -333,11 +333,18 @@ func formatCronJobDetail(cj *batchv1.CronJob) map[string]interface{} {
 		"created_at": toISO(&cj.CreationTimestamp),
 	}
 
+	// last_schedule_time / last_successful_time are the names the list and describe share (the
+	// frontend reads them); last_schedule / last_successful stay for API callers.
 	if cj.Status.LastScheduleTime != nil {
 		result["last_schedule"] = toISO(cj.Status.LastScheduleTime)
+		result["last_schedule_time"] = toISO(cj.Status.LastScheduleTime)
 	}
 	if cj.Status.LastSuccessfulTime != nil {
 		result["last_successful"] = toISO(cj.Status.LastSuccessfulTime)
+		result["last_successful_time"] = toISO(cj.Status.LastSuccessfulTime)
+	}
+	if cj.Spec.TimeZone != nil {
+		result["time_zone"] = *cj.Spec.TimeZone
 	}
 
 	concurrencyPolicy := ""

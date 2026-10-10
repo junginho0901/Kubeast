@@ -6,6 +6,9 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
+import { formatAge, formatTime } from '@/utils/time'
+
+const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
@@ -48,6 +51,10 @@ function renderValue(value: unknown, depth = 0): React.ReactNode {
   if (typeof value === 'boolean') return <span className="font-mono text-[11px]">{value.toString()}</span>
   if (typeof value === 'number') return <span className="font-mono text-[11px]">{value}</span>
   if (typeof value === 'string') {
+    // an RFC 3339 time (lastSyncTime …) reads like every other time on screen, the value as written on hover
+    if (RFC3339.test(value) && formatTime(value) !== '-') {
+      return <span className="font-mono text-[11px]" title={value}>{`${formatTime(value)} (${formatAge(value)})`}</span>
+    }
     if (value.length > 200) {
       return <span className="font-mono text-[11px] break-all whitespace-pre-wrap">{value}</span>
     }

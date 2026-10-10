@@ -4,14 +4,15 @@
 // 컨테이너 / Conditions / Events. 부모가 useQuery 로 fetch + 가시성 결정,
 // 이 컴포넌트는 데이터가 있을 때 렌더링.
 
+import { formatTime, utcTitle } from '@/utils/time'
+
 interface Props {
   data: any
-  locale: string
   na: string
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }
 
-export function PodDescribeTab({ data, locale, na, tr }: Props) {
+export function PodDescribeTab({ data, na, tr }: Props) {
   return (
     <div className="space-y-6">
       {/* 기본 정보 */}
@@ -39,7 +40,7 @@ export function PodDescribeTab({ data, locale, na, tr }: Props) {
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.createdAt', 'Created at')}</p>
             <p className="text-white font-medium">
-              {new Date(data.created_at).toLocaleString(locale)}
+              <span title={utcTitle(data.created_at)}>{formatTime(data.created_at)}</span>
             </p>
           </div>
           {data.pod_ip && (
@@ -153,8 +154,8 @@ export function PodDescribeTab({ data, locale, na, tr }: Props) {
                         {condition.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-sm text-slate-300">
-                      {new Date(condition.last_transition_time).toLocaleString(locale)}
+                    <td className="px-4 py-2 text-sm text-slate-300 whitespace-nowrap" title={utcTitle(condition.last_transition_time)}>
+                      {formatTime(condition.last_transition_time)}
                     </td>
                   </tr>
                 ))}
@@ -185,8 +186,8 @@ export function PodDescribeTab({ data, locale, na, tr }: Props) {
                     </div>
                     <p className="text-slate-300 text-sm mt-1">{event.message}</p>
                   </div>
-                  <span className="text-slate-400 text-xs whitespace-nowrap ml-4">
-                    {new Date(event.last_timestamp).toLocaleString(locale)}
+                  <span className="text-slate-400 text-xs whitespace-nowrap ml-4" title={utcTitle(event.last_timestamp)}>
+                    {formatTime(event.last_timestamp)}
                   </span>
                 </div>
               </div>
