@@ -1,7 +1,7 @@
 import i18next from 'i18next'
 import { beforeAll, describe, expect, it } from 'vitest'
 import ko from '../../i18n/locales/ko.json'
-import { translateDetailLabel, type TranslateFn } from './detailLabel'
+import { translateDetailLabel, translateDetailSection, type TranslateFn } from './detailLabel'
 
 const catalog = (ko as { detail: Record<string, string> }).detail
 
@@ -49,6 +49,16 @@ describe('labels through i18next (the app registers the catalog as the detail na
     expect(translateDetailLabel(t('ko'), 'Used By Pods ({{n}})', { n: 3 })).toBe(catalog['Used By Pods ({{n}})'].replace('{{n}}', '3'))
     expect(translateDetailLabel(t('en'), 'Used By Pods ({{n}})', { n: 3 })).toBe('Used By Pods (3)')
     expect(translateDetailLabel(t('ko'), 'Not In Catalog ({{n}}{{more}})', { n: 12, more: '+' })).toBe('Not In Catalog (12+)')
+  })
+
+  it('gives a section title its Korean term while a field label with the same word stays English', () => {
+    expect(translateDetailSection(t('ko'), 'Finalizers')).toBe(catalog['section:Finalizers'])
+    expect(translateDetailLabel(t('ko'), 'Finalizers')).toBe('Finalizers')
+    expect(translateDetailSection(t('ko'), 'Subjects ({{n}})', { n: 2 })).toBe(catalog['section:Subjects ({{n}})'].replace('{{n}}', '2'))
+    // no section entry: the plain entry, then the English title
+    expect(translateDetailSection(t('ko'), 'Labels')).toBe(catalog['Labels'])
+    expect(translateDetailSection(t('ko'), 'UID')).toBe('UID')
+    expect(translateDetailSection(t('en'), 'Finalizers')).toBe('Finalizers')
   })
 
   it('looks up labels holding "." or ":" as whole keys', () => {

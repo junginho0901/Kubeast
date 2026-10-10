@@ -216,6 +216,11 @@
       "button": "Sign off",
       "saved": "Review signed off at {{when}}.",
       "failed": "The sign-off was not saved."
+    },
+    "auth": {
+      "password": "Password",
+      "oidc": "OIDC",
+      "api_key": "API key"
     }
   },
   "accessRequests": {
@@ -294,7 +299,7 @@
     "workloads": "Workloads",
     "storage": "Storage",
     "network": "Network",
-    "gateway": "Gateway (Beta)",
+    "gateway": "Gateway",
     "security": "Security",
     "configuration": "Configuration",
     "customResources": "Custom Resources",
@@ -308,7 +313,7 @@
     "nodes": "Nodes",
     "resourceGraph": "Resource Graph",
     "timeline": "Change History",
-    "advancedSearch": "Advanced Search (Beta)",
+    "advancedSearch": "Advanced Search",
     "pods": "Pods",
     "deployments": "Deployments",
     "statefulSets": "StatefulSets",
@@ -333,7 +338,7 @@
     "referenceGrants": "ReferenceGrants",
     "backendTlsPolicies": "BackendTLSPolicies",
     "policies": "Policies",
-    "gpu": "GPU (Beta)",
+    "gpu": "GPU",
     "gpuDashboard": "GPU Dashboard",
     "gpuNodes": "GPU Nodes",
     "gpuPods": "GPU Pods",
@@ -365,7 +370,7 @@
     "aiModels": "AI Models",
     "nodeShell": "Node Shell",
     "auditLogs": "Audit Logs",
-    "organizations": "Team",
+    "organizations": "Teams",
     "helmReleases": "Releases",
     "clusters": "Clusters",
     "aiUsage": "AI Usage",
@@ -432,7 +437,6 @@
     "create": "Create Pod",
     "createTitle": "Create Pod from YAML",
     "delete": "Delete Pod",
-    "deleteConfirm": "Are you sure you want to delete pod \"{{name}}\" in namespace \"{{namespace}}\"?",
     "deleteTitle": "Delete Pod"
   },
   "deployments": {
@@ -464,8 +468,7 @@
     "noResults": "No deployments found.",
     "delete": {
       "button": "Delete Deployment",
-      "title": "Delete Deployment",
-      "confirm": "Are you sure you want to delete deployment \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete Deployment"
     }
   },
   "servicesPage": {
@@ -497,8 +500,7 @@
     "noResults": "No services found.",
     "delete": {
       "button": "Delete Service",
-      "title": "Delete Service",
-      "confirm": "Are you sure you want to delete service \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete Service"
     }
   },
   "endpointsPage": {
@@ -529,8 +531,7 @@
     "noResults": "No endpoints found.",
     "delete": {
       "button": "Delete Endpoints",
-      "title": "Delete Endpoints",
-      "confirm": "Are you sure you want to delete endpoints \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete Endpoints"
     }
   },
   "endpointSlicesPage": {
@@ -564,8 +565,7 @@
     "noResults": "No endpoint slices found.",
     "delete": {
       "button": "Delete EndpointSlice",
-      "title": "Delete EndpointSlice",
-      "confirm": "Are you sure you want to delete endpoint slice \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete EndpointSlice"
     }
   },
   "ingressesPage": {
@@ -596,8 +596,7 @@
     "noResults": "No ingresses found.",
     "delete": {
       "button": "Delete Ingress",
-      "title": "Delete Ingress",
-      "confirm": "Are you sure you want to delete ingress \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete Ingress"
     }
   },
   "ingressClassesPage": {
@@ -625,8 +624,7 @@
     "noResults": "No ingress classes found.",
     "delete": {
       "button": "Delete IngressClass",
-      "title": "Delete IngressClass",
-      "confirm": "Are you sure you want to delete ingress class \"{{name}}\"?"
+      "title": "Delete IngressClass"
     }
   },
   "networkPoliciesPage": {
@@ -658,8 +656,7 @@
     "noResults": "No network policies found.",
     "delete": {
       "button": "Delete NetworkPolicy",
-      "title": "Delete NetworkPolicy",
-      "confirm": "Are you sure you want to delete network policy \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete NetworkPolicy"
     }
   },
   "gatewaysPage": {
@@ -691,8 +688,7 @@
     "noResults": "No gateways found.",
     "delete": {
       "button": "Delete Gateway",
-      "title": "Delete Gateway",
-      "confirm": "Are you sure you want to delete gateway \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete Gateway"
     }
   },
   "gatewayClassesPage": {
@@ -720,8 +716,7 @@
     "noResults": "No gateway classes found.",
     "delete": {
       "button": "Delete GatewayClass",
-      "title": "Delete GatewayClass",
-      "confirm": "Are you sure you want to delete gateway class \"{{name}}\"?"
+      "title": "Delete GatewayClass"
     }
   },
   "httpRoutesPage": {
@@ -753,8 +748,7 @@
     "noResults": "No HTTPRoutes found.",
     "delete": {
       "button": "Delete HTTPRoute",
-      "title": "Delete HTTPRoute",
-      "confirm": "Are you sure you want to delete HTTPRoute \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete HTTPRoute"
     }
   },
   "grpcRoutesPage": {
@@ -786,8 +780,7 @@
     "noResults": "No GRPCRoutes found.",
     "delete": {
       "button": "Delete GRPCRoute",
-      "title": "Delete GRPCRoute",
-      "confirm": "Are you sure you want to delete GRPCRoute \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete GRPCRoute"
     }
   },
   "referenceGrantsPage": {
@@ -816,8 +809,7 @@
     "noResults": "No ReferenceGrants found.",
     "delete": {
       "button": "Delete ReferenceGrant",
-      "title": "Delete ReferenceGrant",
-      "confirm": "Are you sure you want to delete ReferenceGrant \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete ReferenceGrant"
     }
   },
   "backendTLSPoliciesPage": {
@@ -845,8 +837,7 @@
     "noResults": "No BackendTLSPolicies found.",
     "delete": {
       "button": "Delete BackendTLSPolicy",
-      "title": "Delete BackendTLSPolicy",
-      "confirm": "Are you sure you want to delete BackendTLSPolicy \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete BackendTLSPolicy"
     }
   },
   "policiesPage": {
@@ -922,8 +913,7 @@
     "noResults": "No StatefulSets found.",
     "delete": {
       "button": "Delete StatefulSet",
-      "title": "Delete StatefulSet",
-      "confirm": "Are you sure you want to delete StatefulSet \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete StatefulSet"
     }
   },
   "daemonsets": {
@@ -942,7 +932,7 @@
       "ready": "Ready",
       "current": "Current",
       "desired": "Desired",
-      "updated": "Updated",
+      "updated": "Up to date",
       "available": "Available",
       "status": "Status",
       "nodeSelector": "Node Selector",
@@ -959,8 +949,7 @@
     "noResults": "No daemonsets found.",
     "delete": {
       "button": "Delete DaemonSet",
-      "title": "Delete DaemonSet",
-      "confirm": "Are you sure you want to delete DaemonSet \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete DaemonSet"
     }
   },
   "replicasets": {
@@ -997,8 +986,7 @@
     "noResults": "No replicasets found.",
     "delete": {
       "button": "Delete ReplicaSet",
-      "title": "Delete ReplicaSet",
-      "confirm": "Are you sure you want to delete ReplicaSet \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete ReplicaSet"
     }
   },
   "jobs": {
@@ -1030,8 +1018,7 @@
     "noResults": "No jobs found.",
     "delete": {
       "button": "Delete Job",
-      "title": "Delete Job",
-      "confirm": "Are you sure you want to delete Job \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete Job"
     }
   },
   "cronjobs": {
@@ -1064,8 +1051,7 @@
     "noResults": "No cronjobs found.",
     "delete": {
       "button": "Delete CronJob",
-      "title": "Delete CronJob",
-      "confirm": "Are you sure you want to delete CronJob \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete CronJob"
     }
   },
   "hpas": {
@@ -1095,8 +1081,7 @@
     "noResults": "No HPAs found.",
     "delete": {
       "button": "Delete HPA",
-      "title": "Delete HPA",
-      "confirm": "Are you sure you want to delete HPA \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete HPA"
     }
   },
   "vpas": {
@@ -1127,8 +1112,7 @@
     "noResults": "No VPAs found.",
     "delete": {
       "button": "Delete VPA",
-      "title": "Delete VPA",
-      "confirm": "Are you sure you want to delete VPA \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete VPA"
     }
   },
   "pdbs": {
@@ -1159,8 +1143,7 @@
     "noResults": "No PDBs found.",
     "delete": {
       "button": "Delete PDB",
-      "title": "Delete PDB",
-      "confirm": "Are you sure you want to delete PDB \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete PDB"
     }
   },
   "priorityClasses": {
@@ -1187,8 +1170,7 @@
     "noResults": "No priority classes found.",
     "delete": {
       "button": "Delete Priority Class",
-      "title": "Delete Priority Class",
-      "confirm": "Are you sure you want to delete priority class \"{{name}}\"? This is a cluster-level resource."
+      "title": "Delete Priority Class"
     }
   },
   "runtimeClasses": {
@@ -1212,8 +1194,7 @@
     "noResults": "No runtime classes found.",
     "delete": {
       "button": "Delete Runtime Class",
-      "title": "Delete Runtime Class",
-      "confirm": "Are you sure you want to delete runtime class \"{{name}}\"? This is a cluster-level resource."
+      "title": "Delete Runtime Class"
     }
   },
   "mutatingWebhooks": {
@@ -1264,7 +1245,7 @@
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search leases by name or holder...",
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "matchCount": "{{count}} lease{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1281,8 +1262,7 @@
     "noResults": "No leases found.",
     "delete": {
       "button": "Delete Lease",
-      "title": "Delete Lease",
-      "confirm": "Are you sure you want to delete lease \"{{name}}\"?"
+      "title": "Delete Lease"
     }
   },
   "resourceQuotas": {
@@ -1293,7 +1273,7 @@
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search resource quotas by name...",
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "matchCount": "{{count}} resource quota{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1309,8 +1289,7 @@
     "noResults": "No resource quotas found.",
     "delete": {
       "button": "Delete ResourceQuota",
-      "title": "Delete ResourceQuota",
-      "confirm": "Are you sure you want to delete resource quota \"{{name}}\"?"
+      "title": "Delete ResourceQuota"
     }
   },
   "limitRanges": {
@@ -1321,7 +1300,7 @@
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search limit ranges by name...",
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "matchCount": "{{count}} limit range{{suffix}} match.",
     "table": {
       "name": "Name",
@@ -1337,8 +1316,7 @@
     "noResults": "No limit ranges found.",
     "delete": {
       "button": "Delete LimitRange",
-      "title": "Delete LimitRange",
-      "confirm": "Are you sure you want to delete limit range \"{{name}}\"?"
+      "title": "Delete LimitRange"
     }
   },
   "pvcs": {
@@ -1371,8 +1349,7 @@
     "noResults": "No PVCs found.",
     "delete": {
       "button": "Delete PVC",
-      "title": "Delete PVC",
-      "confirm": "Are you sure you want to delete PVC \"{{name}}\" in \"{{namespace}}\"?"
+      "title": "Delete PVC"
     }
   },
   "pvs": {
@@ -1406,8 +1383,7 @@
     "noResults": "No PVs found.",
     "delete": {
       "button": "Delete PV",
-      "title": "Delete PV",
-      "confirm": "Are you sure you want to delete PV \"{{name}}\"?"
+      "title": "Delete PV"
     }
   },
   "storageclasses": {
@@ -1433,13 +1409,12 @@
       "total": "Total",
       "default": "Default",
       "expandable": "Expandable",
-      "waitForFirstConsumer": "WaitForFirstConsumer"
+      "waitForFirstConsumer": "Binding mode: WaitForFirstConsumer"
     },
     "noResults": "No StorageClasses found.",
     "delete": {
       "button": "Delete StorageClass",
-      "title": "Delete StorageClass",
-      "confirm": "Are you sure you want to delete StorageClass \"{{name}}\"?"
+      "title": "Delete StorageClass"
     }
   },
   "volumeattachments": {
@@ -1469,8 +1444,7 @@
     "noResults": "No VolumeAttachments found.",
     "delete": {
       "button": "Delete VolumeAttachment",
-      "title": "Delete VolumeAttachment",
-      "confirm": "Are you sure you want to delete VolumeAttachment \"{{name}}\"?"
+      "title": "Delete VolumeAttachment"
     }
   },
   "nodes": {
@@ -1516,7 +1490,6 @@
     "delete": {
       "button": "Delete Node",
       "title": "Delete Node",
-      "confirm": "Are you sure you want to delete node \"{{name}}\"?",
       "warning": "Deleting a node can disrupt workloads scheduled on it."
     },
     "drain": {
@@ -1810,7 +1783,8 @@
       "confirm": "Argo CD application \"{{app}}\" manages this object; a change made here is reverted on the next sync. Change it in Git instead. Continue anyway?",
       "confirmTitle": "Managed by Argo CD",
       "applyAnyway": "Apply anyway"
-    }
+    },
+    "beta": "Beta"
   },
   "dashboard": {
     "optimization": {
@@ -2089,7 +2063,7 @@
         "includeBroad": "(including broad)",
         "excludeBroad": "(excluding broad)",
         "total": "{{count}} items",
-        "none": "(none)",
+        "none": "None",
         "resources": "Resources",
         "table": {
           "apiGroup": "apiGroup",
@@ -2107,7 +2081,7 @@
       "subjects": "Subjects",
       "rulesLabel": "Rules",
       "verbsLabel": "verbs",
-      "none": "(none)",
+      "none": "None",
       "resourcesLabel": "resources",
       "apiGroupsLabel": "apiGroups",
       "nonResourceUrlsLabel": "nonResourceURLs",
@@ -2357,7 +2331,6 @@
     "delete": {
       "button": "Delete Namespace",
       "title": "Delete Namespace",
-      "confirm": "Are you sure you want to delete namespace \"{{name}}\"? This action cannot be undone and will remove all resources within the namespace.",
       "warning": "⚠ All resources (Pods, Services, Deployments, etc.) in this namespace will be permanently deleted.",
       "cancel": "Cancel",
       "submit": "Delete",
@@ -2383,7 +2356,7 @@
     "loading": "Loading...",
     "loadError": "Failed to load users.",
     "title": "User Management",
-    "subtitle": "Update user roles (read/write/admin).",
+    "subtitle": "Change account levels (Pending, Member, Admin). Read and Write are granted per cluster.",
     "table": {
       "name": "Name",
       "email": "Email",
@@ -2403,19 +2376,13 @@
       "close": "Done"
     },
     "resetting": "Resetting...",
-    "reset": "Reset PW",
+    "reset": "Reset password",
     "deleteConfirm": "Delete this user?\n\nTarget: {{target}}\n\n* Deletions cannot be easily undone.",
     "deleteSelfBlocked": "You cannot delete your own account.",
     "deleteTitle": "Delete user",
     "deleting": "Deleting...",
     "delete": "Delete",
     "empty": "No users found.",
-    "roles": {
-      "pending": "PENDING",
-      "read": "READ",
-      "write": "WRITE",
-      "admin": "ADMIN"
-    },
     "createUser": "Add user",
     "bulkUpload": "Bulk upload",
     "bulkUploadTitle": "Bulk upload users",
@@ -2692,7 +2659,7 @@
   },
   "resourceGraph": {
     "title": "Resource Graph",
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "search": "Search resources...",
     "filter": "Filter",
     "legend": "Legend",
@@ -2708,7 +2675,13 @@
     "featureFilteringDesc": "Filter by resource type,\nstatus, and edge type",
     "featureInteractionTitle": "Interaction",
     "featureInteractionDesc": "Hover to preview,\nclick for details",
-    "selectNamespaceHint": "Select a namespace from the dropdown at the top left"
+    "selectNamespaceHint": "Select a namespace from the dropdown at the top left",
+    "groupBy": {
+      "none": "No grouping",
+      "namespace": "Namespace",
+      "node": "Node",
+      "instance": "Instance"
+    }
   },
   "advancedSearch": {
     "title": "Advanced Search",
@@ -2717,7 +2690,7 @@
     "filterResources": "Filter resources...",
     "selectAll": "Select All",
     "clearAll": "Clear All",
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "queryPlaceholder": "Search resources by JavaScript expression...",
     "searching": "Searching...",
     "resultsCount": "{{count}} results",
@@ -2736,7 +2709,7 @@
       "replicasOver3": "Deployments with more than 3 replicas",
       "restartsOver5": "Pods restarted more than 5 times",
       "configMapWithData": "ConfigMaps that carry data",
-      "completedJobs": "Active jobs that have completed",
+      "completedJobs": "Completed jobs (not suspended)",
       "loadBalancerServices": "Services of type LoadBalancer",
       "pendingPvcs": "PVCs stuck in Pending"
     },
@@ -2773,7 +2746,8 @@
     "loadingData": "Loading data...",
     "loadingHint": "This may take a while if there are many resources.",
     "manual": "Manual",
-    "pageInfo": "Page {{current}} / {{total}}"
+    "pageInfo": "Page {{current}} / {{total}}",
+    "examplesAll": "All"
   },
   "serviceAccountsPage": {
     "title": "ServiceAccounts",
@@ -2799,8 +2773,7 @@
     },
     "delete": {
       "button": "Delete ServiceAccount",
-      "title": "Delete ServiceAccount",
-      "confirm": "Are you sure you want to delete ServiceAccount \"{{name}}\"?"
+      "title": "Delete ServiceAccount"
     }
   },
   "rolesPage": {
@@ -2826,8 +2799,7 @@
     },
     "delete": {
       "button": "Delete Role",
-      "title": "Delete Role",
-      "confirm": "Are you sure you want to delete Role \"{{name}}\"?"
+      "title": "Delete Role"
     }
   },
   "roleBindingsPage": {
@@ -2854,8 +2826,7 @@
     },
     "delete": {
       "button": "Delete RoleBinding",
-      "title": "Delete RoleBinding",
-      "confirm": "Are you sure you want to delete RoleBinding \"{{name}}\"?"
+      "title": "Delete RoleBinding"
     }
   },
   "clusterRolesPage": {
@@ -2922,8 +2893,7 @@
     },
     "delete": {
       "button": "Delete ConfigMap",
-      "title": "Delete ConfigMap",
-      "confirm": "Are you sure you want to delete ConfigMap \"{{name}}\"?"
+      "title": "Delete ConfigMap"
     }
   },
   "secretsPage": {
@@ -2951,8 +2921,7 @@
     },
     "delete": {
       "button": "Delete Secret",
-      "title": "Delete Secret",
-      "confirm": "Are you sure you want to delete Secret \"{{name}}\"?"
+      "title": "Delete Secret"
     }
   },
   "secretInfo": {
@@ -3100,7 +3069,7 @@
     "closeSummary": "Close Summary"
   },
   "adminOrg": {
-    "title": "Team",
+    "title": "Teams",
     "subtitle": "Manage the list of Teams that users can select during registration.",
     "teamTitle": "Team",
     "teamSubtitle": "Teams / Groups",
@@ -3196,7 +3165,14 @@
         "admin_organizations_delete": "Delete teams",
         "admin_ai_models_all": "AI model settings",
         "admin_audit_read": "View audit log",
-        "admin_audit_export": "Export audit log (CSV)"
+        "admin_audit_export": "Export audit log (CSV)",
+        "admin_sessions_read": "View terminal session recordings",
+        "admin_review_read": "View the access review report",
+        "admin_review_export": "Export the access review (CSV)",
+        "admin_review_signoff": "Sign off an access review",
+        "admin_hygiene_read": "View the cluster hygiene report",
+        "admin_hygiene_export": "Export the cluster hygiene report (CSV/JSON)",
+        "admin_hygiene_signoff": "Sign off a cluster hygiene report"
       }
     },
     "viewUsers": "View users with this role",
@@ -3210,7 +3186,8 @@
       "userName": "Name",
       "userEmail": "Email",
       "userTeam": "Team"
-    }
+    },
+    "title": "Role Management"
   },
   "helmReleases": {
     "title": "Helm Releases",
@@ -3404,8 +3381,19 @@
       "empty": "No clusters registered yet.",
       "test": "Test",
       "delete": "Delete",
-      "unhealthy": "unhealthy",
-      "inCluster": "In-cluster"
+      "inCluster": "In-cluster",
+      "modeValue": {
+        "self": "In-cluster",
+        "in_cluster": "In-cluster",
+        "external": "External kubeconfig"
+      },
+      "healthValue": {
+        "healthy": "Healthy",
+        "unhealthy": "Unreachable",
+        "unreachable": "Unreachable",
+        "disconnected": "Unreachable",
+        "unknown": "Not checked"
+      }
     },
     "register": {
       "title": "Register cluster",
@@ -3451,7 +3439,7 @@
       "options": "Generation options (JSON)",
       "optionsHint": "Standard params (temperature, top_p, seed, max_tokens) are sent to all providers. Provider-specific keys (e.g. num_ctx) are best-effort and may be ignored over OpenAI-compatible endpoints.",
       "subtitle": "Manage model connection settings used by the AI service.",
-      "title": "AI Model Settings"
+      "title": "AI Models"
     }
   },
   "adminAudit": {
@@ -3474,7 +3462,7 @@
       "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}"
     },
     "filter": {
-      "service": "Service",
+      "service": "Area",
       "any": "All",
       "cluster": "Cluster",
       "action": "Action",
@@ -3491,7 +3479,7 @@
     "col": {
       "time": "Time",
       "actor": "User",
-      "service": "Service",
+      "service": "Area",
       "action": "Action",
       "target": "Target",
       "namespace": "Namespace",
@@ -3501,7 +3489,18 @@
     "empty": "No audit entries match the filters",
     "prev": "Prev",
     "next": "Next",
-    "playRecording": "Play recording"
+    "playRecording": "Play recording",
+    "resultValue": {
+      "success": "Success",
+      "failure": "Failure"
+    },
+    "area": {
+      "auth": "Auth",
+      "k8s": "Kubernetes",
+      "helm": "Helm",
+      "ai": "AI",
+      "admin": "Admin"
+    }
   },
   "deviceClassesPage": {
     "create": "Create DeviceClass",
@@ -3636,7 +3635,7 @@
     "title": "GPU Pods"
   },
   "resourceClaimTemplatesPage": {
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "create": "Create ResourceClaimTemplate",
     "createTitle": "Create ResourceClaimTemplate from YAML",
     "matchCount": "{{count}} ResourceClaimTemplates matched.",
@@ -3657,7 +3656,7 @@
     "title": "ResourceClaimTemplates"
   },
   "resourceClaimsPage": {
-    "allNamespaces": "All Namespaces",
+    "allNamespaces": "All namespaces",
     "create": "Create ResourceClaim",
     "createTitle": "Create ResourceClaim from YAML",
     "matchCount": "{{count}} ResourceClaims matched.",
@@ -3735,7 +3734,7 @@
   },
   "adminAIUsage": {
     "title": "AI Usage",
-    "subtitle": "Aggregation of the ai.chat.complete audit record written per chat turn and per Optimization AI explanation — requests, tokens, tool calls. No quota; see who used how much.",
+    "subtitle": "The audit records written per chat turn and per Optimization AI explanation, added up — requests, tokens, tool calls. No quota; see who used how much.",
     "since": "From",
     "until": "To",
     "groupBy": "Group by",
@@ -3756,10 +3755,10 @@
     "lastAt": "Last",
     "empty": "No AI chat records in this period.",
     "partialTokens": "{{n}} request(s) had no token usage from the provider and are not in the sum",
-    "note": "Token counts are collected only when the provider sends usage in the last stream chunk (OpenAI-compatible stream_options.include_usage). Raw rows: audit log filtered by action=ai.chat.complete, CSV export."
+    "note": "Token counts are added up only when the provider sends the usage value in its response. The raw records are in the audit log under the action ai.chat.complete, with CSV export."
   },
   "networkOverview": {
-    "none": "(none)",
+    "none": "None",
     "noIp": "(no ip)",
     "noTargetRef": "(no targetRef)",
     "ingressTitle": "Ingress",
@@ -3774,7 +3773,7 @@
     "noHosts": "(no hosts)"
   },
   "resourcesTabs": {
-    "none": "(none)",
+    "none": "None",
     "fetchFailed": "Failed to load {{kind}}. (May be unavailable depending on cluster permissions / version)",
     "pdb": {
       "noSelector": "The PDB has no selector, so matching pods cannot be computed.",
@@ -3865,5 +3864,13 @@
     "title": "Page not found",
     "body": "There is no screen at {{path}}.",
     "home": "Go to the dashboard"
+  },
+  "workloadStatus": {
+    "Healthy": "Healthy",
+    "Progressing": "Progressing",
+    "Degraded": "Degraded",
+    "Idle": "Idle",
+    "Unavailable": "Unavailable",
+    "Failed": "Failed"
   }
 }

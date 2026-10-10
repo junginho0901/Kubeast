@@ -428,11 +428,11 @@ export default function Resources() {
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-400">Cluster IP</p>
-                  <p className="text-sm font-mono text-white">{svc.cluster_ip || 'N/A'}</p>
+                  <p className="text-sm font-mono text-white">{svc.cluster_ip || '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">External IP</p>
-                  <p className="text-sm font-mono text-white">{svc.external_ip || t('common.none', '(none)')}</p>
+                  <p className="text-sm font-mono text-white">{svc.external_ip || '-'}</p>
                 </div>
               </div>
               {svc.ports && svc.ports.length > 0 && (
@@ -486,19 +486,19 @@ export default function Resources() {
               <div className="mt-4 grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-xs text-slate-400">{t('resources.capacity', 'Capacity')}</p>
-                  <p className="text-sm text-white">{pvc.capacity || 'N/A'}</p>
+                  <p className="text-sm text-white">{pvc.capacity || '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">{t('resources.requested', 'Requested')}</p>
-                  <p className="text-sm text-white">{pvc.requested || 'N/A'}</p>
+                  <p className="text-sm text-white">{pvc.requested || '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Storage Class</p>
-                  <p className="text-sm text-white">{pvc.storage_class || 'N/A'}</p>
+                  <p className="text-sm text-white">{pvc.storage_class || '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">{t('resources.volume', 'Volume')}</p>
-                  <p className="text-sm font-mono text-white">{pvc.volume_name || 'N/A'}</p>
+                  <p className="text-sm font-mono text-white">{pvc.volume_name || '-'}</p>
                 </div>
               </div>
             </div>

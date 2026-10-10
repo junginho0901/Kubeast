@@ -89,15 +89,15 @@ export default function AccessReview() {
       ))}
     </div>
   )
-  const when = (iso?: string | null) => (iso ? formatWhen(iso) : '—')
+  const when = (iso?: string | null) => (iso ? formatWhen(iso) : '-')
 
   const columns = useMemo<Record<AccessReviewSection, Column<any>[]>>(() => ({
     users: [
       { key: 'email', label: tr('accessReview.col.email', 'Email'), render: (r) => <span className="text-white">{r.email}</span>, text: (r) => r.email },
       { key: 'name', label: tr('accessReview.col.name', 'Name'), render: (r) => r.name, text: (r) => r.name },
-      { key: 'team', label: tr('accessReview.col.team', 'Team'), render: (r) => r.team || '—', text: (r) => r.team },
+      { key: 'team', label: tr('accessReview.col.team', 'Team'), render: (r) => r.team || '-', text: (r) => r.team },
       { key: 'global_role', label: tr('accessReview.col.globalRole', 'Global role'), render: (r) => r.global_role, text: (r) => r.global_role },
-      { key: 'auth_source', label: tr('accessReview.col.authSource', 'Sign-in'), render: (r) => r.auth_source },
+      { key: 'auth_source', label: tr('accessReview.col.authSource', 'Sign-in'), render: (r) => (r.auth_source ? tr(`accessReview.auth.${r.auth_source}`, r.auth_source) : '-') },
       { key: 'last_login_at', label: tr('accessReview.col.lastLogin', 'Last login'), render: (r) => when(r.last_login_at) },
       { key: 'created_at', label: tr('accessReview.col.created', 'Created'), render: (r) => when(r.created_at) },
       { key: 'counts', label: tr('accessReview.col.grantsKeys', 'Clusters / keys / temp'), render: (r) => `${r.cluster_roles} / ${r.api_keys} / ${r.temporary_grants}` },
@@ -109,7 +109,7 @@ export default function AccessReview() {
       { key: 'role', label: tr('accessReview.col.role', 'Role'), render: (r) => r.role, text: (r) => r.role },
       { key: 'granted_via', label: tr('accessReview.col.grantedVia', 'Granted via'), render: (r) => r.granted_via, text: (r) => r.granted_via },
       { key: 'expires_at', label: tr('accessReview.col.expires', 'Expires'), render: (r) => when(r.expires_at) },
-      { key: 'restore_role', label: tr('accessReview.col.restoreRole', 'Then back to'), render: (r) => r.restore_role || '—' },
+      { key: 'restore_role', label: tr('accessReview.col.restoreRole', 'Then back to'), render: (r) => r.restore_role || '-' },
       { key: 'flags', label: tr('accessReview.col.flags', 'Flags'), render: (r) => flags(r.flags), text: (r) => r.flags.join(' ') },
     ],
     api_keys: [
@@ -129,12 +129,12 @@ export default function AccessReview() {
       { key: 'reason', label: tr('accessReview.col.reason', 'Reason'), render: (r) => <span className="line-clamp-2">{r.reason}</span>, text: (r) => r.reason },
       { key: 'status', label: tr('accessReview.col.status', 'Status'), render: (r) => `${r.status}${r.end_reason ? ` (${r.end_reason})` : ''}`, text: (r) => r.status },
       { key: 'created_at', label: tr('accessReview.col.requested', 'Requested'), render: (r) => when(r.created_at) },
-      { key: 'decided', label: tr('accessReview.col.decided', 'Decided'), render: (r) => (r.decided_at ? `${when(r.decided_at)} · ${r.decided_by_email ?? ''}${r.decision_note ? ` · ${r.decision_note}` : ''}` : '—'), text: (r) => r.decided_by_email ?? '' },
+      { key: 'decided', label: tr('accessReview.col.decided', 'Decided'), render: (r) => (r.decided_at ? `${when(r.decided_at)} · ${r.decided_by_email ?? ''}${r.decision_note ? ` · ${r.decision_note}` : ''}` : '-'), text: (r) => r.decided_by_email ?? '' },
     ],
     roles: [
       { key: 'name', label: tr('accessReview.col.role', 'Role'), render: (r) => <span className="text-white">{r.name}{r.is_system ? ` (${tr('accessReview.system', 'system')})` : ''}</span>, text: (r) => r.name },
-      { key: 'description', label: tr('accessReview.col.description', 'Description'), render: (r) => r.description || '—', text: (r) => r.description },
-      { key: 'permissions', label: tr('accessReview.col.permissions', 'Permissions'), render: (r) => <span className="font-mono text-[11px] break-all">{r.permissions.join(', ') || '—'}</span>, text: (r) => r.permissions.join(' ') },
+      { key: 'description', label: tr('accessReview.col.description', 'Description'), render: (r) => r.description || '-', text: (r) => r.description },
+      { key: 'permissions', label: tr('accessReview.col.permissions', 'Permissions'), render: (r) => <span className="font-mono text-[11px] break-all">{r.permissions.join(', ') || '-'}</span>, text: (r) => r.permissions.join(' ') },
       { key: 'users', label: tr('accessReview.col.usersBindings', 'Users / bindings'), render: (r) => `${r.users} / ${r.cluster_bindings}` },
       { key: 'flags', label: tr('accessReview.col.flags', 'Flags'), render: (r) => flags(r.flags), text: (r) => r.flags.join(' ') },
     ],
@@ -303,8 +303,8 @@ export default function AccessReview() {
                   <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="access-review-history-row">
                     <td className="px-3 py-2 whitespace-nowrap text-white">{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
-                    <td className="px-3 py-2">{h.note || '—'}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{h.counts?.users ?? '—'} / {h.counts?.global_admins ?? '—'} / {h.counts?.dormant ?? '—'} / {h.counts?.api_keys_active ?? '—'}</td>
+                    <td className="px-3 py-2">{h.note || '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{h.counts?.users ?? '-'} / {h.counts?.global_admins ?? '-'} / {h.counts?.dormant ?? '-'} / {h.counts?.api_keys_active ?? '-'}</td>
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => { setViewId(h.id); setTab('users') }} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-white">
                         {tr('accessReview.open', 'Open')}

@@ -456,7 +456,7 @@ export default function NamespaceInfo({ name }: Props) {
             <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
               <span>
                 {filteredPods.length === 0
-                  ? tr('detail.(none)', '(none)')
+                  ? tr('common.none', 'None')
                   : `${(podPage - 1) * podPageSize + 1}-${Math.min(podPage * podPageSize, filteredPods.length)} / ${filteredPods.length}`}
               </span>
               <div className="flex gap-2">

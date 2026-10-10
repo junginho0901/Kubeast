@@ -153,12 +153,12 @@ export default function NodeInfo({ name }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoSection title={tr('nodes.detail.addresses', 'Addresses')}>
           <div className="text-xs text-slate-200 whitespace-pre-wrap break-all">
-            {nodeDescribe.addresses?.length > 0 ? nodeDescribe.addresses.map((a: any) => `${a.type}: ${a.address}`).join('\n') : tr('detail.(none)', '(none)')}
+            {nodeDescribe.addresses?.length > 0 ? nodeDescribe.addresses.map((a: any) => `${a.type}: ${a.address}`).join('\n') : tr('common.none', 'None')}
           </div>
         </InfoSection>
         <InfoSection title={tr('nodes.detail.taints', 'Taints')}>
           <div className="text-xs text-slate-200 whitespace-pre-wrap break-all">
-            {nodeDescribe.taints?.length > 0 ? nodeDescribe.taints.map((t: any) => `${t.key || ''}=${t.value || ''}:${t.effect || ''}`).join('\n') : tr('detail.(none)', '(none)')}
+            {nodeDescribe.taints?.length > 0 ? nodeDescribe.taints.map((t: any) => `${t.key || ''}=${t.value || ''}:${t.effect || ''}`).join('\n') : tr('common.none', 'None')}
           </div>
         </InfoSection>
       </div>

@@ -123,17 +123,19 @@ export default function AdminClusters() {
                       <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-300">{c.mode}</td>
-                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]">{c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '—')}</td>
+                  <td className="px-4 py-3 text-slate-300" title={c.mode}>{tr(`cluster.admin.modeValue.${c.mode}`, c.mode)}</td>
+                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]">{c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${healthDotClass(res ? (res.healthy ? 'healthy' : 'unhealthy') : c.health_status)}`} />
                       <span className="text-slate-300">
-                        {res ? (res.healthy ? res.server_version || 'OK' : tr('cluster.admin.unhealthy', 'unhealthy')) : c.health_status || '—'}
+                        {res
+                          ? (res.healthy ? res.server_version || tr('cluster.admin.healthValue.healthy', 'Healthy') : tr('cluster.admin.healthValue.unreachable', 'Unreachable'))
+                          : c.health_status ? tr(`cluster.admin.healthValue.${c.health_status}`, c.health_status) : '-'}
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-400">{c.created_by || '—'}</td>
+                  <td className="px-4 py-3 text-slate-400">{c.created_by || '-'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                       <button

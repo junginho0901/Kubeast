@@ -129,7 +129,7 @@ export function CreateUserModal({
             onChange={(v) => onChangeNewUser((p) => ({ ...p, role_id: Number(v) }))}
             options={[
               { value: '0', label: tr('adminUsers.form.selectRole', 'Select role') },
-              ...roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => ({ value: String(r.id), label: r.name.toUpperCase() })),
+              ...roles.filter((r) => r.name === 'Admin' || r.name === 'Member').map((r) => ({ value: String(r.id), label: r.name })),
             ]}
           />
         </div>

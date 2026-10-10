@@ -56,7 +56,7 @@ export default function LeaseInfo({ name, namespace }: Props) {
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Holder" value={holderIdentity !== '-' ? 'Active' : 'None'} color={holderIdentity !== '-' ? 'green' : 'default'} />
         {leaseDuration != null && (
-          <SummaryBadge label="Duration" value={`${leaseDuration}s`} color="default" />
+          <SummaryBadge label="Lease Time" value={`${leaseDuration}s`} color="default" />
         )}
         {leaseTransitions != null && (
           <SummaryBadge label="Transitions" value={String(leaseTransitions)} color={leaseTransitions > 0 ? 'amber' : 'default'} />

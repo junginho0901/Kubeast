@@ -765,6 +765,7 @@ export interface DeploymentInfo {
   selector: Record<string, string>
   created_at: string
   status: string
+  progressing_reason?: string
 }
 
 export interface ReplicaSetInfo {

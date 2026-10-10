@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsTable, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
+import { useDetailLabel } from './useDetailLabel'
 import { usePagination } from './usePagination'
 import { ResourceLink } from './ResourceLink'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function RuntimeClassInfo({ name }: Props) {
+  const dl = useDetailLabel()
   const { open: openDetail } = useResourceDetail()
   const { data: desc, isLoading } = useQuery({
     queryKey: ['runtimeclass-describe', name],
@@ -73,7 +75,7 @@ export default function RuntimeClassInfo({ name }: Props) {
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Handler" value={handler} color="green" />
-        <SummaryBadge label="Overhead" value={hasOverhead ? 'Configured' : 'None'} color={hasOverhead ? 'amber' : 'default'} />
+        <SummaryBadge label="Overhead" value={hasOverhead ? dl('Configured') : '-'} color={hasOverhead ? 'amber' : 'default'} />
         <SummaryBadge label="Scheduling" value={hasScheduling ? 'Configured' : 'None'} color={hasScheduling ? 'amber' : 'default'} />
       </div>
 

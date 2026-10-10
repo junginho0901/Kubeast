@@ -192,13 +192,13 @@ export default function AdminAudit() {
     const isSuccess = result === 'success'
     return (
       <span
-        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+        className={`inline-flex items-center whitespace-nowrap rounded-sm px-2 py-0.5 text-xs font-medium ${
           isSuccess
             ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
             : 'bg-red-500/15 text-red-300 border border-red-500/30'
         }`}
       >
-        {isSuccess ? '✓' : '✕'} {result}
+        {isSuccess ? '✓' : '✕'} {tr(`adminAudit.resultValue.${result}`, result)}
       </span>
     )
   }
@@ -316,13 +316,13 @@ export default function AdminAudit() {
       <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="flex flex-col text-xs font-semibold text-slate-400">
-            {tr('adminAudit.filter.service', 'Service')}
+            {tr('adminAudit.filter.service', 'Area')}
             <CustomDropdown
               value={draft.service ?? ''}
               onChange={(v) => setDraft({ ...draft, service: v || undefined })}
               options={SERVICES.map((s) => ({
                 value: s,
-                label: s || tr('adminAudit.filter.any', '전체'),
+                label: s ? tr(`adminAudit.area.${s}`, s) : tr('adminAudit.filter.any', '전체'),
               }))}
               minWidth="min-w-[140px]"
             />
@@ -375,7 +375,7 @@ export default function AdminAudit() {
               }
               options={RESULTS.map((r) => ({
                 value: r,
-                label: r || tr('adminAudit.filter.any', '전체'),
+                label: r ? tr(`adminAudit.resultValue.${r}`, r) : tr('adminAudit.filter.any', '전체'),
               }))}
               minWidth="min-w-[140px]"
             />
@@ -460,7 +460,7 @@ export default function AdminAudit() {
             <tr>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.time', '시각')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.actor', '사용자')}</th>
-              <th className="px-3 py-2 text-left">{tr('adminAudit.col.service', 'Service')}</th>
+              <th className="px-3 py-2 text-left">{tr('adminAudit.col.service', 'Area')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.action', 'Action')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.target', '대상')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.namespace', 'Namespace')}</th>
@@ -560,7 +560,7 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
       >
         <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtTime(entry.CreatedAt)}</td>
         <td className="px-3 py-2 text-slate-200">{entry.ActorEmail || '-'}</td>
-        <td className="px-3 py-2 text-slate-300">{entry.Service || '-'}</td>
+        <td className="px-3 py-2 text-slate-300" title={entry.Service || undefined}>{entry.Service ? tr(`adminAudit.area.${entry.Service}`, entry.Service) : '-'}</td>
         <td className="px-3 py-2 font-mono text-xs text-slate-200">{entry.Action}</td>
         <td className="px-3 py-2 text-slate-300">{targetDisplay}</td>
         <td className="px-3 py-2 text-slate-400">{entry.Namespace || '-'}</td>

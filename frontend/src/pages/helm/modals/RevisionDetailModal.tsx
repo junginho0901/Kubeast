@@ -102,6 +102,7 @@ function SectionPane({
   revision: number
   section: HelmSection
 }) {
+  const { t } = useTranslation()
   const q = useQuery({
     queryKey: ['helm-revision-section', namespace, name, revision, section],
     queryFn: () => api.helm.getRevisionSection(namespace, name, revision, section),
@@ -118,7 +119,7 @@ function SectionPane({
   const content = q.data?.content ?? ''
   return (
     <pre className="max-h-[60vh] overflow-auto rounded-sm bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200 whitespace-pre">
-      {content || '—'}
+      {content || t('common.none', 'None')}
     </pre>
   )
 }

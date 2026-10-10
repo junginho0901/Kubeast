@@ -15,6 +15,7 @@ import {
   replicaSetToWorkloadRawJson,
   type SortKey,
 } from './replicaSetHelpers'
+import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -144,7 +145,7 @@ export function ReplicaSetTable({
                 <td className="py-3 px-4 text-xs font-mono">{rs.replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.ready_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.available_replicas ?? 0}</td>
-                <td className="py-3 px-4"><span className={`badge ${getReplicaSetStatusColor(rs.status)}`}>{rs.status || '-'}</span></td>
+                <td className="py-3 px-4"><span className={`badge ${getReplicaSetStatusColor(rs.status)}`} title={workloadStatusTitle(rs.status)}>{workloadStatusLabel(tr, rs.status)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.containers || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>

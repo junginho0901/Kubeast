@@ -66,7 +66,7 @@ export default function PriorityClassInfo({ name }: Props) {
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Value" value={value} color={value > 0 ? 'green' : 'default'} />
-        <SummaryBadge label="Global Default" value={globalDefault ? 'Yes' : 'No'} color={globalDefault ? 'amber' : 'default'} />
+        <SummaryBadge label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
         <SummaryBadge label="Preemption" value={preemptionPolicy === 'PreemptLowerPriority' ? 'Enabled' : 'Never'} color={preemptionPolicy === 'PreemptLowerPriority' ? 'green' : 'default'} />
       </div>
 
@@ -83,7 +83,7 @@ export default function PriorityClassInfo({ name }: Props) {
       <InfoSection title="Priority Settings">
         <InfoGrid>
           <InfoRow label="Value" value={String(value)} />
-          <InfoRow label="Global Default" value={globalDefault ? 'True' : 'False'} />
+          <InfoRow label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
           <InfoRow label="Preemption Policy" value={preemptionPolicy} />
         </InfoGrid>
       </InfoSection>

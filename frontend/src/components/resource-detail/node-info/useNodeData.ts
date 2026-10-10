@@ -105,7 +105,7 @@ export function useNodeData(name: string) {
     const visibleEnd = visibleStart + PAGE_SIZE
     const visiblePods = filteredForView.slice(visibleStart, visibleEnd)
     const visibleSummary = filteredForView.length === 0
-      ? '(none)'
+      ? '없음'
       : `${visibleStart + 1}-${Math.min(visibleEnd, filteredForView.length)} / ${filteredForView.length}`
 
     const summary = `${prefix}Node ${name} — Pod ${podsArr.length}개${notRunning ? ` (NotRunning ${notRunning})` : ''}, 화면 ${visibleSummary}, 이벤트 ${eventsArr.length}건${unschedulable ? ', cordoned' : ''}`

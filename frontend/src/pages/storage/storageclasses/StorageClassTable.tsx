@@ -6,10 +6,10 @@
 // cluster-scoped 라 namespace 컬럼 없음. 7 sortable 컬럼 (name/provisioner/
 // default/reclaimPolicy/bindingMode/allowExpansion/age) + parameters 컬럼
 // (Object.keys count 만, sortable 아님 — 원본 보존). min-w-[1300px].
-// Default 컬럼은 green check icon + 'Yes', AllowVolumeExpansion 은 Yes/No.
+// Default·AllowVolumeExpansion 컬럼은 Yes/No 글자.
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { StorageClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
@@ -129,14 +129,7 @@ export function StorageClassTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{sc.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{sc.provisioner || '-'}</span></td>
-                <td className="py-3 px-4 text-xs">
-                  {sc.is_default ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-300">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      {tr('common.yes', 'Yes')}
-                    </span>
-                  ) : '-'}
-                </td>
+                <td className="py-3 px-4 text-xs">{sc.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.reclaim_policy || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.volume_binding_mode || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>

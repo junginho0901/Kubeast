@@ -240,7 +240,8 @@ export default function AdminUsers() {
   }
 
   const isBlocked = reauthModalOpen
-  const pendingRows = rows.filter((u) => u.role?.name === 'pending')
+  // role names are stored capitalized ("Pending"), so compare without case
+  const pendingRows = rows.filter((u) => u.role?.name?.toLowerCase() === 'pending')
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -425,7 +426,7 @@ export default function AdminUsers() {
               const currentRoleName = roles.find((r) => r.id === currentRoleId)?.name ?? u.role?.name ?? 'unknown'
               const isOpen = openRoleDropdownUserId === u.id
               const isSelf = !!me?.id && me.id === u.id
-              const isPending = currentRoleName === 'pending'
+              const isPending = currentRoleName.toLowerCase() === 'pending'
               return (
                 <tr
                   key={u.id}
@@ -478,7 +479,7 @@ export default function AdminUsers() {
                         aria-expanded={isOpen}
                       >
                         <span className="truncate">
-                          {tr(`adminUsers.roles.${currentRoleName}`, currentRoleName.toUpperCase())}
+                          {currentRoleName}
                         </span>
                         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                       </button>
@@ -511,7 +512,7 @@ export default function AdminUsers() {
                                 }`}
                               >
                                 <span className="flex-1 text-left">
-                                  {tr(`adminUsers.roles.${role.name}`, role.name.toUpperCase())}
+                                  {role.name}
                                 </span>
                                 {isSelected && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
                               </button>

@@ -12,6 +12,7 @@ import {
   getStatusColor,
   type SortKey,
 } from './statefulSetHelpers'
+import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -118,7 +119,7 @@ export function StatefulSetTable({
               <td className="py-3 px-4">{`${sts.updated_replicas ?? sts.current_replicas ?? 0}/${sts.replicas ?? 0}`}</td>
               <td className="py-3 px-4">{sts.available_replicas ?? 0}</td>
               <td className="py-3 px-4">
-                <span className={`badge ${getStatusColor(sts.status)}`}>{sts.status || '-'}</span>
+                <span className={`badge ${getStatusColor(sts.status)}`} title={workloadStatusTitle(sts.status)}>{workloadStatusLabel(tr, sts.status)}</span>
               </td>
               <td className="py-3 px-4 font-mono text-xs">{formatAge(sts.created_at)}</td>
               <td className="py-3 px-4 text-xs font-mono truncate">{sts.service_name || '-'}</td>

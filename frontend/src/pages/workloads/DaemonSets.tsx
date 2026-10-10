@@ -15,6 +15,7 @@ import { parseAgeSeconds, type SortKey } from './daemonsets/daemonSetHelpers'
 import { applyDaemonSetWatchEvent } from './daemonsets/daemonSetWatchNormalize'
 import { DaemonSetFilters } from './daemonsets/DaemonSetFilters'
 import { DaemonSetTable } from './daemonsets/DaemonSetTable'
+import { workloadStatusText } from '@/utils/workloadStatus'
 
 export default function DaemonSets() {
   const queryClient = useQueryClient()
@@ -62,6 +63,7 @@ export default function DaemonSets() {
     if (!Array.isArray(daemonsets)) return [] as DaemonSetInfo[]
     if (!searchQuery.trim()) return daemonsets
     const q = searchQuery.toLowerCase()
+    const label = (k: string, f: string) => t(k, { defaultValue: f })
     return daemonsets.filter((daemonset) => {
       const selectorText = Object.entries(daemonset.node_selector || {})
         .map(([key, value]) => `${key}=${value}`)
@@ -69,11 +71,11 @@ export default function DaemonSets() {
       const imagesText = (daemonset.images || []).join(',')
       return daemonset.name.toLowerCase().includes(q)
         || daemonset.namespace.toLowerCase().includes(q)
-        || String(daemonset.status || '').toLowerCase().includes(q)
+        || workloadStatusText(label, daemonset.status).includes(q)
         || selectorText.toLowerCase().includes(q)
         || imagesText.toLowerCase().includes(q)
     })
-  }, [daemonsets, searchQuery])
+  }, [daemonsets, searchQuery, t])
 
   const summary = useMemo(() => {
     const total = filteredDaemonSets.length
