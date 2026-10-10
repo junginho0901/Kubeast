@@ -37,7 +37,10 @@ test.describe('Dashboard', () => {
     const refresh = page.getByRole('button', { name: /refresh|새로고침/i })
     await expect(refresh).toBeVisible()
     await expect(refresh).toBeEnabled()
+    // the click re-reads the overview past the server cache
+    const refetch = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/overview') && r.url().includes('force_refresh=true'))
     await refresh.click()
+    expect((await refetch).status()).toBe(200)
     // After click the page should still render the title — no error toast.
     await expect(page.locator('h1.text-3xl').first()).toBeVisible()
   })

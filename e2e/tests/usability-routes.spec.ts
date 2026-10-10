@@ -128,9 +128,10 @@ test.describe('Usability and routes', () => {
     await page.getByRole('cell', { name: 'kube-root-ca.crt', exact: true }).first().click()
     const drawer = page.locator(DRAWER).last()
     await drawer.getByRole('button', { name: /^YAML$/ }).first().click()
-    await expect(drawer.getByText(/^(Read-only|읽기 전용)$/)).toBeVisible({ timeout: 15_000 })
+    const status = drawer.locator('p').filter({ hasText: /^(Read-only|읽기 전용|Edit YAML|YAML 편집)$/ })
+    await expect(status).toHaveText(/^(Read-only|읽기 전용)$/, { timeout: 15_000 })
     await drawer.getByRole('button', { name: /^(Edit|편집)$/ }).first().click()
-    await expect(drawer.getByText(/^(Edit YAML|YAML 편집)$/)).toBeVisible()
+    await expect(status).toHaveText(/^(Edit YAML|YAML 편집)$/)
     await drawer.getByRole('button', { name: /^(Cancel|취소)$/ }).first().click()
   })
 

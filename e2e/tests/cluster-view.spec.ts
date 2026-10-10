@@ -17,6 +17,7 @@ test.describe('ClusterView', () => {
     // 검색 input + 네임스페이스 드롭다운
     await expect(page.getByPlaceholder(/Search pod name|Pod 이름/i)).toBeVisible()
     await expect(page.getByRole('button', { name: /All namespaces|모든 Namespace/i })).toBeVisible()
+    await expect(page).toHaveTitle(/^Cluster View · Kubeast$/)
   })
 
   test('initial render — full page screenshot', async ({ page }) => {
@@ -56,13 +57,17 @@ test.describe('ClusterView', () => {
     await page.goto('/cluster-view')
     await page.waitForLoadState('networkidle')
 
-    const dropdown = page.getByRole('button', { name: /All namespaces|모든 Namespace/i })
+    // (the open list has an "All namespaces" option too: the trigger is the first)
+    const dropdown = page.getByRole('button', { name: /All namespaces|모든 Namespace/i }).first()
     await dropdown.click()
 
-    // 드롭다운 열리면 'default' option 노출 (admin 계정 / kubeast 클러스터)
+    // 드롭다운 열리면 'default' option 노출 (admin 계정 / kubeast 클러스터) — kube-system appears only in the list
     await expect(page.getByText('default', { exact: true }).first()).toBeVisible({ timeout: 3000 })
+    const option = page.locator('button').filter({ hasText: /^kube-system$/ })
+    await expect(option).toHaveCount(1)
 
-    // ESC 또는 다시 클릭으로 닫기
-    await page.keyboard.press('Escape')
+    // 다시 클릭으로 닫기
+    await dropdown.click()
+    await expect(option).toHaveCount(0)
   })
 })
