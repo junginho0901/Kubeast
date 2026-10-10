@@ -1,15 +1,6 @@
 // GPU Dashboard sub-component 들이 공유하는 helpers — 추출 출처 GPUDashboard.tsx (Phase 4.11).
 
-export function formatAge(createdAt?: string | null): string {
-  if (!createdAt) return '-'
-  const sec = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000))
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
+export { formatAge } from '@/utils/time'
 
 export function getStatusColor(status: string): string {
   const lower = (status || '').toLowerCase()

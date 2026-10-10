@@ -855,6 +855,8 @@ export interface CronJobInfo {
   active: number
   last_schedule_time?: string | null
   last_successful_time?: string | null
+  /** spec.timeZone (IANA name); absent = the kube-controller-manager's zone */
+  time_zone?: string | null
   containers?: string[]
   images?: string[]
   created_at?: string | null

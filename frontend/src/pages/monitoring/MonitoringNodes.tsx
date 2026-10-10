@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { formatTime } from '@/utils/time'
 import {
   Server,
   RefreshCw,
@@ -166,7 +167,7 @@ export default function MonitoringNodes({
             <p className="text-xs text-slate-400 flex items-center gap-2">
               <Clock className="w-4 h-4" />
               <span>
-                {t('monitoring.metricTimestamp', { time: latestNodeMetricTime.toLocaleTimeString() })}
+                {t('monitoring.metricTimestamp', { time: formatTime(latestNodeMetricTime) })}
               </span>
             </p>
           )}

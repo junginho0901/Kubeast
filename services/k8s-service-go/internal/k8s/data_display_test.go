@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -124,5 +125,27 @@ func TestFormatHPAScalingActive(t *testing.T) {
 		if got := formatHPADetail(c.hpa)["scaling_active"]; got != c.want {
 			t.Errorf("%s: scaling_active = %v, want %v", name, got, c.want)
 		}
+	}
+}
+
+// Re-QA #57 (PR-9b): the CronJob list wrote last_schedule / last_successful while the screen reads
+// last_schedule_time / last_successful_time (the describe names), so "Last Schedule" stayed empty until a
+// watch event came; the list also had no time zone for the next-run time.
+func TestCronJobListCarriesTheScheduleTimesAndTimeZone(t *testing.T) {
+	at := metav1.NewTime(time.Date(2026, 10, 10, 3, 0, 0, 0, time.UTC))
+	zone := "Asia/Seoul"
+	cj := batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "nightly", Namespace: "default"},
+		Spec:       batchv1.CronJobSpec{Schedule: "0 3 * * *", TimeZone: &zone},
+		Status:     batchv1.CronJobStatus{LastScheduleTime: &at, LastSuccessfulTime: &at},
+	}
+	got := formatCronJobList([]batchv1.CronJob{cj})[0]
+	for _, key := range []string{"last_schedule_time", "last_successful_time", "last_schedule", "last_successful"} {
+		if got[key] != "2026-10-10T03:00:00Z" {
+			t.Errorf("%s = %v", key, got[key])
+		}
+	}
+	if got["time_zone"] != zone {
+		t.Errorf("time_zone = %v", got["time_zone"])
 	}
 }

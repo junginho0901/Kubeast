@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { formatTime } from '@/utils/time'
 import { api, type HelmReleaseDetail } from '@/services/api'
 
 // Overview card grid — minimal release metadata. Release-owned resource
@@ -36,7 +37,7 @@ export default function OverviewTab({ detail }: { detail: HelmReleaseDetail }) {
     </div>
   )
 
-  const updated = detail.updated ? new Date(detail.updated).toLocaleString() : '-'
+  const updated = formatTime(detail.updated)
   const resourceCount = resourcesQuery.data?.length ?? 0
   const imageCount = imagesQuery.data?.length ?? 0
 

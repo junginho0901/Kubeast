@@ -13,14 +13,14 @@ test.describe('Monitoring', () => {
 
     // Each node card shows live CPU/Memory percentages + progress bars
     // that move every 5s. Mask the per-node card bodies plus the
-    // "Monitor sampled at HH:MM:SS" / "Auto refresh every Ns" header
+    // "Metrics sampled at <time>" / "Auto refresh every Ns" header
     // strip — both update on every render. The surrounding page chrome
     // (header, layout, tab buttons) is what we want to catch
     // regressions on.
     await expect(page).toHaveScreenshot('monitoring-nodes.png', {
       fullPage: true,
       animations: 'disabled',
-      // Header strip text ("Monitor sampled at HH:MM:SS", etc.) has
+      // Header strip text ("Metrics sampled at <time>", etc.) has
       // variable glyph width, so the mask boxes don't perfectly align
       // between baseline and actual. Bump the per-pixel tolerance just
       // for this spec — 500/1.3M pixels (~0.04 %) is well below any
@@ -28,7 +28,7 @@ test.describe('Monitoring', () => {
       maxDiffPixels: 500,
       mask: [
         page.locator('.bg-slate-700.rounded-lg'),
-        page.locator('text=/Monitor sampled at/'),
+        page.locator('text=/Metrics sampled at|메트릭 기준 수집 시각/'),
         page.locator('text=/Auto refresh every/'),
         page.locator('text=/Data labels/'),
         page.locator('text=/Total \\d+ node/'),

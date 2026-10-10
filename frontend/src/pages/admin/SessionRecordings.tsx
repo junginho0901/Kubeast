@@ -8,6 +8,7 @@ import type { SessionRecording } from '@/services/api/recordings'
 import CustomDropdown from '@/components/CustomDropdown'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 import { formatWhen } from './accessRequestFormat'
+import { utcTitle } from '@/utils/time'
 
 // Admin → Session recordings: recorded pod exec / node shell terminals (the
 // output the user saw). Opening one replays it; every read is audited.
@@ -141,7 +142,7 @@ export default function SessionRecordings() {
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-slate-700" data-testid={`recording-row-${r.id}`}>
-                    <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{formatWhen(r.started_at)}</td>
+                    <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(r.started_at)}>{formatWhen(r.started_at)}</td>
                     <td className="px-3 py-2 text-slate-200"><span className="block max-w-[200px] truncate" title={r.user_email || undefined}>{r.user_email || '-'}</span></td>
                     <td className="px-3 py-2 text-slate-300">{r.kind === 'exec' ? tr('recordings.kind.exec', 'Pod exec') : tr('recordings.kind.nodeShell', 'Node shell')}</td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-200">

@@ -5,23 +5,11 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { formatAge } from '@/utils/time'
 
 interface Props {
   name: string
   rawJson?: Record<string, unknown>
-}
-
-function formatAge(createdAt?: string | null): string {
-  if (!createdAt) return '-'
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return '-'
-  const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000))
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
 }
 
 export default function CRDInfo({ name, rawJson }: Props) {

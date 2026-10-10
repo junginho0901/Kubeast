@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next'
 import { Pause, Play, Zap } from 'lucide-react'
 import { InfoSection, InfoRow, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
+import { nextRunOf, nextRunTitle } from '@/pages/workloads/cronjobs/cronJobHelpers'
+import { humanDuration } from '@/utils/time'
 
 interface Props {
   isJob: boolean
@@ -98,7 +100,22 @@ export default function WorkloadKindInfo({
             {describe?.failed_jobs_history_limit != null && (
               <InfoRow label="Failed Jobs History" value={String(describe.failed_jobs_history_limit)} />
             )}
-            {describe?.time_zone && <InfoRow label="Time Zone" value={String(describe.time_zone)} />}
+            <InfoRow
+              label="Time Zone"
+              value={describe?.time_zone ? String(describe.time_zone) : tr('cronjobs.controllerZone', "the controller's time zone (not set; computed in this browser's zone)")}
+            />
+            <InfoRow
+              label="Next Run"
+              value={(() => {
+                const cronjob = {
+                  schedule: String(describe?.schedule ?? spec.schedule ?? ''),
+                  suspend: Boolean(describe?.suspend ?? spec.suspend),
+                  time_zone: describe?.time_zone ? String(describe.time_zone) : null,
+                }
+                const next = nextRunOf(cronjob)
+                return next ? <span title={nextRunTitle(cronjob, tr)}>{`${fmtTs(next.toISOString())} (${humanDuration((next.getTime() - Date.now()) / 1000)})`}</span> : '-'
+              })()}
+            />
             <InfoRow label="Active Jobs" value={String(describe?.active ?? (Array.isArray(status.active) ? status.active.length : 0))} />
             {(describe?.last_schedule_time ?? status.lastScheduleTime) != null && (
               <InfoRow label="Last Schedule" value={fmtTs(String(describe?.last_schedule_time ?? status.lastScheduleTime))} />

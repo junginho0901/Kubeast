@@ -6,6 +6,7 @@ import { Check, Clock, Loader2, ShieldCheck, X } from 'lucide-react'
 import { api } from '@/services/api'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
 import { formatDuration, formatWhen } from './accessRequestFormat'
+import { utcTitle } from '@/utils/time'
 
 // Admin review of access requests (temporary per-cluster role grants):
 // pending requests to approve or reject with an optional note, and the
@@ -133,7 +134,7 @@ export default function AccessRequests() {
                     <td className="px-4 py-3 font-medium">{r.role}</td>
                     <td className="px-4 py-3 whitespace-nowrap"><span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-400" />{formatDuration(r.duration_minutes)}</span></td>
                     <td className="px-4 py-3 max-w-xs whitespace-pre-wrap wrap-break-word text-slate-300">{r.reason}</td>
-                    <td className="px-4 py-3 text-slate-400">{formatWhen(r.created_at)}</td>
+                    <td className="px-4 py-3 text-slate-400 whitespace-nowrap" title={utcTitle(r.created_at)}>{formatWhen(r.created_at)}</td>
                     {tab === 'pending' ? (
                       <td className="px-4 py-3">
                         {own ? (
@@ -177,7 +178,7 @@ export default function AccessRequests() {
                           <div>{r.decided_by_email ?? '-'}</div>
                           {r.decision_note && <div className="text-xs text-slate-500">{r.decision_note}</div>}
                         </td>
-                        <td className="px-4 py-3 text-slate-400">{formatWhen(r.expires_at)}</td>
+                        <td className="px-4 py-3 text-slate-400 whitespace-nowrap" title={utcTitle(r.expires_at)}>{formatWhen(r.expires_at)}</td>
                       </>
                     )}
                   </tr>

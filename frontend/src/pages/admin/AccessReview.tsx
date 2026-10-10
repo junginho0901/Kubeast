@@ -11,6 +11,7 @@ import {
   type AccessReviewSignoff,
 } from '@/services/api/access_review'
 import { formatDuration, formatWhen } from './accessRequestFormat'
+import { utcTitle } from '@/utils/time'
 
 // Admin → Access review: the report of who has what (accounts, per-cluster
 // grants, API keys, temporary grants since the last review, roles) with the
@@ -90,6 +91,8 @@ export default function AccessReview() {
     </div>
   )
   const when = (iso?: string | null) => (iso ? formatWhen(iso) : '-')
+  // a time alone in a cell: on one line, the UTC value on hover
+  const whenCell = (iso?: string | null) => (iso ? <span className="whitespace-nowrap" title={utcTitle(iso)}>{formatWhen(iso)}</span> : '-')
 
   const columns = useMemo<Record<AccessReviewSection, Column<any>[]>>(() => ({
     users: [
@@ -98,8 +101,8 @@ export default function AccessReview() {
       { key: 'team', label: tr('accessReview.col.team', 'Team'), render: (r) => r.team || '-', text: (r) => r.team },
       { key: 'global_role', label: tr('accessReview.col.globalRole', 'Global role'), render: (r) => r.global_role, text: (r) => r.global_role },
       { key: 'auth_source', label: tr('accessReview.col.authSource', 'Sign-in'), render: (r) => (r.auth_source ? tr(`accessReview.auth.${r.auth_source}`, r.auth_source) : '-') },
-      { key: 'last_login_at', label: tr('accessReview.col.lastLogin', 'Last login'), render: (r) => when(r.last_login_at) },
-      { key: 'created_at', label: tr('accessReview.col.created', 'Created'), render: (r) => when(r.created_at) },
+      { key: 'last_login_at', label: tr('accessReview.col.lastLogin', 'Last login'), render: (r) => whenCell(r.last_login_at) },
+      { key: 'created_at', label: tr('accessReview.col.created', 'Created'), render: (r) => whenCell(r.created_at) },
       { key: 'counts', label: tr('accessReview.col.grantsKeys', 'Clusters / keys / temp'), render: (r) => `${r.cluster_roles} / ${r.api_keys} / ${r.temporary_grants}` },
       { key: 'flags', label: tr('accessReview.col.flags', 'Flags'), render: (r) => flags(r.flags), text: (r) => r.flags.join(' ') },
     ],
@@ -108,7 +111,7 @@ export default function AccessReview() {
       { key: 'cluster', label: tr('accessReview.col.cluster', 'Cluster'), render: (r) => r.cluster, text: (r) => r.cluster },
       { key: 'role', label: tr('accessReview.col.role', 'Role'), render: (r) => r.role, text: (r) => r.role },
       { key: 'granted_via', label: tr('accessReview.col.grantedVia', 'Granted via'), render: (r) => r.granted_via, text: (r) => r.granted_via },
-      { key: 'expires_at', label: tr('accessReview.col.expires', 'Expires'), render: (r) => when(r.expires_at) },
+      { key: 'expires_at', label: tr('accessReview.col.expires', 'Expires'), render: (r) => whenCell(r.expires_at) },
       { key: 'restore_role', label: tr('accessReview.col.restoreRole', 'Then back to'), render: (r) => r.restore_role || '-' },
       { key: 'flags', label: tr('accessReview.col.flags', 'Flags'), render: (r) => flags(r.flags), text: (r) => r.flags.join(' ') },
     ],
@@ -117,8 +120,8 @@ export default function AccessReview() {
       { key: 'name', label: tr('accessReview.col.name', 'Name'), render: (r) => `${r.name} (${r.key_prefix}…)`, text: (r) => `${r.name} ${r.key_prefix}` },
       { key: 'clusters', label: tr('accessReview.col.clusters', 'Clusters'), render: (r) => (r.clusters.length ? r.clusters.join(', ') : tr('accessReview.allClusters', 'all')), text: (r) => r.clusters.join(' ') },
       { key: 'role_ceiling', label: tr('accessReview.col.roleCeiling', 'Role ceiling'), render: (r) => r.role_ceiling },
-      { key: 'created_at', label: tr('accessReview.col.created', 'Created'), render: (r) => when(r.created_at) },
-      { key: 'expires_at', label: tr('accessReview.col.expires', 'Expires'), render: (r) => when(r.expires_at) },
+      { key: 'created_at', label: tr('accessReview.col.created', 'Created'), render: (r) => whenCell(r.created_at) },
+      { key: 'expires_at', label: tr('accessReview.col.expires', 'Expires'), render: (r) => whenCell(r.expires_at) },
       { key: 'last_used_at', label: tr('accessReview.col.lastUsed', 'Last used'), render: (r) => (r.last_used_at ? `${when(r.last_used_at)}${r.last_used_ip ? ` · ${r.last_used_ip}` : ''}` : tr('accessReview.never', 'never')) },
       { key: 'flags', label: tr('accessReview.col.flags', 'Flags'), render: (r) => flags(r.flags), text: (r) => r.flags.join(' ') },
     ],
@@ -128,7 +131,7 @@ export default function AccessReview() {
       { key: 'duration', label: tr('accessReview.col.duration', 'Duration'), render: (r) => formatDuration(r.duration_minutes) },
       { key: 'reason', label: tr('accessReview.col.reason', 'Reason'), render: (r) => <span className="line-clamp-2">{r.reason}</span>, text: (r) => r.reason },
       { key: 'status', label: tr('accessReview.col.status', 'Status'), render: (r) => `${r.status}${r.end_reason ? ` (${r.end_reason})` : ''}`, text: (r) => r.status },
-      { key: 'created_at', label: tr('accessReview.col.requested', 'Requested'), render: (r) => when(r.created_at) },
+      { key: 'created_at', label: tr('accessReview.col.requested', 'Requested'), render: (r) => whenCell(r.created_at) },
       { key: 'decided', label: tr('accessReview.col.decided', 'Decided'), render: (r) => (r.decided_at ? `${when(r.decided_at)} · ${r.decided_by_email ?? ''}${r.decision_note ? ` · ${r.decision_note}` : ''}` : '-'), text: (r) => r.decided_by_email ?? '' },
     ],
     roles: [
@@ -301,7 +304,7 @@ export default function AccessReview() {
               <tbody>
                 {history.map((h) => (
                   <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="access-review-history-row">
-                    <td className="px-3 py-2 whitespace-nowrap text-white">{formatWhen(h.reviewed_at)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-white" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
                     <td className="px-3 py-2">{h.note || '-'}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{h.counts?.users ?? '-'} / {h.counts?.global_admins ?? '-'} / {h.counts?.dormant ?? '-'} / {h.counts?.api_keys_active ?? '-'}</td>

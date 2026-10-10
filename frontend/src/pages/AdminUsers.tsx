@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useTranslation } from 'react-i18next'
 import { usePermission } from '@/hooks/usePermission'
+import { formatTime } from '@/utils/time'
 import { useAdminUserData } from './admin-users/useAdminUserData'
 import { ReauthModal } from './admin-users/ReauthModal'
 import { CreateUserModal } from './admin-users/CreateUserModal'
@@ -451,7 +452,7 @@ export default function AdminUsers() {
                       <span
                         className="ml-2 inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300 border border-red-500/20"
                         data-testid="user-dormant-badge"
-                        title={tr('adminUsers.lastLogin', 'Last login {{when}}', { when: u.last_login_at ? new Date(u.last_login_at).toLocaleString() : tr('adminUsers.neverLoggedIn', 'never signed in') })}
+                        title={tr('adminUsers.lastLogin', 'Last login {{when}}', { when: u.last_login_at ? formatTime(u.last_login_at) : tr('adminUsers.neverLoggedIn', 'never signed in') })}
                       >
                         {tr('adminUsers.dormantBadge', 'Dormant lock')}
                       </span>

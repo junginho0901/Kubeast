@@ -8,6 +8,7 @@ import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { formatWhen } from './accessRequestFormat'
+import { utcTitle } from '@/utils/time'
 
 // Admin → Cluster hygiene: configuration risks of one cluster (Pod Security
 // Standards, image tags, resources, namespace policy, service account tokens,
@@ -361,7 +362,7 @@ export default function ClusterHygiene() {
               <tbody>
                 {history.map((h) => (
                   <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-history-row">
-                    <td className="px-3 py-2 whitespace-nowrap text-white">{formatWhen(h.reviewed_at)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-white" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
                     <td className="px-3 py-2">{h.note || '-'}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{h.counts?.critical ?? '-'} / {h.counts?.warning ?? '-'} / {h.counts?.info ?? '-'} / {h.counts?.exempt ?? '-'}</td>

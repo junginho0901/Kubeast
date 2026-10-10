@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { formatTime } from '@/utils/time'
 import {
   Box,
   RefreshCw,
@@ -159,7 +160,7 @@ export default function MonitoringPods({
               <p className="text-xs text-slate-400 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 <span>
-                  {t('monitoring.metricTimestamp', { time: latestPodMetricTime.toLocaleTimeString() })}
+                  {t('monitoring.metricTimestamp', { time: formatTime(latestPodMetricTime) })}
                 </span>
               </p>
             )}

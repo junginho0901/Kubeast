@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAdaptiveRowsPerPage } from './useAdaptiveRowsPerPage'
+import { usePageSize } from '@/utils/pageSize'
 
 // A table wider than its scroll wrapper is fitted in steps, each only when the
 // one before is not enough: fold the col-optional columns (images, selectors,
@@ -107,13 +108,15 @@ export function useAdaptiveTable(options: UseAdaptiveTableOptions = {}) {
   const theadRef = useRef<HTMLTableSectionElement>(null)
   const firstRowRef = useRef<HTMLTableRowElement>(null)
 
-  const rowsPerPage = useAdaptiveRowsPerPage(containerRef, {
+  const fitRows = useAdaptiveRowsPerPage(containerRef, {
     ...options,
     bodyRef,
     theadRef,
     rowRef: firstRowRef,
   })
+  // the rows-per-page choice in the footer (PageSizeSelect): fit the screen, or a fixed count that scrolls
+  const pageSize = usePageSize()
   useScrollMoreHint(bodyRef, options.recalculationKey)
 
-  return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage }
+  return { containerRef, bodyRef, theadRef, firstRowRef, rowsPerPage: pageSize === 'fit' ? fitRows : pageSize }
 }

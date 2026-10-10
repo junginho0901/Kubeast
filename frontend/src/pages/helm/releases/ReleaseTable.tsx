@@ -2,7 +2,9 @@ import { RefObject } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, ExternalLink, Package } from 'lucide-react'
+import { utcTitle } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { PageSizeSelect } from '@/components/PageSizeSelect'
 import type { HelmReleaseSummary } from '@/services/api'
 import {
   formatUpdated,
@@ -140,7 +142,7 @@ export default function ReleaseTable({
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{r.chart || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{r.chartVersion || '-'}</td>
                   <td className="col-optional py-3 px-4 text-xs font-mono">{r.appVersion || '-'}</td>
-                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={r.updated || undefined}>{formatUpdated(r.updated)}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={utcTitle(r.updated)}>{formatUpdated(r.updated)}</td>
                 </tr>
               )
             })}
@@ -149,7 +151,8 @@ export default function ReleaseTable({
         </table>
       </div>
       <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-        <div className="text-xs text-slate-400">
+        <div className="flex items-center gap-4 text-xs text-slate-400">
+          <PageSizeSelect />
           {t('common.paginationRange', {
             start: (currentPage - 1) * rowsPerPage + 1,
             end: Math.min(currentPage * rowsPerPage, sortedCount),

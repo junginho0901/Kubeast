@@ -7,6 +7,7 @@ import { ModalOverlay } from '@/components/ModalOverlay'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import type { ClusterMeta } from '@/services/api/clusters'
+import { formatTime } from '@/utils/time'
 
 // Per-cluster access management (the inverse of the user-detail ClusterRoleMatrix):
 // for ONE cluster, list every user granted a role on it and let an admin change
@@ -117,7 +118,7 @@ export default function ClusterAccessModal({
                     {g.email}
                     {g.expires_at && (
                       <span className="ml-2 text-amber-300" data-testid={`cluster-access-until-${g.user_id}`}>
-                        {t('accessRequests.until', { defaultValue: 'until {{time}}', time: new Date(g.expires_at).toLocaleString() })}
+                        {t('accessRequests.until', { defaultValue: 'until {{time}}', time: formatTime(g.expires_at) })}
                       </span>
                     )}
                   </div>
