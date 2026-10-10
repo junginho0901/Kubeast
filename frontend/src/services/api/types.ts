@@ -200,35 +200,6 @@ export interface IngressInfo {
   created_at?: string | null
 }
 
-export interface IngressDetail {
-  name: string
-  namespace: string
-  class?: string | null
-  class_source?: 'spec' | 'annotation' | 'default' | null
-  class_controller?: string | null
-  class_is_default?: boolean | null
-  addresses: Array<{ ip?: string | null; hostname?: string | null }>
-  tls: Array<{ secret_name?: string | null; hosts: string[] }>
-  default_backend?: any
-  rules: Array<{
-    host?: string | null
-    paths: Array<{
-      path?: string | null
-      path_type?: string | null
-      backend?: any
-    }>
-  }>
-  events: Array<{
-    type?: string | null
-    reason?: string | null
-    message?: string | null
-    count?: number | null
-    first_timestamp?: string | null
-    last_timestamp?: string | null
-  }>
-  created_at?: string | null
-}
-
 export interface IngressClassInfo {
   name: string
   controller?: string | null

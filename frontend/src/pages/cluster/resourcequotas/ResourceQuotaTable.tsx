@@ -6,7 +6,7 @@ import type { ResourceQuotaInfo } from '@/services/api'
 import { useTranslation, Trans } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceQuotaHelpers'
 
@@ -22,6 +22,7 @@ interface ResourceQuotaTableProps {
   totalPages: number
   rowsPerPage: number
   onPageChange: (page: number) => void
+  searching?: boolean
   onOpenDetail: (item: ResourceQuotaInfo) => void
   containerRef: React.RefObject<HTMLDivElement | null>
   bodyRef: React.RefObject<HTMLDivElement | null>
@@ -41,6 +42,7 @@ export function ResourceQuotaTable({
   totalPages,
   rowsPerPage,
   onPageChange,
+  searching,
   onOpenDetail,
   containerRef,
   bodyRef,
@@ -117,47 +119,13 @@ export function ResourceQuotaTable({
             )}
 
             {sortedResourceQuotasLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="resourcequotas">
-                {tr('resourceQuotas.noResults', 'No resource quotas found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="resourcequotas" searching={searching} />
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedResourceQuotas.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
-      {sortedResourceQuotasLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <PageSizeSelect />
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedResourceQuotasLength),
-              total: sortedResourceQuotasLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedResourceQuotasLength} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }

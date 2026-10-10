@@ -10,7 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { ResourceClaimTemplateItem } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceClaimTemplatesHelpers'
 import { Trans } from 'react-i18next'
@@ -32,6 +32,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -53,6 +54,7 @@ export function ResourceClaimTemplatesTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -135,46 +137,14 @@ export function ResourceClaimTemplatesTable({
             )}
 
             {sortedResourceClaimTemplatesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="resourceclaimtemplates">
-                {tr('resourceClaimTemplatesPage.noResults', 'No ResourceClaimTemplates found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="resourceclaimtemplates" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedResourceClaimTemplates.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
 
-      {sortedResourceClaimTemplatesLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <PageSizeSelect />
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedResourceClaimTemplatesLength),
-              total: sortedResourceClaimTemplatesLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedResourceClaimTemplatesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

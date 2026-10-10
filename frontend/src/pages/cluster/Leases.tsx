@@ -279,6 +279,7 @@ spec:
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         onPageChange={setCurrentPage}
+        searching={!!searchQuery.trim()}
         onOpenDetail={(l) => openDetail({
           kind: 'Lease',
           name: l.name,

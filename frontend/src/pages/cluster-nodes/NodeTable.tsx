@@ -1,7 +1,7 @@
 import { RefObject } from 'react'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
@@ -19,6 +19,7 @@ interface Props {
   totalPages: number
   rowsPerPage: number
   onPageChange: (page: number) => void
+  searching?: boolean
   tableContainerRef: RefObject<HTMLDivElement | null>
   tableBodyRef: RefObject<HTMLDivElement | null>
   theadRef: RefObject<HTMLTableSectionElement | null>
@@ -39,6 +40,7 @@ export default function NodeTable({
   totalPages,
   rowsPerPage,
   onPageChange,
+  searching,
   tableContainerRef,
   tableBodyRef,
   theadRef,
@@ -131,47 +133,13 @@ export default function NodeTable({
             )}
 
             {sortedNodesCount === 0 && !isLoadingNodes && (
-              <TableEmptyRow colSpan={9} resource="nodes">
-                {tr('nodes.noResults', 'No nodes found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={9} resource="nodes" searching={searching} />
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={9} />
         </table>
       </div>
-      {sortedNodesCount > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <PageSizeSelect />
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedNodesCount),
-              total: sortedNodesCount,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedNodesCount} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }

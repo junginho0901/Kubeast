@@ -292,7 +292,7 @@ export default function AccessReview() {
             <div className="p-6 text-slate-400">{tr('accessReview.noHistory', 'No review has been signed off yet.')}</div>
           ) : (
             <table className="min-w-full text-sm">
-              <thead className="text-xs text-slate-400">
+              <thead className="text-slate-400">
                 <tr>
                   <th className="px-3 py-2 text-left">{tr('accessReview.col.reviewedAt', 'Signed off')}</th>
                   <th className="px-3 py-2 text-left">{tr('accessReview.col.reviewedBy', 'By')}</th>
@@ -327,8 +327,8 @@ export default function AccessReview() {
             <div className="p-6 text-slate-400">{tr('accessReview.empty', 'Nothing to show.')}</div>
           ) : (
             <table className="min-w-full text-sm" data-testid="access-review-table">
-              <thead className="text-xs text-slate-400">
-                <tr>{columns[tab].map((c) => <th key={c.key} className="px-3 py-2 text-left font-medium whitespace-nowrap">{c.label}</th>)}</tr>
+              <thead className="text-slate-400">
+                <tr>{columns[tab].map((c) => <th key={c.key} className="px-3 py-2 text-left whitespace-nowrap">{c.label}</th>)}</tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (

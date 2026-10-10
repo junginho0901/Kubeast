@@ -35,7 +35,8 @@ export function computeReplicaSetStatus(rs: {
 export function getReplicaSetStatusColor(status: string): string {
   const lower = String(status || '').toLowerCase()
   if (lower.includes('healthy')) return 'badge-success'
-  if (lower.includes('degraded') || lower.includes('idle')) return 'badge-warning'
+  if (lower.includes('degraded')) return 'badge-warning'
+  if (lower.includes('idle')) return 'badge-neutral'
   if (lower.includes('unavailable') || lower.includes('error') || lower.includes('failed')) return 'badge-error'
   return 'badge-info'
 }

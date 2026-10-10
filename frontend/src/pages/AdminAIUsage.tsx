@@ -128,7 +128,7 @@ export default function AdminAIUsage() {
 
       <div className="overflow-x-auto rounded-lg border border-slate-800">
         <table className="min-w-full text-sm" data-testid="ai-usage-table">
-          <thead className="bg-slate-900/60 text-xs uppercase text-slate-400">
+          <thead className="bg-slate-900/60 text-slate-400">
             <tr>
               <th className="px-3 py-2 text-left">{groupLabel[group]}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.requests', '요청')}</th>
@@ -151,7 +151,7 @@ export default function AdminAIUsage() {
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
-                  {tr('adminAIUsage.empty', '이 기간에 AI 채팅 기록이 없습니다.')}
+                  {tr('common.noSearchResults', 'No results found.')}
                 </td>
               </tr>
             ) : (

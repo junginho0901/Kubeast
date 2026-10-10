@@ -293,6 +293,7 @@ spec:
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         onPageChange={setCurrentPage}
+        searching={!!searchQuery.trim()}
         onOpenDetail={(lr) => openDetail({
           kind: 'LimitRange',
           name: lr.name,

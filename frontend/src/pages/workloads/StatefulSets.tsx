@@ -6,6 +6,7 @@ import { api, type StatefulSetInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
+import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -26,7 +27,6 @@ export default function StatefulSets() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(12)
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const { has } = usePermission()
@@ -61,19 +61,6 @@ export default function StatefulSets() {
       }
     },
   })
-
-  useEffect(() => {
-    const handleResize = () => {
-      const viewportHeight = window.innerHeight
-      const estimatedRowHeight = 45
-      const reservedHeight = 380
-      const next = Math.max(8, Math.floor((viewportHeight - reservedHeight) / estimatedRowHeight))
-      setPageSize(next)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   const filtered = useMemo(() => {
     const items = Array.isArray(statefulsets) ? statefulsets : []
@@ -138,18 +125,21 @@ export default function StatefulSets() {
     return list
   }, [filtered, sortKey, sortDir])
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const { containerRef: tableContainerRef, bodyRef: tableBodyRef, theadRef, firstRowRef, rowsPerPage } = useAdaptiveTable({
+    recalculationKey: sorted.length,
+  })
+  const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage))
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, selectedNamespace, pageSize])
+  }, [searchQuery, selectedNamespace])
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
 
   const paged = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
-    return sorted.slice(start, start + pageSize)
-  }, [sorted, currentPage, pageSize])
+    const start = (currentPage - 1) * rowsPerPage
+    return sorted.slice(start, start + rowsPerPage)
+  }, [sorted, currentPage, rowsPerPage])
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
@@ -166,8 +156,8 @@ export default function StatefulSets() {
         ...summarizeList(paged as unknown as Record<string, unknown>[], {
           total: filtered.length,
           currentPage,
-          pageSize,
-          topN: pageSize,
+          pageSize: rowsPerPage,
+          topN: rowsPerPage,
           pickFields: ['name', 'namespace', 'replicas', 'ready_replicas', 'available_replicas', 'status'],
           filterProblematic: (s) => {
             const st = String((s as unknown as StatefulSetInfo).status || '').toLowerCase()
@@ -180,7 +170,7 @@ export default function StatefulSets() {
         }),
       },
     }
-  }, [statefulsets, paged, filtered.length, currentPage, pageSize, selectedNamespace, searchQuery, summary])
+  }, [statefulsets, paged, filtered.length, currentPage, rowsPerPage, selectedNamespace, searchQuery, summary])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 
@@ -300,7 +290,12 @@ spec:
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
         totalPages={totalPages}
-        pageSize={pageSize}
+        rowsPerPage={rowsPerPage}
+        tableContainerRef={tableContainerRef}
+        tableBodyRef={tableBodyRef}
+        theadRef={theadRef}
+        firstRowRef={firstRowRef}
+        searching={!!searchQuery.trim()}
         openDetail={openDetail}
         tr={tr}
       />

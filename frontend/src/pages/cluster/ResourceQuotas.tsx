@@ -283,6 +283,7 @@ spec:
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         onPageChange={setCurrentPage}
+        searching={!!searchQuery.trim()}
         onOpenDetail={(rq) => openDetail({
           kind: 'ResourceQuota',
           name: rq.name,

@@ -6,6 +6,22 @@ import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 
+// spec.nodeAffinity (the server sends it as JSON) the way kubectl describe pv prints it: one line per required term,
+// "key operator [values]". Anything else stays as the server wrote it.
+function nodeAffinityLines(value: string): string[] | null {
+  if (!value || value === '-') return null
+  try {
+    const terms = JSON.parse(value)?.required?.nodeSelectorTerms
+    if (!Array.isArray(terms) || terms.length === 0) return null
+    return terms.map((term: { matchExpressions?: any[]; matchFields?: any[] }, i: number) => {
+      const reqs = [...(term.matchExpressions ?? []), ...(term.matchFields ?? [])]
+      return `Term ${i}: ${reqs.map((r) => `${r.key} ${String(r.operator ?? '').toLowerCase()}${Array.isArray(r.values) && r.values.length ? ` [${r.values.join(', ')}]` : ''}`).join(', ')}`
+    })
+  } catch {
+    return null
+  }
+}
+
 interface PVClaimRef {
   namespace?: string | null
   name?: string | null
@@ -133,7 +149,10 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
           />
           <InfoRow label="Source" value={sourceText} />
           <InfoRow label="Volume Handle" value={volumeHandle !== '-' ? <span className="font-mono break-all text-[11px]">{volumeHandle}</span> : '-'} />
-          <InfoRow label="Node Affinity" value={nodeAffinity} />
+          <InfoRow
+            label="Node Affinity"
+            value={nodeAffinityLines(nodeAffinity)?.map((line) => <div key={line} className="font-mono text-[11px]">{line}</div>) ?? nodeAffinity}
+          />
           {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(describe.resource_version)}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />

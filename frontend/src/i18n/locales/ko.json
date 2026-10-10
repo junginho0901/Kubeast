@@ -252,7 +252,6 @@
   "accessRequests": {
     "title": "Access Requests",
     "disabled": "이 설치에서는 권한 요청이 꺼져 있습니다 (auth.accessRequests.enabled).",
-    "empty": "요청이 없습니다.",
     "until": "{{time}}까지",
     "tabs": {
       "pending": "대기",
@@ -450,7 +449,6 @@
       "restarted": "재시작 이력",
       "completed": "완료"
     },
-    "noResults": "Pod가 없습니다.",
     "exec": {
       "connectingTo": "{{pod}}/{{container}}에 연결 중...",
       "noShell": "이 컨테이너에는 \"{{command}}\"이(가) 없습니다 — 이미지에 셸이 없거나(distroless) 다른 경로에 있습니다. 다른 셸(bash, ash)이나 Pod의 다른 컨테이너를 고르세요.",
@@ -491,7 +489,6 @@
       "degraded": "저하",
       "unavailable": "사용 불가"
     },
-    "noResults": "Deployment를 찾을 수 없습니다.",
     "delete": {
       "button": "Deployment 삭제",
       "title": "Deployment 삭제"
@@ -523,7 +520,6 @@
       "exposed": "외부 노출",
       "headless": "Headless"
     },
-    "noResults": "Service를 찾을 수 없습니다.",
     "delete": {
       "button": "Service 삭제",
       "title": "Service 삭제"
@@ -554,7 +550,6 @@
       "withNotReady": "NotReady 포함",
       "totalAddresses": "전체 주소 수"
     },
-    "noResults": "Endpoints를 찾을 수 없습니다.",
     "delete": {
       "button": "Endpoints 삭제",
       "title": "Endpoints 삭제"
@@ -588,7 +583,6 @@
       "withNotReady": "NotReady 포함",
       "totalEndpoints": "전체 Endpoints 수"
     },
-    "noResults": "EndpointSlice를 찾을 수 없습니다.",
     "delete": {
       "button": "EndpointSlice 삭제",
       "title": "EndpointSlice 삭제"
@@ -619,7 +613,6 @@
       "withTls": "TLS 사용",
       "withAddress": "주소 할당"
     },
-    "noResults": "Ingress를 찾을 수 없습니다.",
     "delete": {
       "button": "Ingress 삭제",
       "title": "Ingress 삭제"
@@ -647,7 +640,6 @@
       "withParameters": "파라미터 있음",
       "withAnnotations": "어노테이션 있음"
     },
-    "noResults": "IngressClass를 찾을 수 없습니다.",
     "delete": {
       "button": "IngressClass 삭제",
       "title": "IngressClass 삭제"
@@ -679,7 +671,6 @@
       "defaultDenyEgress": "기본 Egress 차단",
       "selectsAllPods": "모든 Pod 선택"
     },
-    "noResults": "NetworkPolicy을 찾을 수 없습니다.",
     "delete": {
       "button": "NetworkPolicy 삭제",
       "title": "NetworkPolicy 삭제"
@@ -711,7 +702,6 @@
       "accepted": "Accepted",
       "withAddress": "주소 할당"
     },
-    "noResults": "Gateway를 찾을 수 없습니다.",
     "delete": {
       "button": "Gateway 삭제",
       "title": "Gateway 삭제"
@@ -739,7 +729,6 @@
       "withParameters": "파라미터 있음",
       "withAnnotations": "어노테이션 있음"
     },
-    "noResults": "GatewayClass를 찾을 수 없습니다.",
     "delete": {
       "button": "GatewayClass 삭제",
       "title": "GatewayClass 삭제"
@@ -771,7 +760,6 @@
       "resolvedRefs": "ResolvedRefs",
       "withHostnames": "호스트명 있음"
     },
-    "noResults": "HTTPRoute를 찾을 수 없습니다.",
     "delete": {
       "button": "HTTPRoute 삭제",
       "title": "HTTPRoute 삭제"
@@ -803,7 +791,6 @@
       "resolvedRefs": "ResolvedRefs",
       "withHostnames": "호스트명 있음"
     },
-    "noResults": "GRPCRoute를 찾을 수 없습니다.",
     "delete": {
       "button": "GRPCRoute 삭제",
       "title": "GRPCRoute 삭제"
@@ -832,7 +819,6 @@
       "withTo": "To 있음",
       "withLabels": "레이블 있음"
     },
-    "noResults": "ReferenceGrant를 찾을 수 없습니다.",
     "delete": {
       "button": "ReferenceGrant 삭제",
       "title": "ReferenceGrant 삭제"
@@ -860,7 +846,6 @@
       "accepted": "수락됨",
       "withTargets": "대상 있음"
     },
-    "noResults": "BackendTLSPolicy를 찾을 수 없습니다.",
     "delete": {
       "button": "BackendTLSPolicy 삭제",
       "title": "BackendTLSPolicy 삭제"
@@ -901,8 +886,7 @@
       "label": "레이블 CRD",
       "builtin": "내장",
       "configured": "설정"
-    },
-    "noResults": "정책이 없습니다."
+    }
   },
   "statefulsets": {
     "title": "StatefulSets",
@@ -930,13 +914,6 @@
       "degraded": "저하",
       "unavailable": "사용 불가"
     },
-    "paging": {
-      "empty": "0개 중 0 표시",
-      "range": "{{total}}개 중 {{from}}-{{to}} 표시",
-      "prev": "이전",
-      "next": "다음"
-    },
-    "noResults": "StatefulSet을 찾을 수 없습니다.",
     "delete": {
       "button": "StatefulSet 삭제",
       "title": "StatefulSet 삭제"
@@ -972,7 +949,6 @@
       "degraded": "저하",
       "unavailable": "사용 불가"
     },
-    "noResults": "DaemonSet을 찾을 수 없습니다.",
     "delete": {
       "button": "DaemonSet 삭제",
       "title": "DaemonSet 삭제"
@@ -1009,7 +985,6 @@
       "degraded": "저하",
       "unavailable": "사용 불가"
     },
-    "noResults": "ReplicaSet을 찾을 수 없습니다.",
     "delete": {
       "button": "ReplicaSet 삭제",
       "title": "ReplicaSet 삭제"
@@ -1041,7 +1016,6 @@
       "running": "실행 중",
       "failed": "실패"
     },
-    "noResults": "Job을 찾을 수 없습니다.",
     "delete": {
       "button": "Job 삭제",
       "title": "Job 삭제"
@@ -1075,7 +1049,6 @@
       "suspended": "중지됨",
       "scheduled": "실행 이력"
     },
-    "noResults": "CronJob을 찾을 수 없습니다.",
     "delete": {
       "button": "CronJob 삭제",
       "title": "CronJob 삭제"
@@ -1108,7 +1081,6 @@
       "active": "활성",
       "inactive": "비활성"
     },
-    "noResults": "HPA가 없습니다.",
     "delete": {
       "button": "HPA 삭제",
       "title": "HPA 삭제"
@@ -1139,7 +1111,6 @@
       "provided": "제공됨",
       "notProvided": "미제공"
     },
-    "noResults": "VPA가 없습니다.",
     "delete": {
       "button": "VPA 삭제",
       "title": "VPA 삭제"
@@ -1170,7 +1141,6 @@
       "healthy": "정상",
       "disrupted": "비정상"
     },
-    "noResults": "PDB가 없습니다.",
     "delete": {
       "button": "PDB 삭제",
       "title": "PDB 삭제"
@@ -1197,7 +1167,6 @@
       "globalDefault": "글로벌 기본값",
       "preempting": "선점 가능"
     },
-    "noResults": "PriorityClass가 없습니다.",
     "delete": {
       "button": "PriorityClass 삭제",
       "title": "PriorityClass 삭제"
@@ -1221,7 +1190,6 @@
       "total": "전체",
       "uniqueHandlers": "고유 핸들러"
     },
-    "noResults": "RuntimeClass가 없습니다.",
     "delete": {
       "button": "RuntimeClass 삭제",
       "title": "RuntimeClass 삭제"
@@ -1244,8 +1212,7 @@
     "stats": {
       "total": "전체 구성",
       "totalWebhooks": "전체 웹훅"
-    },
-    "noResults": "MutatingWebhookConfiguration이 없습니다."
+    }
   },
   "validatingWebhooks": {
     "title": "ValidatingWebhookConfigurations",
@@ -1264,8 +1231,7 @@
     "stats": {
       "total": "전체 구성",
       "totalWebhooks": "전체 웹훅"
-    },
-    "noResults": "ValidatingWebhookConfiguration이 없습니다."
+    }
   },
   "leases": {
     "title": "Leases",
@@ -1289,7 +1255,6 @@
       "withHolder": "홀더 있음",
       "withoutHolder": "홀더 없음"
     },
-    "noResults": "Lease가 없습니다.",
     "delete": {
       "button": "Lease 삭제",
       "title": "Lease 삭제"
@@ -1316,7 +1281,6 @@
       "withCpu": "CPU 쿼터 있음",
       "withMemory": "메모리 쿼터 있음"
     },
-    "noResults": "ResourceQuota가 없습니다.",
     "delete": {
       "button": "ResourceQuota 삭제",
       "title": "ResourceQuota 삭제"
@@ -1343,7 +1307,6 @@
       "containerLimits": "컨테이너 제한",
       "podLimits": "Pod 제한"
     },
-    "noResults": "LimitRange가 없습니다.",
     "delete": {
       "button": "LimitRange 삭제",
       "title": "LimitRange 삭제"
@@ -1376,7 +1339,6 @@
       "pending": "대기",
       "lost": "유실"
     },
-    "noResults": "PVC를 찾을 수 없습니다.",
     "delete": {
       "button": "PVC 삭제",
       "title": "PVC 삭제"
@@ -1410,7 +1372,6 @@
       "released": "해제됨",
       "failed": "실패"
     },
-    "noResults": "PV를 찾을 수 없습니다.",
     "delete": {
       "button": "PV 삭제",
       "title": "PV 삭제"
@@ -1441,7 +1402,6 @@
       "expandable": "확장 가능",
       "waitForFirstConsumer": "바인딩 모드: WaitForFirstConsumer"
     },
-    "noResults": "StorageClass를 찾을 수 없습니다.",
     "delete": {
       "button": "StorageClass 삭제",
       "title": "StorageClass 삭제"
@@ -1471,7 +1431,6 @@
       "detached": "Detached",
       "errors": "오류"
     },
-    "noResults": "VolumeAttachment를 찾을 수 없습니다.",
     "delete": {
       "button": "VolumeAttachment 삭제",
       "title": "VolumeAttachment 삭제"
@@ -1485,7 +1444,6 @@
     "searchPlaceholder": "Node 이름 검색...",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "noResults": "Node를 찾을 수 없습니다.",
     "top": {
       "title": "리소스 사용량 상위 Node",
       "loading": "메트릭 불러오는 중...",
@@ -1835,7 +1793,9 @@
     "pageSize": {
       "label": "페이지당 건수",
       "fit": "맞춤"
-    }
+    },
+    "listEmpty": "항목이 없습니다.",
+    "noSearchResults": "검색 결과가 없습니다."
   },
   "dashboard": {
     "optimization": {
@@ -2279,8 +2239,6 @@
     "searchPlaceholder": "Namespace 검색...",
     "matchCount": "{{count}}개의 Namespace가 검색되었습니다",
     "created": "생성 시각",
-    "noSearchResults": "검색 결과가 없습니다",
-    "empty": "Namespace가 없습니다",
     "table": {
       "name": "이름",
       "status": "상태",
@@ -2489,7 +2447,6 @@
     "deleteTitle": "유저 삭제",
     "deleting": "삭제중...",
     "delete": "삭제",
-    "empty": "유저가 없습니다.",
     "createUser": "사용자 추가",
     "bulkUpload": "일괄 업로드",
     "bulkUploadTitle": "사용자 일괄 업로드",
@@ -2549,7 +2506,9 @@
       "close": "닫기",
       "permissions": "권한",
       "noPerms": "할당된 권한이 없습니다."
-    }
+    },
+    "searchPlaceholder": "이름, 이메일 또는 팀으로 검색...",
+    "selfAccount": "본인 계정"
   },
   "account": {
     "language": {
@@ -2885,7 +2844,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "ServiceAccount 생성",
     "createTitle": "YAML로 ServiceAccount 생성",
-    "noResults": "ServiceAccount가 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -2911,7 +2869,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "Role 생성",
     "createTitle": "YAML로 Role 생성",
-    "noResults": "Role이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -2937,7 +2894,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "RoleBinding 생성",
     "createTitle": "YAML로 RoleBinding 생성",
-    "noResults": "RoleBinding이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -2963,7 +2919,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "ClusterRole 생성",
     "createTitle": "YAML로 ClusterRole 생성",
-    "noResults": "ClusterRole이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -2983,7 +2938,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "ClusterRoleBinding 생성",
     "createTitle": "YAML로 ClusterRoleBinding 생성",
-    "noResults": "ClusterRoleBinding이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -3005,7 +2959,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "ConfigMap 생성",
     "createTitle": "YAML로 ConfigMap 생성",
-    "noResults": "ConfigMap이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -3031,7 +2984,6 @@
     "refreshTitle": "강제 새로고침",
     "create": "Secret 생성",
     "createTitle": "YAML로 Secret 생성",
-    "noResults": "Secret이 없습니다.",
     "forbidden": "이 클러스터에서 Secret을 조회할 권한이 없습니다.",
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
@@ -3077,7 +3029,6 @@
     "create": "CRD 생성",
     "createTitle": "YAML로 CRD 생성",
     "matchCount": "{{count}}개 결과 일치.",
-    "noResults": "Custom Resource Definition이 없습니다.",
     "stats": {
       "total": "전체",
       "namespaced": "Namespace 범위",
@@ -3100,7 +3051,6 @@
     "refreshTitle": "강제 새로고침",
     "allKinds": "모든 Kind",
     "matchCount": "{{count}}개 결과 일치.",
-    "noResults": "커스텀 리소스 인스턴스가 없습니다.",
     "stats": {
       "total": "전체 인스턴스",
       "kinds": "Kind 수",
@@ -3183,7 +3133,7 @@
     "normal": "Normal",
     "warning": "Warning",
     "rollout": "Rollout",
-    "totalEvents": "총 이벤트",
+    "totalEvents": "이벤트",
     "normalEvents": "Normal 이벤트",
     "warningEvents": "Warning 이벤트",
     "rollouts": "롤아웃",
@@ -3200,7 +3150,8 @@
     "closeSummary": "요약 닫기",
     "remaining": "({{n}}개 남음)",
     "via": "{{source}} 경유",
-    "namespace": "Namespace"
+    "namespace": "Namespace",
+    "listCount": "{{rows}}개 항목(이벤트 {{events}} · 롤아웃 {{rollouts}})"
   },
   "adminOrg": {
     "title": "Teams",
@@ -3421,7 +3372,6 @@
     "metrics": "메트릭",
     "refresh": "새로고침",
     "searchPlaceholder": "Node 이름, GPU 모델, 드라이버 버전으로 검색...",
-    "noResults": "GPU Node를 찾을 수 없습니다.",
     "modelDistribution": "GPU 모델 분포",
     "realtimeMetrics": "실시간 GPU 사용률",
     "capacity": "용량",
@@ -3454,7 +3404,6 @@
     "metrics": "메트릭",
     "refresh": "새로고침",
     "searchPlaceholder": "Pod 이름, Namespace 또는 Node로 검색...",
-    "noResults": "GPU Pod를 찾을 수 없습니다.",
     "nodeUsage": "Node별 GPU 사용량",
     "statusDistribution": "상태 분포",
     "stats": {
@@ -3486,7 +3435,6 @@
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "DeviceClass 이름으로 검색...",
-    "noResults": "DeviceClass를 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 DeviceClass가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -3507,7 +3455,6 @@
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "ResourceClaim 이름으로 검색...",
-    "noResults": "ResourceClaim을 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceClaim이 일치합니다.",
     "allNamespaces": "전체 Namespace",
     "stats": {
@@ -3532,7 +3479,6 @@
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "ResourceClaimTemplate 이름으로 검색...",
-    "noResults": "ResourceClaimTemplate을 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceClaimTemplate이 일치합니다.",
     "allNamespaces": "전체 Namespace",
     "stats": {
@@ -3551,7 +3497,6 @@
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "ResourceSlice 이름, Node, 드라이버 또는 풀로 검색...",
-    "noResults": "ResourceSlice를 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceSlice가 일치합니다.",
     "stats": {
       "total": "전체",
@@ -3768,7 +3713,6 @@
       "health": "상태",
       "createdBy": "등록자",
       "actions": "작업",
-      "empty": "등록된 클러스터가 없습니다.",
       "test": "테스트",
       "delete": "삭제",
       "inCluster": "클러스터 내부",
@@ -3847,7 +3791,10 @@
       "anchorNow": "지금 앵커",
       "anchoring": "앵커 중...",
       "ok": "✓ #{{from}}~#{{to}} {{rows}}행 이상 없음, 앵커 {{anchors}}개 일치",
-      "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})"
+      "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})",
+      "anchorNowTitle": "해시 체인의 머리를 지금 앵커 싱크에 기록합니다(정해진 주기로도 기록됩니다).",
+      "sealedTitle": "이 번호까지의 행은 해시로 이어져 있어, 행이 바뀌거나 지워지면 체인이 끊깁니다(검증으로 확인).",
+      "anchorTitle": "앵커는 체인 머리를 데이터베이스 밖(싱크)에 적어 둔 사본으로, 체인을 그것과 대조할 수 있습니다."
     },
     "filter": {
       "service": "영역",
@@ -3874,7 +3821,6 @@
       "result": "결과"
     },
     "loading": "불러오는 중...",
-    "empty": "조건에 맞는 감사 로그가 없습니다",
     "prev": "이전",
     "next": "다음",
     "playRecording": "녹화 재생",
@@ -3897,56 +3843,6 @@
       "admin": "관리"
     }
   },
-  "topology": {
-    "title": "{{namespace}} 리소스 정의",
-    "subtitle": "Kubernetes 리소스의 YAML 정의를 봅니다.",
-    "resourceTypes": "리소스 타입",
-    "noResources": "리소스가 없습니다",
-    "yamlContent": "YAML 내용",
-    "yamlRefreshTitle": "YAML 새로고침",
-    "yamlLoading": "YAML 불러오는 중...",
-    "yamlLoadError": "YAML을 가져올 수 없습니다",
-    "resourceDeletedOrMissing": "리소스가 삭제되었거나 존재하지 않습니다.",
-    "refreshList": "목록 새로고침",
-    "selectResourceHint": "리소스를 선택하면 YAML 정의를 볼 수 있습니다"
-  },
-  "resources": {
-    "title": "{{namespace}} 리소스",
-    "subtitle": "Namespace의 리소스를 확인하고 관리합니다.",
-    "searchPlaceholder": "{{kind}} 이름 검색...",
-    "replicasetError": "ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
-    "fullSelectorTitle": "전체 selector: {{selector}}",
-    "gotoPodsTitle": "ReplicaSet selector로 Pod 목록을 필터링합니다",
-    "gotoPods": "Pods로 이동",
-    "replicas": "레플리카",
-    "ready": "준비됨",
-    "available": "사용 가능",
-    "updated": "최신",
-    "owner": "소유자",
-    "type": "유형",
-    "ports": "포트",
-    "namespace": "Namespace",
-    "capacity": "용량",
-    "requested": "요청 용량",
-    "volume": "볼륨"
-  },
-  "network": {
-    "subtitle": "Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy 연결을 빠르게 확인합니다.",
-    "searchPlaceholder": "Service 이름 검색...",
-    "noServices": "Service가 없습니다",
-    "selectServiceHint": "왼쪽에서 Service를 선택하세요.",
-    "anomaliesDetected": "이상 징후 감지",
-    "selectorless": "selector가 없는 Service입니다. (Pod 매핑/NetworkPolicy 매핑은 제한됩니다)",
-    "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다",
-    "title": "{{namespace}} 네트워크",
-    "ports": "포트",
-    "pods": "Pod",
-    "levelError": "오류",
-    "levelWarn": "경고",
-    "readyCount": "준비 {{n}}",
-    "notReadyCount": "준비 안 됨 {{n}}",
-    "readyOfTotal": "준비 {{ready}} / 전체 {{total}}"
-  },
   "adminAIUsage": {
     "title": "AI Usage",
     "subtitle": "채팅 턴과 Optimization의 AI 설명마다 남는 감사 기록을 모아 요청·토큰·툴 호출을 보여 줍니다. 한도는 없고, 누가 얼마나 썼는지 봅니다.",
@@ -3968,83 +3864,9 @@
     "avgDuration": "평균 소요(초)",
     "failures": "실패",
     "lastAt": "마지막",
-    "empty": "이 기간에 AI 채팅 기록이 없습니다.",
     "partialTokens": "{{n}}건은 제공자가 토큰 수를 보내지 않아 합계에 없습니다.",
     "note": "토큰 수는 AI 제공자가 응답에 usage 값을 보낼 때만 집계합니다. 원본 기록은 감사 로그에서 동작 ai.chat.complete로 걸러 보고 CSV로 내보낼 수 있습니다.",
     "partialLegend": "제공자가 토큰 수를 보내지 않은 요청이 있어 그 행의 합계에서 빠졌습니다."
-  },
-  "networkOverview": {
-    "none": "없음",
-    "noIp": "(ip 없음)",
-    "noTargetRef": "(targetRef 없음)",
-    "ingressTitle": "Ingress",
-    "addressNone": "address: 없음",
-    "tlsSecret": "tls secret: {{secrets}}",
-    "tlsSecretNone": "tls secret: 없음",
-    "networkPoliciesTitle": "NetworkPolicies (적용 후보)",
-    "noSelector": "selector가 없어 Pod 매핑을 못해 정책 연결을 계산할 수 없습니다",
-    "noMatchingPods": "선택된 Service selector에 매칭되는 Pod가 없습니다",
-    "isolationHint": "ON이면 “허용 규칙의 합(Union)”만 통과합니다. (CNI/클러스터 설정에 따라 실제 동작은 달라질 수 있음)",
-    "noRules": "(rules 없음)",
-    "noHosts": "(hosts 없음)",
-    "readyTargets": "준비된 대상 (최대 50)",
-    "notReadyTargets": "준비 안 된 대상 (최대 50)",
-    "default": "기본",
-    "latestEvents": "이벤트 (최근)",
-    "ingressIsolation": "Ingress 격리",
-    "egressIsolation": "Egress 격리",
-    "on": "켜짐",
-    "off": "꺼짐",
-    "nsDefaultDenyIngress": "Namespace에 default-deny ingress 정책 있음",
-    "nsDefaultDenyEgress": "Namespace에 default-deny egress 정책 있음",
-    "selectsAllPods": "모든 Pod 선택",
-    "ruleCounts": "ingress 규칙 {{ingress}} · egress 규칙 {{egress}}",
-    "allPods": "모든 Pod",
-    "ingressAllow": "Ingress 허용",
-    "egressAllow": "Egress 허용",
-    "allSources": "(모든 출발지)",
-    "allDestinations": "(모든 목적지)",
-    "moreIngressRules": "ingress 규칙 {{n}}개 더",
-    "moreEgressRules": "egress 규칙 {{n}}개 더",
-    "noIngressRules": "(ingress 규칙 없음)",
-    "noEgressRules": "(egress 규칙 없음)"
-  },
-  "resourcesTabs": {
-    "none": "없음",
-    "fetchFailed": "{{kind}} 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
-    "pdb": {
-      "noSelector": "selector가 없어 매칭 Pod를 계산할 수 없습니다.",
-      "noMatchingPods": "매칭 Pod가 없어 PDB가 적용되지 않습니다.",
-      "allowed": "현재 {{count}}개까지 disruption(퇴거)이 허용됩니다.",
-      "notProtectedBelow": "현재는 보호 불가: healthy({{healthy}})가 desiredHealthy({{desired}}) 미만이라 disruptionsAllowed=0 입니다.",
-      "notProtected": "현재는 보호 불가: disruptionsAllowed=0 입니다.",
-      "filterTitle": "PDB selector로 Pod 목록을 필터링합니다",
-      "goToPods": "Pods로 이동"
-    },
-    "pod": {
-      "topReasons": "Top reason 요약",
-      "podsCount": "pods: {{count}}",
-      "restarts": "재시작: {{count}}",
-      "node": "Node",
-      "ready": "준비됨"
-    },
-    "hpa": {
-      "metricsMissing": "Desired 계산 불가: metrics-server/metrics API에서 메트릭을 받지 못했습니다.",
-      "desiredBelowMin": "Desired({{desired}})가 minReplicas({{min}})보다 작습니다. 조건/메트릭을 확인하세요.",
-      "target": "대상",
-      "min": "최소",
-      "max": "최대",
-      "current": "현재",
-      "desired": "목표",
-      "metrics": "메트릭",
-      "moreConditions": "(+{{n}}개 더)",
-      "lastScale": "마지막 스케일"
-    },
-    "search": {
-      "clearLabelSelector": "레이블 셀렉터 제거",
-      "reset": "초기화",
-      "resultCount": "{{count}}개의 {{kind}}가 검색되었습니다"
-    }
   },
   "yamlCreate": {
     "clusterScoped": "클러스터 범위 리소스: metadata.namespace는 사용되지 않습니다.",
@@ -4535,7 +4357,6 @@
       "status": "상태"
     },
     "loading": "불러오는 중…",
-    "empty": "녹화가 없습니다",
     "truncated": "크기 상한에서 녹화가 멈췄습니다",
     "interruptedNothing": "서버가 첫 조각을 올리기 전에 멈춰 재생할 내용이 없습니다",
     "interruptedPartial": "서버가 녹화 중에 멈췄습니다. 그 전에 올라간 부분만 남아 있습니다",

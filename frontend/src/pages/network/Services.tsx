@@ -309,6 +309,7 @@ spec:
         setSortDir={setSortDir}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}

@@ -122,7 +122,7 @@ export default function SessionRecordings() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="recordings-table">
-            <thead className="text-xs uppercase text-slate-400">
+            <thead className="text-slate-400">
               <tr>
                 <th className="px-3 py-2 text-left">{tr('recordings.col.started', 'Started')}</th>
                 <th className="px-3 py-2 text-left">{tr('recordings.col.user', 'User')}</th>
@@ -138,7 +138,7 @@ export default function SessionRecordings() {
               {isLoading ? (
                 <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">{tr('recordings.loading', 'Loading…')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">{tr('recordings.empty', 'No recordings')}</td></tr>
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-slate-700" data-testid={`recording-row-${r.id}`}>

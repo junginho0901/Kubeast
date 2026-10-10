@@ -109,7 +109,7 @@ export default function AdminClusters() {
             {!isLoading && clusters.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
-                  {tr('cluster.admin.empty', 'No clusters registered yet.')}
+                  {tr('common.listEmpty', 'No items.')}
                 </td>
               </tr>
             )}

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, ExternalLink, Package } from 'lucide-react'
 import { utcTitle } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import type { HelmReleaseSummary } from '@/services/api'
 import {
   formatUpdated,
@@ -70,14 +70,14 @@ export default function ReleaseTable({
         <table className="w-full text-sm table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
+              <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <span className="inline-flex items-center gap-1">
+                  {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
+                </span>
+              </th>
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('name')}>
                 <span className="inline-flex items-center gap-1">
                   {t('helmReleases.table.name')}{renderSortIcon('name')}
-                </span>
-              </th>
-              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('namespace')}>
-                <span className="inline-flex items-center gap-1">
-                  {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
                 </span>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('revision')}>
@@ -122,6 +122,7 @@ export default function ReleaseTable({
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                   onClick={() => navigate(to)}
                 >
+                  <td className="col-low py-3 px-4 text-xs font-mono" title={r.namespace}>{r.namespace}</td>
                   <td className="py-3 px-4 font-medium text-white">
                     {/* Link kept for cmd/middle-click new-tab;
                         stopPropagation so the row onClick does not
@@ -130,7 +131,6 @@ export default function ReleaseTable({
                       <span className="block truncate">{r.name}</span>
                     </Link>
                   </td>
-                  <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{r.namespace}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{r.revision}</td>
                   <td className="py-3 px-4">
                     <span
@@ -150,38 +150,7 @@ export default function ReleaseTable({
           <AdaptiveTableFillerRows count={rowsPerPage - paged.length} columnCount={8} />
         </table>
       </div>
-      <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-        <div className="flex items-center gap-4 text-xs text-slate-400">
-          <PageSizeSelect />
-          {t('common.paginationRange', {
-            start: (currentPage - 1) * rowsPerPage + 1,
-            end: Math.min(currentPage * rowsPerPage, sortedCount),
-            total: sortedCount,
-            defaultValue: 'Showing {{start}}-{{end}} of {{total}}',
-          })}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-            disabled={currentPage <= 1}
-            className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-          >
-            {t('common.prev', { defaultValue: 'Prev' })}
-          </button>
-          <span className="text-xs text-slate-300 min-w-[72px] text-center">
-            {currentPage} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage >= totalPages}
-            className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-          >
-            {t('common.next', { defaultValue: 'Next' })}
-          </button>
-        </div>
-      </div>
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedCount} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }
