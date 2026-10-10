@@ -10,7 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { IngressClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
@@ -36,6 +36,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -56,6 +57,7 @@ export function IngressClassTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -140,50 +142,14 @@ export function IngressClassTable({
             )}
 
             {sortedIngressClassesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={5} resource="ingressclasses">
-                {tr('ingressClassesPage.noResults', 'No ingress classes found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={5} resource="ingressclasses" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedIngressClasses.length} columnCount={5} />
         </table>
       </div>
 
-      {sortedIngressClassesLength > 0 && (
-        <div className="flex items-center justify-between text-xs text-slate-400 px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="flex items-center gap-4">
-            <PageSizeSelect />
-            <span>
-              {(() => {
-                const total = sortedIngressClassesLength
-                if (total === 0) return tr('common.pagination.empty', '0')
-                const from = (currentPage - 1) * rowsPerPage + 1
-                const to = Math.min(currentPage * rowsPerPage, total)
-                return tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', { from, to, total })
-              })()}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            >
-              {tr('common.pagination.prev', 'Prev')}
-            </button>
-            <span>{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            >
-              {tr('common.pagination.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedIngressClassesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

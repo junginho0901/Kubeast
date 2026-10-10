@@ -13,7 +13,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { VolumeAttachmentInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   errorText,
@@ -42,6 +42,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableBodyRef: RefObject<HTMLDivElement | null>
@@ -61,6 +62,7 @@ export function VolumeAttachmentTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableBodyRef,
@@ -171,9 +173,7 @@ export function VolumeAttachmentTable({
             })}
 
             {!isLoading && pagedVolumeAttachments.length === 0 && (
-              <TableEmptyRow colSpan={7} resource="volumeattachments" className="py-10 text-center text-slate-400">
-                {tr('volumeattachments.noResults', 'No VolumeAttachments found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={7} resource="volumeattachments" className="py-10 text-center text-slate-400" searching={searching} />
             )}
 
             {isLoading && (
@@ -192,37 +192,7 @@ export function VolumeAttachmentTable({
         </table>
       </div>
 
-      <div className="px-4 py-3 border-t border-slate-800 flex items-center justify-between shrink-0">
-        <p className="flex items-center gap-4 text-xs text-slate-400">
-          <PageSizeSelect />
-          {sortedVolumeAttachmentsLength > 0
-            ? tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedVolumeAttachmentsLength),
-                total: sortedVolumeAttachmentsLength,
-              })
-            : tr('common.paginationEmpty', 'Showing 0 of 0')}
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage <= 1}
-            className="btn btn-secondary px-2 py-1 text-xs disabled:opacity-50"
-          >
-            {tr('common.prev', 'Previous')}
-          </button>
-          <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-          <button
-            type="button"
-            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-            disabled={currentPage >= totalPages}
-            className="btn btn-secondary px-2 py-1 text-xs disabled:opacity-50"
-          >
-            {tr('common.next', 'Next')}
-          </button>
-        </div>
-      </div>
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedVolumeAttachmentsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </>
   )
 }

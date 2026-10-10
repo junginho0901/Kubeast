@@ -63,6 +63,12 @@
     overflow-wrap: break-word; /* not `anywhere`: that also shrinks a table column's minimum width */
   }
 
+  /* Tailwind's default placeholder is half the text colour, which on the dark inputs reads like a typed value;
+     inputs that set their own placeholder colour keep it. */
+  ::placeholder {
+    color: var(--color-slate-500);
+  }
+
   /* Browser autofill paints its own light background over the dark inputs
      (Chrome: a pale yellow/blue fill with dark text). Keep the field's own
      colours: the inset shadow covers the fill, the text colour is forced. */
@@ -236,6 +242,11 @@ body {
 
   .badge-info {
     @apply bg-blue-500/20 text-blue-400 border border-blue-500/30;
+  }
+
+  /* a state that needs no attention (Idle: scaled to zero) */
+  .badge-neutral {
+    @apply bg-slate-500/20 text-slate-300 border border-slate-500/30;
   }
 }
 

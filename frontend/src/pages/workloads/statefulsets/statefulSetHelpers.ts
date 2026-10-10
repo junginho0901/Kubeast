@@ -18,7 +18,8 @@ export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 export function getStatusColor(status?: string | null): string {
   const s = String(status || '').toLowerCase()
   if (s.includes('healthy')) return 'badge-success'
-  if (s.includes('degraded') || s.includes('idle')) return 'badge-warning'
+  if (s.includes('degraded')) return 'badge-warning'
+  if (s.includes('idle')) return 'badge-neutral'
   if (s.includes('unavailable') || s.includes('error') || s.includes('failed')) return 'badge-error'
   return 'badge-info'
 }

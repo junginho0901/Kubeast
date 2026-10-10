@@ -256,14 +256,14 @@ export default function AdminAudit() {
           className="rounded-lg bg-slate-800/50 border border-slate-700 px-4 py-3 flex flex-wrap items-center gap-3 text-sm"
           data-testid="audit-integrity"
         >
-          <span className="text-slate-300">
+          <span className="text-slate-300" title={tr('adminAudit.integrity.sealedTitle', 'Rows up to this number are chained by hash: a changed or removed row breaks the chain (Verify checks it)')}>
             {tr('adminAudit.integrity.sealed', '무결성: #{{seq}}까지 봉인', { seq: integrity.sealed_through_seq })}
             {integrity.unsealed_rows > 0 && (
               <span className="text-slate-500"> ({tr('adminAudit.integrity.unsealed', '미봉인 {{n}}', { n: integrity.unsealed_rows })})</span>
             )}
           </span>
           <span className="text-slate-600">·</span>
-          <span className="text-slate-300" data-testid="audit-integrity-anchor-state">
+          <span className="text-slate-300" data-testid="audit-integrity-anchor-state" title={tr('adminAudit.integrity.anchorTitle', 'An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it')}>
             {integrity.last_anchor
               ? tr('adminAudit.integrity.lastAnchor', '마지막 앵커 {{when}} (#{{seq}} → {{sink}})', {
                   when: formatTime(integrity.last_anchor.created_at),
@@ -290,6 +290,7 @@ export default function AdminAudit() {
                 onClick={() => anchorMutation.mutate()}
                 disabled={anchorMutation.isPending}
                 data-testid="audit-integrity-anchor"
+                title={tr('adminAudit.integrity.anchorNowTitle', 'Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)')}
                 className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
               >
                 {anchorMutation.isPending ? tr('adminAudit.integrity.anchoring', '앵커 중...') : tr('adminAudit.integrity.anchorNow', '지금 앵커')}
@@ -449,7 +450,7 @@ export default function AdminAudit() {
           table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
       <div className="rounded-lg bg-slate-800/30 border border-slate-700 overflow-x-auto">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="bg-slate-800 text-slate-300">
+          <thead className="bg-slate-800 text-slate-400">
             <tr>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.time', '시각')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.actor', '사용자')}</th>
@@ -472,7 +473,7 @@ export default function AdminAudit() {
             {!isLoading && items.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
-                  {tr('adminAudit.empty', '조건에 맞는 감사 로그가 없습니다')}
+                  {tr('common.noSearchResults', 'No results found.')}
                 </td>
               </tr>
             )}
@@ -540,7 +541,10 @@ interface AuditRowProps {
 function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
-  const targetDisplay = entry.TargetEmail || entry.TargetID || '-'
+  // kubectl's kind/name form: a bare ID such as a role's "589" says nothing without its type
+  const targetDisplay = entry.TargetEmail
+    || (entry.TargetID ? (entry.TargetType ? `${entry.TargetType}/${entry.TargetID}` : entry.TargetID) : entry.TargetType)
+    || '-'
   const recordingId = recordingIdOf(entry)
 
   return (

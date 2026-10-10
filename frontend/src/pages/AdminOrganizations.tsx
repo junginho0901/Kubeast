@@ -207,7 +207,7 @@ export default function AdminOrganizations() {
                 </div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-800 sticky top-0">
+                  <thead className="bg-slate-800 sticky top-0 text-slate-400">
                     <tr className="text-left text-slate-300">
                       <th className="px-3 py-2.5">{tr('adminOrg.col.name', 'Name')}</th>
                       <th className="px-3 py-2.5">{tr('adminOrg.col.email', 'Email')}</th>

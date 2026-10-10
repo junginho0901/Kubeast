@@ -54,7 +54,6 @@ export default function BackendTLSPolicies() {
         tableTargetRef: tr('backendTLSPoliciesPage.table.targetRef', 'Target Ref'),
         tableStatus: tr('backendTLSPoliciesPage.table.status', 'Status'),
         tableAge: tr('backendTLSPoliciesPage.table.age', 'Age'),
-        noResults: tr('backendTLSPoliciesPage.noResults', 'No BackendTLSPolicies found.'),
         createDialogTitle: tr('backendTLSPoliciesPage.createTitle', 'Create BackendTLSPolicy from YAML'),
         matchSuffixSingular: 'y',
         matchSuffixPlural: 'ies',

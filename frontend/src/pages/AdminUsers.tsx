@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member } from '@/services/api'
-import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Trash2, Unlock, Upload } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Search, Trash2, Unlock, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useTranslation } from 'react-i18next'
 import { usePermission } from '@/hooks/usePermission'
@@ -12,13 +13,18 @@ import { CreateUserModal } from './admin-users/CreateUserModal'
 import { useConfirm } from '@/services/confirm'
 import { UserDetailModal } from './admin-users/UserDetailModal'
 
+const USERS_PAGE_SIZE = 25
+
 export default function AdminUsers() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
   const confirm = useConfirm()
-  const [limit] = useState(100)
+  // the server's largest page; search and pages work on what it returns
+  const [limit] = useState(200)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [offset] = useState(0)
   const [roleDrafts, setRoleDrafts] = useState<Record<string, number>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
@@ -232,6 +238,17 @@ export default function AdminUsers() {
     return list
   }, [rows, sortKey, sortDir])
 
+  const query = search.trim().toLowerCase()
+  const filteredRows = useMemo(
+    () => (query
+      ? sortedRows.filter((u) => [u.name, u.email, u.team].some((v) => (v ?? '').toLowerCase().includes(query)))
+      : sortedRows),
+    [sortedRows, query],
+  )
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / USERS_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pagedRows = filteredRows.slice((currentPage - 1) * USERS_PAGE_SIZE, currentPage * USERS_PAGE_SIZE)
+
   if (isLoading) {
     return <div className="text-slate-300">{tr('adminUsers.loading', 'Loading...')}</div>
   }
@@ -397,10 +414,22 @@ export default function AdminUsers() {
         </div>
       </div>
 
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          placeholder={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
+          data-testid="admin-users-search"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
+
       <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-visible">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800">
-            <tr className="text-left text-slate-300">
+          <thead className="bg-slate-800 text-slate-400">
+            <tr className="text-left">
               <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('name')}>
                 {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
               </th>
@@ -418,7 +447,7 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((u) => {
+            {pagedRows.map((u) => {
               const isUpdating = updateRoleMutation.isPending && updateRoleMutation.variables?.userId === u.id
               const isResetting = resetPasswordMutation.isPending && resetPasswordMutation.variables?.userId === u.id
               const isDeleting = deleteUserMutation.isPending && deleteUserMutation.variables?.userId === u.id
@@ -574,9 +603,14 @@ export default function AdminUsers() {
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {isSelf ? (
+                      <span className="text-xs text-slate-500" title={tr('adminUsers.deleteSelfBlocked', 'You cannot delete your own account.')} data-testid="admin-users-self">
+                        {tr('adminUsers.selfAccount', 'Your account')}
+                      </span>
+                    ) : (
                     <button
                       type="button"
-                      disabled={isDeleting || isSelf || isBlocked}
+                      disabled={isDeleting || isBlocked}
                       onClick={async () => {
                         const ok = await confirm({
                           title: tr('adminUsers.deleteTitle', 'Delete user'),
@@ -588,30 +622,36 @@ export default function AdminUsers() {
                         deleteUserMutation.mutate({ userId: u.id })
                       }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-2 text-xs text-red-200 hover:bg-red-950/35 focus:outline-hidden focus:ring-2 focus:ring-red-600 disabled:opacity-50"
-                      title={
-                        isSelf
-                          ? tr('adminUsers.deleteSelfBlocked', 'You cannot delete your own account.')
-                          : tr('adminUsers.deleteTitle', 'Delete user')
-                      }
+                      title={tr('adminUsers.deleteTitle', 'Delete user')}
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-300" />
                       <span>
                         {isDeleting ? tr('adminUsers.deleting', 'Deleting...') : tr('adminUsers.delete', 'Delete')}
                       </span>
                     </button>
+                    )}
                   </td>
                 </tr>
               )
             })}
-            {sortedRows.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-slate-300" colSpan={7}>
-                  {tr('adminUsers.empty', 'No users found.')}
+                <td className="px-4 py-6 text-center text-slate-400" colSpan={6}>
+                  {query ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        <ListPager
+          currentPage={currentPage}
+          totalPages={pageCount}
+          total={filteredRows.length}
+          rowsPerPage={USERS_PAGE_SIZE}
+          onPageChange={setPage}
+          showPageSize={false}
+          testId="admin-users-pager"
+        />
       </div>
 
       {/* User detail modal */}
@@ -663,7 +703,7 @@ export default function AdminUsers() {
               <>
                 <div className="mt-5 rounded-xl border border-slate-700 overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-800">
+                    <thead className="bg-slate-800 text-slate-400">
                       <tr className="text-left text-slate-300">
                         <th className="px-3 py-2.5 w-10">
                           <input

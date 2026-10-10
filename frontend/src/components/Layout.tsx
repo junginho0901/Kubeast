@@ -226,6 +226,7 @@ export default function Layout() {
         { name: t('nav.aiChat'), href: '/ai-chat', icon: MessageSquare },
         { name: t('nav.resourceGraph'), href: '/cluster/resource-graph', icon: Waypoints },
         { name: t('nav.timeline'), href: '/timeline', icon: History },
+        { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search, tag: t('common.beta') },
       ],
     },
     {
@@ -234,12 +235,8 @@ export default function Layout() {
       items: [
         { name: t('nav.namespaces'), href: '/cluster/namespaces', icon: K.Namespace },
         { name: t('nav.nodes'), href: '/cluster/nodes', icon: K.Node },
-        { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search, tag: t('common.beta') },
         { name: t('nav.priorityClasses'), href: '/cluster/priorityclasses', icon: K.PriorityClass },
         { name: t('nav.runtimeClasses'), href: '/cluster/runtimeclasses', icon: K.RuntimeClass },
-        { name: t('nav.leases'), href: '/cluster/leases', icon: K.Lease },
-        { name: t('nav.resourceQuotas'), href: '/cluster/resourcequotas', icon: K.ResourceQuota },
-        { name: t('nav.limitRanges'), href: '/cluster/limitranges', icon: K.LimitRange },
         { name: t('nav.mutatingWebhooks'), href: '/cluster/mutatingwebhookconfigurations', icon: K.MutatingWebhookConfiguration },
         { name: t('nav.validatingWebhooks'), href: '/cluster/validatingwebhookconfigurations', icon: K.ValidatingWebhookConfiguration },
       ],
@@ -347,6 +344,9 @@ export default function Layout() {
       items: [
         { name: t('nav.configMaps'), href: '/configuration/configmaps', icon: K.ConfigMap },
         { name: t('nav.secrets'), href: '/configuration/secrets', icon: K.Secret },
+        { name: t('nav.resourceQuotas'), href: '/cluster/resourcequotas', icon: K.ResourceQuota },
+        { name: t('nav.limitRanges'), href: '/cluster/limitranges', icon: K.LimitRange },
+        { name: t('nav.leases'), href: '/cluster/leases', icon: K.Lease },
       ],
     },
     {

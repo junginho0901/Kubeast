@@ -206,6 +206,7 @@ export default function ClusterNodes() {
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         onPageChange={setCurrentPage}
+        searching={!!searchQuery.trim()}
         tableContainerRef={tableContainerRef}
         tableBodyRef={tableBodyRef}
         theadRef={theadRef}

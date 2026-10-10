@@ -97,7 +97,7 @@ export default function AccessRequests() {
 
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="text-xs uppercase text-slate-400 bg-slate-900/40">
+          <thead className="text-slate-400 bg-slate-900/40">
             <tr>
               <th className="px-4 py-3 text-left">{tr('accessRequests.columns.requester', 'Requester')}</th>
               <th className="px-4 py-3 text-left">{tr('accessRequests.columns.cluster', 'Cluster')}</th>
@@ -120,7 +120,7 @@ export default function AccessRequests() {
             {(tab === 'pending' ? pendingLoading : allLoading) ? (
               <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400"><Loader2 className="w-4 h-4 animate-spin inline" /></td></tr>
             ) : (tab === 'pending' ? pending : history).length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">{tr('accessRequests.empty', 'No requests.')}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-400">{tr('common.listEmpty', 'No items.')}</td></tr>
             ) : (
               (tab === 'pending' ? pending : history).map((r) => {
                 const own = me?.id === r.user_id

@@ -152,9 +152,9 @@ test.describe('Phase 5 — detail modal sections', () => {
     await waitTable(page)
 
     // 네임스페이스 전환 직후엔 이전 목록이 남아 있을 수 있으니 요청이 끝난 뒤 판단한다.
-    // 빈 목록은 "No secrets found." 한 줄짜리 row 로 렌더되므로 그 경우 skip.
+    // 빈 목록은 공용 빈 행 한 줄("No items.")로 렌더되므로 그 경우 skip.
     await page.waitForLoadState('networkidle')
-    const empty = page.getByText(/No secrets found/i)
+    const empty = page.getByText(/^(No items\.|항목이 없습니다\.)$/)
     const row = page.locator('tbody tr').filter({ hasNot: empty }).first()
     await expect(empty.or(row).first()).toBeVisible({ timeout: 15000 })
     test.skip(await empty.isVisible(), 'gpu-operator ns 에 Secret 없음')

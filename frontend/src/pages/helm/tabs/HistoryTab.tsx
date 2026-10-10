@@ -36,7 +36,8 @@ export default function HistoryTab({
     )
   }
 
-  const items = historyQuery.data ?? []
+  // newest first, whatever order the release storage returned
+  const items = [...(historyQuery.data ?? [])].sort((a, b) => b.revision - a.revision)
   if (items.length === 0) {
     return <div className="text-sm text-slate-400">{t('helmReleaseDetail.history.empty')}</div>
   }
@@ -47,7 +48,7 @@ export default function HistoryTab({
     <>
       <div className="overflow-x-auto rounded-lg border border-slate-700">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-slate-300 text-left">
+          <thead className="bg-slate-800 text-slate-400 text-left">
             <tr>
               <th className="px-3 py-2">{t('helmReleaseDetail.history.col.revision', 'Revision')}</th>
               <th className="px-3 py-2">{t('helmReleaseDetail.history.col.status', 'Status')}</th>

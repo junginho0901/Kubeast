@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, type SetStateAction } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   ReactFlow,
   type Node,
@@ -31,7 +32,12 @@ export default function ResourceGraph() {
   const { open: openDetail } = useResourceDetail()
 
   // State
-  const [selectedNamespaces, setSelectedNamespaces] = useState<Set<string>>(new Set())
+  const [searchParams] = useSearchParams()
+  // null until the user picks: then the namespaces in ?namespace= (the old topology links), else `default`.
+  const [pickedNamespaces, setPickedNamespaces] = useState<Set<string> | null>(() => {
+    const fromUrl = (searchParams.get('namespace') || '').split(',').filter(Boolean)
+    return fromUrl.length > 0 ? new Set(fromUrl) : null
+  })
   const [legendOpen, setLegendOpen] = useState(true)
   const [isNsDropdownOpen, setIsNsDropdownOpen] = useState(false)
   const [kindFilters, setKindFilters] = useState<Set<string>>(new Set(DEFAULT_KINDS))
@@ -48,6 +54,17 @@ export default function ResourceGraph() {
     queryKey: ['namespaces'],
     queryFn: () => api.getNamespaces(),
   })
+
+  const selectedNamespaces = useMemo(
+    () => pickedNamespaces ?? new Set(namespaces?.some((ns) => ns.name === 'default') ? ['default'] : []),
+    [pickedNamespaces, namespaces],
+  )
+  const setSelectedNamespaces = useCallback(
+    (next: SetStateAction<Set<string>>) => {
+      setPickedNamespaces((prev) => (typeof next === 'function' ? next(prev ?? selectedNamespaces) : next))
+    },
+    [selectedNamespaces],
+  )
 
   const nsArray = useMemo(() => {
     if (selectedNamespaces.size === 0) return undefined

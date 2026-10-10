@@ -227,7 +227,17 @@ export default function Timeline() {
         </div>
       )}
 
-      {/* Timeline */}
+      {/* Timeline — the list holds events and rollouts, so its count says both */}
+      {timeline && mergedItems.length > 0 && (
+        <p className="text-xs text-slate-400" data-testid="timeline-count">
+          {t('timeline.listCount', {
+            rows: mergedItems.length,
+            events: mergedItems.filter((it) => it.type === 'event').length,
+            rollouts: mergedItems.filter((it) => it.type === 'rollout').length,
+            defaultValue: '{{rows}} items ({{events}} events · {{rollouts}} rollouts)',
+          })}
+        </p>
+      )}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">

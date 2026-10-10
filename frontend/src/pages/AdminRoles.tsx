@@ -156,7 +156,7 @@ export default function AdminRoles() {
       ) : (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-800">
+            <thead className="bg-slate-800 text-slate-400">
               <tr className="text-left text-slate-300">
                 <th className="px-4 py-3">{tr('adminRoles.col.name', 'Name')}</th>
                 <th className="px-4 py-3">{tr('adminRoles.col.description', 'Description')}</th>
@@ -304,7 +304,7 @@ export default function AdminRoles() {
                 </div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-800 sticky top-0">
+                  <thead className="bg-slate-800 sticky top-0 text-slate-400">
                     <tr className="text-left text-slate-300">
                       <th className="px-3 py-2.5">{tr('adminRoles.col.userName', 'Name')}</th>
                       <th className="px-3 py-2.5">{tr('adminRoles.col.userEmail', 'Email')}</th>

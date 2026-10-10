@@ -252,7 +252,6 @@
   "accessRequests": {
     "title": "Access Requests",
     "disabled": "Access requests are off on this installation (auth.accessRequests.enabled).",
-    "empty": "No requests.",
     "until": "until {{time}}",
     "tabs": {
       "pending": "Pending",
@@ -446,7 +445,6 @@
       "restarted": "Restarted",
       "completed": "Completed"
     },
-    "noResults": "No pods found.",
     "exec": {
       "connectingTo": "Connecting to {{pod}}/{{container}}...",
       "noShell": "This container has no \"{{command}}\" — the image ships no shell (distroless) or it lives elsewhere. Pick another shell (bash, ash) or another container of the pod.",
@@ -491,7 +489,6 @@
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },
-    "noResults": "No deployments found.",
     "delete": {
       "button": "Delete Deployment",
       "title": "Delete Deployment"
@@ -523,7 +520,6 @@
       "exposed": "Exposed",
       "headless": "Headless"
     },
-    "noResults": "No services found.",
     "delete": {
       "button": "Delete Service",
       "title": "Delete Service"
@@ -554,7 +550,6 @@
       "withNotReady": "With NotReady",
       "totalAddresses": "Total Addresses"
     },
-    "noResults": "No endpoints found.",
     "delete": {
       "button": "Delete Endpoints",
       "title": "Delete Endpoints"
@@ -588,7 +583,6 @@
       "withNotReady": "With Not Ready",
       "totalEndpoints": "Total Endpoints"
     },
-    "noResults": "No endpoint slices found.",
     "delete": {
       "button": "Delete EndpointSlice",
       "title": "Delete EndpointSlice"
@@ -619,7 +613,6 @@
       "withTls": "With TLS",
       "withAddress": "With Address"
     },
-    "noResults": "No ingresses found.",
     "delete": {
       "button": "Delete Ingress",
       "title": "Delete Ingress"
@@ -647,7 +640,6 @@
       "withParameters": "With Parameters",
       "withAnnotations": "With Annotations"
     },
-    "noResults": "No ingress classes found.",
     "delete": {
       "button": "Delete IngressClass",
       "title": "Delete IngressClass"
@@ -679,7 +671,6 @@
       "defaultDenyEgress": "Default Deny Egress",
       "selectsAllPods": "Selects All Pods"
     },
-    "noResults": "No network policies found.",
     "delete": {
       "button": "Delete NetworkPolicy",
       "title": "Delete NetworkPolicy"
@@ -711,7 +702,6 @@
       "accepted": "Accepted",
       "withAddress": "With Address"
     },
-    "noResults": "No gateways found.",
     "delete": {
       "button": "Delete Gateway",
       "title": "Delete Gateway"
@@ -739,7 +729,6 @@
       "withParameters": "With Parameters",
       "withAnnotations": "With Annotations"
     },
-    "noResults": "No gateway classes found.",
     "delete": {
       "button": "Delete GatewayClass",
       "title": "Delete GatewayClass"
@@ -771,7 +760,6 @@
       "resolvedRefs": "ResolvedRefs",
       "withHostnames": "With Hostnames"
     },
-    "noResults": "No HTTPRoutes found.",
     "delete": {
       "button": "Delete HTTPRoute",
       "title": "Delete HTTPRoute"
@@ -803,7 +791,6 @@
       "resolvedRefs": "ResolvedRefs",
       "withHostnames": "With Hostnames"
     },
-    "noResults": "No GRPCRoutes found.",
     "delete": {
       "button": "Delete GRPCRoute",
       "title": "Delete GRPCRoute"
@@ -832,7 +819,6 @@
       "withTo": "With To",
       "withLabels": "With Labels"
     },
-    "noResults": "No ReferenceGrants found.",
     "delete": {
       "button": "Delete ReferenceGrant",
       "title": "Delete ReferenceGrant"
@@ -860,7 +846,6 @@
       "accepted": "Accepted",
       "withTargets": "With Targets"
     },
-    "noResults": "No BackendTLSPolicies found.",
     "delete": {
       "button": "Delete BackendTLSPolicy",
       "title": "Delete BackendTLSPolicy"
@@ -901,8 +886,7 @@
       "label": "labelled CRD",
       "builtin": "built-in",
       "configured": "configured"
-    },
-    "noResults": "No policies found."
+    }
   },
   "statefulsets": {
     "title": "StatefulSets",
@@ -930,13 +914,6 @@
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },
-    "paging": {
-      "empty": "Showing 0 of 0",
-      "range": "Showing {{from}}-{{to}} of {{total}}",
-      "prev": "Previous",
-      "next": "Next"
-    },
-    "noResults": "No StatefulSets found.",
     "delete": {
       "button": "Delete StatefulSet",
       "title": "Delete StatefulSet"
@@ -972,7 +949,6 @@
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },
-    "noResults": "No daemonsets found.",
     "delete": {
       "button": "Delete DaemonSet",
       "title": "Delete DaemonSet"
@@ -1009,7 +985,6 @@
       "degraded": "Degraded",
       "unavailable": "Unavailable"
     },
-    "noResults": "No replicasets found.",
     "delete": {
       "button": "Delete ReplicaSet",
       "title": "Delete ReplicaSet"
@@ -1041,7 +1016,6 @@
       "running": "Running",
       "failed": "Failed"
     },
-    "noResults": "No jobs found.",
     "delete": {
       "button": "Delete Job",
       "title": "Delete Job"
@@ -1075,7 +1049,6 @@
       "suspended": "Suspended",
       "scheduled": "Scheduled"
     },
-    "noResults": "No cronjobs found.",
     "delete": {
       "button": "Delete CronJob",
       "title": "Delete CronJob"
@@ -1108,7 +1081,6 @@
       "active": "Active",
       "inactive": "Inactive"
     },
-    "noResults": "No HPAs found.",
     "delete": {
       "button": "Delete HPA",
       "title": "Delete HPA"
@@ -1139,7 +1111,6 @@
       "provided": "Provided",
       "notProvided": "Not Provided"
     },
-    "noResults": "No VPAs found.",
     "delete": {
       "button": "Delete VPA",
       "title": "Delete VPA"
@@ -1170,7 +1141,6 @@
       "healthy": "Healthy",
       "disrupted": "Disrupted"
     },
-    "noResults": "No PDBs found.",
     "delete": {
       "button": "Delete PDB",
       "title": "Delete PDB"
@@ -1197,7 +1167,6 @@
       "globalDefault": "Global Default",
       "preempting": "Preempting"
     },
-    "noResults": "No priority classes found.",
     "delete": {
       "button": "Delete Priority Class",
       "title": "Delete Priority Class"
@@ -1221,7 +1190,6 @@
       "total": "Total",
       "uniqueHandlers": "Unique Handlers"
     },
-    "noResults": "No runtime classes found.",
     "delete": {
       "button": "Delete Runtime Class",
       "title": "Delete Runtime Class"
@@ -1244,8 +1212,7 @@
     "stats": {
       "total": "Total Configurations",
       "totalWebhooks": "Total Webhooks"
-    },
-    "noResults": "No mutating webhook configurations found."
+    }
   },
   "validatingWebhooks": {
     "title": "ValidatingWebhookConfigurations",
@@ -1264,8 +1231,7 @@
     "stats": {
       "total": "Total Configurations",
       "totalWebhooks": "Total Webhooks"
-    },
-    "noResults": "No validating webhook configurations found."
+    }
   },
   "leases": {
     "title": "Leases",
@@ -1289,7 +1255,6 @@
       "withHolder": "With Holder",
       "withoutHolder": "Without Holder"
     },
-    "noResults": "No leases found.",
     "delete": {
       "button": "Delete Lease",
       "title": "Delete Lease"
@@ -1316,7 +1281,6 @@
       "withCpu": "With CPU Quota",
       "withMemory": "With Memory Quota"
     },
-    "noResults": "No resource quotas found.",
     "delete": {
       "button": "Delete ResourceQuota",
       "title": "Delete ResourceQuota"
@@ -1343,7 +1307,6 @@
       "containerLimits": "Container Limits",
       "podLimits": "Pod Limits"
     },
-    "noResults": "No limit ranges found.",
     "delete": {
       "button": "Delete LimitRange",
       "title": "Delete LimitRange"
@@ -1376,7 +1339,6 @@
       "pending": "Pending",
       "lost": "Lost"
     },
-    "noResults": "No PVCs found.",
     "delete": {
       "button": "Delete PVC",
       "title": "Delete PVC"
@@ -1410,7 +1372,6 @@
       "released": "Released",
       "failed": "Failed"
     },
-    "noResults": "No PVs found.",
     "delete": {
       "button": "Delete PV",
       "title": "Delete PV"
@@ -1441,7 +1402,6 @@
       "expandable": "Expandable",
       "waitForFirstConsumer": "Binding mode: WaitForFirstConsumer"
     },
-    "noResults": "No StorageClasses found.",
     "delete": {
       "button": "Delete StorageClass",
       "title": "Delete StorageClass"
@@ -1471,7 +1431,6 @@
       "detached": "Detached",
       "errors": "Errors"
     },
-    "noResults": "No VolumeAttachments found.",
     "delete": {
       "button": "Delete VolumeAttachment",
       "title": "Delete VolumeAttachment"
@@ -1483,7 +1442,6 @@
     "searchPlaceholder": "Search nodes by name...",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
-    "noResults": "No nodes found.",
     "top": {
       "title": "Top nodes by resource usage",
       "loading": "Loading metrics...",
@@ -1819,7 +1777,9 @@
     "pageSize": {
       "label": "Rows per page",
       "fit": "Fit"
-    }
+    },
+    "listEmpty": "No items.",
+    "noSearchResults": "No results found."
   },
   "dashboard": {
     "optimization": {
@@ -2257,8 +2217,6 @@
     "searchPlaceholder": "Search namespaces...",
     "matchCount": "{{count}} namespaces found",
     "created": "Created",
-    "noSearchResults": "No results found",
-    "empty": "No namespaces found",
     "table": {
       "name": "Name",
       "status": "Status",
@@ -2416,7 +2374,6 @@
     "deleteTitle": "Delete user",
     "deleting": "Deleting...",
     "delete": "Delete",
-    "empty": "No users found.",
     "createUser": "Add user",
     "bulkUpload": "Bulk upload",
     "bulkUploadTitle": "Bulk upload users",
@@ -2475,7 +2432,9 @@
       "close": "Close",
       "permissions": "Permissions",
       "noPerms": "No permissions assigned"
-    }
+    },
+    "searchPlaceholder": "Search by name, email or team...",
+    "selfAccount": "Your account"
   },
   "account": {
     "language": {
@@ -2791,7 +2750,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create ServiceAccount",
     "createTitle": "Create ServiceAccount from YAML",
-    "noResults": "No service accounts found.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2817,7 +2775,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create Role",
     "createTitle": "Create Role from YAML",
-    "noResults": "No roles found.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2843,7 +2800,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create RoleBinding",
     "createTitle": "Create RoleBinding from YAML",
-    "noResults": "No role bindings found.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2869,7 +2825,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create ClusterRole",
     "createTitle": "Create ClusterRole from YAML",
-    "noResults": "No cluster roles found.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2889,7 +2844,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create ClusterRoleBinding",
     "createTitle": "Create ClusterRoleBinding from YAML",
-    "noResults": "No cluster role bindings found.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2911,7 +2865,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create ConfigMap",
     "createTitle": "Create ConfigMap from YAML",
-    "noResults": "No config maps found.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
@@ -2937,7 +2890,6 @@
     "refreshTitle": "Force refresh",
     "create": "Create Secret",
     "createTitle": "Create Secret from YAML",
-    "noResults": "No secrets found.",
     "forbidden": "You do not have permission to view Secrets in this cluster.",
     "matchCount": "{{count}} result(s) match.",
     "stats": {
@@ -2978,7 +2930,6 @@
     "create": "Create CRD",
     "createTitle": "Create CRD from YAML",
     "matchCount": "{{count}} result(s) match.",
-    "noResults": "No custom resource definitions found.",
     "stats": {
       "total": "Total",
       "namespaced": "Namespaced",
@@ -3001,7 +2952,6 @@
     "refreshTitle": "Force refresh",
     "allKinds": "All kinds",
     "matchCount": "{{count}} result(s) match.",
-    "noResults": "No custom resource instances found.",
     "stats": {
       "total": "Total Instances",
       "kinds": "Unique Kinds",
@@ -3084,7 +3034,7 @@
     "normal": "Normal",
     "warning": "Warning",
     "rollout": "Rollout",
-    "totalEvents": "Total Events",
+    "totalEvents": "Events",
     "normalEvents": "Normal Events",
     "warningEvents": "Warning Events",
     "rollouts": "Rollouts",
@@ -3098,7 +3048,8 @@
     "repeated": "{{count}} times",
     "resourceFilter": "Resource Kind",
     "refresh": "Refresh",
-    "closeSummary": "Close Summary"
+    "closeSummary": "Close Summary",
+    "listCount": "{{rows}} items ({{events}} events · {{rollouts}} rollouts)"
   },
   "adminOrg": {
     "title": "Teams",
@@ -3410,7 +3361,6 @@
       "health": "Health",
       "createdBy": "Created by",
       "actions": "Actions",
-      "empty": "No clusters registered yet.",
       "test": "Test",
       "delete": "Delete",
       "inCluster": "In-cluster",
@@ -3491,7 +3441,10 @@
       "anchorNow": "Anchor now",
       "anchoring": "Anchoring...",
       "ok": "✓ #{{from}}–#{{to}}: {{rows}} rows intact, {{anchors}} anchor(s) match",
-      "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}"
+      "bad": "✗ #{{from}}–#{{to}}: {{reason}} at #{{seq}}",
+      "anchorNowTitle": "Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)",
+      "sealedTitle": "Rows up to this number are chained by hash: a changed or removed row breaks the chain (Verify checks it)",
+      "anchorTitle": "An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it"
     },
     "filter": {
       "service": "Area",
@@ -3518,7 +3471,6 @@
       "result": "Result"
     },
     "loading": "Loading...",
-    "empty": "No audit entries match the filters",
     "prev": "Prev",
     "next": "Next",
     "playRecording": "Play recording",
@@ -3538,7 +3490,6 @@
     "create": "Create DeviceClass",
     "createTitle": "Create DeviceClass from YAML",
     "matchCount": "{{count}} device classes matched.",
-    "noResults": "No device classes found.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by device class name...",
@@ -3614,7 +3565,6 @@
     "capacity": "Capacity",
     "metrics": "Metrics",
     "modelDistribution": "GPU Model Distribution",
-    "noResults": "No GPU nodes found.",
     "realtimeMetrics": "Real-time GPU Utilization",
     "refresh": "Refresh",
     "searchPlaceholder": "Search by node name, GPU model, or driver version...",
@@ -3640,7 +3590,6 @@
   },
   "gpuPods": {
     "metrics": "Metrics",
-    "noResults": "No GPU pods found.",
     "nodeUsage": "GPU Usage by Node",
     "refresh": "Refresh",
     "searchPlaceholder": "Search by pod name, namespace, or node...",
@@ -3671,7 +3620,6 @@
     "create": "Create ResourceClaimTemplate",
     "createTitle": "Create ResourceClaimTemplate from YAML",
     "matchCount": "{{count}} ResourceClaimTemplates matched.",
-    "noResults": "No ResourceClaimTemplates found.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by ResourceClaimTemplate name...",
@@ -3692,7 +3640,6 @@
     "create": "Create ResourceClaim",
     "createTitle": "Create ResourceClaim from YAML",
     "matchCount": "{{count}} ResourceClaims matched.",
-    "noResults": "No ResourceClaims found.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by ResourceClaim name...",
@@ -3714,7 +3661,6 @@
   },
   "resourceSlicesPage": {
     "matchCount": "{{count}} resource slices matched.",
-    "noResults": "No resource slices found.",
     "refresh": "Refresh",
     "refreshTitle": "Force refresh",
     "searchPlaceholder": "Search by resource slice name, node, driver, or pool...",
@@ -3732,37 +3678,6 @@
       "pool": "Pool"
     },
     "title": "ResourceSlices"
-  },
-  "topology": {
-    "title": "{{namespace}} Resource Definitions",
-    "subtitle": "View YAML definitions for all Kubernetes resources",
-    "resourceTypes": "Resource Types",
-    "noResources": "No resources",
-    "yamlContent": "YAML Content",
-    "yamlRefreshTitle": "Refresh YAML",
-    "yamlLoading": "Loading YAML...",
-    "yamlLoadError": "Failed to load YAML",
-    "resourceDeletedOrMissing": "The resource was deleted or does not exist.",
-    "refreshList": "Refresh list",
-    "selectResourceHint": "Select a resource to view its YAML definition"
-  },
-  "resources": {
-    "title": "{{namespace}} Resources",
-    "subtitle": "View and manage all resources in the namespace",
-    "searchPlaceholder": "Search {{kind}} by name...",
-    "replicasetError": "Failed to load ReplicaSets. (May be unavailable depending on cluster permissions/version)",
-    "fullSelectorTitle": "Full selector: {{selector}}",
-    "gotoPodsTitle": "Filter the Pod list by the ReplicaSet selector",
-    "gotoPods": "Go to Pods"
-  },
-  "network": {
-    "subtitle": "Quickly inspect Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy connections",
-    "searchPlaceholder": "Search Service by name...",
-    "noServices": "No services",
-    "selectServiceHint": "Select a Service on the left",
-    "anomaliesDetected": "Anomalies detected",
-    "selectorless": "This Service has no selector. (Pod / NetworkPolicy mapping is limited)",
-    "endpointsNotFound": "No Endpoints found for this Service name"
   },
   "adminAIUsage": {
     "title": "AI Usage",
@@ -3785,52 +3700,9 @@
     "avgDuration": "Avg duration (s)",
     "failures": "Failures",
     "lastAt": "Last",
-    "empty": "No AI chat records in this period.",
     "partialTokens": "{{n}} request(s) had no token usage from the provider and are not in the sum",
     "note": "Token counts are added up only when the provider sends the usage value in its response. The raw records are in the audit log under the action ai.chat.complete, with CSV export.",
     "partialLegend": "Some requests have no token count from the provider; the row total leaves them out."
-  },
-  "networkOverview": {
-    "none": "None",
-    "noIp": "(no ip)",
-    "noTargetRef": "(no targetRef)",
-    "ingressTitle": "Ingress",
-    "addressNone": "address: (none)",
-    "tlsSecret": "tls secret: {{secrets}}",
-    "tlsSecretNone": "tls secret: (none)",
-    "networkPoliciesTitle": "NetworkPolicies (candidates)",
-    "noSelector": "The Service has no selector, so pods cannot be matched and policy links cannot be computed",
-    "noMatchingPods": "No pods match the selected Service's selector",
-    "isolationHint": "When ON, only the union of allow rules passes. (Actual behavior depends on the CNI / cluster settings)",
-    "noRules": "(no rules)",
-    "noHosts": "(no hosts)"
-  },
-  "resourcesTabs": {
-    "none": "None",
-    "fetchFailed": "Failed to load {{kind}}. (May be unavailable depending on cluster permissions / version)",
-    "pdb": {
-      "noSelector": "The PDB has no selector, so matching pods cannot be computed.",
-      "noMatchingPods": "No pods match, so the PDB has no effect.",
-      "allowed": "Up to {{count}} disruption(s) (evictions) allowed right now.",
-      "notProtectedBelow": "Not protected right now: healthy ({{healthy}}) is below desiredHealthy ({{desired}}), so disruptionsAllowed=0.",
-      "notProtected": "Not protected right now: disruptionsAllowed=0.",
-      "filterTitle": "Filter the pod list by this PDB's selector",
-      "goToPods": "Go to Pods"
-    },
-    "pod": {
-      "topReasons": "Top reasons",
-      "podsCount": "pods: {{count}}",
-      "restarts": "Restarts: {{count}}"
-    },
-    "hpa": {
-      "metricsMissing": "Desired cannot be computed: no metrics received from metrics-server / the metrics API.",
-      "desiredBelowMin": "Desired ({{desired}}) is below minReplicas ({{min}}). Check conditions / metrics."
-    },
-    "search": {
-      "clearLabelSelector": "Clear label selector",
-      "reset": "Reset",
-      "resultCount": "{{count}} {{kind}} matched"
-    }
   },
   "yamlCreate": {
     "clusterScoped": "Cluster-scoped resource: metadata.namespace is not used.",
@@ -3874,7 +3746,6 @@
       "status": "Status"
     },
     "loading": "Loading…",
-    "empty": "No recordings",
     "truncated": "Recording stopped at the size limit",
     "interruptedNothing": "The server stopped before the first part was uploaded: nothing to play",
     "interruptedPartial": "The server stopped during the recording: only the parts uploaded before are kept",

@@ -6,7 +6,7 @@ import type { LeaseInfo } from '@/services/api'
 import { useTranslation, Trans } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
-import { PageSizeSelect } from '@/components/PageSizeSelect'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './leaseHelpers'
 
@@ -22,6 +22,7 @@ interface LeaseTableProps {
   totalPages: number
   rowsPerPage: number
   onPageChange: (page: number) => void
+  searching?: boolean
   onOpenDetail: (item: LeaseInfo) => void
   containerRef: React.RefObject<HTMLDivElement | null>
   bodyRef: React.RefObject<HTMLDivElement | null>
@@ -41,6 +42,7 @@ export function LeaseTable({
   totalPages,
   rowsPerPage,
   onPageChange,
+  searching,
   onOpenDetail,
   containerRef,
   bodyRef,
@@ -64,11 +66,6 @@ export function LeaseTable({
         <table className="w-full text-sm min-w-[700px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">
-                  {tr('leases.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
-              </th>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
                   <span className="inline-flex items-center gap-1">
@@ -76,6 +73,11 @@ export function LeaseTable({
                   </span>
                 </th>
               )}
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
+                <span className="inline-flex items-center gap-1">
+                  {tr('leases.table.name', 'Name')}{renderSortIcon('name')}
+                </span>
+              </th>
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('holder')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('leases.table.holder', 'Holder')}{renderSortIcon('holder')}
@@ -101,10 +103,10 @@ export function LeaseTable({
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                 onClick={() => onOpenDetail(l)}
               >
-                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{l.name}</span></td>
                 {showNamespaceColumn && (
                   <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={l.namespace}>{l.namespace}</td>
                 )}
+                <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{l.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{l.holder_identity || '-'}</span></td>
                 <td className="col-optional py-3 px-4 text-xs font-mono">{l.lease_duration_seconds ?? '-'}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(l.created_at)}</td>
@@ -123,47 +125,13 @@ export function LeaseTable({
             )}
 
             {sortedLeasesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 5 : 4} resource="leases">
-                {tr('leases.noResults', 'No leases found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 5 : 4} resource="leases" searching={searching} />
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedLeases.length} columnCount={4 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
-      {sortedLeasesLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <PageSizeSelect />
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedLeasesLength),
-              total: sortedLeasesLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedLeasesLength} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }

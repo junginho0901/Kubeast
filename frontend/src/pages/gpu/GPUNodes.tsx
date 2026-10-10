@@ -125,6 +125,7 @@ export default function GPUNodes() {
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         tableContainerRef={tableContainerRef}
         tableBodyRef={tableBodyRef}
         theadRef={theadRef}

@@ -278,13 +278,13 @@ export default function ClusterHygiene() {
               <div className="p-6 text-slate-400">{tr('clusterHygiene.empty', 'Nothing to show.')}</div>
             ) : (
               <table className="min-w-full text-sm" data-testid="hygiene-findings-table">
-                <thead className="text-xs text-slate-400">
+                <thead className="text-slate-400">
                   <tr className="whitespace-nowrap">
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.severity', 'Severity')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.check', 'Check')}</th>
-                    <th className="px-3 py-2 text-left font-medium">Namespace</th>
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.object', 'Object')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.message', 'Details')}</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.severity', 'Severity')}</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.check', 'Check')}</th>
+                    <th className="px-3 py-2 text-left">Namespace</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.object', 'Object')}</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.message', 'Details')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,13 +315,13 @@ export default function ClusterHygiene() {
       {tab === 'checks' && report && (
         <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
           <table className="min-w-full text-sm" data-testid="hygiene-checks-table">
-            <thead className="text-xs text-slate-400">
+            <thead className="text-slate-400">
               <tr className="whitespace-nowrap">
-                <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.check', 'Check')}</th>
-                <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.severity', 'Severity')}</th>
-                <th className="px-3 py-2 text-right font-medium">{tr('clusterHygiene.col.findings', 'Findings')}</th>
-                <th className="px-3 py-2 text-right font-medium">{tr('clusterHygiene.exempt', 'Exempt')}</th>
-                <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.refs', 'Basis')}</th>
+                <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.check', 'Check')}</th>
+                <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.severity', 'Severity')}</th>
+                <th className="px-3 py-2 text-right">{tr('clusterHygiene.col.findings', 'Findings')}</th>
+                <th className="px-3 py-2 text-right">{tr('clusterHygiene.exempt', 'Exempt')}</th>
+                <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.refs', 'Basis')}</th>
               </tr>
             </thead>
             <tbody>
@@ -350,7 +350,7 @@ export default function ClusterHygiene() {
             <div className="p-6 text-slate-400">{tr('clusterHygiene.noHistory', 'This cluster has not been signed off yet.')}</div>
           ) : (
             <table className="min-w-full text-sm">
-              <thead className="text-xs text-slate-400">
+              <thead className="text-slate-400">
                 <tr>
                   <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.reviewedAt', 'Signed off')}</th>
                   <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.reviewedBy', 'By')}</th>

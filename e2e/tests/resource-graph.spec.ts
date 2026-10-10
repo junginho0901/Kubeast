@@ -12,15 +12,11 @@ async function box(l: Locator) {
   return b
 }
 
-// The graph draws only the namespaces picked in the header dropdown; both of these
-// always exist on the dev cluster.
+// The graph draws only the picked namespaces (?namespace= picks them, the old topology
+// links use it); both of these always exist on the dev cluster.
 async function openGraph(page: Page) {
-  await page.goto('/cluster/resource-graph?cluster=self')
-  await page.getByRole('button', { name: /Select Namespace|Namespace 선택/ }).click()
-  for (const ns of ['kube-system', 'kubeast']) {
-    await page.getByRole('button', { name: ns, exact: true }).click()
-  }
-  await page.getByRole('heading', { name: /Resource Graph|리소스 그래프/ }).click()
+  await page.goto('/cluster/resource-graph?cluster=self&namespace=kube-system,kubeast')
+  await expect(page.getByRole('button', { name: 'kube-system, kubeast' })).toBeVisible({ timeout: 15000 })
   await expect(page.locator(NODES).first()).toBeVisible({ timeout: 30000 })
 }
 
