@@ -162,11 +162,16 @@ test.describe('data display matches the cluster', () => {
 
   test('Advanced Search offers extension resources under their API group (#36)', async ({ page }) => {
     await page.goto(`/cluster/search?cluster=${CLUSTER}`)
-    await page.getByRole('button', { name: /Select Resources/ }).click()
+    const picker = page.getByRole('button', { name: /Select Resources/ })
+    await picker.click()
     await page.getByPlaceholder('Filter resources...').fill('autoscaling')
     await expect(page.getByText('HorizontalPodAutoscaler', { exact: true })).toBeVisible()
     await page.getByPlaceholder('Filter resources...').fill('ai.kubeast.io')
     await expect(page.getByText('ModelConfig', { exact: true })).toBeVisible()
+    // they can be picked: the picker counts one more
+    const before = Number((await picker.innerText()).match(/\d+/)?.[0] ?? '0')
+    await page.getByText('ModelConfig', { exact: true }).click()
+    await expect(picker).toContainText(String(before + 1))
   })
 
   test('Clusters show the API server each cluster is reached at (#40)', async ({ page, request }) => {

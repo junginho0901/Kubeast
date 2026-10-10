@@ -1,7 +1,37 @@
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import { test, expect, Page } from '@playwright/test'
 
 // SSE migration 회귀 — Pod Logs + Helm Watch 가 WebSocket 에서 SSE 로 전환
 // 후에도 정상 동작 + 사용자가 본 "여러 logs 왔다갔다 stuck" 회귀 방지.
+// The log area must hold the pod's own log (what kubectl logs prints), not only be on screen. Cluster View
+// opens on `default` (the second kind cluster, kubeast-b).
+
+function kubectlFor(kindName: string) {
+  const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
+  const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-sse-')), 'kubeconfig')
+  fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
+  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+}
+const kubectl = kubectlFor('kubeast-b')
+
+// The log area of the open pod modal shows the last line kubectl reads from the pod's first container
+// ("No logs available" when it has none).
+async function expectLogsOf(page: Page, pod: string) {
+  const ns = kubectl(`get pods -A --field-selector metadata.name=${pod} -o jsonpath='{.items[0].metadata.namespace}'`)
+  const container = kubectl(`-n ${ns} get pod ${pod} -o jsonpath='{.spec.containers[0].name}'`)
+  const last = kubectl(`-n ${ns} logs ${pod} -c ${container} --tail=20`).split('\n').map((l) => l.trim()).filter(Boolean).pop()
+  const area = page.locator('pre.whitespace-pre-wrap').first()
+  if (last) await expect(area).toContainText(last.slice(0, 60), { timeout: 15000 })
+  else await expect(area).toContainText(/No logs available|로그가 없습니다/, { timeout: 15000 })
+}
+
+async function podName(button: ReturnType<Page['locator']>) {
+  return (await button.locator('[title]').first().getAttribute('title')) as string
+}
 
 async function gotoClusterView(page: Page) {
   const errors: string[] = []
@@ -47,8 +77,9 @@ test.describe('SSE migration — Pod Logs', () => {
 
     // 모달의 Logs 탭은 default 활성. Container dropdown 이 보이고 + 로그 영역 mount.
     await expect(page.locator('text=/Container$|컨테이너/i').first()).toBeVisible({ timeout: 5000 })
-    // 로그 영역 (font-mono pre) — 'No logs available' 또는 실제 로그
+    // 로그 영역 (font-mono pre) — the pod's own log arrived over the stream
     await expect(page.locator('pre.whitespace-pre-wrap').first()).toBeVisible({ timeout: 10000 })
+    await expectLogsOf(page, await podName(opened!))
 
     await closeModal(page)
     assertNoCriticalErrors(errors)
@@ -72,9 +103,10 @@ test.describe('SSE migration — Pod Logs', () => {
       await closeModal(page)
     }
 
-    // 마지막으로 첫 Pod 한 번 더 열기 → 로그 영역 정상 mount (stuck 검증)
+    // 마지막으로 첫 Pod 한 번 더 열기 → its own log, not a stuck one from an earlier pod
     await pods.first().click()
     await expect(page.locator('pre.whitespace-pre-wrap').first()).toBeVisible({ timeout: 10000 })
+    await expectLogsOf(page, await podName(pods.first()))
 
     // page error 0 — race / cleanup leak 검출
     assertNoCriticalErrors(errors)
@@ -87,9 +119,13 @@ test.describe('SSE migration — Pod Logs', () => {
     const opened = await openFirstPod(page)
     test.skip(!opened, 'Pod 없음')
 
-    // 로그 영역 + Container 레이블 둘 다 보임 (SSE 가 연결되어 로그 또는 'No logs available')
+    // 로그 영역 + Container 레이블 둘 다 보임 — the picker names the pod's first container
     await expect(page.locator('pre.whitespace-pre-wrap').first()).toBeVisible({ timeout: 10000 })
     await expect(page.locator('text=/^Container$|^컨테이너$/i').first()).toBeVisible({ timeout: 3000 })
+    const pod = await podName(opened!)
+    const ns = kubectl(`get pods -A --field-selector metadata.name=${pod} -o jsonpath='{.items[0].metadata.namespace}'`)
+    const container = kubectl(`-n ${ns} get pod ${pod} -o jsonpath='{.spec.containers[0].name}'`)
+    await expect(page.locator('div').filter({ has: page.locator('text=/^Container$|^컨테이너$/i') }).last()).toContainText(container)
 
     await closeModal(page)
     assertNoCriticalErrors(errors)
@@ -113,11 +149,12 @@ test.describe('SSE migration — Pod Logs', () => {
     // 다시 Pod 클릭 → 로그 영역 mount
     await page.waitForTimeout(2000)
     const pods = page.locator('div.card button:has(svg.lucide-box)')
-    if ((await pods.count()) > 0) {
-      await pods.first().click()
-      await expect(page.locator('pre.whitespace-pre-wrap').first()).toBeVisible({ timeout: 10000 })
-      await closeModal(page)
-    }
+    await expect(pods.first()).toBeVisible({ timeout: 10000 })
+    await pods.first().click()
+    await expect(page.locator('pre.whitespace-pre-wrap').first()).toBeVisible({ timeout: 10000 })
+    // the stream reconnected: the pod's own log again
+    await expectLogsOf(page, await podName(pods.first()))
+    await closeModal(page)
 
     assertNoCriticalErrors(errors)
   })

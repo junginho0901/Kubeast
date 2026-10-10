@@ -14,12 +14,16 @@ const STOP_RE = /^중단$|^stop$/i
 
 test.describe('AI Chat', () => {
   test('initial render — input area visible', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (e) => errors.push(e.message))
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
 
     await expect(page.getByRole('heading', { name: /AI.*(어시스턴트|Assistant|Chat)/i })).toBeVisible()
     await expect(page.getByPlaceholder(PLACEHOLDER_RE)).toBeVisible()
     await expect(page.getByRole('button', { name: SEND_RE })).toBeVisible()
+    await expect(page).toHaveTitle(/^AI Chat · Kubeast$/)
+    expect(errors).toEqual([])
   })
 
   test('Korean greeting — streaming response in Korean', async ({ page }) => {
@@ -95,6 +99,12 @@ test.describe('AI Chat', () => {
 
     // input 즉시 또는 1~2초 안에 enabled 복귀 (streaming 종료)
     await expect(input).toBeEnabled({ timeout: 5_000 })
+    await expect(stopButton).toHaveCount(0)
+    // the stream really stopped: the answer does not grow any more
+    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+    const stopped = (await lastAssistant.innerText()).length
+    await page.waitForTimeout(3000)
+    expect((await lastAssistant.innerText()).length).toBe(stopped)
   })
 
   test('copy button strips tool details from clipboard', async ({ page, context }) => {
@@ -134,9 +144,14 @@ test.describe('AI Chat', () => {
     // session item selector — 사이드바 안의 클릭 가능한 세션 행
     const firstSession = page.locator('[class*="cursor-pointer"]').filter({ hasText: /hi|새 채팅|new chat/i }).first()
     await firstSession.click()
+    const messages = page.locator('div.flex.gap-3.p-6')
+    await expect(messages.first()).toBeVisible({ timeout: 5_000 })
+    const before = await messages.count()
 
     // 같은 세션 재클릭 직후 — welcome 화면 ("Start a new chat") 이 뜨면 안 됨
     await firstSession.click()
+    await page.waitForTimeout(1000)
+    expect(await messages.count()).toBe(before)
 
     // welcome 화면의 quick questions 영역이 보이지 않아야 함
     const welcomeHeading = page.getByText(/Start a new chat|새 채팅을 시작|새 대화/i).first()
