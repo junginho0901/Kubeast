@@ -29,7 +29,7 @@
     }
   },
   "clusterHygiene": {
-    "title": "Cluster hygiene",
+    "title": "Cluster Hygiene",
     "subtitle": "Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, Namespace policy, ServiceAccount tokens, RBAC and TLS expiry. Review, export, sign off.",
     "cluster": "Cluster",
     "refresh": "Scan again",
@@ -149,7 +149,7 @@
     "exemptNoReason": "(kubeast.io/hygiene-exempt without kubeast.io/hygiene-exempt-reason)"
   },
   "accessReview": {
-    "title": "Access review",
+    "title": "Access Review",
     "subtitle": "Who can do what right now: accounts, per-cluster grants, API keys, temporary grants since the last review, roles. Review, export, sign off.",
     "refresh": "Refresh",
     "loading": "Loading...",
@@ -250,7 +250,7 @@
     }
   },
   "accessRequests": {
-    "title": "Access requests",
+    "title": "Access Requests",
     "disabled": "Access requests are off on this installation (auth.accessRequests.enabled).",
     "empty": "No requests.",
     "until": "until {{time}}",
@@ -317,9 +317,9 @@
     }
   },
   "nav": {
-    "accessRequests": "Access requests",
-    "accessReview": "Access review",
-    "clusterHygiene": "Cluster hygiene",
+    "accessRequests": "Access Requests",
+    "accessReview": "Access Review",
+    "clusterHygiene": "Cluster Hygiene",
     "core": "Core",
     "cluster": "Cluster",
     "workloads": "Workloads",
@@ -400,7 +400,7 @@
     "helmReleases": "Releases",
     "clusters": "Clusters",
     "aiUsage": "AI Usage",
-    "sessionRecordings": "Session recordings"
+    "sessionRecordings": "Session Recordings"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -1578,7 +1578,7 @@
       "addresses": "Addresses",
       "version": "Versions",
       "system": "System info",
-      "noMetrics": "No metrics (metrics-server not installed)",
+      "noMetrics": "No metrics",
       "labels": "Labels",
       "annotations": "Annotations",
       "pods": "Pods",
@@ -1732,7 +1732,7 @@
     "metricTimestamp": "Metrics sampled at: {{time}}",
     "fetchNote": "* Data fetch can take longer than 5 seconds",
     "loading": "Loading data...",
-    "metricsServerHint": "Check if metrics-server is installed",
+    "metricsServerHint": "metrics-server is missing or not answering.",
     "namespace": {
       "label": "Select namespace",
       "placeholder": "Choose a namespace",
@@ -1920,7 +1920,7 @@
       "countTimes": "×{{count}}",
       "openHint": "Open details"
     },
-    "metricsServerHint": "Check metrics-server status",
+    "metricsServerHint": "metrics-server is missing or not answering.",
     "title": "Dashboard",
     "subtitle": "Get a quick overview of your Kubernetes cluster.",
     "clusterVersion": "Cluster version: {{version}}",
@@ -2259,8 +2259,7 @@
     "stats": {
       "total": "Total",
       "active": "Active",
-      "terminating": "Terminating",
-      "withLabels": "With Labels"
+      "terminating": "Terminating"
     },
     "detail": {
       "title": "Namespace details",
@@ -2510,7 +2509,6 @@
       "subtitle": "Configure debug shell settings for nodes.",
       "enable": "Enable Node Shell",
       "enableHint": "Show debug shell action in node details.",
-      "namespace": "Namespace",
       "image": "Linux image",
       "imagePlaceholder": "Server default (first image on the allow list)"
     }
@@ -2788,8 +2786,7 @@
     "matchCount": "{{count}} result(s) match.",
     "stats": {
       "total": "Total",
-      "withSecrets": "With Secrets",
-      "totalSecrets": "Total Secrets"
+      "withPullSecrets": "With Image Pull Secrets"
     },
     "table": {
       "namespace": "Namespace",
@@ -3843,7 +3840,7 @@
     "confirm": "Delete"
   },
   "recordings": {
-    "title": "Session recordings",
+    "title": "Session Recordings",
     "subtitle": "What users saw in pod exec and node shell terminals. Opening a recording is audited.",
     "refresh": "Refresh",
     "disabled": "Session recording is off on this installation (sessionRecording.enabled). Earlier recordings stay listed.",

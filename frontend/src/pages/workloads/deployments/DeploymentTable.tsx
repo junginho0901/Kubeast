@@ -121,7 +121,7 @@ export function DeploymentTable({
                   {tr('deployments.table.status', 'Status')}{renderSortIcon('status')}
                 </span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('deployments.table.image', 'Image')}{renderSortIcon('image')}
                 </span>
@@ -146,7 +146,7 @@ export function DeploymentTable({
                   rawJson: deploymentToWorkloadRawJson(dep),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{dep.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={dep.namespace}>{dep.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{dep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.ready_replicas}/{dep.replicas}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.updated_replicas ?? 0}</td>
@@ -159,13 +159,13 @@ export function DeploymentTable({
                     {workloadStatusLabel(tr, dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}
                   </span>
                 </td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(dep.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -176,7 +176,7 @@ export function DeploymentTable({
             )}
 
             {sortedDeploymentsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="deployments">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="deployments">
                 {tr('deployments.noResults', 'No deployments found.')}
               </TableEmptyRow>
             )}

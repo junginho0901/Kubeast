@@ -76,16 +76,14 @@ export default function Namespaces() {
     const total = filteredNamespaces.length
     let active = 0
     let terminating = 0
-    let withLabels = 0
 
     for (const ns of filteredNamespaces) {
       const status = String(ns.status || '').toLowerCase()
       if (status === 'active') active += 1
       if (status.includes('terminating')) terminating += 1
-      if (Object.keys(ns.labels || {}).length > 0) withLabels += 1
     }
 
-    return { total, active, terminating, withLabels }
+    return { total, active, terminating }
   }, [filteredNamespaces])
 
   const summaryCards = useMemo<SummaryCard[]>(
@@ -93,9 +91,9 @@ export default function Namespaces() {
       [tr('namespaces.stats.total', 'Total'), namespaceStats.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('namespaces.stats.active', 'Active'), namespaceStats.active, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
       [tr('namespaces.stats.terminating', 'Terminating'), namespaceStats.terminating, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('namespaces.stats.withLabels', 'With Labels'), namespaceStats.withLabels, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      // no "With Labels": every Namespace carries kubernetes.io/metadata.name, so it always equalled Total
     ],
-    [namespaceStats.active, namespaceStats.terminating, namespaceStats.total, namespaceStats.withLabels, tr],
+    [namespaceStats.active, namespaceStats.terminating, namespaceStats.total, tr],
   )
 
   const sortedNamespaces = useMemo(
@@ -181,11 +179,11 @@ export default function Namespaces() {
           placeholder={tr('namespaces.searchPlaceholder', 'Search namespaces...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-3 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>

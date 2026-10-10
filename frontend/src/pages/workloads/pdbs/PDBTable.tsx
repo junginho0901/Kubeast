@@ -143,7 +143,7 @@ export function PDBTable({
                   rawJson: pdbToRawJson(p),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{p.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={p.namespace}>{p.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{p.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{p.min_available ?? '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{p.max_unavailable ?? '-'}</td>
@@ -155,7 +155,7 @@ export function PDBTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -166,7 +166,7 @@ export function PDBTable({
             )}
 
             {sortedPDBsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="pdbs">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="pdbs">
                 {tr('pdbs.noResults', 'No PDBs found.')}
               </TableEmptyRow>
             )}

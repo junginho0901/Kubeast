@@ -149,7 +149,7 @@ export function HPATable({
                   rawJson: hpaToRawJson(h),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{h.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={h.namespace}>{h.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{h.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{h.target_ref || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{h.min_replicas ?? '-'}</td>
@@ -160,7 +160,7 @@ export function HPATable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 7 : 6} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -171,7 +171,7 @@ export function HPATable({
             )}
 
             {sortedHPAsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="hpas">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 7 : 6} resource="hpas">
                 {tr('hpas.noResults', 'No HPAs found.')}
               </TableEmptyRow>
             )}

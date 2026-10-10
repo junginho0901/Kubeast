@@ -107,10 +107,10 @@ export function CronJobTable({
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('lastSchedule')}>
                 <span className="inline-flex items-center gap-1">{tr('cronjobs.table.lastSchedule', 'Last Schedule')}{renderSortIcon('lastSchedule')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
                 <span className="inline-flex items-center gap-1">{tr('cronjobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">{tr('cronjobs.table.images', 'Images')}{renderSortIcon('images')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -131,7 +131,7 @@ export function CronJobTable({
                   rawJson: cronJobToWorkloadRawJson(cronjob),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{cronjob.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={cronjob.namespace}>{cronjob.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{cronjob.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{cronjob.schedule || '-'}</span></td>
                 <td className="py-3 px-4">
@@ -141,8 +141,8 @@ export function CronJobTable({
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">{cronjob.active || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatTimestamp(cronjob.last_schedule_time)}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(cronjob.containers || []).join(', ') || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(cronjob.images || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(cronjob.containers || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(cronjob.images || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cronjob.created_at)}</td>
               </tr>
             ))}

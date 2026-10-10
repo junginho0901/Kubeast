@@ -143,7 +143,7 @@ export function PodTable({
                     rawJson: pod as unknown as Record<string, unknown>,
                   })}
                 >
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{pod.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={pod.namespace}>{pod.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{pod.ready || '-'}</td>
                   <td className="py-3 px-4">

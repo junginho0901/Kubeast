@@ -143,7 +143,7 @@ export function VPATable({
                   rawJson: vpaToRawJson(v),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{v.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={v.namespace}>{v.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{v.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{v.target_ref || '-'}</span></td>
                 <td className="py-3 px-4 text-xs">{v.update_mode || '-'}</td>
@@ -163,7 +163,7 @@ export function VPATable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -174,7 +174,7 @@ export function VPATable({
             )}
 
             {sortedVPAsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="vpas">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="vpas">
                 {tr('vpas.noResults', 'No VPAs found.')}
               </TableEmptyRow>
             )}

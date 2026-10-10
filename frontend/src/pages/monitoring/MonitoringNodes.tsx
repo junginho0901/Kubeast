@@ -156,10 +156,12 @@ export default function MonitoringNodes({
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 text-right">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-green-400">{t('monitoring.autoRefresh')}</span>
-          </div>
+          {latestNodeMetricTime && (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-green-400">{t('monitoring.autoRefresh')}</span>
+            </div>
+          )}
           {latestNodeMetricTime && (
             <p className="text-xs text-slate-400 flex items-center gap-2">
               <Clock className="w-4 h-4" />

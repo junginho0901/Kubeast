@@ -244,7 +244,7 @@ ${yamlBodyTemplate}`
                     rawJson: toRawJson(item, apiVersion, config.kind),
                   })}
                 >
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{formatTargetRefs(item)}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{formatConditionStatus(item)}</span></td>

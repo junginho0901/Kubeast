@@ -365,7 +365,7 @@ rules:
               {pagedItems.map((role, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace })}>
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{role.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={role.namespace}>{role.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{role.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{role.rules_count}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(role.created_at)}</td>

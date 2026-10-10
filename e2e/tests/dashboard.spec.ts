@@ -11,8 +11,7 @@ test.describe('Dashboard', () => {
     // Wait for the cluster overview to finish loading. The page shows
     // a skeleton until isLoading flips false.
     await page.waitForLoadState('networkidle')
-    // Two h1 on screen (sidebar 'Kubeast' + page title) — pick the
-    // page title by its larger size class.
+    // The page title is the screen's one h1.
     await expect(page.locator('h1.text-3xl').first()).toContainText(/Dashboard/i)
 
     // Mask the dynamic data regions: pod-name hashes change on every

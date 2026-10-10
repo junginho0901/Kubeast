@@ -114,13 +114,13 @@ export function ReplicaSetTable({
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.images', 'Images')}{renderSortIcon('images')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
+              <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
+              <th className="col-optional text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('replicasets.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
@@ -139,7 +139,7 @@ export function ReplicaSetTable({
                   rawJson: replicaSetToWorkloadRawJson(rs),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{rs.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={rs.namespace}>{rs.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rs.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.current_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{rs.replicas ?? 0}</td>
@@ -147,15 +147,15 @@ export function ReplicaSetTable({
                 <td className="py-3 px-4 text-xs font-mono">{rs.available_replicas ?? 0}</td>
                 <td className="py-3 px-4"><span className={`badge ${getReplicaSetStatusColor(rs.status)}`} title={workloadStatusTitle(rs.status)}>{workloadStatusLabel(tr, rs.status)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.containers || []).join(', ') || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{rs.owner_deployment || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(rs.images || [rs.image]).filter(Boolean).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{rs.owner_deployment || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rs.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 13 : 12} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 12 : 11} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -166,7 +166,7 @@ export function ReplicaSetTable({
             )}
 
             {sortedReplicaSetsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 13 : 12} resource="replicasets">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 12 : 11} resource="replicasets">
                 {tr('replicasets.noResults', 'No replicasets found.')}
               </TableEmptyRow>
             )}

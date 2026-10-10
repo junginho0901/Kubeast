@@ -97,7 +97,7 @@ export function ResourceQuotaTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{rq.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{rq.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={rq.namespace}>{rq.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono">{Object.keys(rq.status_hard || {}).length}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(rq.created_at)}</td>

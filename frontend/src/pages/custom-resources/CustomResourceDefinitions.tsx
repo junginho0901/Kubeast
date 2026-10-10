@@ -324,7 +324,7 @@ spec:
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
+                <th className="col-optional text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.version', 'Version')}{renderSortIcon('version')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
@@ -344,7 +344,7 @@ spec:
                       ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crd.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
-                  <td className="col-low py-3 px-4 text-xs font-mono">{crd.version}</td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono">{crd.version}</td>
                   <td className="py-3 px-4 text-xs">
                     <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium ${crd.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'}`}>
                       {crd.scope}

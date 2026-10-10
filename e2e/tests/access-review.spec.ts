@@ -166,7 +166,7 @@ test.describe('Access review', () => {
 
   test('the admin page shows the cards, tabs, CSV button and signs off', async ({ page }) => {
     await page.goto('/admin/access-review')
-    await expect(page.getByRole('heading', { name: /Access review|접근 권한 검토/ })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Access review|접근 권한 검토/i })).toBeVisible()
     await expect(page.getByTestId('access-review-summary')).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('access-review-card-users')).toContainText(/\d+/)
     await expect(page.getByTestId('access-review-last-review')).toBeVisible()

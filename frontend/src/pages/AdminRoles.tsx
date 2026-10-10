@@ -144,7 +144,7 @@ export default function AdminRoles() {
         </div>
         <button
           onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
+          className="btn btn-primary flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           {tr('adminRoles.create', 'Create Role')}

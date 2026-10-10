@@ -29,7 +29,7 @@
     }
   },
   "clusterHygiene": {
-    "title": "Cluster hygiene",
+    "title": "Cluster Hygiene",
     "subtitle": "클러스터를 내 권한으로 읽어 설정상 위험을 모읍니다 — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, ServiceAccount 토큰, RBAC, TLS 만료. 검토하고 내보내고 서명합니다.",
     "cluster": "클러스터",
     "refresh": "다시 점검",
@@ -149,7 +149,7 @@
     "exemptNoReason": "(kubeast.io/hygiene-exempt는 있지만 kubeast.io/hygiene-exempt-reason 없음)"
   },
   "accessReview": {
-    "title": "Access review",
+    "title": "Access Review",
     "subtitle": "지금 누가 무엇을 할 수 있는지: 계정·클러스터별 역할·API 키·마지막 검토 이후의 임시 권한·역할. 검토하고, 내려받고, 서명합니다.",
     "refresh": "새로고침",
     "loading": "불러오는 중...",
@@ -250,7 +250,7 @@
     }
   },
   "accessRequests": {
-    "title": "Access requests",
+    "title": "Access Requests",
     "disabled": "이 설치에서는 권한 요청이 꺼져 있습니다 (auth.accessRequests.enabled).",
     "empty": "요청이 없습니다.",
     "until": "{{time}}까지",
@@ -317,9 +317,9 @@
     }
   },
   "nav": {
-    "accessRequests": "Access requests",
-    "accessReview": "Access review",
-    "clusterHygiene": "Cluster hygiene",
+    "accessRequests": "Access Requests",
+    "accessReview": "Access Review",
+    "clusterHygiene": "Cluster Hygiene",
     "core": "Core",
     "cluster": "Cluster",
     "workloads": "Workloads",
@@ -400,7 +400,7 @@
     "helmReleases": "Releases",
     "clusters": "Clusters",
     "aiUsage": "AI Usage",
-    "sessionRecordings": "Session recordings"
+    "sessionRecordings": "Session Recordings"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -1580,7 +1580,7 @@
       "addresses": "주소",
       "version": "버전",
       "system": "시스템 정보",
-      "noMetrics": "메트릭 없음 (metrics-server 미설치)",
+      "noMetrics": "메트릭 없음",
       "labels": "레이블",
       "annotations": "어노테이션",
       "pods": "Pod",
@@ -1734,7 +1734,7 @@
     "metricTimestamp": "메트릭 기준 수집 시각: {{time}}",
     "fetchNote": "* 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다",
     "loading": "데이터를 불러오는 중...",
-    "metricsServerHint": "metrics-server가 설치되어 있는지 확인하세요.",
+    "metricsServerHint": "metrics-server가 없거나 응답하지 않습니다.",
     "namespace": {
       "label": "Namespace 선택",
       "placeholder": "Namespace를 선택하세요",
@@ -1936,7 +1936,7 @@
       "countTimes": "×{{count}}",
       "openHint": "상세 열기"
     },
-    "metricsServerHint": "metrics-server 상태를 확인하세요.",
+    "metricsServerHint": "metrics-server가 없거나 응답하지 않습니다.",
     "title": "Dashboard",
     "subtitle": "Kubernetes 클러스터를 한눈에 확인합니다.",
     "clusterVersion": "클러스터 버전: {{version}}",
@@ -2281,8 +2281,7 @@
     "stats": {
       "total": "전체",
       "active": "활성",
-      "terminating": "종료 중",
-      "withLabels": "레이블 있음"
+      "terminating": "종료 중"
     },
     "detail": {
       "title": "Namespace 상세",
@@ -2584,10 +2583,8 @@
       "subtitle": "Node 디버그 셸 설정을 관리합니다.",
       "enable": "Node 셸 사용",
       "enableHint": "Node 상세 화면에 디버그 셸 액션을 표시합니다.",
-      "namespace": "Namespace",
       "image": "리눅스 이미지",
       "imageHint": "서버 허용 목록에 있어야 합니다(Helm nodeShell.images / NODE_SHELL_IMAGES). 셸 Pod는 항상 전용 특권 Namespace에서 실행됩니다.",
-      "namespaceHint": "참고용: 서버는 셸 Pod를 항상 설정된 특권 Namespace(NODE_SHELL_NAMESPACE)에 만듭니다.",
       "imagePlaceholder": "서버 기본값(허용 목록의 첫 이미지)"
     }
   },
@@ -2883,8 +2880,7 @@
     "matchCount": "{{count}}개 결과가 일치합니다.",
     "stats": {
       "total": "전체",
-      "withSecrets": "Secret 보유",
-      "totalSecrets": "총 Secret"
+      "withPullSecrets": "Image pull Secret 있음"
     },
     "table": {
       "namespace": "Namespace",
@@ -4502,7 +4498,7 @@
     "Configured": "설정됨"
   },
   "recordings": {
-    "title": "Session recordings",
+    "title": "Session Recordings",
     "subtitle": "Pod exec·Node 셸 터미널에서 사용자가 본 화면입니다. 녹화를 열면 감사 로그에 남습니다.",
     "refresh": "새로고침",
     "disabled": "이 설치에서는 세션 기록이 꺼져 있습니다(sessionRecording.enabled). 이전 녹화는 계속 보입니다.",

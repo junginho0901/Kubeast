@@ -16,7 +16,7 @@ async function gotoDashboard(page: Page) {
   })
   await page.goto('/')
   await page.waitForLoadState('networkidle')
-  // h1 두 개 (sidebar 'Kubeast' + page title) — 페이지 title 이 mount 됐는지 확인
+  // 페이지 title(화면의 유일한 h1)이 mount 됐는지 확인
   await expect(page.locator('h1.text-3xl').first()).toBeVisible({ timeout: 10000 })
   return errors
 }

@@ -283,8 +283,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('servicesPage.stats.exposed', 'Exposed')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.exposed}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('servicesPage.stats.headless', 'Headless')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('servicesPage.stats.headless', 'Headless')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.headless}</p>
         </div>
       </div>

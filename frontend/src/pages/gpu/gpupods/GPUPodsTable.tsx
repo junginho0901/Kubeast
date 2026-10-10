@@ -143,7 +143,7 @@ export function GPUPodsTable({
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
                 onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
               >
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.namespace}</span></td>
+                <td className="col-low py-3 px-4 text-xs font-mono" title={pod.namespace}><span className="block truncate">{pod.namespace}</span></td>
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pod.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pod.node_name ?? '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pod.gpu_requested}</td>
@@ -205,7 +205,7 @@ export function GPUPodsTable({
               </TableEmptyRow>
             )}
           </tbody>
-            <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={8} />
+            <AdaptiveTableFillerRows count={rowsPerPage - pagedPods.length} columnCount={metricsAvailable ? 8 : 6} />
         </table>
       </div>
       {sortedPodsLength > 0 && (

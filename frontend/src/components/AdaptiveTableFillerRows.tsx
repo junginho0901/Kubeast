@@ -3,7 +3,8 @@ interface AdaptiveTableFillerRowsProps {
   count: number
   /** 한 행에 그릴 td 개수 (테이블 컬럼 수) */
   columnCount: number
-  /** td 클래스 — 페이지의 데이터 행 td 와 동일한 padding 을 주면 행 높이 일치 */
+  /** td 클래스 — 데이터 행 td 와 같은 세로 padding 을 주면 행 높이 일치. 가로 padding 은 두지 않음:
+   *  접힌 열(폭 0, index.css col-low)에서 칸이 표 오른쪽 끝 밖으로 넘침 */
   cellClassName?: string
 }
 
@@ -24,7 +25,7 @@ interface AdaptiveTableFillerRowsProps {
 export function AdaptiveTableFillerRows({
   count,
   columnCount,
-  cellClassName = 'py-3 px-4',
+  cellClassName = 'py-3',
 }: AdaptiveTableFillerRowsProps) {
   if (count <= 0) return null
   return (

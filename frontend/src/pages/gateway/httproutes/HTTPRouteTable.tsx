@@ -134,7 +134,7 @@ export function HTTPRouteTable({
                   rawJson: httpRouteToRawJson(item),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{item.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{formatHostnames(item)}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{item.parent_refs_count || 0}</td>
@@ -146,7 +146,7 @@ export function HTTPRouteTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -157,7 +157,7 @@ export function HTTPRouteTable({
             )}
 
             {sortedHTTPRoutesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="httproutes">
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="httproutes">
                 {tr('httpRoutesPage.noResults', 'No HTTPRoutes found.')}
               </TableEmptyRow>
             )}

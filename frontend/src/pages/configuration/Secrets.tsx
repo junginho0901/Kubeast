@@ -386,7 +386,7 @@ stringData:
               {pagedItems.map((secret, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${secret.namespace}/${secret.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Secret', name: secret.name, namespace: secret.namespace })}>
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{secret.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={secret.namespace}>{secret.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{secret.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate">{secret.type}</td>
                   <td className="py-3 px-4 text-xs font-mono">{secret.data_count}</td>

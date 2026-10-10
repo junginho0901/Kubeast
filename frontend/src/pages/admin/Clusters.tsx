@@ -66,7 +66,7 @@ export default function AdminClusters() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
             <Server className="w-6 h-6 text-primary-500" />
             {tr('cluster.admin.title', 'Clusters')}
           </h1>
@@ -78,7 +78,7 @@ export default function AdminClusters() {
           type="button"
           data-testid="register-cluster-btn"
           onClick={() => setRegisterOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+          className="btn btn-primary flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           {tr('cluster.admin.register', 'Register cluster')}
@@ -124,7 +124,7 @@ export default function AdminClusters() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-300" title={c.mode}>{tr(`cluster.admin.modeValue.${c.mode}`, c.mode)}</td>
-                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]">{c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')}</td>
+                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]" title={c.api_server_url || undefined}>{c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${healthDotClass(res ? (res.healthy ? 'healthy' : 'unhealthy') : c.health_status)}`} />

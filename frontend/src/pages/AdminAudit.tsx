@@ -213,7 +213,7 @@ export default function AdminAudit() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="page-scrolls space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">{tr('adminAudit.title', '감사 로그')}</h1>
@@ -225,14 +225,14 @@ export default function AdminAudit() {
           <button
             onClick={exportCsv}
             data-testid="audit-export-csv"
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
+            className="btn btn-secondary flex items-center gap-2"
           >
             {tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {isFetching ? tr('adminAudit.refreshing', '불러오는 중...') : tr('adminAudit.refresh', '새로고침')}
           </button>
@@ -356,7 +356,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.actor', '사용자 이메일')}
             <input
               type="text"
-              placeholder="user@kubeast.io"
+              placeholder="user@example.com"
               className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
@@ -453,9 +453,9 @@ export default function AdminAudit() {
 
       {/* Table */}
       {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
-          table 의 min-w-[1100px] 로 컬럼이 너무 압축되지 않게 보장. */}
+          table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
       <div className="rounded-lg bg-slate-800/30 border border-slate-700 overflow-x-auto">
-        <table className="w-full min-w-[1100px] text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead className="bg-slate-800 text-slate-300">
             <tr>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.time', '시각')}</th>
@@ -559,11 +559,11 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
         onClick={onToggle}
       >
         <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtTime(entry.CreatedAt)}</td>
-        <td className="px-3 py-2 text-slate-200">{entry.ActorEmail || '-'}</td>
+        <td className="px-3 py-2 text-slate-200"><span className="block max-w-[220px] truncate" title={entry.ActorEmail || undefined}>{entry.ActorEmail || '-'}</span></td>
         <td className="px-3 py-2 text-slate-300" title={entry.Service || undefined}>{entry.Service ? tr(`adminAudit.area.${entry.Service}`, entry.Service) : '-'}</td>
         <td className="px-3 py-2 font-mono text-xs text-slate-200">{entry.Action}</td>
-        <td className="px-3 py-2 text-slate-300">{targetDisplay}</td>
-        <td className="px-3 py-2 text-slate-400">{entry.Namespace || '-'}</td>
+        <td className="px-3 py-2 text-slate-300"><span className="block max-w-[240px] truncate" title={targetDisplay}>{targetDisplay}</span></td>
+        <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{entry.Namespace || '-'}</td>
         <td className="px-3 py-2">
           {resultBadge(entry.Result || 'success')}
           {recordingId && (

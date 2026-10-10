@@ -116,7 +116,7 @@ export function PVCTable({
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('capacity')}>
                 <span className="inline-flex items-center gap-1">{tr('pvcs.table.capacity', 'Capacity')}{renderSortIcon('capacity')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
+              <th className="col-optional text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
                 <span className="inline-flex items-center gap-1">{tr('pvcs.table.accessModes', 'Access Modes')}{renderSortIcon('accessModes')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -137,7 +137,7 @@ export function PVCTable({
                   rawJson: pvcToRawJson(pvc),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{pvc.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={pvc.namespace}>{pvc.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{pvc.name}</span></td>
                 <td className="py-3 px-4">
                   <span className={`badge ${String(pvc.status || '').toLowerCase() === 'bound' ? 'badge-success' : String(pvc.status || '').toLowerCase() === 'pending' ? 'badge-warning' : 'badge-error'}`}>
@@ -148,7 +148,7 @@ export function PVCTable({
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{pvc.volume_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{pvc.requested || '-'}</td>
                 <td className="py-3 px-4 text-xs font-mono">{pvc.capacity || '-'}</td>
-                <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{(pvc.access_modes || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs"><span className="block truncate">{(pvc.access_modes || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pvc.created_at)}</td>
               </tr>
             ))}

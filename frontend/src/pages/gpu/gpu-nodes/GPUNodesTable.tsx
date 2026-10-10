@@ -79,7 +79,7 @@ export default function GPUNodesTable({
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.status', 'Status')}{renderSortIcon('status')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('mig_strategy')}>
+              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('mig_strategy')}>
                 <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.migStrategy', 'MIG Strategy')}{renderSortIcon('mig_strategy')}</span>
               </th>
             </tr>
@@ -100,7 +100,7 @@ export default function GPUNodesTable({
                 <td className="py-3 px-4">
                   <span className={`badge ${getStatusColor(node.status)}`}>{node.status}</span>
                 </td>
-                <td className="col-low py-3 px-4 text-xs font-mono">{node.mig_strategy ?? '-'}</td>
+                <td className="col-optional py-3 px-4 text-xs font-mono">{node.mig_strategy ?? '-'}</td>
               </tr>
             ))}
             {isLoading && (
