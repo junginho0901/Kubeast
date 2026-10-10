@@ -107,7 +107,7 @@ func bridge(t *testing.T, fake *fakeExecutor) (*websocket.Conn, <-chan error) {
 			return
 		}
 		defer conn.Close()
-		done <- streamShell(r.Context(), conn, readFrames(r.Context(), conn), &rest.Config{Host: "https://k8s.example:6443", Impersonate: rest.ImpersonationConfig{UserName: "u@example.com"}}, &url.URL{Path: "/x"}, nil)
+		done <- streamShell(r.Context(), conn, readFrames(r.Context(), conn), &rest.Config{Host: "https://k8s.example:6443", Impersonate: rest.ImpersonationConfig{UserName: "u@example.com"}}, &url.URL{Path: "/x"}, nil, "")
 	}))
 	t.Cleanup(srv.Close)
 	c, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
@@ -248,5 +248,19 @@ func TestStreamShell_TransportErrorReturned(t *testing.T) {
 	readFrame(t, c)
 	if err := <-done; !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("got %v, want the executor error", err)
+	}
+}
+
+func TestRecordingNoticeFollowsTheScreenLanguage(t *testing.T) {
+	for lang, want := range map[string]string{
+		"ko":    "[Kubeast] 이 세션은 녹화됩니다 (r1).",
+		"ko-KR": "[Kubeast] 이 세션은 녹화됩니다 (r1).",
+		"en":    "[Kubeast] This session is recorded (r1).",
+		"":      "[Kubeast] This session is recorded (r1).", // a page or client that sends none
+		"fr":    "[Kubeast] This session is recorded (r1).",
+	} {
+		if got := recordingNotice("r1", lang); got != "\r\n"+want+"\r\n" {
+			t.Errorf("lang %q: %q, want %q", lang, got, want)
+		}
 	}
 }

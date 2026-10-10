@@ -257,7 +257,7 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	writeShellStatus(conn, shellStatus{Status: shellStarting})
 
 	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
-	if err := streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec); err != nil {
+	if err := streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec, r.URL.Query().Get("lang")); err != nil {
 		msg := fmt.Sprintf("failed to connect to K8s API: %v", err)
 		slog.Error(msg)
 		conn.WriteMessage(websocket.TextMessage, []byte(msg+"\r\n"))

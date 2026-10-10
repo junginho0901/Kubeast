@@ -609,7 +609,7 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 - 같은 워크로드의 파드는 한 줄로 묶습니다(Deployment·StatefulSet·DaemonSet·Job, 파드 수 표시). 시스템 Namespace(`excludeNamespaces`, 기본 kube-system·kube-public·kube-node-lease)는 워크로드·Namespace·Role·TLS 점검에서 뺍니다.
 - **예외**: 객체(파드는 템플릿)나 그 Namespace에 `kubeast.io/hygiene-exempt: "image.latest,pss.hostpath"`(또는 `*`)와 `kubeast.io/hygiene-exempt-reason: <사유>`를 붙이면 그 항목은 "예외(사유)"로 남고 건수에서 따로 셉니다. 사유가 없으면 예외로 치지 않고 그렇다고 적습니다. 차트가 만드는 `kubeast:admin` 바인딩은 이 방식으로 이미 예외입니다.
-- **내보내기·서명**: CSV(BOM·CRLF, 수식 문자 무력화)·JSON을 내려받고, 클러스터별로 메모와 함께 서명하면 그 순간 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안). 화면에 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다. n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 가져가면 됩니다.
+- **내보내기·서명**: CSV(BOM·CRLF, 수식 문자 무력화)·JSON을 내려받고, 클러스터별로 메모와 함께 서명하면 그 순간 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안). 화면에 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다. n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 가져가면 됩니다. 항목의 `message`는 영어 문장(CSV·스냅샷도 이것)이고, 화면은 같은 내용을 `message_key`·`message_args`로 받아 화면 언어로 보여 줍니다.
 - 권한: `admin.hygiene.read`(보기·이력) · `admin.hygiene.export` · `admin.hygiene.signoff`(Admin에 포함). 감사: 조회 `k8s.hygiene.scan`(Secret을 읽으므로 민감 조회 — 기록이 안 되면 503), `admin.hygiene.export` · `admin.hygiene.signoff` · `admin.hygiene.read`(스냅샷). 보고서는 읽기만 하고 아무것도 고치지 않습니다 — 고치는 건 gitops로.
 
 ```yaml
@@ -718,7 +718,7 @@ audit:
 
 켜면(`sessionRecording.enabled`, 기본 off) Pod exec와 노드 셸 터미널에 **찍힌 출력**(사용자가 본 화면 — 친 명령은
 에코로 보이고, 에코되지 않는 비밀번호 입력은 안 남음)을 asciicast v2로 녹화합니다. 세션을 열면 터미널에
-"This session is recorded" 한 줄이 먼저 찍히고, 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
+"This session is recorded"(한국어 화면이면 "이 세션은 녹화됩니다") 한 줄이 먼저 찍히고 — 녹화에도 그 줄이 그대로 남습니다 — 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
 
 - **저장**: k8s-service가 로컬 볼륨에 쓰고 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(운영 권장, 감사 S3 싱크와 같은 필드) · `database`(세션당 1 MiB, S3 없는 작은 설치) · `file`(PVC). S3 키는 파일로 마운트돼 k8s-service의 IRSA 신원을 건드리지 않습니다.
 - **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다. 목록의 크기는 남은(올라간) 크기이고, 올라간 조각이 없으면 재생 버튼이 꺼집니다.

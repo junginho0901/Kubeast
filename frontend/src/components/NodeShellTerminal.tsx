@@ -7,6 +7,7 @@ import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { nodeShellStatusLines, parseNodeShellStatus } from '@/utils/nodeShellStatus'
+import { uiLang } from '@/utils/uiLang'
 
 interface NodeShellTerminalProps {
   nodeName: string
@@ -73,6 +74,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       ...(image ? { image } : {}),
       cols: String(term.cols),
       rows: String(term.rows),
+      lang: uiLang(), // the recording notice in the screen's language
       ...(clusterId ? { cluster: clusterId } : {}),
     })
     const ws = new WebSocket(wsUrl)

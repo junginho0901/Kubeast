@@ -49,6 +49,11 @@ sensitive reads: Secret YAML/describe, logs), console errors, uncaught page erro
 run the driver's `verify()` (kubectl or API) → attach `action.json` and an `after.png` screenshot → assert:
 the UI flow completed, no uncaught page errors, `verify().ok`.
 
+Confirmations are the app's own windows (`acceptConfirm` clicks them; nothing auto-accepts a browser dialog), and
+the delete window of a system object (CRD, Node, objects in the system namespaces …) asks for the name before
+Delete turns on — `confirmDialog(page, re, name)` types it when the window shows the name field. A PR that changes
+a flow a driver walks runs those drivers (`E2E_ACTIONS_ONLY=…`) even when the whole suite is not due.
+
 Order matters and is fixed in `ORDER`: reads and in-place edits first, then namespace create/delete, then
 every delete (a deleted seed object cannot be read afterwards), Helm uninstall, the admin pages, and the
 drivers that need their own session last. Tests in this file run serially in that order (`workers: 1`).

@@ -191,9 +191,10 @@ class AIService:
         namespace: str,
         audit_actor: Optional[dict] = None,
         audit_http: Optional[dict] = None,
+        lang: str = "en",
     ):
         async for chunk in streaming_module.suggest_optimization_stream(
-            self, namespace, audit_actor=audit_actor, audit_http=audit_http
+            self, namespace, audit_actor=audit_actor, audit_http=audit_http, lang=lang
         ):
             yield chunk
 
@@ -221,9 +222,9 @@ class AIService:
         from app.services.ai.quantities import extract_image_tag_flag
         return extract_image_tag_flag(image)
 
-    async def _build_optimization_observations(self, namespace: str) -> Dict[str, str]:
+    async def _build_optimization_observations(self, namespace: str, lang: str = "en") -> Dict[str, str]:
         from app.services.ai.optimization import build_optimization_observations
-        return await build_optimization_observations(self, namespace)
+        return await build_optimization_observations(self, namespace, lang)
 
     async def _execute_function(self, function_name: str, function_args: dict):
         from app.services.ai.tool_dispatch import execute_function

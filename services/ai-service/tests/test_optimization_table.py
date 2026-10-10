@@ -63,6 +63,24 @@ def test_draft_lists_only_flagged_rows_with_their_numbers():
     assert "no memory limit" in lines[1] and "request 100m, usage 250m, recommended 250m" in lines[1]
 
 
+def test_korean_table_and_draft_keep_the_numbers_and_have_no_english_sentence():
+    md = render_optimization_table(SAMPLE, "ko")
+    assert md.startswith("## 관측 데이터 (`web`)")
+    assert "- 사용량 출처: Prometheus 최근 24시간" in md
+    assert "워크로드 컨테이너 3개, Pod 3개" in md
+    assert "CPU request 1100m → 추천 210m" in md
+    assert "| `Deployment/api` | app | 2 | 500m/1000m | 55m | 55m | 512Mi/1024Mi | 200Mi | 230Mi | cpu_over, mem_over |" in md
+    for english in ("Usage source", "Observed data", "Workload containers", "over the last", "recommended"):
+        assert english not in md
+    draft = draft_from_flags(SAMPLE, "ko")
+    assert "CPU request가 사용량 기반 추천값의 2배 이상: request 500m, 사용량 55m, 추천 55m" in draft
+    assert "메모리 limit 없음" in draft and "at least double" not in draft
+
+
+def test_unknown_language_falls_back_to_english():
+    assert render_optimization_table(SAMPLE, "fr").startswith("## Observed data (`web`)")
+
+
 @pytest.mark.asyncio
 async def test_build_observations_calls_k8s_service_for_the_namespace():
     service = SimpleNamespace(k8s_service=SimpleNamespace(get_optimization=AsyncMock(return_value=SAMPLE)))
