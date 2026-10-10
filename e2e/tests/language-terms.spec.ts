@@ -167,6 +167,48 @@ test.describe('language and terms', () => {
       await expect(page.getByRole('button', { name: 'History', exact: true })).toHaveCount(0)
     })
 
+    test('cluster hygiene: every finding comes with a sentence key, and the details column reads in Korean', async ({ page, request }) => {
+      const headers = await bearer(request)
+      const config = await request.get('/api/v1/cluster/hygiene/config?cluster=self', { headers })
+      test.skip(!config.ok() || !(await config.json()).enabled, 'cluster hygiene report is off (features.hygiene.enabled)')
+      const res = await request.get('/api/v1/cluster/hygiene?cluster=self', { headers })
+      expect(res.ok()).toBeTruthy()
+      const findings = ((await res.json()).report.findings ?? []) as Array<{ message: string; message_key?: string }>
+      expect(findings.length).toBeGreaterThan(0)
+      expect(findings.filter((f) => !f.message_key).map((f) => f.message)).toEqual([])
+      expect(findings.filter((f) => lookup(`clusterHygiene.message.${f.message_key}`) === undefined).map((f) => f.message_key)).toEqual([])
+
+      await page.goto('/admin/cluster-hygiene')
+      await page.getByTestId('hygiene-cluster').click()
+      await page.getByTestId('hygiene-cluster-opt-self').click()
+      const rows = page.getByTestId('hygiene-finding-row')
+      await expect(rows.first()).toBeVisible({ timeout: 30000 })
+      const details = await rows.locator('td:nth-child(5)').allInnerTexts()
+      const english = /no memory limit|runs in the default namespace|token mounted|no NetworkPolicy|no pod-security|binds cluster-admin|rule with verbs|expires \d|not a readable/
+      expect(details.filter((d) => english.test(d))).toEqual([])
+      expect(details.some((d) => /[가-힣]/.test(d))).toBe(true)
+    })
+
+    test('optimization: the table headings and the AI explanation come back in Korean, without the English source line', async ({ request }) => {
+      test.setTimeout(300_000) // the dev model takes ~30 s; the whole stream is awaited
+      const res = await request.get('/api/v1/ai/suggest-optimization/stream', {
+        headers: { ...(await bearer(request)), Accept: 'text/event-stream', 'X-Cluster-Name': 'self' },
+        params: { namespace: 'kube-system', lang: 'ko' },
+        timeout: 240_000,
+      })
+      expect(res.ok()).toBeTruthy()
+      const events = (await res.text()).split('\n').filter((l) => l.startsWith('data: {')).map((l) => JSON.parse(l.slice(6)))
+      const observed = events.find((e) => e.kind === 'observed')?.content ?? ''
+      expect(observed).toMatch(/^## 관측 데이터 \(`kube-system`\)/)
+      expect(observed).toContain('- 사용량 출처: ')
+      expect(observed).toContain('## 최적화 제안 (AI)')
+      expect(observed).not.toMatch(/Usage source|Observed data|Workload containers/)
+      const answer = events.filter((e) => e.kind === 'answer').map((e) => e.content).join('')
+      expect(events.find((e) => e.kind === 'error'), 'the model answered').toBeUndefined()
+      expect((answer.match(/[가-힣]/g) ?? []).length, 'the answer is in Korean').toBeGreaterThan(50)
+      expect(answer).not.toMatch(/Usage source|over the last \d+h|95th percentile of the 5m rate/)
+    })
+
     test('Advanced Search: the same Beta label in the sidebar and the title, kind chips as written', async ({ page }) => {
       await page.goto('/cluster/search')
       await expect(page.locator('main h1')).toContainText('Advanced Search')

@@ -44,19 +44,24 @@ async def suggest_optimization_stream(
     namespace: str,
     audit_actor: Optional[dict] = None,
     audit_http: Optional[dict] = None,
+    lang: str = "en",
 ):
-    """리소스 최적화 제안 (SSE 스트리밍). 끝나면 ai.chat.complete(phase optimization) 1건."""
+    """리소스 최적화 제안 (SSE 스트리밍). 끝나면 ai.chat.complete(phase optimization) 1건.
+    lang = 화면 언어("ko"/"en") — 표 머리말·초안·프롬프트·답이 그 언어."""
     import asyncio
     import json
     from app.config import settings
+    from app.services.ai.language import ui_language_directive
+    from app.services.ai.optimization import ANSWER_HEADING, PROMPT_TEXT, SYSTEM_TEXT, TEXT, ui_lang
 
+    lang = ui_lang(lang)
     started = time.monotonic()
     turn_usage = usage_acct.new_turn_usage()
     finish_reason = None
     err: Optional[Exception] = None
     try:
-        observations = await service._build_optimization_observations(namespace)
-        observed_md = observations["observations_md"].rstrip() + "\n\n---\n\n## 최적화 제안 (AI)\n\n"
+        observations = await service._build_optimization_observations(namespace, lang)
+        observed_md = observations["observations_md"].rstrip() + f"\n\n---\n\n{ANSWER_HEADING[lang]}\n\n"
 
         # 1) 표(관측 데이터) 먼저 출력
         yield "data: " + json.dumps({"kind": "observed", "content": observed_md}, ensure_ascii=False) + "\n\n"
@@ -65,30 +70,12 @@ async def suggest_optimization_stream(
         # 2) 표/관측값 기반 draft(룰 기반)도 모델 입력에 포함해 일관성 강화 (UI에는 직접 출력 X)
         draft_plan = observations.get("action_plan_md", "").strip()
 
-        prompt = f"""
-    아래는 Kubernetes 네임스페이스의 관측 데이터(표)입니다. 표의 수치는 k8s-service가 계산한 것이고, 추천값(recommend)은 CPU = 사용량 95퍼센타일, 메모리 = 최대 사용량 + 15%입니다. 이 표를 근거로 "왜 이런 수치가 나왔는지"와 "무엇부터 바꿀지"를 설명하세요.
-
-    필수:
-    - 제안에 반드시 표의 워크로드명/수치(request, usage, recommend, flags)를 인용해서 근거를 달아주세요.
-    - 'Usage source' 줄을 읽고 그 한계를 말하세요: metrics-server면 순간값이라 피크를 못 봤을 수 있고, 사용량이 없으면 수치 추천 대신 관측 수단부터 제안하세요.
-    - 표에 없는 내용은 "추가 확인 필요"로 처리하고 추측하지 마세요.
-    - 아래 'Draft (rules-based)'의 수치/추천값은 **바꾸지 말고** 문장/구조만 다듬어 주세요.
-
-Observed data (markdown):
-{observations["observations_md"]}
-
-Draft (rules-based, keep numbers unchanged):
-{draft_plan if draft_plan else "(none)"}
-
-출력:
-- 마크다운
-- High/Medium/Low 우선순위
-- 각 항목에 (효과: 비용/성능/안정성) + 근거 + 적용 예시(kubectl 짧게)
-
-금지:
-- 응답 전체를 ```markdown ... ``` 같은 코드 펜스로 감싸지 마세요. (그렇게 하면 UI에서 마크다운 렌더가 코드블록으로 깨집니다)
-- 최상단을 ```로 시작하지 마세요.
-"""
+        prompt = PROMPT_TEXT[lang].format(
+            source=TEXT[lang]["source"],
+            observed=observations["observations_md"],
+            draft=draft_plan if draft_plan else "(none)",
+        )
+        system = SYSTEM_TEXT[lang] + "\n\n" + ui_language_directive(lang)
 
         max_tokens = int(getattr(settings, "OPENAI_OPTIMIZATION_MAX_TOKENS", 900) or 900)
 
@@ -96,10 +83,7 @@ Draft (rules-based, keep numbers unchanged):
             stream = await service.client.chat.completions.create(
                 model=service.model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요.",
-                    },
+                    {"role": "system", "content": system},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,
@@ -111,10 +95,7 @@ Draft (rules-based, keep numbers unchanged):
             stream = await service.client.chat.completions.create(
                 model=service.model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 Kubernetes 리소스 최적화 전문가입니다. 반드시 관측 데이터에 근거해 답하세요.",
-                    },
+                    {"role": "system", "content": system},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,

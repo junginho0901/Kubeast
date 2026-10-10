@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
+import { uiLang } from '@/utils/uiLang'
 
 /*
  * FUTURE — exec session audit log persistence.
@@ -102,6 +103,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
         // the size the terminal opened at (the recording's width/height)
         cols: String(term.cols),
         rows: String(term.rows),
+        lang: uiLang(), // the recording notice in the screen's language
         ...(clusterId ? { cluster: clusterId } : {}),
       }
     )

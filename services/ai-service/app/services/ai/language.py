@@ -38,3 +38,13 @@ def build_language_directive(user_message: str) -> str:
         f"in earlier turns or the rest of this system prompt. Keep command names, code, "
         f"and Kubernetes resource identifiers verbatim."
     )
+
+
+def ui_language_directive(lang: str) -> str:
+    """Directive for a request that names the UI language ("ko" / "en") instead of a user message."""
+    name = "Korean" if lang == "ko" else "English"
+    return (
+        f"LANGUAGE OVERRIDE (highest priority): The user's screen is in {name}. "
+        f"You MUST write your entire response in {name}, including any line you take from the data. "
+        f"Keep command names, code, and Kubernetes resource identifiers verbatim."
+    )

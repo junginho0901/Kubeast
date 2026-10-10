@@ -120,7 +120,33 @@
       "button": "Sign off",
       "saved": "Signed off at {{when}}.",
       "failed": "The sign-off was not saved."
-    }
+    },
+    "message": {
+      "privileged": "privileged: {{containers}}",
+      "hostNamespaces": "{{fields}}",
+      "hostPath": "hostPath: {{paths}}",
+      "hostPort": "hostPort: {{ports}}",
+      "capabilities": "adds {{added}}",
+      "otherBaseline": "{{items}}",
+      "restricted": "restricted: {{controls}}",
+      "imageLatest": "image {{image}}",
+      "memoryLimit": "no memory limit",
+      "requests": "no {{resources}} request",
+      "defaultNamespace": "runs in the default namespace",
+      "defaultToken": "default ServiceAccount token mounted",
+      "pssLabel": "no pod-security.kubernetes.io/enforce label",
+      "pssLabelWarn": "no pod-security.kubernetes.io/enforce label (warn={{warn}})",
+      "networkPolicy": "no NetworkPolicy ({{pods}} pods)",
+      "clusterAdmin": "binds cluster-admin to {{subjects}}",
+      "clusterAdminNoSubjects": "binds cluster-admin to no subjects",
+      "clusterAdminInNamespace": "binds cluster-admin in the namespace to {{subjects}}",
+      "clusterAdminInNamespaceNoSubjects": "binds cluster-admin in the namespace to no subjects",
+      "wildcard": "rule with verbs [{{verbs}}] resources [{{resources}}]",
+      "tlsUnreadable": "tls.crt is not a readable certificate",
+      "tlsExpired": "expired {{date}}{{suffix}}",
+      "tlsExpires": "expires {{date}} ({{days}} days){{suffix}}"
+    },
+    "exemptNoReason": "(kubeast.io/hygiene-exempt without kubeast.io/hygiene-exempt-reason)"
   },
   "accessReview": {
     "title": "Access review",

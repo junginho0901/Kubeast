@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,6 +118,16 @@ var (
 	shellHangupGrace = 2 * time.Second
 )
 
+// recordingNotice is the line a recorded terminal starts with, in the screen's
+// language ("ko"; English otherwise, also when the page sent none). It is part
+// of the recording, so a reviewer replaying it reads the same line.
+func recordingNotice(id, lang string) string {
+	if strings.HasPrefix(strings.ToLower(lang), "ko") {
+		return "\r\n[Kubeast] 이 세션은 녹화됩니다 (" + id + ").\r\n"
+	}
+	return "\r\n[Kubeast] This session is recorded (" + id + ").\r\n"
+}
+
 func hangUp(w io.Writer) {
 	for i, key := range shellHangup {
 		if i > 0 {
@@ -137,8 +148,9 @@ func hangUp(w io.Writer) {
 // shellHangupGrace to end before the stream is cut.
 //
 // With rec set, the terminal output (what the user sees, not keystrokes) is
-// also written to the recording, after a one-line notice that it is.
-func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session) error {
+// also written to the recording, after a one-line notice that it is — in
+// lang, the screen's language the page sent.
+func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cfg *rest.Config, u *url.URL, rec *recording.Session, lang string) error {
 	exec, err := newShellExecutor(cfg, u)
 	if err != nil {
 		return err
@@ -148,8 +160,7 @@ func streamShell(ctx context.Context, conn *websocket.Conn, in <-chan []byte, cf
 
 	out := &shellWriter{conn: conn, rec: rec}
 	if rec != nil {
-		notice := []byte("\r\n[Kubeast] This session is recorded (" + rec.ID + ").\r\n")
-		if _, err := out.channel(shellStdout).Write(notice); err != nil {
+		if _, err := out.channel(shellStdout).Write([]byte(recordingNotice(rec.ID, lang))); err != nil {
 			return err
 		}
 	}

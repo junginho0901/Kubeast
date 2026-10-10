@@ -23,6 +23,18 @@ const SEVERITY_TONE: Record<HygieneSeverity, string> = {
   info: 'bg-blue-500/20 text-blue-300',
 }
 
+type Tr = (key: string, fallback: string, opts?: Record<string, unknown>) => string
+
+// The server sends a finding's sentence as a catalog key and values (its `message` stays English for the CSV
+// and sign-off snapshots); a snapshot from before the keys shows the English text.
+function findingText(tr: Tr, f: HygieneFinding): string {
+  if (!f.message_key) return f.message
+  const text = tr(`clusterHygiene.message.${f.message_key}`, f.message, f.message_args)
+  return f.exempt_no_reason
+    ? `${text} ${tr('clusterHygiene.exemptNoReason', '(kubeast.io/hygiene-exempt without kubeast.io/hygiene-exempt-reason)')}`
+    : text
+}
+
 export default function ClusterHygiene() {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
@@ -78,13 +90,14 @@ export default function ClusterHygiene() {
   const findings = useMemo(() => {
     if (!report) return []
     const q = search.trim().toLowerCase()
+    const label: Tr = (key, fallback, opts) => t(key, { defaultValue: fallback, ...opts })
     return report.findings.filter((f: HygieneFinding) => {
       if (severity === 'exempt' ? !f.exempt : severity !== 'all' && (f.exempt || f.severity !== severity)) return false
       if (check !== 'all' && f.check !== check) return false
       if (!q) return true
-      return [f.namespace, f.kind, f.name, f.container, f.message, f.exempt_reason].join(' ').toLowerCase().includes(q)
+      return [f.namespace, f.kind, f.name, f.container, f.message, findingText(label, f), f.exempt_reason].join(' ').toLowerCase().includes(q)
     })
-  }, [report, severity, check, search])
+  }, [report, severity, check, search, t])
 
   const download = (format: 'csv' | 'json') => {
     const a = document.createElement('a')
@@ -285,7 +298,7 @@ export default function ClusterHygiene() {
                         {f.pods && f.pods > 1 ? <span className="text-slate-500"> · {tr('clusterHygiene.pods', '{{count}} Pods', { count: f.pods })}</span> : null}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="break-all">{f.message}</span>
+                        <span className="break-all">{findingText(tr, f)}</span>
                         {f.exempt && f.exempt_reason && <div className="text-xs text-slate-400 mt-0.5">{tr('clusterHygiene.exemptReason', 'Exempt: {{reason}}', { reason: f.exempt_reason })}</div>}
                       </td>
                     </tr>

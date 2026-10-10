@@ -130,6 +130,27 @@ test.describe.serial('session recording', () => {
     expect(reads.some((i) => (i.After ?? i.after)?.format === 'text')).toBe(true)
   })
 
+  test('the notice is in the screen language, and the recording keeps the same line', async ({ page, request }) => {
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const pod = await firstPod(request, 'kubeast', 'frontend-')
+    const mark = `kubeast-rec-ko-${stamp()}`
+    await page.goto('/')
+    const frames = await execSession(page, `/api/v1/cluster/namespaces/kubeast/pods/${pod}/exec/ws?cluster=self&command=/bin/sh&cols=100&rows=30&lang=ko`, [
+      { send: `echo ${mark}\r`, until: mark },
+    ])
+    const out = frames.map((f) => f.text).join('')
+    const m = out.match(/\[Kubeast\] 이 세션은 녹화됩니다 \(([0-9a-f-]{36})\)/)
+    expect(m, `Korean notice in: ${out.slice(0, 300)}`).toBeTruthy()
+    expect(out).not.toContain('This session is recorded')
+    const id = m![1]
+    await expect
+      .poll(async () => (await (await request.get(`/api/v1/cluster/recordings/${id}`, { headers: bearer(admin) })).json()).status, { timeout: 30_000 })
+      .toBe('uploaded')
+    const text = await (await request.get(`/api/v1/cluster/recordings/${id}/cast?format=text`, { headers: bearer(admin) })).text()
+    expect(text).toContain(`[Kubeast] 이 세션은 녹화됩니다 (${id})`)
+  })
+
   test('Admin → Session recordings lists it and replays it; the audit row links to it', async ({ page }) => {
     test.skip(!recordingId, 'needs the recording from the previous test')
     await page.goto('/admin/session-recordings')

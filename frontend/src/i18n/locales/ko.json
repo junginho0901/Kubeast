@@ -120,7 +120,33 @@
       "button": "서명",
       "saved": "{{when}}에 서명했습니다.",
       "failed": "서명을 저장하지 못했습니다."
-    }
+    },
+    "message": {
+      "privileged": "privileged 컨테이너: {{containers}}",
+      "hostNamespaces": "호스트 네임스페이스 사용: {{fields}}",
+      "hostPath": "hostPath: {{paths}}",
+      "hostPort": "hostPort: {{ports}}",
+      "capabilities": "기본 밖 capability 추가: {{added}}",
+      "otherBaseline": "{{items}}",
+      "restricted": "restricted 미충족: {{controls}}",
+      "imageLatest": "이미지 {{image}}",
+      "memoryLimit": "memory limit 없음",
+      "requests": "{{resources}} request 없음",
+      "defaultNamespace": "default Namespace에서 실행",
+      "defaultToken": "default ServiceAccount 토큰 마운트",
+      "pssLabel": "pod-security.kubernetes.io/enforce 레이블 없음",
+      "pssLabelWarn": "pod-security.kubernetes.io/enforce 레이블 없음 (warn={{warn}})",
+      "networkPolicy": "NetworkPolicy 없음 (Pod {{pods}}개)",
+      "clusterAdmin": "cluster-admin 바인딩 대상: {{subjects}}",
+      "clusterAdminNoSubjects": "cluster-admin 바인딩 (서브젝트 없음)",
+      "clusterAdminInNamespace": "이 Namespace의 cluster-admin 바인딩 대상: {{subjects}}",
+      "clusterAdminInNamespaceNoSubjects": "이 Namespace의 cluster-admin 바인딩 (서브젝트 없음)",
+      "wildcard": "와일드카드 규칙: verbs [{{verbs}}] resources [{{resources}}]",
+      "tlsUnreadable": "tls.crt를 인증서로 읽을 수 없음",
+      "tlsExpired": "{{date}} 만료됨{{suffix}}",
+      "tlsExpires": "{{date}} 만료 ({{days}}일 남음){{suffix}}"
+    },
+    "exemptNoReason": "(kubeast.io/hygiene-exempt는 있지만 kubeast.io/hygiene-exempt-reason 없음)"
   },
   "accessReview": {
     "title": "Access review",
