@@ -77,7 +77,7 @@ export default function AdminAIUsage() {
         <div>
           <h1 className="text-3xl font-bold text-white">{tr('adminAIUsage.title', 'AI 사용량')}</h1>
           <p className="text-slate-400 text-sm mt-1">
-            {tr('adminAIUsage.subtitle', '채팅 턴마다 남는 ai.chat.complete 감사 기록의 집계 — 요청·토큰·툴 호출. 한도는 없고, 누가 얼마나 썼는지 본다.')}
+            {tr('adminAIUsage.subtitle', 'The audit records written per chat turn and per Optimization AI explanation, added up — requests, tokens, tool calls.')}
           </p>
         </div>
         <button
@@ -184,7 +184,7 @@ export default function AdminAIUsage() {
         </table>
       </div>
       <p className="text-xs text-slate-500">
-        {tr('adminAIUsage.note', '토큰 수는 제공자가 스트림 마지막 청크에 usage를 보낼 때만 집계된다(OpenAI 호환 stream_options.include_usage). 원본 행은 감사 로그에서 action=ai.chat.complete 로 조회·CSV 내보내기.')}
+        {tr('adminAIUsage.note', 'Token counts are added up only when the provider sends the usage value in its response.')}
       </p>
     </div>
   )

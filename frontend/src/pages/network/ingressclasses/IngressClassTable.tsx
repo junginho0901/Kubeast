@@ -121,11 +121,7 @@ export function IngressClassTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.controller || '-'}</span></td>
-                <td className="py-3 px-4 text-xs">
-                  {item.is_default
-                    ? <span className="badge badge-success">{tr('common.yes', 'Yes')}</span>
-                    : <span className="badge badge-info">{tr('common.no', 'No')}</span>}
-                </td>
+                <td className="py-3 px-4 text-xs">{item.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatParameters(item)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>

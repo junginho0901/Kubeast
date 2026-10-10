@@ -72,7 +72,7 @@ function TargetList({
 }
 
 export function EndpointTargets({ endpoint }: { endpoint: EndpointInfo | null }) {
-  if (!endpoint) return <>{i18next.t('networkOverview.none', '(none)')}</>
+  if (!endpoint) return <>{i18next.t('networkOverview.none', 'None')}</>
 
   return (
     <div className="space-y-4">

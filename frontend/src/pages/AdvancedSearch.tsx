@@ -2,6 +2,7 @@ import { useState, useEffect, useDeferredValue, useCallback, useMemo, useRef } f
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search, RefreshCw, AlertCircle, Database, AlertTriangle, Loader2 } from 'lucide-react'
+import { BetaTag } from '@/components/BetaTag'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import ResourceTypePicker, { ResourceTypeOption } from '@/components/search/ResourceTypePicker'
@@ -243,9 +244,7 @@ export default function AdvancedSearch() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
             <Search className="w-7 h-7 text-sky-400" />
             {t('advancedSearch.title', 'Advanced Search')}
-            <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-medium">
-              {t('advancedSearch.beta', 'Beta')}
-            </span>
+            <BetaTag label={t('common.beta', 'Beta')} size="md" />
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             {t('advancedSearch.subtitle', 'Search across Kubernetes resources using JavaScript expressions')}

@@ -20,6 +20,7 @@ import {
 import { applyDeploymentWatchEvent } from './deployments/deploymentWatchNormalize'
 import { DeploymentFilters } from './deployments/DeploymentFilters'
 import { DeploymentTable } from './deployments/DeploymentTable'
+import { workloadStatusText } from '@/utils/workloadStatus'
 
 export default function Deployments() {
   const queryClient = useQueryClient()
@@ -67,13 +68,14 @@ export default function Deployments() {
     if (!Array.isArray(deployments)) return [] as DeploymentInfo[]
     if (!searchQuery.trim()) return deployments
     const q = searchQuery.toLowerCase()
+    const label = (k: string, f: string) => t(k, { defaultValue: f })
     return deployments.filter((dep) =>
       dep.name.toLowerCase().includes(q) ||
       dep.namespace.toLowerCase().includes(q) ||
       (dep.image || '').toLowerCase().includes(q) ||
-      (dep.status || '').toLowerCase().includes(q),
+      workloadStatusText(label, dep.status).includes(q),
     )
-  }, [deployments, searchQuery])
+  }, [deployments, searchQuery, t])
 
   const summary = useMemo(() => {
     const total = filteredDeployments.length

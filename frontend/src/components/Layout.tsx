@@ -39,6 +39,7 @@ import ResourceDetailDrawer from './LazyResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
 import { PageContextProvider } from './PageContextProvider'
 import FloatingAIChat from './FloatingAIChat'
+import { BetaTag } from './BetaTag'
 import ClusterPicker from './ClusterPicker'
 import ClusterSwitchProgress from './ClusterSwitchProgress'
 import RouteFallback from './RouteFallback'
@@ -53,12 +54,16 @@ type NavItem = {
   match?: (pathname: string, search: string) => boolean
   // A count shown after the name (pending access requests).
   badge?: number
+  // A small label after the name (Beta).
+  tag?: string
   testId?: string
 }
 
 type NavGroup = {
   id: string
   label: string
+  // A small label after the name (Beta), as on items.
+  tag?: string
   items: NavItem[]
   adminOnly?: boolean
   // requiredPermission hides the entire group when the user lacks the
@@ -212,7 +217,7 @@ export default function Layout() {
       items: [
         { name: t('nav.namespaces'), href: '/cluster/namespaces', icon: Boxes },
         { name: t('nav.nodes'), href: '/cluster/nodes', icon: Server },
-        { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search },
+        { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search, tag: t('common.beta') },
         { name: t('nav.priorityClasses'), href: '/cluster/priorityclasses', icon: Activity },
         { name: t('nav.runtimeClasses'), href: '/cluster/runtimeclasses', icon: Server },
         { name: t('nav.leases'), href: '/cluster/leases', icon: Clock },
@@ -283,6 +288,7 @@ export default function Layout() {
     {
       id: 'gateway',
       label: t('nav.gateway'),
+      tag: t('common.beta'),
       items: [
         { name: t('nav.gateways'), href: '/gateway/gateways', icon: Waypoints },
         { name: t('nav.gatewayClasses'), href: '/gateway/gatewayclasses', icon: FileCode },
@@ -296,6 +302,7 @@ export default function Layout() {
     {
       id: 'gpu',
       label: t('nav.gpu'),
+      tag: t('common.beta'),
       items: [
         { name: t('nav.gpuDashboard'), href: '/gpu/dashboard', icon: LayoutDashboard },
         { name: t('nav.gpuNodes'), href: '/gpu/nodes', icon: Server },
@@ -451,6 +458,7 @@ export default function Layout() {
                     }`}
                   >
                     <span>{group.label}</span>
+                    {group.tag && <span className="ml-2 normal-case tracking-normal"><BetaTag label={group.tag} /></span>}
                   </button>
                   <div
                     className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
@@ -478,6 +486,7 @@ export default function Layout() {
                           >
                             {Icon && <Icon className="w-4 h-4" />}
                             <span className="font-medium">{item.name}</span>
+                            {item.tag && <BetaTag label={item.tag} />}
                             {item.badge ? (
                               <span
                                 className="ml-auto rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900"

@@ -201,7 +201,7 @@ export default function ClusterHygiene() {
           <span className="text-slate-500">
             {tr('clusterHygiene.generatedAt', 'Scanned {{when}}; not checked: {{namespaces}}.', {
               when: formatWhen(report.generated_at),
-              namespaces: report.excluded_namespaces.length ? report.excluded_namespaces.join(', ') : '—',
+              namespaces: report.excluded_namespaces.length ? report.excluded_namespaces.join(', ') : '-',
             })}
           </span>
         </div>
@@ -278,7 +278,7 @@ export default function ClusterHygiene() {
                     <tr key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`} className="border-t border-slate-700/60 text-slate-300 align-top" data-testid="hygiene-finding-row">
                       <td className="px-3 py-2">{badge(f)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{checkTitle(f.check)}</td>
-                      <td className="px-3 py-2">{f.namespace || '—'}</td>
+                      <td className="px-3 py-2">{f.namespace || '-'}</td>
                       <td className="px-3 py-2">
                         <span className="text-white">{f.kind}/{f.name}</span>
                         {f.container && <span className="text-slate-400"> · {f.container}</span>}
@@ -350,8 +350,8 @@ export default function ClusterHygiene() {
                   <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-history-row">
                     <td className="px-3 py-2 whitespace-nowrap text-white">{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
-                    <td className="px-3 py-2">{h.note || '—'}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{h.counts?.critical ?? '—'} / {h.counts?.warning ?? '—'} / {h.counts?.info ?? '—'} / {h.counts?.exempt ?? '—'}</td>
+                    <td className="px-3 py-2">{h.note || '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{h.counts?.critical ?? '-'} / {h.counts?.warning ?? '-'} / {h.counts?.info ?? '-'} / {h.counts?.exempt ?? '-'}</td>
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => { setViewId(h.id); setTab('findings') }} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-white">
                         {tr('clusterHygiene.open', 'Open')}

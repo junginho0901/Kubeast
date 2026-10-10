@@ -332,7 +332,7 @@ for (const [key, p, route, obj, namespaced] of DELETES) {
   def(key, `k8s-service:DELETE:${p}`, route, async (page) => {
     await openRow(page, name)
     await clickButton(page, /^delete\b|^삭제/i) // the drawer header's only Delete button reads "Delete <Kind>"
-    await confirmDialog(page, /^delete$|^삭제$/i)
+    await confirmDialog(page, /^delete$|^삭제$/i, name)
   }, () => {
     const base = namespaced ? ['-n', NS, 'get', kind, name] : ['get', kind, name]
     const r = kubectl([...base, '-o', 'name'])
@@ -466,7 +466,7 @@ def('cluster-access-revoke', 'auth-service:DELETE:/admin/users/{user_id}/cluster
 
 def('user-reset-password', 'auth-service:POST:/admin/users/{user_id}/reset-password', 'admin/users', async (page, ctx) => {
   const row = await userRow(page, USER_EMAIL)
-  await row.locator('button').filter({ hasText: /reset pw|비밀번호/i }).first().click()
+  await row.locator('button').filter({ hasText: /reset (pw|password)|비밀번호/i }).first().click()
   await acceptConfirm(page)
   await sleep(2000)
   ctx.note = (await uiText(page)).join(' | ').slice(0, 160)

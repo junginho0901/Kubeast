@@ -1,7 +1,7 @@
 import type { ReactNode, ThHTMLAttributes } from 'react'
 import type { LabelValues } from './detailLabel'
 import { fmtRel } from './detailFormat'
-import { useDetailLabel } from './useDetailLabel'
+import { useDetailLabel, useDetailSection } from './useDetailLabel'
 
 /* ── Shared UI primitives for resource detail views ── */
 
@@ -19,19 +19,19 @@ export function Tx({ children, text, values }: { children?: string; text?: strin
   return <>{dl(text ?? children ?? '', values)}</>
 }
 
-// "(none)" placeholder through the catalog ("(없음)" in Korean).
+// Placeholder for an empty list or section ("없음" in Korean); an empty cell shows "-".
 export function NoneText({ className = 'text-slate-400 text-xs' }: { className?: string }) {
   const dl = useDetailLabel()
-  return <span className={className}>{dl('(none)')}</span>
+  return <span className={className}>{dl('None')}</span>
 }
 
 // titleValues fill {{placeholders}} in the title ("Used By Pods ({{n}})").
 export function InfoSection({ title, titleValues, children, actions }: { title: string; titleValues?: LabelValues; children: ReactNode; actions?: ReactNode }) {
-  const dl = useDetailLabel()
+  const ds = useDetailSection()
   return (
     <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-slate-400">{dl(title, titleValues)}</p>
+        <p className="text-xs text-slate-400">{ds(title, titleValues)}</p>
         {actions}
       </div>
       {children}
@@ -56,13 +56,14 @@ export function InfoGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">{children}</div>
 }
 
-export function StatusBadge({ status }: { status: string }) {
+// label: the text on screen when it differs from the value the colour is picked from.
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const lower = (status || '').toLowerCase()
   let cls = 'badge-info'
   if (['active', 'running', 'ready', 'bound', 'available', 'true', 'succeeded', 'completed'].some(s => lower.includes(s))) cls = 'badge-success'
   else if (['pending', 'warning', 'terminating', 'unknown'].some(s => lower.includes(s))) cls = 'badge-warning'
   else if (['failed', 'error', 'crashloopbackoff', 'false', 'notready', 'lost'].some(s => lower.includes(s))) cls = 'badge-error'
-  return <span className={`badge ${cls}`}>{status || '-'}</span>
+  return <span className={`badge ${cls}`} title={label && label !== status ? status : undefined}>{label || status || '-'}</span>
 }
 
 export function SummaryBadge({ label, value, color }: { label: string; value: string | number; color?: 'green' | 'amber' | 'red' | 'default' }) {
@@ -80,7 +81,7 @@ export function SummaryBadge({ label, value, color }: { label: string; value: st
   )
 }
 
-export function KeyValueTags({ data, emptyText = '(none)' }: { data?: Record<string, string>; emptyText?: string }) {
+export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<string, string>; emptyText?: string }) {
   const dl = useDetailLabel()
   const entries = data ? Object.entries(data) : []
   if (entries.length === 0) return <span className="text-slate-400 text-xs">{dl(emptyText)}</span>
@@ -102,7 +103,7 @@ export function KeyValueTags({ data, emptyText = '(none)' }: { data?: Record<str
 
 export function ConditionsTable({ conditions }: { conditions: any[] }) {
   const dl = useDetailLabel()
-  if (!conditions || conditions.length === 0) return <span className="text-slate-400 text-xs">{dl('(none)')}</span>
+  if (!conditions || conditions.length === 0) return <span className="text-slate-400 text-xs">{dl('None')}</span>
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs table-fixed min-w-[700px]">
@@ -133,7 +134,7 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
 
 export function EventsTable({ events }: { events: any[] }) {
   const dl = useDetailLabel()
-  if (!events || events.length === 0) return <span className="text-slate-400 text-xs">{dl('(none)')}</span>
+  if (!events || events.length === 0) return <span className="text-slate-400 text-xs">{dl('None')}</span>
   const badge = (type?: string | null) => {
     const t = (type || '').toLowerCase()
     if (t.includes('warning')) return 'badge-warning'

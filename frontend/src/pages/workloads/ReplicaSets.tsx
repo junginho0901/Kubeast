@@ -18,6 +18,7 @@ import {
 import { applyReplicaSetWatchEvent } from './replicasets/replicaSetWatchNormalize'
 import { ReplicaSetFilters } from './replicasets/ReplicaSetFilters'
 import { ReplicaSetTable } from './replicasets/ReplicaSetTable'
+import { workloadStatusText } from '@/utils/workloadStatus'
 
 export default function ReplicaSets() {
   const queryClient = useQueryClient()
@@ -65,6 +66,7 @@ export default function ReplicaSets() {
     if (!Array.isArray(replicasets)) return [] as ReplicaSetInfo[]
     if (!searchQuery.trim()) return replicasets
     const q = searchQuery.toLowerCase()
+    const label = (k: string, f: string) => t(k, { defaultValue: f })
     return replicasets.filter((rs) => {
       const imagesText = (rs.images || []).join(',')
       const containersText = (rs.containers || []).join(',')
@@ -72,12 +74,12 @@ export default function ReplicaSets() {
       return rs.name.toLowerCase().includes(q)
         || rs.namespace.toLowerCase().includes(q)
         || (rs.owner_deployment || '').toLowerCase().includes(q)
-        || (rs.status || '').toLowerCase().includes(q)
+        || workloadStatusText(label, rs.status).includes(q)
         || imagesText.toLowerCase().includes(q)
         || containersText.toLowerCase().includes(q)
         || selectorText.toLowerCase().includes(q)
     })
-  }, [replicasets, searchQuery])
+  }, [replicasets, searchQuery, t])
 
   const summary = useMemo(() => {
     const total = filteredReplicaSets.length

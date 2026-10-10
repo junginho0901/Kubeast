@@ -1,6 +1,6 @@
 {
   "apiKeys": {
-    "title": "API keys",
+    "title": "API 키",
     "subtitle": "스크립트·CI용 자격입니다. 키는 짧은 액세스 토큰으로 교환해 쓰며, 내 권한을 넘는 일은 할 수 없습니다.",
     "create": "키 발급",
     "name": "이름",
@@ -30,7 +30,7 @@
   },
   "clusterHygiene": {
     "title": "Cluster hygiene",
-    "subtitle": "클러스터를 내 권한으로 읽어 설정상 위험을 모은다 — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, ServiceAccount 토큰, RBAC, TLS 만료. 검토하고 내보내고 서명한다.",
+    "subtitle": "클러스터를 내 권한으로 읽어 설정상 위험을 모읍니다 — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, ServiceAccount 토큰, RBAC, TLS 만료. 검토하고 내보내고 서명합니다.",
     "cluster": "클러스터",
     "refresh": "다시 점검",
     "scanning": "점검 중...",
@@ -94,7 +94,7 @@
         "requests": "CPU·메모리 requests 없음"
       },
       "ns": {
-        "pss-label": "PSS enforce 라벨 없는 Namespace",
+        "pss-label": "PSS enforce 레이블 없는 Namespace",
         "network-policy": "NetworkPolicy 없는 Namespace",
         "default-used": "default Namespace 사용"
       },
@@ -165,7 +165,7 @@
       "globalRole": "전역 역할",
       "authSource": "인증",
       "lastLogin": "마지막 로그인",
-      "created": "생성",
+      "created": "생성 시각",
       "grantsKeys": "클러스터 / 키 / 임시",
       "flags": "플래그",
       "cluster": "클러스터",
@@ -216,6 +216,11 @@
       "button": "검토 완료",
       "saved": "{{when}}에 서명을 저장했습니다.",
       "failed": "서명을 저장하지 못했습니다."
+    },
+    "auth": {
+      "password": "비밀번호",
+      "oidc": "OIDC",
+      "api_key": "API 키"
     }
   },
   "accessRequests": {
@@ -294,7 +299,7 @@
     "workloads": "Workloads",
     "storage": "Storage",
     "network": "Network",
-    "gateway": "Gateway (Beta)",
+    "gateway": "Gateway",
     "security": "Security",
     "configuration": "Configuration",
     "customResources": "Custom Resources",
@@ -308,7 +313,7 @@
     "nodes": "Nodes",
     "resourceGraph": "Resource Graph",
     "timeline": "Change History",
-    "advancedSearch": "Advanced Search (Beta)",
+    "advancedSearch": "Advanced Search",
     "pods": "Pods",
     "deployments": "Deployments",
     "statefulSets": "StatefulSets",
@@ -333,7 +338,7 @@
     "referenceGrants": "ReferenceGrants",
     "backendTlsPolicies": "BackendTLSPolicies",
     "policies": "Policies",
-    "gpu": "GPU (Beta)",
+    "gpu": "GPU",
     "gpuDashboard": "GPU Dashboard",
     "gpuNodes": "GPU Nodes",
     "gpuPods": "GPU Pods",
@@ -365,19 +370,19 @@
     "aiModels": "AI Models",
     "nodeShell": "Node Shell",
     "auditLogs": "Audit Logs",
-    "organizations": "Team",
+    "organizations": "Teams",
     "helmReleases": "Releases",
     "clusters": "Clusters",
     "aiUsage": "AI Usage",
     "sessionRecordings": "Session recordings"
   },
   "layout": {
-    "accountTitle": "설정",
-    "account": "설정",
+    "accountTitle": "Settings",
+    "account": "Settings",
     "logout": "로그아웃",
     "forbidden": {
       "title": "권한 없음",
-      "body": "이 클러스터에서 {{resources}}을(를) 볼 권한이 없습니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
+      "body": "{{resources}}: 이 클러스터에서 볼 권한이 없습니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
       "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles)."
     },
     "clusterChecking": "연결 확인 중...",
@@ -393,7 +398,6 @@
     "createTitle": "YAML로 Pod 생성",
     "delete": "Pod 삭제",
     "deleteTitle": "Pod 삭제",
-    "deleteConfirm": "\"{{namespace}}\" Namespace의 Pod \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
     "searchPlaceholder": "Pod 이름 검색...",
     "refresh": "새로고침",
     "forceRefreshTitle": "새로고침 (강제 갱신)",
@@ -407,7 +411,7 @@
       "ready": "준비됨",
       "status": "상태",
       "restarts": "재시작",
-      "age": "생성 시각",
+      "age": "경과 시간",
       "node": "Node",
       "podIp": "Pod IP"
     },
@@ -449,35 +453,34 @@
       "namespace": "Namespace",
       "name": "이름",
       "ready": "준비됨",
-      "updated": "최신 반영",
-      "available": "가용",
+      "updated": "최신",
+      "available": "사용 가능",
       "status": "상태",
       "image": "이미지",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "healthy": "정상",
       "degraded": "저하",
-      "unavailable": "비가용"
+      "unavailable": "사용 불가"
     },
     "noResults": "Deployment를 찾을 수 없습니다.",
     "delete": {
       "button": "Deployment 삭제",
-      "title": "Deployment 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 Deployment \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "Deployment 삭제"
     }
   },
   "servicesPage": {
     "title": "Services",
-    "subtitle": "Namespace 전반의 서비스를 조회하고 관리합니다.",
-    "create": "서비스 생성",
-    "createTitle": "YAML로 서비스 생성",
+    "subtitle": "Namespace 전반의 Service를 조회하고 관리합니다.",
+    "create": "Service 생성",
+    "createTitle": "YAML로 Service 생성",
     "refresh": "새로고침",
     "refreshTitle": "새로고침 (강제)",
-    "searchPlaceholder": "서비스 이름 검색...",
+    "searchPlaceholder": "Service 이름 검색...",
     "allNamespaces": "전체 Namespace",
-    "matchCount": "{{count}}개의 서비스가 검색되었습니다.",
+    "matchCount": "{{count}}개의 Service가 검색되었습니다.",
     "table": {
       "namespace": "Namespace",
       "name": "이름",
@@ -486,7 +489,7 @@
       "externalIp": "외부 IP",
       "ports": "포트",
       "selector": "셀렉터",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -494,11 +497,10 @@
       "exposed": "외부 노출",
       "headless": "Headless"
     },
-    "noResults": "서비스를 찾을 수 없습니다.",
+    "noResults": "Service를 찾을 수 없습니다.",
     "delete": {
-      "button": "서비스 삭제",
-      "title": "서비스 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 서비스 \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "button": "Service 삭제",
+      "title": "Service 삭제"
     }
   },
   "endpointsPage": {
@@ -518,7 +520,7 @@
       "ports": "포트",
       "ready": "준비됨",
       "notReady": "준비 안 됨",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -529,8 +531,7 @@
     "noResults": "Endpoints를 찾을 수 없습니다.",
     "delete": {
       "button": "Endpoints 삭제",
-      "title": "Endpoints 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 Endpoints \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "Endpoints 삭제"
     }
   },
   "endpointSlicesPage": {
@@ -546,14 +547,14 @@
     "table": {
       "namespace": "Namespace",
       "name": "이름",
-      "service": "서비스",
+      "service": "Service",
       "addressType": "주소 타입",
       "ports": "포트",
       "endpoints": "Endpoints",
       "total": "전체",
       "ready": "준비됨",
       "notReady": "준비 안 됨",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -564,8 +565,7 @@
     "noResults": "EndpointSlice를 찾을 수 없습니다.",
     "delete": {
       "button": "EndpointSlice 삭제",
-      "title": "EndpointSlice 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 EndpointSlice \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "EndpointSlice 삭제"
     }
   },
   "ingressesPage": {
@@ -585,7 +585,7 @@
       "hosts": "호스트",
       "routes": "라우트",
       "addresses": "주소",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -596,8 +596,7 @@
     "noResults": "Ingress를 찾을 수 없습니다.",
     "delete": {
       "button": "Ingress 삭제",
-      "title": "Ingress 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 Ingress \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "Ingress 삭제"
     }
   },
   "ingressClassesPage": {
@@ -614,7 +613,7 @@
       "controller": "컨트롤러",
       "default": "기본값",
       "parameters": "파라미터",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -625,8 +624,7 @@
     "noResults": "IngressClass를 찾을 수 없습니다.",
     "delete": {
       "button": "IngressClass 삭제",
-      "title": "IngressClass 삭제",
-      "confirm": "IngressClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "IngressClass 삭제"
     }
   },
   "networkPoliciesPage": {
@@ -647,7 +645,7 @@
       "ingressRules": "Ingress 규칙",
       "egressRules": "Egress 규칙",
       "defaultDeny": "기본 차단",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -658,8 +656,7 @@
     "noResults": "NetworkPolicy을 찾을 수 없습니다.",
     "delete": {
       "button": "NetworkPolicy 삭제",
-      "title": "NetworkPolicy 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 NetworkPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "NetworkPolicy 삭제"
     }
   },
   "gatewaysPage": {
@@ -680,7 +677,7 @@
       "listeners": "리스너",
       "attachedRoutes": "연결 라우트",
       "addresses": "주소",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -691,8 +688,7 @@
     "noResults": "Gateway를 찾을 수 없습니다.",
     "delete": {
       "button": "Gateway 삭제",
-      "title": "Gateway 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 Gateway \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "Gateway 삭제"
     }
   },
   "gatewayClassesPage": {
@@ -709,7 +705,7 @@
       "controller": "컨트롤러",
       "conditions": "조건",
       "parametersRef": "파라미터 참조",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -720,8 +716,7 @@
     "noResults": "GatewayClass를 찾을 수 없습니다.",
     "delete": {
       "button": "GatewayClass 삭제",
-      "title": "GatewayClass 삭제",
-      "confirm": "GatewayClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "GatewayClass 삭제"
     }
   },
   "httpRoutesPage": {
@@ -742,7 +737,7 @@
       "rules": "규칙",
       "backendRefs": "백엔드 참조",
       "status": "상태",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -753,8 +748,7 @@
     "noResults": "HTTPRoute를 찾을 수 없습니다.",
     "delete": {
       "button": "HTTPRoute 삭제",
-      "title": "HTTPRoute 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 HTTPRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "HTTPRoute 삭제"
     }
   },
   "grpcRoutesPage": {
@@ -775,7 +769,7 @@
       "rules": "규칙",
       "backendRefs": "백엔드 참조",
       "status": "상태",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -786,8 +780,7 @@
     "noResults": "GRPCRoute를 찾을 수 없습니다.",
     "delete": {
       "button": "GRPCRoute 삭제",
-      "title": "GRPCRoute 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 GRPCRoute \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "GRPCRoute 삭제"
     }
   },
   "referenceGrantsPage": {
@@ -805,19 +798,18 @@
       "name": "이름",
       "from": "From",
       "to": "To",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "withFrom": "From 있음",
       "withTo": "To 있음",
-      "withLabels": "라벨 있음"
+      "withLabels": "레이블 있음"
     },
     "noResults": "ReferenceGrant를 찾을 수 없습니다.",
     "delete": {
       "button": "ReferenceGrant 삭제",
-      "title": "ReferenceGrant 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 ReferenceGrant \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "ReferenceGrant 삭제"
     }
   },
   "backendTLSPoliciesPage": {
@@ -835,7 +827,7 @@
       "name": "이름",
       "targetRef": "대상 참조",
       "status": "상태",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -845,8 +837,7 @@
     "noResults": "BackendTLSPolicy를 찾을 수 없습니다.",
     "delete": {
       "button": "BackendTLSPolicy 삭제",
-      "title": "BackendTLSPolicy 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 BackendTLSPolicy \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "BackendTLSPolicy 삭제"
     }
   },
   "policiesPage": {
@@ -864,7 +855,7 @@
       "namespace": "Namespace",
       "target": "대상",
       "accepted": "수락",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -873,7 +864,7 @@
     },
     "accepted": {
       "yes": "예",
-      "no": "아니오"
+      "no": "아니요"
     },
     "kinds": {
       "title": "조회한 종류",
@@ -881,7 +872,7 @@
       "forbidden": "권한 없음"
     },
     "source": {
-      "label": "라벨 CRD",
+      "label": "레이블 CRD",
       "builtin": "내장",
       "configured": "설정"
     },
@@ -900,18 +891,18 @@
       "namespace": "Namespace",
       "name": "이름",
       "ready": "준비됨",
-      "upToDate": "최신 반영",
-      "available": "가용",
+      "upToDate": "최신",
+      "available": "사용 가능",
       "status": "상태",
-      "age": "생성 시각",
-      "service": "서비스"
+      "age": "경과 시간",
+      "service": "Service"
     },
     "stats": {
       "total": "전체",
       "healthy": "정상",
       "idle": "유휴",
       "degraded": "저하",
-      "unavailable": "비가용"
+      "unavailable": "사용 불가"
     },
     "paging": {
       "empty": "0개 중 0 표시",
@@ -922,8 +913,7 @@
     "noResults": "StatefulSet을 찾을 수 없습니다.",
     "delete": {
       "button": "StatefulSet 삭제",
-      "title": "StatefulSet 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 StatefulSet \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "StatefulSet 삭제"
     }
   },
   "daemonsets": {
@@ -942,25 +932,24 @@
       "ready": "준비됨",
       "current": "현재",
       "desired": "목표",
-      "updated": "업데이트됨",
-      "available": "가용",
+      "updated": "최신",
+      "available": "사용 가능",
       "status": "상태",
       "nodeSelector": "Node 셀렉터",
       "images": "이미지",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "healthy": "정상",
       "idle": "유휴",
       "degraded": "저하",
-      "unavailable": "비가용"
+      "unavailable": "사용 불가"
     },
     "noResults": "DaemonSet을 찾을 수 없습니다.",
     "delete": {
       "button": "DaemonSet 삭제",
-      "title": "DaemonSet 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 DaemonSet \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "DaemonSet 삭제"
     }
   },
   "replicasets": {
@@ -979,26 +968,25 @@
       "current": "현재",
       "desired": "목표",
       "ready": "준비됨",
-      "available": "가용",
+      "available": "사용 가능",
       "status": "상태",
       "containers": "컨테이너",
       "images": "이미지",
       "selector": "셀렉터",
       "owner": "소유자",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "healthy": "정상",
       "idle": "유휴",
       "degraded": "저하",
-      "unavailable": "비가용"
+      "unavailable": "사용 불가"
     },
     "noResults": "ReplicaSet을 찾을 수 없습니다.",
     "delete": {
       "button": "ReplicaSet 삭제",
-      "title": "ReplicaSet 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 ReplicaSet \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "ReplicaSet 삭제"
     }
   },
   "jobs": {
@@ -1019,7 +1007,7 @@
       "duration": "소요 시간",
       "containers": "컨테이너",
       "images": "이미지",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1030,8 +1018,7 @@
     "noResults": "Job을 찾을 수 없습니다.",
     "delete": {
       "button": "Job 삭제",
-      "title": "Job 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 Job \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "Job 삭제"
     }
   },
   "cronjobs": {
@@ -1053,7 +1040,7 @@
       "lastSchedule": "마지막 실행",
       "containers": "컨테이너",
       "images": "이미지",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1064,8 +1051,7 @@
     "noResults": "CronJob을 찾을 수 없습니다.",
     "delete": {
       "button": "CronJob 삭제",
-      "title": "CronJob 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 CronJob \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "CronJob 삭제"
     }
   },
   "hpas": {
@@ -1085,7 +1071,7 @@
       "min": "최소",
       "max": "최대",
       "replicas": "레플리카",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1095,8 +1081,7 @@
     "noResults": "HPA가 없습니다.",
     "delete": {
       "button": "HPA 삭제",
-      "title": "HPA 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 HPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "HPA 삭제"
     }
   },
   "vpas": {
@@ -1117,7 +1102,7 @@
       "cpu": "CPU",
       "memory": "메모리",
       "provided": "제공 상태",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1127,8 +1112,7 @@
     "noResults": "VPA가 없습니다.",
     "delete": {
       "button": "VPA 삭제",
-      "title": "VPA 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 VPA \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "VPA 삭제"
     }
   },
   "pdbs": {
@@ -1139,7 +1123,7 @@
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "searchPlaceholder": "이름으로 PDB 검색...",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "matchCount": "{{count}}개 PDB 일치.",
     "table": {
       "namespace": "Namespace",
@@ -1149,7 +1133,7 @@
       "allowedDisruptions": "허용 중단",
       "currentHealthy": "현재",
       "desiredHealthy": "목표",
-      "age": "생성 시간"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1159,8 +1143,7 @@
     "noResults": "PDB가 없습니다.",
     "delete": {
       "button": "PDB 삭제",
-      "title": "PDB 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 PDB \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "PDB 삭제"
     }
   },
   "priorityClasses": {
@@ -1177,7 +1160,7 @@
       "value": "값",
       "globalDefault": "글로벌 기본값",
       "preemptionPolicy": "선점 정책",
-      "age": "생성 시간"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1187,8 +1170,7 @@
     "noResults": "PriorityClass가 없습니다.",
     "delete": {
       "button": "PriorityClass 삭제",
-      "title": "PriorityClass 삭제",
-      "confirm": "PriorityClass \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이것은 클러스터 수준 리소스입니다."
+      "title": "PriorityClass 삭제"
     }
   },
   "runtimeClasses": {
@@ -1203,7 +1185,7 @@
     "table": {
       "name": "이름",
       "handler": "핸들러",
-      "age": "생성 시간"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1212,8 +1194,7 @@
     "noResults": "RuntimeClass가 없습니다.",
     "delete": {
       "button": "RuntimeClass 삭제",
-      "title": "RuntimeClass 삭제",
-      "confirm": "RuntimeClass \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이것은 클러스터 수준 리소스입니다."
+      "title": "RuntimeClass 삭제"
     }
   },
   "mutatingWebhooks": {
@@ -1228,7 +1209,7 @@
     "table": {
       "name": "이름",
       "webhooks": "웹훅 수",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체 구성",
@@ -1248,7 +1229,7 @@
     "table": {
       "name": "이름",
       "webhooks": "웹훅 수",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체 구성",
@@ -1258,7 +1239,7 @@
   },
   "leases": {
     "title": "Leases",
-    "subtitle": "Namespace 전반의 코디네이션 Lease를 관리합니다.",
+    "subtitle": "Namespace 전반의 coordination.k8s.io Lease를 관리합니다.",
     "create": "Lease 생성",
     "createTitle": "YAML로 Lease 생성",
     "refresh": "새로고침",
@@ -1271,7 +1252,7 @@
       "namespace": "Namespace",
       "holder": "홀더",
       "duration": "유지 시간 (초)",
-      "age": "생성 시간"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1281,8 +1262,7 @@
     "noResults": "Lease가 없습니다.",
     "delete": {
       "button": "Lease 삭제",
-      "title": "Lease 삭제",
-      "confirm": "Lease \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "Lease 삭제"
     }
   },
   "resourceQuotas": {
@@ -1299,7 +1279,7 @@
       "name": "이름",
       "namespace": "Namespace",
       "requests": "리소스 수",
-      "age": "생성 시간"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1309,8 +1289,7 @@
     "noResults": "ResourceQuota가 없습니다.",
     "delete": {
       "button": "ResourceQuota 삭제",
-      "title": "ResourceQuota 삭제",
-      "confirm": "ResourceQuota \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "ResourceQuota 삭제"
     }
   },
   "limitRanges": {
@@ -1327,18 +1306,17 @@
       "name": "이름",
       "namespace": "Namespace",
       "types": "타입",
-      "age": "생성 시간"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
-      "containerLimits": "컨테이너 리밋",
-      "podLimits": "Pod 리밋"
+      "containerLimits": "컨테이너 제한",
+      "podLimits": "Pod 제한"
     },
     "noResults": "LimitRange가 없습니다.",
     "delete": {
       "button": "LimitRange 삭제",
-      "title": "LimitRange 삭제",
-      "confirm": "LimitRange \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "LimitRange 삭제"
     }
   },
   "pvcs": {
@@ -1360,7 +1338,7 @@
       "requested": "요청량",
       "capacity": "용량",
       "accessModes": "접근 모드",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1371,8 +1349,7 @@
     "noResults": "PVC를 찾을 수 없습니다.",
     "delete": {
       "button": "PVC 삭제",
-      "title": "PVC 삭제",
-      "confirm": "\"{{namespace}}\" Namespace의 PVC \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "PVC 삭제"
     }
   },
   "pvs": {
@@ -1394,20 +1371,19 @@
       "claim": "클레임",
       "volumeMode": "볼륨 모드",
       "source": "소스",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "bound": "바인드됨",
-      "available": "가용",
+      "available": "사용 가능",
       "released": "해제됨",
       "failed": "실패"
     },
     "noResults": "PV를 찾을 수 없습니다.",
     "delete": {
       "button": "PV 삭제",
-      "title": "PV 삭제",
-      "confirm": "PV \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "PV 삭제"
     }
   },
   "storageclasses": {
@@ -1427,19 +1403,18 @@
       "volumeBindingMode": "볼륨 바인딩 모드",
       "allowVolumeExpansion": "볼륨 확장 허용",
       "parameters": "파라미터",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "default": "기본값",
       "expandable": "확장 가능",
-      "waitForFirstConsumer": "WaitForFirstConsumer"
+      "waitForFirstConsumer": "바인딩 모드: WaitForFirstConsumer"
     },
     "noResults": "StorageClass를 찾을 수 없습니다.",
     "delete": {
       "button": "StorageClass 삭제",
-      "title": "StorageClass 삭제",
-      "confirm": "StorageClass \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "StorageClass 삭제"
     }
   },
   "volumeattachments": {
@@ -1458,7 +1433,7 @@
       "node": "Node",
       "attached": "Attach 상태",
       "error": "오류",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
@@ -1469,8 +1444,7 @@
     "noResults": "VolumeAttachment를 찾을 수 없습니다.",
     "delete": {
       "button": "VolumeAttachment 삭제",
-      "title": "VolumeAttachment 삭제",
-      "confirm": "VolumeAttachment \"{{name}}\"을(를) 정말 삭제하시겠습니까?"
+      "title": "VolumeAttachment 삭제"
     }
   },
   "nodes": {
@@ -1484,7 +1458,7 @@
     "noResults": "Node를 찾을 수 없습니다.",
     "top": {
       "title": "리소스 사용량 상위 Node",
-      "loading": "메트릭 로딩 중...",
+      "loading": "메트릭 불러오는 중...",
       "error": "메트릭을 불러올 수 없습니다.",
       "empty": "메트릭 데이터가 없습니다.",
       "unavailable": "이 클러스터에 메트릭 서버가 없습니다"
@@ -1498,7 +1472,7 @@
       "version": "버전",
       "internalIp": "내부 IP",
       "externalIp": "외부 IP",
-      "age": "생성 시각"
+      "age": "경과 시간"
     },
     "actions": {
       "cordon": "스케줄링 비활성화",
@@ -1518,7 +1492,6 @@
     "delete": {
       "button": "Node 삭제",
       "title": "Node 삭제",
-      "confirm": "Node \"{{name}}\"을(를) 정말 삭제하시겠습니까?",
       "warning": "Node를 삭제하면 해당 Node에 스케줄된 워크로드에 영향이 생길 수 있습니다."
     },
     "drain": {
@@ -1545,7 +1518,7 @@
       "summary": {
         "ready": "Ready",
         "readyYes": "예",
-        "readyNo": "아니오",
+        "readyNo": "아니요",
         "taints": "Taints",
         "conditions": "Conditions"
       },
@@ -1562,7 +1535,7 @@
         "applying": "적용 중...",
         "applied": "적용 완료",
         "cancel": "취소",
-        "loading": "YAML 로딩 중...",
+        "loading": "YAML 불러오는 중...",
         "error": "YAML을 불러오지 못했습니다.",
         "readonly": "읽기 전용 계정입니다.",
         "editHint": "admin 권한에서만 편집할 수 있습니다.",
@@ -1570,7 +1543,7 @@
         "refreshing": "새로고침 중...",
         "unsaved": "저장되지 않은 YAML 변경사항이 있습니다. 폐기할까요?"
       },
-      "loading": "Node 상세 로딩 중...",
+      "loading": "Node 상세 불러오는 중...",
       "error": "Node 상세를 불러오지 못했습니다.",
       "notFound": "Node 상세 정보가 없습니다.",
       "uptime": "업타임",
@@ -1582,7 +1555,7 @@
       "version": "버전",
       "system": "시스템 정보",
       "noMetrics": "메트릭 없음 (metrics-server 미설치)",
-      "labels": "라벨",
+      "labels": "레이블",
       "annotations": "어노테이션",
       "pods": "Pod",
       "eventsTitle": "이벤트",
@@ -1616,7 +1589,7 @@
         "status": "상태",
         "restarts": "재시작",
         "ip": "IP",
-        "age": "생성 시각"
+        "age": "경과 시간"
       }
     },
     "events": {
@@ -1660,7 +1633,7 @@
     "selectAll": "전체 선택",
     "deselectAll": "선택 해제",
     "deleteWithCount": "삭제 ({{count}})",
-    "loading": "로딩 중...",
+    "loading": "불러오는 중...",
     "loadMoreLoading": "더 불러오는 중...",
     "loadMore": "더 불러오기",
     "endOfHistory": "마지막 히스토리입니다.",
@@ -1669,9 +1642,9 @@
     "rename": "제목 바꾸기",
     "delete": "삭제",
     "title": "AI Chat",
-    "subtitle": "자연어로 클러스터를 질의하고 문제를 해결하세요",
+    "subtitle": "자연어로 클러스터에 묻고 문제를 해결합니다.",
     "emptyTitle": "새 대화를 시작하세요",
-    "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요",
+    "emptySubtitle": "아래 질문을 클릭하거나 직접 입력하세요.",
     "resultZipDownload": "Result ZIP 다운로드",
     "copyMessage": "복사",
     "approval": {
@@ -1701,15 +1674,15 @@
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
     "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",
     "quickQuestions": [
-      "현재 메모리 많이 쓰는 파드들 알려줘",
-      "현재 노드들 상태 알려줘",
-      "kube-system 네임스페이스의 Pod 상태를 확인해줘",
-      "default 네임스페이스의 Service 목록을 조회해줘"
+      "현재 메모리를 많이 쓰는 Pod를 알려줘",
+      "현재 Node 상태를 알려줘",
+      "kube-system Namespace의 Pod 상태를 확인해줘",
+      "default Namespace의 Service 목록을 조회해줘"
     ]
   },
   "monitoring": {
     "title": "Monitoring",
-    "subtitle": "Node 및 Pod의 실시간 리소스 사용량을 모니터링하세요",
+    "subtitle": "Node와 Pod의 실시간 리소스 사용량을 봅니다.",
     "metricsUnavailable": "이 클러스터에 메트릭 서버가 없습니다",
     "tabs": {
       "nodes": "Node 리소스",
@@ -1722,7 +1695,7 @@
     },
     "pods": {
       "title": "Pod 리소스 사용량",
-      "subtitle": "Namespace별 필터링 지원",
+      "subtitle": "Namespace별로 걸러 볼 수 있습니다.",
       "totalPods": "총 Pod 수",
       "totalCpu": "총 CPU 사용량",
       "totalMemory": "총 Memory 사용량",
@@ -1735,13 +1708,13 @@
     "metricTimestamp": "메트릭 기준 수집 시각: {{time}}",
     "fetchNote": "* 데이터를 가져오는 데 5초 이상 걸릴 수 있습니다",
     "loading": "데이터를 불러오는 중...",
-    "metricsServerHint": "metrics-server가 설치되어 있는지 확인하세요",
+    "metricsServerHint": "metrics-server가 설치되어 있는지 확인하세요.",
     "namespace": {
       "label": "Namespace 선택",
       "placeholder": "Namespace를 선택하세요",
       "all": "전체 Namespace",
       "promptTitle": "Namespace를 선택하세요",
-      "promptSubtitle": "Pod 리소스 사용량을 확인하려면 위에서 Namespace를 선택하세요"
+      "promptSubtitle": "Pod 리소스 사용량을 확인하려면 위에서 Namespace를 선택하세요."
     },
     "table": {
       "pod": "Pod",
@@ -1755,13 +1728,13 @@
   },
   "common": {
     "notAvailable": "N/A",
-    "controllerManaged": "보통 쿠버네티스가 직접 만드는 객체입니다",
-    "none": "(없음)",
+    "controllerManaged": "보통 Kubernetes가 직접 만드는 객체입니다",
+    "none": "없음",
     "empty": "-",
-    "forbiddenEmpty": "이 클러스터에서 {{resource}}을(를) 볼 권한이 없습니다.",
+    "forbiddenEmpty": "{{resource}}: 이 클러스터에서 볼 권한이 없습니다.",
     "notInstalledEmpty": "이 클러스터에는 {{resource}}이(가) 설치되어 있지 않습니다(CustomResourceDefinition 없음).",
-    "loadErrorEmpty": "{{resource}}을(를) 불러오지 못했습니다(서버 오류 {{code}}).",
-    "loadErrorEmptyNetwork": "{{resource}}을(를) 불러오지 못했습니다(서버 응답 없음).",
+    "loadErrorEmpty": "{{resource}}: 불러오지 못했습니다(서버 오류 {{code}}).",
+    "loadErrorEmptyNetwork": "{{resource}}: 불러오지 못했습니다(서버 응답 없음).",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
     "deleteKindConfirm": "{{kind}} \"{{name}}\" 삭제를 진행할까요?",
@@ -1769,7 +1742,7 @@
     "unknown": "알 수 없음",
     "close": "닫기",
     "info": "정보",
-    "loading": "로딩 중...",
+    "loading": "불러오는 중...",
     "refresh": "새로고침",
     "refreshing": "새로고침 중...",
     "copy": "복사",
@@ -1787,14 +1760,14 @@
     "discard": "버리기",
     "confirm": "확인",
     "typeToConfirm": "확인하려면 이름을 그대로 입력하세요",
-    "deleteRefused": "쿠버네티스는 {{kind}} \"{{name}}\" 삭제를 허용하지 않습니다.",
+    "deleteRefused": "Kubernetes는 {{kind}} \"{{name}}\" 삭제를 허용하지 않습니다.",
     "systemObject": {
       "title": "시스템 객체입니다.",
-      "systemNamespace": "쿠버네티스 시스템 Namespace(kube-system·kube-public·kube-node-lease)에 속한 객체입니다.",
+      "systemNamespace": "Kubernetes 시스템 Namespace(kube-system·kube-public·kube-node-lease)에 속한 객체입니다.",
       "node": "클러스터의 Node입니다.",
       "crd": "CustomResourceDefinition을 지우면 그 종류의 객체가 모두 지워집니다.",
       "helm": "Helm이 관리합니다. 다음 업그레이드 때 다시 생기거나 릴리스가 어긋납니다.",
-      "bootstrap": "쿠버네티스 기본 RBAC(kubernetes.io/bootstrapping)입니다.",
+      "bootstrap": "Kubernetes 기본 RBAC(kubernetes.io/bootstrapping)입니다.",
       "systemRbac": "시스템 권한(system:*, cluster-admin)입니다."
     },
     "cancel": "취소",
@@ -1807,7 +1780,7 @@
     "selectNamespace": "Namespace를 선택하세요",
     "refreshForce": "새로고침 (강제 갱신)",
     "noOptions": "옵션 없음",
-    "loadingEditor": "에디터 로딩 중...",
+    "loadingEditor": "에디터 불러오는 중...",
     "back": "뒤로",
     "describeUnavailable": "지금은 상세 필드 일부를 볼 수 없습니다.",
     "no": "아니요",
@@ -1826,13 +1799,14 @@
       "confirm": "Argo CD 애플리케이션 \"{{app}}\"이(가) 관리하는 객체입니다. 여기서 바꾸면 다음 동기화 때 되돌아갑니다. Git에서 바꾸는 것이 맞습니다. 그래도 진행할까요?",
       "confirmTitle": "Argo CD가 관리하는 객체",
       "applyAnyway": "그래도 적용"
-    }
+    },
+    "beta": "베타"
   },
   "dashboard": {
     "optimization": {
       "missingMeta": "서버가 meta(finish reason)를 보내지 않았습니다. ai-service가 재빌드/재시작되지 않았을 수 있습니다.",
       "title": "최적화 제안",
-      "subtitle": "워크로드 컨테이너별 requests/limits와 사용량을 비교합니다. 추천값 = CPU 95퍼센타일, 메모리 최대 +15%.",
+      "subtitle": "워크로드 컨테이너별 requests/limits와 사용량을 비교합니다. 추천값은 CPU 95퍼센타일, 메모리 최댓값 +15%입니다.",
       "selectNamespaceTitle": "Namespace 선택",
       "selectNamespace": "Namespace 선택",
       "noNamespaces": "표시할 Namespace가 없습니다",
@@ -1891,9 +1865,9 @@
     "stats": {
       "namespaces": "Namespace",
       "pods": "Pod",
-      "services": "서비스",
+      "services": "Service",
       "deployments": "Deployment",
-      "pvcs": "PVCs",
+      "pvcs": "PVC",
       "nodes": "Node"
     },
     "issues": {
@@ -1930,25 +1904,25 @@
       "loading": "이슈 수집 중...",
       "error": "이슈를 수집하지 못했습니다",
       "none": "이슈가 없습니다",
-      "noneHint": "필터/검색어를 확인하세요",
+      "noneHint": "필터/검색어를 확인하세요.",
       "count": "{{count}}",
       "lastSeen": "마지막 {{age}}",
       "countTimes": "×{{count}}",
       "openHint": "상세 열기"
     },
-    "metricsServerHint": "metrics-server 상태를 확인하세요",
+    "metricsServerHint": "metrics-server 상태를 확인하세요.",
     "title": "Dashboard",
-    "subtitle": "쿠버네티스 클러스터를 한눈에 확인합니다.",
+    "subtitle": "Kubernetes 클러스터를 한눈에 확인합니다.",
     "clusterVersion": "클러스터 버전: {{version}}",
     "refreshTitle": "강제 새로고침",
     "refresh": "새로고침",
     "podStatus": {
       "title": "Pod 상태",
-      "subtitle": "상태별 Pod를 보려면 클릭"
+      "subtitle": "누르면 상태별 Pod를 봅니다."
     },
     "nodeStatus": {
       "title": "Node 상태",
-      "subtitle": "상태별 Node를 보려면 클릭"
+      "subtitle": "누르면 상태별 Node를 봅니다."
     },
     "topPods": {
       "title": "리소스 사용 상위 5개 Pod",
@@ -1996,7 +1970,7 @@
     },
     "storage": {
       "title": "스토리지 분석",
-      "subtitle": "PV/PVC 상태·바인딩과 사용률(Prometheus의 kubelet 볼륨 통계)을 확인합니다",
+      "subtitle": "PV/PVC 상태·바인딩과 사용률(Prometheus의 kubelet 볼륨 통계)을 확인합니다.",
       "usage": "사용률",
       "fillsIn": "{{days}}일 뒤 가득 참",
       "usageUnavailableHint": "CSI 드라이버가 볼륨 통계를 내지 않거나 Prometheus가 kubelet을 수집하지 않습니다",
@@ -2021,25 +1995,25 @@
       "reclaimLabel": "회수 정책",
       "claimLabel": "Claim",
       "topologyTitle": "스토리지 토폴로지",
-      "topologySummary": "Node: {{nodes}} · 엣지: {{edges}}",
-      "noTopologyEdges": "표시할 토폴로지 엣지가 없습니다",
-      "topologyLimit": "최대 50개 엣지만 표시",
-      "topologyLoading": "토폴로지 로딩 중...",
+      "topologySummary": "Node: {{nodes}} · 연결선: {{edges}}",
+      "noTopologyEdges": "표시할 연결선이 없습니다",
+      "topologyLimit": "연결선은 최대 50개만 표시합니다",
+      "topologyLoading": "토폴로지 불러오는 중...",
       "topologyError": "토폴로지 로드 실패",
       "topologyUnavailable": "토폴로지 데이터를 사용할 수 없습니다"
     },
     "unknownError": "알 수 없는 오류",
     "resourceModal": {
-      "loading": "로딩 중...",
+      "loading": "불러오는 중...",
       "total": "총 {{count}}",
       "searchPlaceholder": "검색...",
-      "namespaceSummary": "Pod: {{pods}} | 서비스: {{services}} | Deployment: {{deployments}}",
+      "namespaceSummary": "Pod: {{pods}} | Service: {{services}} | Deployment: {{deployments}}",
       "noSearchResults": "검색 결과가 없습니다",
       "noNamespaces": "Namespace가 없습니다",
       "noPods": "Pod가 없습니다",
       "typeLabel": "타입",
       "clusterIpLabel": "클러스터 IP",
-      "noServices": "서비스가 없습니다",
+      "noServices": "Service가 없습니다",
       "replicasLabel": "레플리카",
       "noDeployments": "Deployment가 없습니다",
       "noPVCs": "PVC가 없습니다",
@@ -2072,7 +2046,7 @@
         "reason": "사유",
         "message": "메시지"
       },
-      "labels": "라벨",
+      "labels": "레이블",
       "annotations": "어노테이션"
     },
     "live": "실시간",
@@ -2109,7 +2083,7 @@
         "includeBroad": "(광범위 포함)",
         "excludeBroad": "(광범위 제외)",
         "total": "{{count}} 항목",
-        "none": "(없음)",
+        "none": "없음",
         "resources": "Resources",
         "table": {
           "apiGroup": "apiGroup",
@@ -2127,7 +2101,7 @@
       "subjects": "Subjects",
       "rulesLabel": "Rules",
       "verbsLabel": "verbs",
-      "none": "(없음)",
+      "none": "없음",
       "resourcesLabel": "resources",
       "apiGroupsLabel": "apiGroups",
       "nonResourceUrlsLabel": "nonResourceURLs",
@@ -2175,9 +2149,9 @@
       "streamFailed": "실시간 보기가 끊겼습니다: {{reason}}",
       "errors": {
         "disabled": "로그 파일 보기가 꺼져 있습니다.",
-        "namespace": "이 네임스페이스에서는 로그 파일 보기가 켜져 있지 않습니다.",
+        "namespace": "이 Namespace에서는 로그 파일 보기가 켜져 있지 않습니다.",
         "path": "설정된 경로 밖의 파일입니다.",
-        "forbidden": "Kubernetes가 이 네임스페이스에서 계정의 pods/exec를 허용하지 않습니다. 클러스터에 kubeast:logfile-reader 바인딩이 있는지 관리자에게 확인하세요.",
+        "forbidden": "Kubernetes가 이 Namespace에서 계정의 pods/exec를 허용하지 않습니다. 클러스터에 kubeast:logfile-reader 바인딩이 있는지 관리자에게 확인하세요.",
         "not_found": "Pod 또는 컨테이너를 찾을 수 없습니다.",
         "no_file": "파일이 없습니다.",
         "tool_missing": "이 컨테이너에는 tail·ls가 없어 파일을 읽을 수 없습니다.",
@@ -2186,7 +2160,7 @@
       }
     },
     "title": "Cluster View",
-    "subtitle": "Node별 Pod 배치를 확인합니다",
+    "subtitle": "Node별 Pod 배치를 확인합니다.",
     "searchPlaceholder": "Pod 이름 검색...",
     "allNamespaces": "전체 Namespace",
     "loading": "데이터를 불러오는 중...",
@@ -2259,42 +2233,42 @@
       "events": "이벤트"
     },
     "manifest": {
-      "loading": "로딩 중..."
+      "loading": "불러오는 중..."
     }
   },
   "namespaces": {
     "loading": "데이터를 불러오는 중...",
     "title": "Namespaces",
-    "subtitle": "클러스터의 모든 Namespace를 확인하고 리소스를 관리하세요",
+    "subtitle": "클러스터의 Namespace를 확인하고 리소스를 관리합니다.",
     "refresh": "새로고침",
     "searchPlaceholder": "Namespace 검색...",
     "matchCount": "{{count}}개의 Namespace가 검색되었습니다",
-    "created": "생성",
+    "created": "생성 시각",
     "noSearchResults": "검색 결과가 없습니다",
     "empty": "Namespace가 없습니다",
     "table": {
       "name": "이름",
       "status": "상태",
-      "labels": "라벨",
-      "age": "생성 시각"
+      "labels": "레이블",
+      "age": "경과 시간"
     },
     "stats": {
       "total": "전체",
       "active": "활성",
       "terminating": "종료 중",
-      "withLabels": "라벨 있음"
+      "withLabels": "레이블 있음"
     },
     "detail": {
       "title": "Namespace 상세",
       "subtitle": "kubectl describe namespace {{name}} 결과",
-      "loading": "Namespace 상세 로딩 중...",
+      "loading": "Namespace 상세 불러오는 중...",
       "error": "Namespace 상세를 불러오지 못했습니다.",
       "notFound": "Namespace 상세 정보가 없습니다.",
       "basicInfo": "기본 정보",
       "name": "이름",
       "status": "상태",
       "createdAt": "생성 시각",
-      "labels": "라벨",
+      "labels": "레이블",
       "annotations": "어노테이션",
       "eventsTitle": "이벤트",
       "events": {
@@ -2317,7 +2291,7 @@
         "applying": "적용 중...",
         "applied": "적용 완료",
         "cancel": "취소",
-        "loading": "YAML 로딩 중...",
+        "loading": "YAML 불러오는 중...",
         "error": "YAML을 불러오지 못했습니다.",
         "readonly": "읽기 전용 계정입니다.",
         "editHint": "write 또는 admin 권한에서 편집할 수 있습니다.",
@@ -2356,10 +2330,10 @@
       "podsTable": {
         "name": "이름",
         "status": "상태",
-        "ready": "준비",
+        "ready": "준비됨",
         "restarts": "재시작",
         "node": "Node",
-        "age": "생성 시각"
+        "age": "경과 시간"
       }
     },
     "create": {
@@ -2379,7 +2353,6 @@
     "delete": {
       "button": "Namespace 삭제",
       "title": "Namespace 삭제",
-      "confirm": "Namespace \"{{name}}\"을(를) 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, Namespace 내 모든 리소스가 삭제됩니다.",
       "warning": "⚠ 이 Namespace의 모든 리소스(Pod, Service, Deployment 등)가 영구적으로 삭제됩니다.",
       "cancel": "취소",
       "submit": "삭제",
@@ -2389,7 +2362,7 @@
   },
   "admin": {
     "aiModels": {
-      "title": "AI 모델 설정",
+      "title": "AI Models",
       "subtitle": "AI 서비스에서 사용할 모델 연결 정보를 관리합니다.",
       "add": "모델 추가",
       "new": "새 모델",
@@ -2453,15 +2426,15 @@
     "sweepTitle": "{{days}}일 동안 로그인·API 키 사용이 없는 계정을 잠급니다(매일 자동으로도 실행)",
     "sweepDone": "점검 완료: {{count}}개 계정을 잠갔습니다.",
     "sweepFailed": "점검에 실패했습니다.",
-    "loading": "로딩 중...",
+    "loading": "불러오는 중...",
     "loadError": "유저 목록을 불러오지 못했습니다.",
     "title": "User Management",
-    "subtitle": "유저 권한(read/write/admin)을 변경합니다.",
+    "subtitle": "계정 등급(Pending·Member·Admin)을 바꿉니다. Read·Write는 클러스터마다 줍니다.",
     "table": {
       "name": "이름",
       "email": "이메일",
       "team": "팀",
-      "role": "Role",
+      "role": "역할",
       "password": "비밀번호",
       "delete": "삭제"
     },
@@ -2475,20 +2448,14 @@
       "copied": "복사됨",
       "close": "확인"
     },
-    "resetting": "초기화중...",
-    "reset": "PW 초기화",
+    "resetting": "초기화 중...",
+    "reset": "비밀번호 초기화",
     "deleteConfirm": "유저를 삭제할까요?\n\n대상: {{target}}\n\n* 삭제하면 복구가 어렵습니다.",
     "deleteSelfBlocked": "자기 자신은 삭제할 수 없습니다.",
     "deleteTitle": "유저 삭제",
     "deleting": "삭제중...",
     "delete": "삭제",
     "empty": "유저가 없습니다.",
-    "roles": {
-      "pending": "승인 대기",
-      "read": "READ",
-      "write": "WRITE",
-      "admin": "ADMIN"
-    },
     "createUser": "사용자 추가",
     "bulkUpload": "일괄 업로드",
     "bulkUploadTitle": "사용자 일괄 업로드",
@@ -2563,7 +2530,7 @@
       "required": "현재 비밀번호와 새 비밀번호를 입력하세요.",
       "mismatch": "새 비밀번호가 일치하지 않습니다.",
       "title": "비밀번호 변경",
-      "subtitle": "현재 비밀번호를 확인합니다",
+      "subtitle": "현재 비밀번호를 확인합니다.",
       "failed": "비밀번호 변경에 실패했습니다.",
       "open": "비밀번호 변경",
       "cancel": "취소",
@@ -2580,14 +2547,14 @@
     "subtitle": "프로필, 비밀번호, 언어를 관리합니다.",
     "profile": {
       "title": "내 정보",
-      "subtitle": "로그인된 계정 정보",
+      "subtitle": "로그인한 계정의 정보입니다.",
       "name": "이름",
       "email": "이메일",
       "team": "팀",
-      "role": "Role"
+      "role": "역할"
     },
     "nodeShell": {
-      "title": "Node 셸",
+      "title": "Node Shell",
       "subtitle": "Node 디버그 셸 설정을 관리합니다.",
       "enable": "Node 셸 사용",
       "enableHint": "Node 상세 화면에 디버그 셸 액션을 표시합니다.",
@@ -2633,7 +2600,7 @@
       "goto": "PV로 이동",
       "none": "(PV 없음)"
     },
-    "loading": "로딩 중...",
+    "loading": "불러오는 중...",
     "lookupNone": "(조회 실패 또는 없음)",
     "storageClass": {
       "summary": "StorageClass 요약",
@@ -2776,22 +2743,22 @@
     "sources": "소스",
     "issuesOnly": "이슈",
     "noData": "리소스를 찾을 수 없습니다",
-    "emptyDesc1": "쿠버네티스 리소스 간의 관계를 그래프로 시각화합니다.",
+    "emptyDesc1": "Kubernetes 리소스 간의 관계를 그래프로 시각화합니다.",
     "emptyDesc2": "Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,",
     "emptyDesc3": "PVC → PV → StorageClass 등 다양한 관계를 한눈에 파악할 수 있습니다.",
     "featureGroupingTitle": "그룹핑",
     "featureGroupingDesc": "Namespace / Node /\nInstance 별 묶기",
     "featureFilteringTitle": "필터링",
-    "featureFilteringDesc": "리소스 타입, 상태,\n엣지 타입별 필터",
+    "featureFilteringDesc": "리소스 종류, 상태,\n연결선 종류별 필터",
     "featureInteractionTitle": "인터랙션",
-    "featureInteractionDesc": "호버로 프리뷰,\n클릭으로 상세 보기",
-    "selectNamespaceHint": "왼쪽 상단 드롭다운에서 Namespace를 선택하세요",
+    "featureInteractionDesc": "마우스를 올리면 미리 보기,\n클릭하면 상세 보기",
+    "selectNamespaceHint": "왼쪽 위 드롭다운에서 Namespace를 선택하세요.",
     "legendRunning": "실행 중 / 활성",
     "legendPending": "대기 중",
     "legendFailed": "실패 / 오류",
     "glance": {
       "status": "상태",
-      "ready": "준비",
+      "ready": "준비됨",
       "namespace": "Namespace",
       "node": "Node",
       "owner": "소유자",
@@ -2800,11 +2767,17 @@
     "nodeCount": "리소스 {{n}}개",
     "edgeCount": "연결 {{n}}개",
     "selectNamespace": "Namespace 선택...",
-    "clearSelection": "선택 해제"
+    "clearSelection": "선택 해제",
+    "groupBy": {
+      "none": "묶지 않음",
+      "namespace": "Namespace",
+      "node": "Node",
+      "instance": "인스턴스"
+    }
   },
   "advancedSearch": {
     "title": "Advanced Search",
-    "subtitle": "JavaScript 표현식으로 Kubernetes 리소스를 검색합니다",
+    "subtitle": "JavaScript 표현식으로 Kubernetes 리소스를 검색합니다.",
     "selectResources": "리소스 선택",
     "filterResources": "리소스 필터...",
     "selectAll": "전체 선택",
@@ -2814,31 +2787,31 @@
     "searching": "검색 중...",
     "resultsCount": "{{count}}건 결과",
     "outOf": "(전체 {{total}}건 중)",
-    "loading": "리소스 로딩 중...",
+    "loading": "리소스 불러오는 중...",
     "loadingData": "데이터를 불러오는 중...",
     "loadingHint": "리소스 양이 많으면 시간이 다소 걸릴 수 있습니다.",
     "loaded": "{{count}}개 항목 로드됨",
     "refresh": "새로고침",
     "noResults": "쿼리에 일치하는 리소스가 없습니다",
-    "noResultsHint": "표현식 구문을 확인하거나 다른 쿼리를 시도하세요",
-    "noResources": "검색할 리소스 타입을 선택하세요",
+    "noResultsHint": "표현식 구문을 확인하거나 다른 쿼리를 시도하세요.",
+    "noResources": "검색할 리소스 타입을 선택하세요.",
     "tooManyResults": "{{total}}건의 결과를 찾았습니다. 처음 {{max}}건만 표시합니다.",
     "examplesTitle": "쿼리 예시",
     "examples": {
       "podsNotRunning": "Running 상태가 아닌 Pod 찾기",
-      "labelApp": "app=nginx 라벨이 있는 모든 리소스",
+      "labelApp": "app=nginx 레이블이 있는 모든 리소스",
       "replicasOver3": "레플리카가 3개 초과인 Deployment",
       "restartsOver5": "재시작 5회 초과 Pod",
       "configMapWithData": "data가 있는 ConfigMap",
-      "completedJobs": "완료된 활성 Job",
-      "loadBalancerServices": "LoadBalancer 타입 서비스",
+      "completedJobs": "완료된 Job(일시 중지 아님)",
+      "loadBalancerServices": "LoadBalancer 타입 Service",
       "pendingPvcs": "Pending 상태인 PVC"
     },
     "colKind": "종류",
     "colName": "이름",
     "colNamespace": "Namespace",
     "colStatus": "상태",
-    "colAge": "나이",
+    "colAge": "경과 시간",
     "colActions": "작업",
     "page": "{{current}} / {{total}} 페이지",
     "pageInfo": "{{current}} / {{total}} 페이지",
@@ -2869,13 +2842,13 @@
     "clusterScoped": "클러스터",
     "copyName": "이름 복사",
     "detail": "상세",
-    "beta": "베타"
+    "examplesAll": "전체"
   },
   "serviceAccountsPage": {
     "title": "ServiceAccounts",
     "subtitle": "Namespace별 ServiceAccount를 관리합니다.",
     "searchPlaceholder": "이름 또는 Namespace로 검색...",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "create": "ServiceAccount 생성",
@@ -2891,19 +2864,18 @@
       "namespace": "Namespace",
       "name": "이름",
       "secrets": "Secret",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "delete": {
       "button": "ServiceAccount 삭제",
-      "title": "ServiceAccount 삭제",
-      "confirm": "ServiceAccount \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "title": "ServiceAccount 삭제"
     }
   },
   "rolesPage": {
     "title": "Roles",
     "subtitle": "Namespace별 Role을 관리합니다.",
     "searchPlaceholder": "이름 또는 Namespace로 검색...",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "create": "Role 생성",
@@ -2918,19 +2890,18 @@
       "namespace": "Namespace",
       "name": "이름",
       "rules": "규칙",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "delete": {
       "button": "Role 삭제",
-      "title": "Role 삭제",
-      "confirm": "Role \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "title": "Role 삭제"
     }
   },
   "roleBindingsPage": {
     "title": "RoleBindings",
     "subtitle": "Namespace별 RoleBinding을 관리합니다.",
     "searchPlaceholder": "이름, Namespace 또는 Role 참조로 검색...",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "create": "RoleBinding 생성",
@@ -2946,12 +2917,11 @@
       "name": "이름",
       "roleRef": "Role 참조",
       "subjects": "대상",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "delete": {
       "button": "RoleBinding 삭제",
-      "title": "RoleBinding 삭제",
-      "confirm": "RoleBinding \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "title": "RoleBinding 삭제"
     }
   },
   "clusterRolesPage": {
@@ -2971,7 +2941,7 @@
     "table": {
       "name": "이름",
       "rules": "규칙",
-      "age": "생성 경과"
+      "age": "경과 시간"
     }
   },
   "clusterRoleBindingsPage": {
@@ -2992,14 +2962,14 @@
       "name": "이름",
       "roleRef": "Role 참조",
       "subjects": "대상",
-      "age": "생성 경과"
+      "age": "경과 시간"
     }
   },
   "configMapsPage": {
     "title": "ConfigMaps",
     "subtitle": "Namespace별 ConfigMap을 관리합니다.",
     "searchPlaceholder": "이름 또는 Namespace로 검색...",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "create": "ConfigMap 생성",
@@ -3014,19 +2984,18 @@
       "namespace": "Namespace",
       "name": "이름",
       "data": "데이터",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "delete": {
       "button": "ConfigMap 삭제",
-      "title": "ConfigMap 삭제",
-      "confirm": "ConfigMap \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "title": "ConfigMap 삭제"
     }
   },
   "secretsPage": {
     "title": "Secrets",
     "subtitle": "Namespace별 Secret을 관리합니다.",
     "searchPlaceholder": "이름, Namespace 또는 타입으로 검색...",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "refresh": "새로고침",
     "refreshTitle": "강제 새로고침",
     "create": "Secret 생성",
@@ -3043,18 +3012,17 @@
       "name": "이름",
       "type": "타입",
       "data": "데이터",
-      "age": "생성 경과"
+      "age": "경과 시간"
     },
     "delete": {
       "button": "Secret 삭제",
-      "title": "Secret 삭제",
-      "confirm": "Secret \"{{name}}\"을(를) 삭제하시겠습니까?"
+      "title": "Secret 삭제"
     }
   },
   "secretInfo": {
     "basicInfo": "기본 정보",
     "type": "타입",
-    "created": "생성일",
+    "created": "생성 시각",
     "immutable": "불변",
     "dataKeys": "데이터 키 수",
     "data": "데이터",
@@ -3090,7 +3058,7 @@
       "version": "버전",
       "scope": "범위",
       "kind": "Kind",
-      "age": "생성 경과"
+      "age": "경과 시간"
     }
   },
   "crInstancesPage": {
@@ -3112,7 +3080,7 @@
       "namespace": "Namespace",
       "kind": "Kind",
       "group": "그룹",
-      "age": "생성 경과"
+      "age": "경과 시간"
     }
   },
   "crdInfo": {
@@ -3160,10 +3128,10 @@
   },
   "rollback": {
     "title": "롤백",
-    "selectRevision": "롤백할 리비전을 선택하세요",
+    "selectRevision": "롤백할 리비전을 선택하세요.",
     "revision": "리비전",
     "images": "이미지",
-    "created": "생성일",
+    "created": "생성 시각",
     "current": "현재",
     "confirm": "롤백",
     "cancel": "취소",
@@ -3204,7 +3172,7 @@
     "namespace": "Namespace"
   },
   "adminOrg": {
-    "title": "Team",
+    "title": "Teams",
     "subtitle": "회원가입 시 선택할 수 있는 팀 목록을 관리합니다.",
     "teamTitle": "팀",
     "teamSubtitle": "팀 / 그룹",
@@ -3280,7 +3248,7 @@
         "resource_helm_read": "Release 조회",
         "resource_helm_rollback": "Release 롤백",
         "resource_helm_upgrade": "Release 업그레이드 (values 수정)",
-        "resource_helm_uninstall": "Release 언인스톨",
+        "resource_helm_uninstall": "Release 삭제",
         "resource_helm_test": "Release 테스트 실행",
         "ai_tool_all": "모든 AI 도구",
         "ai_tool_k8s_execute_command": "K8s 명령어 실행",
@@ -3300,7 +3268,14 @@
         "admin_organizations_delete": "본부/팀 삭제",
         "admin_ai_models_all": "AI 모델 설정",
         "admin_audit_read": "감사 로그 조회",
-        "admin_audit_export": "감사 로그 내보내기 (CSV)"
+        "admin_audit_export": "감사 로그 내보내기 (CSV)",
+        "admin_sessions_read": "터미널 세션 녹화 보기",
+        "admin_review_read": "접근 권한 검토 보고서 보기",
+        "admin_review_export": "접근 권한 검토 내보내기(CSV)",
+        "admin_review_signoff": "접근 권한 검토 서명",
+        "admin_hygiene_read": "클러스터 위생 점검 보고서 보기",
+        "admin_hygiene_export": "클러스터 위생 점검 내보내기(CSV·JSON)",
+        "admin_hygiene_signoff": "클러스터 위생 점검 서명"
       }
     },
     "viewUsers": "이 역할의 사용자 보기",
@@ -3337,20 +3312,20 @@
       "name": "역할 이름",
       "namePh": "예: InfraManager"
     },
-    "loading": "로딩 중...",
-    "nameRequired": "역할 이름을 입력하세요",
+    "loading": "불러오는 중...",
+    "nameRequired": "역할 이름을 입력하세요.",
     "noPerms": "권한 없음",
     "save": "저장",
     "saving": "저장 중...",
     "selectedCount": "권한 {{count}}개 선택됨",
-    "subtitle": "세분화된 권한으로 사용자 정의 역할을 만듭니다",
+    "subtitle": "세분화된 권한으로 사용자 정의 역할을 만듭니다.",
     "systemNote": "시스템 역할: 이름과 권한은 고정이고 설명만 바꿀 수 있습니다",
-    "title": "역할 관리",
+    "title": "Role Management",
     "updateError": "역할을 수정하지 못했습니다"
   },
   "gpuDashboardPage": {
     "title": "GPU Dashboard",
-    "subtitle": "클러스터 전체 GPU 리소스 개요",
+    "subtitle": "클러스터 전체 GPU 리소스를 한눈에 봅니다.",
     "empty": "이 클러스터에서 GPU 리소스가 감지되지 않았습니다.",
     "error": "GPU 데이터를 불러오지 못했습니다. 클러스터에 일시적으로 접속할 수 없을 수 있습니다.",
     "retry": "다시 시도",
@@ -3406,7 +3381,7 @@
       "node": "Node",
       "gpus": "GPU",
       "status": "상태",
-      "age": "Age"
+      "age": "경과 시간"
     }
   },
   "gpuNodes": {
@@ -3465,7 +3440,7 @@
       "node": "Node",
       "gpus": "GPU",
       "status": "상태",
-      "age": "Age",
+      "age": "경과 시간",
       "gpuUtil": "GPU 사용률",
       "memUtil": "메모리 사용률"
     },
@@ -3490,7 +3465,7 @@
       "name": "이름",
       "selectors": "Selector",
       "conditions": "Condition",
-      "age": "Age"
+      "age": "경과 시간"
     }
   },
   "resourceClaimsPage": {
@@ -3503,7 +3478,7 @@
     "searchPlaceholder": "ResourceClaim 이름으로 검색...",
     "noResults": "ResourceClaim을 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceClaim이 일치합니다.",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "stats": {
       "total": "전체",
       "allocated": "할당됨",
@@ -3515,7 +3490,7 @@
       "name": "이름",
       "requests": "요청",
       "status": "상태",
-      "age": "Age"
+      "age": "경과 시간"
     }
   },
   "resourceClaimTemplatesPage": {
@@ -3528,7 +3503,7 @@
     "searchPlaceholder": "ResourceClaimTemplate 이름으로 검색...",
     "noResults": "ResourceClaimTemplate을 찾을 수 없습니다.",
     "matchCount": "{{count}}개의 ResourceClaimTemplate이 일치합니다.",
-    "allNamespaces": "모든 Namespace",
+    "allNamespaces": "전체 Namespace",
     "stats": {
       "total": "전체"
     },
@@ -3536,7 +3511,7 @@
       "namespace": "Namespace",
       "name": "이름",
       "requests": "요청",
-      "age": "Age"
+      "age": "경과 시간"
     }
   },
   "resourceSlicesPage": {
@@ -3557,7 +3532,7 @@
       "driver": "드라이버",
       "pool": "풀",
       "devices": "디바이스",
-      "age": "Age"
+      "age": "경과 시간"
     }
   },
   "helmReleases": {
@@ -3599,7 +3574,7 @@
       "values": "Values",
       "manifest": "Manifest",
       "notes": "Notes",
-      "history": "History",
+      "history": "이력",
       "resources": "리소스"
     },
     "overview": {
@@ -3642,7 +3617,7 @@
     "rollback": {
       "button": "롤백",
       "title": "리비전 {{rev}}로 롤백",
-      "subtitle": "{{ns}}/{{name}} — 변경 미리보기 확인 후 적용",
+      "subtitle": "{{ns}}/{{name}} — 변경 내용을 미리 보고 적용합니다.",
       "noChange": "적용될 변경이 없습니다.",
       "cancel": "취소",
       "apply": "롤백 실행",
@@ -3653,7 +3628,7 @@
       "cancel": "취소",
       "preview": "변경 미리보기 (Dry Run)",
       "title": "Values 변경 미리보기",
-      "subtitle": "{{ns}}/{{name}} — chart 버전은 유지된 채 values 만 갱신됩니다",
+      "subtitle": "{{ns}}/{{name}} — chart 버전은 그대로 두고 values만 바꿉니다.",
       "noChange": "적용될 변경이 없습니다.",
       "apply": "업그레이드 실행",
       "applying": "업그레이드 중..."
@@ -3669,14 +3644,14 @@
       "close": "닫기"
     },
     "uninstall": {
-      "button": "언인스톨",
-      "title": "Release \"{{name}}\" 언인스톨",
+      "button": "삭제",
+      "title": "Release \"{{name}}\" 삭제",
       "warning": "이 Release가 관리하는 {{count}}개의 Kubernetes 리소스가 삭제됩니다. 되돌릴 수 없습니다.",
       "keepHistory": "리비전 기록은 보존 (나중에 helm rollback 으로 복구 가능)",
       "confirmLabel": "확인을 위해 Release 이름 \"{{name}}\"을 그대로 입력하세요.",
       "cancel": "취소",
-      "apply": "언인스톨 실행",
-      "applying": "언인스톨 중..."
+      "apply": "삭제",
+      "applying": "삭제 중..."
     },
     "error": {
       "notFound": "Release를 찾을 수 없습니다.",
@@ -3714,14 +3689,14 @@
         "이 리소스 어떻게 고치면 좋을까?"
       ],
       "gpu": [
-        "지금 화면에 보이는 GPU 노드 중 효율 떨어지는 게 있어?",
+        "지금 화면에 보이는 GPU Node 중 효율 떨어지는 게 있어?",
         "이 GPU 사용률 분포에서 이상한 점 있어?",
         "여기 할당이 막힌 GPU 있다면 왜 그런 거야?"
       ],
       "monitoring": [
         "지금 보이는 메트릭 중에 한계 임박한 워크로드 있어?",
         "이 그래프에서 비정상적인 패턴이 보여?",
-        "여기 위험해 보이는 노드가 있어?"
+        "여기 위험해 보이는 Node가 있어?"
       ],
       "topology": [
         "이 토폴로지에 단일 장애 지점(SPOF) 가 있어?",
@@ -3753,7 +3728,7 @@
       "select": "클러스터 선택"
     },
     "admin": {
-      "title": "클러스터",
+      "title": "Clusters",
       "subtitle": "이 플랫폼이 연결하는 클러스터를 등록·관리합니다.",
       "register": "클러스터 등록",
       "name": "이름",
@@ -3765,10 +3740,21 @@
       "empty": "등록된 클러스터가 없습니다.",
       "test": "테스트",
       "delete": "삭제",
-      "unhealthy": "비정상",
       "inCluster": "클러스터 내부",
       "access": "접근 권한 관리",
-      "edit": "편집"
+      "edit": "편집",
+      "modeValue": {
+        "self": "이 클러스터",
+        "in_cluster": "이 클러스터",
+        "external": "외부 kubeconfig"
+      },
+      "healthValue": {
+        "healthy": "정상",
+        "unhealthy": "연결 안 됨",
+        "unreachable": "연결 안 됨",
+        "disconnected": "연결 안 됨",
+        "unknown": "확인 전"
+      }
     },
     "register": {
       "title": "클러스터 등록",
@@ -3815,7 +3801,7 @@
   },
   "adminAudit": {
     "title": "Audit Logs",
-    "subtitle": "모든 쓰기 작업과 민감 열람 내역",
+    "subtitle": "모든 쓰기 작업과 민감 정보 열람 기록입니다.",
     "exportCsv": "CSV 내보내기",
     "refreshing": "불러오는 중...",
     "refresh": "새로고침",
@@ -3833,10 +3819,10 @@
       "bad": "✗ #{{from}}~#{{to}}: {{reason}} (#{{seq}})"
     },
     "filter": {
-      "service": "Service",
+      "service": "영역",
       "any": "전체",
       "cluster": "클러스터",
-      "action": "Action",
+      "action": "동작",
       "actor": "사용자 이메일",
       "result": "결과",
       "namespace": "Namespace",
@@ -3850,8 +3836,8 @@
     "col": {
       "time": "시각",
       "actor": "사용자",
-      "service": "Service",
-      "action": "Action",
+      "service": "영역",
+      "action": "동작",
       "target": "대상",
       "namespace": "Namespace",
       "result": "결과"
@@ -3867,16 +3853,27 @@
       "error": "오류",
       "before": "변경 전",
       "after": "변경 후"
+    },
+    "resultValue": {
+      "success": "성공",
+      "failure": "실패"
+    },
+    "area": {
+      "auth": "인증",
+      "k8s": "Kubernetes",
+      "helm": "Helm",
+      "ai": "AI",
+      "admin": "관리"
     }
   },
   "topology": {
     "title": "{{namespace}} 리소스 정의",
-    "subtitle": "모든 Kubernetes 리소스의 YAML 정의를 확인하세요",
+    "subtitle": "Kubernetes 리소스의 YAML 정의를 봅니다.",
     "resourceTypes": "리소스 타입",
     "noResources": "리소스가 없습니다",
     "yamlContent": "YAML 내용",
     "yamlRefreshTitle": "YAML 새로고침",
-    "yamlLoading": "YAML 로딩 중...",
+    "yamlLoading": "YAML 불러오는 중...",
     "yamlLoadError": "YAML을 가져올 수 없습니다",
     "resourceDeletedOrMissing": "리소스가 삭제되었거나 존재하지 않습니다.",
     "refreshList": "목록 새로고침",
@@ -3884,16 +3881,16 @@
   },
   "resources": {
     "title": "{{namespace}} 리소스",
-    "subtitle": "Namespace의 모든 리소스를 확인하고 관리하세요",
+    "subtitle": "Namespace의 리소스를 확인하고 관리합니다.",
     "searchPlaceholder": "{{kind}} 이름 검색...",
     "replicasetError": "ReplicaSet 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
     "fullSelectorTitle": "전체 selector: {{selector}}",
     "gotoPodsTitle": "ReplicaSet selector로 Pod 목록을 필터링합니다",
     "gotoPods": "Pods로 이동",
     "replicas": "레플리카",
-    "ready": "준비",
+    "ready": "준비됨",
     "available": "사용 가능",
-    "updated": "업데이트됨",
+    "updated": "최신",
     "owner": "소유자",
     "type": "유형",
     "ports": "포트",
@@ -3903,10 +3900,10 @@
     "volume": "볼륨"
   },
   "network": {
-    "subtitle": "Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy 연결을 빠르게 확인합니다",
+    "subtitle": "Service ↔ Endpoints/EndpointSlices ↔ Ingress ↔ NetworkPolicy 연결을 빠르게 확인합니다.",
     "searchPlaceholder": "Service 이름 검색...",
     "noServices": "Service가 없습니다",
-    "selectServiceHint": "왼쪽에서 Service를 선택하세요",
+    "selectServiceHint": "왼쪽에서 Service를 선택하세요.",
     "anomaliesDetected": "이상 징후 감지",
     "selectorless": "selector가 없는 Service입니다. (Pod 매핑/NetworkPolicy 매핑은 제한됩니다)",
     "endpointsNotFound": "해당 Service 이름의 Endpoints를 찾지 못했습니다",
@@ -3921,7 +3918,7 @@
   },
   "adminAIUsage": {
     "title": "AI Usage",
-    "subtitle": "채팅 턴과 Optimization의 AI 설명마다 남는 ai.chat.complete 감사 기록의 집계 — 요청·토큰·툴 호출. 한도는 없고, 누가 얼마나 썼는지 본다.",
+    "subtitle": "채팅 턴과 Optimization의 AI 설명마다 남는 감사 기록을 모아 요청·토큰·툴 호출을 보여 줍니다. 한도는 없고, 누가 얼마나 썼는지 봅니다.",
     "since": "시작일",
     "until": "종료일",
     "groupBy": "기준",
@@ -3941,17 +3938,17 @@
     "failures": "실패",
     "lastAt": "마지막",
     "empty": "이 기간에 AI 채팅 기록이 없습니다.",
-    "partialTokens": "{{n}}건은 제공자가 토큰 수를 보내지 않아 합계에 없음",
-    "note": "토큰 수는 제공자가 스트림 마지막 청크에 usage를 보낼 때만 집계된다(OpenAI 호환 stream_options.include_usage). 원본 행은 감사 로그에서 action=ai.chat.complete 로 조회·CSV 내보내기."
+    "partialTokens": "{{n}}건은 제공자가 토큰 수를 보내지 않아 합계에 없습니다.",
+    "note": "토큰 수는 AI 제공자가 응답에 usage 값을 보낼 때만 집계합니다. 원본 기록은 감사 로그에서 동작 ai.chat.complete로 걸러 보고 CSV로 내보낼 수 있습니다."
   },
   "networkOverview": {
-    "none": "(없음)",
+    "none": "없음",
     "noIp": "(ip 없음)",
     "noTargetRef": "(targetRef 없음)",
     "ingressTitle": "Ingress",
-    "addressNone": "address: (없음)",
+    "addressNone": "address: 없음",
     "tlsSecret": "tls secret: {{secrets}}",
-    "tlsSecretNone": "tls secret: (없음)",
+    "tlsSecretNone": "tls secret: 없음",
     "networkPoliciesTitle": "NetworkPolicies (적용 후보)",
     "noSelector": "selector가 없어 Pod 매핑을 못해 정책 연결을 계산할 수 없습니다",
     "noMatchingPods": "선택된 Service selector에 매칭되는 Pod가 없습니다",
@@ -3981,7 +3978,7 @@
     "noEgressRules": "(egress 규칙 없음)"
   },
   "resourcesTabs": {
-    "none": "(없음)",
+    "none": "없음",
     "fetchFailed": "{{kind}} 조회에 실패했습니다. (클러스터 권한/버전에 따라 불가할 수 있습니다)",
     "pdb": {
       "noSelector": "selector가 없어 매칭 Pod를 계산할 수 없습니다.",
@@ -3997,7 +3994,7 @@
       "podsCount": "pods: {{count}}",
       "restarts": "재시작: {{count}}",
       "node": "Node",
-      "ready": "준비"
+      "ready": "준비됨"
     },
     "hpa": {
       "metricsMissing": "Desired 계산 불가: metrics-server/metrics API에서 메트릭을 받지 못했습니다.",
@@ -4012,7 +4009,7 @@
       "lastScale": "마지막 스케일"
     },
     "search": {
-      "clearLabelSelector": "라벨 셀렉터 제거",
+      "clearLabelSelector": "레이블 셀렉터 제거",
       "reset": "초기화",
       "resultCount": "{{count}}개의 {{kind}}가 검색되었습니다"
     }
@@ -4035,7 +4032,6 @@
     "confirm": "삭제"
   },
   "detail": {
-    "(none)": "(없음)",
     "Name": "이름",
     "Namespace": "Namespace",
     "Created": "생성 시각",
@@ -4044,8 +4040,8 @@
     "Status": "상태",
     "Type": "유형",
     "Kind": "종류",
-    "Age": "생성 경과",
-    "Ready": "준비",
+    "Age": "경과 시간",
+    "Ready": "준비됨",
     "Not Ready": "준비 안 됨",
     "Restarts": "재시작",
     "Total Restarts": "총 재시작",
@@ -4062,8 +4058,8 @@
     "Container": "컨테이너",
     "Containers": "컨테이너",
     "Init Containers": "초기화 컨테이너",
-    "Service": "서비스",
-    "Service Info": "서비스 정보",
+    "Service": "Service",
+    "Service Info": "Service 정보",
     "Description": "설명",
     "Summary": "요약",
     "Duration": "소요 시간",
@@ -4071,7 +4067,7 @@
     "Current": "현재",
     "Desired": "목표",
     "Actual": "실제",
-    "Updated": "업데이트됨",
+    "Updated": "최신",
     "Available": "사용 가능",
     "Up to date": "최신",
     "Uptime": "가동 시간",
@@ -4091,9 +4087,9 @@
     "Metrics": "메트릭",
     "Events": "이벤트",
     "Logs": "로그",
-    "Labels": "라벨",
+    "Labels": "레이블",
     "Annotations": "어노테이션",
-    "Lifecycle": "수명주기",
+    "Lifecycle": "라이프사이클",
     "Basic Info": "기본 정보",
     "Gateway Info": "Gateway 정보",
     "GatewayClass Info": "GatewayClass 정보",
@@ -4177,19 +4173,19 @@
     "present": "있음",
     "not present": "없음",
     "via": "경유",
-    "Loading...": "로딩 중...",
-    "Loading details...": "상세 정보 로딩 중...",
-    "Loading rules...": "규칙 로딩 중...",
-    "Loading service details...": "서비스 상세 정보 로딩 중...",
-    "Loading gateway details...": "Gateway 상세 정보 로딩 중...",
-    "Loading gateway class details...": "GatewayClass 상세 정보 로딩 중...",
-    "Loading DeviceClass details...": "DeviceClass 상세 정보 로딩 중...",
-    "Loading GRPCRoute details...": "GRPCRoute 상세 정보 로딩 중...",
-    "Loading HTTPRoute details...": "HTTPRoute 상세 정보 로딩 중...",
-    "Loading ReferenceGrant details...": "ReferenceGrant 상세 정보 로딩 중...",
-    "Loading ResourceClaim details...": "ResourceClaim 상세 정보 로딩 중...",
-    "Loading ResourceClaimTemplate details...": "ResourceClaimTemplate 상세 정보 로딩 중...",
-    "Loading ResourceSlice details...": "ResourceSlice 상세 정보 로딩 중...",
+    "Loading...": "불러오는 중...",
+    "Loading details...": "상세 정보 불러오는 중...",
+    "Loading rules...": "규칙 불러오는 중...",
+    "Loading service details...": "Service 상세 정보를 불러오는 중...",
+    "Loading gateway details...": "Gateway 상세 정보 불러오는 중...",
+    "Loading gateway class details...": "GatewayClass 상세 정보 불러오는 중...",
+    "Loading DeviceClass details...": "DeviceClass 상세 정보 불러오는 중...",
+    "Loading GRPCRoute details...": "GRPCRoute 상세 정보 불러오는 중...",
+    "Loading HTTPRoute details...": "HTTPRoute 상세 정보 불러오는 중...",
+    "Loading ReferenceGrant details...": "ReferenceGrant 상세 정보 불러오는 중...",
+    "Loading ResourceClaim details...": "ResourceClaim 상세 정보 불러오는 중...",
+    "Loading ResourceClaimTemplate details...": "ResourceClaimTemplate 상세 정보 불러오는 중...",
+    "Loading ResourceSlice details...": "ResourceSlice 상세 정보 불러오는 중...",
     "Failed to load describe data. Showing summary from list.": "상세 정보를 불러오지 못했습니다. 목록의 요약을 표시합니다.",
     "Failed to load rules: {{error}}": "규칙을 불러오지 못했습니다: {{error}}",
     "Prev": "이전",
@@ -4243,7 +4239,7 @@
     "Effective Permissions": "실효 권한",
     "Effective Permissions ({{n}} bindings)": "실효 권한 (바인딩 {{n}}개)",
     "Effective Permissions (1 binding)": "실효 권한 (바인딩 1개)",
-    "Effective Permissions ({{n}} bindings, loading…)": "실효 권한 (바인딩 {{n}}개, 로딩 중…)",
+    "Effective Permissions ({{n}} bindings, loading…)": "실효 권한 (바인딩 {{n}}개, 불러오는 중…)",
     "Webhook: {{name}}": "웹훅: {{name}}",
     "Webhooks": "웹훅",
     "{{kind}} Info": "{{kind}} 정보",
@@ -4291,7 +4287,7 @@
     "No RoleBinding in this namespace references this Role.": "이 Namespace에 이 Role을 참조하는 RoleBinding이 없습니다.",
     "No RoleBinding or ClusterRoleBinding binds this ServiceAccount.": "이 ServiceAccount를 묶는 RoleBinding·ClusterRoleBinding이 없습니다.",
     "You may not list {{kinds}} here, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}} 목록을 볼 권한이 없어 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",
-    "Could not load {{kinds}}, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}}을(를) 불러오지 못해 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",
+    "Could not load {{kinds}}, so the bindings of this ServiceAccount cannot all be checked.": "{{kinds}}: 불러오지 못해 이 ServiceAccount의 바인딩을 다 확인할 수 없습니다.",
     "No ServiceAccount in this namespace references this Secret.": "이 Namespace에 이 Secret을 참조하는 ServiceAccount가 없습니다.",
     "No listener status data available to determine attached routes.": "연결된 Route를 판단할 리스너 상태 데이터가 없습니다.",
     "No other EndpointSlice for this Service in the namespace.": "이 Namespace에 이 Service의 다른 EndpointSlice가 없습니다.",
@@ -4400,7 +4396,7 @@
     "Scale Up": "확장",
     "Scale Down": "축소",
     "Scaling Behavior": "스케일링 동작",
-    "Service Name": "서비스 이름",
+    "Service Name": "Service 이름",
     "Source": "소스",
     "Started": "시작 시각",
     "Top": "요약",
@@ -4417,7 +4413,67 @@
     "Port:": "포트:",
     "Protocol:": "프로토콜:",
     "Zone:": "영역:",
-    "Claim": "클레임"
+    "Claim": "클레임",
+    "section:Affinity": "어피니티",
+    "section:Aggregation Rule": "집계 규칙",
+    "section:Allowed Topologies": "허용 토폴로지",
+    "section:Attachment Metadata": "연결 메타데이터",
+    "section:Behavior": "스케일링 동작",
+    "section:Claim Spec": "Claim 스펙",
+    "section:Claim Spec - Config": "Claim 스펙 - 설정",
+    "section:Claim Spec - Constraints": "Claim 스펙 - 제약",
+    "section:Claim Spec - Requests": "Claim 스펙 - 요청",
+    "section:Conditions": "조건",
+    "section:Config": "설정",
+    "section:Container Policies": "컨테이너 정책",
+    "section:Disruption Budget": "중단 예산",
+    "section:Endpoint Slices": "EndpointSlice",
+    "section:Finalizers": "파이널라이저",
+    "section:From": "참조하는 쪽 (From)",
+    "section:To": "참조되는 쪽 (To)",
+    "section:Image Pull Secrets": "이미지 풀 Secret",
+    "section:Inline Volume Spec": "인라인 볼륨 스펙",
+    "section:Lease Spec": "Lease 스펙",
+    "section:Limits": "제한",
+    "section:Listeners": "리스너",
+    "section:Load Balancer Ports": "로드 밸런서 포트",
+    "section:Managed Fields ({{n}})": "관리 필드 ({{n}})",
+    "section:Match Expressions": "일치 표현식",
+    "section:Mount Options": "마운트 옵션",
+    "section:Node Selector": "Node 셀렉터",
+    "section:Overhead": "오버헤드",
+    "section:Parameters": "파라미터",
+    "section:Parent Refs": "상위 참조",
+    "section:Parent Status": "상위별 상태",
+    "section:Pod Security Context": "Pod 보안 컨텍스트",
+    "section:Pod Selector": "Pod 셀렉터",
+    "section:Pool": "풀",
+    "section:Reserved For": "예약 대상",
+    "section:Role Reference": "Role 참조",
+    "section:Scale Target Reference": "스케일 대상 참조",
+    "section:Scope Selector": "범위 셀렉터",
+    "section:Scopes": "범위",
+    "section:Secrets": "Secret",
+    "section:Selector": "셀렉터",
+    "section:Selector Expressions": "셀렉터 표현식",
+    "section:Selectors": "셀렉터",
+    "section:Spec": "스펙",
+    "section:Strategy": "업데이트 전략",
+    "section:Subjects": "서브젝트",
+    "section:Subjects ({{n}})": "서브젝트 ({{n}})",
+    "section:Subsets": "서브셋",
+    "section:Supported Features ({{n}})": "지원 기능 ({{n}})",
+    "section:TLS": "TLS",
+    "section:Target Reference": "대상 참조",
+    "section:Target Refs": "대상 참조",
+    "section:Tolerations": "톨러레이션",
+    "section:Topology Spread Constraints": "토폴로지 분배 제약 조건",
+    "section:Update Policy": "업데이트 정책",
+    "section:Volume Attributes": "볼륨 속성",
+    "section:Volume Claim Templates": "볼륨 클레임 템플릿",
+    "Lease Time": "유지 시간",
+    "None": "없음",
+    "Configured": "설정됨"
   },
   "recordings": {
     "title": "Session recordings",
@@ -4505,5 +4561,13 @@
     "title": "페이지를 찾을 수 없습니다",
     "body": "{{path}} 주소에 해당하는 화면이 없습니다.",
     "home": "대시보드로 가기"
+  },
+  "workloadStatus": {
+    "Healthy": "정상",
+    "Progressing": "진행 중",
+    "Degraded": "저하",
+    "Idle": "유휴",
+    "Unavailable": "사용 불가",
+    "Failed": "실패"
   }
 }

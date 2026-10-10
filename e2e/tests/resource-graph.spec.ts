@@ -39,7 +39,7 @@ test.describe('resource graph', () => {
   test('grouping by namespace keeps every resource inside a group container', async ({ page }) => {
     await openGraph(page)
 
-    await page.getByRole('button', { name: 'NS', exact: true }).click()
+    await page.getByRole('button', { name: 'Namespace', exact: true }).click()
     const groups = page.locator(`${NODES}[data-id^="group-"]`)
     await expect(groups.first()).toBeVisible({ timeout: 30000 })
 

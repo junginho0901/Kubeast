@@ -15,6 +15,7 @@ import {
   daemonSetToWorkloadRawJson,
   type SortKey,
 } from './daemonSetHelpers'
+import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -163,7 +164,7 @@ export function DaemonSetTable({
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.updated}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.available}</td>
                 <td className="py-3 px-4">
-                  <span className={`badge ${getDaemonSetStatusColor(daemonset.status)}`}>{daemonset.status}</span>
+                  <span className={`badge ${getDaemonSetStatusColor(daemonset.status)}`} title={workloadStatusTitle(daemonset.status)}>{workloadStatusLabel(tr, daemonset.status)}</span>
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">
                   <span className="block truncate">

@@ -174,7 +174,7 @@ export default function AccessRequests() {
                       <>
                         <td className="px-4 py-3"><StatusBadge request={r} /></td>
                         <td className="px-4 py-3 text-slate-400">
-                          <div>{r.decided_by_email ?? '—'}</div>
+                          <div>{r.decided_by_email ?? '-'}</div>
                           {r.decision_note && <div className="text-xs text-slate-500">{r.decision_note}</div>}
                         </td>
                         <td className="px-4 py-3 text-slate-400">{formatWhen(r.expires_at)}</td>

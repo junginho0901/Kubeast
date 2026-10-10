@@ -16,6 +16,7 @@ import {
   deploymentToWorkloadRawJson,
   type SortKey,
 } from './deploymentHelpers'
+import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -151,8 +152,11 @@ export function DeploymentTable({
                 <td className="py-3 px-4 text-xs font-mono">{dep.updated_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.available_replicas ?? 0}</td>
                 <td className="py-3 px-4">
-                  <span className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}`}>
-                    {dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0)}
+                  <span
+                    className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}`}
+                    title={workloadStatusTitle(dep.status, dep.progressing_reason)}
+                  >
+                    {workloadStatusLabel(tr, dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}
                   </span>
                 </td>
                 <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
