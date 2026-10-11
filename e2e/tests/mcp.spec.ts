@@ -62,7 +62,8 @@ test.describe('MCP server', () => {
     test.setTimeout(120_000)
     const admin = await login(request, EMAIL, PASSWORD)
     const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
-    test.skip(!config.ok() || !(await config.json()).enabled, 'the MCP server is off (mcp.enabled)')
+    const cfg = config.ok() ? await config.json() : {}
+    test.skip(!cfg.enabled, 'the MCP server is off (mcp.enabled)')
 
     const s = stamp()
     const writer = `e2e-mcp-w-${s}@kubeast.local`
@@ -92,8 +93,11 @@ test.describe('MCP server', () => {
       const names = tools.map((t) => t.name).sort()
       expect(names).toContain('list_clusters')
       expect(names).toContain('k8s_get_resources')
-      expect(names.filter((n) => /apply|create|delete|patch|scale|rollout|execute|label|annotate/.test(n))).toEqual([])
-      expect(tools.every((t) => t.annotations?.readOnlyHint === true)).toBe(true)
+      // Write tools (and request_access) appear only when the operator turned them on (mcp.writeTools, mcp-write.spec.ts).
+      const writes = names.filter((n) => /apply|create|delete|patch|scale|rollout|execute|label|annotat/.test(n))
+      expect(writes.length).toBe(cfg.write_tools ? 11 : 0)
+      expect(names.includes('request_access')).toBe(!!cfg.write_tools)
+      expect(tools.filter((t) => !writes.includes(t.name) && t.name !== 'request_access').every((t) => t.annotations?.readOnlyHint === true)).toBe(true)
       expect(tools.find((t) => t.name === 'k8s_get_resources')!.inputSchema.required).toContain('cluster')
 
       // list_clusters says where the key may act.
@@ -135,10 +139,10 @@ test.describe('MCP server', () => {
       expect(podsRow?.Cluster ?? podsRow?.cluster).toBe('self')
       expect(after?.credential).toEqual({ type: 'api_key', akid: key.id })
 
-      // A Read user on self has no ai.mcp.use: nothing to call.
+      // A Read user on self has no ai.mcp.use: nothing to call (with write tools on, only the way to ask for a role).
       const readList = await rpc(request, readerToken, 'tools/list')
       expect(readList.status()).toBe(200)
-      expect((await readList.json()).result.tools).toEqual([])
+      expect(((await readList.json()).result.tools as { name: string }[]).map((t) => t.name)).toEqual(cfg.write_tools ? ['request_access'] : [])
 
       // The official client SDK connects the same way Claude Code does (a static Authorization header).
       const transport = new StreamableHTTPClientTransport(new URL(MCP, process.env.E2E_BASE_URL || 'http://localhost:30080'), {

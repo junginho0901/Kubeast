@@ -43,6 +43,9 @@ func LoadFromEnv() Config {
 // Blocks reports whether a write to a managed object must be refused.
 func (c Config) Blocks() bool { return c.Enabled && c.Mode == ModeBlock }
 
+// Warns reports whether a write to a managed object goes through with a notice.
+func (c Config) Warns() bool { return c.Enabled && c.Mode == ModeWarn }
+
 // Result names the Application that manages an object.
 type Result struct {
 	Managed bool

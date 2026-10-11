@@ -288,8 +288,13 @@ ai:
 # connects with a Kubeast API key instead of a kubeconfig and gets the chat's
 # read-only tools, run as that user (cluster role, masking, an audit row per
 # call). A user needs ai.mcp.use in a cluster (in the Write role) to use it there.
+# writeTools also offers the chat's write tools (apply, delete, scale, rollout,
+# exec, …) and request_access to keys whose role ceiling is Write — no approval
+# step, the user's own permissions (permanent or a granted access request) and
+# the Argo CD guard apply, every call is audited with write: true.
 mcp:
   enabled: false
+  writeTools: false
 
 # --- PostgreSQL ---
 audit:

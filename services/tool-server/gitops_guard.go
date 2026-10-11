@@ -13,7 +13,9 @@ import (
 
 // The write tools refuse an object an Argo CD Application manages while
 // gitops.argocd.mode is "block" (the same rule k8s-service applies to the
-// REST writes), so an approved AI tool cannot go around the console.
+// REST writes), so an approved AI tool cannot go around the console. In
+// "warn" mode the write goes through and the result starts with a notice
+// naming the Application, for the model and the MCP client to relay.
 var (
 	gitopsCfg   = gitops.LoadFromEnv()
 	errConflict = errors.New("conflict")
@@ -62,11 +64,12 @@ func gitopsObjects(raw []byte) ([]gitops.Object, error) {
 	}}, nil
 }
 
-// gitopsRefuse reads the live object and refuses the write when Argo CD
-// manages it. An object kubectl cannot find is not managed.
-func gitopsRefuse(ctx context.Context, headers http.Header, resourceType, name, namespace string) error {
-	if !gitopsCfg.Blocks() || resourceType == "" || name == "" {
-		return nil
+// gitopsGuard reads the live object and, when Argo CD manages it, refuses
+// the write (block) or returns the notice the tool puts before its result
+// (warn). An object kubectl cannot find is not managed.
+func gitopsGuard(ctx context.Context, headers http.Header, resourceType, name, namespace string) (string, error) {
+	if !gitopsCfg.Enabled || resourceType == "" || name == "" {
+		return "", nil
 	}
 	args := []string{"get", resourceType, name, "-o", "json"}
 	if namespace != "" {
@@ -74,37 +77,38 @@ func gitopsRefuse(ctx context.Context, headers http.Header, resourceType, name, 
 	}
 	raw, err := runKubectl(ctx, headers, args...)
 	if err != nil {
-		return nil
+		return "", nil
 	}
 	objs, err := gitopsObjects([]byte(raw))
 	if err != nil {
-		return nil
+		return "", nil
 	}
-	return gitopsRefuseObjects(ctx, headers, objs, false)
+	return gitopsGuardObjects(ctx, headers, objs, false)
 }
 
-// gitopsRefuseManifest checks every object a manifest would change: kubectl
+// gitopsGuardManifest checks every object a manifest would change: kubectl
 // renders the documents (client dry run), then each one that already exists
 // in the cluster is read and checked.
-func gitopsRefuseManifest(ctx context.Context, headers http.Header, manifest string) error {
-	if !gitopsCfg.Blocks() {
-		return nil
+func gitopsGuardManifest(ctx context.Context, headers http.Header, manifest string) (string, error) {
+	if !gitopsCfg.Enabled {
+		return "", nil
 	}
 	raw, err := runKubectlWithInput(ctx, headers, manifest, "apply", "--dry-run=client", "-o", "json", "-f", "-")
 	if err != nil {
-		return nil // the real apply reports the problem
+		return "", nil // the real apply reports the problem
 	}
 	objs, err := gitopsObjects([]byte(raw))
 	if err != nil {
-		return nil
+		return "", nil
 	}
-	return gitopsRefuseObjects(ctx, headers, objs, true)
+	return gitopsGuardObjects(ctx, headers, objs, true)
 }
 
-func gitopsRefuseObjects(ctx context.Context, headers http.Header, objs []gitops.Object, live bool) error {
-	if !gitopsCfg.Blocks() {
-		return nil
+func gitopsGuardObjects(ctx context.Context, headers http.Header, objs []gitops.Object, live bool) (string, error) {
+	if !gitopsCfg.Enabled {
+		return "", nil
 	}
+	var notices []string
 	for _, o := range objs {
 		if live {
 			kind := strings.ToLower(o.Kind)
@@ -126,8 +130,19 @@ func gitopsRefuseObjects(ctx context.Context, headers http.Header, objs []gitops
 			o = got[0]
 		}
 		if res := gitopsCfg.Detect(o); res.Managed {
-			return fmt.Errorf("%w: %s %s/%s is managed by Argo CD application %s; change it in Git", errConflict, o.Kind, o.Namespace, o.Name, res.App)
+			if gitopsCfg.Blocks() {
+				return "", fmt.Errorf("%w: %s %s/%s is managed by Argo CD application %s; change it in Git", errConflict, o.Kind, o.Namespace, o.Name, res.App)
+			}
+			notices = append(notices, fmt.Sprintf("⚠ %s %s/%s is managed by Argo CD application %s (gitops.argocd.mode=warn): this change drifts from Git until the Application syncs it back.", o.Kind, o.Namespace, o.Name, res.App))
 		}
 	}
-	return nil
+	return strings.Join(notices, "\n"), nil
+}
+
+// withGitopsNotice puts the warn-mode notice before a tool's output.
+func withGitopsNotice(notice, output string) string {
+	if notice == "" {
+		return output
+	}
+	return notice + "\n\n" + output
 }

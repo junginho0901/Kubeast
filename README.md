@@ -174,7 +174,8 @@ AI 어시스턴트가 활성화됩니다.
   를 이해하고 답변 (read-only 툴로 제한)
 - **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`)
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
-  **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐)
+  **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐). 운영자가 켜면(`mcp.writeTools`) 상한이 Write인 키에 쓰기 도구와
+  접근 요청 도구도 — 승인 카드 없이 그 사람 권한(영구·임시) 그대로, Argo CD 가드·감사 동일
 - **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트
 
 ### 🌐 멀티클러스터 & RBAC
@@ -583,7 +584,8 @@ Claude Code·Cursor 같은 AI 에이전트가 클러스터를 보게 하려면 �
 Kubeast의 MCP 서버(`/api/v1/ai/mcp`, [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports))는
 그 자리를 대신합니다 — 에이전트는 **API 키 하나**로 연결하고, 채팅과 같은 **읽기 도구**를 **그 사람 권한으로만**(클러스터별 역할,
 impersonation) 씁니다. 결과는 모델로 가기 전에 마스킹되고(Secret 값은 늘 제거), 호출마다 감사 로그 `ai.mcp.call`이
-남으며, 감사 행을 못 쓰면 호출이 거부됩니다. 쓰는 도구는 없습니다.
+남으며, 감사 행을 못 쓰면 호출이 거부됩니다. 쓰기 도구는 기본으로 없고, 운영자가 켜면(`mcp.writeTools`) 상한이 Write인 키에만
+열립니다.
 
 ```bash
 # Settings → API keys에서 키를 발급한 뒤(클러스터·역할 상한 지정), 에이전트에 등록
@@ -596,8 +598,15 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 주고, 나머지 도구는 `cluster` 인자가 필수입니다(기본 클러스터로 떨어지지 않음).
 - 인증: `Authorization: Bearer` 헤더에 API 키(`kbk_…`) 또는 액세스 토큰. 키는 서버가 짧은 토큰으로 교환해 쓰고(교환도 감사), 키를
   폐기하면 다음 호출부터 거부됩니다. 세션이 없어(stateless) 요청마다 검사하고, 복제본이 여럿이어도 됩니다.
-- 감사: `ai.mcp.call`의 `after`에 도구·클러스터·마스킹 통계·자격(`credential.akid` = 키 id)·클라이언트(User-Agent). 권한 밖 호출도
-  `failure`로 남습니다.
+- 감사: `ai.mcp.call`의 `after`에 도구·클러스터·마스킹 통계·자격(`credential.akid` = 키 id)·클라이언트(User-Agent)·`write`(쓰기 도구
+  여부). 권한 밖 호출도 `failure`로 남습니다.
+- 쓰기 도구(`mcp.writeTools: true`, 컴포즈는 `MCP_WRITE_TOOLS`, 기본 꺼짐): 채팅의 쓰기 도구 11개(apply·create·delete·patch·
+  annotate·label·scale·rollout·exec …)가 **역할 상한이 Write인 키**에 같이 나옵니다. 채팅의 승인 카드(`ai.writeApproval`)는 MCP에
+  없습니다 — 그 사람이 그 클러스터에서 할 수 있는 만큼(영구 역할, 또는 [접근 요청](#접근-요청)으로 받은 임시 역할)만 되고, 호출마다
+  `write: true`로 감사에 남습니다. 도구 어노테이션(`destructiveHint`)이 정직하게 붙어 Claude Code 같은 클라이언트가 호출 전에 사용자에게 확인을
+  띄웁니다. Argo CD가 관리하는 객체는 가드 모드대로 — `block`이면 거부(“Git에서 바꾸세요”), `warn`이면 실행하고 결과 첫 줄에
+  경고를 붙입니다. 권한이 모자라면 에이전트가 `request_access` 도구로 접근 요청을 직접 내고(관리자 승인 → 1분 안에 반영) 다시
+  시도합니다.
 
 ### 접근 권한 검토 (Access review)
 

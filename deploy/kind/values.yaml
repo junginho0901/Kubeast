@@ -43,6 +43,7 @@ ai:
 # e2e/tests/mcp.spec.ts connects an MCP client with an API key.
 mcp:
   enabled: true
+  writeTools: true
 audit:
   # Audit sinks against the stand-ins in deploy/kind/devtools.yaml (S3 with Object Lock, a webhook
   # receiver, a mail catcher) — what e2e/tests/audit-sinks.spec.ts checks.

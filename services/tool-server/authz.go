@@ -20,8 +20,10 @@ import (
 const defaultClusterID = "default"
 
 // approvalHeader carries the id of the user's approval for a write tool.
-// ai-service sets it only on the approve path (H2); the streaming path never
-// executes write tools, so a write call without it is refused outright.
+// ai-service sets it on the chat's approve path (H2) and, per call, on the MCP
+// path (the agent acts under the user's own key and the MCP client is the
+// human in the loop); the streaming path never executes write tools, so a
+// write call without it is refused outright.
 const approvalHeader = "X-Kubeast-Approval-Id"
 
 // writeTools change cluster state (same set as ai-service WRITE_TOOL_NAMES).

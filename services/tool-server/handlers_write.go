@@ -19,10 +19,12 @@ func handleApplyManifest(ctx context.Context, args map[string]interface{}, heade
 	if err != nil {
 		return "", err
 	}
-	if err := gitopsRefuseManifest(ctx, headers, manifest); err != nil {
+	notice, err := gitopsGuardManifest(ctx, headers, manifest)
+	if err != nil {
 		return "", err
 	}
-	return runKubectlWithInput(ctx, headers, manifest, "apply", "-f", "-")
+	out, err := runKubectlWithInput(ctx, headers, manifest, "apply", "-f", "-")
+	return withGitopsNotice(notice, out), err
 }
 
 func handleCreateResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -49,7 +51,8 @@ func handleDeleteResource(ctx context.Context, args map[string]interface{}, head
 	wait := argBool(args, "wait")
 	ignoreNotFound := argBool(args, "ignore_not_found")
 
-	if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
 		return "", err
 	}
 	cmdArgs := []string{"delete", resourceType}
@@ -74,7 +77,8 @@ func handleDeleteResource(ctx context.Context, args map[string]interface{}, head
 	if ignoreNotFound {
 		cmdArgs = append(cmdArgs, "--ignore-not-found=true")
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handlePatchResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -90,7 +94,8 @@ func handlePatchResource(ctx context.Context, args map[string]interface{}, heade
 	namespace := argString(args, "namespace", "")
 	patchType := argString(args, "patch_type", "")
 
-	if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
 		return "", err
 	}
 	cmdArgs := []string{"patch", resourceType, resourceName, "-p", patchContent}
@@ -100,7 +105,8 @@ func handlePatchResource(ctx context.Context, args map[string]interface{}, heade
 	if patchType != "" {
 		cmdArgs = append(cmdArgs, "--type", patchType)
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleAnnotateResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -219,14 +225,16 @@ func handleScaleResource(ctx context.Context, args map[string]interface{}, heade
 	}
 	namespace := argString(args, "namespace", "")
 
-	if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+	notice, err := gitopsGuard(ctx, headers, resourceType, resourceName, namespace)
+	if err != nil {
 		return "", err
 	}
 	cmdArgs := []string{"scale", resourceType, resourceName, "--replicas", strconv.Itoa(replicas)}
 	if namespace != "" {
 		cmdArgs = append(cmdArgs, "-n", namespace)
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleRollout(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -243,8 +251,10 @@ func handleRollout(ctx context.Context, args map[string]interface{}, headers htt
 	revision := argInt(args, "revision", 0)
 	timeout := argString(args, "timeout", "")
 
+	var notice string
 	if action != "status" && action != "history" {
-		if err := gitopsRefuse(ctx, headers, resourceType, resourceName, namespace); err != nil {
+		var err error
+		if notice, err = gitopsGuard(ctx, headers, resourceType, resourceName, namespace); err != nil {
 			return "", err
 		}
 	}
@@ -258,7 +268,8 @@ func handleRollout(ctx context.Context, args map[string]interface{}, headers htt
 	if timeout != "" {
 		cmdArgs = append(cmdArgs, "--timeout", timeout)
 	}
-	return runKubectl(ctx, headers, cmdArgs...)
+	out, err := runKubectl(ctx, headers, cmdArgs...)
+	return withGitopsNotice(notice, out), err
 }
 
 func handleExecuteCommand(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {

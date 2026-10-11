@@ -121,6 +121,7 @@ export default function ApiKeysSection() {
           <div className="text-sm font-semibold text-slate-200">{tr('apiKeys.mcp.title', 'Connect an AI agent (MCP)')}</div>
           <p className="mt-1 text-sm text-slate-400">
             {tr('apiKeys.mcp.body', 'Agents such as Claude Code and Cursor connect with this API key instead of a kubeconfig. They get read-only tools within your permissions, and every call is audited.')}
+            {mcp.write_tools && <span data-testid="api-key-mcp-write"> {tr('apiKeys.mcp.writeBody', 'A key with a Write ceiling also gets the write tools — no approval step, your own or a temporarily granted role (access request) applies, and Argo CD-managed objects are refused or flagged by the guard.')}</span>}
           </p>
           <div className="mt-2 text-xs text-slate-500">{tr('apiKeys.mcp.command', 'Registration command (replace the key with the value shown when it was created)')}</div>
           <pre className="mt-1 overflow-x-auto rounded-sm bg-slate-950/60 p-2 font-mono text-xs text-slate-300">
@@ -287,7 +288,10 @@ export default function ApiKeysSection() {
                 onChange={setCeiling}
                 testId="api-key-ceiling"
               />
-              <p className="text-xs text-slate-500">{tr('apiKeys.ceilingHint', 'The key never exceeds your own role on a cluster.')}</p>
+              <p className="text-xs text-slate-500">
+                {tr('apiKeys.ceilingHint', 'The key never exceeds your own role on a cluster.')}
+                {mcp?.write_tools && ` ${tr('apiKeys.ceilingHintWrite', 'A Write ceiling also opens the MCP write tools.')}`}
+              </p>
               {error && <p className="text-sm text-red-300" data-testid="api-key-error">{error}</p>}
             </div>
         </ModalFrame>

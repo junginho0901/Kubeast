@@ -22,22 +22,41 @@ func TestGitopsObjects(t *testing.T) {
 	}
 }
 
-func TestGitopsRefuseObjectsBlocksManaged(t *testing.T) {
+func TestGitopsGuardObjectsBlocksOrWarns(t *testing.T) {
 	saved := gitopsCfg
 	defer func() { gitopsCfg = saved }()
 	gitopsCfg = gitops.Config{Enabled: true, Mode: gitops.ModeBlock, TrackingAnnotation: gitops.DefaultTrackingAnnotation}
 	managed := gitops.Object{Group: "apps", Kind: "Deployment", Namespace: "ns", Name: "web",
 		Annotations: map[string]string{gitops.DefaultTrackingAnnotation: "app:apps/Deployment:ns/web"}}
 	free := gitops.Object{Kind: "ConfigMap", Namespace: "ns", Name: "cm"}
-	if err := gitopsRefuseObjects(nil, nil, []gitops.Object{free}, false); err != nil {
-		t.Fatalf("unmanaged must pass: %v", err)
+	if notice, err := gitopsGuardObjects(nil, nil, []gitops.Object{free}, false); err != nil || notice != "" {
+		t.Fatalf("unmanaged must pass silently: %q %v", notice, err)
 	}
-	err := gitopsRefuseObjects(nil, nil, []gitops.Object{free, managed}, false)
+	_, err := gitopsGuardObjects(nil, nil, []gitops.Object{free, managed}, false)
 	if err == nil || err.Error() != "conflict: Deployment ns/web is managed by Argo CD application app; change it in Git" {
 		t.Fatalf("managed must be refused with the app name: %v", err)
 	}
+
+	// warn: the write goes through, the result starts with the notice.
 	gitopsCfg.Mode = gitops.ModeWarn
-	if err := gitopsRefuseObjects(nil, nil, []gitops.Object{managed}, false); err != nil {
+	notice, err := gitopsGuardObjects(nil, nil, []gitops.Object{free, managed}, false)
+	if err != nil {
 		t.Fatalf("warn mode must pass: %v", err)
+	}
+	want := "⚠ Deployment ns/web is managed by Argo CD application app (gitops.argocd.mode=warn): this change drifts from Git until the Application syncs it back."
+	if notice != want {
+		t.Fatalf("notice = %q", notice)
+	}
+	if got := withGitopsNotice(notice, "deployment.apps/web scaled"); got != want+"\n\ndeployment.apps/web scaled" {
+		t.Fatalf("prefixed output = %q", got)
+	}
+	if got := withGitopsNotice("", "deployment.apps/web scaled"); got != "deployment.apps/web scaled" {
+		t.Fatalf("no notice must leave the output alone: %q", got)
+	}
+
+	// off: nothing is detected at all.
+	gitopsCfg.Enabled = false
+	if notice, err := gitopsGuardObjects(nil, nil, []gitops.Object{managed}, false); err != nil || notice != "" {
+		t.Fatalf("disabled guard must be silent: %q %v", notice, err)
 	}
 }

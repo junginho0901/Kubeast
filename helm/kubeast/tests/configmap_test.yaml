@@ -243,6 +243,27 @@ tests:
           path: data.PROMETHEUS_DISCOVER
           value: "false"
 
+  - it: keeps the MCP server and its write tools off by default and takes both from mcp
+    asserts:
+      - equal:
+          path: data.MCP_ENABLED
+          value: "false"
+      - equal:
+          path: data.MCP_WRITE_TOOLS
+          value: "false"
+
+  - it: turns MCP write tools on from mcp.writeTools
+    set:
+      mcp.enabled: true
+      mcp.writeTools: true
+    asserts:
+      - equal:
+          path: data.MCP_ENABLED
+          value: "true"
+      - equal:
+          path: data.MCP_WRITE_TOOLS
+          value: "true"
+
   - it: turns in-place resize on by default and off from features.inPlaceResize
     asserts:
       - equal:

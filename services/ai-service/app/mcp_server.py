@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import anyio
@@ -34,8 +35,10 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.types import ASGIApp
 
 from app.security import TokenPayload, decode_access_token
-from app.services.ai.tools import CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS
+from app.services.ai.tools import CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
+from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
+from app.services.tool_whitelists import write_approval_required
 from app.services.http_shared import ScopedClient
 from app.services.tool_server_client import ToolServerClient
 
@@ -48,13 +51,19 @@ LIST_CLUSTERS_TOOL = "list_clusters"
 API_KEY_PREFIX = "kbk_"
 # An exchanged API-key token is reused for this long at most (the token itself
 # lives longer); revoking the key refuses the next exchange.
-EXCHANGE_CACHE_SECONDS = 300
+EXCHANGE_CACHE_SECONDS = 60  # a granted access request shows up on the next exchange
 
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8004").rstrip("/")
 
 
 def mcp_enabled() -> bool:
     return os.getenv("MCP_ENABLED", "false").strip().lower() == "true"
+
+
+def mcp_write_tools_enabled() -> bool:
+    """MCP_WRITE_TOOLS (chart mcp.writeTools, default off): offer the chat's write
+    tools and request_access to keys whose ceiling is Write."""
+    return os.getenv("MCP_WRITE_TOOLS", "false").strip().lower() == "true"
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +97,56 @@ def _read_tools() -> Dict[str, Tool]:
 
 
 READ_TOOLS: Dict[str, Tool] = _read_tools()
+
+# The chat's write tools (app/services/ai/tools.py K8S_WRITE_TOOLS), offered only
+# when MCP_WRITE_TOOLS is on and the token holds ai.tool.<name> somewhere — a key
+# with a Read ceiling carries neither that nor ai.mcp.use. No approval step: the
+# user's own permissions (or a granted access request) and the Argo CD guard
+# apply, and the annotations tell the client which calls change the cluster.
+WRITE_NON_DESTRUCTIVE = frozenset({"k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label"})
+
+
+def _write_tools() -> Dict[str, Tool]:
+    tools: Dict[str, Tool] = {}
+    for entry in K8S_WRITE_TOOLS:
+        fn = entry["function"]
+        tools[fn["name"]] = Tool(
+            name=fn["name"],
+            description=" ".join(str(fn.get("description", "")).split()),
+            input_schema=_with_cluster(fn.get("parameters")),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=fn["name"] not in WRITE_NON_DESTRUCTIVE,
+                idempotent_hint=False,
+                open_world_hint=False,
+            ),
+        )
+    return tools
+
+
+WRITE_TOOLS: Dict[str, Tool] = _write_tools()
+
+REQUEST_ACCESS_TOOL = "request_access"
+REQUEST_ACCESS = Tool(
+    name=REQUEST_ACCESS_TOOL,
+    description=(
+        "Ask a Kubeast admin for a temporary role on a cluster (access request). Use it when a write tool answers "
+        "forbidden; once approved, calls within that role work for the granted hours. Needs cluster, role (usually Write), "
+        "duration_minutes and a reason."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "cluster": CLUSTER_ARG,
+            "role": {"type": "string", "description": "Role to request, e.g. Write."},
+            "duration_minutes": {"type": "integer", "minimum": 1, "description": "How long the role is needed (auth-service caps it)."},
+            "reason": {"type": "string", "minLength": 3, "description": "Why — shown to the approver."},
+        },
+        "required": ["cluster", "role", "duration_minutes", "reason"],
+        "additionalProperties": False,
+    },
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False),
+)
 
 LIST_CLUSTERS = Tool(
     name=LIST_CLUSTERS_TOOL,
@@ -138,14 +197,24 @@ class KubeastTokenVerifier:
         token = token.strip()
         if not token:
             return None
+        is_key = token.startswith(API_KEY_PREFIX)
         jwt_token = token
-        if token.startswith(API_KEY_PREFIX):
-            jwt_token = await self._exchange_api_key(token)
-            if not jwt_token:
-                return None
-        try:
-            payload = await anyio.to_thread.run_sync(decode_access_token, jwt_token)
-        except HTTPException:
+        payload: Optional[TokenPayload] = None
+        for attempt in (0, 1):
+            if is_key:
+                jwt_token = await self._exchange_api_key(token, fresh=attempt == 1)
+                if not jwt_token:
+                    return None
+            try:
+                payload = await anyio.to_thread.run_sync(decode_access_token, jwt_token)
+                break
+            except HTTPException:
+                # A cached exchange goes stale when auth-service revokes the user's
+                # tokens (a role change, an approved access request): exchange once
+                # more so the new permissions apply now, not after the cache TTL.
+                if not is_key or attempt == 1:
+                    return None
+        if payload is None:
             return None
         if (payload.role or "").lower() == "pending":
             return None
@@ -157,11 +226,11 @@ class KubeastTokenVerifier:
             claims=_payload_to_claims(payload),
         )
 
-    async def _exchange_api_key(self, key: str) -> Optional[str]:
+    async def _exchange_api_key(self, key: str, fresh: bool = False) -> Optional[str]:
         cache_key = hashlib.sha256(key.encode()).hexdigest()
         cached = self._cache.get(cache_key)
         now = time.monotonic()
-        if cached and cached[1] > now:
+        if cached and cached[1] > now and not fresh:
             return cached[0]
         try:
             res = await self._exchange.post("/api/v1/auth/token", headers={"Authorization": f"Bearer {key}"})
@@ -198,7 +267,18 @@ def _may_use_mcp(payload: TokenPayload, cluster: Optional[str] = None) -> bool:
 def _tools_allowed_in(payload: TokenPayload, cluster: str) -> List[str]:
     if not _may_use_mcp(payload, cluster):
         return []
-    return [name for name in READ_TOOLS if payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)]
+    names = [name for name in READ_TOOLS if payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)]
+    if mcp_write_tools_enabled():
+        names += [name for name in WRITE_TOOLS if payload.has_permission_for_cluster(f"ai.tool.{name}", cluster)]
+    return names
+
+
+def _write_tools_anywhere(payload: TokenPayload) -> List[str]:
+    """Write tools the token may call in at least one cluster of its matrix."""
+    if not mcp_write_tools_enabled():
+        return []
+    clusters = [c for c in payload.matrix if c != "*"] or ["*"]
+    return [name for name in WRITE_TOOLS if any(payload.has_permission_for_cluster(f"ai.tool.{name}", c) for c in clusters)]
 
 
 def _http_meta(context: Optional[Context]) -> Dict[str, str]:
@@ -238,8 +318,12 @@ class KubeastMCPServer(MCPServer):
             return []
         payload = payload_of(token)
         if not _may_use_mcp(payload):
-            return []
-        return [LIST_CLUSTERS, *READ_TOOLS.values()]
+            # Nothing to call yet; with write tools on the agent may still ask for a role.
+            return [REQUEST_ACCESS] if mcp_write_tools_enabled() else []
+        tools = [LIST_CLUSTERS, *READ_TOOLS.values(), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
+        if mcp_write_tools_enabled():
+            tools.append(REQUEST_ACCESS)
+        return tools
 
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None) -> CallToolResult:  # type: ignore[override]
         token = get_access_token()
@@ -248,9 +332,12 @@ class KubeastMCPServer(MCPServer):
         payload = payload_of(token)
         if name == LIST_CLUSTERS_TOOL:
             return await self._list_clusters(token, payload)
-        tool = READ_TOOLS.get(name)
+        if name == REQUEST_ACCESS_TOOL and mcp_write_tools_enabled():
+            return await self._request_access(token, payload, dict(arguments or {}), context)
+        tool = READ_TOOLS.get(name) or (WRITE_TOOLS.get(name) if mcp_write_tools_enabled() else None)
         if tool is None:
             return _text(f"unknown tool: {name}", error=True)
+        is_write = name in WRITE_TOOLS
 
         args = dict(arguments or {})
         cluster = args.get("cluster")
@@ -279,6 +366,7 @@ class KubeastMCPServer(MCPServer):
         }
         after: Dict[str, Any] = {
             "tool": name,
+            "write": is_write,
             "resource_type": args.get("resource_type"),
             "credential": {"type": "api_key" if payload.api_key_id else "session", "akid": payload.api_key_id or None},
             "client": meta["user_agent"],
@@ -296,9 +384,23 @@ class KubeastMCPServer(MCPServer):
         except AuditUnavailable as e:
             return _text(f"audit unavailable: {e}", error=True)
 
+        # tool-server's approval gate (AI_WRITE_APPROVAL) exists for the chat, where
+        # the model picks the call and the user approves it in a card. Here the
+        # agent calls under the user's own key and the MCP client confirms
+        # destructive calls, so the server signs the approval per call.
+        headers: Optional[Dict[str, str]] = None
+        if is_write and write_approval_required():
+            approval_id = f"mcp-{uuid.uuid4().hex}"
+            try:
+                headers = {"X-Kubeast-Approval-Id": approval_id, "X-Kubeast-Approval-Token": sign_approval(approval_id, payload.user_id, cluster, name, args)}
+            except ApprovalTokenUnavailable as e:
+                await write_audit(**audit, after=after, result="failure", error=str(e))
+                return _text(f"write tools are not available: {e}", error=True)
+            after["approval_id"] = approval_id
+
         client = ToolServerClient(authorization=f"Bearer {token.token}", base_url=self._tool_server_url)
         try:
-            content = await client.call_tool(name, args)
+            content = await client.call_tool(name, args, headers=headers)
         except Exception as e:
             error = str(e) or e.__class__.__name__
             after["redacted"] = client.last_redacted
@@ -307,6 +409,61 @@ class KubeastMCPServer(MCPServer):
         after["redacted"] = client.last_redacted
         await write_audit(**audit, after=after)
         return _text(content)
+
+    async def _request_access(self, token: AccessToken, payload: TokenPayload, args: Dict[str, Any], context: Optional[Context]) -> CallToolResult:
+        """File an access request as the user. auth-service decides (feature on,
+        escalation only, ceiling role, duration cap, one pending per cluster); no
+        ai.mcp.use check here, since the requester usually lacks it in that very
+        cluster. The agent retries after an admin approves — the granted role
+        reaches the key on its next exchange (EXCHANGE_CACHE_SECONDS). Audited
+        here and, by auth-service, as user.access.request."""
+        try:
+            jsonschema.validate(instance=args, schema=REQUEST_ACCESS.input_schema)
+        except jsonschema.ValidationError as e:
+            return _text(f"invalid arguments: {e.message}", error=True)
+        cluster = str(args["cluster"]).strip()
+        meta = _http_meta(context)
+        audit: Dict[str, Any] = {
+            "action": AUDIT_ACTION,
+            "actor_user_id": payload.user_id,
+            "actor_email": payload.email,
+            "target_type": "access_request",
+            "target_id": cluster,
+            "cluster": cluster,
+            "request_ip": meta["ip"],
+            "user_agent": meta["user_agent"],
+            "request_id": meta["request_id"],
+            "path": MCP_PATH,
+        }
+        after: Dict[str, Any] = {
+            "tool": REQUEST_ACCESS_TOOL,
+            "write": False,
+            "role": args["role"],
+            "duration_minutes": args["duration_minutes"],
+            "credential": {"type": "api_key" if payload.api_key_id else "session", "akid": payload.api_key_id or None},
+            "client": meta["user_agent"],
+        }
+        try:
+            await require_audit_ready()
+        except AuditUnavailable as e:
+            return _text(f"audit unavailable: {e}", error=True)
+        try:
+            res = await self._clusters.post(
+                "/api/v1/auth/access-requests",
+                json={"cluster_id": cluster, "role": args["role"], "duration_minutes": int(args["duration_minutes"]), "reason": str(args["reason"])},
+                headers={"Authorization": f"Bearer {token.token}", "X-Requested-With": "XMLHttpRequest"},
+            )
+            body = res.json() if res.content else {}
+            if res.status_code >= 400:
+                detail = str((body or {}).get("detail") or (body or {}).get("error") or res.text)[:300]
+                await write_audit(**audit, after=after, result="failure", error=f"{res.status_code}: {detail}")
+                return _text(f"access request refused ({res.status_code}): {detail}", error=True)
+        except Exception as e:
+            await write_audit(**audit, after=after, result="failure", error=str(e)[:500])
+            return _text(f"access request failed: {e}", error=True)
+        after["request_id"] = (body or {}).get("id")
+        await write_audit(**audit, after=after)
+        return _text(json.dumps({"status": "pending", "request": body, "note": "an admin approves it in Kubeast → Access Requests; retry the call afterwards (takes effect within a minute)"}, ensure_ascii=False))
 
     async def _list_clusters(self, token: AccessToken, payload: TokenPayload) -> CallToolResult:
         try:

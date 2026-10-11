@@ -12,6 +12,7 @@
     "allClusters": "All clusters you can reach",
     "ceiling": "Role ceiling",
     "ceilingHint": "The key never exceeds your own role on a cluster.",
+    "ceilingHintWrite": "A Write ceiling also opens the MCP write tools.",
     "issue": "Issue key",
     "cancel": "Cancel",
     "onceWarning": "Copy the key now — it is shown only this once.",
@@ -30,6 +31,7 @@
     "mcp": {
       "title": "Connect an AI agent (MCP)",
       "body": "Agents such as Claude Code and Cursor connect with this API key instead of a kubeconfig. They get read-only tools within your permissions, and every call is audited.",
+      "writeBody": "A key with a Write ceiling also gets the write tools — no approval step, your own or a temporarily granted role (access request) applies, and Argo CD-managed objects are refused or flagged by the guard.",
       "command": "Registration command (replace the key with the value shown when it was created)"
     }
   },

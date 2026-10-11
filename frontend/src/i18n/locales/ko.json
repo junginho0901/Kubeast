@@ -12,6 +12,7 @@
     "allClusters": "접근 가능한 모든 클러스터",
     "ceiling": "역할 상한",
     "ceilingHint": "클러스터별 내 역할을 넘지 않습니다.",
+    "ceilingHintWrite": "상한이 Write면 MCP 쓰기 도구도 열립니다.",
     "issue": "발급",
     "cancel": "취소",
     "onceWarning": "지금 복사하세요 — 키는 이번 한 번만 표시됩니다.",
@@ -30,6 +31,7 @@
     "mcp": {
       "title": "AI 에이전트 연결 (MCP)",
       "body": "Claude Code·Cursor 같은 AI 에이전트는 kubeconfig 대신 이 API 키로 연결합니다. 내 권한만큼의 읽기 도구만 쓰고, 호출마다 감사 로그에 남습니다.",
+      "writeBody": "상한이 Write인 키는 쓰기 도구도 씁니다 — 승인 단계 없이 내 권한·임시 권한(접근 요청) 그대로, Argo CD 관리 객체는 가드가 막거나 경고합니다.",
       "command": "등록 명령 (키 값은 발급 때 보인 값으로 바꾸세요)"
     }
   },
