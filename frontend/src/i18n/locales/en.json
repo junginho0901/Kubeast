@@ -26,6 +26,11 @@
     "admin": {
       "title": "API keys",
       "empty": "No API keys"
+    },
+    "mcp": {
+      "title": "Connect an AI agent (MCP)",
+      "body": "Agents such as Claude Code and Cursor connect with this API key instead of a kubeconfig. They get read-only tools within your permissions, and every call is audited.",
+      "command": "Registration command (replace the key with the value shown when it was created)"
     }
   },
   "clusterHygiene": {
@@ -3133,6 +3138,7 @@
         "ai_tool_all": "All AI tools",
         "ai_tool_k8s_execute_command": "Run kubectl commands",
         "ai_tool_helm_execute": "AI runs Helm commands (including writes)",
+        "ai_mcp_use": "Connect an external AI agent (MCP) to this cluster",
         "admin_all": "All admin features",
         "admin_users_all": "User management",
         "admin_users_create": "Create users",

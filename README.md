@@ -173,6 +173,8 @@ AI 어시스턴트가 활성화됩니다.
 - **플로팅 AI 위젯** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트(보고 있는 리소스)**
   를 이해하고 답변 (read-only 툴로 제한)
 - **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍
+- **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
+  **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐)
 - **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트
 
 ### 🌐 멀티클러스터 & RBAC
@@ -573,6 +575,29 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 `?cluster=`를 빼면 레지스트리 기본 클러스터(self 클러스터, 없으면 가장 먼저 등록한 것)로 가고 권한도 그 클러스터로 검사합니다. 어느 클러스터인지는 `GET /api/v1/cluster/current`(`{"id": "…"}`)로 확인합니다.
 
 끄려면 `auth.apiKeys.enabled: false`(컴포즈는 `API_KEYS_ENABLED`). 발급·폐기·교환은 감사 로그에 남습니다.
+
+### AI 에이전트 연결 (MCP 서버)
+
+Claude Code·Cursor 같은 AI 에이전트가 클러스터를 보게 하려면 보통 kubeconfig를 에이전트에 쥐여 줍니다. 그러면
+누가 무엇을 했는지 감사에 안 남고, 에이전트가 사람보다 많은 권한을 쥐고, Secret 값이 그대로 모델로 갑니다.
+Kubeast의 MCP 서버(`/api/v1/ai/mcp`, [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports))는
+그 자리를 대신합니다 — 에이전트는 **API 키 하나**로 연결하고, 채팅과 같은 **읽기 도구**를 **그 사람 권한으로만**(클러스터별 역할,
+impersonation) 씁니다. 결과는 모델로 가기 전에 마스킹되고(Secret 값은 늘 제거), 호출마다 감사 로그 `ai.mcp.call`이
+남으며, 감사 행을 못 쓰면 호출이 거부됩니다. 쓰는 도구는 없습니다.
+
+```bash
+# Settings → API keys에서 키를 발급한 뒤(클러스터·역할 상한 지정), 에이전트에 등록
+claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mcp \
+  --header "Authorization: Bearer $KUBEAST_API_KEY"
+```
+
+- 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼짐이고, 꺼져 있으면 경로가 없습니다.
+- 권한: 그 클러스터에 `ai.mcp.use`(시스템 Write 역할에 포함, Admin은 전부)와 쓰려는 도구의 `ai.tool.<이름>`. `list_clusters`가
+  연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 주고, 나머지 도구는 `cluster` 인자가 필수입니다(기본 클러스터로 떨어지지 않음).
+- 인증: `Authorization: Bearer` 헤더에 API 키(`kbk_…`) 또는 액세스 토큰. 키는 서버가 짧은 토큰으로 교환해 쓰고(교환도 감사), 키를
+  폐기하면 다음 호출부터 거부됩니다. 세션이 없어(stateless) 요청마다 검사하고, 복제본이 여럿이어도 됩니다.
+- 감사: `ai.mcp.call`의 `after`에 도구·클러스터·마스킹 통계·자격(`credential.akid` = 키 id)·클라이언트(User-Agent). 권한 밖 호출도
+  `failure`로 남습니다.
 
 ### 접근 권한 검토 (Access review)
 

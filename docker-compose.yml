@@ -90,6 +90,8 @@ services:
       - SESSION_SERVICE_URL=http://session-service:8003
       - TOOL_SERVER_URL=http://tool-server:8086
       - AI_APPROVAL_SECRET=${AI_APPROVAL_SECRET:-}
+      # MCP server for external AI agents at /api/v1/ai/mcp (API key sign-in)
+      - MCP_ENABLED=${MCP_ENABLED:-false}
     networks:
       - msa-network
     depends_on:

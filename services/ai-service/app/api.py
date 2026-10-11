@@ -585,3 +585,10 @@ async def delete_model_config(config_id: int, payload=Depends(require_auth)):
     if not ok:
         raise HTTPException(status_code=404, detail="Model config not found")
     _invalidate_caches()
+
+@router.get("/mcp/config")
+async def mcp_config(payload=Depends(require_auth)):
+    """Whether the MCP server is on and where (the Settings page shows how to connect)."""
+    from app import mcp_server
+
+    return {"enabled": mcp_server.mcp_enabled(), "path": mcp_server.MCP_PATH}

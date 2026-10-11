@@ -349,13 +349,9 @@ K8S_WRITE_TOOLS: List[Dict] = [
 ]
 
 
-def get_tools_definition(service) -> List[Dict]:
-    """Tools 정의 반환 (상세한 설명 포함).
-
-    ai_service.AIService._get_tools_definition 에서 추출. role 기반 필터링은
-    service._filter_tools_by_role 에 위임 (해당 메서드는 self._role_allows_*
-    프로퍼티에 의존하므로 AIService 에 잔존)."""
-    tools = [
+# Cluster-wide read tools (overview, kubectl top). Module-level so the MCP
+# server (app/mcp_server.py) offers the same read tools the chat does.
+CLUSTER_METRICS_TOOLS: List[Dict] = [
         {
             "type": "function",
             "function": {
@@ -404,8 +400,16 @@ def get_tools_definition(service) -> List[Dict]:
                 "parameters": {"type": "object", "properties": {}}
             }
         }
-    ]
+]
 
+
+def get_tools_definition(service) -> List[Dict]:
+    """Tools 정의 반환 (상세한 설명 포함).
+
+    ai_service.AIService._get_tools_definition 에서 추출. role 기반 필터링은
+    service._filter_tools_by_role 에 위임 (해당 메서드는 self._role_allows_*
+    프로퍼티에 의존하므로 AIService 에 잔존)."""
+    tools = list(CLUSTER_METRICS_TOOLS)
     tools.extend(K8S_READONLY_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)

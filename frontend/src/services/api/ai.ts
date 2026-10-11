@@ -24,6 +24,12 @@ export interface ToolApproval {
 }
 
 export const aiApi = {
+  // MCP server for external AI agents (chart mcp.enabled): the Settings page shows how to connect.
+  getMCPConfig: async (): Promise<{ enabled: boolean; path: string }> => {
+    const { data } = await client.get('/ai/mcp/config')
+    return { enabled: !!data?.enabled, path: String(data?.path || '/api/v1/ai/mcp') }
+  },
+
   // AI write-tool approvals (H2): the model's write call waits here until the user decides.
   listToolApprovals: async (sessionId: string): Promise<ToolApproval[]> => {
     const { data } = await client.get('/ai/tool-approvals', { params: { session_id: sessionId } })

@@ -8,6 +8,7 @@
     "check:assertions": "node scripts/check-assertions.mjs"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@playwright/test": "^1.48.0"
   }
 }

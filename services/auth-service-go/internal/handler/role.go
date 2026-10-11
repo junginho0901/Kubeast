@@ -270,6 +270,7 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.*", "All AI tools"},
 			{"ai.tool.k8s_execute_command", "Run kubectl commands"},
 			{"ai.tool.helm_execute", "AI runs Helm commands (including writes)"},
+			{"ai.mcp.use", "Connect an external AI agent (MCP) to this cluster"},
 		}},
 		{"category": "Admin", "permissions": []perm{
 			{"admin.*", "All admin features"},

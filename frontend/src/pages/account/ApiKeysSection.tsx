@@ -24,6 +24,7 @@ export default function ApiKeysSection() {
   const queryClient = useQueryClient()
 
   const { data: config } = useQuery({ queryKey: ['api-keys', 'config'], queryFn: api.getAPIKeysConfig, staleTime: 60_000 })
+  const { data: mcp } = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000 })
   const enabled = !!config?.enabled
   const maxDays = config?.max_days ?? 90
   const { data: keys = [] } = useQuery({ queryKey: ['api-keys', 'mine'], queryFn: api.listMyAPIKeys, enabled })
@@ -114,6 +115,19 @@ export default function ApiKeysSection() {
           {tr('apiKeys.create', 'Create key')}
         </button>
       </div>
+
+      {mcp?.enabled && (
+        <div className="mb-4 rounded-lg border border-slate-700 bg-slate-900/40 p-3" data-testid="api-key-mcp">
+          <div className="text-sm font-semibold text-slate-200">{tr('apiKeys.mcp.title', 'Connect an AI agent (MCP)')}</div>
+          <p className="mt-1 text-sm text-slate-400">
+            {tr('apiKeys.mcp.body', 'Agents such as Claude Code and Cursor connect with this API key instead of a kubeconfig. They get read-only tools within your permissions, and every call is audited.')}
+          </p>
+          <div className="mt-2 text-xs text-slate-500">{tr('apiKeys.mcp.command', 'Registration command (replace the key with the value shown when it was created)')}</div>
+          <pre className="mt-1 overflow-x-auto rounded-sm bg-slate-950/60 p-2 font-mono text-xs text-slate-300">
+            {`claude mcp add --transport http kubeast ${window.location.origin}${mcp.path} --header "Authorization: Bearer $KUBEAST_API_KEY"`}
+          </pre>
+        </div>
+      )}
 
       {created && (
         <div className="mb-4 rounded-lg border border-emerald-800/60 bg-emerald-900/20 p-3" data-testid="api-key-created">

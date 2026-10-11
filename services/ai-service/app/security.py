@@ -131,6 +131,9 @@ class TokenPayload:
     email: str = ""
     permissions: tuple = ()
     matrix: Mapping[str, tuple] = field(default_factory=dict)
+    # Set when the token came from an API key exchange (the "akid" claim); the
+    # audit row then names the key the automation used.
+    api_key_id: str = ""
 
     def has_permission(self, perm: str) -> bool:
         """Global check: the all-cluster ("*") entry only."""
@@ -187,6 +190,7 @@ def decode_access_token(token: str) -> TokenPayload:
             email=email,
             permissions=matrix.get("*", ()),
             matrix=matrix,
+            api_key_id=str(payload.get("akid") or "").strip(),
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")

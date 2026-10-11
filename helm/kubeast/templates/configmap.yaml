@@ -110,6 +110,7 @@ data:
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
+  MCP_ENABLED: {{ .Values.mcp.enabled | quote }}
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}
   METRICS_ENABLED: {{ .Values.metrics.enabled | quote }}
   AUDIT_FAIL_CLOSED: {{ .Values.audit.failClosed | quote }}

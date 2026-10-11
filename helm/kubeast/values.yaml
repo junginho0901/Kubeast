@@ -284,6 +284,13 @@ ai:
   # cluster log pipeline.
   debugDump: false
 
+# MCP server at /api/v1/ai/mcp: an external AI agent (Claude Code, Cursor, ...)
+# connects with a Kubeast API key instead of a kubeconfig and gets the chat's
+# read-only tools, run as that user (cluster role, masking, an audit row per
+# call). A user needs ai.mcp.use in a cluster (in the Write role) to use it there.
+mcp:
+  enabled: false
+
 # --- PostgreSQL ---
 audit:
   # Also write every audit record to the service log as one JSON line (event: audit) for the cluster log pipeline.

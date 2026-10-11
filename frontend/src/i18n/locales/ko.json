@@ -26,6 +26,11 @@
     "admin": {
       "title": "API 키",
       "empty": "API 키 없음"
+    },
+    "mcp": {
+      "title": "AI 에이전트 연결 (MCP)",
+      "body": "Claude Code·Cursor 같은 AI 에이전트는 kubeconfig 대신 이 API 키로 연결합니다. 내 권한만큼의 읽기 도구만 쓰고, 호출마다 감사 로그에 남습니다.",
+      "command": "등록 명령 (키 값은 발급 때 보인 값으로 바꾸세요)"
     }
   },
   "clusterHygiene": {
@@ -3229,6 +3234,7 @@
         "ai_tool_all": "모든 AI 도구",
         "ai_tool_k8s_execute_command": "K8s 명령어 실행",
         "ai_tool_helm_execute": "AI가 Helm 명령 실행 (쓰기 포함)",
+        "ai_mcp_use": "외부 AI 에이전트(MCP)를 이 클러스터에 연결",
         "admin_all": "모든 관리자 기능",
         "admin_users_all": "사용자 관리",
         "admin_users_create": "사용자 생성",

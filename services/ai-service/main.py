@@ -2,21 +2,40 @@
 AI Service - OpenAI 통합 및 AI 기능 전담
 Port: 8001
 """
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.routing import Route
 from app.api import router
 from app.api_public import admin_router, public_router
 from app.config import settings
 from app.security import require_auth
 from app import metrics as console_metrics
+from app import mcp_server
 import uvicorn
+
+# The MCP server (MCP_ENABLED): external AI agents reach the clusters through
+# Kubeast as the signed-in user. Its session manager runs for the app's lifetime.
+_mcp = mcp_server.KubeastMCPServer() if mcp_server.mcp_enabled() else None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if _mcp is None:
+        yield
+        return
+    async with _mcp.session_manager.run():
+        yield
+
 
 app = FastAPI(
     title="AI Service",
     version="1.0.0",
-    description="OpenAI 통합 및 AI 분석 서비스"
+    description="OpenAI 통합 및 AI 분석 서비스",
+    lifespan=lifespan,
 )
 
 # CORS 설정
@@ -50,6 +69,10 @@ app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_au
 # 관리자 전용(모델 연결 테스트) / 공개(health)
 app.include_router(admin_router, prefix="/api/v1/ai")
 app.include_router(public_router, prefix="/api/v1/ai")
+
+if _mcp is not None:
+    # One exact path, so a client never meets a trailing-slash redirect.
+    app.router.routes.append(Route(mcp_server.MCP_PATH, mcp_server.build_mcp_app(_mcp)))
 
 # Console metrics (app/metrics.py): the shared kubeast_http_* instruments at
 # /metrics on this port. METRICS_ENABLED=false leaves it unmounted.

@@ -42,6 +42,8 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 			"resource.helm.read", "resource.helm.rollback",
 			"resource.helm.upgrade", "resource.helm.test",
 			"ai.tool.*",
+			// External AI agents (the MCP server) may act in this cluster as the user.
+			"ai.mcp.use",
 		}},
 		{"Admin", "전체 관리자", []string{"*"}},
 	}
