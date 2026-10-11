@@ -4,7 +4,8 @@
 // table query and the streaming state are owned by the parent; the
 // dropdown's outside-click detection is local to this component.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   AlertCircle,
@@ -15,12 +16,17 @@ import {
   Sparkles,
   StopCircle,
   X,
+  Zap,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
-import type { OptimizationResponse, OptimizationRow } from '@/services/api/types'
+import { api } from '@/services/api'
+import type { OptimizationResponse, OptimizationRow, ResizeResult } from '@/services/api/types'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { usePermission } from '@/hooks/usePermission'
+import { useConfirm } from '@/services/confirm'
 
 import { formatBytes, formatMillicores } from '../utils'
 
@@ -109,6 +115,61 @@ export function OptimizationModal({
     t(key, { defaultValue: fallback, ...options })
   const na = tr('common.notAvailable', 'N/A')
 
+  // "Apply without restart": the row's recommendation on the workload's running
+  // pods through the pod resize subresource. Shown when the chart switch is on,
+  // the server is 1.35+ and the user may edit pods.
+  const { data: features } = useClusterFeatures()
+  const { has } = usePermission()
+  const confirm = useConfirm()
+  const queryClient = useQueryClient()
+  const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
+  const rowKey = (row: OptimizationRow) => `${row.kind}/${row.name}/${row.container}`
+  const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
+  const resize = useMutation({
+    mutationFn: (row: OptimizationRow) =>
+      api.resizeOptimization(row.namespace, {
+        kind: row.kind,
+        name: row.name,
+        container: row.container,
+        cpu_request_m: row.cpu_recommend_m,
+        mem_request_bytes: row.mem_recommend_bytes,
+      }),
+    onSuccess: (res, row) => {
+      setResizeResults((m) => ({ ...m, [rowKey(row)]: res }))
+      queryClient.invalidateQueries({ queryKey: ['cluster-optimization'] })
+    },
+    onError: (err: any, row) => {
+      setResizeResults((m) => ({ ...m, [rowKey(row)]: { error: err?.response?.data?.detail ?? err?.response?.data?.error ?? err?.message ?? String(err) } }))
+    },
+  })
+  const resizable = (row: OptimizationRow) =>
+    canResize &&
+    ((row.cpu_recommend_m != null && row.cpu_recommend_m !== row.cpu_request_m) ||
+      (row.mem_recommend_bytes != null && row.mem_recommend_bytes !== row.mem_request_bytes))
+  const applyResize = async (row: OptimizationRow) => {
+    const ok = await confirm({
+      title: tr('dashboard.optimization.resize.title', 'Apply without restart'),
+      message: tr('dashboard.optimization.resize.message', '{{workload}} · {{container}}: CPU {{cpu}}, memory {{mem}} on {{pods}} running pods, through the pod resize subresource.', {
+        workload: `${row.kind}/${row.name}`,
+        container: row.container,
+        cpu: row.cpu_recommend_m != null ? formatMillicores(row.cpu_recommend_m) : '-',
+        mem: row.mem_recommend_bytes != null ? formatBytes(row.mem_recommend_bytes) : '-',
+        pods: row.pods,
+      }),
+      warning: tr('dashboard.optimization.resize.warning', 'The workload template is not changed: the next rollout restores its values. Containers whose resizePolicy restarts on this change are skipped, and the QoS class is kept.'),
+      confirmLabel: tr('dashboard.optimization.resize.confirm', 'Apply'),
+    })
+    if (ok) resize.mutate(row)
+  }
+  const resizeResultText = (r: ResizeResult) => {
+    const parts = [tr('dashboard.optimization.resize.result', '{{resized}}/{{total}} resized', { resized: r.resized, total: r.pods.length })]
+    if (r.pending) parts.push(tr('dashboard.optimization.resize.pending', 'pending {{count}}', { count: r.pending }))
+    if (r.skipped) parts.push(tr('dashboard.optimization.resize.skipped', 'skipped {{count}}', { count: r.skipped }))
+    if (r.failed) parts.push(tr('dashboard.optimization.resize.failed', 'failed {{count}}', { count: r.failed }))
+    const reasons = Array.from(new Set(r.pods.filter((p) => p.result !== 'resized' && p.reason).map((p) => p.reason as string)))
+    return reasons.length ? `${parts.join(' · ')} — ${reasons.join('; ')}` : parts.join(' · ')
+  }
+
   // Outside-click → close namespace dropdown.
   const dropdownRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -153,6 +214,35 @@ export function OptimizationModal({
       <td className="px-2 py-1.5 text-right text-slate-300 whitespace-nowrap">{reqLim(row.mem_request_bytes, row.mem_limit_bytes, formatBytes)}</td>
       <td className="px-2 py-1.5 text-right text-slate-300">{row.mem_usage_bytes != null ? formatBytes(row.mem_usage_bytes) : '-'}</td>
       <td className="px-2 py-1.5 text-right text-slate-100">{row.mem_recommend_bytes != null ? formatBytes(row.mem_recommend_bytes) : '-'}</td>
+      {canResize && (
+        <td className="px-2 py-1.5 max-w-[260px]">
+          {resizable(row) && (
+            <button
+              type="button"
+              onClick={() => applyResize(row)}
+              disabled={resize.isPending}
+              data-testid="optimization-resize"
+              className="h-7 px-2 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] text-white inline-flex items-center gap-1 whitespace-nowrap"
+              title={tr('dashboard.optimization.resize.title', 'Apply without restart')}
+            >
+              <Zap className="w-3 h-3" />
+              {resize.isPending && resize.variables && rowKey(resize.variables) === rowKey(row)
+                ? tr('dashboard.optimization.resize.applying', 'Applying...')
+                : tr('dashboard.optimization.resize.button', 'Apply')}
+            </button>
+          )}
+          {resizeResults[rowKey(row)] && (
+            <p
+              data-testid="optimization-resize-result"
+              className={`mt-1 text-[11px] break-words ${'error' in resizeResults[rowKey(row)] ? 'text-red-300' : 'text-slate-300'}`}
+            >
+              {'error' in resizeResults[rowKey(row)]
+                ? tr('dashboard.optimization.resize.error', 'Not applied: {{error}}', { error: (resizeResults[rowKey(row)] as { error: string }).error })
+                : resizeResultText(resizeResults[rowKey(row)] as ResizeResult)}
+            </p>
+          )}
+        </td>
+      )}
       <td className="px-2 py-1.5">
         <div className="flex flex-wrap gap-1">
           {row.flags.length === 0 ? (
@@ -357,6 +447,7 @@ export function OptimizationModal({
                     <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.memReqLim', 'Mem req / lim')}</th>
                     <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.memUsage', 'Mem usage')}</th>
                     <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.memRecommend', 'Mem rec.')}</th>
+                    {canResize && <th className="px-2 py-2 text-left font-medium">{tr('dashboard.optimization.resize.column', 'Apply')}</th>}
                     <th className="px-2 py-2 text-left font-medium">{tr('dashboard.optimization.table.flags', 'Flags')}</th>
                   </tr>
                 </thead>

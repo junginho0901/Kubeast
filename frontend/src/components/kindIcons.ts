@@ -3,8 +3,8 @@ import {
   Archive, ArrowUpWideNarrow, BadgeCheck, Box, Boxes, CalendarClock, ChartPie, CirclePlay, Container, Copy, Cpu,
   Database, DoorOpen, FileText, HardDrive, HardDriveDownload, KeyRound, KeySquare, Link, Lock, LockKeyhole, LogIn,
   MoveHorizontal, MoveVertical, Network, Package, Paperclip, Plug, PlugZap, Puzzle, Radio, Rocket, Route, Ruler,
-  Server, ServerCog, Shapes, ShieldAlert, ShieldHalf, Slice, Tag, Tags, Ticket, TicketPlus, Timer, UserCog,
-  UserPlus, UsersRound, Webhook,
+  Scale, Server, ServerCog, Shapes, ShieldAlert, ShieldHalf, Slice, Tag, Tags, Ticket, TicketPlus, Timer, UserCog,
+  UserPlus, UsersRound, Wand, Webhook,
 } from 'lucide-react'
 
 // One icon per Kubernetes kind, shared by the sidebar and the resource drawer header so the same kind always
@@ -12,6 +12,7 @@ import {
 export const KIND_ICONS: Record<string, LucideIcon> = {
   Namespace: Boxes, Node: Server, PriorityClass: ArrowUpWideNarrow, RuntimeClass: Container, Lease: Timer,
   ResourceQuota: ChartPie, LimitRange: Ruler, MutatingWebhookConfiguration: Webhook, ValidatingWebhookConfiguration: BadgeCheck,
+  ValidatingAdmissionPolicy: Scale, MutatingAdmissionPolicy: Wand,
   Pod: Box, Deployment: Rocket, StatefulSet: Database, DaemonSet: ServerCog, ReplicaSet: Copy, Job: CirclePlay,
   CronJob: CalendarClock, HorizontalPodAutoscaler: MoveHorizontal, VerticalPodAutoscaler: MoveVertical,
   PodDisruptionBudget: ShieldAlert,

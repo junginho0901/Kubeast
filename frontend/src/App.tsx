@@ -79,6 +79,8 @@ const ResourceQuotas = lazy(() => import('./pages/cluster/ResourceQuotas'))
 const LimitRanges = lazy(() => import('./pages/cluster/LimitRanges'))
 const MutatingWebhookConfigurations = lazy(() => import('./pages/cluster/MutatingWebhookConfigurations'))
 const ValidatingWebhookConfigurations = lazy(() => import('./pages/cluster/ValidatingWebhookConfigurations'))
+const ValidatingAdmissionPolicies = lazy(() => import('./pages/cluster/ValidatingAdmissionPolicies'))
+const MutatingAdmissionPolicies = lazy(() => import('./pages/cluster/MutatingAdmissionPolicies'))
 const CustomResourceDefinitions = lazy(() => import('./pages/custom-resources/CustomResourceDefinitions'))
 const CustomResourceInstances = lazy(() => import('./pages/custom-resources/CustomResourceInstances'))
 const HelmReleasesPage = lazy(() => import('./pages/helm/Releases'))
@@ -151,6 +153,8 @@ function App() {
             <Route path="cluster/leases" element={<Leases />} />
             <Route path="cluster/mutatingwebhookconfigurations" element={<MutatingWebhookConfigurations />} />
             <Route path="cluster/validatingwebhookconfigurations" element={<ValidatingWebhookConfigurations />} />
+            <Route path="cluster/validatingadmissionpolicies" element={<ValidatingAdmissionPolicies />} />
+            <Route path="cluster/mutatingadmissionpolicies" element={<MutatingAdmissionPolicies />} />
             <Route path="custom-resources/instances" element={<CustomResourceInstances />} />
             <Route path="custom-resources/groups" element={<CustomResourceDefinitions />} />
             <Route path="helm/releases" element={<HelmReleasesPage />} />

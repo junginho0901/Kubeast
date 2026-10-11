@@ -172,7 +172,7 @@ AI 어시스턴트가 활성화됩니다.
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 게이팅**
 - **플로팅 AI 위젯** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트(보고 있는 리소스)**
   를 이해하고 답변 (read-only 툴로 제한)
-- **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍
+- **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`)
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
   **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐)
 - **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트
@@ -219,7 +219,7 @@ AI 어시스턴트가 활성화됩니다.
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
 | **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount |
-| **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating) |
+| **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "설치 안 됨") |
 | **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집 |
 
 - **YAML 편집** (Monaco), **Pod Exec / 로그** (xterm.js, WebSocket)
@@ -670,7 +670,8 @@ Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tra
 세 카드는 모두 k8s-service가 계산한 읽기 전용 결과를 보여 줍니다(AI 도구와 같은 숫자).
 
 - **이슈 확인** — `GET /api/v1/cluster/issues?window=<분>`: 파드(Phase·Ready·CrashLoopBackOff 등 대기/종료 사유·재시작), 워크로드(Deployment `ProgressDeadlineExceeded`·unavailable, StatefulSet·DaemonSet 미준비, Job 실패, CronJob 마지막 실행 실패, HPA 상한 도달), 노드(Ready≠True·압박 조건), PVC(미바인딩)에 최근 `window`분의 Warning 이벤트를 같은 객체 행에 붙여 "왜·언제·몇 번"을 보여 줍니다. 기본 범위는 `features.issues.eventWindowMinutes`(60), 화면에서 1h/6h/24h로 바꿀 수 있습니다. 행을 누르면 그 객체의 드로어가 열립니다.
-- **최적화 제안** — `GET /api/v1/cluster/optimization?namespace=…&window=<시간>`: 실행 중인 파드의 컨테이너별 requests/limits와 사용량(Prometheus가 있으면 최근 `window`시간의 CPU 95퍼센타일·메모리 최대, 없으면 metrics-server 순간값, 둘 다 없으면 "없음"으로 표기), 추천값(CPU = p95, 메모리 = 최대+15%, 최소 10m/100Mi — Robusta KRR의 simple 전략), 플래그(`cpu_over`·`cpu_under`·`mem_over`·`mem_under`·`no_cpu_request`·`no_mem_request`·`no_mem_limit`)를 표로 냅니다. 기본 범위는 `features.optimization.windowHours`(24). "AI 설명" 버튼은 이 표를 그대로 모델에 보내 왜 그런 수치인지·무엇부터 바꿀지 설명을 받습니다 — 숫자는 모델이 바꾸지 않습니다. 쓰기는 없습니다.
+- **최적화 제안** — `GET /api/v1/cluster/optimization?namespace=…&window=<시간>`: 실행 중인 파드의 컨테이너별 requests/limits와 사용량(Prometheus가 있으면 최근 `window`시간의 CPU 95퍼센타일·메모리 최대, 없으면 metrics-server 순간값, 둘 다 없으면 "없음"으로 표기), 추천값(CPU = p95, 메모리 = 최대+15%, 최소 10m/100Mi — Robusta KRR의 simple 전략), 플래그(`cpu_over`·`cpu_under`·`mem_over`·`mem_under`·`no_cpu_request`·`no_mem_request`·`no_mem_limit`)를 표로 냅니다. 기본 범위는 `features.optimization.windowHours`(24). "AI 설명" 버튼은 이 표를 그대로 모델에 보내 왜 그런 수치인지·무엇부터 바꿀지 설명을 받습니다 — 숫자는 모델이 바꾸지 않습니다.
+- **재시작 없이 적용** — `POST /api/v1/cluster/namespaces/{ns}/optimization/resize` 본문 `{kind, name, container, cpu_request_m?, mem_request_bytes?}`(최적화 행 그대로): 그 워크로드의 실행 중인 파드마다 컨테이너 requests를 Pod `resize` 하위 리소스로 바꿉니다(Kubernetes 1.35+ GA, 차트 `features.inPlaceResize.enabled` 기본 켬, 서버가 낮으면 버튼 숨김·API 409). QoS 클래스는 유지합니다 — Guaranteed면 limits도 같이, Burstable이면 새 request보다 낮은 limit만 올림, BestEffort는 건너뜀. `resizePolicy`가 재시작을 요구하는 자원·변화 없는 컨테이너도 건너뛰고 파드마다 `resized`/`pending`(kubelet의 `PodResizePending`: Infeasible·Deferred)/`skipped`/`error`로 답합니다. 워크로드 템플릿은 바꾸지 않으므로 다음 롤아웃 때 원래 값으로 돌아갑니다. 권한 `resource.pod.edit`, Argo CD 가드는 워크로드 기준, 감사 `k8s.pod.resize`(호출 하나에 행 하나, 파드별 결과 포함).
 - **스토리지 분석** — PVC 목록(`?usage=true`)에 Prometheus의 `kubelet_volume_stats_*`로 사용률·용량과 6시간 추세로 계산한 "n일 뒤 가득 참"을 붙입니다(`features.prometheus.enabled`가 켜져 있고 Prometheus가 kubelet `/metrics`를 긁어야 함). CSI 드라이버가 볼륨 통계를 내지 않으면(hostPath·local-path 등) N/A로 표시합니다. 85%/97% 색 경계와 "4일 내 가득 참"은 kube-prometheus의 `KubePersistentVolumeFillingUp` 규칙과 같습니다.
 
 ### 감사 싱크 (S3 · 웹훅 · 메일 · 파일)

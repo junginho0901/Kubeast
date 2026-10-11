@@ -23,6 +23,7 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	// Dashboard quick actions
 	r.Get("/api/v1/issues", h.GetClusterIssues)
 	r.Get("/api/v1/optimization", h.GetClusterOptimization)
+	r.Post("/api/v1/namespaces/{namespace}/optimization/resize", h.ResizeOptimization)
 
 	// Cluster hygiene report (Admin → Cluster hygiene)
 	r.Get("/api/v1/hygiene/config", h.HygieneConfig)

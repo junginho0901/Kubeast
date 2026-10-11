@@ -565,6 +565,13 @@ features:
     excludeNamespaces: [kube-system, kube-public, kube-node-lease]
     tlsWarnDays: 30
     tlsCriticalDays: 7
+  # Dashboard → Optimization → "Apply without restart": a row's recommended
+  # requests applied to the workload's running pods through the pod resize
+  # subresource (Kubernetes 1.35+; the button stays hidden on older servers).
+  # Permission resource.pod.edit, audited as k8s.pod.resize. The workload
+  # template is not changed, so the next rollout restores its values.
+  inPlaceResize:
+    enabled: true
   # Log files inside containers (Pod → Logs → Log files, permission
   # resource.pod.logfile, in the Read and Write roles): for applications that
   # write logs to files instead of stdout. Kubeast runs only "ls" and "tail"

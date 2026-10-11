@@ -203,6 +203,9 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
     } else if (kind === 'ValidatingWebhookConfiguration') {
       queryClient.invalidateQueries({ queryKey: ['cluster', 'validatingwebhookconfigurations'] })
       queryClient.invalidateQueries({ queryKey: ['validatingwebhookconfiguration-describe', name] })
+    } else if (kind === 'ValidatingAdmissionPolicy' || kind === 'MutatingAdmissionPolicy') {
+      queryClient.invalidateQueries({ queryKey: ['cluster', kind === 'ValidatingAdmissionPolicy' ? 'validatingadmissionpolicies' : 'mutatingadmissionpolicies'] })
+      queryClient.invalidateQueries({ queryKey: ['admissionpolicy-describe', kind, name] })
     } else if (kind === 'CustomResourceDefinition') {
       queryClient.invalidateQueries({ queryKey: ['custom-resources', 'crds'] })
       queryClient.invalidateQueries({ queryKey: ['crd-describe', name] })

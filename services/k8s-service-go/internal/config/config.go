@@ -40,6 +40,11 @@ type Config struct {
 	HygieneTLSWarnDays       int
 	HygieneTLSCriticalDays   int
 
+	// Optimization → "Apply without restart" (chart features.inPlaceResize):
+	// pod resize through the resize subresource, Kubernetes 1.35+. Off = the
+	// route answers 404 and the button is hidden.
+	InPlaceResizeEnabled bool
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -132,6 +137,8 @@ func Load() Config {
 		HygieneExcludeNamespaces: pkgconfig.LookupEnvList("HYGIENE_EXCLUDE_NAMESPACES", "kube-system,kube-public,kube-node-lease"),
 		HygieneTLSWarnDays:       pkgconfig.GetEnvInt("HYGIENE_TLS_WARN_DAYS", 30),
 		HygieneTLSCriticalDays:   pkgconfig.GetEnvInt("HYGIENE_TLS_CRITICAL_DAYS", 7),
+
+		InPlaceResizeEnabled: pkgconfig.GetEnvBool("IN_PLACE_RESIZE_ENABLED", true),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

@@ -239,6 +239,8 @@ export default function Layout() {
         { name: t('nav.runtimeClasses'), href: '/cluster/runtimeclasses', icon: K.RuntimeClass },
         { name: t('nav.mutatingWebhooks'), href: '/cluster/mutatingwebhookconfigurations', icon: K.MutatingWebhookConfiguration },
         { name: t('nav.validatingWebhooks'), href: '/cluster/validatingwebhookconfigurations', icon: K.ValidatingWebhookConfiguration },
+        { name: t('nav.validatingAdmissionPolicies'), href: '/cluster/validatingadmissionpolicies', icon: K.ValidatingAdmissionPolicy },
+        { name: t('nav.mutatingAdmissionPolicies'), href: '/cluster/mutatingadmissionpolicies', icon: K.MutatingAdmissionPolicy },
       ],
     },
     {

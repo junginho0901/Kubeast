@@ -63,6 +63,7 @@ import LeaseInfo from './resource-detail/LeaseInfo'
 import ResourceQuotaInfo from './resource-detail/ResourceQuotaInfo'
 import LimitRangeInfo from './resource-detail/LimitRangeInfo'
 import WebhookConfigInfo from './resource-detail/WebhookConfigInfo'
+import AdmissionPolicyInfo from './resource-detail/AdmissionPolicyInfo'
 import CRDInfo from './resource-detail/CRDInfo'
 import CustomResourceInstanceInfo from './resource-detail/CustomResourceInstanceInfo'
 import GenericInfo from './resource-detail/GenericInfo'
@@ -92,7 +93,9 @@ export default function ResourceDetailDrawer() {
   const crKind = kind === 'CustomResourceInstance' ? target?.rawJson?.kind : undefined
   const displayKind = typeof crKind === 'string' && crKind ? crKind : kind
   const { has } = usePermission()
-  const canDelete = has(`resource.${permResource(kind)}.delete`)
+  // Admission policies are read-only in Kubeast (no delete route); the YAML tab is the shared path.
+  const readOnlyKind = kind === 'ValidatingAdmissionPolicy' || kind === 'MutatingAdmissionPolicy'
+  const canDelete = !readOnlyKind && has(`resource.${permResource(kind)}.delete`)
 
   const {
     deleteDialogOpen,
@@ -307,6 +310,8 @@ export default function ResourceDetailDrawer() {
     if (kind === 'LimitRange' && ns) return <LimitRangeInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
     if (kind === 'MutatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="MutatingWebhookConfiguration" rawJson={effectiveRawJson} />
     if (kind === 'ValidatingWebhookConfiguration') return <WebhookConfigInfo name={name} kind="ValidatingWebhookConfiguration" rawJson={effectiveRawJson} />
+    if (kind === 'ValidatingAdmissionPolicy') return <AdmissionPolicyInfo name={name} kind="ValidatingAdmissionPolicy" />
+    if (kind === 'MutatingAdmissionPolicy') return <AdmissionPolicyInfo name={name} kind="MutatingAdmissionPolicy" />
     if (kind === 'CustomResourceDefinition') return <CRDInfo name={name} rawJson={effectiveRawJson} />
     if (kind === 'CustomResourceInstance') return <CustomResourceInstanceInfo name={name} namespace={ns} rawJson={effectiveRawJson} />
     if (WORKLOAD_KINDS.has(kind)) return <WorkloadInfo name={name} namespace={ns} kind={kind} rawJson={effectiveRawJson} writesBlocked={argoBlocked} />

@@ -14,6 +14,7 @@ import type {
   RuntimeClassInfo,
   SecretInfo,
   WebhookConfigInfo,
+  AdmissionPolicyInfo,
 } from './types'
 
 export const configurationApi = {
@@ -126,6 +127,28 @@ export const configurationApi = {
 
   deleteLimitRange: async (namespace: string, name: string): Promise<void> => {
     await client.delete(`/cluster/namespaces/${namespace}/limitranges/${name}`)
+  },
+
+  // Admission policies (admissionregistration.k8s.io/v1, read-only). The list
+  // is empty with the not-installed header on a cluster without the v1 API.
+  getValidatingAdmissionPolicies: async (forceRefresh = false): Promise<AdmissionPolicyInfo[]> => {
+    const { data } = await client.get('/cluster/validatingadmissionpolicies', { params: { force_refresh: forceRefresh } })
+    return data
+  },
+
+  describeValidatingAdmissionPolicy: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/validatingadmissionpolicies/${name}/describe`)
+    return data
+  },
+
+  getMutatingAdmissionPolicies: async (forceRefresh = false): Promise<AdmissionPolicyInfo[]> => {
+    const { data } = await client.get('/cluster/mutatingadmissionpolicies', { params: { force_refresh: forceRefresh } })
+    return data
+  },
+
+  describeMutatingAdmissionPolicy: async (name: string): Promise<any> => {
+    const { data } = await client.get(`/cluster/mutatingadmissionpolicies/${name}/describe`)
+    return data
   },
 
   // MutatingWebhookConfigurations

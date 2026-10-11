@@ -92,6 +92,17 @@ func RegisterConfiguration(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/mutatingwebhookconfigurations/{name}/yaml", h.GetMutatingWebhookConfigurationYAML)
 	r.Delete("/api/v1/mutatingwebhookconfigurations/{name}", h.DeleteMutatingWebhookConfiguration)
 
+	// Admission policies (cluster-scoped, admissionregistration.k8s.io/v1, read-only);
+	// a cluster that does not serve the v1 resource answers "not installed".
+	vap := h.ListIfServed("admissionregistration.k8s.io", "validatingadmissionpolicies")
+	r.With(vap).Get("/api/v1/validatingadmissionpolicies", h.GetValidatingAdmissionPolicies)
+	r.Get("/api/v1/validatingadmissionpolicies/{name}/describe", h.DescribeValidatingAdmissionPolicy)
+	r.Get("/api/v1/validatingadmissionpolicies/{name}/yaml", h.GetValidatingAdmissionPolicyYAML)
+	mapPolicy := h.ListIfServed("admissionregistration.k8s.io", "mutatingadmissionpolicies")
+	r.With(mapPolicy).Get("/api/v1/mutatingadmissionpolicies", h.GetMutatingAdmissionPolicies)
+	r.Get("/api/v1/mutatingadmissionpolicies/{name}/describe", h.DescribeMutatingAdmissionPolicy)
+	r.Get("/api/v1/mutatingadmissionpolicies/{name}/yaml", h.GetMutatingAdmissionPolicyYAML)
+
 	// ValidatingWebhookConfiguration (cluster-scoped)
 	r.Get("/api/v1/validatingwebhookconfigurations", h.GetValidatingWebhookConfigurations)
 	r.Get("/api/v1/validatingwebhookconfigurations/{name}/describe", h.DescribeValidatingWebhookConfiguration)

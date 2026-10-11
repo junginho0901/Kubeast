@@ -126,6 +126,7 @@ export function kindToPlural(kind: string): string {
     NetworkPolicy: 'networkpolicy', PersistentVolumeClaim: 'persistentvolumeclaim',
     PersistentVolume: 'persistentvolume', HorizontalPodAutoscaler: 'horizontalpodautoscaler',
     VerticalPodAutoscaler: 'verticalpodautoscaler',
+    ValidatingAdmissionPolicy: 'validatingadmissionpolicy', MutatingAdmissionPolicy: 'mutatingadmissionpolicy',
     Endpoints: 'endpoints', EndpointSlice: 'endpointslice',
     IngressClass: 'ingressclass',
     Gateway: 'gateway',

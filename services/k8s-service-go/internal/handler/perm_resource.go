@@ -34,6 +34,7 @@ var permResourceKinds = map[string]bool{
 	"namespace": true, "node": true, "storageclass": true, "volumeattachment": true,
 	"resourcequota": true, "limitrange": true, "priorityclass": true, "runtimeclass": true, "lease": true,
 	"mutatingwebhookconfiguration": true, "validatingwebhookconfiguration": true,
+	"validatingadmissionpolicy": true, "validatingadmissionpolicybinding": true, "mutatingadmissionpolicy": true, "mutatingadmissionpolicybinding": true,
 	"gateway": true, "gatewayclass": true, "httproute": true, "grpcroute": true, "referencegrant": true, "backendtlspolicy": true,
 	"deviceclass": true, "resourceclaim": true, "resourceclaimtemplate": true, "resourceslice": true,
 }

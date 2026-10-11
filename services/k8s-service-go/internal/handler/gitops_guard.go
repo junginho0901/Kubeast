@@ -50,6 +50,8 @@ func gitopsTargets(r *http.Request) ([]gitopsTarget, error) {
 			return []gitopsTarget{{resourceType: "namespaces", name: seg[1]}}, nil
 		case len(seg) == 4 && seg[2] == "yaml" && seg[3] == "apply":
 			return gitopsTargetsFromBody(r, seg[1])
+		case len(seg) == 4 && seg[2] == "optimization" && seg[3] == "resize":
+			return gitopsTargetsFromResize(r, seg[1])
 		case len(seg) >= 4: // /namespaces/{ns}/{plural}/{name}[/action]
 			return []gitopsTarget{{resourceType: seg[2], namespace: seg[1], name: seg[3]}}, nil
 		}
@@ -100,6 +102,29 @@ func gitopsTargetsFromBody(r *http.Request, defaultNS string) ([]gitopsTarget, e
 		out = append(out, gitopsTarget{apiVersion: m.APIVersion, kind: m.Kind, namespace: ns, name: m.Metadata.Name})
 	}
 	return out, nil
+}
+
+// gitopsTargetsFromResize names the workload a resize request addresses
+// ({"kind","name"} in the body): its pods carry no tracking annotation, the
+// workload does. The request body is restored.
+func gitopsTargetsFromResize(r *http.Request, ns string) ([]gitopsTarget, error) {
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	var body struct {
+		Kind string `json:"kind"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil || body.Name == "" {
+		return nil, nil // the handler answers 400 itself
+	}
+	apiVersion := map[string]string{"Deployment": "apps/v1", "StatefulSet": "apps/v1", "DaemonSet": "apps/v1", "ReplicaSet": "apps/v1", "Job": "batch/v1", "CronJob": "batch/v1", "Pod": "v1"}[body.Kind]
+	if apiVersion == "" {
+		return nil, nil
+	}
+	return []gitopsTarget{{apiVersion: apiVersion, kind: body.Kind, namespace: ns, name: body.Name}}, nil
 }
 
 // GitopsGuard refuses (409) a write to an object an Argo CD Application

@@ -75,6 +75,7 @@ const PERM_RESOURCES = new Set([
   'namespace', 'node', 'storageclass', 'volumeattachment',
   'resourcequota', 'limitrange', 'priorityclass', 'runtimeclass', 'lease',
   'mutatingwebhookconfiguration', 'validatingwebhookconfiguration',
+  'validatingadmissionpolicy', 'validatingadmissionpolicybinding', 'mutatingadmissionpolicy', 'mutatingadmissionpolicybinding',
   'gateway', 'gatewayclass', 'httproute', 'grpcroute', 'referencegrant', 'backendtlspolicy',
   'deviceclass', 'resourceclaim', 'resourceclaimtemplate', 'resourceslice',
   'hpa', 'vpa', 'pdb', 'pv', 'pvc', 'crd',

@@ -89,6 +89,8 @@ const STATIC_MAP: Record<string, StaticEntry> = {
   '/cluster/leases':                      { pageType: 'resource-list', resourceKind: 'Lease',                         titleKey: 'nav.leases',                  pageTitle: '리스' },
   '/cluster/mutatingwebhookconfigurations':   { pageType: 'resource-list', resourceKind: 'MutatingWebhookConfiguration',   titleKey: 'nav.mutatingWebhooks',     pageTitle: '변경 웹훅 구성' },
   '/cluster/validatingwebhookconfigurations': { pageType: 'resource-list', resourceKind: 'ValidatingWebhookConfiguration', titleKey: 'nav.validatingWebhooks',   pageTitle: '검증 웹훅 구성' },
+  '/cluster/validatingadmissionpolicies':     { pageType: 'resource-list', resourceKind: 'ValidatingAdmissionPolicy',     titleKey: 'nav.validatingAdmissionPolicies', pageTitle: '검증 어드미션 정책' },
+  '/cluster/mutatingadmissionpolicies':       { pageType: 'resource-list', resourceKind: 'MutatingAdmissionPolicy',       titleKey: 'nav.mutatingAdmissionPolicies',   pageTitle: '변경 어드미션 정책' },
 
   '/custom-resources/instances':          { pageType: 'resource-list', resourceKind: 'CustomResource',                titleKey: 'nav.customInstances',         pageTitle: '커스텀 리소스 인스턴스' },
   '/custom-resources/groups':             { pageType: 'resource-list', resourceKind: 'CustomResourceDefinition',      titleKey: 'nav.customGroups',            pageTitle: '커스텀 리소스 정의' },

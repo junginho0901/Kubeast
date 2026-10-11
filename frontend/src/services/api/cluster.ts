@@ -16,6 +16,8 @@ import type {
   NamespaceResourceQuota,
   OptimizationResponse,
   PodInfo,
+  ResizeRequest,
+  ResizeResult,
 } from './types'
 
 export const clusterApi = {
@@ -39,6 +41,12 @@ export const clusterApi = {
   // (features.optimization.windowHours).
   getClusterOptimization: async (namespace: string, windowHours?: number): Promise<OptimizationResponse> => {
     const { data } = await client.get('/cluster/optimization', { params: { namespace, window: windowHours } })
+    return data
+  },
+
+  // "Apply without restart": the row's recommendation on the workload's running pods (resize subresource).
+  resizeOptimization: async (namespace: string, body: ResizeRequest): Promise<ResizeResult> => {
+    const { data } = await client.post(`/cluster/namespaces/${namespace}/optimization/resize`, body)
     return data
   },
 

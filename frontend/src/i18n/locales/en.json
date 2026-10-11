@@ -453,7 +453,9 @@
     "helmReleases": "Releases",
     "clusters": "Clusters",
     "aiUsage": "AI Usage",
-    "sessionRecordings": "Session Recordings"
+    "sessionRecordings": "Session Recordings",
+    "validatingAdmissionPolicies": "Validating Admission Policies",
+    "mutatingAdmissionPolicies": "Mutating Admission Policies"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -1892,7 +1894,21 @@
       "selectPrompt": "Select a namespace to load its table.",
       "promptNote": "“Explain with AI” sends this table to the model and asks why the numbers look like this and what to change first; the numbers stay as they are.",
       "observedData": "Table as sent to the model",
-      "writing": "AI is writing…"
+      "writing": "AI is writing…",
+      "resize": {
+        "column": "Apply",
+        "button": "Apply",
+        "applying": "Applying...",
+        "title": "Apply without restart",
+        "message": "{{workload}} · {{container}}: CPU {{cpu}}, memory {{mem}} on {{pods}} running pods, through the pod resize subresource.",
+        "warning": "The workload template is not changed: the next rollout restores its values. Containers whose resizePolicy restarts on this change are skipped, and the QoS class is kept.",
+        "confirm": "Apply",
+        "result": "{{resized}}/{{total}} resized",
+        "pending": "pending {{count}}",
+        "skipped": "skipped {{count}}",
+        "failed": "failed {{count}}",
+        "error": "Not applied: {{error}}"
+      }
     },
     "loading": "Loading data...",
     "stats": {
@@ -3829,5 +3845,32 @@
     "Idle": "Idle",
     "Unavailable": "Unavailable",
     "Failed": "Failed"
+  },
+  "admissionPolicies": {
+    "validating": {
+      "title": "Validating Admission Policies",
+      "subtitle": "CEL policies that validate API requests in the API server, with their bindings. Read-only here; create or change them through YAML."
+    },
+    "mutating": {
+      "title": "Mutating Admission Policies",
+      "subtitle": "CEL policies that mutate API requests in the API server, with their bindings. Read-only here; create or change them through YAML."
+    },
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "searchPlaceholder": "Search by policy or binding name...",
+    "matchCount": "{{count}} polic{{suffix}} match.",
+    "stats": {
+      "total": "Total Policies",
+      "bindings": "Total Bindings"
+    },
+    "table": {
+      "name": "Name",
+      "validations": "Validations",
+      "mutations": "Mutations",
+      "paramKind": "Param kind",
+      "bindings": "Bindings",
+      "failurePolicy": "Failure policy",
+      "age": "Age"
+    }
   }
 }

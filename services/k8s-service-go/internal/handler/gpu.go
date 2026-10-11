@@ -169,9 +169,10 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		"gitops": map[string]interface{}{
 			"argocd": map[string]interface{}{"enabled": g.Enabled, "mode": g.Mode, "url": g.URL, "trackingAnnotation": g.TrackingAnnotation, "instanceLabel": g.InstanceLabel},
 		},
-		"issues":       map[string]interface{}{"eventWindowMinutes": h.cfg.IssuesEventWindowMinutes},
-		"optimization": map[string]interface{}{"windowHours": h.cfg.OptimizationWindowHours},
-		"logFiles":     map[string]interface{}{"enabled": h.cfg.LogFilesEnabled, "maxLines": h.cfg.LogFilesMaxLines, "namespaces": nonNilStrings(h.cfg.LogFilesNamespaces)},
+		"issues":        map[string]interface{}{"eventWindowMinutes": h.cfg.IssuesEventWindowMinutes},
+		"optimization":  map[string]interface{}{"windowHours": h.cfg.OptimizationWindowHours},
+		"logFiles":      map[string]interface{}{"enabled": h.cfg.LogFilesEnabled, "maxLines": h.cfg.LogFilesMaxLines, "namespaces": nonNilStrings(h.cfg.LogFilesNamespaces)},
+		"inPlaceResize": map[string]interface{}{"enabled": h.cfg.InPlaceResizeEnabled, "serverSupports": h.cfg.InPlaceResizeEnabled && h.svc.ServerSupportsResize(r.Context())},
 	})
 }
 

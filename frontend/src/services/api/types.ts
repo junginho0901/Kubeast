@@ -606,6 +606,50 @@ export interface ClusterFeatures {
   optimization?: { windowHours: number }
   // Log files inside containers; namespaces empty = every namespace.
   logFiles?: { enabled: boolean; maxLines: number; namespaces: string[] }
+  // Optimization → apply without restart (pod resize subresource, server 1.35+).
+  inPlaceResize?: { enabled: boolean; serverSupports: boolean }
+}
+
+// POST /api/v1/cluster/namespaces/{ns}/optimization/resize — one optimization
+// row's values applied to the workload's running pods, outcome per pod.
+export interface ResizeRequest {
+  kind: string
+  name: string
+  container: string
+  cpu_request_m?: number
+  mem_request_bytes?: number
+}
+
+export interface PodResizeResult {
+  pod: string
+  result: 'resized' | 'pending' | 'skipped' | 'error'
+  reason?: string
+}
+
+export interface ResizeResult {
+  kind: string
+  namespace: string
+  name: string
+  container: string
+  pods: PodResizeResult[]
+  resized: number
+  pending: number
+  skipped: number
+  failed: number
+}
+
+// admissionregistration.k8s.io/v1 ValidatingAdmissionPolicy / MutatingAdmissionPolicy list row
+export interface AdmissionPolicyInfo {
+  name: string
+  failure_policy: string
+  param_kind: string
+  bindings_count: number
+  bindings: string[]
+  labels?: Record<string, string>
+  created_at: string
+  validations_count?: number
+  mutations_count?: number
+  reinvocation_policy?: string
 }
 
 // /api/v1/namespaces/{ns}/pods/{name}/logfiles — files only, no content.

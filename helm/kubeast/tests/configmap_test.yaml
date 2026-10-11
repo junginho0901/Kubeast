@@ -215,6 +215,20 @@ tests:
           path: data.OPTIMIZATION_WINDOW_HOURS
           value: "24"
 
+  - it: turns in-place resize on by default and off from features.inPlaceResize
+    asserts:
+      - equal:
+          path: data.IN_PLACE_RESIZE_ENABLED
+          value: "true"
+
+  - it: takes features.inPlaceResize.enabled false
+    set:
+      features.inPlaceResize.enabled: false
+    asserts:
+      - equal:
+          path: data.IN_PLACE_RESIZE_ENABLED
+          value: "false"
+
   - it: turns the cluster hygiene report on by default with a 30-day interval and the system namespaces excluded
     asserts:
       - equal:
