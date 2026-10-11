@@ -200,35 +200,6 @@ export interface IngressInfo {
   created_at?: string | null
 }
 
-export interface IngressDetail {
-  name: string
-  namespace: string
-  class?: string | null
-  class_source?: 'spec' | 'annotation' | 'default' | null
-  class_controller?: string | null
-  class_is_default?: boolean | null
-  addresses: Array<{ ip?: string | null; hostname?: string | null }>
-  tls: Array<{ secret_name?: string | null; hosts: string[] }>
-  default_backend?: any
-  rules: Array<{
-    host?: string | null
-    paths: Array<{
-      path?: string | null
-      path_type?: string | null
-      backend?: any
-    }>
-  }>
-  events: Array<{
-    type?: string | null
-    reason?: string | null
-    message?: string | null
-    count?: number | null
-    first_timestamp?: string | null
-    last_timestamp?: string | null
-  }>
-  created_at?: string | null
-}
-
 export interface IngressClassInfo {
   name: string
   controller?: string | null
@@ -765,6 +736,7 @@ export interface DeploymentInfo {
   selector: Record<string, string>
   created_at: string
   status: string
+  progressing_reason?: string
 }
 
 export interface ReplicaSetInfo {
@@ -776,8 +748,7 @@ export interface ReplicaSetInfo {
   available_replicas: number
   image: string
   images?: string[]
-  container_names?: string[]
-  owner?: string | null
+  containers?: string[]
   owner_deployment?: string
   owner_references?: Array<{
     kind?: string | null
@@ -855,6 +826,8 @@ export interface CronJobInfo {
   active: number
   last_schedule_time?: string | null
   last_successful_time?: string | null
+  /** spec.timeZone (IANA name); absent = the kube-controller-manager's zone */
+  time_zone?: string | null
   containers?: string[]
   images?: string[]
   created_at?: string | null
@@ -868,6 +841,7 @@ export interface HPAInfo {
   max_replicas: number
   current_replicas?: number | null
   desired_replicas?: number | null
+  scaling_active?: boolean
   metrics: Array<Record<string, any>>
   conditions: Array<Record<string, any>>
   last_scale_time?: string | null
@@ -1262,6 +1236,8 @@ export interface ResourceGraphEdge {
 export interface ResourceGraphResponse {
   nodes: ResourceGraphNode[]
   edges: ResourceGraphEdge[]
+  // kinds the user may not list in this cluster, left out of the graph
+  forbidden_kinds?: string[]
 }
 
 export interface TopResources {

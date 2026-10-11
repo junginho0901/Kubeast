@@ -104,7 +104,7 @@ async def test_happy_path_yields_observed_then_answer_then_meta_then_done():
     )
 
     events = []
-    async for chunk in suggest_optimization_stream(service, "default"):
+    async for chunk in suggest_optimization_stream(service, "default", lang="ko"):
         events.append(chunk)
 
     # SSE payload 만 파싱
@@ -136,6 +136,32 @@ async def test_happy_path_yields_observed_then_answer_then_meta_then_done():
     assert answer_concat == "답변 시작 끝"
     # usage 데이터 보존
     assert parsed[5]["usage"]["total_tokens"] == 30
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lang,heading,source_line,english_only", [
+    ("ko", "## 최적화 제안 (AI)", "'사용량 출처' 줄", False),
+    ("en", "## Optimization suggestions (AI)", "'Usage source' line", True),
+])
+async def test_the_prompt_and_heading_follow_the_ui_language(lang, heading, source_line, english_only):
+    """화면 언어로 표 머리말·프롬프트·답 — 모델이 표 줄을 다른 언어 그대로 옮기지 않게(#69)."""
+    service = _make_service()
+    create_calls = []
+
+    async def create_mock(**kwargs):
+        create_calls.append(kwargs)
+        return _make_stream_chunks(contents=["ok"])
+
+    service.client.chat.completions.create = create_mock
+    events = [c async for c in suggest_optimization_stream(service, "default", lang=lang)]
+
+    service._build_optimization_observations.assert_awaited_once_with("default", lang)
+    assert heading in json.loads(events[0][len("data: "):])["content"]
+    system, user = create_calls[0]["messages"][0]["content"], create_calls[0]["messages"][1]["content"]
+    assert f"screen is in {'Korean' if lang == 'ko' else 'English'}" in system
+    assert source_line in user
+    if english_only:
+        assert not any("가" <= ch <= "힣" for ch in system + user)
 
 
 @pytest.mark.asyncio

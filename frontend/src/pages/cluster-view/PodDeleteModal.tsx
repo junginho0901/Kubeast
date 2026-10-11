@@ -4,9 +4,13 @@
 // 콜백 (onForceChange / onClose / onConfirm) 으로 변경 위임. 이 컴포넌트는
 // dialog UI 와 disabled 처리만 담당.
 
+import { useState } from 'react'
 import { HelpCircle } from 'lucide-react'
 import { Trans, useTranslation } from 'react-i18next'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton } from '@/components/modalStyles'
+import { TypeToConfirm, WarningBox } from '@/components/TypeToConfirm'
+import { systemObject } from '@/components/resource-detail/systemObject'
 import type { PodInfo } from '@/services/api'
 
 interface Props {
@@ -21,67 +25,71 @@ interface Props {
 
 export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, onClose, onConfirm }: Props) {
   const { t } = useTranslation()
+  // the typed name belongs to one pod: opening another starts empty
+  const [typedFor, setTypedFor] = useState({ pod: '', value: '' })
   if (!pod) return null
+  const typed = typedFor.pod === pod.name ? typedFor.value : ''
+  const setTyped = (value: string) => setTypedFor({ pod: pod.name, value })
+  const system = systemObject('Pod', pod.namespace, pod.name, { labels: pod.labels })
+  const needsName = system.reasons.length > 0
   return (
-    <ModalOverlay onClose={onClose}>
-      <div
-        className="bg-slate-800 rounded-lg w-full max-w-lg p-6"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('podDeleteModal.title')}
-      >
-        <h2 className="text-xl font-bold text-white mb-4">{t('podDeleteModal.title')}</h2>
-        <p className="text-slate-300 leading-relaxed">
-          <Trans
-            i18nKey="podDeleteModal.question"
-            values={{ name: pod.name }}
-            components={{ kbd: <kbd className="px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-100" /> }}
-          />
-        </p>
-        <p className="text-slate-400 mt-3">
-          {t('podDeleteModal.warning')}
-        </p>
-
-        <div className="mt-4 flex items-center gap-2">
-          <input
-            id="force-delete-checkbox"
-            type="checkbox"
-            checked={force}
-            onChange={(event) => onForceChange(event.target.checked)}
-            className="w-4 h-4 rounded-sm border-slate-500 bg-slate-700"
-          />
-          <label htmlFor="force-delete-checkbox" className="text-sm text-slate-300">
-            {t('podDeleteModal.force')}
-          </label>
-          <span title={t('podDeleteModal.forceHint')}>
-            <HelpCircle className="w-4 h-4 text-slate-400" />
-          </span>
-        </div>
-
-        {error && (
-          <div className="mt-4 text-sm text-red-400">{error}</div>
-        )}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onClose}
-            disabled={isDeleting}
-          >
+    <ModalFrame
+      size="sm"
+      title={t('podDeleteModal.title')}
+      onClose={onClose}
+      busy={isDeleting}
+      testId="pod-delete-dialog"
+      footer={
+        <>
+          <button type="button" className={modalButton.cancel} onClick={onClose} disabled={isDeleting}>
             {t('common.cancel')}
           </button>
-          <button
-            type="button"
-            className="btn bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"
-            onClick={onConfirm}
-            disabled={isDeleting}
-          >
+          <button type="button" className={modalButton.danger} onClick={onConfirm} disabled={isDeleting || (needsName && typed !== pod.name)}>
             {t('podDeleteModal.confirm')}
           </button>
-        </div>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-300 leading-relaxed break-keep">
+        <Trans
+          i18nKey="podDeleteModal.question"
+          values={{ name: pod.name }}
+          components={{ kbd: <kbd className="px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-100" /> }}
+        />
+      </p>
+      <p className="text-sm text-slate-400 mt-3 break-keep">
+        {t('podDeleteModal.warning')}
+      </p>
+
+      <div className="mt-4 flex items-center gap-2">
+        <input
+          id="force-delete-checkbox"
+          type="checkbox"
+          checked={force}
+          onChange={(event) => onForceChange(event.target.checked)}
+          className="w-4 h-4 rounded-sm border-slate-500 bg-slate-700"
+        />
+        <label htmlFor="force-delete-checkbox" className="text-sm text-slate-300">
+          {t('podDeleteModal.force')}
+        </label>
+        <span title={t('podDeleteModal.forceHint')}>
+          <HelpCircle className="w-4 h-4 text-slate-400" />
+        </span>
       </div>
-    </ModalOverlay>
+
+      {needsName && (
+        <>
+          <WarningBox>
+            {[t('common.systemObject.title', { defaultValue: 'This is a system object.' }),
+              ...system.reasons.map((r) => `· ${t(`common.systemObject.${r}`)}`)].join('\n')}
+          </WarningBox>
+          <TypeToConfirm expected={pod.name} value={typed} onChange={setTyped} />
+        </>
+      )}
+
+      {error && (
+        <div className="mt-4 text-sm text-red-400">{error}</div>
+      )}
+    </ModalFrame>
   )
 }

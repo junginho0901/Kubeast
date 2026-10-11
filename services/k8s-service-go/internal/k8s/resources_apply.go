@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -49,9 +47,7 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace
 		return nil, fmt.Errorf("patch %s %s: %w", resourceType, name, err)
 	}
 
-	// Invalidate cache
-	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
-	s.cache.Delete(ctx, cacheKey)
+	s.dropCached(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
 
 	return map[string]interface{}{
 		"name":        patched.GetName(),
@@ -75,6 +71,28 @@ func resolveCreateNamespace(yamlNs, defaultNs string, namespaced bool) string {
 		return defaultNs
 	}
 	return "default"
+}
+
+// YAMLKinds is the kind of every document CreateResourcesFromYAML would create,
+// decoded the same way: the documents before a decode error, and that error.
+func YAMLKinds(yamlStr string) ([]string, error) {
+	decoder := yaml.NewDecoder(bufio.NewReader(bytes.NewBufferString(yamlStr)))
+	var kinds []string
+	for {
+		var rawObj map[string]interface{}
+		err := decoder.Decode(&rawObj)
+		if err == io.EOF {
+			return kinds, nil
+		}
+		if err != nil {
+			return kinds, err
+		}
+		if rawObj == nil {
+			continue
+		}
+		kind, _ := rawObj["kind"].(string)
+		kinds = append(kinds, kind)
+	}
 }
 
 // CreateResourcesFromYAML creates resources from a YAML string, supporting multi-document YAML.
@@ -122,14 +140,9 @@ func (s *Service) CreateResourcesFromYAML(ctx context.Context, yamlStr, defaultN
 			return results, fmt.Errorf("YAML document missing apiVersion or kind")
 		}
 
-		gvr, namespaced, err := s.ResolveResource(ctx, strings.ToLower(kind))
+		gvr, namespaced, err := s.ResolveKind(ctx, apiVersion, kind)
 		if err != nil {
-			// Try with plural forms or group
-			gv, _ := schema.ParseGroupVersion(apiVersion)
-			gvr, namespaced, err = s.ResolveResource(ctx, strings.ToLower(kind)+"."+gv.Group)
-			if err != nil {
-				return results, fmt.Errorf("resolve resource for %s/%s: %w", apiVersion, kind, err)
-			}
+			return results, err
 		}
 
 		namespace := resolveCreateNamespace(obj.GetNamespace(), defaultNamespace, namespaced)

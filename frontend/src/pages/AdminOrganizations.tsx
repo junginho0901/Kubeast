@@ -5,12 +5,14 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { usePermission } from '@/hooks/usePermission'
+import { useConfirm } from '@/services/confirm'
 
 export default function AdminOrganizations() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
+  const confirm = useConfirm()
 
   const [newTeam, setNewTeam] = useState('')
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
@@ -66,20 +68,23 @@ export default function AdminOrganizations() {
         onSubmit={(e) => {
           e.preventDefault()
           const name = inputValue.trim()
-          if (!name) return
+          if (!name) {
+            e.currentTarget.querySelector('input')?.focus()
+            return
+          }
           createMutation.mutate({ type, name })
         }}
       >
         <input
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+          className="flex-1 h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           placeholder={tr('adminOrg.inputPlaceholder', 'Enter name...')}
         />
         <button
           type="submit"
-          disabled={!inputValue.trim() || createMutation.isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+          disabled={createMutation.isPending}
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
           {tr('adminOrg.add', 'Add')}
@@ -122,8 +127,13 @@ export default function AdminOrganizations() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const ok = window.confirm(tr('adminOrg.deleteConfirm', 'Delete "{{name}}"?', { name: item.name }))
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: tr('adminOrg.deleteDialogTitle', 'Delete team'),
+                    message: tr('adminOrg.deleteConfirm', 'Delete team "{{name}}"?', { name: item.name }),
+                    confirmLabel: tr('adminOrg.deleteTitle', 'Delete'),
+                    danger: true,
+                  })
                   if (!ok) return
                   deleteMutation.mutate({ id: item.id, type: item.type })
                 }}
@@ -197,7 +207,7 @@ export default function AdminOrganizations() {
                 </div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-800 sticky top-0">
+                  <thead className="bg-slate-800 sticky top-0 text-slate-400">
                     <tr className="text-left text-slate-300">
                       <th className="px-3 py-2.5">{tr('adminOrg.col.name', 'Name')}</th>
                       <th className="px-3 py-2.5">{tr('adminOrg.col.email', 'Email')}</th>

@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -67,5 +70,31 @@ func TestCanDecideAccessRequest_RefusesOwn(t *testing.T) {
 	}
 	if err := canDecideAccessRequest(auth.TokenPayload{UserID: "admin"}, req); err != nil {
 		t.Fatalf("another admin refused: %v", err)
+	}
+}
+
+// Re-QA #72 (decision A): the chart's "where to ask" text and link reach the
+// console with the access request config; only an http(s) link is passed on.
+func TestAccessRequestsConfig_AccessHelp(t *testing.T) {
+	for _, c := range []struct{ url, want string }{
+		{"https://flex.example.com/forms/123", "https://flex.example.com/forms/123"},
+		{"http://intranet/ask", "http://intranet/ask"},
+		{"javascript:alert(1)", ""},
+		{"flex.example.com/forms", ""},
+		{"", ""},
+	} {
+		cfg := config.Config{}
+		cfg.AccessRequests.HelpText = "  Ask in #infra-access  "
+		cfg.AccessRequests.HelpURL = c.url
+		h := &AuthHandler{cfg: cfg}
+		w := httptest.NewRecorder()
+		h.AccessRequestsConfig(w, httptest.NewRequest(http.MethodGet, "/api/v1/auth/access-requests/config", nil))
+		var got accessRequestsConfigResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.HelpText != "Ask in #infra-access" || got.HelpURL != c.want {
+			t.Errorf("url %q: help = %q %q, want text trimmed and url %q", c.url, got.HelpText, got.HelpURL, c.want)
+		}
 	}
 }

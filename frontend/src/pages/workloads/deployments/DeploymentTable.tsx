@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { DeploymentInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
@@ -16,6 +17,7 @@ import {
   deploymentToWorkloadRawJson,
   type SortKey,
 } from './deploymentHelpers'
+import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -36,6 +38,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -57,6 +60,7 @@ export function DeploymentTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -120,7 +124,7 @@ export function DeploymentTable({
                   {tr('deployments.table.status', 'Status')}{renderSortIcon('status')}
                 </span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('deployments.table.image', 'Image')}{renderSortIcon('image')}
                 </span>
@@ -145,23 +149,26 @@ export function DeploymentTable({
                   rawJson: deploymentToWorkloadRawJson(dep),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{dep.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={dep.namespace}>{dep.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{dep.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.ready_replicas}/{dep.replicas}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.updated_replicas ?? 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{dep.available_replicas ?? 0}</td>
                 <td className="py-3 px-4">
-                  <span className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}`}>
-                    {dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0)}
+                  <span
+                    className={`badge ${getDeploymentStatusColor(dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}`}
+                    title={workloadStatusTitle(dep.status, dep.progressing_reason)}
+                  >
+                    {workloadStatusLabel(tr, dep.status || computeDeploymentStatus(dep.replicas || 0, dep.ready_replicas || 0))}
                   </span>
                 </td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{dep.image || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(dep.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -172,46 +179,13 @@ export function DeploymentTable({
             )}
 
             {sortedDeploymentsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="deployments">
-                {tr('deployments.noResults', 'No deployments found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="deployments" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedDeployments.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
-      {sortedDeploymentsLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedDeploymentsLength),
-              total: sortedDeploymentsLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedDeploymentsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

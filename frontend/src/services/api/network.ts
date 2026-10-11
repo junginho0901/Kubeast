@@ -8,7 +8,6 @@ import type {
   EndpointInfo,
   EndpointSliceInfo,
   IngressClassInfo,
-  IngressDetail,
   IngressInfo,
   NetworkPolicyInfo,
   ServiceInfo,
@@ -58,11 +57,6 @@ export const networkApi = {
     const { data } = await client.get('/cluster/ingressclasses', {
       params: { force_refresh: forceRefresh },
     })
-    return data
-  },
-
-  getIngressDetail: async (namespace: string, name: string): Promise<IngressDetail> => {
-    const { data } = await client.get(`/cluster/namespaces/${namespace}/ingresses/${name}/detail`)
     return data
   },
 

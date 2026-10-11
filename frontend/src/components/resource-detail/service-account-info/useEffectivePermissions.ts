@@ -91,6 +91,8 @@ function normalizeRules(rulesRaw: any): RuleEntry[] {
 export function useEffectivePermissions({ namespace, name }: Params): {
   bound: BoundRole[]
   loading: boolean
+  /** Binding kinds whose list could not be read (403 or a failure): the result may be incomplete */
+  unreadable: { kinds: string[]; forbidden: boolean }
 } {
   const enabled = !!namespace && !!name
 
@@ -101,7 +103,7 @@ export function useEffectivePermissions({ namespace, name }: Params): {
   const rbKey = ['sa-effperm-rb', namespace, name]
   const crbKey = ['sa-effperm-crb', name]
 
-  const { data: rbList } = useQuery({
+  const { data: rbList, error: rbError } = useQuery({
     queryKey: rbKey,
     queryFn: () => api.getRoleBindings(namespace),
     enabled,
@@ -150,7 +152,7 @@ export function useEffectivePermissions({ namespace, name }: Params): {
     },
   })
 
-  const { data: crbList } = useQuery({
+  const { data: crbList, error: crbError } = useQuery({
     queryKey: crbKey,
     queryFn: () => api.getClusterRoleBindings(),
     enabled,
@@ -250,5 +252,14 @@ export function useEffectivePermissions({ namespace, name }: Params): {
   })
 
   const loading = roleResults.some((q) => q?.isLoading)
-  return { bound, loading }
+  // A refused binding list must not read as "nothing binds it" (re-QA #43).
+  const failed = [
+    { kind: 'RoleBinding', error: rbError },
+    { kind: 'ClusterRoleBinding', error: crbError },
+  ].filter((f) => f.error)
+  const unreadable = {
+    kinds: failed.map((f) => f.kind),
+    forbidden: failed.some((f) => (f.error as { response?: { status?: number } })?.response?.status === 403),
+  }
+  return { bound, loading, unreadable }
 }

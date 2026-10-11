@@ -46,7 +46,7 @@ export function GPUDashboardError({ tr, onRefetch }: ErrorEmptyProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-white">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -82,7 +82,7 @@ export function GPUDashboardEmpty({ tr, onRefetch }: ErrorEmptyProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-white">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">

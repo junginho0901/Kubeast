@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { workloadStatusLabel } from '@/utils/workloadStatus'
 import { InfoSection, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel } from '../detailFormat'
 import { usePagination } from '../usePagination'
@@ -96,7 +97,7 @@ export default function WorkloadOwnedResources({
                       <td className="py-2 pr-2 font-mono">{rs.replicas}</td>
                       <td className="py-2 pr-2 font-mono">{rs.ready_replicas}</td>
                       <td className="py-2 pr-2 font-mono">{rs.available_replicas}</td>
-                      <td className="py-2 pr-2"><StatusBadge status={rs.status || '-'} /></td>
+                      <td className="py-2 pr-2"><StatusBadge status={rs.status || '-'} label={workloadStatusLabel(tr, rs.status)} /></td>
                       <td className="py-2 pr-2 text-slate-400">{fmtRel(rs.created_at)}</td>
                     </tr>
                   ))}

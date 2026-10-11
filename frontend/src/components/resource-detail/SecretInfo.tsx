@@ -217,9 +217,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
           {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
           {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
           {immutable !== undefined && (
-            <InfoRow label={tr('secretInfo.immutable', 'Immutable')} value={
-              <span className={`badge ${immutable ? 'badge-warning' : 'badge-info'}`}><Tx>{immutable ? 'Yes' : 'No'}</Tx></span>
-            } />
+            <InfoRow label={tr('secretInfo.immutable', 'Immutable')} value={immutable ? 'Yes' : 'No'} />
           )}
           <InfoRow label={tr('secretInfo.dataKeys', 'Data Keys')} value={String(describe?.data_count ?? dataKeys.length)} />
         </div>

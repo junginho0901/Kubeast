@@ -13,29 +13,13 @@ export type SortKey =
   | 'age'
   | 'service'
 
-export function parseAgeSeconds(iso?: string | null): number {
-  if (!iso) return 0
-  const ms = new Date(iso).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-export function formatAge(iso?: string | null): string {
-  if (!iso) return '-'
-  const diffSec = parseAgeSeconds(iso)
-  if (diffSec === 0 && !iso) return '-'
-  const days = Math.floor(diffSec / 86400)
-  const hours = Math.floor((diffSec % 86400) / 3600)
-  const minutes = Math.floor((diffSec % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
-}
+export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 
 export function getStatusColor(status?: string | null): string {
   const s = String(status || '').toLowerCase()
   if (s.includes('healthy')) return 'badge-success'
-  if (s.includes('degraded') || s.includes('idle')) return 'badge-warning'
+  if (s.includes('degraded')) return 'badge-warning'
+  if (s.includes('idle')) return 'badge-neutral'
   if (s.includes('unavailable') || s.includes('error') || s.includes('failed')) return 'badge-error'
   return 'badge-info'
 }

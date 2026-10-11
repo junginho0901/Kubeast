@@ -23,6 +23,8 @@ interface Props {
   isJob: boolean
   isCronJob: boolean
   isDaemonSet: boolean
+  /** A ReplicaSet's status has no updated count (it runs one template) */
+  isReplicaSet: boolean
   replicaView: ReplicaView
   daemonSetStatus: DaemonSetStatus
   promWorkloadMetrics: PromMetrics
@@ -33,6 +35,7 @@ export default function WorkloadReplicasSection({
   isJob,
   isCronJob,
   isDaemonSet,
+  isReplicaSet,
   replicaView,
   daemonSetStatus,
   promWorkloadMetrics,
@@ -49,7 +52,7 @@ export default function WorkloadReplicasSection({
           value={replicaView.ready as string | number}
           color={Number(replicaView.ready) === Number(replicaView.desired) ? 'green' : 'amber'}
         />
-        <SummaryBadge label="Updated" value={replicaView.updated as string | number} />
+        {!isReplicaSet && <SummaryBadge label="Updated" value={replicaView.updated as string | number} />}
         <SummaryBadge label="Available" value={replicaView.available as string | number} />
         {isDaemonSet && (
           <SummaryBadge
@@ -72,7 +75,7 @@ export default function WorkloadReplicasSection({
           <InfoRow label="Desired" value={String(replicaView.desired ?? '-')} />
           <InfoRow label="Current" value={String(replicaView.current ?? '-')} />
           <InfoRow label="Ready" value={String(replicaView.ready ?? '-')} />
-          <InfoRow label="Up to date" value={String(replicaView.updated ?? '-')} />
+          {!isReplicaSet && <InfoRow label="Up to date" value={String(replicaView.updated ?? '-')} />}
           <InfoRow label="Available" value={String(replicaView.available ?? '-')} />
           {isDaemonSet && (
             <>

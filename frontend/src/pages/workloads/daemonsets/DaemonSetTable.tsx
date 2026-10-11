@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { DaemonSetInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
@@ -15,6 +16,7 @@ import {
   daemonSetToWorkloadRawJson,
   type SortKey,
 } from './daemonSetHelpers'
+import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 
 interface OpenDetailArgs {
@@ -35,6 +37,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -56,6 +59,7 @@ export function DaemonSetTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -130,7 +134,7 @@ export function DaemonSetTable({
                 </span>
               </th>
               <th className="text-left py-3 px-4 w-[200px]">{tr('daemonsets.table.nodeSelector', 'Node Selector')}</th>
-              <th className="col-low text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
                 <span className="inline-flex items-center gap-1">
                   {tr('daemonsets.table.images', 'Images')}{renderSortIcon('images')}
                 </span>
@@ -155,7 +159,7 @@ export function DaemonSetTable({
                   rawJson: daemonSetToWorkloadRawJson(daemonset),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{daemonset.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={daemonset.namespace}>{daemonset.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{daemonset.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.ready}/{daemonset.desired}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.current}</td>
@@ -163,20 +167,20 @@ export function DaemonSetTable({
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.updated}</td>
                 <td className="py-3 px-4 text-xs font-mono">{daemonset.available}</td>
                 <td className="py-3 px-4">
-                  <span className={`badge ${getDaemonSetStatusColor(daemonset.status)}`}>{daemonset.status}</span>
+                  <span className={`badge ${getDaemonSetStatusColor(daemonset.status)}`} title={workloadStatusTitle(daemonset.status)}>{workloadStatusLabel(tr, daemonset.status)}</span>
                 </td>
                 <td className="py-3 px-4 text-xs font-mono">
                   <span className="block truncate">
                     {Object.entries(daemonset.node_selector || {}).map(([k, v]) => `${k}=${v}`).join(', ') || '-'}
                   </span>
                 </td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{(daemonset.images || []).join(', ') || '-'}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{(daemonset.images || []).join(', ') || '-'}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(daemonset.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 12 : 11} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 11 : 10} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -187,46 +191,13 @@ export function DaemonSetTable({
             )}
 
             {sortedDaemonSetsLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 12 : 11} resource="daemonsets">
-                {tr('daemonsets.noResults', 'No daemonsets found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 11 : 10} resource="daemonsets" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedDaemonSets.length} columnCount={10 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
-      {sortedDaemonSetsLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedDaemonSetsLength),
-              total: sortedDaemonSetsLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedDaemonSetsLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

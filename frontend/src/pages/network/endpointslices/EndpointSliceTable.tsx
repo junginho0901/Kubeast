@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { EndpointSliceInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   endpointSliceToRawJson,
@@ -38,6 +39,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -59,6 +61,7 @@ export function EndpointSliceTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -105,10 +108,10 @@ export function EndpointSliceTable({
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('service')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.service', 'Service')}{renderSortIcon('service')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.addressType', 'Address Type')}{renderSortIcon('addressType')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
+              <th className="col-optional text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('endpointSlicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[280px]">
@@ -143,11 +146,11 @@ export function EndpointSliceTable({
                     rawJson: endpointSliceToRawJson(es),
                   })}
                 >
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{es.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={es.namespace}>{es.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{es.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{es.service_name || '-'}</span></td>
-                  <td className="col-low py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
-                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono">{es.address_type || '-'}</td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(es.ports)}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatEndpointPreview(es)}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{es.endpoints_total || 0}</td>
                   <td className="py-3 px-4 text-xs font-mono">{es.endpoints_ready || 0}</td>
@@ -158,7 +161,7 @@ export function EndpointSliceTable({
             })}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 11 : 10} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 10 : 9} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -169,45 +172,14 @@ export function EndpointSliceTable({
             )}
 
             {sortedEndpointSlicesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 11 : 10} resource="endpointslices">
-                {tr('endpointSlicesPage.noResults', 'No endpoint slices found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 10 : 9} resource="endpointslices" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedEndpointSlices.length} columnCount={9 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
 
-      {sortedEndpointSlicesLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedEndpointSlicesLength),
-              total: sortedEndpointSlicesLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedEndpointSlicesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

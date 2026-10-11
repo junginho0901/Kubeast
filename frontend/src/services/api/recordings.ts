@@ -35,6 +35,8 @@ export interface RecordingFilter {
   user?: string
   cluster?: string
   kind?: string
+  limit?: number
+  offset?: number
 }
 
 const base = '/cluster/recordings'
@@ -48,7 +50,7 @@ export const recordingsApi = {
   listRecordings: async (filter: RecordingFilter = {}): Promise<SessionRecording[]> => {
     // cluster is a filter here, not the selected cluster the client adds by default
     const params: Record<string, string> = { cluster: '' }
-    for (const [k, v] of Object.entries(filter)) if (v) params[k] = v
+    for (const [k, v] of Object.entries(filter)) if (v) params[k] = String(v)
     const { data } = await client.get(base, { params })
     return Array.isArray(data) ? data : []
   },

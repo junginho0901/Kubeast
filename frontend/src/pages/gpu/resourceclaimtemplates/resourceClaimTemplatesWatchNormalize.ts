@@ -3,7 +3,7 @@
 // frontend/src/pages/gpu/ResourceClaimTemplates.tsx 의
 // normalizeWatchResourceClaimTemplateObject /
 // applyResourceClaimTemplateWatchEvent 추출.
-// raw k8s ResourceClaimTemplate (resource.k8s.io/v1beta1) object 를 API
+// raw k8s ResourceClaimTemplate (resource.k8s.io) object 를 API
 // list 형태 (ResourceClaimTemplateItem) 로 정규화 — Template 은 status 없이
 // **spec.spec.devices.requests** 만 (한번 더 wrap). request_count 는 그 배열
 // 길이.

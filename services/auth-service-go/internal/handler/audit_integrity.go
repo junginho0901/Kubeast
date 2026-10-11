@@ -9,7 +9,6 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditchain"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -61,9 +60,7 @@ func (h *AuthHandler) chainOn() bool { return h.cfg.AuditIntegrity.Enabled && h.
 // AuditIntegrityStatus handles GET /auth/admin/audit/integrity
 // (admin.audit.read): {enabled:false} when the feature is off.
 func (h *AuthHandler) AuditIntegrityStatus(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.audit.read") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	if _, ok := requirePerm(h.auditStore, w, r, "admin.audit.read"); !ok {
 		return
 	}
 	if !h.chainOn() {
@@ -102,9 +99,8 @@ type auditVerifyRequest struct {
 // (admin.audit.read): recomputes the range (default: since the last anchor)
 // and compares the anchors in it, recorded as admin.audit.verify.
 func (h *AuthHandler) AdminAuditVerify(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.audit.read") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.read")
+	if !ok {
 		return
 	}
 	if !h.chainOn() {
@@ -153,9 +149,8 @@ func (h *AuthHandler) AdminAuditVerify(w http.ResponseWriter, r *http.Request) {
 // AdminAuditAnchor handles POST /auth/admin/audit/integrity/anchor
 // (admin.audit.export): writes one digest now, recorded as admin.audit.anchor.
 func (h *AuthHandler) AdminAuditAnchor(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.audit.export") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.export")
+	if !ok {
 		return
 	}
 	if !h.chainOn() || h.chain.Anchorer == nil {

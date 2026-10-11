@@ -1,6 +1,7 @@
 import Editor from '@/components/monaco/CodeEditor'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { api, type HelmSection } from '@/services/api'
 
 // Generic read-only renderer for the manifest / notes tabs. Values has
@@ -18,6 +19,7 @@ export default function SectionTab({
   name: string
   section: HelmSection
 }) {
+  const { t } = useTranslation()
   const q = useQuery({
     queryKey: ['helm-section', namespace, name, section],
     queryFn: () => api.helm.getSection(namespace, name, section),
@@ -38,7 +40,7 @@ export default function SectionTab({
   if (section === 'notes') {
     return (
       <pre className="max-h-[70vh] overflow-auto rounded-lg bg-slate-900 border border-slate-700 px-4 py-3 text-xs text-slate-200 whitespace-pre-wrap">
-        {content || '—'}
+        {content || t('common.none', 'None')}
       </pre>
     )
   }

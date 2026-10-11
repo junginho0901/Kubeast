@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -47,9 +48,13 @@ type accessRequestsConfigResponse struct {
 	Enabled  bool     `json:"enabled"`
 	MaxHours int      `json:"max_hours"`
 	Roles    []string `json:"roles"`
+	HelpText string   `json:"help_text,omitempty"`
+	HelpURL  string   `json:"help_url,omitempty"`
 }
 
-// AccessRequestsConfig tells the UI whether to offer requests and within what bounds.
+// AccessRequestsConfig tells the UI whether to offer requests and within what
+// bounds, and where a user with no cluster asks for one (chart
+// auth.accessHelp; a URL that is not http(s) is dropped).
 func (h *AuthHandler) AccessRequestsConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := h.cfg.AccessRequests
 	roles := make([]string, 0, len(cfg.Roles))
@@ -58,7 +63,14 @@ func (h *AuthHandler) AccessRequestsConfig(w http.ResponseWriter, r *http.Reques
 			roles = append(roles, role)
 		}
 	}
-	response.JSON(w, http.StatusOK, accessRequestsConfigResponse{Enabled: cfg.Enabled, MaxHours: cfg.MaxHours, Roles: roles})
+	helpURL := strings.TrimSpace(cfg.HelpURL)
+	if u, err := url.Parse(helpURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		helpURL = ""
+	}
+	response.JSON(w, http.StatusOK, accessRequestsConfigResponse{
+		Enabled: cfg.Enabled, MaxHours: cfg.MaxHours, Roles: roles,
+		HelpText: strings.TrimSpace(cfg.HelpText), HelpURL: helpURL,
+	})
 }
 
 // CreateAccessRequest files a request for the signed-in user.
@@ -91,6 +103,8 @@ func (h *AuthHandler) CreateAccessRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if grant == nil {
+		self := &repository.AccessRequest{UserID: payload.UserID, UserEmail: payload.Email, ClusterID: in.ClusterID, Role: in.Role}
+		h.auditAccessRequest(r, auditAccessRequestCreate, payload, self, map[string]any{"role": in.Role}, errors.New("no grant on the cluster"))
 		response.Error(w, http.StatusForbidden, "You have no access to this cluster to escalate; ask an admin for a grant first")
 		return
 	}

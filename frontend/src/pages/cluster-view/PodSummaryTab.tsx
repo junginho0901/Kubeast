@@ -6,6 +6,7 @@
 
 import { CheckCircle, XCircle, Search, X } from 'lucide-react'
 import { getPodHealth, getHealthIcon } from './podHealth'
+import { formatTime, utcTitle } from '@/utils/time'
 
 interface PodDetail {
   name: string
@@ -28,7 +29,6 @@ interface Props {
   pod: PodDetail
   containerSearchQuery: string
   onContainerSearchChange: (q: string) => void
-  locale: string
   na: string
   emptyValue: string
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
@@ -38,7 +38,6 @@ export function PodSummaryTab({
   pod,
   containerSearchQuery,
   onContainerSearchChange,
-  locale,
   na,
   emptyValue,
   tr,
@@ -72,16 +71,7 @@ export function PodSummaryTab({
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.createdAt', 'Created at')}</p>
           <p className="text-white font-medium">
-            {pod.created_at
-              ? new Date(pod.created_at).toLocaleString(locale, {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })
-              : na}
+            {pod.created_at ? <span title={utcTitle(pod.created_at)}>{formatTime(pod.created_at)}</span> : na}
           </p>
         </div>
       </div>

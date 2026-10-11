@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
+import { uiLang } from '@/utils/uiLang'
 
 /*
  * FUTURE — exec session audit log persistence.
@@ -67,7 +68,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
   useEffect(() => {
     tRef.current = t
   }, [t])
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'error' | 'closed'>('connecting')
 
   useEffect(() => {
     const term = new Terminal({
@@ -102,6 +103,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
         // the size the terminal opened at (the recording's width/height)
         cols: String(term.cols),
         rows: String(term.rows),
+        lang: uiLang(), // the recording notice in the screen's language
         ...(clusterId ? { cluster: clusterId } : {}),
       }
     )
@@ -155,6 +157,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       if (event.code === 1008) {
         handleUnauthorized()
       }
+      setStatus((prev) => (prev === 'error' ? prev : 'closed'))
       term.writeln(tRef.current('pods.exec.disconnected', { defaultValue: 'Disconnected.' }))
     }
 
@@ -199,7 +202,9 @@ export default function PodExecTerminal({ podName, namespace, container, command
               ? t('pods.exec.statusConnecting', { defaultValue: 'Connecting...' })
               : status === 'connected'
                 ? t('pods.exec.statusConnected', { defaultValue: 'Connected' })
-                : t('pods.exec.statusError', { defaultValue: 'Connection error' })}
+                : status === 'closed'
+                  ? t('pods.exec.statusClosed', { defaultValue: 'Disconnected' })
+                  : t('pods.exec.statusError', { defaultValue: 'Connection error' })}
           </p>
         </div>
         <button

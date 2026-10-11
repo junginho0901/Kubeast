@@ -21,7 +21,7 @@ var helmRedactOpts = redact.Options{Enabled: true, Disabled: map[string]bool{}}
 // the read cannot be recorded — the handler answers 503 (refuseUnaudited)
 // rather than the full text.
 func (h *Handler) helmReveal(r *http.Request, namespace, name, section string) (bool, error) {
-	if h.requirePermissionForCluster(r, "resource.secret.reveal") != nil {
+	if !h.canForCluster(r, "resource.secret.reveal") {
 		return false, nil
 	}
 	if rerr := h.auditReady(r); rerr != nil {

@@ -127,5 +127,14 @@ test.describe('Dashboard quick actions', () => {
     await expect(page.locator('h2').filter({ hasText: /Storage analysis|스토리지 분석/ })).toBeVisible()
     const usage = page.getByTestId('pvc-usage').or(page.getByTestId('pvc-usage-na'))
     await expect(usage.first()).toBeVisible({ timeout: 20000 })
+    // a usage bar carries its percent; N/A says why in its tooltip
+    const measured = page.getByTestId('pvc-usage').first()
+    if (await measured.count()) {
+      const percent = Number(await measured.getByRole('progressbar').getAttribute('aria-valuenow'))
+      expect(percent).toBeGreaterThanOrEqual(0)
+      expect(percent).toBeLessThanOrEqual(100)
+    } else {
+      expect(await page.getByTestId('pvc-usage-na').first().getAttribute('title')).toMatch(/CSI|Prometheus/)
+    }
   })
 })

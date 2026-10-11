@@ -23,7 +23,6 @@ for (const key of keys) {
     const reason = d.precondition?.()
     test.skip(!!reason, reason || '')
 
-    page.on('dialog', (dlg) => dlg.accept()) // admin pages confirm deletes with window.confirm
     const apis: string[] = []
     const consoleErrors: string[] = []
     const pageErrors: string[] = []

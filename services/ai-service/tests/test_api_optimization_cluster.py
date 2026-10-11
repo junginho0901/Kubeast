@@ -13,8 +13,8 @@ stream_calls: list[dict] = []
 
 
 class _StubService:
-    async def suggest_optimization_stream(self, namespace, audit_actor=None, audit_http=None):
-        stream_calls.append({"namespace": namespace, "audit_actor": audit_actor, "audit_http": audit_http})
+    async def suggest_optimization_stream(self, namespace, audit_actor=None, audit_http=None, lang="en"):
+        stream_calls.append({"namespace": namespace, "audit_actor": audit_actor, "audit_http": audit_http, "lang": lang})
         yield "event: done\ndata: {}\n\n"
 
 
@@ -52,3 +52,13 @@ def test_stream_without_header_builds_service_for_the_default_cluster(builder_ca
     )
     assert r.status_code == 200
     assert builder_calls[-1]["cluster_name"] is None
+    assert stream_calls[-1]["lang"] == "en"  # no lang: English
+
+
+def test_stream_passes_the_ui_language(builder_calls):
+    r = TestClient(app).get(
+        "/api/v1/ai/suggest-optimization/stream?namespace=web&lang=ko",
+        headers={"Authorization": "Bearer tok"},
+    )
+    assert r.status_code == 200
+    assert stream_calls[-1]["lang"] == "ko"

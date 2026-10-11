@@ -16,9 +16,11 @@ import type { ModelFormState } from './useModelForm'
 
 interface Props {
   form: ModelFormState
+  // inside the create window: no card, title or Cancel/Create row (the window has them)
+  inModal?: boolean
 }
 
-export default function ModelConfigForm({ form }: Props) {
+export default function ModelConfigForm({ form, inModal }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fb: string) => t(key, { defaultValue: fb })
   const {
@@ -49,8 +51,8 @@ export default function ModelConfigForm({ form }: Props) {
   } = form
 
   return (
-    <div className="rounded-xl border border-primary-500/30 bg-slate-900/80 p-5 space-y-4 mt-2 shadow-lg shadow-primary-500/5">
-      <div className="flex items-center justify-between">
+    <div className={inModal ? 'space-y-4' : 'rounded-xl border border-primary-500/30 bg-slate-900/80 p-5 space-y-4 mt-2 shadow-lg shadow-primary-500/5'}>
+      {!inModal && <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           {editingId ? (
             <>
@@ -67,7 +69,7 @@ export default function ModelConfigForm({ form }: Props) {
         <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition">
           <X className="h-4 w-4" />
         </button>
-      </div>
+      </div>}
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* Name */}
@@ -271,7 +273,7 @@ export default function ModelConfigForm({ form }: Props) {
           </span>
         )}
 
-        <div className="ml-auto flex gap-2">
+        {!inModal && <div className="ml-auto flex gap-2">
           <button
             onClick={resetForm}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
@@ -286,7 +288,7 @@ export default function ModelConfigForm({ form }: Props) {
             {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {editingId ? tr('admin.aiModels.update', 'Update') : tr('admin.aiModels.create', 'Create')}
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Rollout hint — only for new model that may require new env vars */}

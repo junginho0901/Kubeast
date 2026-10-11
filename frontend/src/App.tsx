@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
@@ -13,11 +13,8 @@ import { ClusterProvider } from './contexts/ClusterProvider'
 const Setup = lazy(() => import('./pages/Setup'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Namespaces = lazy(() => import('./pages/Namespaces'))
-const Resources = lazy(() => import('./pages/Resources'))
-const Topology = lazy(() => import('./pages/Topology'))
 const ResourceGraph = lazy(() => import('./pages/ResourceGraph'))
 const Timeline = lazy(() => import('./pages/Timeline'))
-const NetworkPage = lazy(() => import('./pages/Network'))
 const AIChat = lazy(() => import('./pages/AIChat'))
 const ClusterView = lazy(() => import('./pages/ClusterView'))
 const Monitoring = lazy(() => import('./pages/Monitoring'))
@@ -68,6 +65,7 @@ const ResourceClaims = lazy(() => import('./pages/gpu/ResourceClaims'))
 const ResourceClaimTemplates = lazy(() => import('./pages/gpu/ResourceClaimTemplates'))
 const ResourceSlices = lazy(() => import('./pages/gpu/ResourceSlices'))
 const ServiceAccounts = lazy(() => import('./pages/security/ServiceAccounts'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 const Roles = lazy(() => import('./pages/security/Roles'))
 const RoleBindings = lazy(() => import('./pages/security/RoleBindings'))
 const ClusterRoles = lazy(() => import('./pages/security/ClusterRoles'))
@@ -86,6 +84,12 @@ const CustomResourceInstances = lazy(() => import('./pages/custom-resources/Cust
 const HelmReleasesPage = lazy(() => import('./pages/helm/Releases'))
 const HelmReleaseDetailPage = lazy(() => import('./pages/helm/ReleaseDetail'))
 
+// The old per-namespace topology screen: its links open the Resource Graph on that namespace.
+function TopologyRedirect() {
+  const { namespace = '' } = useParams()
+  return <Navigate to={`/cluster/resource-graph?namespace=${encodeURIComponent(namespace)}`} replace />
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -96,7 +100,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<Dashboard />} />
-            <Route path="namespaces" element={<Namespaces />} />
+            <Route path="namespaces" element={<Navigate to="/cluster/namespaces" replace />} />
             <Route path="cluster/namespaces" element={<Namespaces />} />
             <Route path="cluster/resource-graph" element={<ResourceGraph />} />
             <Route path="timeline" element={<Timeline />} />
@@ -154,9 +158,9 @@ function App() {
             <Route path="monitoring" element={<Monitoring />} />
             <Route path="cluster-view" element={<ClusterView />} />
             <Route path="account" element={<Account />} />
-            <Route path="resources/:namespace" element={<Resources />} />
-            <Route path="topology/:namespace" element={<Topology />} />
-            <Route path="network/:namespace" element={<NetworkPage />} />
+            <Route path="resources/:namespace" element={<Navigate to="/workloads/pods" replace />} />
+            <Route path="topology/:namespace" element={<TopologyRedirect />} />
+            <Route path="network/:namespace" element={<Navigate to="/network/services" replace />} />
             <Route path="ai-chat" element={<AIChat />} />
             <Route path="admin/clusters" element={<RequireAdmin><AdminClusters /></RequireAdmin>} />
             <Route path="admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
@@ -170,6 +174,7 @@ function App() {
             <Route path="admin/access-review" element={<RequirePermission permission="admin.review.read"><AdminAccessReview /></RequirePermission>} />
             <Route path="admin/cluster-hygiene" element={<RequirePermission permission="admin.hygiene.read"><AdminClusterHygiene /></RequirePermission>} />
             <Route path="admin/session-recordings" element={<RequirePermission permission="admin.sessions.read"><AdminSessionRecordings /></RequirePermission>} />
+            <Route path="*" element={<NotFound />} />
           </Route>
           </Routes>
         </Suspense>

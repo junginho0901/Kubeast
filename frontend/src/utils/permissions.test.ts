@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasPermission, matchAny, permMatches } from './permissions'
+import { hasPermission, matchAny, permMatches, permResource } from './permissions'
 
 // Same table as services/pkg/auth permissions_test.go — the three matchers
 // (Go, Python, TS) must agree on wildcard semantics.
@@ -30,5 +30,33 @@ describe('hasPermission', () => {
     expect(hasPermission(matrix, 'resource.namespace.create', 'alpha')).toBe(true)
     expect(hasPermission(matrix, 'resource.namespace.create', 'prod')).toBe(false)
     expect(matchAny(undefined, 'resource.pod.read')).toBe(false)
+  })
+})
+
+// Same names as permResource in the backend (perm_resource_test.go): a role
+// granting resource.hpa.delete must see the HPA drawer's Delete button.
+describe('permResource', () => {
+  it.each([
+    ['ConfigMap', 'configmap'],
+    ['Endpoints', 'endpoints'],
+    ['HorizontalPodAutoscaler', 'hpa'],
+    ['HPA', 'hpa'],
+    ['VerticalPodAutoscaler', 'vpa'],
+    ['PodDisruptionBudget', 'pdb'],
+    ['PDB', 'pdb'],
+    ['PersistentVolume', 'pv'],
+    ['PersistentVolumeClaim', 'pvc'],
+    ['PVC', 'pvc'],
+    ['CustomResourceDefinition', 'crd'],
+    ['CustomResourceInstance', 'customresource'],
+    ['BackendTLSPolicy', 'backendtlspolicy'],
+    ['ModelConfig', 'customresource'],
+  ])('%s → %s', (kind, want) => {
+    expect(permResource(kind)).toBe(want)
+  })
+  it('a per-kind grant opens that kind only', () => {
+    const m = { alpha: ['resource.hpa.delete'] }
+    expect(hasPermission(m, `resource.${permResource('HorizontalPodAutoscaler')}.delete`, 'alpha')).toBe(true)
+    expect(hasPermission(m, `resource.${permResource('Deployment')}.delete`, 'alpha')).toBe(false)
   })
 })

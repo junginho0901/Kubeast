@@ -106,7 +106,7 @@ export function IssuesModal({
             <span className="badge badge-info">{tr('dashboard.issues.infoLabel', 'Info')} {issuesSummary.info}</span>
             {generatedAt && (
               <span className="text-xs text-slate-500 ml-auto">
-                {tr('dashboard.issues.generatedAt', 'Collected {{age}}', { age: formatAge(nowMs - Date.parse(generatedAt)) })}
+                {tr('dashboard.issues.generatedAt', 'Collected {{age}} ago', { age: formatAge(nowMs - Date.parse(generatedAt)) })}
               </span>
             )}
           </div>
@@ -251,7 +251,7 @@ export function IssuesModal({
                             {(issue.lastSeen || issue.count) && (
                               <div className="shrink-0 text-right text-xs text-slate-500 space-y-0.5">
                                 {issue.lastSeen && (
-                                  <p>{tr('dashboard.issues.lastSeen', 'last {{age}}', { age: formatAge(nowMs - Date.parse(issue.lastSeen)) })}</p>
+                                  <p>{tr('dashboard.issues.lastSeen', 'last {{age}} ago', { age: formatAge(nowMs - Date.parse(issue.lastSeen)) })}</p>
                                 )}
                                 {!!issue.count && issue.count > 1 && (
                                   <p>{tr('dashboard.issues.countTimes', '×{{count}}', { count: issue.count })}</p>

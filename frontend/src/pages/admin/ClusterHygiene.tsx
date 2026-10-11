@@ -8,6 +8,7 @@ import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { formatWhen } from './accessRequestFormat'
+import { utcTitle } from '@/utils/time'
 
 // Admin → Cluster hygiene: configuration risks of one cluster (Pod Security
 // Standards, image tags, resources, namespace policy, service account tokens,
@@ -21,6 +22,18 @@ const SEVERITY_TONE: Record<HygieneSeverity, string> = {
   critical: 'bg-red-500/20 text-red-300',
   warning: 'bg-yellow-500/20 text-yellow-300',
   info: 'bg-blue-500/20 text-blue-300',
+}
+
+type Tr = (key: string, fallback: string, opts?: Record<string, unknown>) => string
+
+// The server sends a finding's sentence as a catalog key and values (its `message` stays English for the CSV
+// and sign-off snapshots); a snapshot from before the keys shows the English text.
+function findingText(tr: Tr, f: HygieneFinding): string {
+  if (!f.message_key) return f.message
+  const text = tr(`clusterHygiene.message.${f.message_key}`, f.message, f.message_args)
+  return f.exempt_no_reason
+    ? `${text} ${tr('clusterHygiene.exemptNoReason', '(kubeast.io/hygiene-exempt without kubeast.io/hygiene-exempt-reason)')}`
+    : text
 }
 
 export default function ClusterHygiene() {
@@ -78,13 +91,14 @@ export default function ClusterHygiene() {
   const findings = useMemo(() => {
     if (!report) return []
     const q = search.trim().toLowerCase()
+    const label: Tr = (key, fallback, opts) => t(key, { defaultValue: fallback, ...opts })
     return report.findings.filter((f: HygieneFinding) => {
       if (severity === 'exempt' ? !f.exempt : severity !== 'all' && (f.exempt || f.severity !== severity)) return false
       if (check !== 'all' && f.check !== check) return false
       if (!q) return true
-      return [f.namespace, f.kind, f.name, f.container, f.message, f.exempt_reason].join(' ').toLowerCase().includes(q)
+      return [f.namespace, f.kind, f.name, f.container, f.message, findingText(label, f), f.exempt_reason].join(' ').toLowerCase().includes(q)
     })
-  }, [report, severity, check, search])
+  }, [report, severity, check, search, t])
 
   const download = (format: 'csv' | 'json') => {
     const a = document.createElement('a')
@@ -114,7 +128,7 @@ export default function ClusterHygiene() {
   )
 
   return (
-    <div className="space-y-4">
+    <div className="page-scrolls space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -138,7 +152,7 @@ export default function ClusterHygiene() {
           <button
             onClick={() => refetch()}
             disabled={isFetching || !!viewId || !cluster}
-            className="h-10 rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 text-sm text-white flex items-center gap-2 whitespace-nowrap"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
             {tr('clusterHygiene.refresh', 'Scan again')}
@@ -201,7 +215,7 @@ export default function ClusterHygiene() {
           <span className="text-slate-500">
             {tr('clusterHygiene.generatedAt', 'Scanned {{when}}; not checked: {{namespaces}}.', {
               when: formatWhen(report.generated_at),
-              namespaces: report.excluded_namespaces.length ? report.excluded_namespaces.join(', ') : '—',
+              namespaces: report.excluded_namespaces.length ? report.excluded_namespaces.join(', ') : '-',
             })}
           </span>
         </div>
@@ -264,28 +278,28 @@ export default function ClusterHygiene() {
               <div className="p-6 text-slate-400">{tr('clusterHygiene.empty', 'Nothing to show.')}</div>
             ) : (
               <table className="min-w-full text-sm" data-testid="hygiene-findings-table">
-                <thead className="text-xs text-slate-400">
+                <thead className="text-slate-400">
                   <tr className="whitespace-nowrap">
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.severity', 'Severity')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.check', 'Check')}</th>
-                    <th className="px-3 py-2 text-left font-medium">Namespace</th>
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.object', 'Object')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.message', 'Details')}</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.severity', 'Severity')}</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.check', 'Check')}</th>
+                    <th className="px-3 py-2 text-left">Namespace</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.object', 'Object')}</th>
+                    <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.message', 'Details')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {findings.map((f, i) => (
                     <tr key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`} className="border-t border-slate-700/60 text-slate-300 align-top" data-testid="hygiene-finding-row">
                       <td className="px-3 py-2">{badge(f)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{checkTitle(f.check)}</td>
-                      <td className="px-3 py-2">{f.namespace || '—'}</td>
+                      <td className="px-3 py-2">{checkTitle(f.check)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{f.namespace || '-'}</td>
                       <td className="px-3 py-2">
-                        <span className="text-white">{f.kind}/{f.name}</span>
+                        <span className="text-white">{f.kind}/<wbr />{f.name}</span>
                         {f.container && <span className="text-slate-400"> · {f.container}</span>}
                         {f.pods && f.pods > 1 ? <span className="text-slate-500"> · {tr('clusterHygiene.pods', '{{count}} Pods', { count: f.pods })}</span> : null}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="break-all">{f.message}</span>
+                        <span className="block min-w-[200px] [overflow-wrap:anywhere]">{findingText(tr, f)}</span>
                         {f.exempt && f.exempt_reason && <div className="text-xs text-slate-400 mt-0.5">{tr('clusterHygiene.exemptReason', 'Exempt: {{reason}}', { reason: f.exempt_reason })}</div>}
                       </td>
                     </tr>
@@ -301,13 +315,13 @@ export default function ClusterHygiene() {
       {tab === 'checks' && report && (
         <div className="rounded-lg bg-slate-800/50 border border-slate-700 overflow-x-auto">
           <table className="min-w-full text-sm" data-testid="hygiene-checks-table">
-            <thead className="text-xs text-slate-400">
+            <thead className="text-slate-400">
               <tr className="whitespace-nowrap">
-                <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.check', 'Check')}</th>
-                <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.severity', 'Severity')}</th>
-                <th className="px-3 py-2 text-right font-medium">{tr('clusterHygiene.col.findings', 'Findings')}</th>
-                <th className="px-3 py-2 text-right font-medium">{tr('clusterHygiene.exempt', 'Exempt')}</th>
-                <th className="px-3 py-2 text-left font-medium">{tr('clusterHygiene.col.refs', 'Basis')}</th>
+                <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.check', 'Check')}</th>
+                <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.severity', 'Severity')}</th>
+                <th className="px-3 py-2 text-right">{tr('clusterHygiene.col.findings', 'Findings')}</th>
+                <th className="px-3 py-2 text-right">{tr('clusterHygiene.exempt', 'Exempt')}</th>
+                <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.refs', 'Basis')}</th>
               </tr>
             </thead>
             <tbody>
@@ -336,7 +350,7 @@ export default function ClusterHygiene() {
             <div className="p-6 text-slate-400">{tr('clusterHygiene.noHistory', 'This cluster has not been signed off yet.')}</div>
           ) : (
             <table className="min-w-full text-sm">
-              <thead className="text-xs text-slate-400">
+              <thead className="text-slate-400">
                 <tr>
                   <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.reviewedAt', 'Signed off')}</th>
                   <th className="px-3 py-2 text-left">{tr('clusterHygiene.col.reviewedBy', 'By')}</th>
@@ -348,10 +362,10 @@ export default function ClusterHygiene() {
               <tbody>
                 {history.map((h) => (
                   <tr key={h.id} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-history-row">
-                    <td className="px-3 py-2 whitespace-nowrap text-white">{formatWhen(h.reviewed_at)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-white" title={utcTitle(h.reviewed_at)}>{formatWhen(h.reviewed_at)}</td>
                     <td className="px-3 py-2">{h.reviewed_by_email}</td>
-                    <td className="px-3 py-2">{h.note || '—'}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{h.counts?.critical ?? '—'} / {h.counts?.warning ?? '—'} / {h.counts?.info ?? '—'} / {h.counts?.exempt ?? '—'}</td>
+                    <td className="px-3 py-2">{h.note || '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{h.counts?.critical ?? '-'} / {h.counts?.warning ?? '-'} / {h.counts?.info ?? '-'} / {h.counts?.exempt ?? '-'}</td>
                     <td className="px-3 py-2 text-right">
                       <button onClick={() => { setViewId(h.id); setTab('findings') }} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-white">
                         {tr('clusterHygiene.open', 'Open')}

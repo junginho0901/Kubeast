@@ -5,23 +5,11 @@ import { api } from '@/services/api'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
+import { formatAge } from '@/utils/time'
 
 interface Props {
   name: string
   rawJson?: Record<string, unknown>
-}
-
-function formatAge(createdAt?: string | null): string {
-  if (!createdAt) return '-'
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return '-'
-  const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000))
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
 }
 
 export default function CRDInfo({ name, rawJson }: Props) {
@@ -84,6 +72,17 @@ export default function CRDInfo({ name, rawJson }: Props) {
   const categories = Array.isArray(describe?.categories) ? describe.categories : []
   const storedVersions = Array.isArray(describe?.stored_versions) ? describe.stored_versions : []
   const subresources = Array.isArray(describe?.subresources) ? describe.subresources as string[] : []
+  // status.acceptedNames repeats spec.names unless the API server refused a name (a conflict) — shown only then
+  const accepted = describe?.accepted_names
+  const sameList = (a: unknown, b: string[]) => (Array.isArray(a) ? a : []).join(',') === b.join(',')
+  const acceptedDiffers = !!accepted && (
+    (accepted.kind || '') !== (describe?.kind || '') ||
+    (accepted.plural || '') !== (describe?.plural || '') ||
+    (accepted.singular || '') !== (describe?.singular || String(describe?.kind || '').toLowerCase()) ||
+    (accepted.listKind || '') !== (describe?.list_kind || `${describe?.kind || ''}List`) ||
+    !sameList(accepted.shortNames, shortNames) ||
+    !sameList(accepted.categories, categories)
+  )
 
   if (isLoading) return <p className="text-slate-400">{tr('common.loading', 'Loading...')}</p>
 
@@ -140,19 +139,18 @@ export default function CRDInfo({ name, rawJson }: Props) {
         </div>
       </InfoSection>
 
-      {/* Accepted Names */}
-      {describe?.accepted_names && (
+      {acceptedDiffers && (
         <InfoSection title={tr('crdInfo.acceptedNames', 'Accepted Names')}>
           <div className="space-y-2">
-            <InfoRow label="Kind" value={describe.accepted_names.kind || '-'} />
-            <InfoRow label="Plural" value={describe.accepted_names.plural || '-'} />
-            {describe.accepted_names.singular && <InfoRow label="Singular" value={describe.accepted_names.singular} />}
-            {describe.accepted_names.listKind && <InfoRow label="List Kind" value={describe.accepted_names.listKind} />}
-            {Array.isArray(describe.accepted_names.shortNames) && describe.accepted_names.shortNames.length > 0 && (
-              <InfoRow label="Short Names" value={describe.accepted_names.shortNames.join(', ')} />
+            <InfoRow label={tr('crdInfo.resourceKind', 'Resource Kind')} value={accepted.kind || '-'} />
+            <InfoRow label={tr('crdInfo.plural', 'Plural')} value={accepted.plural || '-'} />
+            {accepted.singular && <InfoRow label={tr('crdInfo.singular', 'Singular')} value={accepted.singular} />}
+            {accepted.listKind && <InfoRow label={tr('crdInfo.listKind', 'List Kind')} value={accepted.listKind} />}
+            {Array.isArray(accepted.shortNames) && accepted.shortNames.length > 0 && (
+              <InfoRow label={tr('crdInfo.shortNames', 'Short Names')} value={accepted.shortNames.join(', ')} />
             )}
-            {Array.isArray(describe.accepted_names.categories) && describe.accepted_names.categories.length > 0 && (
-              <InfoRow label="Categories" value={describe.accepted_names.categories.join(', ')} />
+            {Array.isArray(accepted.categories) && accepted.categories.length > 0 && (
+              <InfoRow label={tr('crdInfo.categories', 'Categories')} value={accepted.categories.join(', ')} />
             )}
           </div>
         </InfoSection>

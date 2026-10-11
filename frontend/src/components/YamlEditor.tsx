@@ -239,7 +239,7 @@ export default function YamlEditor({
           <p className="text-[11px] text-slate-500">{labels.refreshing}</p>
         )}
         <p className="text-[11px] text-slate-500">
-          {canEdit ? labels.editHint : labels.readonly}
+          {canEdit && isEditing ? labels.editHint : labels.readonly}
         </p>
         {applyError && <p className="text-xs text-red-400">{applyError}</p>}
         {showInlineApplied && applySuccess && !toast && (

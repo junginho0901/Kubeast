@@ -15,22 +15,7 @@ export function parseReadyPair(ready?: string | null): [number, number] {
   return [Number(m[1]) || 0, Number(m[2]) || 0]
 }
 
-export function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-export function formatAge(createdAt?: string | null): string {
-  const diffSec = parseAgeSeconds(createdAt)
-  const days = Math.floor(diffSec / 86400)
-  const hours = Math.floor((diffSec % 86400) / 3600)
-  const minutes = Math.floor((diffSec % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
-}
+export { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 
 export function pickPodDisplayStatus(pod: PodInfo): string {
   if (pod.status_reason) return String(pod.status_reason)

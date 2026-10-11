@@ -126,6 +126,12 @@ auth:
     roles: [Write]
     # How often expired grants are reverted (and tokens revoked).
     sweepSeconds: 60
+  # Where a signed-in user who reaches no cluster asks for access, shown with
+  # "no accessible cluster" (dashboard, Settings): a sentence and an http(s)
+  # link, e.g. the request form of your ticket system. Empty = a generic line.
+  accessHelp:
+    text: ""
+    url: ""
   # API keys: a user issues a key (Settings → API keys) and automation
   # exchanges it for a short access token (POST /api/v1/auth/token). A key
   # is scoped to clusters and capped at a role, never above the user's own
@@ -185,12 +191,14 @@ metrics:
 
 # --- Node shell (privileged debug pod on a node) ---
 # Off by default. When on, the pod runs in `namespace` (created with the
-# Pod Security "privileged" label) with an image from the allow list.
+# Pod Security "privileged" label) with an image from the allow list; the
+# first is the default. Images are pulled IfNotPresent, so pin a version (or
+# point at a registry mirror) — a node that has the image needs no registry.
 nodeShell:
   enabled: false
   namespace: kubeast-node-shell
   images:
-    - docker.io/library/busybox:latest
+    - docker.io/library/busybox:1.38.0
   timeoutSeconds: 3600
 
 # --- Terminal session recording ---

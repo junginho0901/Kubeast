@@ -560,7 +560,7 @@ func (h *AuthHandler) oidcFail(w http.ResponseWriter, r *http.Request, code, ema
 	if email != "" {
 		target = &email
 	}
-	h.writeAuditLog(r, "user.login.failed", nil, nil, nil, target, nil,
+	h.writeAuditFailure(r, "user.login.failed", nil, nil, nil, target, code,
 		jsonRaw(map[string]any{"method": "oidc", "reason": code}))
 	http.Redirect(w, r, "/login?error="+url.QueryEscape(code), http.StatusFound)
 }

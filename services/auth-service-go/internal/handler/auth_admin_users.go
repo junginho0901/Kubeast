@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -11,15 +12,13 @@ import (
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // AdminBulkUpdateRole handles PATCH /auth/admin/users/bulk-role
 func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.update")
+	if !ok {
 		return
 	}
 
@@ -79,9 +78,8 @@ func (h *AuthHandler) AdminBulkUpdateRole(w http.ResponseWriter, r *http.Request
 
 // AdminBulkCreateUsers handles POST /auth/admin/users/bulk
 func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.create") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.create")
+	if !ok {
 		return
 	}
 
@@ -189,9 +187,8 @@ func (h *AuthHandler) AdminBulkCreateUsers(w http.ResponseWriter, r *http.Reques
 
 // AdminCreateUser handles POST /auth/admin/users
 func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.create") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.create")
+	if !ok {
 		return
 	}
 
@@ -288,9 +285,7 @@ func (h *AuthHandler) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 
 // AdminListUsers handles GET /auth/admin/users
 func (h *AuthHandler) AdminListUsers(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.read") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	if _, ok := requirePerm(h.auditStore, w, r, "admin.users.read"); !ok {
 		return
 	}
 
@@ -321,9 +316,8 @@ func (h *AuthHandler) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 
 // AdminUpdateUser handles PATCH /auth/admin/users/{user_id}
 func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.update")
+	if !ok {
 		return
 	}
 
@@ -335,6 +329,8 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.RoleID != nil && userID == payload.UserID {
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.role.update", targetType: "user", targetID: userID, targetEmail: payload.Email,
+			after: map[string]any{"role_id": *req.RoleID}, err: errors.New("cannot change your own role")})
 		response.Error(w, http.StatusForbidden, "Cannot change your own role")
 		return
 	}
@@ -450,9 +446,8 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 // 평문 비밀번호를 응답에 포함시켜 관리자가 사용자에게 전달할 수 있게 합니다.
 // 평문은 DB 에 저장되지 않으며 응답 한 번에만 노출됩니다.
 func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.update")
+	if !ok {
 		return
 	}
 
@@ -501,9 +496,8 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 
 // AdminDeleteUser handles DELETE /auth/admin/users/{user_id}
 func (h *AuthHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.delete") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.users.delete")
+	if !ok {
 		return
 	}
 

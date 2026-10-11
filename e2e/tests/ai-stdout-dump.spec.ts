@@ -38,15 +38,20 @@ test('a chat turn leaves no model response dump or credential in the ai-service 
   )
   await input.fill(`DB 비밀번호는 ${MARKER} 입니다. 이 값을 담는 ConfigMap YAML 예시를 그대로 적어 보여줘.`)
   await page.getByRole('button', { name: SEND_RE }).click()
-  await streamPromise
-  await expect(input).toBeEnabled({ timeout: 120_000 })
+  const sessionId = (await streamPromise).url().match(/\/sessions\/([^/]+)\/chat/)?.[1]
+  try {
+    await expect(input).toBeEnabled({ timeout: 120_000 })
 
-  const log = aiServiceLog('5m')
-  expect(log, 'the turn must have reached ai-service').toContain('POST /api/v1/ai/sessions/')
-  // every session turn used to print these; a credential the user typed could
-  // sit inside the preview or a tool argument
-  expect(log).not.toContain('[DEBUG] Full message preview')
-  expect(log).not.toContain('[OPENAI RESPONSE]')
-  expect(log).not.toContain('with args:')
-  expect(log).not.toContain(MARKER)
+    const log = aiServiceLog('5m')
+    expect(log, 'the turn must have reached ai-service').toContain('POST /api/v1/ai/sessions/')
+    // every session turn used to print these; a credential the user typed could
+    // sit inside the preview or a tool argument
+    expect(log).not.toContain('[DEBUG] Full message preview')
+    expect(log).not.toContain('[OPENAI RESPONSE]')
+    expect(log).not.toContain('with args:')
+    expect(log).not.toContain(MARKER)
+  } finally {
+    // The conversation is titled with the planted value: do not leave it in the list.
+    if (sessionId) await page.request.delete(`/api/v1/sessions/${sessionId}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+  }
 })

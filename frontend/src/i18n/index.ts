@@ -31,4 +31,12 @@ i18n
     },
   })
 
+// <html lang> follows the UI language: screen readers pick the voice from it, and the stylesheet keeps Korean
+// words whole on line breaks (`:lang(ko)`, index.css).
+const setDocumentLang = (lng?: string) => {
+  if (typeof document !== 'undefined') document.documentElement.lang = (lng || 'en').startsWith('ko') ? 'ko' : 'en'
+}
+setDocumentLang(i18n.resolvedLanguage || i18n.language)
+i18n.on('languageChanged', setDocumentLang)
+
 export default i18n

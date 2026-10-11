@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { IngressInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAddresses,
@@ -37,6 +38,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -58,6 +60,7 @@ export function IngressTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -101,16 +104,16 @@ export function IngressTable({
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('class')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('class')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.class', 'Class')}{renderSortIcon('class')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[270px] cursor-pointer" onClick={() => handleSort('hosts')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('hosts')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.hosts', 'Hosts')}{renderSortIcon('hosts')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('backends')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('backends')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.routes', 'Routes')}{renderSortIcon('backends')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[210px] cursor-pointer" onClick={() => handleSort('addresses')}>
+              <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.addresses', 'Address')}{renderSortIcon('addresses')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -131,7 +134,7 @@ export function IngressTable({
                   rawJson: ingressToRawJson(ing),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{ing.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={ing.namespace}>{ing.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{ing.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{ing.class || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatHosts(ing)}</span></td>
@@ -142,7 +145,7 @@ export function IngressTable({
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 7 : 6} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -153,47 +156,14 @@ export function IngressTable({
             )}
 
             {sortedIngressesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="ingresses">
-                {tr('ingressesPage.noResults', 'No ingresses found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 7 : 6} resource="ingresses" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedIngresses.length} columnCount={6 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-slate-400 px-4 py-3 border-t border-slate-700 shrink-0">
-          <span>
-            {(() => {
-              const total = sortedIngressesLength
-              if (total === 0) return tr('common.pagination.empty', '0')
-              const from = (currentPage - 1) * rowsPerPage + 1
-              const to = Math.min(currentPage * rowsPerPage, total)
-              return tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', { from, to, total })
-            })()}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            >
-              {tr('common.pagination.prev', 'Prev')}
-            </button>
-            <span>{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            >
-              {tr('common.pagination.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedIngressesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

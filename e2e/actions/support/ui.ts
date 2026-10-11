@@ -81,9 +81,17 @@ export function dialog(page: Page): Locator {
     .last()
 }
 
-export async function confirmDialog(page: Page, re: RegExp): Promise<void> {
+/** OK on the in-app confirm window (ConfirmProvider) that admin deletes and resets open. */
+export async function acceptConfirm(page: Page): Promise<void> {
+  await page.getByTestId('confirm-dialog-ok').click({ timeout: 10000 })
+}
+
+// A system object's delete window (CRD, Node, kube-system objects …) asks for the name before Delete turns on.
+export async function confirmDialog(page: Page, re: RegExp, name?: string): Promise<void> {
   const d = dialog(page)
   await d.waitFor({ state: 'visible', timeout: 10000 })
+  const typed = d.getByTestId('type-to-confirm')
+  if (name && (await typed.count())) await typed.fill(name)
   await d.getByRole('button', { name: re }).last().click()
 }
 

@@ -68,6 +68,12 @@ func (s *Service) DescribeReplicaSet(ctx context.Context, namespace, name string
 		result["min_ready_seconds"] = rs.Spec.MinReadySeconds
 	}
 	result["fully_labeled_replicas"] = rs.Status.FullyLabeledReplicas
+	result["replicas_status"] = map[string]interface{}{
+		"desired":   result["replicas"],
+		"current":   rs.Status.Replicas,
+		"ready":     rs.Status.ReadyReplicas,
+		"available": rs.Status.AvailableReplicas,
+	}
 
 	// Owner
 	for _, or := range rs.OwnerReferences {

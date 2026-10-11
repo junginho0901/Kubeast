@@ -170,7 +170,7 @@ export async function applyElkLayout(
           <div className="flex items-center gap-2 px-3 py-1.5">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-xs font-semibold text-slate-300">
-              {groupBy === 'namespace' ? 'NS' : groupBy === 'node' ? i18next.t('resourceGraph.glance.node', 'Node') : i18next.t('resourceGraph.glance.instance', 'Instance')}: {groupKey}
+              {groupBy === 'namespace' ? i18next.t('resourceGraph.groupBy.namespace', 'Namespace') : groupBy === 'node' ? i18next.t('resourceGraph.glance.node', 'Node') : i18next.t('resourceGraph.glance.instance', 'Instance')}: {groupKey}
             </span>
             <span className="text-[10px] text-slate-500">({group.children?.length || 0})</span>
           </div>

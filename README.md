@@ -138,7 +138,7 @@ grep DEFAULT_ADMIN_PASSWORD .env
 (마법사와 그 API는 관리자 권한이 필요합니다). **로그인 후 즉시 비밀번호를 변경하세요.**
 
 - **In-cluster** — Kubeast가 떠 있는 그 클러스터를 ServiceAccount 권한으로 자동 연결
-- **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터)
+- **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터). API 서버 주소를 비워 두면 연결 확인 때 실제로 붙은 주소가 들어가고, 주소 없이 등록된 클러스터는 **Admin > Clusters**의 연결 테스트가 채웁니다
 
 **EKS 클러스터**는 IAM으로 인증합니다. k8s-service·tool-server 이미지에 `aws-iam-authenticator`가 들어 있으므로 kubeconfig에는 정적 자격증명 대신 exec 플러그인을 적습니다. Kubeast 파드의 IRSA 롤(`values.yaml`의 `aws.irsaRoleArn`)이 `-r`의 대상 롤을 AssumeRole하고, 대상 클러스터의 access entry가 그 롤을 Kubernetes 그룹에 매핑합니다(그룹 권한은 `helm/kubeast/files/impersonation-rbac.yaml`).
 
@@ -201,9 +201,11 @@ AI 어시스턴트가 활성화됩니다.
   - 클러스터 쪽에서 보면 Write 그룹(`kubeast:operator`)은 기본 `edit` ClusterRole에 `pods/exec`가 들어 있어 원래 모든 네임스페이스에서 exec가 된다 — Pod exec를 Admin 전용으로 만드는 것은 Kubeast의 앱 권한이다. 그래서 Kubeast의 impersonation 자격(`kubeast-impersonator`)은 그 그룹들 전체 권한과 같은 무게로 지켜야 한다.
   - 로그 파일 보기(`features.logFiles`, 기본 off)는 Kubeast가 명령을 `ls`·`tail`로 고정하므로 Read·Write도 쓴다. 이를 위해 차트는 적어 둔 네임스페이스에만 Read 그룹(`kubeast:viewer`)에 `pods/exec`를 묶는다(아래 "컨테이너 안 로그 파일" 절).
 - **쓰기 API는 전부** 핸들러에서 권한을 검사하고 감사 행 없이는 거부된다(fail-closed). **읽기 API**는 "그 클러스터에 역할이 있나"(클러스터 미들웨어, deny-by-default) + 클러스터의 RBAC(viewer 그룹)으로 막힌다. `menu.*`는 화면 메뉴만 가린다.
+- **YAML 생성·편집**은 문서마다 그 Kind의 `resource.<이름>.create`(편집은 대상의 `resource.<이름>.edit`)를 본다. 이름은 Kind 소문자, 단 HorizontalPodAutoscaler·VerticalPodAutoscaler·PodDisruptionBudget·PersistentVolume·PersistentVolumeClaim·CustomResourceDefinition은 `hpa`·`vpa`·`pdb`·`pv`·`pvc`·`crd`, 자기 이름이 없는 Kind(CR 등)는 `customresource`. Write 그룹의 `edit`는 클러스터 범위 객체(Namespace·ClusterRole·StorageClass 등)를 만들 수 없어 그건 클러스터가 거부한다 — 그래서 그 화면들(클러스터 범위 15종 + Role·RoleBinding)의 생성 버튼은 앱 권한에 더해 클러스터에 직접 묻는다(`GET /api/v1/cluster/can-i?verb=create&group=&resource=`, 사용자 신원의 SelfSubjectAccessReview = `kubectl auth can-i`). 클러스터가 안 된다고 하면 버튼이 없다.
 - 네임스페이스 단위 권한은 없다(클러스터 단위). 팀별로 네임스페이스를 나누려면 커스텀 역할을 만들고 그 클러스터에서 `kubeast:role:<이름>` 그룹을 RoleBinding으로 묶는다.
 - `auth.impersonation.enabled=false`는 데모용이다: k8s-service가 `cluster-admin`, tool-server가 `*`로 돌고 읽기 API는 클러스터 부여만으로 열린다.
-- 회귀 확인: `e2e/tests/rbac-matrix.spec.ts`(역할 × 동작 403/200 표) · `permission-ceiling.spec.ts`(남에게 자기 이상 못 줌) · `reader-ui-notices.spec.ts`(Read의 화면 안내).
+- **목록이 비었을 때 화면이 하는 말**: 권한이 없으면(403) "볼 권한이 없습니다"(위쪽 배너 + 표), 서버 오류·응답 없음이면 "불러오지 못했습니다(서버 오류 503)" + 다시 시도, 클러스터에 그 CRD가 없으면(Gateway API·VPA) "설치되어 있지 않습니다"(k8s-service가 discovery로 보고 빈 목록에 `X-Kubeast-Not-Installed` 헤더 — 역할과 무관하게 같은 답, 생성 버튼 없음). 그 밖엔 "없습니다". 없는 주소는 404 화면.
+- 회귀 확인: `e2e/tests/rbac-matrix.spec.ts`(역할 × 동작 403/200 표) · `permission-ceiling.spec.ts`(남에게 자기 이상 못 줌) · `reader-ui-notices.spec.ts`(Read의 화면 안내) · `notices.spec.ts`(서버 오류·설치 안 됨·404·생성 버튼 can-i·권한 요청 안내).
 
 ### ☸️ Kubernetes 리소스 관리
 
@@ -372,6 +374,12 @@ auth:
     enabled: false
     maxHours: 8
     roles: [Write]
+  # 클러스터가 하나도 없는 사용자에게 "어디서 권한을 요청하나" — 대시보드·Settings의
+  # "접근 가능한 클러스터 없음" 아래에 보인다. 한 줄 문구 + http(s) 링크(사내 요청 양식 등).
+  # #이 들어가면 따옴표로 감싼다(YAML 주석). 비우면 일반 문구만
+  accessHelp:
+    text: ""
+    url: ""
 
 # EKS: k8s-service·tool-server 파드가 aws-iam-authenticator를 실행할 IRSA 롤 + STS 리전
 aws:
@@ -405,11 +413,12 @@ metrics:
 # INTERNAL_API_TOKEN을 X-Internal-Token으로 요구한다(차트가 생성·보존). 회전 = 값 교체 후
 # auth-service·k8s-service·tool-server 롤아웃. secrets.existingSecret를 쓰면 그 Secret에 넣는다.
 
-# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록
+# 노드 셸(특권 디버그 파드) — 기본 off. 켜면 전용 네임스페이스 + 이미지 허용 목록(첫 항목이 기본).
+# 이미지는 IfNotPresent로 받으므로 버전을 고정(또는 사내 미러 주소) — 이미 받은 노드는 레지스트리에 안 감
 nodeShell:
   enabled: false
   images:
-    - docker.io/library/busybox:latest
+    - docker.io/library/busybox:1.38.0
 
 # 파드 보안 (Pod Security Standards restricted 기본). 사용자 네임스페이스를
 # 지원하지 않는 클러스터(커널 6.3 미만)에서는 hostUsers: true
@@ -600,7 +609,7 @@ curl -s "https://console.example.com/api/v1/cluster/overview?cluster=prod" \
 
 - 같은 워크로드의 파드는 한 줄로 묶습니다(Deployment·StatefulSet·DaemonSet·Job, 파드 수 표시). 시스템 Namespace(`excludeNamespaces`, 기본 kube-system·kube-public·kube-node-lease)는 워크로드·Namespace·Role·TLS 점검에서 뺍니다.
 - **예외**: 객체(파드는 템플릿)나 그 Namespace에 `kubeast.io/hygiene-exempt: "image.latest,pss.hostpath"`(또는 `*`)와 `kubeast.io/hygiene-exempt-reason: <사유>`를 붙이면 그 항목은 "예외(사유)"로 남고 건수에서 따로 셉니다. 사유가 없으면 예외로 치지 않고 그렇다고 적습니다. 차트가 만드는 `kubeast:admin` 바인딩은 이 방식으로 이미 예외입니다.
-- **내보내기·서명**: CSV(BOM·CRLF, 수식 문자 무력화)·JSON을 내려받고, 클러스터별로 메모와 함께 서명하면 그 순간 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안). 화면에 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다. n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 가져가면 됩니다.
+- **내보내기·서명**: CSV(BOM·CRLF, 수식 문자 무력화)·JSON을 내려받고, 클러스터별로 메모와 함께 서명하면 그 순간 보고서가 스냅샷으로 저장됩니다(`hygiene_reviews`, `retention.reviewDays` 동안). 화면에 마지막 서명과 다음 기한(`intervalDays`, 기본 30일)이 보입니다. n8n 같은 자동화는 API 키로 `GET /api/v1/cluster/hygiene?cluster=<id>&format=json`을 가져가면 됩니다. 항목의 `message`는 영어 문장(CSV·스냅샷도 이것)이고, 화면은 같은 내용을 `message_key`·`message_args`로 받아 화면 언어로 보여 줍니다.
 - 권한: `admin.hygiene.read`(보기·이력) · `admin.hygiene.export` · `admin.hygiene.signoff`(Admin에 포함). 감사: 조회 `k8s.hygiene.scan`(Secret을 읽으므로 민감 조회 — 기록이 안 되면 503), `admin.hygiene.export` · `admin.hygiene.signoff` · `admin.hygiene.read`(스냅샷). 보고서는 읽기만 하고 아무것도 고치지 않습니다 — 고치는 건 gitops로.
 
 ```yaml
@@ -709,10 +718,11 @@ audit:
 
 켜면(`sessionRecording.enabled`, 기본 off) Pod exec와 노드 셸 터미널에 **찍힌 출력**(사용자가 본 화면 — 친 명령은
 에코로 보이고, 에코되지 않는 비밀번호 입력은 안 남음)을 asciicast v2로 녹화합니다. 세션을 열면 터미널에
-"This session is recorded" 한 줄이 먼저 찍히고, 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
+"This session is recorded"(한국어 화면이면 "이 세션은 녹화됩니다") 한 줄이 먼저 찍히고 — 녹화에도 그 줄이 그대로 남습니다 — 감사 행(`k8s.pod.exec`·`k8s.node.shell`)에 `recording_id`가 붙습니다.
 
 - **저장**: k8s-service가 로컬 볼륨에 쓰고 세션 중에도 `chunkSeconds`(기본 30초)마다 조각을 올립니다 — k8s-service 파드가 사라져도 잃는 건 마지막 조각 간격만큼. 저장소 = `s3`(운영 권장, 감사 S3 싱크와 같은 필드) · `database`(세션당 1 MiB, S3 없는 작은 설치) · `file`(PVC). S3 키는 파일로 마운트돼 k8s-service의 IRSA 신원을 건드리지 않습니다.
-- **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다.
+- **끊긴 세션**: k8s-service 쪽 사정으로 끊긴 세션은 `interrupted`로 남습니다 — 정상 종료(롤아웃·드레인)와 컨테이너 재시작은 남은 출력까지 다 올리고, 파드가 통째로 사라지면 그 전에 올린 조각만 남습니다. 목록의 크기는 남은(올라간) 크기이고, 올라간 조각이 없으면 재생 버튼이 꺼집니다.
+- **터미널이 끊길 때**: 브라우저 탭을 닫거나 네트워크가 끊겨 터미널이 `exit` 없이 사라지면, k8s-service가 셸에 Ctrl-C·Ctrl-D를 보내 끝냅니다(컨테이너 런타임은 끊긴 exec의 프로세스를 정리하지 않음). 편집기처럼 이를 무시하는 프로그램이 앞에 떠 있으면 남을 수 있습니다.
 - **실패**: 녹화를 시작하지 못하면(로컬 볼륨에 못 씀) 세션을 거부합니다(`required: true`). 저장소 업로드가 실패하거나 조각 하나가 30초 안에 끝나지 않아도 세션은 계속되고, 재시도하며 알람 `KubeastSessionRecordingUploadStalled`로 드러납니다. 세션당 `maxBytes`(기본 64 MiB)를 넘으면 녹화만 멈춥니다.
 - **다시보기**: Admin → Session recordings(권한 `admin.sessions.read`)에서 재생·`.cast`·텍스트 사본 내려받기, Audit Logs의 exec 행에서도 재생. 녹화를 열 때마다 `admin.session.read`가 감사에 남습니다.
 - **재생기와 CSP**: 재생기(asciinema-player)는 터미널을 WebAssembly로 돌립니다. 그래서 게이트웨이가 보내는 CSP의 `script-src`에 `'wasm-unsafe-eval'`이 들어 있습니다(`'unsafe-eval'`은 아님, `helm/kubeast/files/nginx.conf`). 앞단 Ingress·프록시가 CSP 헤더를 덮어쓰면 같은 값을 허용해야 재생됩니다 — 빠지면 ▶ 버튼과 `--:--`에서 멈춥니다.

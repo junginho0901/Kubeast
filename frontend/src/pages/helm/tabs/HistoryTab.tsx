@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { History as HistoryIcon, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 import { usePermission } from '@/hooks/usePermission'
+import { formatTime, utcTitle } from '@/utils/time'
 import RollbackModal from '../modals/RollbackModal'
 import RevisionDetailModal from '../modals/RevisionDetailModal'
 
@@ -35,7 +36,8 @@ export default function HistoryTab({
     )
   }
 
-  const items = historyQuery.data ?? []
+  // newest first, whatever order the release storage returned
+  const items = [...(historyQuery.data ?? [])].sort((a, b) => b.revision - a.revision)
   if (items.length === 0) {
     return <div className="text-sm text-slate-400">{t('helmReleaseDetail.history.empty')}</div>
   }
@@ -46,7 +48,7 @@ export default function HistoryTab({
     <>
       <div className="overflow-x-auto rounded-lg border border-slate-700">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-slate-300 text-left">
+          <thead className="bg-slate-800 text-slate-400 text-left">
             <tr>
               <th className="px-3 py-2">{t('helmReleaseDetail.history.col.revision', 'Revision')}</th>
               <th className="px-3 py-2">{t('helmReleaseDetail.history.col.status', 'Status')}</th>
@@ -77,8 +79,8 @@ export default function HistoryTab({
                   <td className="px-3 py-2 text-slate-300">{h.status}</td>
                   <td className="px-3 py-2 text-slate-300">{h.chartVersion}</td>
                   <td className="px-3 py-2 text-slate-300">{h.appVersion}</td>
-                  <td className="px-3 py-2 text-slate-400">
-                    {h.updated ? new Date(h.updated).toLocaleString() : '-'}
+                  <td className="px-3 py-2 text-slate-400 whitespace-nowrap" title={utcTitle(h.updated)}>
+                    {formatTime(h.updated)}
                   </td>
                   <td className="px-3 py-2 text-slate-300">{h.description}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">

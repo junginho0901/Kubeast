@@ -57,7 +57,7 @@ export default function DeviceClasses() {
   }
 
   const createDeviceClassYamlTemplate = useMemo(() => {
-    return `apiVersion: resource.k8s.io/v1beta1
+    return `apiVersion: resource.k8s.io/v1
 kind: DeviceClass
 metadata:
   name: example-gpu-class
@@ -141,6 +141,7 @@ spec:
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         tableContainerRef={tableContainerRef}
         tableBodyRef={tableBodyRef}
         theadRef={theadRef}

@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,16 +60,33 @@ var HygieneChecks = []HygieneCheck{
 }
 
 type HygieneFinding struct {
-	Check        string `json:"check"`
-	Severity     string `json:"severity"`
-	Kind         string `json:"kind"`
-	Namespace    string `json:"namespace,omitempty"`
-	Name         string `json:"name"`
-	Container    string `json:"container,omitempty"`
-	Pods         int    `json:"pods,omitempty"`
-	Message      string `json:"message"`
-	Exempt       bool   `json:"exempt,omitempty"`
-	ExemptReason string `json:"exempt_reason,omitempty"`
+	Check     string `json:"check"`
+	Severity  string `json:"severity"`
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Container string `json:"container,omitempty"`
+	Pods      int    `json:"pods,omitempty"`
+	Message   string `json:"message"`
+	// MessageKey and MessageArgs are the same sentence for the UI catalog (clusterHygiene.message.<key>), so
+	// the screen shows it in its own language; Message stays English for the API, CSV and sign-off snapshots.
+	MessageKey     string            `json:"message_key,omitempty"`
+	MessageArgs    map[string]string `json:"message_args,omitempty"`
+	Exempt         bool              `json:"exempt,omitempty"`
+	ExemptReason   string            `json:"exempt_reason,omitempty"`
+	ExemptNoReason bool              `json:"exempt_no_reason,omitempty"`
+}
+
+// msgArgs builds MessageArgs from key, value pairs.
+func msgArgs(kv ...string) map[string]string {
+	if len(kv) == 0 {
+		return nil
+	}
+	m := make(map[string]string, len(kv)/2)
+	for i := 0; i+1 < len(kv); i += 2 {
+		m[kv[i]] = kv[i+1]
+	}
+	return m
 }
 
 type HygieneCheckSummary struct {
@@ -208,23 +226,28 @@ func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 			}
 			ex := parseExemption(n.Annotations)
 			if n.Labels["pod-security.kubernetes.io/enforce"] == "" {
-				msg := "no pod-security.kubernetes.io/enforce label"
+				f := HygieneFinding{Check: "ns.pss-label", Kind: "Namespace", Name: n.Name,
+					Message: "no pod-security.kubernetes.io/enforce label", MessageKey: "pssLabel"}
 				if w := n.Labels["pod-security.kubernetes.io/warn"]; w != "" {
-					msg += " (warn=" + w + ")"
+					f.Message += " (warn=" + w + ")"
+					f.MessageKey, f.MessageArgs = "pssLabelWarn", msgArgs("warn", w)
 				}
-				b.add(HygieneFinding{Check: "ns.pss-label", Kind: "Namespace", Name: n.Name, Message: msg}, ex)
+				b.add(f, ex)
 			}
 			if !in.Failed["networkpolicies"] && !withPolicy[n.Name] {
+				pods := strconv.Itoa(podsPerNS[n.Name])
 				b.add(HygieneFinding{Check: "ns.network-policy", Kind: "Namespace", Name: n.Name,
-					Message: fmt.Sprintf("no NetworkPolicy (%d pods)", podsPerNS[n.Name])}, ex)
+					Message: "no NetworkPolicy (" + pods + " pods)", MessageKey: "networkPolicy", MessageArgs: msgArgs("pods", pods)}, ex)
 			}
 		}
 	}
 
 	for _, crb := range in.ClusterRoleBindings {
 		if crb.RoleRef.Kind == "ClusterRole" && crb.RoleRef.Name == "cluster-admin" && !builtinClusterAdminBinding(crb.Name) {
-			b.add(HygieneFinding{Check: "rbac.cluster-admin", Kind: "ClusterRoleBinding", Name: crb.Name,
-				Message: "binds cluster-admin to " + subjectList(crb.Subjects)}, parseExemption(crb.Annotations))
+			f := HygieneFinding{Check: "rbac.cluster-admin", Kind: "ClusterRoleBinding", Name: crb.Name,
+				Message: "binds cluster-admin to " + subjectList(crb.Subjects), MessageKey: "clusterAdmin"}
+			subjectArgs(&f, crb.Subjects)
+			b.add(f, parseExemption(crb.Annotations))
 		}
 	}
 	for _, rb := range in.RoleBindings {
@@ -232,24 +255,28 @@ func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 			continue
 		}
 		if rb.RoleRef.Kind == "ClusterRole" && rb.RoleRef.Name == "cluster-admin" {
-			b.add(HygieneFinding{Check: "rbac.cluster-admin", Kind: "RoleBinding", Namespace: rb.Namespace, Name: rb.Name,
-				Message: "binds cluster-admin in the namespace to " + subjectList(rb.Subjects)}, parseExemption(rb.Annotations))
+			f := HygieneFinding{Check: "rbac.cluster-admin", Kind: "RoleBinding", Namespace: rb.Namespace, Name: rb.Name,
+				Message: "binds cluster-admin in the namespace to " + subjectList(rb.Subjects), MessageKey: "clusterAdminInNamespace"}
+			subjectArgs(&f, rb.Subjects)
+			b.add(f, parseExemption(rb.Annotations))
 		}
 	}
 	for _, cr := range in.ClusterRoles {
 		if cr.AggregationRule != nil || builtinClusterRole(cr.Name) {
 			continue
 		}
-		if msg := wildcardRule(cr.Rules); msg != "" {
-			b.add(HygieneFinding{Check: "rbac.wildcard", Kind: "ClusterRole", Name: cr.Name, Message: msg}, parseExemption(cr.Annotations))
+		if f, found := wildcardFinding(cr.Rules); found {
+			f.Kind, f.Name = "ClusterRole", cr.Name
+			b.add(f, parseExemption(cr.Annotations))
 		}
 	}
 	for _, r := range in.Roles {
 		if excluded[r.Namespace] {
 			continue
 		}
-		if msg := wildcardRule(r.Rules); msg != "" {
-			b.add(HygieneFinding{Check: "rbac.wildcard", Kind: "Role", Namespace: r.Namespace, Name: r.Name, Message: msg}, parseExemption(r.Annotations))
+		if f, found := wildcardFinding(r.Rules); found {
+			f.Kind, f.Namespace, f.Name = "Role", r.Namespace, r.Name
+			b.add(f, parseExemption(r.Annotations))
 		}
 	}
 
@@ -313,8 +340,8 @@ var (
 // podHygieneFindings returns the pod's findings without owner fields.
 func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 	var out []HygieneFinding
-	add := func(check, container, msg string) {
-		out = append(out, HygieneFinding{Check: check, Container: container, Message: msg})
+	add := func(check, container, msg, key string, kv ...string) {
+		out = append(out, HygieneFinding{Check: check, Container: container, Message: msg, MessageKey: key, MessageArgs: msgArgs(kv...)})
 	}
 	spec := p.Spec
 	psc := spec.SecurityContext
@@ -323,7 +350,7 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 	}
 	containers := podContainers(p)
 
-	var privileged, hostPorts, caps, other []string
+	var privileged, hostPorts, caps, capsAdded, other []string
 	for _, c := range containers {
 		sc := c.sc
 		if sc == nil {
@@ -346,13 +373,14 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 			}
 			if len(extra) > 0 {
 				caps = append(caps, c.name+" adds "+strings.Join(extra, ", "))
+				capsAdded = append(capsAdded, strings.Join(extra, ", ")+" ("+c.name+")")
 			}
 		}
 		if sc.WindowsOptions != nil && sc.WindowsOptions.HostProcess != nil && *sc.WindowsOptions.HostProcess {
 			other = append(other, "hostProcess ("+c.name+")")
 		}
 		if probeHost(c.probes, c.lifecycle) {
-			other = append(other, "probe or lifecycle host ("+c.name+")")
+			other = append(other, "probe/lifecycle host ("+c.name+")")
 		}
 		if sc.AppArmorProfile != nil && sc.AppArmorProfile.Type == corev1.AppArmorProfileTypeUnconfined {
 			other = append(other, "AppArmor Unconfined ("+c.name+")")
@@ -368,10 +396,10 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 		}
 		if c.app {
 			if img := c.image; imageLatest(img) {
-				add("image.latest", c.name, "image "+img)
+				add("image.latest", c.name, "image "+img, "imageLatest", "image", img)
 			}
 			if _, set := c.resources.Limits[corev1.ResourceMemory]; !set {
-				add("resources.memory-limit", c.name, "no memory limit")
+				add("resources.memory-limit", c.name, "no memory limit", "memoryLimit")
 			}
 			var missing []string
 			if _, set := c.resources.Requests[corev1.ResourceCPU]; !set {
@@ -381,10 +409,10 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 				missing = append(missing, "memory")
 			}
 			if len(missing) > 0 {
-				add("resources.requests", c.name, "no "+strings.Join(missing, "/")+" request")
+				add("resources.requests", c.name, "no "+strings.Join(missing, "/")+" request", "requests", "resources", strings.Join(missing, "/"))
 			}
 		} else if imageLatest(c.image) {
-			add("image.latest", c.name, "image "+c.image)
+			add("image.latest", c.name, "image "+c.image, "imageLatest", "image", c.image)
 		}
 	}
 	if psc.WindowsOptions != nil && psc.WindowsOptions.HostProcess != nil && *psc.WindowsOptions.HostProcess {
@@ -411,7 +439,7 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 	}
 
 	if len(privileged) > 0 {
-		add("pss.privileged", "", "privileged: "+strings.Join(privileged, ", "))
+		add("pss.privileged", "", "privileged: "+strings.Join(privileged, ", "), "privileged", "containers", strings.Join(privileged, ", "))
 	}
 	var hostNS []string
 	if spec.HostNetwork {
@@ -424,7 +452,7 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 		hostNS = append(hostNS, "hostIPC")
 	}
 	if len(hostNS) > 0 {
-		add("pss.host-namespaces", "", strings.Join(hostNS, ", "))
+		add("pss.host-namespaces", "", strings.Join(hostNS, ", "), "hostNamespaces", "fields", strings.Join(hostNS, ", "))
 	}
 	var hostPaths []string
 	for _, v := range spec.Volumes {
@@ -433,26 +461,26 @@ func podHygieneFindings(p corev1.Pod) []HygieneFinding {
 		}
 	}
 	if len(hostPaths) > 0 {
-		add("pss.hostpath", "", "hostPath: "+strings.Join(hostPaths, ", "))
+		add("pss.hostpath", "", "hostPath: "+strings.Join(hostPaths, ", "), "hostPath", "paths", strings.Join(hostPaths, ", "))
 	}
 	if len(hostPorts) > 0 {
-		add("pss.host-ports", "", "hostPort: "+strings.Join(hostPorts, ", "))
+		add("pss.host-ports", "", "hostPort: "+strings.Join(hostPorts, ", "), "hostPort", "ports", strings.Join(hostPorts, ", "))
 	}
 	if len(caps) > 0 {
-		add("pss.capabilities", "", strings.Join(caps, "; "))
+		add("pss.capabilities", "", strings.Join(caps, "; "), "capabilities", "added", strings.Join(capsAdded, "; "))
 	}
 	if len(other) > 0 {
 		sort.Strings(other)
-		add("pss.other-baseline", "", strings.Join(other, "; "))
+		add("pss.other-baseline", "", strings.Join(other, "; "), "otherBaseline", "items", strings.Join(other, "; "))
 	}
 	if r := restrictedGaps(p, containers, psc); len(r) > 0 {
-		add("pss.restricted", "", "restricted: "+strings.Join(r, ", "))
+		add("pss.restricted", "", "restricted: "+strings.Join(r, ", "), "restricted", "controls", strings.Join(r, ", "))
 	}
 	if p.Namespace == "default" {
-		add("ns.default-used", "", "runs in the default namespace")
+		add("ns.default-used", "", "runs in the default namespace", "defaultNamespace")
 	}
 	if (spec.ServiceAccountName == "" || spec.ServiceAccountName == "default") && mountsServiceAccountToken(spec) {
-		add("sa.default-token", "", "default ServiceAccount token mounted")
+		add("sa.default-token", "", "default ServiceAccount token mounted", "defaultToken")
 	}
 	return out
 }
@@ -626,19 +654,18 @@ func builtinClusterRole(name string) bool {
 	return strings.HasPrefix(name, "system:") || strings.HasPrefix(name, "eks:")
 }
 
-func wildcardRule(rules []rbacv1.PolicyRule) string {
+func wildcardFinding(rules []rbacv1.PolicyRule) (HygieneFinding, bool) {
 	for _, r := range rules {
 		if contains(r.Verbs, "*") || contains(r.Resources, "*") {
-			return fmt.Sprintf("rule with verbs [%s] resources [%s]", strings.Join(r.Verbs, " "), strings.Join(r.Resources, " "))
+			verbs, resources := strings.Join(r.Verbs, " "), strings.Join(r.Resources, " ")
+			return HygieneFinding{Check: "rbac.wildcard", Message: fmt.Sprintf("rule with verbs [%s] resources [%s]", verbs, resources),
+				MessageKey: "wildcard", MessageArgs: msgArgs("verbs", verbs, "resources", resources)}, true
 		}
 	}
-	return ""
+	return HygieneFinding{}, false
 }
 
-func subjectList(subjects []rbacv1.Subject) string {
-	if len(subjects) == 0 {
-		return "no subjects"
-	}
+func subjectNames(subjects []rbacv1.Subject) []string {
 	var out []string
 	for _, s := range subjects {
 		name := s.Name
@@ -647,35 +674,53 @@ func subjectList(subjects []rbacv1.Subject) string {
 		}
 		out = append(out, s.Kind+":"+name)
 	}
-	return strings.Join(out, ", ")
+	return out
+}
+
+func subjectList(subjects []rbacv1.Subject) string {
+	if len(subjects) == 0 {
+		return "no subjects"
+	}
+	return strings.Join(subjectNames(subjects), ", ")
+}
+
+// subjectArgs fills the binding's subjects into the UI sentence; a binding with none gets its own sentence.
+func subjectArgs(f *HygieneFinding, subjects []rbacv1.Subject) {
+	if len(subjects) == 0 {
+		f.MessageKey += "NoSubjects"
+		return
+	}
+	f.MessageArgs = msgArgs("subjects", strings.Join(subjectNames(subjects), ", "))
 }
 
 func tlsFinding(s corev1.Secret, now time.Time, warnDays, critDays int) (HygieneFinding, bool) {
 	f := HygieneFinding{Check: "tls.expiry", Kind: "Secret", Namespace: s.Namespace, Name: s.Name}
 	block, _ := pem.Decode(s.Data[corev1.TLSCertKey])
 	if block == nil {
-		f.Severity, f.Message = HygieneWarning, "tls.crt is not a readable certificate"
+		f.Severity, f.Message, f.MessageKey = HygieneWarning, "tls.crt is not a readable certificate", "tlsUnreadable"
 		return f, true
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		f.Severity, f.Message = HygieneWarning, "tls.crt is not a readable certificate"
+		f.Severity, f.Message, f.MessageKey = HygieneWarning, "tls.crt is not a readable certificate", "tlsUnreadable"
 		return f, true
 	}
 	days := int(cert.NotAfter.Sub(now).Hours() / 24)
+	date := cert.NotAfter.UTC().Format("2006-01-02")
 	switch {
 	case cert.NotAfter.Before(now):
 		f.Severity = HygieneCritical
-		f.Message = "expired " + cert.NotAfter.UTC().Format("2006-01-02")
+		f.Message, f.MessageKey = "expired "+date, "tlsExpired"
 	case days <= critDays:
 		f.Severity = HygieneCritical
-		f.Message = fmt.Sprintf("expires %s (%d days)", cert.NotAfter.UTC().Format("2006-01-02"), days)
+		f.Message, f.MessageKey = fmt.Sprintf("expires %s (%d days)", date, days), "tlsExpires"
 	case days <= warnDays:
 		f.Severity = HygieneWarning
-		f.Message = fmt.Sprintf("expires %s (%d days)", cert.NotAfter.UTC().Format("2006-01-02"), days)
+		f.Message, f.MessageKey = fmt.Sprintf("expires %s (%d days)", date, days), "tlsExpires"
 	default:
 		return f, false
 	}
+	suffix := ""
 	subject := cert.Subject.CommonName
 	if len(cert.DNSNames) > 0 {
 		names := cert.DNSNames
@@ -685,11 +730,13 @@ func tlsFinding(s corev1.Secret, now time.Time, warnDays, critDays int) (Hygiene
 		subject = strings.Join(names, ", ")
 	}
 	if subject != "" {
-		f.Message += " · " + subject
+		suffix += " · " + subject
 	}
 	if s.Annotations["cert-manager.io/certificate-name"] != "" {
-		f.Message += " · cert-manager"
+		suffix += " · cert-manager"
 	}
+	f.Message += suffix
+	f.MessageArgs = msgArgs("date", date, "days", strconv.Itoa(days), "suffix", suffix)
 	return f, true
 }
 
@@ -753,6 +800,7 @@ func (b *hygieneBuilder) addPod(f HygieneFinding, exs []hygieneExemption) {
 		}
 		if ex.reason == "" {
 			f.Message += " (" + HygieneExemptAnnotation + " without " + HygieneExemptReasonAnnotation + ")"
+			f.ExemptNoReason = true
 		} else {
 			f.Exempt, f.ExemptReason = true, ex.reason
 		}

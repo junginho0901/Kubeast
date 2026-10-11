@@ -33,7 +33,7 @@ export function DashboardHeader({ clusterVersion, isRefreshing, onRefresh }: Pro
         onClick={onRefresh}
         disabled={isRefreshing}
         title={tr('dashboard.refreshTitle', 'Force refresh')}
-        className="btn btn-secondary flex items-center gap-2"
+        className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
       >
         <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
         {tr('dashboard.refresh', 'Refresh')}

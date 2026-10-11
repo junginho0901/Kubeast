@@ -9,6 +9,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { ServiceInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatPorts,
@@ -37,6 +38,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -58,6 +60,7 @@ export function ServiceTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -109,7 +112,7 @@ export function ServiceTable({
               <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('ports')}>
                 <span className="inline-flex items-center gap-1">{tr('servicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('selector')}>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('selector')}>
                 <span className="inline-flex items-center gap-1">{tr('servicesPage.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -130,19 +133,19 @@ export function ServiceTable({
                   rawJson: serviceToRawJson(svc),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{svc.namespace}</td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={svc.namespace}>{svc.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{svc.name}</span></td>
                 <td className="py-3 px-4"><span className="badge badge-info">{svc.type || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.cluster_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{svc.external_ip || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatPorts(svc.ports)}</span></td>
-                <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(svc.selector)}</span></td>
+                <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{formatSelector(svc.selector)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(svc.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -153,45 +156,14 @@ export function ServiceTable({
             )}
 
             {sortedServicesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="services">
-                {tr('servicesPage.noResults', 'No services found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="services" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedServices.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
 
-      {sortedServicesLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedServicesLength),
-              total: sortedServicesLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedServicesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

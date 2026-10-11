@@ -38,6 +38,7 @@ export function normalizeWatchCronJobObject(obj: any): CronJobInfo {
     active: Array.isArray(status?.active) ? status.active.length : Number(obj?.active || 0),
     last_schedule_time: status?.lastScheduleTime ?? obj?.last_schedule_time ?? null,
     last_successful_time: status?.lastSuccessfulTime ?? obj?.last_successful_time ?? null,
+    time_zone: spec?.timeZone ?? obj?.time_zone ?? null,
     containers: containers.map((container: any) => container?.name).filter(Boolean),
     images: containers.map((container: any) => container?.image).filter(Boolean),
     created_at: metadata?.creationTimestamp ?? obj?.created_at ?? null,

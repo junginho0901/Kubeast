@@ -176,7 +176,7 @@ export default function ResourceClaimTemplates() {
 
   const createResourceClaimTemplateYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
-    return `apiVersion: resource.k8s.io/v1beta1
+    return `apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
   name: example-gpu-claim-template
@@ -186,7 +186,8 @@ spec:
     devices:
       requests:
         - name: gpu
-          deviceClassName: example-gpu-class
+          exactly:
+            deviceClassName: example-gpu-class
 `
   }, [selectedNamespace])
 
@@ -194,7 +195,7 @@ spec:
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div>
           <h1 className="text-3xl font-bold text-white">{tr('resourceClaimTemplatesPage.title', 'Resource Claim Templates')}</h1>
           <p className="mt-2 text-slate-400">{tr('resourceClaimTemplatesPage.subtitle', 'Manage DRA ResourceClaimTemplate resources.')}</p>
@@ -260,6 +261,7 @@ spec:
         setSortDir={setSortDir}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}

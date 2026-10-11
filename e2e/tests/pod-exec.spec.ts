@@ -1,4 +1,7 @@
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 // The pod exec socket runs on the cluster named by ?cluster= and is authorized
 // as the signed-in user: an admin gets a shell on the pod, a viewer is refused
@@ -47,6 +50,37 @@ async function execFrames(page: Page, path: string, input: string, until: string
       }),
     { path, input, until },
   )
+}
+
+// Opens the exec socket, types `input` once the shell answers, then drops the
+// socket without "exit" — a closed tab or a lost network.
+async function dropAfter(page: Page, path: string, input: string): Promise<void> {
+  await page.evaluate(
+    ({ path, input }) =>
+      new Promise<void>((resolve) => {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const ws = new WebSocket(`${proto}//${location.host}${path}`)
+        ws.binaryType = 'arraybuffer'
+        let sent = false
+        ws.onmessage = (ev) => {
+          if (sent || typeof ev.data === 'string' || new Uint8Array(ev.data as ArrayBuffer)[0] !== 1) return
+          sent = true
+          ws.send(input)
+          setTimeout(() => { ws.close(); resolve() }, 800)
+        }
+        ws.onclose = () => resolve()
+        ws.onerror = () => resolve()
+        setTimeout(() => { ws.close(); resolve() }, 15_000)
+      }),
+    { path, input },
+  )
+}
+
+const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
+const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
+function kubectl(args: string[]): string {
+  if (!KUBECONFIG) throw new Error('KUBECONFIG is unset and .kubeconfig-kind is missing: refusing to run kubectl against the default kubeconfig')
+  return execFileSync('kubectl', args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, KUBECONFIG } })
 }
 
 async function firstPod(request: APIRequestContext, cluster: string, namespace: string, prefix: string): Promise<string> {
@@ -117,5 +151,22 @@ test.describe('pod exec runs as the user on the selected cluster', () => {
     const out = frames.map((f) => f.text).join('')
     expect(out, `frames: ${JSON.stringify(frames)}`).not.toMatch(/not found/i)
     expect(out).not.toMatch(/forbidden/i)
+  })
+
+  // Re-QA #63: a terminal that went away without "exit" left /bin/sh (and
+  // whatever it was running) in the container — the runtime does not end an
+  // exec process when its client leaves. The server now hangs the shell up.
+  test('a terminal dropped without exit leaves no shell in the container', async ({ page, request }) => {
+    const pod = await firstPod(request, 'self', 'kubeast', 'frontend-')
+    const left = () =>
+      kubectl(['-n', 'kubeast', 'exec', pod, '--', 'ps', '-o', 'args'])
+        .split('\n')
+        .filter((l) => /^(\/bin\/)?sh$/.test(l.trim()) || l.includes('sleep 4321'))
+    const before = left().length
+    await page.goto('/')
+    for (let i = 0; i < 3; i++) {
+      await dropAfter(page, `/api/v1/cluster/namespaces/kubeast/pods/${pod}/exec/ws?cluster=self&command=/bin/sh`, 'sleep 4321\r')
+    }
+    await expect.poll(() => left().length, { timeout: 15_000, message: 'shells and their jobs after three dropped terminals' }).toBe(before)
   })
 })

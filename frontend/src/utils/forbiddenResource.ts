@@ -1,45 +1,58 @@
-// Names the resource kind behind a cluster API path, for the "no permission"
-// banner: /cluster/roles/all → "roles", /cluster/namespaces/web/rolebindings →
-// "rolebindings", /cluster/helm/releases → "helm releases",
-// /cluster/custom-resources/... → "custom resources". Unknown shapes fall back
-// to the first path segment after /cluster/.
-// API path segments that read badly as-is ("vpas", "ingressclasses").
+// Names the resource kind behind a cluster API path, for the "no permission",
+// "not installed" and "could not load" notices: /cluster/roles/all → "Role",
+// /cluster/namespaces/web/rolebindings → "RoleBinding", /cluster/helm/releases
+// → "Helm release". Kubernetes kinds stay English in every locale (the screen
+// names do too). Unknown shapes fall back to the first path segment after
+// /cluster/.
 const KIND_LABELS: Record<string, string> = {
-  hpas: 'horizontal pod autoscalers',
-  vpas: 'vertical pod autoscalers',
-  pdbs: 'pod disruption budgets',
-  pvcs: 'persistent volume claims',
-  pvs: 'persistent volumes',
-  crds: 'custom resource definitions',
-  configmaps: 'config maps',
-  cronjobs: 'cron jobs',
-  daemonsets: 'daemon sets',
-  statefulsets: 'stateful sets',
-  replicasets: 'replica sets',
-  serviceaccounts: 'service accounts',
-  rolebindings: 'role bindings',
-  clusterroles: 'cluster roles',
-  clusterrolebindings: 'cluster role bindings',
-  networkpolicies: 'network policies',
-  endpointslices: 'endpoint slices',
-  ingressclasses: 'ingress classes',
-  gatewayclasses: 'gateway classes',
-  httproutes: 'HTTP routes',
-  grpcroutes: 'gRPC routes',
-  referencegrants: 'reference grants',
-  backendtlspolicies: 'backend TLS policies',
-  storageclasses: 'storage classes',
-  volumeattachments: 'volume attachments',
-  priorityclasses: 'priority classes',
-  runtimeclasses: 'runtime classes',
-  resourcequotas: 'resource quotas',
-  limitranges: 'limit ranges',
-  deviceclasses: 'device classes',
-  resourceclaims: 'resource claims',
-  resourceclaimtemplates: 'resource claim templates',
-  resourceslices: 'resource slices',
-  mutatingwebhookconfigurations: 'mutating webhook configurations',
-  validatingwebhookconfigurations: 'validating webhook configurations',
+  pods: 'Pod',
+  deployments: 'Deployment',
+  statefulsets: 'StatefulSet',
+  daemonsets: 'DaemonSet',
+  replicasets: 'ReplicaSet',
+  jobs: 'Job',
+  cronjobs: 'CronJob',
+  services: 'Service',
+  endpoints: 'Endpoints',
+  endpointslices: 'EndpointSlice',
+  ingresses: 'Ingress',
+  ingressclasses: 'IngressClass',
+  networkpolicies: 'NetworkPolicy',
+  configmaps: 'ConfigMap',
+  secrets: 'Secret',
+  hpas: 'HorizontalPodAutoscaler',
+  vpas: 'VerticalPodAutoscaler',
+  pdbs: 'PodDisruptionBudget',
+  priorityclasses: 'PriorityClass',
+  runtimeclasses: 'RuntimeClass',
+  leases: 'Lease',
+  resourcequotas: 'ResourceQuota',
+  limitranges: 'LimitRange',
+  mutatingwebhookconfigurations: 'MutatingWebhookConfiguration',
+  validatingwebhookconfigurations: 'ValidatingWebhookConfiguration',
+  pvcs: 'PersistentVolumeClaim',
+  pvs: 'PersistentVolume',
+  storageclasses: 'StorageClass',
+  volumeattachments: 'VolumeAttachment',
+  serviceaccounts: 'ServiceAccount',
+  roles: 'Role',
+  rolebindings: 'RoleBinding',
+  clusterroles: 'ClusterRole',
+  clusterrolebindings: 'ClusterRoleBinding',
+  nodes: 'Node',
+  namespaces: 'Namespace',
+  events: 'Event',
+  crds: 'CustomResourceDefinition',
+  gateways: 'Gateway',
+  gatewayclasses: 'GatewayClass',
+  httproutes: 'HTTPRoute',
+  grpcroutes: 'GRPCRoute',
+  referencegrants: 'ReferenceGrant',
+  backendtlspolicies: 'BackendTLSPolicy',
+  deviceclasses: 'DeviceClass',
+  resourceclaims: 'ResourceClaim',
+  resourceclaimtemplates: 'ResourceClaimTemplate',
+  resourceslices: 'ResourceSlice',
 }
 
 export function forbiddenResourceFromUrl(url: string): string {
@@ -49,9 +62,9 @@ export function forbiddenResourceFromUrl(url: string): string {
   if (parts[0] === 'namespaces') {
     // /namespaces/{ns}/{kind}[/...]: the kind follows the namespace; a bare
     // /namespaces list is the namespaces themselves
-    return parts.length >= 3 ? label(parts[2]) : 'namespaces'
+    return parts.length >= 3 ? label(parts[2]) : 'Namespace'
   }
-  if (parts[0] === 'helm') return 'helm releases'
+  if (parts[0] === 'helm') return 'Helm release'
   if (parts[0] === 'custom-resources') return 'custom resources'
   if (parts[0] === 'gateway-policies') return 'gateway policies'
   return label(parts[0])
@@ -59,7 +72,16 @@ export function forbiddenResourceFromUrl(url: string): string {
 
 const label = (segment: string) => KIND_LABELS[segment] || segment
 
-/** Dedupes and sorts resource names for display: "roles, rolebindings". */
+/** The list's API segment a table keys on: /cluster/vpas/all → "vpas", /cluster/namespaces/web/rolebindings → "rolebindings". */
+export function listSegmentFromUrl(url: string): string {
+  const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+  const parts = path.replace(/^\/api\/v1/, '').replace(/^\/cluster\//, '').split('/').filter(Boolean)
+  if (parts.length === 0) return ''
+  if (parts[0] === 'namespaces') return parts.length >= 3 ? parts[2] : 'namespaces'
+  return parts[0]
+}
+
+/** Dedupes and sorts resource names for display: "Role, RoleBinding". */
 export function joinResources(names: Iterable<string>): string {
   return Array.from(new Set(names)).sort().join(', ')
 }

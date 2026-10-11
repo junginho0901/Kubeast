@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"sort"
 	"strings"
@@ -58,6 +60,16 @@ func (p TokenPayload) Impersonation(clusterID string) (user string, groups []str
 	}
 	sort.Strings(groups)
 	return user, groups
+}
+
+// CacheIdentity is a short hash of the identity Impersonation returns for
+// clusterID, for keying a cached cluster answer: the cluster decides what each
+// identity may see, so one user's answer is never served to another. The hash
+// keeps user data out of the key.
+func (p TokenPayload) CacheIdentity(clusterID string) string {
+	user, groups := p.Impersonation(clusterID)
+	sum := sha256.Sum256([]byte(user + "|" + strings.Join(groups, ",")))
+	return hex.EncodeToString(sum[:8])
 }
 
 // groupSlug makes a role name safe for a group: lowercase, [a-z0-9._-] only.

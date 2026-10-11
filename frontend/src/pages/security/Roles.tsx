@@ -7,33 +7,18 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'namespace' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
 
 function normalizeWatchRoleObject(obj: any): RoleInfo {
   if (
@@ -113,8 +98,7 @@ export default function Roles() {
         ? api.getAllRoles(false)
         : api.getRoles(selectedNamespace, false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.role.create')
+  const canCreate = useCanCreate('resource.role.create', { group: 'rbac.authorization.k8s.io', resource: 'roles', namespace: selectedNamespace })
 
   useKubeWatchList({
     enabled: true,
@@ -366,7 +350,7 @@ rules:
               {pagedItems.map((role, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace })}>
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{role.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={role.namespace}>{role.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{role.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{role.rules_count}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(role.created_at)}</td>
@@ -385,35 +369,14 @@ rules:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="roles">
-                  {tr('rolesPage.noResults', 'No roles found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="roles" searching={!!searchQuery.trim()} />
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />
           </table>
         </div>
 
-        {sortedItems.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedItems.length),
-                total: sortedItems.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedItems.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
 
       {createDialogOpen && (

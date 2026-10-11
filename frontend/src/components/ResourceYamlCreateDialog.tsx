@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Editor from '@/components/monaco/CodeEditor'
-import { ModalOverlay } from '@/components/ModalOverlay'
+import { ModalFrame } from '@/components/ModalFrame'
+import { modalButton, yamlEditorHeight } from '@/components/modalStyles'
 import { api } from '@/services/api'
 
 const CLUSTER_SCOPED_KINDS = new Set([
@@ -73,59 +74,45 @@ export default function ResourceYamlCreateDialog({
   }
 
   return (
-    <ModalOverlay onClose={onClose}>
-      <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl mx-auto p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-white">{title}</h3>
-        <p className="mt-1 text-xs text-slate-400">
-          {clusterScoped
-            ? t('yamlCreate.clusterScoped', { defaultValue: 'Cluster-scoped resource: metadata.namespace is not used.' })
-            : namespace
-              ? t('yamlCreate.namespaceOverride', { namespace, defaultValue: 'Namespace override: {{namespace}}' })
-              : t('yamlCreate.namespaceFromYaml', { defaultValue: 'Namespace is read from YAML metadata.namespace (or default namespace if omitted).' })}
-        </p>
-
-        <div className="mt-4 border border-slate-700 rounded-lg overflow-hidden">
-          <div className="h-[460px]">
-            <Editor
-              height="100%"
-              theme="vs-dark"
-              language="yaml"
-              value={yaml}
-              onChange={(next) => setYaml(next ?? '')}
-              options={editorOptions}
-            />
-          </div>
-        </div>
-
-        {error && (
-          <p className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
-            {error}
-          </p>
-        )}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 rounded-lg hover:bg-slate-800"
-            disabled={isCreating}
-          >
+    <ModalFrame
+      size="lg"
+      title={title}
+      subtitle={clusterScoped
+        ? t('yamlCreate.clusterScoped', { defaultValue: 'Cluster-scoped resource: metadata.namespace is not used.' })
+        : namespace
+          ? t('yamlCreate.namespaceOverride', { namespace, defaultValue: 'Namespace override: {{namespace}}' })
+          : t('yamlCreate.namespaceFromYaml', { defaultValue: 'Namespace is read from YAML metadata.namespace (or default namespace if omitted).' })}
+      onClose={onClose}
+      busy={isCreating}
+      testId="yaml-create-dialog"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={modalButton.cancel} disabled={isCreating}>
             {t('yamlCreate.cancel', { defaultValue: 'Cancel' })}
           </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={isCreating || !yaml.trim()}
-            className="btn btn-primary px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button type="button" onClick={handleCreate} disabled={isCreating || !yaml.trim()} className={modalButton.primary}>
             {isCreating ? t('yamlCreate.creating', { defaultValue: 'Creating...' }) : t('yamlCreate.create', { defaultValue: 'Create' })}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="border border-slate-700 rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
+        <Editor
+          height="100%"
+          theme="vs-dark"
+          language="yaml"
+          value={yaml}
+          onChange={(next) => setYaml(next ?? '')}
+          options={editorOptions}
+        />
       </div>
-    </ModalOverlay>
+
+      {error && (
+        <p className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
+          {error}
+        </p>
+      )}
+    </ModalFrame>
   )
 }
 

@@ -7,33 +7,18 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
 
 function normalizeWatchCRDObject(obj: any): CRDInfo {
   if (
@@ -107,8 +92,7 @@ export default function CustomResourceDefinitions() {
     queryKey: ['custom-resources', 'crds'],
     queryFn: () => api.getCRDs(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.crd.create')
+  const canCreate = useCanCreate('resource.crd.create', { group: 'apiextensions.k8s.io', resource: 'customresourcedefinitions' })
 
   useKubeWatchList({
     enabled: true,
@@ -325,7 +309,7 @@ spec:
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
+                <th className="col-optional text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('version')}>
                   <span className="inline-flex items-center gap-1">{tr('crdPage.table.version', 'Version')}{renderSortIcon('version')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
@@ -345,7 +329,7 @@ spec:
                       ref={idx === 0 ? firstRowRef : undefined} key={crd.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'CustomResourceDefinition', name: crd.name })}>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{crd.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{crd.group}</span></td>
-                  <td className="col-low py-3 px-4 text-xs font-mono">{crd.version}</td>
+                  <td className="col-optional py-3 px-4 text-xs font-mono">{crd.version}</td>
                   <td className="py-3 px-4 text-xs">
                     <span className={`inline-flex px-2 py-0.5 rounded-sm text-[11px] font-medium ${crd.scope === 'Namespaced' ? 'bg-cyan-900/40 text-cyan-300' : 'bg-purple-900/40 text-purple-300'}`}>
                       {crd.scope}
@@ -368,35 +352,14 @@ spec:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={6} resource="custom-resources">
-                  {tr('crdPage.noResults', 'No custom resource definitions found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={6} resource="custom-resources" searching={!!searchQuery.trim()} />
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={6} />
           </table>
         </div>
 
-        {sortedItems.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedItems.length),
-                total: sortedItems.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedItems.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
 
       {createDialogOpen && (

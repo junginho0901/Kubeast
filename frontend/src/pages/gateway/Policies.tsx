@@ -4,7 +4,9 @@ import { useTranslation, Trans } from 'react-i18next'
 import { api, type GatewayPolicyItem, type GatewayPolicyKindInfo } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -22,23 +24,6 @@ type SortKey = null | 'kind' | 'name' | 'namespace' | 'target' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
 
 const QUERY_KEY = ['gateway', 'policies'] as const
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
 
 function formatPolicyTargets(item: GatewayPolicyItem): string {
   const targets = item.targets || []
@@ -336,35 +321,14 @@ export default function Policies() {
                 </tr>
               )}
               {sortedItems.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={columnCount} resource="gateway-policies">
-                  {tr('policiesPage.noResults', 'No policies found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={columnCount} resource="gateway-policies" searching={!!searchQuery.trim()} />
               )}
             </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={columnCount} />
           </table>
         </div>
 
-        {sortedItems.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedItems.length),
-                total: sortedItems.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedItems.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
     </div>
   )

@@ -85,7 +85,7 @@ func (h *Handler) isSecretResourceType(r *http.Request, resourceType string) boo
 // error means the caller may reveal but the read cannot be recorded — the
 // handler answers 503 instead of the values (refuseUnaudited).
 func (h *Handler) secretRevealAllowed(r *http.Request, namespace, name, via string, err error) (bool, error) {
-	if h.requirePermissionForCluster(r, "resource.secret.reveal") != nil {
+	if !h.canForCluster(r, "resource.secret.reveal") {
 		return false, nil
 	}
 	if rerr := h.auditReady(r); rerr != nil {

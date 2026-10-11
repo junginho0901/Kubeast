@@ -8,6 +8,7 @@ import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useNotInstalled } from '@/services/listStatusStore'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -51,7 +52,8 @@ export default function ReferenceGrants() {
     ),
   })
   const { has } = usePermission()
-  const canCreate = has('resource.referencegrant.create')
+  const notInstalled = useNotInstalled('referencegrants')
+  const canCreate = has('resource.referencegrant.create') && !notInstalled
 
   useKubeWatchList({
     enabled: true,
@@ -268,8 +270,8 @@ spec:
           <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-cyan-300">{tr('referenceGrantsPage.stats.withTo', 'With To')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.withTo}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('referenceGrantsPage.stats.withLabels', 'With Labels')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('referenceGrantsPage.stats.withLabels', 'With Labels')}</p>
           <p className="text-lg text-white font-semibold mt-1">{summary.withLabels}</p>
         </div>
       </div>
@@ -294,6 +296,7 @@ spec:
         setSortDir={setSortDir}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}

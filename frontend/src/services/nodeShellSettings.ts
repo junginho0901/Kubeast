@@ -8,10 +8,15 @@ export type NodeShellSettings = {
   linuxImage: string
 }
 
+// An empty image lets the server pick its default (the first image on its
+// allow list). Browsers that saved the old built-in default keep working when
+// the server's list moves on, so that value reads as empty too.
+const LEGACY_DEFAULT_IMAGE = 'docker.io/library/busybox:latest'
+
 const DEFAULTS: NodeShellSettings = {
   isEnabled: true,
   namespace: 'default',
-  linuxImage: 'docker.io/library/busybox:latest',
+  linuxImage: '',
 }
 
 export const loadNodeShellSettings = (): NodeShellSettings => {
@@ -22,7 +27,7 @@ export const loadNodeShellSettings = (): NodeShellSettings => {
     return {
       isEnabled: typeof parsed?.isEnabled === 'boolean' ? parsed.isEnabled : DEFAULTS.isEnabled,
       namespace: parsed?.namespace || DEFAULTS.namespace,
-      linuxImage: parsed?.linuxImage || DEFAULTS.linuxImage,
+      linuxImage: parsed?.linuxImage === LEGACY_DEFAULT_IMAGE ? '' : parsed?.linuxImage || DEFAULTS.linuxImage,
     }
   } catch {
     return DEFAULTS

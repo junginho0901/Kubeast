@@ -191,7 +191,7 @@ export function ResourceGraphHeader({
 
         {/* Group By */}
         <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5">
-          {([['none', 'None'], ['namespace', 'NS'], ['node', 'Node'], ['instance', 'Instance']] as const).map(([val, label]) => (
+          {([['none', 'No grouping'], ['namespace', 'Namespace'], ['node', 'Node'], ['instance', 'Instance']] as const).map(([val, label]) => (
             <button
               key={val}
               type="button"
@@ -200,7 +200,7 @@ export function ResourceGraphHeader({
                 groupBy === val ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              {label}
+              {t(`resourceGraph.groupBy.${val}`, label)}
             </button>
           ))}
         </div>

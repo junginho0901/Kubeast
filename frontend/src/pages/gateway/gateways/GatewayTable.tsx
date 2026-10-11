@@ -10,6 +10,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { GatewayInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
@@ -36,6 +37,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -57,6 +59,7 @@ export function GatewayTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -112,7 +115,7 @@ export function GatewayTable({
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('routes')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.attachedRoutes', 'Attached Routes')}{renderSortIcon('routes')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
                 <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
@@ -133,19 +136,19 @@ export function GatewayTable({
                   rawJson: gatewayToRawJson(gateway),
                 })}
               >
-                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{gateway.namespace}</span></td>}
+                {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={gateway.namespace}><span className="block truncate">{gateway.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{gateway.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.gateway_class_name || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{gateway.status || '-'}</span></td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.listeners_count || 0}</td>
                 <td className="py-3 px-4 text-xs font-mono">{gateway.attached_routes || 0}</td>
-                <td className="col-low py-3 px-4 text-xs font-mono">{gateway.addresses_count || 0}</td>
+                <td className="col-optional py-3 px-4 text-xs font-mono">{gateway.addresses_count || 0}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(gateway.created_at)}</td>
               </tr>
             ))}
             {isLoading && (
               <tr>
-                <td colSpan={showNamespaceColumn ? 9 : 8} className="py-10 px-4 text-center text-slate-400">
+                <td colSpan={showNamespaceColumn ? 8 : 7} className="py-10 px-4 text-center text-slate-400">
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     
@@ -156,45 +159,14 @@ export function GatewayTable({
             )}
 
             {sortedGatewaysLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 9 : 8} resource="gateways">
-                {tr('gatewaysPage.noResults', 'No gateways found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 8 : 7} resource="gateways" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedGateways.length} columnCount={7 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
 
-      {sortedGatewaysLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedGatewaysLength),
-              total: sortedGatewaysLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedGatewaysLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

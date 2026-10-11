@@ -8,13 +8,15 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // fetchResourceGraphData fetches all Kubernetes resources used in the resource
-// graph in parallel goroutines. Returns the first error encountered (if any).
+// graph in parallel goroutines. Returns the first error other than Forbidden.
 func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []string) (*rgResources, error) {
 	// Determine namespace for queries ("" means all namespaces)
 	ns := ""
@@ -27,14 +29,18 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	var wg sync.WaitGroup
 	var firstErr error
 
-	fetch := func(name string, fn func() error) {
+	// A kind the identity may not list is left out of the graph and named in
+	// res.forbidden; any other error fails the graph.
+	fetch := func(kind string, fn func() error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if err := fn(); err != nil {
 				mu.Lock()
-				if firstErr == nil {
-					firstErr = fmt.Errorf("%s: %w", name, err)
+				if apierrors.IsForbidden(err) {
+					res.forbidden = append(res.forbidden, kind)
+				} else if firstErr == nil {
+					firstErr = fmt.Errorf("%s: %w", kind, err)
 				}
 				mu.Unlock()
 			}
@@ -42,7 +48,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	}
 
 	// --- Namespaced resources ---
-	fetch("pods", func() error {
+	fetch("Pod", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -53,7 +59,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("services", func() error {
+	fetch("Service", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -64,7 +70,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("configmaps", func() error {
+	fetch("ConfigMap", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -75,7 +81,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("secrets", func() error {
+	fetch("Secret", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -86,7 +92,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("pvcs", func() error {
+	fetch("PersistentVolumeClaim", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -97,7 +103,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("ingresses", func() error {
+	fetch("Ingress", func() error {
 		list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -108,7 +114,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("rolebindings", func() error {
+	fetch("RoleBinding", func() error {
 		list, err := s.clientsetCtx(ctx).RbacV1().RoleBindings(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -119,7 +125,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("serviceaccounts", func() error {
+	fetch("ServiceAccount", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -130,7 +136,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("replicasets", func() error {
+	fetch("ReplicaSet", func() error {
 		list, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -141,7 +147,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("deployments", func() error {
+	fetch("Deployment", func() error {
 		list, err := s.clientsetCtx(ctx).AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -152,7 +158,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("statefulsets", func() error {
+	fetch("StatefulSet", func() error {
 		list, err := s.clientsetCtx(ctx).AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -163,7 +169,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("daemonsets", func() error {
+	fetch("DaemonSet", func() error {
 		list, err := s.clientsetCtx(ctx).AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -174,7 +180,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("jobs", func() error {
+	fetch("Job", func() error {
 		list, err := s.clientsetCtx(ctx).BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -185,7 +191,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("cronjobs", func() error {
+	fetch("CronJob", func() error {
 		list, err := s.clientsetCtx(ctx).BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -196,7 +202,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("hpas", func() error {
+	fetch("HorizontalPodAutoscaler", func() error {
 		list, err := s.clientsetCtx(ctx).AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -207,7 +213,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("networkpolicies", func() error {
+	fetch("NetworkPolicy", func() error {
 		list, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -218,7 +224,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("endpointslices", func() error {
+	fetch("EndpointSlice", func() error {
 		list, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -229,7 +235,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("endpoints", func() error {
+	fetch("Endpoints", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().Endpoints(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -241,7 +247,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	})
 
 	// --- Cluster-scoped resources ---
-	fetch("pvs", func() error {
+	fetch("PersistentVolume", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -252,7 +258,7 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("storageclasses", func() error {
+	fetch("StorageClass", func() error {
 		list, err := s.clientsetCtx(ctx).StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -267,5 +273,6 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 	if firstErr != nil {
 		return nil, firstErr
 	}
+	sort.Strings(res.forbidden)
 	return &res, nil
 }

@@ -267,6 +267,7 @@ type ValidateClusterRequest struct {
 type ClusterConnectionResult struct {
 	Healthy       bool   `json:"healthy"`
 	ServerVersion string `json:"server_version,omitempty"`
+	Server        string `json:"server,omitempty"`
 	Message       string `json:"message,omitempty"`
 }
 

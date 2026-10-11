@@ -472,7 +472,7 @@ export function DashboardBody() {
   const optimizationAnswerMarkdownForStreaming = makeStreamingMarkdownRenderFriendly(optimizationAnswerMarkdown)
   const optimizationMarkdown = `${optimizationObservedContent}${unwrapOuterMarkdownFence(optimizationAnswerContent)}`.trim()
   return (
-    <div className="space-y-8">
+    <div className="page-scrolls space-y-8">
       <DashboardHeader
         clusterVersion={overview?.cluster_version}
         isRefreshing={isRefreshing}

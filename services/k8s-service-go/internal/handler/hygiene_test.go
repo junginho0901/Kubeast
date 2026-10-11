@@ -17,6 +17,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -99,9 +100,16 @@ func TestHygieneGates(t *testing.T) {
 			t.Errorf("%s: %d", c.name, w.Code)
 		}
 	}
-	if len(store.rows) != 0 {
-		t.Errorf("refused requests wrote audit rows: %+v", store.rows)
+	// Each refusal is one k8s.access.denied row; no report was built.
+	if len(store.rows) != len(cases) {
+		t.Errorf("refused requests: %d audit rows, want %d: %+v", len(store.rows), len(cases), store.rows)
 	}
+	for _, row := range store.rows {
+		if row.Action != "k8s.access.denied" || row.Result != audit.ResultFailure {
+			t.Errorf("refused request wrote %s/%s", row.Action, row.Result)
+		}
+	}
+	store.rows = nil
 	w = httptest.NewRecorder()
 	h.GetHygiene(w, hygieneRequest(http.MethodGet, "/api/v1/hygiene?format=xml", nil, "admin.hygiene.export"))
 	if w.Code != http.StatusBadRequest {

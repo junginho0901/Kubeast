@@ -444,16 +444,17 @@ async def floating_session_chat(
 async def suggest_optimization_stream(
     request: Request,
     namespace: str,
+    lang: Optional[str] = None,
     authorization: str = Depends(bearer_or_cookie),
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
-    """리소스 최적화 제안 (SSE 스트리밍)"""
+    """리소스 최적화 제안 (SSE 스트리밍). lang = 화면 언어(ko/en, 없으면 en)."""
     ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
     actor, http = _extract_audit_meta(request, authorization)
 
     try:
         return StreamingResponse(
-            ai_service.suggest_optimization_stream(namespace, audit_actor=actor, audit_http=http),
+            ai_service.suggest_optimization_stream(namespace, audit_actor=actor, audit_http=http, lang=lang or "en"),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

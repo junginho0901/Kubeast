@@ -7,7 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -42,8 +42,7 @@ export default function VolumeAttachments() {
     queryKey: ['storage', 'volumeattachments'],
     queryFn: () => api.getVolumeAttachments(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.volumeattachment.create')
+  const canCreate = useCanCreate('resource.volumeattachment.create', { group: 'storage.k8s.io', resource: 'volumeattachments' })
 
   useKubeWatchList({
     enabled: true,
@@ -236,7 +235,8 @@ spec:
             <button
               type="button"
               onClick={() => setCreateDialogOpen(true)}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-secondary flex items-center gap-2"
+              title={tr('common.controllerManaged', 'Kubernetes usually creates this object itself')}
             >
               <Plus className="w-4 h-4" />
               {tr('volumeattachments.create', 'Create VolumeAttachment')}
@@ -292,6 +292,7 @@ spec:
           setSortDir={setSortDir}
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}
+          searching={!!searchQuery.trim()}
           totalPages={totalPages}
           rowsPerPage={rowsPerPage}
           tableBodyRef={tableBodyRef}

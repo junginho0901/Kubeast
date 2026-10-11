@@ -5,7 +5,9 @@ import { JSONPath } from 'jsonpath-plus'
 import { api, type CustomResourceInstanceInfo } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -21,23 +23,6 @@ interface PrinterColumn {
   type: string
   jsonPath: string
   description?: string
-}
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
 }
 
 function getValueWithJSONPath(json: object, jsonPath: string): string {
@@ -345,18 +330,18 @@ export default function CustomResourceInstances() {
           <table className="w-full text-sm min-w-[900px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
+                <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                </th>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
                   <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
-                </th>
-                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
                 </th>
                 {!kindFilter && (
                   <>
                     <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
                       <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
                     </th>
-                    <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
+                    <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
                       <span className="inline-flex items-center gap-1">{tr('crInstancesPage.table.group', 'Group')}{renderSortIcon('group')}</span>
                     </th>
                   </>
@@ -384,12 +369,12 @@ export default function CustomResourceInstances() {
                     rawJson: { kind: inst.kind, group: inst.group, version: inst.version, crd_name: inst.crd_name, scope: inst.scope },
                   })}
                 >
+                  <td className="col-low py-3 px-4 text-xs font-mono" title={inst.namespace || undefined}>{inst.namespace || '-'}</td>
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{inst.name}</span></td>
-                  <td className="py-3 px-4 text-xs"><span className="block truncate">{inst.namespace || '-'}</span></td>
                   {!kindFilter && (
                     <>
                       <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.kind}</span></td>
-                      <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.group}</span></td>
+                      <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate">{inst.group}</span></td>
                     </>
                   )}
                   {showDynamicCols && printerColumns.map((col) => (
@@ -413,35 +398,14 @@ export default function CustomResourceInstances() {
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={totalColCount} resource="custom-resources">
-                  {tr('crInstancesPage.noResults', 'No custom resource instances found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={totalColCount} resource="custom-resources" searching={!!searchQuery.trim()} />
               )}
             </tbody>
-              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={6} />
+              <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={totalColCount} />
           </table>
         </div>
 
-        {sortedItems.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedItems.length),
-                total: sortedItems.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedItems.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
     </div>
   )

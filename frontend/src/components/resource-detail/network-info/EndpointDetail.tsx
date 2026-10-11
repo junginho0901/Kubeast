@@ -24,7 +24,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
 
   const renderTargets = (targets: any[], fallbackIps: string[], tone: 'ready' | 'notReady') => {
     if (!Array.isArray(targets) || targets.length === 0) {
-      if (!Array.isArray(fallbackIps) || fallbackIps.length === 0) return <p className="text-xs text-slate-400"><Tx>(none)</Tx></p>
+      if (!Array.isArray(fallbackIps) || fallbackIps.length === 0) return <p className="text-xs text-slate-400"><Tx>None</Tx></p>
       return <p className="text-xs text-slate-200 break-all">{fallbackIps.join(', ')}</p>
     }
 
@@ -33,7 +33,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
       <div className="space-y-1.5">
         {targets.map((t: any, i: number) => {
           const ref = t?.target_ref || t?.targetRef
-          const refText = ref?.name ? `${ref.kind || 'Target'}:${ref.name}` : '(targetRef none)'
+          const refText = ref?.name ? `${ref.kind || 'Target'}:${ref.name}` : 'targetRef: -'
           const nodeText = t?.node_name ? `node=${t.node_name}` : null
           return (
             <div key={`${tone}-${i}`} className={`rounded-sm border px-2 py-1.5 text-xs ${borderTone}`}>
@@ -114,8 +114,8 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
           <div className="space-y-2 text-xs">
             {subsets.map((s: any, i: number) => (
               <div key={i} className="rounded-sm border border-slate-800 p-2">
-                <div className="text-slate-200">Addresses: {(s.addresses || []).map((a: any) => a.ip).join(', ') || <Tx>(none)</Tx>}</div>
-                <div className="text-slate-400">Ports: {(s.ports || []).map((p: any) => `${p.name || ''}:${p.port}/${p.protocol || 'TCP'}`).join(', ') || <Tx>(none)</Tx>}</div>
+                <div className="text-slate-200">Addresses: {(s.addresses || []).map((a: any) => a.ip).join(', ') || <Tx>None</Tx>}</div>
+                <div className="text-slate-400">Ports: {(s.ports || []).map((p: any) => `${p.name || ''}:${p.port}/${p.protocol || 'TCP'}`).join(', ') || <Tx>None</Tx>}</div>
               </div>
             ))}
           </div>

@@ -118,7 +118,7 @@ func TestHygieneBaselineViolations(t *testing.T) {
 	if len(other) != 1 {
 		t.Fatalf("pss.other-baseline = %+v", other)
 	}
-	for _, sub := range []string{"procMount Unmasked", "probe or lifecycle host", "sysctl kernel.msgmax", "seccomp Unconfined (pod)", "SELinux user system_u"} {
+	for _, sub := range []string{"procMount Unmasked", "probe/lifecycle host", "sysctl kernel.msgmax", "seccomp Unconfined (pod)", "SELinux user system_u"} {
 		if !strings.Contains(other[0].Message, sub) {
 			t.Errorf("pss.other-baseline message %q lacks %q", other[0].Message, sub)
 		}
@@ -129,6 +129,10 @@ func TestHygieneBaselineViolations(t *testing.T) {
 	if got := findingsOf(rep, "pss.privileged")[0].Severity; got != HygieneCritical {
 		t.Errorf("privileged severity = %s", got)
 	}
+	if f := findingsOf(rep, "pss.capabilities")[0]; f.MessageKey != "capabilities" || f.MessageArgs["added"] != "NET_RAW, SYS_ADMIN (app)" {
+		t.Errorf("capabilities sentence = %q %v", f.MessageKey, f.MessageArgs)
+	}
+	everyFindingHasAKey(t, rep)
 	if rep.Counts.Critical != 2 {
 		t.Errorf("critical = %d, want 2 (privileged, host namespaces)", rep.Counts.Critical)
 	}
@@ -172,8 +176,20 @@ func TestHygieneResources(t *testing.T) {
 	if got := findingsOf(rep, "resources.memory-limit"); len(got) != 1 || got[0].Container != "app" {
 		t.Errorf("memory-limit = %+v", got)
 	}
-	if got := findingsOf(rep, "resources.requests"); len(got) != 1 || got[0].Message != "no memory request" {
+	if got := findingsOf(rep, "resources.requests"); len(got) != 1 || got[0].Message != "no memory request" ||
+		got[0].MessageKey != "requests" || got[0].MessageArgs["resources"] != "memory" {
 		t.Errorf("requests = %+v", got)
+	}
+	everyFindingHasAKey(t, rep)
+}
+
+// The UI shows a finding through clusterHygiene.message.<key>: every finding carries one.
+func everyFindingHasAKey(t *testing.T, rep HygieneReport) {
+	t.Helper()
+	for _, f := range rep.Findings {
+		if f.MessageKey == "" {
+			t.Errorf("%s %s/%s has no message key (message %q)", f.Check, f.Namespace, f.Name, f.Message)
+		}
 	}
 }
 
@@ -223,7 +239,7 @@ func TestHygieneExemptions(t *testing.T) {
 	if f := byName["a"]; !f.Exempt || f.ExemptReason != "vendor image without tags" {
 		t.Errorf("pod with reason = %+v, want exempt", f)
 	}
-	if f := byName["b"]; f.Exempt || !strings.Contains(f.Message, "without "+HygieneExemptReasonAnnotation) {
+	if f := byName["b"]; f.Exempt || !f.ExemptNoReason || !strings.Contains(f.Message, "without "+HygieneExemptReasonAnnotation) {
 		t.Errorf("pod without reason = %+v, want a finding that names the missing reason", f)
 	}
 	if f := findingsOf(rep, "pss.host-namespaces"); len(f) != 1 || !f[0].Exempt {
@@ -241,12 +257,15 @@ func TestHygieneNamespaceChecks(t *testing.T) {
 	p := compliantPod("default", "stray")
 	rep := evaluate(HygieneInput{Pods: []corev1.Pod{p},
 		Namespaces: []corev1.Namespace{{ObjectMeta: metav1.ObjectMeta{Name: "default", Labels: map[string]string{"pod-security.kubernetes.io/warn": "baseline"}}}}})
-	if f := findingsOf(rep, "ns.pss-label"); len(f) != 1 || !strings.Contains(f[0].Message, "warn=baseline") {
+	if f := findingsOf(rep, "ns.pss-label"); len(f) != 1 || !strings.Contains(f[0].Message, "warn=baseline") ||
+		f[0].MessageKey != "pssLabelWarn" || f[0].MessageArgs["warn"] != "baseline" {
 		t.Errorf("ns.pss-label = %+v", f)
 	}
-	if f := findingsOf(rep, "ns.network-policy"); len(f) != 1 || f[0].Message != "no NetworkPolicy (1 pods)" {
+	if f := findingsOf(rep, "ns.network-policy"); len(f) != 1 || f[0].Message != "no NetworkPolicy (1 pods)" ||
+		f[0].MessageKey != "networkPolicy" || f[0].MessageArgs["pods"] != "1" {
 		t.Errorf("ns.network-policy = %+v", f)
 	}
+	everyFindingHasAKey(t, rep)
 	if f := findingsOf(rep, "ns.default-used"); len(f) != 1 {
 		t.Errorf("ns.default-used = %+v", f)
 	}
@@ -301,10 +320,15 @@ func TestHygieneRBAC(t *testing.T) {
 		t.Errorf("RoleBinding to cluster-admin missing: %+v", admin)
 	}
 	for _, f := range admin {
-		if f.Name == "ci-deployer" && f.Message != "binds cluster-admin to ServiceAccount:ci/deployer" {
-			t.Errorf("message = %q", f.Message)
+		if f.Name == "ci-deployer" && (f.Message != "binds cluster-admin to ServiceAccount:ci/deployer" ||
+			f.MessageKey != "clusterAdmin" || f.MessageArgs["subjects"] != "ServiceAccount:ci/deployer") {
+			t.Errorf("ci-deployer = %q %q %v", f.Message, f.MessageKey, f.MessageArgs)
+		}
+		if f.Name == "team-admin" && !strings.HasPrefix(f.MessageKey, "clusterAdminInNamespace") {
+			t.Errorf("team-admin key = %q", f.MessageKey)
 		}
 	}
+	everyFindingHasAKey(t, rep)
 	wild := findingsOf(rep, "rbac.wildcard")
 	if len(wild) != 2 {
 		t.Fatalf("rbac.wildcard = %+v, want tool-server and apps/all-pods", wild)
@@ -353,6 +377,16 @@ func TestHygieneTLSExpiry(t *testing.T) {
 	if f := got["five-days"]; f.Severity != HygieneCritical || !strings.Contains(f.Message, "(5 days) · a.example.com, b.example.com") {
 		t.Errorf("five-days = %+v", f)
 	}
+	if f := got["five-days"]; f.MessageKey != "tlsExpires" || f.MessageArgs["days"] != "5" || f.MessageArgs["suffix"] != " · a.example.com, b.example.com" {
+		t.Errorf("five-days sentence = %q %v", f.MessageKey, f.MessageArgs)
+	}
+	if f := got["expired"]; f.MessageKey != "tlsExpired" || f.MessageArgs["date"] != "2026-10-07" {
+		t.Errorf("expired sentence = %q %v", f.MessageKey, f.MessageArgs)
+	}
+	if f := got["garbage"]; f.MessageKey != "tlsUnreadable" {
+		t.Errorf("garbage sentence = %q", f.MessageKey)
+	}
+	everyFindingHasAKey(t, rep)
 	if f := got["twenty-days"]; f.Severity != HygieneWarning || !strings.Contains(f.Message, "(20 days)") {
 		t.Errorf("twenty-days = %+v", f)
 	}

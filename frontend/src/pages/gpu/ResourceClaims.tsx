@@ -190,7 +190,7 @@ export default function ResourceClaims() {
 
   const createResourceClaimYamlTemplate = useMemo(() => {
     const ns = selectedNamespace !== 'all' ? selectedNamespace : 'default'
-    return `apiVersion: resource.k8s.io/v1beta1
+    return `apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
   name: example-gpu-claim
@@ -199,7 +199,8 @@ spec:
   devices:
     requests:
       - name: gpu
-        deviceClassName: example-gpu-class
+        exactly:
+          deviceClassName: example-gpu-class
 `
   }, [selectedNamespace])
 
@@ -285,6 +286,7 @@ spec:
         setSortDir={setSortDir}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}

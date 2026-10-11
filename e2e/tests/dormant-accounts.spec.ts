@@ -133,8 +133,8 @@ test.describe('Dormant accounts', () => {
     const row = page.locator('tr').filter({ has: page.getByTestId(`user-detail-${MEMBER}`) })
     await expect(row.getByTestId('user-dormant-badge')).toBeVisible()
 
-    page.once('dialog', (d) => d.accept())
     await row.getByTestId('user-unlock').click()
+    await page.getByTestId('confirm-dialog-ok').click()
     await expect(row.getByTestId('user-dormant-badge')).toHaveCount(0, { timeout: 15000 })
     expect((await listed(request, admin, MEMBER)).dormant_locked_at).toBeUndefined()
 

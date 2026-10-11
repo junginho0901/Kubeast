@@ -106,9 +106,11 @@ func TestLogFilesGates(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("%s without resource.pod.logfile: %d", name, w.Code)
 		}
-		if len(store.rows) != 0 || len(*calls) != 0 {
-			t.Errorf("%s: refused before the gate but rows=%d calls=%v", name, len(store.rows), *calls)
+		// The refusal itself is one k8s.access.denied row (a sensitive read); nothing runs.
+		if len(*calls) != 0 || len(store.rows) != 1 || store.rows[0].Action != "k8s.access.denied" || store.rows[0].TargetID != "resource.pod.logfile" {
+			t.Errorf("%s: refused before the gate but rows=%+v calls=%v", name, store.rows, *calls)
 		}
+		store.rows = nil
 		w = httptest.NewRecorder()
 		route(h)(w, logFileRequest(target, "kube-system", "resource.pod.logfile"))
 		if w.Code != http.StatusForbidden || decodeLogFileError(t, w) != "namespace" {

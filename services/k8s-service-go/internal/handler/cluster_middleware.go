@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -52,11 +54,17 @@ func (h *Handler) ClusterMiddleware(next http.Handler) http.Handler {
 		// check any authenticated user could read a cluster's data just by hitting
 		// the endpoint. Require a per-cluster grant (Perms[id]) or the global admin
 		// entry (Perms["*"]); deny-by-default (00-COMMON §2-3).
+		r = r.WithContext(cluster.WithID(r.Context(), id))
 		if len(payload.Perms["*"]) == 0 && len(payload.Perms[c]) == 0 {
-			response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+c)
+			err := errors.New("forbidden: no access to cluster " + c)
+			// A write or a terminal is a refused attempt worth a row; reads are not (see denied).
+			if r.Method != http.MethodGet || strings.HasSuffix(r.URL.Path, "/ws") {
+				_ = h.recordAuditWithPayload(r, "k8s.access.denied", "cluster", c, "", err, nil,
+					audit.MustJSON(map[string]interface{}{"permission": "cluster access", "method": r.Method, "path": r.URL.Path}))
+			}
+			response.Error(w, http.StatusForbidden, err.Error())
 			return
 		}
-		r = r.WithContext(cluster.WithID(r.Context(), id))
 
 		// An id the registry does not know is 404 here, once, instead of each
 		// handler answering differently (500, or 200 with an empty list).

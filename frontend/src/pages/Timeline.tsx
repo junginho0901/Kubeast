@@ -12,6 +12,7 @@ import { api, TimelineEvent, RolloutRevision } from '@/services/api'
 import CustomDropdown from '@/components/CustomDropdown'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
+import { absoluteTitle, formatAge, formatDate } from '@/utils/time'
 
 const TIME_RANGES = [
   { value: 1, label: '1h' },
@@ -22,28 +23,10 @@ const TIME_RANGES = [
 
 type EventFilter = 'all' | 'Normal' | 'Warning'
 
-function fmtRelative(iso: string): string {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  return `${days}d`
-}
-
-function fmtAbsolute(iso: string): string {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString()
-}
-
-function getDateKey(iso: string): string {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString()
-}
+const fmtRelative = formatAge
+// the local time with the UTC value after it (the tooltip of each row)
+const fmtAbsolute = absoluteTitle
+const getDateKey = formatDate
 
 type TimelineItem =
   | { type: 'event'; data: TimelineEvent; timestamp: string }
@@ -244,7 +227,17 @@ export default function Timeline() {
         </div>
       )}
 
-      {/* Timeline */}
+      {/* Timeline — the list holds events and rollouts, so its count says both */}
+      {timeline && mergedItems.length > 0 && (
+        <p className="text-xs text-slate-400" data-testid="timeline-count">
+          {t('timeline.listCount', {
+            rows: mergedItems.length,
+            events: mergedItems.filter((it) => it.type === 'event').length,
+            rollouts: mergedItems.filter((it) => it.type === 'rollout').length,
+            defaultValue: '{{rows}} items ({{events}} events · {{rollouts}} rollouts)',
+          })}
+        </p>
+      )}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">

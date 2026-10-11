@@ -31,7 +31,6 @@ type StaticEntry = {
 // App.tsx 기준 정적 경로 매핑
 const STATIC_MAP: Record<string, StaticEntry> = {
   '/':                                    { pageType: 'dashboard',     titleKey: 'nav.dashboard',         pageTitle: '대시보드' },
-  '/namespaces':                          { pageType: 'resource-list', resourceKind: 'Namespace',       titleKey: 'nav.namespaces',        pageTitle: '네임스페이스' },
   '/cluster/namespaces':                  { pageType: 'resource-list', resourceKind: 'Namespace',       titleKey: 'nav.namespaces',        pageTitle: '네임스페이스' },
   '/cluster/nodes':                       { pageType: 'resource-list', resourceKind: 'Node',            titleKey: 'nav.nodes',             pageTitle: '노드' },
   '/cluster/search':                      { pageType: 'search',                                         titleKey: 'nav.advancedSearch',    pageTitle: '고급 검색' },
@@ -107,14 +106,6 @@ const DYNAMIC_PATTERNS: Array<
   [RegExp, (m: RegExpMatchArray) => Omit<RouteContextMeta, 'path'>]
 > = [
   [
-    /^\/topology\/([^/]+)$/,
-    (m) => ({ pageType: 'topology', pageTitle: `토폴로지 · ${m[1]}`, namespace: m[1] }),
-  ],
-  [
-    /^\/resources\/([^/]+)$/,
-    (m) => ({ pageType: 'resource-list', pageTitle: `리소스 · ${m[1]}`, namespace: m[1] }),
-  ],
-  [
     /^\/helm\/releases\/([^/]+)\/([^/]+)$/,
     (m) => ({
       pageType: 'resource-detail',
@@ -123,11 +114,6 @@ const DYNAMIC_PATTERNS: Array<
       resourceName: m[2],
       pageTitle: `Helm · ${m[2]}`,
     }),
-  ],
-  // /network/:namespace — 정적 /network/services 등보다 뒤에 매칭 (정적 우선)
-  [
-    /^\/network\/([^/]+)$/,
-    (m) => ({ pageType: 'network', pageTitle: `네트워크 · ${m[1]}`, namespace: m[1] }),
   ],
   [
     /^\/admin\/[a-z-]+$/,

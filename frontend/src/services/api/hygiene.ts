@@ -26,9 +26,13 @@ export interface HygieneFinding {
   name: string
   container?: string
   pods?: number
+  // English text (CSV, sign-off snapshots); the screen uses the catalog key and values when present
   message: string
+  message_key?: string
+  message_args?: Record<string, string>
   exempt?: boolean
   exempt_reason?: string
+  exempt_no_reason?: boolean
 }
 
 export interface HygieneCounts {

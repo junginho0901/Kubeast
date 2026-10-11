@@ -81,6 +81,7 @@ type rgResources struct {
 	networkPolicies []networkingv1.NetworkPolicy
 	endpointSlices  []discoveryv1.EndpointSlice
 	endpoints       []corev1.Endpoints
+	forbidden       []string // kinds the identity may not list, left out
 }
 
 // GetResourceGraph returns a comprehensive resource graph for given namespaces.
@@ -129,6 +130,9 @@ func (s *Service) GetResourceGraph(ctx context.Context, namespaces []string) (ma
 	edges = buildStorageRBACGraph(res, nodeMap, addNode, edges, inScope)
 
 	result := buildResourceGraphResponse(nodeMap, edges)
+	if len(res.forbidden) > 0 {
+		result["forbidden_kinds"] = res.forbidden
+	}
 
 	s.cache.Set(ctx, cacheKey, result, 30*time.Second)
 	return result, nil

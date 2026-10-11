@@ -24,6 +24,7 @@ export function normalizeWatchHPAObject(obj: any): HPAInfo {
     max_replicas: spec?.maxReplicas ?? 0,
     current_replicas: status?.currentReplicas ?? null,
     desired_replicas: status?.desiredReplicas ?? null,
+    scaling_active: (status?.conditions ?? []).some((c: any) => c?.type === 'ScalingActive' && c?.status === 'True'),
     metrics: [],
     conditions: [],
     last_scale_time: status?.lastScaleTime ?? null,

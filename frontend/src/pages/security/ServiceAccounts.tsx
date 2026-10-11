@@ -7,7 +7,9 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
@@ -17,23 +19,6 @@ import { Loader2, CheckCircle, ChevronDown, ChevronUp, Plus, RefreshCw, Search }
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
 type SummaryCard = [label: string, value: number, boxClass: string, labelClass: string]
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
 
 function normalizeWatchServiceAccountObject(obj: any): ServiceAccountInfo {
   if (
@@ -159,23 +144,22 @@ export default function ServiceAccounts() {
   }, [serviceAccounts, searchQuery])
 
   const summary = useMemo(() => {
+    // Token Secrets are not created for ServiceAccounts since Kubernetes 1.24, so a count of them read 0 on
+    // every current cluster; image pull Secrets are what still differs from one ServiceAccount to the next.
     const total = filteredItems.length
-    let withSecrets = 0
-    let totalSecrets = 0
+    let withPullSecrets = 0
     for (const sa of filteredItems) {
-      if (sa.secrets > 0) withSecrets += 1
-      totalSecrets += sa.secrets
+      if ((sa.image_pull_secrets?.length ?? 0) > 0) withPullSecrets += 1
     }
-    return { total, withSecrets, totalSecrets }
+    return { total, withPullSecrets }
   }, [filteredItems])
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('serviceAccountsPage.stats.total', 'Total'), summary.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('serviceAccountsPage.stats.withSecrets', 'With Secrets'), summary.withSecrets, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('serviceAccountsPage.stats.totalSecrets', 'Total Secrets'), summary.totalSecrets, 'border-cyan-700/40 bg-cyan-900/10', 'text-cyan-300'],
+      [tr('serviceAccountsPage.stats.withPullSecrets', 'With Image Pull Secrets'), summary.withPullSecrets, 'border-slate-700 bg-slate-900/50', 'text-slate-300'],
     ],
-    [summary.total, summary.withSecrets, summary.totalSecrets, tr],
+    [summary.total, summary.withPullSecrets, tr],
   )
 
   const handleSort = (key: NonNullable<SortKey>) => {
@@ -335,7 +319,7 @@ metadata:
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
+      <div className="grid grid-cols-2 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
             <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
@@ -375,7 +359,7 @@ metadata:
               {pagedItems.map((sa, idx) => (
                 <tr
                       ref={idx === 0 ? firstRowRef : undefined} key={`${sa.namespace}/${sa.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ServiceAccount', name: sa.name, namespace: sa.namespace })}>
-                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono">{sa.namespace}</td>}
+                  {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={sa.namespace}>{sa.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{sa.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{sa.secrets}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(sa.created_at)}</td>
@@ -394,35 +378,14 @@ metadata:
               )}
 
               {sortedItems.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="serviceaccounts">
-                  {tr('serviceAccountsPage.noResults', 'No service accounts found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="serviceaccounts" searching={!!searchQuery.trim()} />
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedItems.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />
           </table>
         </div>
 
-        {sortedItems.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedItems.length),
-                total: sortedItems.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage >= totalPages} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedItems.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
 
       {createDialogOpen && (

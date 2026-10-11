@@ -172,7 +172,7 @@ func Load() Config {
 
 		NodeShellEnabled:    pkgconfig.GetEnvBool("NODE_SHELL_ENABLED", false),
 		NodeShellNamespace:  pkgconfig.GetEnv("NODE_SHELL_NAMESPACE", "kubeast-node-shell"),
-		NodeShellImages:     pkgconfig.GetEnvList("NODE_SHELL_IMAGES", "docker.io/library/busybox:latest"),
+		NodeShellImages:     pkgconfig.GetEnvList("NODE_SHELL_IMAGES", "docker.io/library/busybox:1.38.0"),
 		NodeShellTimeoutSec: pkgconfig.GetEnvInt("NODE_SHELL_TIMEOUT_SEC", 3600),
 
 		DatabaseURL: pkgconfig.GetEnv("DATABASE_URL", "postgres://kubeast:password@localhost:5432/kubeast?sslmode=disable"),

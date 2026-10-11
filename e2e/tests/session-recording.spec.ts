@@ -130,6 +130,27 @@ test.describe.serial('session recording', () => {
     expect(reads.some((i) => (i.After ?? i.after)?.format === 'text')).toBe(true)
   })
 
+  test('the notice is in the screen language, and the recording keeps the same line', async ({ page, request }) => {
+    test.setTimeout(120_000)
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const pod = await firstPod(request, 'kubeast', 'frontend-')
+    const mark = `kubeast-rec-ko-${stamp()}`
+    await page.goto('/')
+    const frames = await execSession(page, `/api/v1/cluster/namespaces/kubeast/pods/${pod}/exec/ws?cluster=self&command=/bin/sh&cols=100&rows=30&lang=ko`, [
+      { send: `echo ${mark}\r`, until: mark },
+    ])
+    const out = frames.map((f) => f.text).join('')
+    const m = out.match(/\[Kubeast\] 이 세션은 녹화됩니다 \(([0-9a-f-]{36})\)/)
+    expect(m, `Korean notice in: ${out.slice(0, 300)}`).toBeTruthy()
+    expect(out).not.toContain('This session is recorded')
+    const id = m![1]
+    await expect
+      .poll(async () => (await (await request.get(`/api/v1/cluster/recordings/${id}`, { headers: bearer(admin) })).json()).status, { timeout: 30_000 })
+      .toBe('uploaded')
+    const text = await (await request.get(`/api/v1/cluster/recordings/${id}/cast?format=text`, { headers: bearer(admin) })).text()
+    expect(text).toContain(`[Kubeast] 이 세션은 녹화됩니다 (${id})`)
+  })
+
   test('Admin → Session recordings lists it and replays it; the audit row links to it', async ({ page }) => {
     test.skip(!recordingId, 'needs the recording from the previous test')
     await page.goto('/admin/session-recordings')
@@ -171,5 +192,40 @@ test.describe.serial('session recording', () => {
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
     }
+  })
+
+  // Re-QA #3 and #4: the list pages 50 at a time (it was every row on one
+  // page, and nothing past 200), and an interrupted recording shows the size
+  // that was kept — not the bytes that never left the lost spool file.
+  test('the list pages, and an interrupted recording shows what was kept', async ({ page, request }) => {
+    const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
+    const list = async (params: Record<string, string>) =>
+      (await (await request.get('/api/v1/cluster/recordings', { headers: bearer(admin), params: { cluster: '', ...params } })).json()) as any[]
+    const all = await list({ limit: '500' })
+    test.skip(all.length <= 50, `only ${all.length} recordings: a single page`)
+    expect((await list({ limit: '2', offset: '1' })).map((r) => r.id), 'the API skips offset rows').toEqual(all.slice(1, 3).map((r) => r.id))
+
+    await page.goto('/admin/session-recordings')
+    const rows = page.getByTestId('recordings-table').locator('tbody tr')
+    const pager = page.getByTestId('recordings-pager')
+    await expect(rows).toHaveCount(50)
+    await expect(pager).toContainText('1–50')
+    const go = async (n: number) => {
+      for (let cur = 1; cur < n; cur++) {
+        await pager.getByRole('button').last().click()
+        await expect(rows.first()).toHaveAttribute('data-testid', `recording-row-${all[cur * 50].id}`)
+      }
+    }
+    await go(2)
+    await expect(pager).toContainText(`51–${Math.min(100, all.length)}`)
+
+    const lost = all.find((r) => r.status === 'interrupted' && r.parts === 0 && r.bytes > 0)
+    test.skip(!lost, 'no interrupted recording without uploaded parts on this installation')
+    await page.goto('/admin/session-recordings')
+    await go(Math.floor(all.indexOf(lost) / 50) + 1)
+    const row = page.getByTestId(`recording-row-${lost.id}`)
+    await expect(row.locator('td').nth(5)).toHaveText('0 B')
+    await expect(row.locator('td').nth(6).locator('span')).toHaveAttribute('title', /nothing to play|재생할 내용이 없습니다/)
+    await expect(page.getByTestId(`recording-play-${lost.id}`)).toBeDisabled()
   })
 })

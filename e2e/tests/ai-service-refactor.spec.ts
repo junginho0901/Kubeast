@@ -59,6 +59,11 @@ test.describe('ai_service refactor regression', () => {
     await page.waitForTimeout(2000)
     await stop.click()
     await expect(input).toBeEnabled({ timeout: 5_000 })
+    // the SSE really stopped: the answer does not grow any more
+    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+    const stopped = (await lastAssistant.innerText()).length
+    await page.waitForTimeout(3000)
+    expect((await lastAssistant.innerText()).length).toBe(stopped)
   })
 
   test('Copy 버튼 — intent.py 의 stripToolDetails 가 클립보드에서 tool 메타 제거', async ({ page }) => {
@@ -88,6 +93,13 @@ test.describe('ai_service refactor regression', () => {
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.getByPlaceholder(PLACEHOLDER_RE)).toBeVisible({ timeout: 10_000 })
+    const input = page.getByPlaceholder(PLACEHOLDER_RE)
+    await expect(input).toBeVisible({ timeout: 10_000 })
+    // the stream manager still streams after the route change: a short question gets an answer
+    await input.fill('hi')
+    await page.getByRole('button', { name: SEND_RE }).click()
+    await expect(input).toBeEnabled({ timeout: 60_000 })
+    const answer = (await page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last().innerText()).trim()
+    expect(answer.length).toBeGreaterThan(0)
   })
 })

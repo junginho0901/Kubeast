@@ -4,6 +4,8 @@
 // 모두 순수 함수 (외부 상태 의존 X). watch event 정규화는 cronJobWatchNormalize.ts.
 
 import type { CronJobInfo } from '@/services/api'
+import { nextCronRun } from '@/utils/cron'
+import { utcTitle } from '@/utils/time'
 
 export type SortKey =
   | null
@@ -16,28 +18,22 @@ export type SortKey =
   | 'images'
   | 'age'
 
-export function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
+export { ageSeconds as parseAgeSeconds, formatAge, formatTime as formatTimestamp } from '@/utils/time'
+
+/** The next run of a CronJob that is not suspended (D11, utils/cron). */
+export function nextRunOf(cronjob: Pick<CronJobInfo, 'schedule' | 'suspend' | 'time_zone'>): Date | null {
+  return cronjob.suspend ? null : nextCronRun(cronjob.schedule, cronjob.time_zone)
 }
 
-export function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-export function formatTimestamp(ts?: string | null): string {
-  if (!ts) return '-'
-  const ms = new Date(ts)
-  if (!Number.isFinite(ms.getTime())) return '-'
-  return ms.toLocaleString()
+/** Tooltip of the next run: the UTC value and the zone the schedule is read in. */
+export function nextRunTitle(
+  cronjob: Pick<CronJobInfo, 'schedule' | 'suspend' | 'time_zone'>,
+  tr: (key: string, fallback: string, options?: Record<string, unknown>) => string,
+): string | undefined {
+  const next = nextRunOf(cronjob)
+  if (!next) return cronjob.suspend ? tr('cronjobs.nextRunSuspended', 'Suspended: no run is scheduled') : undefined
+  const zone = cronjob.time_zone || tr('cronjobs.controllerZone', "the controller's time zone (not set; computed in this browser's zone)")
+  return tr('cronjobs.nextRunTitle', 'UTC {{utc}} · {{zone}}', { utc: utcTitle(next), zone })
 }
 
 export function cronJobToWorkloadRawJson(cronjob: CronJobInfo): Record<string, unknown> {

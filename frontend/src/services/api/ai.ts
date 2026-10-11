@@ -2,6 +2,8 @@
 // suggestOptimizationStream uses raw fetch instead of axios so it can
 // consume the response body as a stream of SSE events.
 
+import { uiLang } from '@/utils/uiLang'
+
 import { getAuthHeaders, handleUnauthorized } from '../auth'
 import { clusterHeaders } from '../clusterRef'
 
@@ -46,7 +48,8 @@ export const aiApi = {
     // X-Cluster-Name scopes the observations to the selected cluster (as the chat streams do).
     const headers: Record<string, string> = { Accept: 'text/event-stream', ...getAuthHeaders(), ...clusterHeaders() }
 
-    const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}`, {
+    // lang: the table headings, the prompt and the answer come back in the screen's language
+    const response = await fetch(`/api/v1/ai/suggest-optimization/stream?namespace=${encodeURIComponent(namespace)}&lang=${uiLang()}`, {
       method: 'GET',
       headers,
       signal,

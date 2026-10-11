@@ -2,10 +2,12 @@ import { useState, useEffect, useDeferredValue, useCallback, useMemo, useRef } f
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search, RefreshCw, AlertCircle, Database, AlertTriangle, Loader2 } from 'lucide-react'
+import { BetaTag } from '@/components/BetaTag'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import ResourceTypePicker, { ResourceTypeOption } from '@/components/search/ResourceTypePicker'
 import { NON_LISTABLE } from '@/components/search/nonListable'
+import { flattenApiResources } from '@/components/search/apiResources'
 import SearchQueryEditor from '@/components/search/SearchQueryEditor'
 import SearchResultTable from '@/components/search/SearchResultTable'
 import SearchExamples from '@/components/search/SearchExamples'
@@ -59,18 +61,10 @@ export default function AdvancedSearch() {
     staleTime: 120_000,
   })
 
-  const extraResources = useMemo<ResourceTypeOption[]>(() => {
-    if (!apiResources || !Array.isArray(apiResources)) return []
-    return apiResources
-      .filter((r: any) => r.name && r.kind)
-      .map((r: any) => ({
-        name: r.name as string,
-        kind: r.kind as string,
-        group: (r.group_version?.split('/')[0]) ?? 'core',
-        namespaced: r.namespaced ?? true,
-        verbs: (r.verbs ?? []) as string[],
-      }))
-  }, [apiResources])
+  const extraResources = useMemo<ResourceTypeOption[]>(
+    () => (Array.isArray(apiResources) ? flattenApiResources(apiResources) : []),
+    [apiResources],
+  )
 
   const resourceTypes = useMemo(() => [...selectedResources], [selectedResources])
 
@@ -247,12 +241,10 @@ export default function AdvancedSearch() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <Search className="w-7 h-7 text-sky-400" />
             {t('advancedSearch.title', 'Advanced Search')}
-            <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-medium">
-              {t('advancedSearch.beta', 'Beta')}
-            </span>
+            <BetaTag label={t('common.beta', 'Beta')} size="md" />
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             {t('advancedSearch.subtitle', 'Search across Kubernetes resources using JavaScript expressions')}
@@ -261,7 +253,7 @@ export default function AdvancedSearch() {
         <button
           onClick={() => refetch()}
           disabled={isFetching}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm text-slate-300 transition-colors disabled:opacity-50"
+          className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           {t('advancedSearch.refresh', 'Refresh')}

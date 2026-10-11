@@ -6,12 +6,13 @@
 // cluster-scoped 라 namespace 컬럼 없음. 7 sortable 컬럼 (name/provisioner/
 // default/reclaimPolicy/bindingMode/allowExpansion/age) + parameters 컬럼
 // (Object.keys count 만, sortable 아님 — 원본 보존). min-w-[1300px].
-// Default 컬럼은 green check icon + 'Yes', AllowVolumeExpansion 은 Yes/No.
+// Default·AllowVolumeExpansion 컬럼은 Yes/No 글자.
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { StorageClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
@@ -36,6 +37,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -56,6 +58,7 @@ export function StorageClassTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -106,10 +109,10 @@ export function StorageClassTable({
               <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('bindingMode')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.volumeBindingMode', 'Volume Binding Mode')}{renderSortIcon('bindingMode')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
+              <th className="col-optional text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.allowVolumeExpansion', 'Allow Volume Expansion')}{renderSortIcon('allowExpansion')}</span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
+              <th className="col-optional text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
                 <span className="inline-flex items-center gap-1">{tr('storageclasses.table.age', 'Age')}{renderSortIcon('age')}</span>
               </th>
@@ -129,18 +132,11 @@ export function StorageClassTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{sc.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{sc.provisioner || '-'}</span></td>
-                <td className="py-3 px-4 text-xs">
-                  {sc.is_default ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-300">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      {tr('common.yes', 'Yes')}
-                    </span>
-                  ) : '-'}
-                </td>
+                <td className="py-3 px-4 text-xs">{sc.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.reclaim_policy || '-'}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{sc.volume_binding_mode || '-'}</span></td>
-                <td className="col-low py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
-                <td className="col-low py-3 px-4 text-xs">{Object.keys(sc.parameters || {}).length}</td>
+                <td className="col-optional py-3 px-4 text-xs">{sc.allow_volume_expansion ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
+                <td className="col-optional py-3 px-4 text-xs">{Object.keys(sc.parameters || {}).length}</td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(sc.created_at)}</td>
               </tr>
             ))}
@@ -157,45 +153,14 @@ export function StorageClassTable({
             )}
 
             {sortedStorageClassesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={8} resource="storageclasses">
-                {tr('storageclasses.noResults', 'No StorageClasses found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={8} resource="storageclasses" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedStorageClasses.length} columnCount={8} />
         </table>
       </div>
 
-      {sortedStorageClassesLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedStorageClassesLength),
-              total: sortedStorageClassesLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedStorageClassesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

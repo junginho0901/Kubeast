@@ -46,7 +46,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
   })
   const { items: pagedUsingPods, nav: usingPodsNav } = usePagination(usingPods, 10)
 
-  const { bound: effectivePerms, loading: effectivePermsLoading } = useEffectivePermissions({ namespace, name })
+  const { bound: effectivePerms, loading: effectivePermsLoading, unreadable } = useEffectivePermissions({ namespace, name })
   const { items: pagedEffectivePerms, nav: effectivePermsNav } = usePagination(effectivePerms, 5)
 
   const { data: describe, isLoading } = useQuery({
@@ -110,11 +110,23 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
       )}
 
       <InfoSection
-        title={effectivePermsLoading ? 'Effective Permissions ({{n}} bindings, loading…)' : effectivePerms.length === 1 ? 'Effective Permissions (1 binding)' : 'Effective Permissions ({{n}} bindings)'}
+        title={effectivePermsLoading ? 'Effective Permissions ({{n}} bindings, loading…)' : unreadable.kinds.length > 0 && effectivePerms.length === 0 ? 'Effective Permissions' : effectivePerms.length === 1 ? 'Effective Permissions (1 binding)' : 'Effective Permissions ({{n}} bindings)'}
         titleValues={{ n: effectivePerms.length }}
       >
+        {unreadable.kinds.length > 0 && (
+          <p className="mb-2 text-xs text-amber-300" data-testid="sa-bindings-unreadable">
+            <Tx
+              text={unreadable.forbidden
+                ? 'You may not list {{kinds}} here, so the bindings of this ServiceAccount cannot all be checked.'
+                : 'Could not load {{kinds}}, so the bindings of this ServiceAccount cannot all be checked.'}
+              values={{ kinds: unreadable.kinds.join(', ') }}
+            />
+          </p>
+        )}
         {effectivePerms.length === 0 ? (
-          <p className="text-xs text-slate-400"><Tx>No RoleBinding or ClusterRoleBinding binds this ServiceAccount.</Tx></p>
+          unreadable.kinds.length > 0 ? null : (
+            <p className="text-xs text-slate-400"><Tx>No RoleBinding or ClusterRoleBinding binds this ServiceAccount.</Tx></p>
+          )
         ) : (
           <div className="space-y-3">
             {pagedEffectivePerms.map((b, i) => (

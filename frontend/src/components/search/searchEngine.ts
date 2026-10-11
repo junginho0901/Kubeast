@@ -1,5 +1,6 @@
 import jsep from 'jsep'
 import evaluate from 'simple-eval'
+import { formatAge } from '@/utils/time'
 
 export interface SearchResult {
   kind: string
@@ -68,18 +69,7 @@ export async function searchWithExpression(
   return { results, timeMs: performance.now() - start }
 }
 
-export function formatAge(creationTimestamp: string | undefined): string {
-  if (!creationTimestamp) return '-'
-  const diff = Date.now() - new Date(creationTimestamp).getTime()
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  return `${days}d`
-}
+export { formatAge }
 
 export function extractStatus(item: Record<string, unknown>): string {
   const status = item.status as Record<string, unknown> | undefined

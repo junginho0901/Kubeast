@@ -3,13 +3,12 @@
 // frontend/src/pages/network/IngressClasses.tsx 의 table JSX (sort header +
 // tbody + 빈/로딩 상태 + pagination footer) 추출. cluster-scoped 라 namespace
 // 컬럼 없음. 5 컬럼 모두 sortable (name/controller/default/parameters/age).
-// pagination 은 totalPages > 1 + common.pagination.range 키 사용 (다른 페이지의
-// common.paginationRange 와 다름 — IngressClasses 원본 그대로 보존).
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import type { IngressClassInfo } from '@/services/api'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   formatAge,
@@ -35,6 +34,7 @@ interface Props {
   setSortDir: Dispatch<SetStateAction<'asc' | 'desc'>>
   currentPage: number
   setCurrentPage: Dispatch<SetStateAction<number>>
+  searching?: boolean
   totalPages: number
   rowsPerPage: number
   tableContainerRef: RefObject<HTMLDivElement | null>
@@ -55,6 +55,7 @@ export function IngressClassTable({
   setSortDir,
   currentPage,
   setCurrentPage,
+  searching,
   totalPages,
   rowsPerPage,
   tableContainerRef,
@@ -121,11 +122,7 @@ export function IngressClassTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{item.controller || '-'}</span></td>
-                <td className="py-3 px-4 text-xs">
-                  {item.is_default
-                    ? <span className="badge badge-success">{tr('common.yes', 'Yes')}</span>
-                    : <span className="badge badge-info">{tr('common.no', 'No')}</span>}
-                </td>
+                <td className="py-3 px-4 text-xs">{item.is_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{formatParameters(item)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
               </tr>
@@ -143,47 +140,14 @@ export function IngressClassTable({
             )}
 
             {sortedIngressClassesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={5} resource="ingressclasses">
-                {tr('ingressClassesPage.noResults', 'No ingress classes found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={5} resource="ingressclasses" searching={searching} />
             )}
           </tbody>
             <AdaptiveTableFillerRows count={rowsPerPage - pagedIngressClasses.length} columnCount={5} />
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-slate-400 px-4 py-3 border-t border-slate-700 shrink-0">
-          <span>
-            {(() => {
-              const total = sortedIngressClassesLength
-              if (total === 0) return tr('common.pagination.empty', '0')
-              const from = (currentPage - 1) * rowsPerPage + 1
-              const to = Math.min(currentPage * rowsPerPage, total)
-              return tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', { from, to, total })
-            })()}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            >
-              {tr('common.pagination.prev', 'Prev')}
-            </button>
-            <span>{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              className="btn btn-secondary px-2 py-1 disabled:opacity-50"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            >
-              {tr('common.pagination.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedIngressClassesLength} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
     </div>
   )
 }

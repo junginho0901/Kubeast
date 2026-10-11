@@ -197,11 +197,12 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 	spec, _ := obj.Object["spec"].(map[string]interface{})
 	status, _ := obj.Object["status"].(map[string]interface{})
 
-	var replicas, readyReplicas, availableReplicas int64
+	var replicas, currentReplicas, readyReplicas, availableReplicas int64
 	if spec != nil {
 		replicas, _ = toInt64(spec["replicas"])
 	}
 	if status != nil {
+		currentReplicas, _ = toInt64(status["replicas"])
 		readyReplicas, _ = toInt64(status["readyReplicas"])
 		availableReplicas, _ = toInt64(status["availableReplicas"])
 	}
@@ -254,6 +255,7 @@ func replicasetToInfo(obj *unstructured.Unstructured) map[string]interface{} {
 		"name":               metadata["name"],
 		"namespace":          metadata["namespace"],
 		"replicas":           replicas,
+		"current_replicas":   currentReplicas,
 		"ready_replicas":     readyReplicas,
 		"available_replicas": availableReplicas,
 		"image":              image,

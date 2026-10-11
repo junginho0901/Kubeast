@@ -16,7 +16,6 @@ interface Props {
 export function PodDetailTabBody({ manifest, describeData }: Props) {
   const {
     tr,
-    locale,
     na,
     emptyValue,
     selectedPod,
@@ -37,7 +36,6 @@ export function PodDetailTabBody({ manifest, describeData }: Props) {
           pod={selectedPod}
           containerSearchQuery={containerSearchQuery}
           onContainerSearchChange={setContainerSearchQuery}
-          locale={locale}
           na={na}
           emptyValue={emptyValue}
           tr={tr}
@@ -64,7 +62,7 @@ export function PodDetailTabBody({ manifest, describeData }: Props) {
       )}
 
       {activeTab === 'describe' && describeData && (
-        <PodDescribeTab data={describeData} locale={locale} na={na} tr={tr} />
+        <PodDescribeTab data={describeData} na={na} tr={tr} />
       )}
 
       {activeTab === 'rbac' && <PodRbacTab pod={selectedPod} tr={tr} />}

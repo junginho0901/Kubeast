@@ -10,6 +10,9 @@ export interface AccessRequestsConfig {
   enabled: boolean
   max_hours: number
   roles: string[]
+  /** Where a user with no cluster asks for one (chart auth.accessHelp); empty when unset */
+  help_text: string
+  help_url: string
 }
 
 export type AccessRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired'
@@ -46,7 +49,14 @@ export interface CreateAccessRequestInput {
 export const accessRequestsApi = {
   getAccessRequestsConfig: async (): Promise<AccessRequestsConfig> => {
     const { data } = await client.get('/auth/access-requests/config')
-    return { enabled: !!data?.enabled, max_hours: Number(data?.max_hours) || 0, roles: Array.isArray(data?.roles) ? data.roles : [] }
+    const helpURL = String(data?.help_url || '')
+    return {
+      enabled: !!data?.enabled,
+      max_hours: Number(data?.max_hours) || 0,
+      roles: Array.isArray(data?.roles) ? data.roles : [],
+      help_text: String(data?.help_text || ''),
+      help_url: /^https?:\/\//i.test(helpURL) ? helpURL : '',
+    }
   },
 
   createAccessRequest: async (input: CreateAccessRequestInput): Promise<AccessRequest> => {

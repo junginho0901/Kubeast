@@ -1,8 +1,13 @@
+import { ageSeconds, formatAge } from '@/utils/time'
+
+export { formatAge }
+
 export interface NodeInfo {
   name: string
   status: string
   roles: string[]
   age: string
+  created_at?: string | null
   version?: string | null
   internal_ip?: string | null
   external_ip?: string | null
@@ -39,22 +44,6 @@ metadata:
   labels:
     node-role.kubernetes.io/worker: ""
 `
-
-export function parseAgeDays(age?: string | null): number {
-  if (!age) return 0
-  const match = age.match(/(\d+)\s+day/)
-  if (match) return Number(match[1]) || 0
-  const compactMatch = age.match(/^(\d+)d$/i)
-  if (compactMatch) return Number(compactMatch[1]) || 0
-  const hourMatch = age.match(/^(\d+)h$/i)
-  if (hourMatch) return Number(hourMatch[1]) / 24
-  return 0
-}
-
-export function formatAge(age?: string | null): string {
-  if (!age) return '-'
-  return age
-}
 
 export function getStatusColor(status: string): string {
   const lower = (status || '').toLowerCase().trim()
@@ -96,7 +85,7 @@ export function sortNodes(
       case 'external_ip':
         return node.external_ip || ''
       case 'age':
-        return parseAgeDays(node.age)
+        return ageSeconds(node.created_at)
       default:
         return ''
     }

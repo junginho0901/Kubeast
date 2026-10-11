@@ -333,7 +333,7 @@ export function StorageModal({
 
                   const claimNs = pv?.claim_ref?.namespace ? String(pv.claim_ref.namespace) : ''
                   const claimName = pv?.claim_ref?.name ? String(pv.claim_ref.name) : ''
-                  const claim = claimNs && claimName ? `${claimNs}/${claimName}` : '—'
+                  const claim = claimNs && claimName ? `${claimNs}/${claimName}` : '-'
 
                   return (
                     <div key={pv.name} className="p-3 bg-slate-900/20">

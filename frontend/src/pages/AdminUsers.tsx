@@ -1,21 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member } from '@/services/api'
-import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Trash2, Unlock, Upload } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Copy, Download, KeyRound, Lock, Plus, RotateCcw, Search, Trash2, Unlock, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ListPager } from '@/components/ListPager'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useTranslation } from 'react-i18next'
 import { usePermission } from '@/hooks/usePermission'
+import { formatTime } from '@/utils/time'
 import { useAdminUserData } from './admin-users/useAdminUserData'
 import { ReauthModal } from './admin-users/ReauthModal'
 import { CreateUserModal } from './admin-users/CreateUserModal'
+import { useConfirm } from '@/services/confirm'
 import { UserDetailModal } from './admin-users/UserDetailModal'
+
+const USERS_PAGE_SIZE = 25
 
 export default function AdminUsers() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
-  const [limit] = useState(100)
+  const confirm = useConfirm()
+  // the server's largest page; search and pages work on what it returns
+  const [limit] = useState(200)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [offset] = useState(0)
   const [roleDrafts, setRoleDrafts] = useState<Record<string, number>>({})
   const [openRoleDropdownUserId, setOpenRoleDropdownUserId] = useState<string | null>(null)
@@ -229,6 +238,17 @@ export default function AdminUsers() {
     return list
   }, [rows, sortKey, sortDir])
 
+  const query = search.trim().toLowerCase()
+  const filteredRows = useMemo(
+    () => (query
+      ? sortedRows.filter((u) => [u.name, u.email, u.team].some((v) => (v ?? '').toLowerCase().includes(query)))
+      : sortedRows),
+    [sortedRows, query],
+  )
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / USERS_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pagedRows = filteredRows.slice((currentPage - 1) * USERS_PAGE_SIZE, currentPage * USERS_PAGE_SIZE)
+
   if (isLoading) {
     return <div className="text-slate-300">{tr('adminUsers.loading', 'Loading...')}</div>
   }
@@ -238,7 +258,8 @@ export default function AdminUsers() {
   }
 
   const isBlocked = reauthModalOpen
-  const pendingRows = rows.filter((u) => u.role?.name === 'pending')
+  // role names are stored capitalized ("Pending"), so compare without case
+  const pendingRows = rows.filter((u) => u.role?.name?.toLowerCase() === 'pending')
 
   const handleSort = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) {
@@ -367,7 +388,7 @@ export default function AdminUsers() {
               onClick={() => sweepMutation.mutate()}
               disabled={sweepMutation.isPending}
               data-testid="dormant-sweep-now"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="btn btn-secondary flex items-center gap-2 disabled:opacity-50"
               title={tr('adminUsers.sweepTitle', 'Lock accounts with no sign-in or API key use for {{days}} days (runs daily on its own)', { days: dormantConfig.days })}
             >
               <Lock className="w-4 h-4" />
@@ -377,7 +398,7 @@ export default function AdminUsers() {
           <button
             type="button"
             onClick={() => { setBulkUploadResult(null); setBulkUploadModalOpen(true) }}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
+            className="btn btn-secondary flex items-center gap-2"
           >
             <Upload className="w-4 h-4" />
             {tr('adminUsers.bulkUpload', 'Bulk upload')}
@@ -385,7 +406,7 @@ export default function AdminUsers() {
           <button
             type="button"
             onClick={() => setCreateModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
+            className="btn btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             {tr('adminUsers.createUser', 'Add user')}
@@ -393,10 +414,22 @@ export default function AdminUsers() {
         </div>
       </div>
 
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          placeholder={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
+          data-testid="admin-users-search"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
+
       <div className="rounded-2xl border border-slate-700 bg-slate-800/50 overflow-visible">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800">
-            <tr className="text-left text-slate-300">
+          <thead className="bg-slate-800 text-slate-400">
+            <tr className="text-left">
               <th className="px-4 py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('name')}>
                 {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
               </th>
@@ -414,7 +447,7 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((u) => {
+            {pagedRows.map((u) => {
               const isUpdating = updateRoleMutation.isPending && updateRoleMutation.variables?.userId === u.id
               const isResetting = resetPasswordMutation.isPending && resetPasswordMutation.variables?.userId === u.id
               const isDeleting = deleteUserMutation.isPending && deleteUserMutation.variables?.userId === u.id
@@ -423,7 +456,7 @@ export default function AdminUsers() {
               const currentRoleName = roles.find((r) => r.id === currentRoleId)?.name ?? u.role?.name ?? 'unknown'
               const isOpen = openRoleDropdownUserId === u.id
               const isSelf = !!me?.id && me.id === u.id
-              const isPending = currentRoleName === 'pending'
+              const isPending = currentRoleName.toLowerCase() === 'pending'
               return (
                 <tr
                   key={u.id}
@@ -448,7 +481,7 @@ export default function AdminUsers() {
                       <span
                         className="ml-2 inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300 border border-red-500/20"
                         data-testid="user-dormant-badge"
-                        title={tr('adminUsers.lastLogin', 'Last login {{when}}', { when: u.last_login_at ? new Date(u.last_login_at).toLocaleString() : tr('adminUsers.neverLoggedIn', 'never signed in') })}
+                        title={tr('adminUsers.lastLogin', 'Last login {{when}}', { when: u.last_login_at ? formatTime(u.last_login_at) : tr('adminUsers.neverLoggedIn', 'never signed in') })}
                       >
                         {tr('adminUsers.dormantBadge', 'Dormant lock')}
                       </span>
@@ -476,7 +509,7 @@ export default function AdminUsers() {
                         aria-expanded={isOpen}
                       >
                         <span className="truncate">
-                          {tr(`adminUsers.roles.${currentRoleName}`, currentRoleName.toUpperCase())}
+                          {currentRoleName}
                         </span>
                         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                       </button>
@@ -509,7 +542,7 @@ export default function AdminUsers() {
                                 }`}
                               >
                                 <span className="flex-1 text-left">
-                                  {tr(`adminUsers.roles.${role.name}`, role.name.toUpperCase())}
+                                  {role.name}
                                 </span>
                                 {isSelected && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
                               </button>
@@ -523,13 +556,13 @@ export default function AdminUsers() {
                     <button
                       type="button"
                       disabled={isResetting || isBlocked}
-                      onClick={() => {
+                      onClick={async () => {
                         const targetLabel = u.email ?? u.name
-                        const ok = window.confirm(
-                          tr('adminUsers.resetPasswordConfirm', 'Generate a new random password?\n\nTarget: {{target}}', {
-                            target: targetLabel,
-                          })
-                        )
+                        const ok = await confirm({
+                          title: tr('adminUsers.resetPasswordTitle', 'Issue temporary password'),
+                          message: tr('adminUsers.resetPasswordConfirm', 'Generate a new random password?\n\nTarget: {{target}}', { target: targetLabel }),
+                          confirmLabel: tr('adminUsers.reset', 'Reset PW'),
+                        })
                         if (!ok) return
                         resetPasswordMutation.mutate({ userId: u.id, targetLabel })
                       }}
@@ -547,8 +580,12 @@ export default function AdminUsers() {
                       <button
                         type="button"
                         disabled={isBlocked || (unlockMutation.isPending && unlockMutation.variables?.userId === u.id)}
-                        onClick={() => {
-                          const ok = window.confirm(tr('adminUsers.unlockConfirm', 'Unlock this account?\n\nTarget: {{target}}', { target: u.email ?? u.name }))
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: tr('adminUsers.unlockDialogTitle', 'Unlock account'),
+                            message: tr('adminUsers.unlockConfirm', 'Unlock this account?\n\nTarget: {{target}}', { target: u.email ?? u.name }),
+                            confirmLabel: tr('adminUsers.unlock', 'Unlock'),
+                          })
                           if (!ok) return
                           unlockMutation.mutate({ userId: u.id })
                         }}
@@ -566,45 +603,55 @@ export default function AdminUsers() {
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {isSelf ? (
+                      <span className="text-xs text-slate-500" title={tr('adminUsers.deleteSelfBlocked', 'You cannot delete your own account.')} data-testid="admin-users-self">
+                        {tr('adminUsers.selfAccount', 'Your account')}
+                      </span>
+                    ) : (
                     <button
                       type="button"
-                      disabled={isDeleting || isSelf || isBlocked}
-                      onClick={() => {
-                        const ok = window.confirm(
-                          tr(
-                            'adminUsers.deleteConfirm',
-                            'Delete this user?\\n\\nTarget: {{target}}\\n\\n* Deletions cannot be easily undone.',
-                            { target: u.email ?? u.name }
-                          )
-                        )
+                      disabled={isDeleting || isBlocked}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: tr('adminUsers.deleteTitle', 'Delete user'),
+                          message: tr('adminUsers.deleteConfirm', 'Delete this user?\n\nTarget: {{target}}\n\n* Deletions cannot be easily undone.', { target: u.email ?? u.name }),
+                          confirmLabel: tr('adminUsers.delete', 'Delete'),
+                          danger: true,
+                        })
                         if (!ok) return
                         deleteUserMutation.mutate({ userId: u.id })
                       }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-2 text-xs text-red-200 hover:bg-red-950/35 focus:outline-hidden focus:ring-2 focus:ring-red-600 disabled:opacity-50"
-                      title={
-                        isSelf
-                          ? tr('adminUsers.deleteSelfBlocked', 'You cannot delete your own account.')
-                          : tr('adminUsers.deleteTitle', 'Delete user')
-                      }
+                      title={tr('adminUsers.deleteTitle', 'Delete user')}
                     >
                       <Trash2 className="w-3.5 h-3.5 text-red-300" />
                       <span>
                         {isDeleting ? tr('adminUsers.deleting', 'Deleting...') : tr('adminUsers.delete', 'Delete')}
                       </span>
                     </button>
+                    )}
                   </td>
                 </tr>
               )
             })}
-            {sortedRows.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
-                <td className="px-4 py-4 text-slate-300" colSpan={7}>
-                  {tr('adminUsers.empty', 'No users found.')}
+                <td className="px-4 py-6 text-center text-slate-400" colSpan={6}>
+                  {query ? tr('common.noSearchResults', 'No results found.') : tr('common.listEmpty', 'No items.')}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        <ListPager
+          currentPage={currentPage}
+          totalPages={pageCount}
+          total={filteredRows.length}
+          rowsPerPage={USERS_PAGE_SIZE}
+          onPageChange={setPage}
+          showPageSize={false}
+          testId="admin-users-pager"
+        />
       </div>
 
       {/* User detail modal */}
@@ -627,7 +674,7 @@ export default function AdminUsers() {
 
       {/* Pending approval modal */}
       {pendingModalOpen && (
-        <ModalOverlay>
+        <ModalOverlay onClose={() => setPendingModalOpen(false)}>
           <div
             className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"
@@ -656,7 +703,7 @@ export default function AdminUsers() {
               <>
                 <div className="mt-5 rounded-xl border border-slate-700 overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-800">
+                    <thead className="bg-slate-800 text-slate-400">
                       <tr className="text-left text-slate-300">
                         <th className="px-3 py-2.5 w-10">
                           <input
@@ -744,7 +791,7 @@ export default function AdminUsers() {
 
       {/* Bulk upload modal */}
       {bulkUploadModalOpen && (
-        <ModalOverlay>
+        <ModalOverlay onClose={() => { setBulkUploadModalOpen(false); setBulkUploadResult(null) }}>
           <div
             className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
             role="dialog"

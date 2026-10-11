@@ -153,9 +153,15 @@ export function Iso3DChart({
         {data.map((d, i) => {
           const rawH = (d.value / niceMax) * CH
           const barH = Math.max(rawH, d.value > 0 ? 5 : 0)
-          if (barH <= 0) return null
-
           const bx = M.l + i * groupW + (groupW - barW) / 2
+          // the value stays readable without hovering, a 0 included
+          const valueLabel = (y: number) => (
+            <text x={bx + barW / 2 + BDX / 2} y={y} textAnchor="middle" fill="#e2e8f0" fontSize={11} fontWeight={600}>
+              {d.value}
+            </text>
+          )
+          if (barH <= 0) return <g key={d.name}>{valueLabel(baseY + BDY - 6)}</g>
+
           const by = baseY - barH
           const isHov = hovered === i
           const delay = i * 0.08
@@ -202,26 +208,7 @@ export function Iso3DChart({
               <line x1={bx} y1={by} x2={bx + barW} y2={by}
                 stroke="#fff" strokeWidth={0.5} opacity={0.1} />
 
-              {/* Hover tooltip */}
-              {isHov && d.value > 0 && (
-                <g>
-                  <rect
-                    x={bx + barW / 2 + BDX / 2 - 22}
-                    y={by + BDY - 28}
-                    width={44} height={22} rx={6}
-                    fill="rgba(15,23,42,0.92)"
-                    stroke={colors.accent} strokeWidth={1} strokeOpacity={0.4}
-                  />
-                  <text
-                    x={bx + barW / 2 + BDX / 2}
-                    y={by + BDY - 13}
-                    textAnchor="middle" fill="#f1f5f9"
-                    fontSize={11} fontWeight={600}
-                  >
-                    {d.value}
-                  </text>
-                </g>
-              )}
+              {valueLabel(by + BDY - 6)}
             </g>
           )
         })}

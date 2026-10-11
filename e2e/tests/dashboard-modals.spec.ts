@@ -14,19 +14,19 @@ test.describe('Dashboard modals — Context refactor regression', () => {
     // 진입점이 sidebar 가 아닌 Dashboard 본문에 있다면 그 버튼을 찾아야 함.
     // 일반적으로 Storage 모달은 Stats Grid 의 PVCs 카드 클릭 또는 별도 버튼에서 열림.
     // 우선 'pvcs' Stats Grid 카드를 통한 ResourceModal 만 확인.
-    const pvcsCard = page.locator('button.card').filter({ hasText: /^PVCs$/i }).first()
-    if ((await pvcsCard.count()) === 0) {
-      test.skip(true, 'PVCs Stats card 없음')
-      return
-    }
+    // (the card's text is the label and its count run together — "PVCs0" — so not the whole text)
+    const pvcsCard = page.locator('button.card').filter({ hasText: /^PVCs\d+$/ }).first()
+    await expect(pvcsCard).toHaveCount(1)
     await pvcsCard.click()
 
     // ResourceModal 가 뜨면 PVC list 가 render
     await expect(page.locator('text=/PVC|Persistent Volume/i').first()).toBeVisible({ timeout: 10000 })
+    const title = page.locator('h2.text-xl').filter({ hasText: /PVC|PersistentVolumeClaim/ })
+    await expect(title).toHaveCount(1)
 
     // 모달 닫기 (Esc)
     await page.keyboard.press('Escape')
-    await page.waitForTimeout(300)
+    await expect(title).toHaveCount(0)
   })
 
   test('Issues 모달 — 열기 + sortedIssues render', async ({ page }) => {

@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { api, AuditLogEntry, AuditLogFilter, AuditVerifyReport } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
+import { formatTime, parseTypedTime, utcTitle } from '@/utils/time'
+import { DateTextInput } from '@/components/DateTextInput'
+import { ListPager } from '@/components/ListPager'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
@@ -94,6 +97,8 @@ export default function AdminAudit() {
 
   // Local draft for inputs; committed to `filter` on "Apply".
   const [draft, setDraft] = useState<AuditLogFilter>(filter)
+  const [sinceText, setSinceText] = useState(() => (filter.since ? formatTime(filter.since).slice(0, 16) : ''))
+  const [untilText, setUntilText] = useState(() => (filter.until ? formatTime(filter.until).slice(0, 16) : ''))
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['admin-audit-logs', filter],
@@ -153,14 +158,27 @@ export default function AdminAudit() {
   const page = Math.floor(offset / limit) + 1
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
+  // The time range is typed as local YYYY-MM-DD HH:mm; the API takes RFC 3339.
+  const typedRange = (text: string) => {
+    if (!text.trim()) return { ok: true, iso: undefined }
+    const d = parseTypedTime(text, true)
+    return { ok: !!d, iso: d?.toISOString() }
+  }
+  const since = typedRange(sinceText)
+  const until = typedRange(untilText)
+  const rangeOk = since.ok && until.ok
+
   const applyFilter = () => {
-    setFilter({ ...draft, offset: 0 })
+    if (!rangeOk) return
+    setFilter({ ...draft, since: since.iso, until: until.iso, offset: 0 })
     setExpandedId(null)
   }
 
   const resetFilter = () => {
     const next: AuditLogFilter = { limit, offset: 0 }
     setDraft(next)
+    setSinceText('')
+    setUntilText('')
     setFilter(next)
     setExpandedId(null)
   }
@@ -192,28 +210,23 @@ export default function AdminAudit() {
     const isSuccess = result === 'success'
     return (
       <span
-        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+        className={`inline-flex items-center whitespace-nowrap rounded-sm px-2 py-0.5 text-xs font-medium ${
           isSuccess
             ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
             : 'bg-red-500/15 text-red-300 border border-red-500/30'
         }`}
       >
-        {isSuccess ? '✓' : '✕'} {result}
+        {isSuccess ? '✓' : '✕'} {tr(`adminAudit.resultValue.${result}`, result)}
       </span>
     )
   }
 
   const fmtTime = (iso: string) => {
-    try {
-      const d = new Date(iso)
-      return d.toLocaleString()
-    } catch {
-      return iso
-    }
+    return formatTime(iso)
   }
 
   return (
-    <div className="space-y-4">
+    <div className="page-scrolls space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">{tr('adminAudit.title', '감사 로그')}</h1>
@@ -225,14 +238,14 @@ export default function AdminAudit() {
           <button
             onClick={exportCsv}
             data-testid="audit-export-csv"
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-white"
+            className="btn btn-secondary flex items-center gap-2"
           >
             {tr('adminAudit.exportCsv', 'CSV 내보내기')}
           </button>
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {isFetching ? tr('adminAudit.refreshing', '불러오는 중...') : tr('adminAudit.refresh', '새로고침')}
           </button>
@@ -244,17 +257,17 @@ export default function AdminAudit() {
           className="rounded-lg bg-slate-800/50 border border-slate-700 px-4 py-3 flex flex-wrap items-center gap-3 text-sm"
           data-testid="audit-integrity"
         >
-          <span className="text-slate-300">
+          <span className="text-slate-300" title={tr('adminAudit.integrity.sealedTitle', 'Rows up to this number are chained by hash: a changed or removed row breaks the chain (Verify checks it)')}>
             {tr('adminAudit.integrity.sealed', '무결성: #{{seq}}까지 봉인', { seq: integrity.sealed_through_seq })}
             {integrity.unsealed_rows > 0 && (
               <span className="text-slate-500"> ({tr('adminAudit.integrity.unsealed', '미봉인 {{n}}', { n: integrity.unsealed_rows })})</span>
             )}
           </span>
           <span className="text-slate-600">·</span>
-          <span className="text-slate-300" data-testid="audit-integrity-anchor-state">
+          <span className="text-slate-300" data-testid="audit-integrity-anchor-state" title={tr('adminAudit.integrity.anchorTitle', 'An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it')}>
             {integrity.last_anchor
               ? tr('adminAudit.integrity.lastAnchor', '마지막 앵커 {{when}} (#{{seq}} → {{sink}})', {
-                  when: new Date(integrity.last_anchor.created_at).toLocaleString(),
+                  when: formatTime(integrity.last_anchor.created_at),
                   seq: integrity.last_anchor.to_seq,
                   sink: integrity.last_anchor.sink,
                 })
@@ -278,6 +291,7 @@ export default function AdminAudit() {
                 onClick={() => anchorMutation.mutate()}
                 disabled={anchorMutation.isPending}
                 data-testid="audit-integrity-anchor"
+                title={tr('adminAudit.integrity.anchorNowTitle', 'Write the head of the hash chain to the anchor sink now (it is also written on its own schedule)')}
                 className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-1.5 text-sm text-white"
               >
                 {anchorMutation.isPending ? tr('adminAudit.integrity.anchoring', '앵커 중...') : tr('adminAudit.integrity.anchorNow', '지금 앵커')}
@@ -316,13 +330,13 @@ export default function AdminAudit() {
       <div className="rounded-lg bg-slate-800/50 border border-slate-700 p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="flex flex-col text-xs font-semibold text-slate-400">
-            {tr('adminAudit.filter.service', 'Service')}
+            {tr('adminAudit.filter.service', 'Area')}
             <CustomDropdown
               value={draft.service ?? ''}
               onChange={(v) => setDraft({ ...draft, service: v || undefined })}
               options={SERVICES.map((s) => ({
                 value: s,
-                label: s || tr('adminAudit.filter.any', '전체'),
+                label: s ? tr(`adminAudit.area.${s}`, s) : tr('adminAudit.filter.any', '전체'),
               }))}
               minWidth="min-w-[140px]"
             />
@@ -356,7 +370,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.actor', '사용자 이메일')}
             <input
               type="text"
-              placeholder="user@kubeast.io"
+              placeholder="user@example.com"
               className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
@@ -375,7 +389,7 @@ export default function AdminAudit() {
               }
               options={RESULTS.map((r) => ({
                 value: r,
-                label: r || tr('adminAudit.filter.any', '전체'),
+                label: r ? tr(`adminAudit.resultValue.${r}`, r) : tr('adminAudit.filter.any', '전체'),
               }))}
               minWidth="min-w-[140px]"
             />
@@ -393,32 +407,12 @@ export default function AdminAudit() {
 
           <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.since', '시작 시각')}
-            <input
-              type="datetime-local"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
-              value={draft.since ? draft.since.slice(0, 16) : ''}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  since: e.target.value ? new Date(e.target.value).toISOString() : undefined,
-                })
-              }
-            />
+            <DateTextInput withTime value={sinceText} onChange={setSinceText} testId="audit-filter-since" />
           </label>
 
           <label className="flex flex-col text-xs font-semibold text-slate-400">
             {tr('adminAudit.filter.until', '종료 시각')}
-            <input
-              type="datetime-local"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-white"
-              value={draft.until ? draft.until.slice(0, 16) : ''}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  until: e.target.value ? new Date(e.target.value).toISOString() : undefined,
-                })
-              }
-            />
+            <DateTextInput withTime value={untilText} onChange={setUntilText} testId="audit-filter-until" />
           </label>
 
           <label className="flex flex-col text-xs font-semibold text-slate-400">
@@ -435,7 +429,8 @@ export default function AdminAudit() {
         <div className="flex gap-2 mt-3">
           <button
             onClick={applyFilter}
-            className="inline-flex items-center gap-1 rounded-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white"
+            disabled={!rangeOk}
+            className="inline-flex items-center gap-1 rounded-sm bg-sky-600 hover:bg-sky-500 px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Search className="w-4 h-4" /> {tr('adminAudit.apply', '조회')}
           </button>
@@ -453,14 +448,15 @@ export default function AdminAudit() {
 
       {/* Table */}
       {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
-          table 의 min-w-[1100px] 로 컬럼이 너무 압축되지 않게 보장. */}
-      <div className="rounded-lg bg-slate-800/30 border border-slate-700 overflow-x-auto">
-        <table className="w-full min-w-[1100px] text-sm">
-          <thead className="bg-slate-800 text-slate-300">
+          table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
+      <div className="rounded-lg bg-slate-800/30 border border-slate-700">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[1000px] text-sm">
+          <thead className="bg-slate-800 text-slate-400">
             <tr>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.time', '시각')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.actor', '사용자')}</th>
-              <th className="px-3 py-2 text-left">{tr('adminAudit.col.service', 'Service')}</th>
+              <th className="px-3 py-2 text-left">{tr('adminAudit.col.service', 'Area')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.action', 'Action')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.target', '대상')}</th>
               <th className="px-3 py-2 text-left">{tr('adminAudit.col.namespace', 'Namespace')}</th>
@@ -479,7 +475,7 @@ export default function AdminAudit() {
             {!isLoading && items.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
-                  {tr('adminAudit.empty', '조건에 맞는 감사 로그가 없습니다')}
+                  {tr('common.noSearchResults', 'No results found.')}
                 </td>
               </tr>
             )}
@@ -497,30 +493,9 @@ export default function AdminAudit() {
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <button
-            onClick={() => goPage(page - 1)}
-            disabled={page <= 1}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
-          >
-            {tr('adminAudit.prev', '이전')}
-          </button>
-          <span className="text-slate-300">
-            {page} / {totalPages}
-          </span>
-          <button
-            onClick={() => goPage(page + 1)}
-            disabled={page >= totalPages}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
-          >
-            {tr('adminAudit.next', '다음')}
-          </button>
         </div>
-      )}
+        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={limit} onPageChange={goPage} showPageSize={false} testId="audit-pager" />
+      </div>
       {playing && <RecordingPlayerModal recordingId={playing.id} title={playing.title} onClose={() => setPlaying(null)} />}
     </div>
   )
@@ -547,7 +522,10 @@ interface AuditRowProps {
 function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
-  const targetDisplay = entry.TargetEmail || entry.TargetID || '-'
+  // kubectl's kind/name form: a bare ID such as a role's "589" says nothing without its type
+  const targetDisplay = entry.TargetEmail
+    || (entry.TargetID ? (entry.TargetType ? `${entry.TargetType}/${entry.TargetID}` : entry.TargetID) : entry.TargetType)
+    || '-'
   const recordingId = recordingIdOf(entry)
 
   return (
@@ -558,12 +536,12 @@ function AuditRow({ entry, expanded, onToggle, resultBadge, fmtTime, onPlay, pla
         }`}
         onClick={onToggle}
       >
-        <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{fmtTime(entry.CreatedAt)}</td>
-        <td className="px-3 py-2 text-slate-200">{entry.ActorEmail || '-'}</td>
-        <td className="px-3 py-2 text-slate-300">{entry.Service || '-'}</td>
+        <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(entry.CreatedAt)}>{fmtTime(entry.CreatedAt)}</td>
+        <td className="px-3 py-2 text-slate-200"><span className="block max-w-[170px] truncate" title={entry.ActorEmail || undefined}>{entry.ActorEmail || '-'}</span></td>
+        <td className="px-3 py-2 text-slate-300" title={entry.Service || undefined}>{entry.Service ? tr(`adminAudit.area.${entry.Service}`, entry.Service) : '-'}</td>
         <td className="px-3 py-2 font-mono text-xs text-slate-200">{entry.Action}</td>
-        <td className="px-3 py-2 text-slate-300">{targetDisplay}</td>
-        <td className="px-3 py-2 text-slate-400">{entry.Namespace || '-'}</td>
+        <td className="px-3 py-2 text-slate-300"><span className="block max-w-[190px] truncate" title={targetDisplay}>{targetDisplay}</span></td>
+        <td className="px-3 py-2 text-slate-400"><span className="block max-w-[120px] truncate" title={entry.Namespace || undefined}>{entry.Namespace || '-'}</span></td>
         <td className="px-3 py-2">
           {resultBadge(entry.Result || 'success')}
           {recordingId && (

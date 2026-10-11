@@ -3,6 +3,7 @@ import { ModelConfigResponse } from '@/services/api'
 import { getProvider, getModelLabel } from '@/constants/modelCatalog'
 import { Check, Pencil, Trash2, X, Radio } from 'lucide-react'
 import type { UseMutationResult } from '@tanstack/react-query'
+import { useConfirm } from '@/services/confirm'
 
 interface Props {
   cfg: ModelConfigResponse
@@ -23,6 +24,7 @@ export default function ModelConfigCard({
 }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fb: string, o?: Record<string, unknown>) => t(key, { defaultValue: fb, ...o })
+  const confirm = useConfirm()
   const provDef = getProvider(cfg.provider)
   const isActive = cfg.is_default && cfg.enabled
 
@@ -101,8 +103,14 @@ export default function ModelConfigCard({
             {isEditing ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
           </button>
           <button
-            onClick={() => {
-              if (confirm(tr('admin.aiModels.deleteConfirm', 'Delete "{{name}}"?', { name: cfg.name }))) onDelete(cfg.id)
+            onClick={async () => {
+              const ok = await confirm({
+                title: tr('admin.aiModels.deleteTitle', 'Delete model'),
+                message: tr('admin.aiModels.deleteConfirm', 'Delete model "{{name}}"?', { name: cfg.name }),
+                confirmLabel: tr('common.delete', 'Delete'),
+                danger: true,
+              })
+              if (ok) onDelete(cfg.id)
             }}
             className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
             title={tr('common.delete', 'Delete')}

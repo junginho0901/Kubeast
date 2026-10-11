@@ -7,32 +7,17 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'handler' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
 
 function normalizeWatchRuntimeClassObject(obj: any): RuntimeClassInfo {
   if (typeof obj?.name === 'string' && typeof obj?.handler === 'string' && typeof obj?.created_at === 'string') {
@@ -108,8 +93,7 @@ export default function RuntimeClasses() {
     queryKey: ['cluster', 'runtimeclasses'],
     queryFn: () => api.getRuntimeClasses(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.runtimeclass.create')
+  const canCreate = useCanCreate('resource.runtimeclass.create', { group: 'node.k8s.io', resource: 'runtimeclasses' })
 
   useKubeWatchList({
     enabled: true,
@@ -366,46 +350,13 @@ handler: runc
               )}
 
               {sortedRCs.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={3} resource="runtimeclasses">
-                  {tr('runtimeClasses.noResults', 'No runtime classes found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={3} resource="runtimeclasses" searching={!!searchQuery.trim()} />
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedRCs.length} columnCount={3} />
           </table>
         </div>
-        {sortedRCs.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedRCs.length),
-                total: sortedRCs.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedRCs.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
 
       {createDialogOpen && (

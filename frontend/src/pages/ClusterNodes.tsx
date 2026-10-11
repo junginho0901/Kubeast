@@ -6,7 +6,7 @@ import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
-import { usePermission } from '@/hooks/usePermission'
+import { useCanCreate } from '@/hooks/useCanCreate'
 import ResourceYamlCreateDialog from '@/components/ResourceYamlCreateDialog'
 import {
   nodeYamlTemplate,
@@ -39,8 +39,7 @@ export default function ClusterNodes() {
     queryKey: ['cluster', 'nodes'],
     queryFn: () => api.getNodes(false),
   })
-  const { has } = usePermission()
-  const canCreate = has('resource.node.create')
+  const canCreate = useCanCreate('resource.node.create', { group: '', resource: 'nodes' })
 
   useKubeWatchList({
     enabled: true,
@@ -157,7 +156,8 @@ export default function ClusterNodes() {
             <button
               type="button"
               onClick={() => setCreateDialogOpen(true)}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn btn-secondary flex items-center gap-2"
+              title={tr('common.controllerManaged', 'Kubernetes usually creates this object itself')}
             >
               <Plus className="w-4 h-4" />
               {tr('nodes.create', 'Create Node')}
@@ -182,7 +182,7 @@ export default function ClusterNodes() {
           placeholder={tr('nodes.searchPlaceholder', 'Search nodes by name...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -206,6 +206,7 @@ export default function ClusterNodes() {
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         onPageChange={setCurrentPage}
+        searching={!!searchQuery.trim()}
         tableContainerRef={tableContainerRef}
         tableBodyRef={tableBodyRef}
         theadRef={theadRef}

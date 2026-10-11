@@ -55,6 +55,7 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	showAll := payload.HasPermission(auth.PermClustersList)
 	accessibleOnly := r.URL.Query().Get("accessibleOnly") == "true"
 	if !accessibleOnly && !showAll {
+		recordDenied(h.auditStore, r, payload, auth.PermClustersList)
 		response.Error(w, http.StatusForbidden, "forbidden: requires "+auth.PermClustersList)
 		return
 	}
@@ -86,7 +87,7 @@ func (h *ClustersHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 
 // RegisterCluster handles POST /api/v1/clusters (mode: external | self).
 func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersCreate)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate)
 	if !ok {
 		return
 	}
@@ -121,11 +122,12 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, uid, err = probeKubeconfig(r, h.cfg, *req.Kubeconfig)
-		if err != nil {
-			response.Error(w, http.StatusBadRequest, "Connection test failed: "+err.Error())
+		probe, perr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
+		if perr != nil {
+			response.Error(w, http.StatusBadRequest, "Connection test failed: "+perr.Error())
 			return
 		}
+		uid = probe.UID
 		// Reject a kubeconfig that points at a cluster we already manage (same
 		// physical cluster under a different name) — matched by the kube-system
 		// namespace UID fingerprint.
@@ -136,7 +138,8 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
-		if req.APIServerURL != nil {
+		apiURL = probe.Server
+		if req.APIServerURL != nil && *req.APIServerURL != "" {
 			apiURL = *req.APIServerURL
 		}
 		meta, err = h.registry.AddExternal(r.Context(), req.DisplayName, *req.Kubeconfig, apiURL, uid, payload.Email, h.secrets)
@@ -179,7 +182,7 @@ func (h *ClustersHandler) RegisterCluster(w http.ResponseWriter, r *http.Request
 
 // DeleteCluster handles DELETE /api/v1/clusters/{id}.
 func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersDelete)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersDelete)
 	if !ok {
 		return
 	}
@@ -207,7 +210,7 @@ func (h *ClustersHandler) DeleteCluster(w http.ResponseWriter, r *http.Request) 
 
 // UpdateCluster handles PATCH /api/v1/clusters/{id} (display_name / api_server_url).
 func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersUpdate)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersUpdate)
 	if !ok {
 		return
 	}
@@ -241,11 +244,12 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 			response.Error(w, http.StatusBadRequest, verr.Error())
 			return
 		}
-		_, newUID, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
+		probe, verr := probeKubeconfig(r, h.cfg, *req.Kubeconfig)
 		if verr != nil {
 			response.Error(w, http.StatusBadRequest, "Connection test failed: "+verr.Error())
 			return
 		}
+		newUID := probe.UID
 		storedUID, _ := h.registry.ClusterUID(r.Context(), id)
 		if storedUID != "" && newUID != "" && storedUID != newUID {
 			response.Error(w, http.StatusConflict,
@@ -338,7 +342,7 @@ func (h *ClustersHandler) invalidateToolServer(r *http.Request, id cluster.ID) {
 // TestCluster handles POST /api/v1/clusters/{id}/test — re-validates a
 // registered cluster's connection and records the health result.
 func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
-	payload, ok := requirePerm(w, r, auth.PermClustersList)
+	payload, ok := requirePerm(h.auditStore, w, r, auth.PermClustersList)
 	if !ok {
 		return
 	}
@@ -362,6 +366,14 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 	if uerr := h.registry.UpdateHealth(r.Context(), id, status); uerr != nil {
 		slog.Warn("cluster: update health failed", "id", id, "err", uerr)
 	}
+	// Clusters registered without an API server address get the one the probe saw.
+	if result.Server != "" {
+		if meta, merr := h.registry.GetMeta(r.Context(), id); merr == nil && meta.APIServerURL == "" {
+			if _, uerr := h.registry.UpdateMeta(r.Context(), id, nil, &result.Server); uerr != nil {
+				slog.Warn("cluster: fill api server url failed", "id", id, "err", uerr)
+			}
+		}
+	}
 	h.audit(r, "admin.cluster.test", payload, string(id), nil, result, nil)
 	response.JSON(w, http.StatusOK, result)
 }
@@ -369,7 +381,7 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 // ValidateCluster handles POST /api/v1/clusters/validate — a pre-registration
 // connection test that writes nothing. Used by the "test connection" button.
 func (h *ClustersHandler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requirePerm(w, r, auth.PermClustersCreate); !ok {
+	if _, ok := requirePerm(h.auditStore, w, r, auth.PermClustersCreate); !ok {
 		return
 	}
 	var req model.ValidateClusterRequest
@@ -405,21 +417,21 @@ func (h *ClustersHandler) checkInfo(r *http.Request, info *cluster.Info) model.C
 		return model.ClusterConnectionResult{Healthy: true, Message: "in-cluster ServiceAccount"}
 	}
 	var (
-		ver string
-		err error
+		probe probeResult
+		err   error
 	)
 	switch {
 	case info.ID != "":
-		ver, _, err = probeCluster(r, h.cfg, info.ID)
+		probe, err = probeCluster(r, h.cfg, info.ID)
 	case info.KubeconfigBlob != "":
-		ver, _, err = probeKubeconfig(r, h.cfg, info.KubeconfigBlob)
+		probe, err = probeKubeconfig(r, h.cfg, info.KubeconfigBlob)
 	default:
 		return model.ClusterConnectionResult{Healthy: false, Message: "no kubeconfig available"}
 	}
 	if err != nil {
 		return model.ClusterConnectionResult{Healthy: false, Message: err.Error()}
 	}
-	return model.ClusterConnectionResult{Healthy: true, ServerVersion: ver}
+	return model.ClusterConnectionResult{Healthy: true, ServerVersion: probe.ServerVersion, Server: probe.Server}
 }
 
 // validateKubeconfigYAML performs the cheap structural checks (valid YAML with

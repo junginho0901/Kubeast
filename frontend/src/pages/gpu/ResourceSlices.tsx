@@ -6,7 +6,9 @@ import { api, type ResourceSliceItem } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAdaptiveTable } from '@/hooks/useAdaptiveTable'
+import { ageSeconds as parseAgeSeconds, formatAge } from '@/utils/time'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
@@ -14,23 +16,6 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
-
-function parseAgeSeconds(createdAt?: string | null): number {
-  if (!createdAt) return 0
-  const ms = new Date(createdAt).getTime()
-  if (!Number.isFinite(ms)) return 0
-  return Math.max(0, Math.floor((Date.now() - ms) / 1000))
-}
-
-function formatAge(createdAt?: string | null): string {
-  const sec = parseAgeSeconds(createdAt)
-  const d = Math.floor(sec / 86400)
-  const h = Math.floor((sec % 86400) / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
 
 function normalizeWatchResourceSliceObject(obj: any): ResourceSliceItem {
   if (
@@ -317,7 +302,7 @@ export default function ResourceSlices() {
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('node')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.node', 'Node')}{renderSortIcon('node')}</span>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
+                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
                   <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.driver', 'Driver')}{renderSortIcon('driver')}</span>
                 </th>
                 <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('pool')}>
@@ -344,7 +329,7 @@ export default function ResourceSlices() {
                 >
                   <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.node_name ?? '-'}</span></td>
-                  <td className="col-low py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
+                  <td className="col-optional py-3 px-4 text-xs"><span className="block truncate">{item.driver_name ?? '-'}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.pool_name ?? '-'}</span></td>
                   <td className="py-3 px-4 text-xs">{item.device_count ?? 0}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(item.created_at)}</td>
@@ -363,45 +348,14 @@ export default function ResourceSlices() {
               )}
 
               {sortedResourceSlices.length === 0 && !isLoading && (
-                <TableEmptyRow colSpan={6} resource="resourceslices">
-                  {tr('resourceSlicesPage.noResults', 'No resource slices found.')}
-                </TableEmptyRow>
+                <TableEmptyRow colSpan={6} resource="resourceslices" searching={!!searchQuery.trim()} />
               )}
             </tbody>
               <AdaptiveTableFillerRows count={rowsPerPage - pagedResourceSlices.length} columnCount={6} />
           </table>
         </div>
 
-        {sortedResourceSlices.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-            <div className="text-xs text-slate-400">
-              {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-                start: (currentPage - 1) * rowsPerPage + 1,
-                end: Math.min(currentPage * rowsPerPage, sortedResourceSlices.length),
-                total: sortedResourceSlices.length,
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[72px] text-center">{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-              >
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedResourceSlices.length} rowsPerPage={rowsPerPage} onPageChange={setCurrentPage} />
       </div>
     </div>
   )

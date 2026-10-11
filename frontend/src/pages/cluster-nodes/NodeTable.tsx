@@ -1,6 +1,7 @@
 import { RefObject } from 'react'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
@@ -18,6 +19,7 @@ interface Props {
   totalPages: number
   rowsPerPage: number
   onPageChange: (page: number) => void
+  searching?: boolean
   tableContainerRef: RefObject<HTMLDivElement | null>
   tableBodyRef: RefObject<HTMLDivElement | null>
   theadRef: RefObject<HTMLTableSectionElement | null>
@@ -38,6 +40,7 @@ export default function NodeTable({
   totalPages,
   rowsPerPage,
   onPageChange,
+  searching,
   tableContainerRef,
   tableBodyRef,
   theadRef,
@@ -60,25 +63,25 @@ export default function NodeTable({
         <table className="w-full text-sm min-w-[980px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => onSort('name')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.name', 'Name')}{renderSortIcon('name')}</span>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('status')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.status', 'Status')}{renderSortIcon('status')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('roles')}>
+              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('roles')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.roles', 'Roles')}{renderSortIcon('roles')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('cpu')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('cpu')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.cpu', 'CPU')}{renderSortIcon('cpu')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => onSort('memory')}>
+              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('memory')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.memory', 'Memory')}{renderSortIcon('memory')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => onSort('version')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('version')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.version', 'Version')}{renderSortIcon('version')}</span>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('internal_ip')}>
+              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('internal_ip')}>
                 <span className="inline-flex items-center gap-1">{tr('nodes.table.internalIp', 'Internal IP')}{renderSortIcon('internal_ip')}</span>
               </th>
               <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('external_ip')}>
@@ -113,7 +116,7 @@ export default function NodeTable({
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.version || '-'}</span></td>
                   <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{node.internal_ip || '-'}</span></td>
                   <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{node.external_ip || '-'}</span></td>
-                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.age)}</span></td>
+                  <td className="col-low py-3 px-4 text-xs font-mono"><span className="block truncate">{formatAge(node.created_at)}</span></td>
                 </tr>
               )
             })}
@@ -130,46 +133,13 @@ export default function NodeTable({
             )}
 
             {sortedNodesCount === 0 && !isLoadingNodes && (
-              <TableEmptyRow colSpan={9} resource="nodes">
-                {tr('nodes.noResults', 'No nodes found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={9} resource="nodes" searching={searching} />
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedNodes.length} columnCount={9} />
         </table>
       </div>
-      {sortedNodesCount > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedNodesCount),
-              total: sortedNodesCount,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedNodesCount} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }

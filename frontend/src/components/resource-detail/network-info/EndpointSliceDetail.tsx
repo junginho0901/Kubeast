@@ -11,7 +11,7 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
-function renderConditionBadge(label: string, value: unknown) {
+function ConditionBadge({ label, value }: { label: string; value: unknown }) {
   const isOn = value === true
   const isUnknown = value == null
   const cls = isUnknown
@@ -19,8 +19,7 @@ function renderConditionBadge(label: string, value: unknown) {
     : isOn
       ? 'border-emerald-700/60 bg-emerald-900/20 text-emerald-300'
       : 'border-amber-700/60 bg-amber-900/20 text-amber-300'
-  const text = isUnknown ? 'Unknown' : isOn ? 'True' : 'False'
-  return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: {text}</span>
+  return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: <Tx>{isUnknown ? 'Unknown' : isOn ? 'Yes' : 'No'}</Tx></span>
 }
 
 export default function EndpointSliceDetail({ name, namespace, rawJson }: Props) {
@@ -117,9 +116,9 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                     </div>
                   )}
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    {renderConditionBadge('Ready', ep?.conditions?.ready)}
-                    {renderConditionBadge('Serving', ep?.conditions?.serving)}
-                    {renderConditionBadge('Terminating', ep?.conditions?.terminating)}
+                    <ConditionBadge label="Ready" value={ep?.conditions?.ready} />
+                    <ConditionBadge label="Serving" value={ep?.conditions?.serving} />
+                    <ConditionBadge label="Terminating" value={ep?.conditions?.terminating} />
                   </div>
                 </div>
               )

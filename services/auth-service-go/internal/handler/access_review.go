@@ -56,12 +56,7 @@ func (h *AuthHandler) requireAccessReview(w http.ResponseWriter, r *http.Request
 		response.Error(w, http.StatusNotFound, "Access review is disabled")
 		return auth.TokenPayload{}, false
 	}
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission(permission) {
-		response.Error(w, http.StatusForbidden, "Permission denied")
-		return auth.TokenPayload{}, false
-	}
-	return payload, true
+	return requirePerm(h.auditStore, w, r, permission)
 }
 
 // touchLastLogin records a successful sign-in on the account (best effort).

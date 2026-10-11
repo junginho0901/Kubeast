@@ -1,6 +1,7 @@
 import { RefObject } from 'react'
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatRelative, getStatusColor } from './namespaceHelpers'
 import type { NamespaceInfo, SortKey, SortDir } from './namespaceHelpers'
@@ -70,7 +71,7 @@ export default function NamespaceTable({
                   {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
                 </span>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[30%]">
+              <th className="col-optional text-left py-3 px-4 w-[30%]">
                 {tr('namespaces.table.labels', 'Labels')}
               </th>
               <th className="col-low text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('age')}>
@@ -82,7 +83,8 @@ export default function NamespaceTable({
           </thead>
           <tbody className="divide-y divide-slate-700">
             {pagedNamespaces.map((ns, idx) => {
-              const labelEntries = ns.labels ? Object.entries(ns.labels) : []
+              // kubernetes.io/metadata.name is set on every namespace and always equals its name
+              const labelEntries = ns.labels ? Object.entries(ns.labels).filter(([k]) => k !== 'kubernetes.io/metadata.name') : []
               return (
                 <tr
                   ref={idx === 0 ? firstRowRef : undefined}
@@ -96,16 +98,16 @@ export default function NamespaceTable({
                   <td className="py-3 px-4">
                     <span className={`badge ${getStatusColor(ns.status)}`}>{ns.status}</span>
                   </td>
-                  <td className="col-low py-3 px-4 text-xs">
+                  <td className="col-optional py-3 px-4 text-xs">
                     <div className="flex flex-nowrap items-center gap-1 max-w-full overflow-hidden min-w-0 whitespace-nowrap">
                       {labelEntries.length > 0
                         ? labelEntries.slice(0, 2).map(([k, v]) => (
                             <span
                               key={k}
                               className="inline-block rounded-full border border-slate-700 bg-slate-800/80 px-2 py-0.5 text-slate-300 truncate max-w-[160px]"
-                              title={`${k}: ${v}`}
+                              title={`${k}=${v}`}
                             >
-                              {k}
+                              {`${k}=${v}`}
                             </span>
                           ))
                         : <span className="text-slate-500">-</span>}
@@ -133,48 +135,13 @@ export default function NamespaceTable({
             )}
 
             {sortedNamespacesCount === 0 && !isLoadingNs && (
-              <TableEmptyRow colSpan={4} resource="namespaces">
-                {searchQuery
-                  ? tr('namespaces.noSearchResults', 'No results found')
-                  : tr('namespaces.empty', 'No namespaces found')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={4} resource="namespaces" searching={!!searchQuery.trim()} />
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedNamespaces.length} columnCount={4} />
         </table>
       </div>
-      {sortedNamespacesCount > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedNamespacesCount),
-              total: sortedNamespacesCount,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedNamespacesCount} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }

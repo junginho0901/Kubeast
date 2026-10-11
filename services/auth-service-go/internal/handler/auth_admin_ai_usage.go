@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -17,9 +16,8 @@ import (
 // Defaults: since = now-30d, until = now, group = user. Requires
 // admin.audit.read and, like the audit-log list, records the read itself.
 func (h *AuthHandler) AdminAIUsage(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.audit.read") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.audit.read")
+	if !ok {
 		return
 	}
 

@@ -8,6 +8,7 @@ import type { LimitRangeInfo } from '@/services/api'
 import { useTranslation, Trans } from 'react-i18next'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
+import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import {
   getLimitTypes,
@@ -27,6 +28,7 @@ interface LimitRangeTableProps {
   totalPages: number
   rowsPerPage: number
   onPageChange: (page: number) => void
+  searching?: boolean
   onOpenDetail: (item: LimitRangeInfo) => void
   containerRef: React.RefObject<HTMLDivElement | null>
   bodyRef: React.RefObject<HTMLDivElement | null>
@@ -46,6 +48,7 @@ export function LimitRangeTable({
   totalPages,
   rowsPerPage,
   onPageChange,
+  searching,
   onOpenDetail,
   containerRef,
   bodyRef,
@@ -103,7 +106,7 @@ export function LimitRangeTable({
               >
                 <td className="py-3 px-4 font-medium text-white"><span className="block truncate">{lr.name}</span></td>
                 {showNamespaceColumn && (
-                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400">{lr.namespace}</td>
+                  <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={lr.namespace}>{lr.namespace}</td>
                 )}
                 <td className="py-3 px-4 text-xs font-mono"><span className="block truncate">{getLimitTypes(lr)}</span></td>
                 <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(lr.created_at)}</td>
@@ -122,46 +125,13 @@ export function LimitRangeTable({
             )}
 
             {sortedLimitRangesLength === 0 && !isLoading && (
-              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="limitranges">
-                {tr('limitRanges.noResults', 'No limit ranges found.')}
-              </TableEmptyRow>
+              <TableEmptyRow colSpan={showNamespaceColumn ? 4 : 3} resource="limitranges" searching={searching} />
             )}
           </tbody>
           <AdaptiveTableFillerRows count={rowsPerPage - pagedLimitRanges.length} columnCount={3 + (showNamespaceColumn ? 1 : 0)} />
         </table>
       </div>
-      {sortedLimitRangesLength > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 shrink-0">
-          <div className="text-xs text-slate-400">
-            {tr('common.paginationRange', 'Showing {{start}}-{{end}} of {{total}}', {
-              start: (currentPage - 1) * rowsPerPage + 1,
-              end: Math.min(currentPage * rowsPerPage, sortedLimitRangesLength),
-              total: sortedLimitRangesLength,
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.prev', 'Prev')}
-            </button>
-            <span className="text-xs text-slate-300 min-w-[72px] text-center">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500"
-            >
-              {tr('common.next', 'Next')}
-            </button>
-          </div>
-        </div>
-      )}
+      <ListPager currentPage={currentPage} totalPages={totalPages} total={sortedLimitRangesLength} rowsPerPage={rowsPerPage} onPageChange={onPageChange} />
     </div>
   )
 }

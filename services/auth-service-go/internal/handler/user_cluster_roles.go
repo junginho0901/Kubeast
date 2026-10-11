@@ -159,12 +159,7 @@ func (h *AuthHandler) endApprovedRequests(r *http.Request, userID, clusterID, re
 
 // requireClusterRoleAdmin gates the cluster-role endpoints on admin.users.update.
 func (h *AuthHandler) requireClusterRoleAdmin(w http.ResponseWriter, r *http.Request) (auth.TokenPayload, bool) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.users.update") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
-		return auth.TokenPayload{}, false
-	}
-	return payload, true
+	return requirePerm(h.auditStore, w, r, "admin.users.update")
 }
 
 // auditClusterRole records a user.cluster_role.set/.unset entry with the cluster

@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
@@ -31,9 +30,8 @@ func (h *AuthHandler) ListOrganizations(w http.ResponseWriter, r *http.Request) 
 
 // AdminCreateOrganization handles POST /auth/admin/organizations
 func (h *AuthHandler) AdminCreateOrganization(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.organizations.create") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.organizations.create")
+	if !ok {
 		return
 	}
 
@@ -74,9 +72,8 @@ func (h *AuthHandler) AdminCreateOrganization(w http.ResponseWriter, r *http.Req
 
 // AdminDeleteOrganization handles DELETE /auth/admin/organizations/{id}
 func (h *AuthHandler) AdminDeleteOrganization(w http.ResponseWriter, r *http.Request) {
-	payload, ok := auth.FromContext(r.Context())
-	if !ok || !payload.HasPermission("admin.organizations.delete") {
-		response.Error(w, http.StatusForbidden, "Permission denied")
+	payload, ok := requirePerm(h.auditStore, w, r, "admin.organizations.delete")
+	if !ok {
 		return
 	}
 

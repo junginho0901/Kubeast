@@ -18,6 +18,7 @@ import {
 import { applyReplicaSetWatchEvent } from './replicasets/replicaSetWatchNormalize'
 import { ReplicaSetFilters } from './replicasets/ReplicaSetFilters'
 import { ReplicaSetTable } from './replicasets/ReplicaSetTable'
+import { workloadStatusText } from '@/utils/workloadStatus'
 
 export default function ReplicaSets() {
   const queryClient = useQueryClient()
@@ -65,19 +66,20 @@ export default function ReplicaSets() {
     if (!Array.isArray(replicasets)) return [] as ReplicaSetInfo[]
     if (!searchQuery.trim()) return replicasets
     const q = searchQuery.toLowerCase()
+    const label = (k: string, f: string) => t(k, { defaultValue: f })
     return replicasets.filter((rs) => {
       const imagesText = (rs.images || []).join(',')
-      const containersText = (rs.container_names || []).join(',')
+      const containersText = (rs.containers || []).join(',')
       const selectorText = Object.entries(rs.selector || {}).map(([k, v]) => `${k}=${v}`).join(',')
       return rs.name.toLowerCase().includes(q)
         || rs.namespace.toLowerCase().includes(q)
-        || (rs.owner || '').toLowerCase().includes(q)
-        || (rs.status || '').toLowerCase().includes(q)
+        || (rs.owner_deployment || '').toLowerCase().includes(q)
+        || workloadStatusText(label, rs.status).includes(q)
         || imagesText.toLowerCase().includes(q)
         || containersText.toLowerCase().includes(q)
         || selectorText.toLowerCase().includes(q)
     })
-  }, [replicasets, searchQuery])
+  }, [replicasets, searchQuery, t])
 
   const summary = useMemo(() => {
     const total = filteredReplicaSets.length
@@ -120,7 +122,7 @@ export default function ReplicaSets() {
         case 'status':
           return rs.status || ''
         case 'containers':
-          return (rs.container_names || []).join(',')
+          return (rs.containers || []).join(',')
         case 'images':
           return (rs.images || []).join(',')
         case 'selector':
@@ -182,7 +184,7 @@ export default function ReplicaSets() {
           currentPage,
           pageSize: rowsPerPage,
           topN: rowsPerPage,
-          pickFields: ['name', 'namespace', 'replicas', 'ready_replicas', 'available_replicas', 'owner', 'status'],
+          pickFields: ['name', 'namespace', 'replicas', 'current_replicas', 'ready_replicas', 'available_replicas', 'owner_deployment', 'status'],
           linkBuilder: (r) => {
             const rs = r as unknown as ReplicaSetInfo
             return buildResourceLink('ReplicaSet', rs.namespace, rs.name)
@@ -322,6 +324,7 @@ spec:
         setSortDir={setSortDir}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
+        searching={!!searchQuery.trim()}
         totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         tableContainerRef={tableContainerRef}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -92,7 +93,7 @@ const clusterProbeTimeout = 10 * time.Second
 // credential plugin a kubeconfig may name runs here, where the pod's cloud
 // identity (IRSA) lives — auth-service holds neither the binary nor a role.
 //
-//	POST /internal/clusters/validate {"kubeconfig": "..."} → {"server_version": "...", "uid": "..."}
+//	POST /internal/clusters/validate {"kubeconfig": "..."} → {"server_version": "...", "uid": "...", "server": "https://…"}
 //
 // Internal-only (NOT gateway-routed); the caller must hold a cluster
 // registration permission.
@@ -113,18 +114,22 @@ func (h *Handler) ValidateKubeconfig(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "kubeconfig required")
 		return
 	}
-	ver, uid, err := h.svc.ProbeKubeconfig(r.Context(), req.Kubeconfig, clusterProbeTimeout)
+	res, err := h.svc.ProbeKubeconfig(r.Context(), req.Kubeconfig, clusterProbeTimeout)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, map[string]string{"server_version": ver, "uid": uid})
+	response.JSON(w, http.StatusOK, probeBody(res))
+}
+
+func probeBody(res k8s.ProbeResult) map[string]string {
+	return map[string]string{"server_version": res.Version, "uid": res.UID, "server": res.Server}
 }
 
 // ValidateCluster probes a registered cluster from its stored connection
 // details. Gated like the kubeconfig read.
 //
-//	POST /internal/clusters/{id}/validate → {"server_version": "...", "uid": "..."}
+//	POST /internal/clusters/{id}/validate → {"server_version": "...", "uid": "...", "server": "https://…"}
 func (h *Handler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	payload, ok := auth.FromContext(r.Context())
@@ -136,7 +141,7 @@ func (h *Handler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusForbidden, "forbidden: no access to cluster "+id)
 		return
 	}
-	ver, uid, err := h.svc.ProbeCluster(r.Context(), cluster.ID(id), clusterProbeTimeout)
+	res, err := h.svc.ProbeCluster(r.Context(), cluster.ID(id), clusterProbeTimeout)
 	if errors.Is(err, cluster.ErrNotFound) {
 		response.Error(w, http.StatusNotFound, "cluster not found")
 		return
@@ -145,7 +150,7 @@ func (h *Handler) ValidateCluster(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, map[string]string{"server_version": ver, "uid": uid})
+	response.JSON(w, http.StatusOK, probeBody(res))
 }
 
 var errForbiddenKubeconfig = forbiddenKubeconfigErr{}

@@ -31,6 +31,7 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
 
     await expect(page.getByPlaceholder(/Search pod name|Pod 이름/i)).toBeVisible()
     await expect(page.getByRole('button', { name: /All namespaces|모든 Namespace/i })).toBeVisible()
+    await expect(page).toHaveTitle(/^Cluster View · Kubeast$/)
 
     assertNoCriticalErrors(errors)
   })
@@ -45,15 +46,18 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
       test.skip(true, 'Pod 카드 없음')
       return
     }
+    const podName = await firstPodButton.locator('[title]').first().getAttribute('title')
     await firstPodButton.click()
 
     // 모달 mount — ModalOverlay 안의 close X 버튼이 보이면 모달 열렸음
     const modalCloseBtn = page.locator('button').filter({ has: page.locator('svg.lucide-x.w-5') }).first()
     await expect(modalCloseBtn).toBeVisible({ timeout: 10000 })
+    // the modal is the pod that was clicked (the node cards have h2 titles too)
+    await expect(page.locator('h2.text-xl').filter({ hasText: podName! })).toHaveCount(1)
 
-    // Logs 탭 default 표시
+    // Logs 탭 default 표시 — the selected tab
     const logsTab = page.locator('button').filter({ hasText: /^Logs$|^로그$/i }).first()
-    await expect(logsTab).toBeVisible()
+    await expect(logsTab).toHaveClass(/border-primary-400/)
 
     // ESC close — modal 의 X 버튼이 hidden 되어야
     await page.keyboard.press('Escape')
@@ -76,11 +80,12 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
 
     // Summary → Describe → Manifest → RBAC → Summary 순회. selectTab 단일 setter 가
     // 5 boolean 을 동시 reset 안 하면 두 탭이 동시 active 됨 → exclusive 확인.
-    for (const tabName of ['Summary', 'Describe', 'Manifest', 'RBAC']) {
-      const tabBtn = page.locator('button').filter({ hasText: new RegExp(`^${tabName}$`, 'i') }).first()
-      if ((await tabBtn.count()) === 0) continue
+    for (const tabName of ['Summary|요약', 'Describe', 'Manifest|매니페스트', 'RBAC', 'Summary|요약']) {
+      const tabBtn = page.locator('button').filter({ hasText: new RegExp(`^(${tabName})$`, 'i') }).first()
       await tabBtn.click()
-      await page.waitForTimeout(300)
+      // exactly one tab is selected, the one clicked
+      await expect(tabBtn).toHaveClass(/border-primary-400/)
+      await expect(page.locator('button[class*="border-primary-400"]')).toHaveCount(1)
     }
 
     await page.keyboard.press('Escape')
@@ -106,8 +111,9 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
     await opt.click()
     await page.waitForTimeout(500)
 
-    // 버튼 텍스트 변경 확인
-    await expect(page.getByRole('button', { name: /^default$/ }).first()).toBeVisible()
+    // 버튼 텍스트 변경 확인 — the picker reads default and its option list is closed
+    await expect(page.getByRole('button', { name: /^default$/ }).first()).toHaveText('default')
+    await expect(page.locator('button').filter({ hasText: /^kube-system$/ })).toHaveCount(0)
 
     assertNoCriticalErrors(errors)
   })
@@ -138,6 +144,7 @@ test.describe('ClusterView refactor — Context / hook 분리 회귀', () => {
     await page.goto('/cluster-view')
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('heading', { name: /클러스터 뷰|Cluster view/i })).toBeVisible({ timeout: 10000 })
+    await expect(page).toHaveTitle(/^Cluster View · Kubeast$/)
 
     assertNoCriticalErrors(errors)
   })
