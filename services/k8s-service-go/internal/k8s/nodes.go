@@ -284,7 +284,7 @@ func (s *Service) ApplyNodeYAML(ctx context.Context, name string, yamlStr string
 		return fmt.Errorf("update node %s: %w", name, err)
 	}
 
-	s.cache.Delete(ctx, s.clusterCacheKey(ctx, fmt.Sprintf("yaml|nodes||%s", name)))
+	s.dropCached(ctx, fmt.Sprintf("yaml|nodes||%s", name))
 	return nil
 }
 

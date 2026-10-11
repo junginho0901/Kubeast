@@ -2,11 +2,8 @@ package helm
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"helm.sh/helm/v3/pkg/action"
@@ -22,15 +19,11 @@ import (
 const listCacheTTL = 30 * time.Second
 
 // listCacheKey scopes the cached list by cluster and by the identity the list
-// was read as: the cluster decides what a user may see, so one user's list
-// must never be served to another. The identity is hashed so the key carries
-// no user data.
+// was read as (auth.TokenPayload.CacheIdentity).
 func listCacheKey(ctx context.Context, clusterID, namespace, status string) string {
 	actor := ""
 	if p, ok := auth.FromContext(ctx); ok {
-		user, groups := p.Impersonation(clusterID)
-		sum := sha256.Sum256([]byte(user + "|" + strings.Join(groups, ",")))
-		actor = hex.EncodeToString(sum[:8])
+		actor = p.CacheIdentity(clusterID)
 	}
 	return fmt.Sprintf("helm|releases|%s|%s|%s|%s", clusterID, actor, namespace, status)
 }

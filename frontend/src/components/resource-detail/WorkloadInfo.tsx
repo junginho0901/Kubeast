@@ -92,6 +92,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
         isJob={isJob}
         isCronJob={isCronJob}
         isDaemonSet={isDaemonSet}
+        isReplicaSet={isReplicaSet}
         replicaView={replicaView}
         daemonSetStatus={daemonSetStatus}
         promWorkloadMetrics={promWorkloadMetrics}

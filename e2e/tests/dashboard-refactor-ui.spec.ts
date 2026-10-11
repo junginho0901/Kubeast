@@ -37,6 +37,8 @@ test.describe('Dashboard refactor — UI verification', () => {
     for (const label of ['Namespaces', 'Pods', 'Services', 'Deployments', 'PVCs', 'Nodes']) {
       const card = page.locator('button.card').filter({ hasText: label }).first()
       await expect(card, `StatsGrid card ${label} 가 안 보임`).toBeVisible()
+      // each card carries its count
+      await expect(card).toContainText(/\d+/)
     }
 
     // Pods 카드 클릭 → ResourceModal h2 'Pods' 로 열림
@@ -67,6 +69,7 @@ test.describe('Dashboard refactor — UI verification', () => {
     // 4 metric 중 하나라도 % 표기가 보여야 함
     const anyPercent = page.locator('span.font-mono').filter({ hasText: /%/ }).first()
     await expect(anyPercent).toBeVisible({ timeout: 5000 })
+    await expect(anyPercent).toHaveText(/\d+(\.\d+)?\s*%/)
 
     assertNoCriticalErrors(errors)
   })
@@ -89,6 +92,9 @@ test.describe('Dashboard refactor — UI verification', () => {
     const totalBadge = page.locator('.badge.badge-info').first()
     const empty = page.getByText(/No issues|문제\s*없음/i).first()
     await expect(totalBadge.or(empty).first()).toBeVisible({ timeout: 5000 })
+    // the issues API answered and the modal shows its count
+    const issues = await (await page.request.get('/api/v1/cluster/issues')).json().catch(() => null)
+    if (issues && Array.isArray(issues.issues) && issues.issues.length > 0) await expect(totalBadge).toHaveText(/^\d+$/)
 
     // 'Include restart history' 토글이 보여야 함 — useDashboardIssues 가 prop 받는 증거
     const restartToggle = page.locator('text=/Restart history|재시작 기록/i').first()
@@ -118,6 +124,7 @@ test.describe('Dashboard refactor — UI verification', () => {
     // PVC count badge — useDashboardStorage 의 sortedPVCsForStorage.length
     const pvcCountIndicator = page.locator('text=/PVC\\s*\\d+/i').first()
     await expect(pvcCountIndicator).toBeVisible({ timeout: 5000 })
+    await expect(pvcCountIndicator).toContainText(/PVC\s*\d+/i)
 
     // tab 전환: PVCs → PVs → Topology — 각 전환 시 hook 재호출
     const pvsTab = page.locator('button').filter({ hasText: /^PVs$|^PV$/i }).first()
@@ -150,14 +157,12 @@ test.describe('Dashboard refactor — UI verification', () => {
 
     // openOptimizationModal 의 preferred namespace 로직 (default → 첫번째) →
     // dropdown 버튼에 namespace 명이 표시되어야 함 ('Select namespace' 가 아닌)
-    await page.waitForTimeout(1500)  // useEffect 의 setOptimizationNamespace 가 적용될 시간
+    const nsPicker = page.locator('button[title="Select namespace"], button[title="Namespace 선택"]').first()
+    await expect(nsPicker).not.toHaveText(/^\s*(Select namespace|Namespace 선택)\s*$/, { timeout: 5000 })
+    await expect(nsPicker).toHaveText(/\S/)
 
-    // close 버튼 (X)
-    const closeBtn = page.locator('button[aria-label="Close"], button:has(svg)').filter({ hasText: /^$|×/i }).first()
-    // ESC 가 안전
     await page.keyboard.press('Escape')
-    await page.waitForTimeout(500)
-    // Optimization 모달은 ESC 처리가 다를 수 있음 — 그래도 critical error 만 없으면 OK
+    await expect(modalTitle).toHaveCount(0, { timeout: 3000 })
 
     assertNoCriticalErrors(errors)
   })
@@ -170,13 +175,15 @@ test.describe('Dashboard refactor — UI verification', () => {
     const modalTitle = page.locator('h2').filter({ hasText: /^Pods$/ }).first()
     await expect(modalTitle).toBeVisible({ timeout: 10000 })
 
-    // 검색 input — modalSearchQuery state update + getFilteredResources 재계산
-    const searchInput = page.locator('input[type="text"], input[type="search"]').filter({ hasNot: page.locator('[autocomplete="email"]') }).first()
-    if ((await searchInput.count()) > 0) {
-      await searchInput.fill('a').catch(() => {})
-      await page.waitForTimeout(300)
-      await searchInput.fill('').catch(() => {})
-    }
+    // 검색 input — modalSearchQuery state update + getFilteredResources 재계산: nothing matches, then all come back
+    const searchInput = page.getByPlaceholder(/^(Search\.\.\.|검색\.\.\.)$/).last()
+    const cards = page.locator('div.p-4.bg-slate-700.rounded-lg.cursor-pointer')
+    await expect(cards.first()).toBeVisible({ timeout: 10000 })
+    const all = await cards.count()
+    await searchInput.fill('zz-no-such-pod-9c')
+    await expect(cards).toHaveCount(0)
+    await searchInput.fill('')
+    await expect(cards).toHaveCount(all)
 
     // ESC close
     await page.keyboard.press('Escape')
@@ -192,16 +199,13 @@ test.describe('Dashboard refactor — UI verification', () => {
     const podStatusH2 = page.locator('h2, h3').filter({ hasText: /Pod status|Pod\s*상태/i }).first()
     await expect(podStatusH2).toBeVisible({ timeout: 10000 })
 
-    // chart 의 첫번째 bar (Running phase) — recharts 의 Bar 는 svg path
-    const firstBar = page.locator('.recharts-bar-rectangle, [class*="recharts"] rect').first()
-    if ((await firstBar.count()) === 0) {
-      test.skip(true, 'recharts bar 못 찾음 — selector 변경 필요')
-      return
-    }
-    await firstBar.click({ force: true }).catch(() => {})
-    await page.waitForTimeout(500)
+    // chart 의 첫번째 bar (Running phase) — Iso3DChart: a clickable <g> per bar
+    const firstBar = page.locator('div').filter({ has: podStatusH2 }).locator('svg g[style*="cursor: pointer"]').first()
+    await expect(firstBar).toHaveCount(1, { timeout: 10000 })
+    await firstBar.click({ force: true })
 
-    // 핵심은 page error 안 나는 것 (handlePodStatusClick → setSelectedPodStatus + setSelectedResourceType)
+    // handlePodStatusClick → setSelectedPodStatus + setSelectedResourceType: the Pods modal opens
+    await expect(page.locator('h2').filter({ hasText: /Pods/ })).not.toHaveCount(0, { timeout: 5000 })
     assertNoCriticalErrors(errors)
   })
 
@@ -210,8 +214,9 @@ test.describe('Dashboard refactor — UI verification', () => {
 
     const refresh = page.getByRole('button', { name: /refresh|새로고침/i })
     await expect(refresh).toBeVisible()
+    const refetch = page.waitForResponse((r) => r.url().includes('/api/v1/cluster/overview') && r.url().includes('force_refresh=true'))
     await refresh.click()
-    await page.waitForTimeout(1000)
+    expect((await refetch).status()).toBe(200)
 
     // 재조회 후에도 page 가 살아있어야 함
     await expect(page.locator('h1.text-3xl').first()).toBeVisible()

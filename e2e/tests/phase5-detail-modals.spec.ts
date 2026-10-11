@@ -1,182 +1,125 @@
-import { test, expect, Page } from '@playwright/test'
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
-// Phase 5 detail 모달 강화 + wsMultiplexer fix + 페이지네이션 시각 검증.
+import { test, expect, type Page } from '@playwright/test'
 
-async function selectNamespace(page: Page, ns: string) {
-  // Sidebar/top namespace dropdown — 'All namespaces' default 버튼 클릭 후 ns 선택
-  const dropdown = page.getByRole('button', { name: /All namespaces|모든 네임스페이스|namespace/i }).first()
-  if ((await dropdown.count()) === 0) return
-  await dropdown.click()
-  await page.getByText(ns, { exact: true }).first().click({ timeout: 5000 }).catch(() => {})
-  await page.waitForTimeout(500)
+// Phase 5 detail 모달 강화 + wsMultiplexer fix + 페이지네이션.
+// Each drawer is opened on `self` (the kind cluster itself) and its counts are compared with what kubectl reads
+// from the same cluster.
+
+function kubectlFor(kindName: string) {
+  const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
+  const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-phase5-')), 'kubeconfig')
+  fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
+  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 }).trim()
+}
+const kubectl = kubectlFor('kubeast')
+
+const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+
+type Pod = { metadata: { name: string }; spec: Record<string, any> }
+const pods = (ns: string): Pod[] => JSON.parse(kubectl(`-n ${ns} get pods -o json`)).items
+
+// The list on `self` once its rows are in, searched for `name`; the drawer of that row (in `namespace` when given).
+async function openDrawer(page: Page, route: string, name: string, namespace?: string) {
+  await page.goto(`${route}${route.includes('?') ? '&' : '?'}cluster=self`)
+  await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 30000 })
+  const search = page.getByPlaceholder(/search|검색/i).first()
+  if (await search.count()) await search.fill(name)
+  let row = page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name, exact: true }) })
+  if (namespace) row = row.filter({ has: page.locator(`td[title="${namespace}"]`) })
+  await row.first().getByRole('cell', { name, exact: true }).click({ timeout: 20000 })
+  const drawer = page.locator(DRAWER).last()
+  await expect(drawer).toContainText(name, { timeout: 20000 })
+  return drawer
 }
 
-async function waitTable(page: Page) {
-  // table render + 첫 row 도착까지
-  await page.waitForSelector('tbody tr', { timeout: 30000 }).catch(() => {})
-  await page.waitForTimeout(500)
+// "<label> (N)" in the drawer, once the watch-fed count has settled on `expected`
+async function expectCount(page: Page, label: string, expected: number) {
+  await expect(page.locator(DRAWER).last().locator(`text=/${label} \\(\\d+\\)/`).first()).toHaveText(new RegExp(`${label} \\(${expected}\\)`), { timeout: 30000 })
 }
 
 test.describe('Phase 5 — detail modal sections', () => {
 
-  test('5.2 + backend fix — Service Matching Pods 가 selector 매칭 Pod 만 (chatbot-db)', async ({ page }) => {
-    await page.goto('/network/services')
-    await page.waitForLoadState('networkidle')
-    await selectNamespace(page, 'clarinet')
-    await waitTable(page)
-
-    const targetRow = page.locator('tbody tr:has-text("chatbot-db")').first()
-    const hasService = (await targetRow.count()) > 0
-    test.skip(!hasService, 'chatbot-db Service 없음 (clarinet ns)')
-
-    await targetRow.click()
-    // describe + first watch tick 까지 충분히 대기 — 외부 클러스터 VPN latency 고려
-    const matchingSection = page.locator('text=/Matching Pods \\(\\d+\\)/').first()
-    await matchingSection.waitFor({ timeout: 45000 })
-    // ns Pod list + watch 이벤트 도착해서 count 안정될 시간
-    await page.waitForTimeout(2000)
-
-    const matchText = await matchingSection.innerText()
-    expect(matchText).toMatch(/Matching Pods \(1\)/)
+  test('5.2 + backend fix — Service Matching Pods 가 selector 매칭 Pod 만', async ({ page }) => {
+    const expected = pods('kubeast').filter((p) => p.metadata.name.startsWith('ai-service-')).length
+    test.skip(expected === 0, 'no ai-service pod on self')
+    await openDrawer(page, '/network/services', 'ai-service', 'kubeast')
+    await expectCount(page, 'Matching Pods', expected)
   })
 
   test('페이지네이션 — PriorityClass system-node-critical', async ({ page }) => {
-    await page.goto('/cluster/priorityclasses')
-    await page.waitForLoadState('networkidle')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("system-node-critical")').first()
-    test.skip((await row.count()) === 0, 'system-node-critical 없음')
-
-    await row.click()
+    await openDrawer(page, '/cluster/priorityclasses', 'system-node-critical')
     const usingSection = page.locator('text=/Used By Pods \\(\\d+\\)/').first()
     await usingSection.waitFor({ timeout: 15000 })
-    const text = await usingSection.innerText()
-    const total = parseInt(text.match(/\((\d+)\)/)?.[1] ?? '0', 10)
+    const total = parseInt((await usingSection.innerText()).match(/\((\d+)\)/)?.[1] ?? '0', 10)
     test.skip(total <= 10, `Pods ${total}개 → 페이지네이션 무의미`)
 
     await expect(page.locator(`text=/1-10 \\/ ${total}/`).first()).toBeVisible()
     await page.locator('button:has-text("Next")').first().click()
-    await page.waitForTimeout(200)
-    await expect(page.locator(`text=/11-/`).first()).toBeVisible()
+    // the next page of the pods
+    await expect(page.locator(`text=/11-\\d+ \\/ ${total}/`).first()).toContainText(`11-${Math.min(20, total)} / ${total}`)
   })
 
   test('5.4 — ConfigMap kube-root-ca.crt Used By Pods', async ({ page }) => {
-    await page.goto('/configuration/configmaps')
-    await page.waitForLoadState('networkidle')
-    await selectNamespace(page, 'kubeast')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("kube-root-ca.crt")').first()
-    test.skip((await row.count()) === 0, 'kube-root-ca.crt 없음')
-
-    await row.click()
-    await page.locator('text=/Used By Pods \\(\\d+\\)/').first().waitFor({ timeout: 15000 })
+    // the projected service-account volume of every pod that mounts its token
+    const expected = pods('kubeast').filter((p) => (p.spec.volumes ?? []).some((v: any) =>
+      (v.projected?.sources ?? []).some((s: any) => s.configMap?.name === 'kube-root-ca.crt'))).length
+    await openDrawer(page, '/configuration/configmaps', 'kube-root-ca.crt', 'kubeast')
+    await expectCount(page, 'Used By Pods', expected)
   })
 
-  test('5.4 — ServiceAccount cert-manager Effective Permissions', async ({ page }) => {
-    await page.goto('/security/serviceaccounts')
-    await page.waitForLoadState('networkidle')
-    await selectNamespace(page, 'cert-manager')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("cert-manager")').first()
-    test.skip((await row.count()) === 0, 'cert-manager SA 없음')
-
-    await row.click()
-    await page.locator('text=/Effective Permissions/').first().waitFor({ timeout: 15000 })
+  test('5.4 — ServiceAccount Effective Permissions (k8s-service)', async ({ page }) => {
+    const verbs = kubectl(`get clusterrole kubeast-impersonator -o jsonpath='{.rules[*].verbs[*]}'`)
+    test.skip(!verbs, 'kubeast-impersonator ClusterRole missing on self')
+    const drawer = await openDrawer(page, '/security/serviceaccounts', 'k8s-service', 'kubeast')
+    await expect(drawer.locator('text=/Effective Permissions/').first()).toBeVisible({ timeout: 15000 })
+    await expect(drawer).toContainText(verbs.split(' ')[0])
   })
 
-  test('5.7 — RuntimeClass nvidia Used By Pods', async ({ page }) => {
-    await page.goto('/cluster/runtimeclasses')
-    await page.waitForLoadState('networkidle')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("nvidia")').first()
-    test.skip((await row.count()) === 0, 'nvidia RuntimeClass 없음')
-
-    await row.click()
-    // Cluster-wide Pod scan (api.getAllPods) 외부 cluster 라 느림. count > 0 될 때까지 polling
-    await expect(async () => {
-      const section = page.locator('text=/Used By Pods \\(\\d+\\)/').first()
-      await section.waitFor({ timeout: 30000 })
-      const text = await section.innerText()
-      const count = parseInt(text.match(/\((\d+)\)/)?.[1] ?? '0', 10)
-      expect(count).toBeGreaterThan(0)
-    }).toPass({ timeout: 45000, intervals: [2000, 5000, 5000] })
+  test('5.7 — RuntimeClass Used By Pods', async ({ page }) => {
+    const all = JSON.parse(kubectl('get pods -A -o json')).items as Pod[]
+    const expected = all.filter((p) => p.spec.runtimeClassName === 'e2e-fixture').length
+    await openDrawer(page, '/cluster/runtimeclasses', 'e2e-fixture')
+    await expectCount(page, 'Used By Pods', expected)
   })
 
-  test('5.5 #2 — Namespace cert-manager Resource Summary', async ({ page }) => {
-    await page.goto('/cluster/namespaces')
-    await page.waitForLoadState('networkidle')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("cert-manager")').first()
-    test.skip((await row.count()) === 0, 'cert-manager namespace 없음')
-
-    await row.click()
-    await page.locator('text=/Resource Summary/').first().waitFor({ timeout: 30000 })
+  test('5.5 #2 — Namespace Resource Summary (kubeast)', async ({ page }) => {
+    const drawer = await openDrawer(page, '/cluster/namespaces', 'kubeast')
+    await expect(drawer.locator('text=/Resource Summary/').first()).toBeVisible({ timeout: 30000 })
+    await expect(drawer).toContainText(/Running/)
   })
 
-  test('5.7 — ClusterRoleBinding cluster-admin Bound Pods (있으면)', async ({ page }) => {
-    await page.goto('/security/clusterrolebindings')
-    await page.waitForLoadState('networkidle')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("cluster-admin")').first()
-    test.skip((await row.count()) === 0, 'cluster-admin CRB 없음')
-
-    await row.click()
-    // SA subject 가 있을 때만 섹션 나타남
-    await page.locator('text=/Subjects/').first().waitFor({ timeout: 15000 })
-    // Bound Pods section 은 SA subject 0개면 없을 수도 → soft check
+  test('5.7 — ClusterRoleBinding Bound Pods (kubeast impersonator)', async ({ page }) => {
+    const binding = 'kubeast-kubeast-impersonator'
+    const sa = kubectl(`get clusterrolebinding ${binding} -o jsonpath='{.subjects[0].name}'`)
+    test.skip(!sa, `${binding} missing on self`)
+    const bound = pods('kubeast').filter((p) => p.spec.serviceAccountName === sa).map((p) => p.metadata.name)
+    const drawer = await openDrawer(page, '/security/clusterrolebindings', binding)
+    await expect(drawer.locator('text=/Subjects/').first()).toBeVisible({ timeout: 15000 })
+    for (const name of bound) await expect(drawer).toContainText(name)
   })
 
-  test('회귀 — Namespace clarinet 기존 Pods 페이지네이션', async ({ page }) => {
-    await page.goto('/cluster/namespaces')
-    await page.waitForLoadState('networkidle')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("clarinet")').first()
-    test.skip((await row.count()) === 0, 'clarinet namespace 없음')
-
-    await row.click()
-    // 모달 안의 Pods 섹션
-    await page.locator('text=/Pods \\(\\d+\\)/').first().waitFor({ timeout: 30000 })
+  test('회귀 — Namespace 기존 Pods 페이지네이션 (kube-system)', async ({ page }) => {
+    const expected = pods('kube-system').length
+    await openDrawer(page, '/cluster/namespaces', 'kube-system')
+    await expectCount(page, 'Pods', expected)
   })
 
-  test('5.4 — Secret 의 Used By Pods / ServiceAccounts (gpu-operator)', async ({ page }) => {
-    await page.goto('/configuration/secrets')
-    await page.waitForLoadState('networkidle')
-    await selectNamespace(page, 'gpu-operator')
-    await waitTable(page)
-
-    // 네임스페이스 전환 직후엔 이전 목록이 남아 있을 수 있으니 요청이 끝난 뒤 판단한다.
-    // 빈 목록은 공용 빈 행 한 줄("No items.")로 렌더되므로 그 경우 skip.
-    await page.waitForLoadState('networkidle')
-    const empty = page.getByText(/^(No items\.|항목이 없습니다\.)$/)
-    const row = page.locator('tbody tr').filter({ hasNot: empty }).first()
-    await expect(empty.or(row).first()).toBeVisible({ timeout: 15000 })
-    test.skip(await empty.isVisible(), 'gpu-operator ns 에 Secret 없음')
-    await row.click()
-    await page.locator('text=/Used By Pods/').first().waitFor({ timeout: 30000 })
+  test('5.4 — Secret 의 Used By Pods / ServiceAccounts (kubeast-secrets)', async ({ page }) => {
+    const expected = pods('kubeast').filter((p) => JSON.stringify(p.spec).includes('"kubeast-secrets"')).length
+    test.skip(expected === 0, 'no pod reads kubeast-secrets on self')
+    await openDrawer(page, '/configuration/secrets', 'kubeast-secrets', 'kubeast')
+    await expectCount(page, 'Used By Pods', expected)
   })
 
   test('5.7 — PriorityClass system-cluster-critical Used By Pods (>0)', async ({ page }) => {
-    await page.goto('/cluster/priorityclasses')
-    await page.waitForLoadState('networkidle')
-    await waitTable(page)
-
-    const row = page.locator('tbody tr:has-text("system-cluster-critical")').first()
-    test.skip((await row.count()) === 0, 'system-cluster-critical 없음')
-
-    await row.click()
-    await expect(async () => {
-      const section = page.locator('text=/Used By Pods \\(\\d+\\)/').first()
-      await section.waitFor({ timeout: 30000 })
-      const text = await section.innerText()
-      const count = parseInt(text.match(/\((\d+)\)/)?.[1] ?? '0', 10)
-      expect(count).toBeGreaterThan(0)
-    }).toPass({ timeout: 45000, intervals: [2000, 5000, 5000] })
+    const all = JSON.parse(kubectl('get pods -A -o json')).items as Pod[]
+    const expected = all.filter((p) => p.spec.priorityClassName === 'system-cluster-critical').length
+    test.skip(expected === 0, 'no system-cluster-critical pod on self')
+    await openDrawer(page, '/cluster/priorityclasses', 'system-cluster-critical')
+    await expectCount(page, 'Used By Pods', expected)
   })
 })

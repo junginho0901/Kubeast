@@ -40,6 +40,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     // Input area
     await expect(page.getByPlaceholder(PLACEHOLDER_RE)).toBeVisible()
     await expect(page.getByRole('button', { name: SEND_RE })).toBeVisible()
+    await expect(page).toHaveTitle(/^AI Chat · Kubeast$/)
 
     assertNoCriticalErrors(errors)
   })
@@ -64,21 +65,24 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     await page.getByRole('button', { name: SEND_RE }).click()
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    // 다중 선택 토글 버튼 — i18n: "선택" / "Select"
-    const toggleBtn = page.locator('button').filter({ hasText: /^선택$|^Select$|선택\s*해제/i }).first()
-    if ((await toggleBtn.count()) === 0) {
-      test.skip(true, '다중 선택 토글 버튼 못 찾음 (sidebar 구조 변경 가능)')
-      return
-    }
-    await toggleBtn.click()
-    await page.waitForTimeout(300)
+    // 다중 선택 토글 버튼 — i18n: "채팅 내역 선택 삭제" / "Delete selected chats"
+    await page.getByRole('button', { name: /^(채팅 내역 선택 삭제|Delete selected chats)$/ }).click()
+    // selection mode: a checkbox per session row, and Select all picks every one of them (nothing is deleted here)
+    // (the session list is virtualised: only the rows on screen have a checkbox, the count is in the delete button)
+    const boxes = page.locator('input[type="checkbox"]')
+    await expect(boxes.first()).toBeVisible({ timeout: 3000 })
+    const del = page.getByRole('button', { name: /^(삭제|Delete) \(\d+\)$/ })
+    await expect(del).toHaveText(/\(0\)$/)
+    await page.getByRole('button', { name: /^(전체 선택|Select all)$/ }).click()
+    expect(Number((await del.innerText()).match(/\d+/)![0])).toBeGreaterThan(0)
+    expect(await page.locator('input[type="checkbox"]:checked').count()).toBeGreaterThan(0)
+    await page.getByRole('button', { name: /^(선택 해제|Clear selection)$/ }).click()
+    await expect(del).toHaveText(/\(0\)$/)
+    await expect(page.locator('input[type="checkbox"]:checked')).toHaveCount(0)
 
     // 다시 토글 해제 — 모드 OFF
-    const toggleOff = page.locator('button').filter({ hasText: /해제|Cancel|취소/i }).first()
-    if ((await toggleOff.count()) > 0) {
-      await toggleOff.click()
-      await page.waitForTimeout(300)
-    }
+    await page.getByRole('button', { name: /^(취소|Cancel)$/ }).first().click()
+    await expect(boxes).toHaveCount(0)
 
     assertNoCriticalErrors(errors)
   })
@@ -92,20 +96,15 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     await page.getByRole('button', { name: SEND_RE }).click()
     await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    // New chat 버튼 — i18n: "새 채팅" / "New chat"
-    const newChatBtn = page.locator('button').filter({ hasText: /^새 채팅$|^New chat$|^새 대화$/i }).first()
-    if ((await newChatBtn.count()) === 0) {
-      test.skip(true, 'New chat 버튼 못 찾음')
-      return
-    }
-    await newChatBtn.click()
-    await page.waitForTimeout(500)
+    const messages = page.locator('div.flex.gap-3.p-6')
+    await expect(messages.first()).toBeVisible()
 
-    // welcome 화면이 다시 보여야 함 (messages 0 + selectedSession 없음)
-    const welcome = page.locator('text=/Start a new chat|새 채팅을 시작|새 대화/i').first()
-    await expect(welcome).toBeVisible({ timeout: 3000 }).catch(() => {
-      // welcome heading 텍스트가 다를 수 있으므로 quick questions 영역으로 fallback
-    })
+    // New chat 버튼 — i18n: "새 대화" / "New Chat"
+    await page.getByRole('button', { name: /^(새 대화|New Chat)$/i }).first().click()
+
+    // the session is reset: no message on screen, an empty input
+    await expect(messages).toHaveCount(0, { timeout: 3000 })
+    await expect(input).toHaveValue('')
 
     assertNoCriticalErrors(errors)
   })
@@ -147,11 +146,12 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
       return
     }
     await firstSession.click({ button: 'right' })
-    await page.waitForTimeout(300)
+    const rename = page.getByRole('button', { name: /^(제목 바꾸기|Rename)$/ })
+    await expect(rename).toHaveCount(1, { timeout: 3000 })
 
     // ESC → context menu dismiss (useContextMenuDismiss 의 ESC 처리)
     await page.keyboard.press('Escape')
-    await page.waitForTimeout(300)
+    await expect(rename).toHaveCount(0)
 
     assertNoCriticalErrors(errors)
   })

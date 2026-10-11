@@ -1774,12 +1774,6 @@
     "no": "아니요",
     "yes": "예",
     "save": "저장",
-    "pagination": {
-      "empty": "0",
-      "next": "다음",
-      "prev": "이전",
-      "range": "{{from}}-{{to}} / {{total}}"
-    },
     "gitops": {
       "managedBy": "Argo CD · {{app}}",
       "blocked": "Argo CD가 관리합니다 — Git에서 바꾸세요. 콘솔에서의 쓰기는 거부됩니다.",
@@ -3216,8 +3210,8 @@
         "resource_all_create": "모든 리소스 생성",
         "resource_all_edit": "모든 리소스 수정",
         "resource_all_delete": "모든 리소스 삭제",
-        "resource_node_cordon": "Cordon/Uncordon",
-        "resource_node_drain": "Drain",
+        "resource_node_cordon": "Node 스케줄링 비활성화/활성화",
+        "resource_node_drain": "Node 드레인",
         "resource_node_shell": "Node 셸",
         "resource_pod_exec": "Pod Exec",
         "resource_pod_logfile": "컨테이너 안 로그 파일 읽기",
@@ -3821,8 +3815,6 @@
       "result": "결과"
     },
     "loading": "불러오는 중...",
-    "prev": "이전",
-    "next": "다음",
     "playRecording": "녹화 재생",
     "detail": {
       "httpContext": "HTTP 컨텍스트",

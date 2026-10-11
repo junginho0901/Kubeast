@@ -47,9 +47,7 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, resourceType, namespace
 		return nil, fmt.Errorf("patch %s %s: %w", resourceType, name, err)
 	}
 
-	// Invalidate cache
-	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
-	s.cache.Delete(ctx, cacheKey)
+	s.dropCached(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
 
 	return map[string]interface{}{
 		"name":        patched.GetName(),

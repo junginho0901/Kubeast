@@ -1,253 +1,148 @@
-import { test, expect, Page } from '@playwright/test'
+import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
-// Phase 5.x Out-of-Scope (이번에 진행) — Prometheus 기반 detail modal feature 5개 +
-// 외부 의존성 toggle + AdminAudit 의 custom dropdown / 가로 스크롤 검증.
-//
-// dev kind cluster 에서 PROMETHEUS_ENABLED env 없음 → backend default `true` →
-// 자동 발견 → frontend useClusterFeatures() 가 `{ prometheus: { enabled: true } }`
-// 받음. cluster 에 Prometheus 있으면 feature section 보이고, 없으면 graceful
-// hidden. helm install --set features.prometheus.enabled=false 면 무조건 hidden.
+import { test, expect, type Page } from '@playwright/test'
 
-async function selectNamespace(page: Page, ns: string) {
-  const dropdown = page.getByRole('button', { name: /All namespaces|모든 네임스페이스|namespace/i }).first()
-  if ((await dropdown.count()) === 0) return
-  await dropdown.click()
-  await page.getByText(ns, { exact: true }).first().click({ timeout: 5000 }).catch(() => {})
-  await page.waitForTimeout(500)
+// Prometheus-backed drawer and dashboard sections, the events-based image pull history, and the Audit page's
+// dropdowns and wide table. On the dev clusters `default` (kubeast-b) runs a Prometheus and `self` does not
+// (deploy/kind/second-cluster.yaml), so a Prometheus section must show with values on `default` and stay out on
+// `self` — a PrometheusSection renders nothing while its query is unavailable.
+
+function kubectlFor(kindName: string) {
+  const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
+  const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-prometheus-')), 'kubeconfig')
+  fs.writeFileSync(kcPath, kubeconfig, { mode: 0o600 })
+  return (args: string) => execSync(`kubectl --kubeconfig ${kcPath} ${args}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+}
+const kubectl = kubectlFor('kubeast')
+const kubectlB = kubectlFor('kubeast-b')
+
+const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+
+async function openDrawer(page: Page, route: string, name: string) {
+  await page.goto(route)
+  await expect(page.locator('main tbody tr').first()).toBeVisible({ timeout: 30000 })
+  const search = page.getByPlaceholder(/search|검색/i).first()
+  if (await search.count()) await search.fill(name)
+  await page.getByRole('cell', { name, exact: true }).first().click({ timeout: 20000 })
+  const drawer = page.locator(DRAWER).last()
+  await expect(drawer).toContainText(name, { timeout: 20000 })
+  return drawer
 }
 
-async function waitTable(page: Page) {
-  await page.waitForSelector('tbody tr', { timeout: 30000 }).catch(() => {})
-  await page.waitForTimeout(500)
-}
-
-function assertNoCriticalErrors(page: Page, errors: string[]) {
-  page.on('pageerror', (e) => errors.push(`PAGEERR: ${e.message}`))
-  page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`CONSOLE.error: ${m.text()}`)
-  })
-  const critical = errors.filter((e) =>
-    /Rendered more hooks|Cannot read|undefined is not|TypeError|ReferenceError/.test(e),
-  )
-  expect(critical, `unexpected critical errors:\n${critical.join('\n')}`).toEqual([])
-}
+const hasPrometheus = (k: (args: string) => string) => k('get svc -A --no-headers').split('\n').some((l) => /\bprometheus\b/.test(l))
 
 test.describe('Prometheus features — toggle + 4 detail modal sections + #5 events', () => {
 
   test('Cluster features API — /api/v1/cluster/features 응답 + prometheus enabled flag', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-    await page.goto('/')
-    await page.waitForLoadState('domcontentloaded')
-
-    // useClusterFeatures hook 이 호출하는 endpoint 직접 검증
     const res = await page.request.get('/api/v1/cluster/features')
     expect(res.ok()).toBeTruthy()
     const body = await res.json()
     // 응답 schema: { prometheus: { enabled: boolean } }
     expect(body).toHaveProperty('prometheus')
     expect(typeof body.prometheus?.enabled).toBe('boolean')
-
-    assertNoCriticalErrors(page, errors)
   })
 
   test('Feature #1 — HPA Scaling History 섹션 (HPA 모달, 있으면)', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/workloads/hpas?cluster=self')
-    await page.waitForLoadState('domcontentloaded')
-    await waitTable(page)
-
-    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
-    test.skip((await row.count()) === 0, 'HPA 없음')
-
-    await row.click()
-    await page.waitForTimeout(3000)  // PrometheusSection range query 응답 대기
-
-    // HPA 모달 mount — Summary 또는 Replicas section 항상 보임. Scaling History
-    // 는 Prometheus 자동 발견 + range query 응답 가능 시에만 추가로 보임.
-    await expect(page.locator('text=/^Summary$|^Replicas$|Scale Target Reference/').first())
-      .toBeVisible({ timeout: 10000 })
-
-    assertNoCriticalErrors(page, errors)
+    test.skip(hasPrometheus(kubectl), 'self runs a Prometheus here — this checks the section stays out without one')
+    const drawer = await openDrawer(page, '/workloads/hpas?cluster=self', 'e2e-fixture')
+    await expect(drawer).toContainText('80%')
+    // no Prometheus on self: the section is not drawn
+    await expect(drawer.getByText(/Scaling History/)).toHaveCount(0)
   })
 
   test('Feature #2 — Ingress Response Time P50/P95/P99 (있으면)', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/network/ingresses?cluster=self')
-    await page.waitForLoadState('domcontentloaded')
-    await waitTable(page)
-
-    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
-    test.skip((await row.count()) === 0, 'self에 Ingress 없음 (deploy/kind/fixtures.yaml)')
-
-    await row.click()
-    await page.waitForTimeout(3000)
-
-    // Ingress Info 는 항상 보임 — modal mount 검증
-    await expect(page.locator('text=/^Ingress Info$/').first()).toBeVisible({ timeout: 10000 })
-
-    // Prometheus enabled + nginx-ingress 가 metrics scrape 중이면 P50/P95/P99 카드
-    // 보임. 아니면 hint 또는 section 자체 hidden. 둘 다 정상.
-    const latencySection = page.locator('text=/Response Time|P50|P95|P99/i').first()
-    // visible 일 수도, 없을 수도 — page error 만 검증
-    await latencySection.waitFor({ timeout: 3000 }).catch(() => {})
-
-    assertNoCriticalErrors(page, errors)
+    test.skip(hasPrometheus(kubectl), 'self runs a Prometheus here — this checks the section stays out without one')
+    const drawer = await openDrawer(page, '/network/ingresses?cluster=self', 'e2e-fixture')
+    await expect(drawer.locator('text=/^Ingress Info$/').first()).toBeVisible()
+    await expect(drawer).toContainText('e2e-fixture-tls')
+    await expect(drawer.getByText(/^Response Time$/i)).toHaveCount(0)
   })
 
   test('Feature #3 — Node 24h Resource Trend (있으면)', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/cluster/nodes')
-    await page.waitForLoadState('domcontentloaded')
-    await waitTable(page)
-
-    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
-    test.skip((await row.count()) === 0, 'Node 없음')
-
-    await row.click()
-    await page.waitForTimeout(3000)
-
-    // System Info section 항상 보임 — modal mount
-    await expect(page.locator('text=/System Info|시스템/i').first()).toBeVisible({ timeout: 10000 })
-
-    // Prometheus enabled + node-exporter 있으면 24h Resource Trend 또는 sparkline
-    // 보임. 없으면 hidden — page error 0 만 검증.
-    assertNoCriticalErrors(page, errors)
+    test.skip(!hasPrometheus(kubectlB), 'no Prometheus on default (deploy/kind/second-cluster.yaml)')
+    const node = kubectlB(`get nodes -o jsonpath='{.items[0].metadata.name}'`)
+    const drawer = await openDrawer(page, '/cluster/nodes?cluster=default', node)
+    const section = drawer.locator('div.rounded-lg').filter({ has: page.getByText(/Real-time Metrics|실시간/i) }).first()
+    await expect(section).toBeVisible({ timeout: 20000 })
+    await expect(section).toContainText(/\d+(\.\d+)?\s*%/)
   })
 
   test('Feature #5 — Pod Image Pull History 섹션 (events 기반, 있으면)', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/workloads/pods')
-    await page.waitForLoadState('domcontentloaded')
-    await waitTable(page)
-
-    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan]))').first()
-    test.skip((await row.count()) === 0, 'Pod 없음')
-
-    await row.click()
-    await page.waitForTimeout(3000)
-
-    await expect(page.locator('text=/^Basic Info$/').first()).toBeVisible({ timeout: 15000 })
-    // Image Pull History 는 events 가 있을 때만 보임 — 그 자체 검증보다 page error 0
-
-    assertNoCriticalErrors(page, errors)
+    // a pod whose image the node already has: the kubelet records "Pulled" right away
+    const image = kubectl(`-n default get cronjob e2e-fixture -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}'`)
+    test.skip(!image, 'e2e-fixture CronJob missing (fixtures.yaml)')
+    const name = `e2e-pull-history-${Date.now().toString(36)}`
+    kubectl(`-n default run ${name} --image=${image} --image-pull-policy=IfNotPresent --restart=Never -- sleep 300`)
+    try {
+      await expect.poll(() => kubectl(`-n default get events --field-selector involvedObject.name=${name},reason=Pulled -o name`), { timeout: 60000 }).not.toBe('')
+      const drawer = await openDrawer(page, '/workloads/pods?cluster=self', name)
+      await expect(drawer.getByText(/Image Pull History \(\d+, last 1h\)/)).toHaveText(/Image Pull History \([1-9]\d*, last 1h\)/, { timeout: 20000 })
+      await expect(drawer).toContainText('Pulled')
+    } finally {
+      kubectl(`-n default delete pod ${name} --ignore-not-found --wait=false`)
+    }
   })
 
   test('Feature #4 — Pod exec terminal 로그 보존 (스텁만 — 인프라 작업 OOS)', async ({ page }) => {
-    // 본격 구현은 별도 — PodExecTerminal.tsx 의 stub 주석 확인 정도.
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
-
     await page.goto('/cluster-view')
-    await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /클러스터 뷰|Cluster view/i })).toBeVisible({ timeout: 10000 })
-
-    // Exec 권한 있는 사용자만 보임 — admin 계정으로 진입. exec 자체는 안 띄움
-    // (DB schema / audit_writer 작업 OOS). 단지 PodExecTerminal mount 시 console
-    // error 0 확인.
-
-    assertNoCriticalErrors(page, errors)
+    await expect(page).toHaveTitle(/^Cluster View · Kubeast$/)
+    expect(errors).toEqual([])
   })
 })
 
 test.describe('AdminAudit — custom dropdown + 가로 스크롤', () => {
 
   test('AdminAudit 페이지 mount + 3 custom dropdown 보임', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
     await page.goto('/admin/audit')
-    await page.waitForLoadState('domcontentloaded')
-
-    // 'admin' 계정 권한 필요 — 권한 없으면 page error 또는 redirect.
-    // mount 자체 검증.
-    await page.waitForTimeout(2000)
-
-    // 3 custom dropdown 의 chevron 으로 식별
-    const chevrons = page.locator('button:has(svg.lucide-chevron-down)')
-    const count = await chevrons.count()
-    // Service / Result / Limit + 다른 dropdown (table sort 등) 다 합쳐서 ≥3
-    // ChevronDown 은 다른 곳에도 있을 수 있으니 정확 비교 X — 적어도 1개는 있어야
-    if (count > 0) {
-      // 첫 번째 dropdown 클릭 → 패널 열림 → 다시 닫기
-      await chevrons.first().click()
-      await page.waitForTimeout(300)
-      await page.keyboard.press('Escape')
-      await page.waitForTimeout(300)
-    }
-
-    assertNoCriticalErrors(page, errors)
+    const filters = page.locator('main label').filter({ has: page.locator('button:has(svg.lucide-chevron-down)') })
+    await expect(filters.first()).toBeVisible({ timeout: 15000 })
+    expect(await filters.count()).toBeGreaterThanOrEqual(3)
+    // the first one opens its options and closes on Escape
+    const buttons = page.locator('main button')
+    const closed = await buttons.count()
+    await filters.first().locator('button').first().click()
+    await expect.poll(() => buttons.count()).toBeGreaterThan(closed)
+    await page.keyboard.press('Escape')
+    await expect.poll(() => buttons.count()).toBe(closed)
   })
 
   test('AdminAudit table — overflow-x-auto + min-width', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
     // 좁은 viewport (세로 모니터 모방) — 가로 스크롤 가능해야
     await page.setViewportSize({ width: 600, height: 1024 })
     await page.goto('/admin/audit')
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForTimeout(2000)
-
-    // table outer container 의 overflow-x-auto 적용 검증
-    const tableContainer = page.locator('div.overflow-x-auto').filter({ has: page.locator('table.min-w-\\[1100px\\]') }).first()
-    if ((await tableContainer.count()) === 0) {
-      // 또 다른 selector — overflow-x-auto + table
-      const fallback = page.locator('div').filter({ has: page.locator('table.min-w-\\[1100px\\]') }).first()
-      if ((await fallback.count()) === 0) {
-        // admin 권한 없으면 page redirect 됐을 수도 — page error 0 만 검증
-        assertNoCriticalErrors(page, errors)
-        return
-      }
-    }
-
-    assertNoCriticalErrors(page, errors)
+    const table = page.locator('main table').first()
+    await expect(table).toBeVisible({ timeout: 15000 })
+    const box = await table.evaluate((t) => {
+      const parent = t.parentElement as HTMLElement
+      return { overflowX: getComputedStyle(parent).overflowX, scrolls: parent.scrollWidth > parent.clientWidth, pageScrolls: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 }
+    })
+    // the table scrolls inside its box, not the page
+    expect(box).toEqual({ overflowX: 'auto', scrolls: true, pageScrolls: false })
   })
 })
 
 test.describe('Prometheus toggle smoke — page error 0', () => {
 
   test('Dashboard 진입 + Prometheus Cluster Resource Utilization', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/')
-    await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('h1.text-3xl').first()).toBeVisible({ timeout: 10000 })
-
-    // Cluster Resource Utilization (Prometheus dependent) 가 보이면 자동 발견 OK.
-    // 안 보여도 page error 0 만 검증.
-    await page.waitForTimeout(3000)
-    assertNoCriticalErrors(page, errors)
+    test.skip(!hasPrometheus(kubectlB), 'no Prometheus on default (deploy/kind/second-cluster.yaml)')
+    await page.goto('/?cluster=default')
+    const card = page.locator('h2').filter({ hasText: /Cluster Resource Utilization/i }).first()
+    await expect(card).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('span.font-mono').filter({ hasText: /%/ }).first()).toHaveText(/\d+(\.\d+)?\s*%/)
   })
 
   test('Namespace detail — Real-time Resource Usage (Prometheus dependent)', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/cluster/namespaces')
-    await page.waitForLoadState('domcontentloaded')
-    await waitTable(page)
-
-    // Resource Summary 는 파드가 있는 네임스페이스에서만 그려짐 — 어느 클러스터에나 있는 kube-system 으로
-    const row = page.locator('tbody:not([aria-hidden="true"]) tr:not(:has(td[colspan])):has-text("kube-system")').first()
-    test.skip((await row.count()) === 0, 'kube-system 네임스페이스 행 없음')
-
-    await row.click()
-    await page.waitForTimeout(3000)
-
-    // Resource Summary 는 K8s API 기반이라 Prometheus 없이도 보임
-    // Real-time Resource Usage 는 Prometheus 의존 — 자동 발견 시 보임
-    await expect(page.locator('text=/Resource Summary|Real-time Resource Usage/').first()).toBeVisible({ timeout: 15000 })
-
-    assertNoCriticalErrors(page, errors)
+    test.skip(!hasPrometheus(kubectlB), 'no Prometheus on default (deploy/kind/second-cluster.yaml)')
+    const drawer = await openDrawer(page, '/cluster/namespaces?cluster=default', 'kube-system')
+    await expect(drawer.locator('text=/Resource Summary/').first()).toBeVisible({ timeout: 15000 })
+    const usage = drawer.locator('div.rounded-lg').filter({ has: page.getByText(/^Real-time Resource Usage$/i) }).first()
+    await expect(usage).toBeVisible({ timeout: 20000 })
+    await expect(usage).toContainText(/\d/)
   })
 })

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
-    "baseline": "playwright test --update-snapshots"
+    "baseline": "playwright test --update-snapshots",
+    "check:assertions": "node scripts/check-assertions.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0"
