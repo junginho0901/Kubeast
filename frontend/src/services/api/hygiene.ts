@@ -16,6 +16,9 @@ export interface HygieneCheck {
   refs: string
   findings: number
   exempt: number
+  // upgrade checks: the target minor the check starts at, and whether it ran for this report's target
+  since?: number
+  applies: boolean
 }
 
 export interface HygieneFinding {
@@ -44,6 +47,9 @@ export interface HygieneCounts {
 
 export interface HygieneReport {
   generated_at: string
+  // the API server's version and the upgrade target (its next minor) the upgrade checks judged against
+  server_version?: string
+  target_version?: string
   excluded_namespaces: string[]
   counts: HygieneCounts
   checks: HygieneCheck[]

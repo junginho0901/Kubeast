@@ -136,7 +136,7 @@ export default function ClusterHygiene() {
             <h1 className="text-3xl font-bold text-white">{tr('clusterHygiene.title', 'Cluster hygiene')}</h1>
           </div>
           <p className="text-slate-400 text-sm mt-1">
-            {tr('clusterHygiene.subtitle', 'Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, namespace policy, ServiceAccount tokens, RBAC and TLS expiry. Review, export, sign off.')}
+            {tr('clusterHygiene.subtitle', 'Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, namespace policy, ServiceAccount tokens, RBAC, TLS expiry and readiness for the next Kubernetes minor. Review, export, sign off.')}
           </p>
         </div>
         <div className="flex items-end gap-2">
@@ -218,6 +218,11 @@ export default function ClusterHygiene() {
               namespaces: report.excluded_namespaces.length ? report.excluded_namespaces.join(', ') : '-',
             })}
           </span>
+          {report.target_version && (
+            <span className="text-slate-400" data-testid="hygiene-target">
+              {tr('clusterHygiene.target', 'Upgrade checks target {{target}} (server {{server}})', { target: report.target_version, server: report.server_version })}
+            </span>
+          )}
         </div>
       )}
 
@@ -326,10 +331,13 @@ export default function ClusterHygiene() {
             </thead>
             <tbody>
               {report.checks.map((c) => (
-                <tr key={c.id} className="border-t border-slate-700/60 text-slate-300" data-testid="hygiene-check-row">
+                <tr key={c.id} className={`border-t border-slate-700/60 ${c.applies === false ? 'text-slate-500' : 'text-slate-300'}`} data-testid="hygiene-check-row" data-applies={c.applies === false ? 'false' : 'true'}>
                   <td className="px-3 py-2">
-                    <button onClick={() => { setCheck(c.id); setSeverity('all'); setTab('findings') }} className="text-white hover:text-primary-300 text-left">{checkTitle(c.id)}</button>
-                    <div className="text-[11px] font-mono text-slate-500">{c.id}</div>
+                    <button onClick={() => { setCheck(c.id); setSeverity('all'); setTab('findings') }} className={`${c.applies === false ? 'text-slate-400' : 'text-white'} hover:text-primary-300 text-left`}>{checkTitle(c.id)}</button>
+                    <div className="text-[11px] font-mono text-slate-500">
+                      {c.id}
+                      {c.applies === false && c.since ? <span className="ml-2 font-sans">{tr('clusterHygiene.fromTarget', 'from target v1.{{since}}', { since: c.since })}</span> : null}
+                    </div>
                   </td>
                   <td className="px-3 py-2">{badge({ severity: c.severity })}</td>
                   <td className="px-3 py-2 text-right">{c.findings}</td>

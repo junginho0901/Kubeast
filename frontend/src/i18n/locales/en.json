@@ -35,7 +35,7 @@
   },
   "clusterHygiene": {
     "title": "Cluster Hygiene",
-    "subtitle": "Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, Namespace policy, ServiceAccount tokens, RBAC and TLS expiry. Review, export, sign off.",
+    "subtitle": "Configuration risks read from the cluster as you: Pod Security Standards, image tags, resources, Namespace policy, ServiceAccount tokens, RBAC, TLS expiry and readiness for the next Kubernetes minor. Review, export, sign off.",
     "cluster": "Cluster",
     "refresh": "Scan again",
     "scanning": "Scanning...",
@@ -53,6 +53,8 @@
     "overdue": "Overdue since {{when}}",
     "intervalHint": "A sign-off is due every {{days}} days.",
     "generatedAt": "Scanned {{when}} · Namespaces not checked: {{namespaces}}",
+    "target": "Upgrade checks target {{target}} (server {{server}})",
+    "fromTarget": "from target v1.{{since}}",
     "open": "Open",
     "noHistory": "This cluster has not been signed off yet.",
     "severity": {
@@ -112,6 +114,37 @@
       },
       "tls": {
         "expiry": "TLS certificate expiry"
+      },
+      "upgrade": {
+        "removed-api": {
+          "helm": "Removed APIs in Helm release manifests",
+          "crd": "CRD storedVersions no longer served"
+        },
+        "deprecated-api": {
+          "requests": "Clients still calling deprecated APIs"
+        },
+        "webhook": {
+          "fail-closed": "Fail-closed webhooks without a backend or matching everything"
+        },
+        "pdb": {
+          "blocks-drain": "PDBs that block a drain"
+        },
+        "node": {
+          "skew": "kubelet version skew",
+          "cgroup-v1": "Node OS likely on cgroup v1 (deprecated 1.35)"
+        },
+        "kube-proxy": {
+          "ipvs": "kube-proxy ipvs mode (deprecated 1.35)"
+        },
+        "service": {
+          "external-ips": "Service externalIPs (deprecated 1.36)"
+        },
+        "scheduling": {
+          "v1alpha2": "scheduling.k8s.io/v1alpha2 objects (removed 1.37)"
+        },
+        "pod": {
+          "git-repo": "gitRepo volumes (off by default 1.36)"
+        }
       }
     },
     "snapshot": {
@@ -149,7 +182,23 @@
       "wildcard": "rule with verbs [{{verbs}}] resources [{{resources}}]",
       "tlsUnreadable": "tls.crt is not a readable certificate",
       "tlsExpired": "expired {{date}}{{suffix}}",
-      "tlsExpires": "expires {{date}} ({{days}} days){{suffix}}"
+      "tlsExpires": "expires {{date}} ({{days}} days){{suffix}}",
+      "helmRemovedAPI": "Helm release {{release}} renders {{kind}} {{object}} as {{apiVersion}}, removed in {{removed}} (use {{replacement}}): the next helm upgrade fails",
+      "crdStoredVersion": "stored version {{versions}} is no longer served: migrate the stored objects before the version is dropped",
+      "deprecatedAPIRemoved": "clients still request {{api}}, removed in {{removed}}: they break after the upgrade",
+      "deprecatedAPIRequested": "clients still request deprecated {{api}} (removed in {{removed}})",
+      "webhookNoService": "fail-closed webhook with no backend: Service {{service}} does not exist — API writes it matches are refused",
+      "webhookNoEndpoints": "fail-closed webhook with no ready endpoint behind Service {{service}} — API writes it matches are refused",
+      "webhookCatchAll": "fail-closed webhook matching every resource: an outage of its backend stops all API writes during the upgrade",
+      "webhookNoCA": "fail-closed webhook without a caBundle: the API server cannot trust its backend",
+      "pdbBlocksDrain": "allows 0 disruptions ({{expected}} pods, {{healthy}} healthy): a node drain waits on it",
+      "nodeKubeletNewer": "kubelet {{kubelet}} is newer than the API server {{server}} (never supported)",
+      "nodeKubeletBehind": "kubelet {{kubelet}} would be more than three minors behind {{target}}: upgrade the node before the control plane",
+      "kubeProxyIPVS": "kube-proxy runs in ipvs mode, deprecated since v1.35: move to nftables (or iptables) before it is removed",
+      "serviceExternalIPs": "uses spec.externalIPs ({{ips}}), deprecated in v1.36: prefer a LoadBalancer or Ingress",
+      "schedulingV1alpha2": "scheduling.k8s.io/v1alpha2 object: v1.37 drops the version — delete or recreate it as v1alpha3/v1beta1 before upgrading",
+      "nodeCgroupV1": "OS image {{os}} usually runs cgroup v1, which a v1.35+ kubelet refuses to start on by default (failCgroupV1): check with `stat -fc %T /sys/fs/cgroup/` on the node",
+      "gitRepoVolume": "volume {{volume}} is a gitRepo volume, disabled by default in v1.36: clone in an init container instead"
     },
     "exemptNoReason": "(kubeast.io/hygiene-exempt without kubeast.io/hygiene-exempt-reason)"
   },

@@ -70,13 +70,50 @@ test.describe('cluster hygiene report', () => {
         }))
         const { crt, key } = shortLivedCert(dir)
         kubectl(['create', 'secret', 'tls', 'expiring', '-n', NS, `--cert=${crt}`, `--key=${key}`])
+        // Upgrade readiness: a PDB that allows no disruption, a Service with externalIPs, and a fail-closed
+        // webhook (scoped to this namespace's ConfigMaps so it cannot block anything else) whose Service does not exist.
+        kubectl(['apply', '-n', NS, '-f', '-'], JSON.stringify({
+          apiVersion: 'policy/v1', kind: 'PodDisruptionBudget', metadata: { name: 'stuck', namespace: NS },
+          spec: { minAvailable: 2, selector: { matchLabels: { app: 'untidy' } } },
+        }))
+        kubectl(['label', 'pod', 'untidy', '-n', NS, 'app=untidy'])
+        kubectl(['apply', '-n', NS, '-f', '-'], JSON.stringify({
+          apiVersion: 'v1', kind: 'Service', metadata: { name: 'legacy', namespace: NS },
+          spec: { ports: [{ port: 80 }], externalIPs: ['192.0.2.10'] },
+        }))
+        kubectl(['label', 'namespace', NS, `e2e-hygiene=${stamp}`])
+        kubectl(['apply', '-f', '-'], JSON.stringify({
+          apiVersion: 'admissionregistration.k8s.io/v1', kind: 'ValidatingWebhookConfiguration', metadata: { name: `e2e-hygiene-${stamp}` },
+          webhooks: [{
+            name: 'gone.e2e-hygiene.example.com', admissionReviewVersions: ['v1'], sideEffects: 'None', failurePolicy: 'Fail',
+            clientConfig: { service: { namespace: NS, name: 'gone', path: '/validate' }, caBundle: Buffer.from('x').toString('base64') },
+            namespaceSelector: { matchLabels: { 'e2e-hygiene': stamp } },
+            rules: [{ apiGroups: [''], apiVersions: ['v1'], resources: ['configmaps'], operations: ['CREATE'] }],
+          }],
+        }))
       })
 
       await test.step('the report lists them, and leaves the excluded namespaces out', async () => {
         const body = await report(request, admin)
         expect(body.cluster).toBe(CLUSTER)
-        expect(body.report.checks).toHaveLength(17)
+        expect(body.report.checks).toHaveLength(28)
         expect(body.report.collectors).toEqual([])
+        // The upgrade target is the server's next minor.
+        const minor = Number(JSON.parse(kubectl(['version', '-o', 'json'])).serverVersion.gitVersion.match(/^v1\.(\d+)/)?.[1])
+        expect(body.report.server_version).toMatch(/^v1\./)
+        expect(body.report.target_version).toBe(`v1.${minor + 1}`)
+        const upgrade = body.report.findings.filter((f) => f.check.startsWith('upgrade.'))
+        const pdb = upgrade.find((f) => f.check === 'upgrade.pdb.blocks-drain' && f.namespace === NS)
+        expect(pdb, `pdb in ${JSON.stringify(upgrade)}`).toBeTruthy()
+        expect(pdb!.message).toMatch(/allows 0 disruptions \(1 pods, [01] healthy\)/)
+        const hook = upgrade.find((f) => f.check === 'upgrade.webhook.fail-closed' && f.name === `e2e-hygiene-${stamp}/gone.e2e-hygiene.example.com`)
+        expect(hook, 'fail-closed webhook without a Service').toBeTruthy()
+        expect(hook!.severity).toBe('critical')
+        expect(hook!.message).toContain(`Service ${NS}/gone does not exist`)
+        const ext = upgrade.find((f) => f.check === 'upgrade.service.external-ips' && f.namespace === NS)
+        expect(ext?.severity, 'externalIPs is informational').toBe('info')
+        // The dev cluster's own nodes and kube-proxy are fine.
+        expect(upgrade.filter((f) => ['upgrade.node.skew', 'upgrade.kube-proxy.ipvs'].includes(f.check))).toEqual([])
         expect(body.report.excluded_namespaces).toContain('kube-system')
         expect(body.report.findings.some((f) => f.namespace === 'kube-system')).toBeFalsy()
         const mine = body.report.findings.filter((f) => f.namespace === NS || (f.kind === 'Namespace' && f.name === NS))
@@ -146,6 +183,7 @@ test.describe('cluster hygiene report', () => {
       })
     } finally {
       try {
+        kubectl(['delete', 'validatingwebhookconfiguration', `e2e-hygiene-${stamp}`, '--ignore-not-found'])
         kubectl(['delete', 'namespace', NS, '--wait=false', '--ignore-not-found'])
       } catch {
         /* leave it to the next reset */

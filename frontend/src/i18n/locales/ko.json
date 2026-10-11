@@ -35,7 +35,7 @@
   },
   "clusterHygiene": {
     "title": "Cluster Hygiene",
-    "subtitle": "클러스터를 내 권한으로 읽어 설정상 위험을 모읍니다 — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, ServiceAccount 토큰, RBAC, TLS 만료. 검토하고 내보내고 서명합니다.",
+    "subtitle": "클러스터를 내 권한으로 읽어 설정상 위험을 모읍니다 — Pod Security Standards, 이미지 태그, 리소스, Namespace 정책, ServiceAccount 토큰, RBAC, TLS 만료, 다음 Kubernetes 마이너 준비. 검토하고 내보내고 서명합니다.",
     "cluster": "클러스터",
     "refresh": "다시 점검",
     "scanning": "점검 중...",
@@ -53,6 +53,8 @@
     "overdue": "{{when}}부터 기한 지남",
     "intervalHint": "{{days}}일마다 서명 기한이 돌아옵니다.",
     "generatedAt": "점검 시각 {{when}} · 제외한 Namespace: {{namespaces}}",
+    "target": "업그레이드 점검 대상 {{target}} (서버 {{server}})",
+    "fromTarget": "대상 v1.{{since}}부터",
     "open": "열기",
     "noHistory": "이 클러스터는 아직 서명된 적이 없습니다.",
     "severity": {
@@ -112,6 +114,37 @@
       },
       "tls": {
         "expiry": "TLS 인증서 만료"
+      },
+      "upgrade": {
+        "removed-api": {
+          "helm": "Helm 릴리스에 남은 제거 API",
+          "crd": "CRD의 served 아닌 storedVersions"
+        },
+        "deprecated-api": {
+          "requests": "폐기 API를 아직 부르는 클라이언트"
+        },
+        "webhook": {
+          "fail-closed": "백엔드 없는·전부 매치하는 fail-closed 웹훅"
+        },
+        "pdb": {
+          "blocks-drain": "드레인을 막는 PDB"
+        },
+        "node": {
+          "skew": "kubelet 버전 차이",
+          "cgroup-v1": "cgroup v1 계열 노드 OS(1.35 폐기)"
+        },
+        "kube-proxy": {
+          "ipvs": "kube-proxy ipvs 모드(1.35 폐기)"
+        },
+        "service": {
+          "external-ips": "Service externalIPs(1.36 폐기)"
+        },
+        "scheduling": {
+          "v1alpha2": "scheduling.k8s.io/v1alpha2 객체(1.37 제거)"
+        },
+        "pod": {
+          "git-repo": "gitRepo 볼륨(1.36 기본 비활성)"
+        }
       }
     },
     "snapshot": {
@@ -149,7 +182,23 @@
       "wildcard": "와일드카드 규칙: verbs [{{verbs}}] resources [{{resources}}]",
       "tlsUnreadable": "tls.crt를 인증서로 읽을 수 없음",
       "tlsExpired": "{{date}} 만료됨{{suffix}}",
-      "tlsExpires": "{{date}} 만료 ({{days}}일 남음){{suffix}}"
+      "tlsExpires": "{{date}} 만료 ({{days}}일 남음){{suffix}}",
+      "helmRemovedAPI": "Helm 릴리스 {{release}}가 {{kind}} {{object}}를 {{apiVersion}}으로 렌더함 — {{removed}}에서 제거({{replacement}} 사용): 다음 helm upgrade가 실패합니다",
+      "crdStoredVersion": "served 아닌 storedVersions {{versions}}: 버전이 빠지기 전에 저장된 객체를 옮기세요",
+      "deprecatedAPIRemoved": "{{api}} 요청이 아직 들어옴 — {{removed}}에서 제거: 업그레이드 뒤 그 클라이언트가 깨집니다",
+      "deprecatedAPIRequested": "폐기 API {{api}} 요청이 아직 들어옴 ({{removed}} 제거)",
+      "webhookNoService": "fail-closed 웹훅의 백엔드 Service {{service}}가 없음 — 매치되는 API 쓰기가 거부됩니다",
+      "webhookNoEndpoints": "fail-closed 웹훅의 Service {{service}} 뒤에 준비된 엔드포인트가 없음 — 매치되는 API 쓰기가 거부됩니다",
+      "webhookCatchAll": "모든 리소스에 매치되는 fail-closed 웹훅: 백엔드가 멈추면 업그레이드 중 모든 API 쓰기가 멈춥니다",
+      "webhookNoCA": "caBundle 없는 fail-closed 웹훅: API 서버가 백엔드를 신뢰할 수 없습니다",
+      "pdbBlocksDrain": "허용 중단 0 (Pod {{expected}}개, 정상 {{healthy}}개): 노드 드레인이 여기서 기다립니다",
+      "nodeKubeletNewer": "kubelet {{kubelet}}이 API 서버 {{server}}보다 높음 (지원되지 않는 조합)",
+      "nodeKubeletBehind": "kubelet {{kubelet}}은 {{target}}보다 3 마이너 넘게 낮아짐: 컨트롤 플레인 전에 노드를 먼저 올리세요",
+      "kubeProxyIPVS": "kube-proxy가 ipvs 모드로 동작 (v1.35부터 폐기): 제거되기 전에 nftables(또는 iptables)로 옮기세요",
+      "serviceExternalIPs": "spec.externalIPs 사용 ({{ips}}), v1.36 폐기: LoadBalancer나 Ingress를 쓰세요",
+      "schedulingV1alpha2": "scheduling.k8s.io/v1alpha2 객체: v1.37이 이 버전을 없앱니다 — 업그레이드 전에 v1alpha3/v1beta1로 다시 만드세요",
+      "nodeCgroupV1": "OS 이미지 {{os}}는 보통 cgroup v1: v1.35+ kubelet은 기본값(failCgroupV1)으로 시작을 거부합니다 — 노드에서 `stat -fc %T /sys/fs/cgroup/`로 확인하세요",
+      "gitRepoVolume": "볼륨 {{volume}}이 gitRepo 볼륨 (v1.36 기본 비활성): init 컨테이너에서 clone하세요"
     },
     "exemptNoReason": "(kubeast.io/hygiene-exempt는 있지만 kubeast.io/hygiene-exempt-reason 없음)"
   },

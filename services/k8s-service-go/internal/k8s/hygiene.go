@@ -10,10 +10,16 @@ import (
 	"strings"
 	"time"
 
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // Cluster hygiene report: configuration risks read from the API as the
@@ -57,6 +63,33 @@ var HygieneChecks = []HygieneCheck{
 	{"rbac.cluster-admin", HygieneWarning, "CIS 5.1.1 · EKS 4.1.1"},
 	{"rbac.wildcard", HygieneWarning, "CIS 5.1.3 · EKS 4.1.3"},
 	{"tls.expiry", HygieneWarning, "Kubernetes security checklist · cert-manager renews at 2/3"},
+	// Upgrade readiness (hygiene_upgrade.go): the target is the server minor + 1.
+	{"upgrade.removed-api.helm", HygieneCritical, "Deprecated API Migration Guide · Helm upgrade re-applies the stored manifest"},
+	{"upgrade.removed-api.crd", HygieneWarning, "CRD versioning: storage version migration"},
+	{"upgrade.deprecated-api.requests", HygieneWarning, "apiserver_requested_deprecated_apis · EKS upgrade insights"},
+	{"upgrade.webhook.fail-closed", HygieneWarning, "Dynamic Admission Control: failurePolicy · KubePreflight WH-001/002/004"},
+	{"upgrade.pdb.blocks-drain", HygieneWarning, "Disruptions: PDB and drain · KubePreflight PDB-001"},
+	{"upgrade.node.skew", HygieneWarning, "Version Skew Policy: kubelet ≤ 3 minors behind, never newer"},
+	{"upgrade.kube-proxy.ipvs", HygieneWarning, "kube-proxy ipvs deprecated since v1.35 (CHANGELOG-1.37 #139067)"},
+	{"upgrade.pod.git-repo", HygieneWarning, "gitRepo volume disabled by default in v1.36 (#136400)"},
+	{"upgrade.service.external-ips", HygieneInfo, "Service spec.externalIPs deprecated in v1.36 (#137293)"},
+	{"upgrade.scheduling.v1alpha2", HygieneCritical, "scheduling.k8s.io/v1alpha2 dropped in v1.37 (#138572)"},
+	{"upgrade.node.cgroup-v1", HygieneInfo, "cgroup v1 deprecated since v1.35; kubelet failCgroupV1 defaults to true"},
+}
+
+// hygieneCheckSince is the target minor a check starts to apply at (a check
+// about a deprecation is noise before the release that deprecates it).
+var hygieneCheckSince = map[string]int{
+	"upgrade.kube-proxy.ipvs":      35,
+	"upgrade.node.cgroup-v1":       35,
+	"upgrade.pod.git-repo":         36,
+	"upgrade.service.external-ips": 36,
+	"upgrade.scheduling.v1alpha2":  37,
+}
+
+func hygieneCheckApplies(id string, target int) bool {
+	since := hygieneCheckSince[id]
+	return since == 0 || target >= since
 }
 
 type HygieneFinding struct {
@@ -93,6 +126,10 @@ type HygieneCheckSummary struct {
 	HygieneCheck
 	Findings int `json:"findings"`
 	Exempt   int `json:"exempt"`
+	// Since is the target minor an upgrade check starts at; Applies is false
+	// when this report's target is below it (the check did not run).
+	Since   int  `json:"since,omitempty"`
+	Applies bool `json:"applies"`
 }
 
 // HygieneCollector is a list the report could not read (its checks are skipped).
@@ -109,7 +146,11 @@ type HygieneCounts struct {
 }
 
 type HygieneReport struct {
-	GeneratedAt        string                `json:"generated_at"`
+	GeneratedAt string `json:"generated_at"`
+	// ServerVersion is the API server's version; TargetVersion ("v1.37") is the
+	// next minor the upgrade checks judge against (empty when the version could not be read).
+	ServerVersion      string                `json:"server_version,omitempty"`
+	TargetVersion      string                `json:"target_version,omitempty"`
 	ExcludedNamespaces []string              `json:"excluded_namespaces"`
 	Counts             HygieneCounts         `json:"counts"`
 	Checks             []HygieneCheckSummary `json:"checks"`
@@ -123,6 +164,11 @@ type HygieneOptions struct {
 	TLSWarnDays       int
 	TLSCriticalDays   int
 	Now               time.Time
+	// HelmManifests lists every release's stored manifest for the removed-API
+	// check (the helm package imports this one, so the handler passes it in).
+	HelmManifests func(ctx context.Context) ([]HelmManifest, error)
+	// TargetMinor overrides the upgrade target (0 = the server's minor + 1).
+	TargetMinor int
 }
 
 // HygieneInput is what the checks read. Failed names the lists that could not
@@ -136,8 +182,21 @@ type HygieneInput struct {
 	ClusterRoles        []rbacv1.ClusterRole
 	Roles               []rbacv1.Role
 	TLSSecrets          []corev1.Secret
-	Collectors          []HygieneCollector
-	Failed              map[string]bool
+	// Upgrade readiness (hygiene_upgrade.go)
+	ServerVersion   string
+	Nodes           []corev1.Node
+	PDBs            []policyv1.PodDisruptionBudget
+	Validating      []admissionv1.ValidatingWebhookConfiguration
+	Mutating        []admissionv1.MutatingWebhookConfiguration
+	Services        []corev1.Service
+	EndpointSlices  []discoveryv1.EndpointSlice
+	CRDs            []unstructured.Unstructured
+	KubeProxyConfig map[string]string // kube-system ConfigMap name → its data values joined
+	Metrics         string            // the API server's /metrics text ("" when unreadable)
+	HelmManifests   []HelmManifest
+	SchedulingAlpha []schedulingObject
+	Collectors      []HygieneCollector
+	Failed          map[string]bool
 }
 
 // CollectHygiene lists what the checks need, as the caller, and evaluates it.
@@ -180,6 +239,74 @@ func (s *Service) CollectHygiene(ctx context.Context, opts HygieneOptions) (Hygi
 	if l, err := cs.CoreV1().Secrets("").List(ctx, metav1.ListOptions{FieldSelector: "type=" + string(corev1.SecretTypeTLS)}); ok("secrets", err) {
 		in.TLSSecrets = l.Items
 	}
+
+	// Upgrade readiness. The server version decides the target; without it the
+	// upgrade checks do not run (and say so through the collector list).
+	if sv, err := cs.Discovery().ServerVersion(); ok("serverversion", err) {
+		in.ServerVersion = sv.GitVersion
+	}
+	if l, err := cs.CoreV1().Nodes().List(ctx, all); ok("nodes", err) {
+		in.Nodes = l.Items
+	}
+	if l, err := cs.PolicyV1().PodDisruptionBudgets("").List(ctx, all); ok("poddisruptionbudgets", err) {
+		in.PDBs = l.Items
+	}
+	if l, err := cs.AdmissionregistrationV1().ValidatingWebhookConfigurations().List(ctx, all); ok("validatingwebhookconfigurations", err) {
+		in.Validating = l.Items
+	}
+	if l, err := cs.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, all); ok("mutatingwebhookconfigurations", err) {
+		in.Mutating = l.Items
+	}
+	if l, err := cs.CoreV1().Services("").List(ctx, all); ok("services", err) {
+		in.Services = l.Items
+	}
+	if l, err := cs.DiscoveryV1().EndpointSlices("").List(ctx, all); ok("endpointslices", err) {
+		in.EndpointSlices = l.Items
+	}
+	if dyn := s.dynamicCtx(ctx); dyn != nil {
+		if l, err := dyn.Resource(crdGVR).List(ctx, all); ok("customresourcedefinitions", err) {
+			in.CRDs = l.Items
+		}
+		// scheduling.k8s.io/v1alpha2 exists only on clusters that served it; its absence is not a failure.
+		if rl, err := s.discoveryCtx(ctx).ServerResourcesForGroupVersion("scheduling.k8s.io/v1alpha2"); err == nil && rl != nil {
+			for _, r := range rl.APIResources {
+				if strings.Contains(r.Name, "/") || !contains(r.Verbs, "list") {
+					continue
+				}
+				gvr := schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "v1alpha2", Resource: r.Name}
+				if l, err := dyn.Resource(gvr).Namespace("").List(ctx, all); ok("scheduling.k8s.io/v1alpha2", err) {
+					for _, item := range l.Items {
+						in.SchedulingAlpha = append(in.SchedulingAlpha, schedulingObject{Kind: r.Kind, Namespace: item.GetNamespace(), Name: item.GetName()})
+					}
+				}
+			}
+		}
+	}
+	in.KubeProxyConfig = map[string]string{}
+	for _, name := range []string{"kube-proxy", "kube-proxy-config"} {
+		cm, err := cs.CoreV1().ConfigMaps("kube-system").Get(ctx, name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		if !ok("kube-proxy", err) {
+			break
+		}
+		var parts []string
+		for _, v := range cm.Data {
+			parts = append(parts, v)
+		}
+		in.KubeProxyConfig[name] = strings.Join(parts, "\n")
+	}
+	// /metrics needs a nonResourceURL grant (cluster-admin has it, the viewer
+	// role does not): forbidden lands in the collector list like any other.
+	if raw, err := cs.CoreV1().RESTClient().Get().AbsPath("/metrics").DoRaw(ctx); ok("metrics", err) {
+		in.Metrics = string(raw)
+	}
+	if opts.HelmManifests != nil {
+		if m, err := opts.HelmManifests(ctx); ok("helm", err) {
+			in.HelmManifests = m
+		}
+	}
 	return EvaluateHygiene(in, opts), nil
 }
 
@@ -198,6 +325,10 @@ func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 		nsAnnotations[n.Name] = n.Annotations
 	}
 	b := &hygieneBuilder{index: map[string]int{}}
+	target := opts.TargetMinor
+	if target == 0 && minorOf(in.ServerVersion) > 0 {
+		target = minorOf(in.ServerVersion) + 1
+	}
 
 	podsPerNS := map[string]int{}
 	if !in.Failed["pods"] {
@@ -208,7 +339,7 @@ func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 			podsPerNS[p.Namespace]++
 			kind, name := podOwner(p)
 			ex := mergeExemptions(parseExemption(p.Annotations), parseExemption(nsAnnotations[p.Namespace]))
-			for _, f := range podHygieneFindings(p) {
+			for _, f := range append(podHygieneFindings(p), podUpgradeFindings(p, target)...) {
 				f.Kind, f.Namespace, f.Name = kind, p.Namespace, name
 				b.addPod(f, ex)
 			}
@@ -296,7 +427,19 @@ func EvaluateHygiene(in HygieneInput, opts HygieneOptions) HygieneReport {
 		}
 	}
 
-	return b.report(now, opts.ExcludeNamespaces, in.Collectors)
+	upgradeFindings(in, target, excluded, nsAnnotations, b)
+
+	rep := b.report(now, opts.ExcludeNamespaces, in.Collectors)
+	rep.ServerVersion = in.ServerVersion
+	if target > 0 {
+		rep.TargetVersion = "v1." + strconv.Itoa(target)
+	}
+	for i := range rep.Checks {
+		c := &rep.Checks[i]
+		c.Since = hygieneCheckSince[c.ID]
+		c.Applies = target > 0 && hygieneCheckApplies(c.ID, target) || !strings.HasPrefix(c.ID, "upgrade.")
+	}
+	return rep
 }
 
 // --- pods ---------------------------------------------------------------

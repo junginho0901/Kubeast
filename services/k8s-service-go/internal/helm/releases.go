@@ -9,6 +9,7 @@ import (
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/release"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
@@ -180,4 +181,26 @@ func trimSpace(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// ListManifests returns every release's stored manifest across namespaces
+// (the hygiene report's removed-API check reads it); the caller's own Helm
+// permissions apply, no cache.
+func (s *Service) ListManifests(ctx context.Context) ([]k8s.HelmManifest, error) {
+	cfg, err := s.actionConfig(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	lister := action.NewList(cfg)
+	lister.AllNamespaces = true
+	lister.SetStateMask()
+	releases, err := lister.Run()
+	if err != nil {
+		return nil, fmt.Errorf("list releases: %w", err)
+	}
+	out := make([]k8s.HelmManifest, 0, len(releases))
+	for _, r := range releases {
+		out = append(out, k8s.HelmManifest{Namespace: r.Namespace, Name: r.Name, Manifest: r.Manifest})
+	}
+	return out, nil
 }

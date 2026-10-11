@@ -84,6 +84,9 @@ func (h *Handler) collectHygiene(r *http.Request) (k8s.HygieneReport, error) {
 		TLSCriticalDays:   h.cfg.HygieneTLSCriticalDays,
 		Now:               time.Now(),
 	}
+	if h.helmSvc != nil {
+		opts.HelmManifests = h.helmSvc.ListManifests
+	}
 	if h.hygieneScan != nil {
 		return h.hygieneScan(r.Context(), opts)
 	}
