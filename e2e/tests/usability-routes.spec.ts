@@ -8,7 +8,8 @@ import { test, expect, type Page } from '@playwright/test'
 // Usability and routes from the 2026-10 re-QA (PR-9c): old routes open the current screens, the sidebar groups by
 // scope, Resource Graph opens on a namespace, a list keeps its footer and says why it is empty, the open drawer is
 // in the URL, and the small fixes on User Management, Change History, Helm history, the PV drawer, the YAML status
-// line and the Audit target column. Runs against `self` (the kind cluster itself).
+// line and the Audit target column; from the second re-QA, the ReplicaSet drawer without an up-to-date count and the
+// shared footer on the admin tables. Runs against `self` (the kind cluster itself).
 
 function kubectlFor(kindName: string) {
   const kubeconfig = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
@@ -83,6 +84,35 @@ test.describe('Usability and routes', () => {
     const drawer = page.locator(DRAWER).last()
     await expect(drawer).toContainText(pv, { timeout: 15_000 })
     await expect(drawer).toContainText(/Term 0: kubernetes\.io\/hostname in \[/)
+  })
+
+  test('a ReplicaSet drawer has no up-to-date count; a Deployment drawer shows the one kubectl reads', async ({ page }) => {
+    const rs = kubectl(`-n kube-system get rs -o jsonpath='{.items[0].metadata.name}'`)
+    await page.goto(`/workloads/replicasets?cluster=self&detail=ReplicaSet/kube-system/${rs}`)
+    const rsDrawer = page.locator(DRAWER).last()
+    await expect(rsDrawer).toContainText(rs, { timeout: 15_000 })
+    await expect(rsDrawer).toContainText(/Desired|목표/)
+    await expect(rsDrawer.getByText(/^(Up to date|Updated|최신)$/)).toHaveCount(0)
+
+    const updated = kubectl(`-n kube-system get deploy coredns -o jsonpath='{.status.updatedReplicas}'`)
+    await page.goto('/workloads/deployments?cluster=self&detail=Deployment/kube-system/coredns')
+    const row = page.locator(DRAWER).last().locator('div').filter({ has: page.getByText(/^(Up to date|최신)$/) }).last()
+    await expect(row).toContainText(updated, { timeout: 15_000 })
+  })
+
+  test('the admin tables keep the shared footer, with the totals the API gave', async ({ page }) => {
+    const usage = page.waitForResponse((r) => r.url().includes('/api/v1/auth/admin/ai-usage?'))
+    await page.goto('/admin/ai-usage')
+    const rows = (((await (await usage).json()).rows ?? []) as unknown[]).length
+    await expect(page.getByTestId('ai-usage-pager')).toContainText(rows ? new RegExp(`of ${rows}(?!\\d)|^${rows}개 중`) : /Showing 0 of 0|0개 중 0/, { timeout: 15_000 })
+
+    const audit = page.waitForResponse((r) => r.url().includes('/api/v1/auth/admin/audit-logs?'))
+    await page.goto('/admin/audit')
+    const total = (await (await audit).json()).total as number
+    await expect(page.getByTestId('audit-pager')).toContainText(new RegExp(`of ${total}(?!\\d)|^${total}개 중`), { timeout: 15_000 })
+
+    await page.goto('/admin/session-recordings')
+    await expect(page.getByTestId('recordings-pager')).toContainText(/^1–\d+|Showing 0 of 0|0개 중 0/, { timeout: 15_000 })
   })
 
   test('an Idle workload is neutral, not a warning', async ({ page }) => {

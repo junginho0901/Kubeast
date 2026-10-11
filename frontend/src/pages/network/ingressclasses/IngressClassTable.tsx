@@ -3,8 +3,6 @@
 // frontend/src/pages/network/IngressClasses.tsx 의 table JSX (sort header +
 // tbody + 빈/로딩 상태 + pagination footer) 추출. cluster-scoped 라 namespace
 // 컬럼 없음. 5 컬럼 모두 sortable (name/controller/default/parameters/age).
-// pagination 은 totalPages > 1 + common.pagination.range 키 사용 (다른 페이지의
-// common.paginationRange 와 다름 — IngressClasses 원본 그대로 보존).
 
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'

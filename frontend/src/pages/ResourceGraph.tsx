@@ -11,7 +11,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Info } from 'lucide-react'
+import { Info, ShieldAlert } from 'lucide-react'
 import { api, ResourceGraphNode } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { useAIContext } from '@/hooks/useAIContext'
@@ -73,11 +73,13 @@ export default function ResourceGraph() {
 
   const hasSelection = selectedNamespaces.size > 0
 
-  const { data: graphData, isLoading } = useQuery({
+  const { data: graphData, isLoading, error: graphError, refetch: refetchGraph } = useQuery({
     queryKey: ['resource-graph', nsArray],
     queryFn: () => api.getResourceGraph(nsArray),
     enabled: hasSelection,
   })
+  const graphErrorCode = (graphError as { response?: { status?: number } } | null)?.response?.status
+  const forbiddenKinds = graphData?.forbidden_kinds ?? []
 
   // 플로팅 AI 위젯용 스냅샷
   // visible_items: 화면에 그려진 노드 중 (1) 검색·필터 통과 + (2) 문제 있는 것 우선,
@@ -237,6 +239,22 @@ export default function ResourceGraph() {
               </p>
             </div>
           </div>
+        ) : graphError && !graphData ? (
+          <div className="w-full h-full flex flex-col items-center justify-center text-slate-400" data-testid="resource-graph-error">
+            <Info className="w-12 h-12 mb-3" />
+            <p className="text-sm">
+              {graphErrorCode
+                ? t('common.loadErrorEmpty', { resource: 'Resource Graph', code: graphErrorCode, defaultValue: 'Could not load {{resource}} (server error {{code}}).' })
+                : t('common.loadErrorEmptyNetwork', { resource: 'Resource Graph', defaultValue: 'Could not load {{resource}} (no response from the server).' })}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetchGraph()}
+              className="mt-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400"
+            >
+              {t('common.retry', { defaultValue: 'Retry' })}
+            </button>
+          </div>
         ) : isLoading || !layoutReady ? (
           <div className="w-full h-full flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
@@ -272,6 +290,16 @@ export default function ResourceGraph() {
                 style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
               />
             </ReactFlow>
+          </div>
+        )}
+
+        {hasSelection && forbiddenKinds.length > 0 && (
+          <div
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-lg border border-amber-700/50 bg-amber-900/80 px-3 py-1.5 text-xs text-amber-100"
+            data-testid="resource-graph-forbidden"
+          >
+            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-300" />
+            {t('common.forbiddenEmpty', { resource: forbiddenKinds.join(', '), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
           </div>
         )}
 

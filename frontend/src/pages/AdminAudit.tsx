@@ -6,6 +6,7 @@ import { clustersApi } from '@/services/api/clusters'
 import { CheckCircle, ChevronDown, ChevronUp, Play, Search } from 'lucide-react'
 import { formatTime, parseTypedTime, utcTitle } from '@/utils/time'
 import { DateTextInput } from '@/components/DateTextInput'
+import { ListPager } from '@/components/ListPager'
 import RecordingPlayerModal from '@/components/RecordingPlayerModal'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
@@ -448,7 +449,8 @@ export default function AdminAudit() {
       {/* Table */}
       {/* overflow-x-auto — 폭 좁은 모니터 (세로 모드 등) 에서 가로 스크롤 가능.
           table 의 min-w-[1000px] 로 컬럼이 너무 압축되지 않게 보장. */}
-      <div className="rounded-lg bg-slate-800/30 border border-slate-700 overflow-x-auto">
+      <div className="rounded-lg bg-slate-800/30 border border-slate-700">
+        <div className="overflow-x-auto">
         <table className="w-full min-w-[1000px] text-sm">
           <thead className="bg-slate-800 text-slate-400">
             <tr>
@@ -491,30 +493,9 @@ export default function AdminAudit() {
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <button
-            onClick={() => goPage(page - 1)}
-            disabled={page <= 1}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
-          >
-            {tr('adminAudit.prev', '이전')}
-          </button>
-          <span className="text-slate-300">
-            {page} / {totalPages}
-          </span>
-          <button
-            onClick={() => goPage(page + 1)}
-            disabled={page >= totalPages}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-40 px-3 py-1 text-white"
-          >
-            {tr('adminAudit.next', '다음')}
-          </button>
         </div>
-      )}
+        <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={limit} onPageChange={goPage} showPageSize={false} testId="audit-pager" />
+      </div>
       {playing && <RecordingPlayerModal recordingId={playing.id} title={playing.title} onClose={() => setPlaying(null)} />}
     </div>
   )

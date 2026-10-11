@@ -515,12 +515,24 @@ func (s *Service) clientsetCtx(ctx context.Context) *kubernetes.Clientset {
 	return nil
 }
 
-// clusterCacheKey namespaces a (shared Redis) cache key by the ctx cluster, so
-// one cluster's cached value — overview totals, resource YAML, dependency graph
-// — is never served for another. Falls back to "default" when no cluster is in
-// ctx (the server's default-cluster fallback).
+// clusterCacheKey namespaces a (shared Redis) cache key by the ctx cluster and
+// by the signed-in identity (auth.TokenPayload.CacheIdentity), so a value read
+// for one cluster or one user — overview totals, resource YAML, dependency
+// graph — is never served for another. Falls back to "default" when no cluster
+// is in ctx (the server's default-cluster fallback).
 func (s *Service) clusterCacheKey(ctx context.Context, key string) string {
-	return string(ctxClusterID(ctx)) + "|" + key
+	id := string(ctxClusterID(ctx))
+	if p, ok := auth.FromContext(ctx); ok {
+		return id + "|" + key + "|as:" + p.CacheIdentity(id)
+	}
+	return id + "|" + key
+}
+
+// dropCached removes key for every identity that cached it, after a write
+// changed what it holds.
+func (s *Service) dropCached(ctx context.Context, key string) {
+	s.cache.Delete(ctx, s.clusterCacheKey(ctx, key))
+	s.cache.DeletePattern(ctx, string(ctxClusterID(ctx))+"|"+key+"|as:*")
 }
 
 // ctxClusterID is the cluster carried in ctx, or the default-cluster id when

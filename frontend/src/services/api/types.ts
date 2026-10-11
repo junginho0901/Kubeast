@@ -1236,6 +1236,8 @@ export interface ResourceGraphEdge {
 export interface ResourceGraphResponse {
   nodes: ResourceGraphNode[]
   edges: ResourceGraphEdge[]
+  // kinds the user may not list in this cluster, left out of the graph
+  forbidden_kinds?: string[]
 }
 
 export interface TopResources {

@@ -3471,8 +3471,6 @@
       "result": "Result"
     },
     "loading": "Loading...",
-    "prev": "Prev",
-    "next": "Next",
     "playRecording": "Play recording",
     "resultValue": {
       "success": "Success",

@@ -190,22 +190,21 @@ export default function SessionRecordings() {
           </table>
         </div>
 
-        {(page > 1 || hasNext) && (
-          <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-700" data-testid="recordings-pager">
-            <div className="text-xs text-slate-400">
-              {rows.length > 0 ? `${first}–${first + rows.length - 1}` : ''}
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="text-xs text-slate-300 min-w-[48px] text-center">{page}</span>
-              <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
+        {/* The server pages without a total, so the footer shows the range and Prev/Next only — always, like ListPager */}
+        <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-700" data-testid="recordings-pager">
+          <div className="text-xs text-slate-400">
+            {rows.length > 0 ? `${first}–${first + rows.length - 1}` : tr('common.paginationEmpty', 'Showing 0 of 0')}
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+              {tr('common.prev', 'Prev')}
+            </button>
+            <span className="text-xs text-slate-300 min-w-[48px] text-center">{page}</span>
+            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext} className="px-3 py-1.5 text-xs rounded-sm border border-slate-600 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-slate-500">
+              {tr('common.next', 'Next')}
+            </button>
+          </div>
+        </div>
       </div>
 
       {playing && (

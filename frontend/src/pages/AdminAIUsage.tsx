@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import type { AIUsageGroup, AIUsageRow } from '@/services/api'
 import { formatDate, formatTime, parseTypedTime, utcTitle } from '@/utils/time'
 import { DateTextInput } from '@/components/DateTextInput'
+import { ListPager } from '@/components/ListPager'
 
 // Admin view over the ai.chat.complete audit records: who used the assistant
 // how much in a period (requests, tokens, tool calls). Visibility instead of a
@@ -126,7 +127,8 @@ export default function AdminAIUsage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-800">
+      <div className="rounded-lg border border-slate-800">
+        <div className="overflow-x-auto">
         <table className="min-w-full text-sm" data-testid="ai-usage-table">
           <thead className="bg-slate-900/60 text-slate-400">
             <tr>
@@ -181,26 +183,8 @@ export default function AdminAIUsage() {
             )}
           </tbody>
         </table>
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-800 px-3 py-2 text-xs text-slate-400" data-testid="ai-usage-pager">
-            <span>
-              {tr('common.pagination.range', '{{from}}-{{to}} / {{total}}', {
-                from: (currentPage - 1) * PAGE_SIZE + 1,
-                to: Math.min(currentPage * PAGE_SIZE, rows.length),
-                total: rows.length,
-              })}
-            </span>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} className="rounded-sm border border-slate-600 px-3 py-1.5 text-slate-300 hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
-                {tr('common.prev', 'Prev')}
-              </button>
-              <span className="min-w-[48px] text-center text-slate-300">{currentPage} / {pageCount}</span>
-              <button type="button" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= pageCount} className="rounded-sm border border-slate-600 px-3 py-1.5 text-slate-300 hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
-                {tr('common.next', 'Next')}
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
+        <ListPager currentPage={currentPage} totalPages={pageCount} total={rows.length} rowsPerPage={PAGE_SIZE} onPageChange={setPage} showPageSize={false} testId="ai-usage-pager" />
       </div>
       <p className="text-xs text-slate-500">
         {partialTokens && <span className="mr-1 text-amber-400" data-testid="ai-usage-partial-legend">* {tr('adminAIUsage.partialLegend', 'Some requests have no token count from the provider; the row total leaves them out.')}</span>}
