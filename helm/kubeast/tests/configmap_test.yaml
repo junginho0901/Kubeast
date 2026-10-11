@@ -215,6 +215,34 @@ tests:
           path: data.OPTIMIZATION_WINDOW_HOURS
           value: "24"
 
+  - it: leaves the external Prometheus source empty by default with discovery on and the cluster label "cluster"
+    asserts:
+      - equal:
+          path: data.PROMETHEUS_URL
+          value: ""
+      - equal:
+          path: data.PROMETHEUS_CLUSTER_LABEL
+          value: cluster
+      - equal:
+          path: data.PROMETHEUS_DISCOVER
+          value: "true"
+
+  - it: takes the external Prometheus source from features.prometheus
+    set:
+      features.prometheus.url: https://metrics.example.com/prometheus
+      features.prometheus.clusterLabel: k8s_cluster
+      features.prometheus.discover: false
+    asserts:
+      - equal:
+          path: data.PROMETHEUS_URL
+          value: https://metrics.example.com/prometheus
+      - equal:
+          path: data.PROMETHEUS_CLUSTER_LABEL
+          value: k8s_cluster
+      - equal:
+          path: data.PROMETHEUS_DISCOVER
+          value: "false"
+
   - it: turns in-place resize on by default and off from features.inPlaceResize
     asserts:
       - equal:

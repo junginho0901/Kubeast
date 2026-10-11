@@ -45,6 +45,9 @@ type clientBundle struct {
 	// bundle (not the Service) so one cluster's Prometheus never leaks into
 	// another, and a kubeconfig rotation that rebuilds the bundle re-discovers.
 	prom *promCache
+	// promExt is the cluster's external Prometheus source (registration or the
+	// deployment-wide PROMETHEUS_URL); nil = discover one inside the cluster.
+	promExt *promExternal
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
@@ -242,6 +245,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		discovery:   clientset.Discovery(),
 		restConfig:  cfg,
 		prom:        &promCache{},
+		promExt:     externalFromInfo(info),
 		id:          info.ID,
 		cacheClient: cacheClient,
 	}, nil

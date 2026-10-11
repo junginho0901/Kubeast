@@ -219,6 +219,13 @@ spec:
               value: "{{ .Values.multicluster.breakerConsecutiveFails }}"
             - name: MC_BREAKER_OPEN_SEC
               value: "{{ .Values.multicluster.breakerOpenSec }}"
+            {{- with .Values.features.prometheus.auth.existingSecret }}
+            - name: PROMETHEUS_AUTH_HEADER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: authorization
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
           {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled }}
           volumeMounts:

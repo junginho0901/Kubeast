@@ -3446,7 +3446,8 @@
         "unreachable": "Unreachable",
         "disconnected": "Unreachable",
         "unknown": "Not checked"
-      }
+      },
+      "prometheusExternal": "Prometheus: external"
     },
     "register": {
       "title": "Register cluster",
@@ -3469,6 +3470,33 @@
       "self": "removed from the multi-cluster view only.",
       "external": "its stored kubeconfig is deleted too.",
       "submit": "Delete"
+    },
+    "edit": {
+      "prometheus": {
+        "title": "Prometheus",
+        "hint": "Leave empty to find Prometheus inside the cluster. For a central store (Thanos, Mimir, VictoriaMetrics, …) enter its URL and the value of this cluster's label.",
+        "url": "URL",
+        "urlPlaceholder": "https://metrics.example.com/prometheus",
+        "label": "Cluster label value",
+        "labelHint": "The {{name}} label the store puts on this cluster's series — every query gets {{name}}=\"value\". Leave empty when the store holds only this cluster.",
+        "auth": "Authentication",
+        "authKeep": "Set — kept unless changed",
+        "authNone": "None",
+        "authBearer": "Bearer token",
+        "authBasic": "Basic (username / password)",
+        "authClear": "Remove the stored credentials",
+        "token": "Token",
+        "username": "Username",
+        "password": "Password",
+        "check": "Check connection",
+        "checking": "Checking...",
+        "resultExternal": "External store {{endpoint}} — {{state}}",
+        "resultProxy": "Found inside the cluster: {{endpoint}}",
+        "resultNone": "No Prometheus: {{message}}",
+        "ok": "OK",
+        "fail": "failed: {{message}}",
+        "checkNote": "The check uses the saved settings. Save first, then check changed values."
+      }
     }
   },
   "admin": {

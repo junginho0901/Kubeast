@@ -5,6 +5,7 @@
 
 import { client } from './client'
 import type {
+  PrometheusStatus,
   ClusterFeatures,
   DeviceClassItem,
   GPUDashboardData,
@@ -30,8 +31,9 @@ export const gpuApi = {
   },
 
   // Prometheus (generic)
-  getPrometheusStatus: async (): Promise<{ available: boolean; endpoint?: string; message?: string }> => {
-    const { data } = await client.get('/cluster/prometheus/status')
+  // cluster: ask about one cluster explicitly (the admin page); otherwise the selected one.
+  getPrometheusStatus: async (cluster?: string): Promise<PrometheusStatus> => {
+    const { data } = await client.get('/cluster/prometheus/status', { params: cluster ? { cluster } : undefined })
     return data
   },
 

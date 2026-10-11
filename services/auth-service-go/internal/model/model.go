@@ -254,6 +254,21 @@ type UpdateClusterRequest struct {
 	// Kubeconfig, when set, rotates the external cluster's stored kubeconfig
 	// (credential renewal) — the id and all per-cluster RBAC grants are kept.
 	Kubeconfig *string `json:"kubeconfig,omitempty"`
+	// External Prometheus source. An empty string clears the field; the auth
+	// value is written to the cluster-prometheus-<id> Secret and never read back.
+	PrometheusURL          *string                `json:"prometheus_url,omitempty"`
+	PrometheusClusterLabel *string                `json:"prometheus_cluster_label,omitempty"`
+	PrometheusAuth         *PrometheusAuthRequest `json:"prometheus_auth,omitempty"`
+}
+
+// PrometheusAuthRequest sets ("bearer" with Token, "basic" with Username and
+// Password) or clears ("none") the Authorization header for a cluster's
+// external Prometheus.
+type PrometheusAuthRequest struct {
+	Type     string `json:"type"`
+	Token    string `json:"token,omitempty"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 // ValidateClusterRequest is the payload for POST /api/v1/clusters/validate

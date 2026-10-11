@@ -13,6 +13,10 @@ export interface ClusterMeta {
   mode: ClusterMode
   api_server_url?: string
   is_self_cluster: boolean
+  // external Prometheus source (empty = found inside the cluster); auth = a header is stored
+  prometheus_url?: string
+  prometheus_cluster_label?: string
+  prometheus_auth?: boolean
   health_status: string
   last_healthcheck_at?: string
   created_by: string
@@ -25,6 +29,16 @@ export interface RegisterClusterInput {
   display_name: string
   kubeconfig?: string
   api_server_url?: string
+}
+
+// PATCH /clusters/{id}: an empty prometheus_url or label clears it; prometheus_auth
+// type "none" removes the stored header.
+export interface ClusterPatch {
+  display_name?: string
+  kubeconfig?: string
+  prometheus_url?: string
+  prometheus_cluster_label?: string
+  prometheus_auth?: { type: 'none' | 'bearer' | 'basic'; token?: string; username?: string; password?: string }
 }
 
 export interface ConnectionResult {
@@ -54,7 +68,7 @@ export const clustersApi = {
 
   updateCluster: async (
     id: string,
-    patch: { display_name?: string; kubeconfig?: string },
+    patch: ClusterPatch,
   ): Promise<ClusterMeta> => {
     const { data } = await client.patch(`/clusters/${id}`, patch)
     return data

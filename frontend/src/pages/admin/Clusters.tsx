@@ -124,7 +124,14 @@ export default function AdminClusters() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-300" title={c.mode}>{tr(`cluster.admin.modeValue.${c.mode}`, c.mode)}</td>
-                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]" title={c.api_server_url || undefined}>{c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')}</td>
+                  <td className="px-4 py-3 text-slate-400 truncate max-w-[220px]" title={c.api_server_url || undefined}>
+                    {c.api_server_url || (c.is_self_cluster ? tr('cluster.admin.inCluster', 'In-cluster') : '-')}
+                    {c.prometheus_url && (
+                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300" title={c.prometheus_url} data-testid="cluster-prometheus-external">
+                        {tr('cluster.admin.prometheusExternal', 'Prometheus: external')}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${healthDotClass(res ? (res.healthy ? 'healthy' : 'unhealthy') : c.health_status)}`} />

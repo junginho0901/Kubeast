@@ -3794,7 +3794,8 @@
         "unreachable": "연결 안 됨",
         "disconnected": "연결 안 됨",
         "unknown": "확인 전"
-      }
+      },
+      "prometheusExternal": "Prometheus: 외부"
     },
     "register": {
       "title": "클러스터 등록",
@@ -3831,7 +3832,32 @@
       "kubeconfig": "kubeconfig 교체 (선택)",
       "kubeconfigHint": "비워 두면 지금 kubeconfig를 유지합니다. 자격 증명을 바꾸려면 새 kubeconfig를 붙여 넣으세요.",
       "sameClusterNote": "새 kubeconfig는 같은 클러스터를 가리켜야 합니다 — RBAC 부여와 채팅 기록은 유지됩니다.",
-      "title": "클러스터 편집"
+      "title": "클러스터 편집",
+      "prometheus": {
+        "title": "Prometheus",
+        "hint": "비워 두면 클러스터 안에서 Prometheus를 찾습니다. 중앙 저장소(Thanos·Mimir·VictoriaMetrics 등)를 쓰면 주소와 이 클러스터의 레이블 값을 적으세요.",
+        "url": "주소 (URL)",
+        "urlPlaceholder": "https://metrics.example.com/prometheus",
+        "label": "클러스터 레이블 값",
+        "labelHint": "저장소의 시리즈에 붙은 {{name}} 레이블 값 — 모든 질의에 {{name}}=\"값\"이 더해집니다. 저장소에 이 클러스터만 있으면 비워 둡니다.",
+        "auth": "인증",
+        "authKeep": "설정됨 — 바꾸지 않으면 유지",
+        "authNone": "없음",
+        "authBearer": "Bearer 토큰",
+        "authBasic": "Basic (아이디/비밀번호)",
+        "authClear": "저장된 인증 지우기",
+        "token": "토큰",
+        "username": "아이디",
+        "password": "비밀번호",
+        "check": "연결 확인",
+        "checking": "확인 중...",
+        "resultExternal": "외부 저장소 {{endpoint}} — {{state}}",
+        "resultProxy": "클러스터 안에서 찾음: {{endpoint}}",
+        "resultNone": "Prometheus 없음: {{message}}",
+        "ok": "정상",
+        "fail": "실패: {{message}}",
+        "checkNote": "연결 확인은 저장된 설정으로 합니다. 바꾼 값은 저장 뒤에 확인하세요."
+      }
     },
     "noAccess": {
       "body": "아직 접근 권한을 받은 클러스터가 없습니다. 관리자에게 클러스터 역할을 요청하세요.",

@@ -574,6 +574,17 @@ export interface PrometheusQueryResult {
   value: number
 }
 
+// GET /cluster/prometheus/status — where the cluster's metrics come from.
+export interface PrometheusStatus {
+  available: boolean
+  source?: 'external' | 'proxy' | 'none'
+  endpoint?: string
+  auth?: boolean
+  cluster_label?: string
+  label_name?: string
+  message?: string
+}
+
 export interface PrometheusQueryResponse {
   available: boolean
   results: PrometheusQueryResult[]

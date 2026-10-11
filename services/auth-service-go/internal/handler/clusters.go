@@ -272,7 +272,51 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		h.invalidateToolServer(r, id)
 	}
 
-	meta, err := h.registry.UpdateMeta(r.Context(), id, req.DisplayName, req.APIServerURL)
+	patch := cluster.MetaPatch{DisplayName: req.DisplayName, APIServerURL: req.APIServerURL, PrometheusURL: req.PrometheusURL, PrometheusClusterLabel: req.PrometheusClusterLabel}
+	if req.PrometheusURL != nil && *req.PrometheusURL != "" {
+		if verr := validatePrometheusURL(*req.PrometheusURL); verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+	}
+	if req.PrometheusClusterLabel != nil && *req.PrometheusClusterLabel != "" && !promLabelValue.MatchString(*req.PrometheusClusterLabel) {
+		response.Error(w, http.StatusBadRequest, "prometheus_cluster_label: letters, digits, _ . : / - only (max 128)")
+		return
+	}
+	// The Authorization header goes to the cluster-prometheus-<id> Secret; the
+	// row only keeps the Secret's name, and "none" removes both.
+	promAuthChange := ""
+	if req.PrometheusAuth != nil {
+		header, verr := prometheusAuthHeader(*req.PrometheusAuth)
+		if verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+		if header == "" {
+			if name, _ := h.registry.PrometheusAuthSecretName(r.Context(), id); name != "" && h.secrets != nil {
+				if derr := h.secrets.DeleteSecret(r.Context(), name); derr != nil {
+					slog.Warn("cluster: prometheus auth secret delete failed", "id", id, "err", derr)
+				}
+			}
+			cleared := ""
+			patch.PrometheusAuthSecretName = &cleared
+			promAuthChange = "cleared"
+		} else {
+			if h.secrets == nil {
+				response.Error(w, http.StatusBadRequest, "no secret store configured for this deployment mode")
+				return
+			}
+			name := cluster.PrometheusSecretName(id)
+			if werr := h.secrets.WriteValue(r.Context(), name, cluster.PrometheusAuthKey, header); werr != nil {
+				response.Error(w, http.StatusInternalServerError, "store prometheus auth: "+werr.Error())
+				return
+			}
+			patch.PrometheusAuthSecretName = &name
+			promAuthChange = "set"
+		}
+	}
+
+	meta, err := h.registry.UpdateMeta(r.Context(), id, patch)
 	if errors.Is(err, cluster.ErrNotFound) {
 		response.Error(w, http.StatusNotFound, "Cluster not found")
 		return
@@ -282,7 +326,16 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		response.InternalError(w, r, err)
 		return
 	}
-	h.audit(r, "admin.cluster.update", payload, string(id), before, meta, nil)
+	// A changed Prometheus source takes effect on the next query: k8s-service
+	// keeps the source on its per-cluster bundle.
+	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil {
+		h.invalidateK8sBundle(r, id)
+	}
+	after := struct {
+		*cluster.Meta
+		PrometheusAuthChange string `json:"prometheus_auth_change,omitempty"`
+	}{meta, promAuthChange}
+	h.audit(r, "admin.cluster.update", payload, string(id), before, after, nil)
 	response.JSON(w, http.StatusOK, meta)
 }
 
@@ -369,7 +422,7 @@ func (h *ClustersHandler) TestCluster(w http.ResponseWriter, r *http.Request) {
 	// Clusters registered without an API server address get the one the probe saw.
 	if result.Server != "" {
 		if meta, merr := h.registry.GetMeta(r.Context(), id); merr == nil && meta.APIServerURL == "" {
-			if _, uerr := h.registry.UpdateMeta(r.Context(), id, nil, &result.Server); uerr != nil {
+			if _, uerr := h.registry.UpdateMeta(r.Context(), id, cluster.MetaPatch{APIServerURL: &result.Server}); uerr != nil {
 				slog.Warn("cluster: fill api server url failed", "id", id, "err", uerr)
 			}
 		}

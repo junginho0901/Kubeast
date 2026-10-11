@@ -103,6 +103,12 @@ sessionRecording:
 features:
   prometheus:
     enabled: true
+    # The second kind cluster's Prometheus NodePorts (prometheus-external.spec.ts) on the docker "kind" network.
+    egressCIDRs:
+      - cidr: 172.18.0.0/16
+        port: 30090
+      - cidr: 172.18.0.0/16
+        port: 30091
   # The e2e-logfile-writer fixture in default (deploy/kind/fixtures.yaml).
   logFiles:
     enabled: true

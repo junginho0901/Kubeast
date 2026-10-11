@@ -129,6 +129,9 @@ data:
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
+  PROMETHEUS_URL: {{ .Values.features.prometheus.url | quote }}
+  PROMETHEUS_CLUSTER_LABEL: {{ .Values.features.prometheus.clusterLabel | quote }}
+  PROMETHEUS_DISCOVER: {{ .Values.features.prometheus.discover | quote }}
   ISSUES_EVENT_WINDOW_MINUTES: {{ .Values.features.issues.eventWindowMinutes | quote }}
   OPTIMIZATION_WINDOW_HOURS: {{ .Values.features.optimization.windowHours | quote }}
   HYGIENE_ENABLED: {{ .Values.features.hygiene.enabled | quote }}

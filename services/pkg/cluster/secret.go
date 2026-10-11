@@ -15,15 +15,25 @@ import (
 
 const kubeconfigSecretKey = "kubeconfig"
 
+// PrometheusAuthKey is the key of the cluster-prometheus-<id> Secret that holds
+// the full Authorization header value for the cluster's external Prometheus.
+const PrometheusAuthKey = "authorization"
+
 // SecretReader loads a cluster's kubeconfig from a backing secret store.
 type SecretReader interface {
 	ReadKubeconfig(ctx context.Context, secretName string) (string, error)
+	// ReadValue returns one key of a named secret ("" and an error when absent).
+	ReadValue(ctx context.Context, secretName, key string) (string, error)
 }
 
 // SecretWriter stores and removes per-cluster kubeconfigs.
 type SecretWriter interface {
 	WriteKubeconfig(ctx context.Context, id ID, content string) (secretName string, err error)
 	DeleteKubeconfig(ctx context.Context, secretName string) error
+	// WriteValue stores one key of a named secret (created or replaced).
+	WriteValue(ctx context.Context, secretName, key, value string) error
+	// DeleteSecret removes a named secret; absent is not an error.
+	DeleteSecret(ctx context.Context, secretName string) error
 }
 
 // SecretStore is a combined reader/writer.
@@ -34,6 +44,10 @@ type SecretStore interface {
 
 // SecretName returns the Secret name holding cluster id's kubeconfig.
 func SecretName(id ID) string { return "cluster-kubeconfig-" + string(id) }
+
+// PrometheusSecretName returns the Secret name holding cluster id's external
+// Prometheus Authorization header (key PrometheusAuthKey).
+func PrometheusSecretName(id ID) string { return "cluster-prometheus-" + string(id) }
 
 // --- K8s Secret store (helm mode) ---
 
@@ -100,6 +114,44 @@ func (s *K8sSecretStore) DeleteKubeconfig(ctx context.Context, secretName string
 	return err
 }
 
+func (s *K8sSecretStore) ReadValue(ctx context.Context, secretName, key string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	sec, err := s.client.CoreV1().Secrets(s.namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get secret %s/%s: %w", s.namespace, secretName, err)
+	}
+	v, ok := sec.Data[key]
+	if !ok {
+		return "", fmt.Errorf("secret %s missing key %q", secretName, key)
+	}
+	return string(v), nil
+}
+
+func (s *K8sSecretStore) WriteValue(ctx context.Context, secretName, key, value string) error {
+	sec := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: s.namespace,
+			Labels:    map[string]string{"app.kubernetes.io/managed-by": "kubeast"},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{key: []byte(value)},
+	}
+	_, err := s.client.CoreV1().Secrets(s.namespace).Create(ctx, sec, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		_, err = s.client.CoreV1().Secrets(s.namespace).Update(ctx, sec, metav1.UpdateOptions{})
+	}
+	if err != nil {
+		return fmt.Errorf("write secret %s: %w", secretName, err)
+	}
+	return nil
+}
+
+func (s *K8sSecretStore) DeleteSecret(ctx context.Context, secretName string) error {
+	return s.DeleteKubeconfig(ctx, secretName)
+}
+
 // --- Filesystem store (docker mode) ---
 
 // FilesystemSecretStore keeps per-cluster kubeconfigs as files (docker-compose
@@ -164,4 +216,37 @@ func (s *FilesystemSecretStore) DeleteKubeconfig(_ context.Context, secretName s
 		return nil
 	}
 	return err
+}
+
+// Named values live next to the kubeconfigs as <dir>/<secretName>.<key>.
+func (s *FilesystemSecretStore) valuePath(secretName, key string) string {
+	return filepath.Join(s.dir, secretName+"."+key)
+}
+
+func (s *FilesystemSecretStore) ReadValue(_ context.Context, secretName, key string) (string, error) {
+	b, err := os.ReadFile(s.valuePath(secretName, key))
+	if err != nil {
+		return "", fmt.Errorf("read secret %s/%s: %w", secretName, key, err)
+	}
+	return string(b), nil
+}
+
+func (s *FilesystemSecretStore) WriteValue(_ context.Context, secretName, key, value string) error {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(s.valuePath(secretName, key), []byte(value), 0o600)
+}
+
+func (s *FilesystemSecretStore) DeleteSecret(_ context.Context, secretName string) error {
+	matches, err := filepath.Glob(filepath.Join(s.dir, secretName+".*"))
+	if err != nil {
+		return err
+	}
+	for _, m := range matches {
+		if err := os.Remove(m); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }

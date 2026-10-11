@@ -366,6 +366,15 @@ spec:
     # session recording store (sessionRecording.egress)
     {{- toYaml . | nindent 4 }}
     {{- end }}
+    {{- range .Values.features.prometheus.egressCIDRs }}
+    # external Prometheus store (features.prometheus.egressCIDRs) — 443/6443 are open above
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+        - protocol: TCP
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
+    {{- end }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress
 apiVersion: networking.k8s.io/v1

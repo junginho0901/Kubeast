@@ -540,8 +540,25 @@ networkPolicy:
 # Default is `false` so a fresh install behaves the same as before the
 # Prometheus dependency was introduced; flip to `true` to opt in.
 features:
+  # Metrics. By default Kubeast looks for a Prometheus Service inside each
+  # registered cluster and queries it through the API server proxy. A cluster
+  # can instead name an external (central) store in Admin → Clusters → Edit:
+  # URL, bearer/basic auth (kept in a Secret) and the value of the cluster label
+  # its series carry — every query then gets <clusterLabel>="<value>". url and
+  # auth.existingSecret (key "authorization", the full header value) are the
+  # deployment-wide fallback for clusters without their own; discover: false
+  # turns the in-cluster search off.
   prometheus:
     enabled: false
+    url: ""
+    auth:
+      existingSecret: ""
+    clusterLabel: cluster
+    discover: true
+    # With networkPolicy on, k8s-service may only reach ports 443 and 6443
+    # outside the cluster; an external store on another port needs its
+    # address here ({cidr, port}; a plain CIDR means 443).
+    egressCIDRs: []
   # Dashboard quick actions. "Check issues" reads Warning events this many
   # minutes back; "Optimization" sizes requests from this many hours of usage
   # (Prometheus; without it, one metrics-server sample).

@@ -41,6 +41,14 @@ type Info struct {
 	// runs in. It is only set when an admin explicitly registers the self
 	// cluster — single-cluster deployments leave it false.
 	IsSelfCluster bool
+
+	// Prometheus source when an external (central) store is registered for
+	// this cluster: its base URL, the Authorization header to send (resolved
+	// from the cluster-prometheus-<id> Secret) and the value of the cluster
+	// label its series carry. All empty = find Prometheus inside the cluster.
+	PrometheusURL          string
+	PrometheusAuthHeader   string
+	PrometheusClusterLabel string
 }
 
 // Registry is the source of truth for the set of managed clusters.

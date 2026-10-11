@@ -79,11 +79,15 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 		mode       string
 		secretName *string
 		apiURL     *string
+		promURL    *string
+		promSecret *string
+		promLabel  *string
 	)
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster
+		SELECT id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster,
+		       prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label
 		FROM clusters WHERE id = $1`, id,
-	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster)
+	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster, &promURL, &promSecret, &promLabel)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -91,6 +95,21 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 		return nil, err
 	}
 	info.Mode = Mode(mode)
+	if promURL != nil {
+		info.PrometheusURL = *promURL
+	}
+	if promLabel != nil {
+		info.PrometheusClusterLabel = *promLabel
+	}
+	// The Authorization header is optional for metrics: a missing Secret is
+	// logged and the cluster stays usable (its Prometheus status says 401).
+	if promSecret != nil && *promSecret != "" && r.secrets != nil {
+		if h, err := r.secrets.ReadValue(ctx, *promSecret, PrometheusAuthKey); err != nil {
+			slog.Warn("cluster: prometheus auth secret unreadable", "id", id, "secret", *promSecret, "err", err)
+		} else {
+			info.PrometheusAuthHeader = h
+		}
+	}
 
 	if info.IsSelfCluster {
 		info.InCluster = true
@@ -129,34 +148,49 @@ func (r *PostgresRegistry) Default(ctx context.Context) (ID, error) {
 // API. Unlike Info (which carries connection details for runtime access), Meta
 // never includes the kubeconfig blob.
 type Meta struct {
-	ID                ID         `json:"id"`
-	DisplayName       string     `json:"display_name"`
-	Mode              Mode       `json:"mode"`
-	APIServerURL      string     `json:"api_server_url,omitempty"`
-	IsSelfCluster     bool       `json:"is_self_cluster"`
-	HealthStatus      string     `json:"health_status"`
-	LastHealthcheckAt *time.Time `json:"last_healthcheck_at,omitempty"`
-	CreatedBy         string     `json:"created_by"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID            ID     `json:"id"`
+	DisplayName   string `json:"display_name"`
+	Mode          Mode   `json:"mode"`
+	APIServerURL  string `json:"api_server_url,omitempty"`
+	IsSelfCluster bool   `json:"is_self_cluster"`
+	// External Prometheus source (empty = found inside the cluster); the auth
+	// header itself never leaves the Secret, only whether one is set.
+	PrometheusURL          string     `json:"prometheus_url,omitempty"`
+	PrometheusClusterLabel string     `json:"prometheus_cluster_label,omitempty"`
+	PrometheusAuth         bool       `json:"prometheus_auth"`
+	HealthStatus           string     `json:"health_status"`
+	LastHealthcheckAt      *time.Time `json:"last_healthcheck_at,omitempty"`
+	CreatedBy              string     `json:"created_by"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
 }
 
 func scanMeta(row pgx.Row) (Meta, error) {
 	var (
-		m         Meta
-		mode      string
-		apiURL    *string
-		lastCheck *time.Time
-		health    *string
+		m          Meta
+		mode       string
+		apiURL     *string
+		lastCheck  *time.Time
+		health     *string
+		promURL    *string
+		promSecret *string
+		promLabel  *string
 	)
 	if err := row.Scan(&m.ID, &m.DisplayName, &mode, &apiURL, &m.IsSelfCluster,
-		&health, &lastCheck, &m.CreatedBy, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		&health, &lastCheck, &m.CreatedBy, &m.CreatedAt, &m.UpdatedAt, &promURL, &promSecret, &promLabel); err != nil {
 		return Meta{}, err
 	}
 	m.Mode = Mode(mode)
 	if apiURL != nil {
 		m.APIServerURL = *apiURL
 	}
+	if promURL != nil {
+		m.PrometheusURL = *promURL
+	}
+	if promLabel != nil {
+		m.PrometheusClusterLabel = *promLabel
+	}
+	m.PrometheusAuth = promSecret != nil && *promSecret != ""
 	if health != nil {
 		m.HealthStatus = *health
 	}
@@ -165,7 +199,8 @@ func scanMeta(row pgx.Row) (Meta, error) {
 }
 
 const metaColumns = `id, display_name, mode, api_server_url, is_self_cluster,
-	health_status, last_healthcheck_at, created_by, created_at, updated_at`
+	health_status, last_healthcheck_at, created_by, created_at, updated_at,
+	prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label`
 
 // ListMeta returns metadata for every registered cluster (admin CRUD list).
 func (r *PostgresRegistry) ListMeta(ctx context.Context) ([]Meta, error) {
@@ -292,8 +327,8 @@ func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy s
 // best-effort removes its kubeconfig secret. A secret-delete failure does not
 // fail the call — the row is already gone.
 func (r *PostgresRegistry) Remove(ctx context.Context, id ID, writer SecretWriter) error {
-	var secretName *string
-	err := r.pool.QueryRow(ctx, `SELECT kubeconfig_secret_name FROM clusters WHERE id = $1`, id).Scan(&secretName)
+	var secretName, promSecret *string
+	err := r.pool.QueryRow(ctx, `SELECT kubeconfig_secret_name, prometheus_auth_secret_name FROM clusters WHERE id = $1`, id).Scan(&secretName, &promSecret)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -308,19 +343,50 @@ func (r *PostgresRegistry) Remove(ctx context.Context, id ID, writer SecretWrite
 			slog.Warn("cluster: best-effort kubeconfig secret delete failed", "id", id, "secret", *secretName, "err", err)
 		}
 	}
+	if promSecret != nil && *promSecret != "" && writer != nil {
+		if err := writer.DeleteSecret(ctx, *promSecret); err != nil {
+			slog.Warn("cluster: best-effort prometheus secret delete failed", "id", id, "secret", *promSecret, "err", err)
+		}
+	}
 	return nil
 }
 
-// UpdateMeta updates the mutable metadata of a cluster (display name and the
-// display-only API server URL). The ID is immutable. nil fields are left
-// unchanged.
-func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, displayName, apiServerURL *string) (*Meta, error) {
+// MetaPatch is what UpdateMeta changes: nil leaves a field as it is; for the
+// Prometheus fields an empty string clears it (NULL).
+type MetaPatch struct {
+	DisplayName              *string
+	APIServerURL             *string
+	PrometheusURL            *string
+	PrometheusAuthSecretName *string
+	PrometheusClusterLabel   *string
+}
+
+// PrometheusAuthSecretName returns the name of the Secret holding cluster id's
+// Prometheus Authorization header, or "" when none is set.
+func (r *PostgresRegistry) PrometheusAuthSecretName(ctx context.Context, id ID) (string, error) {
+	var name *string
+	err := r.pool.QueryRow(ctx, `SELECT prometheus_auth_secret_name FROM clusters WHERE id = $1`, id).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil || name == nil {
+		return "", err
+	}
+	return *name, nil
+}
+
+// UpdateMeta updates the mutable metadata of a cluster (display name, the
+// display-only API server URL and the Prometheus source). The ID is immutable.
+func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatch) (*Meta, error) {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE clusters
-		SET display_name   = COALESCE($2, display_name),
-		    api_server_url = COALESCE($3, api_server_url),
-		    updated_at     = NOW()
-		WHERE id = $1`, id, displayName, apiServerURL)
+		SET display_name                = COALESCE($2, display_name),
+		    api_server_url              = COALESCE($3, api_server_url),
+		    prometheus_url              = CASE WHEN $4::varchar IS NULL THEN prometheus_url ELSE NULLIF($4, '') END,
+		    prometheus_auth_secret_name = CASE WHEN $5::varchar IS NULL THEN prometheus_auth_secret_name ELSE NULLIF($5, '') END,
+		    prometheus_cluster_label    = CASE WHEN $6::varchar IS NULL THEN prometheus_cluster_label ELSE NULLIF($6, '') END,
+		    updated_at                  = NOW()
+		WHERE id = $1`, id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel)
 	if err != nil {
 		return nil, err
 	}

@@ -87,27 +87,47 @@ func (s *Service) PrometheusAvailable(ctx context.Context) bool {
 	if !PrometheusFeatureEnabled() {
 		return false
 	}
-	return s.getPromService(ctx) != nil
+	return s.getPromSource(ctx) != nil
 }
 
-// PrometheusStatus returns status information about the Prometheus integration.
+// PrometheusStatus says where this cluster's metrics come from and whether
+// that source answers: external (URL, auth set, cluster label) or proxy
+// (Service found in the cluster), or none.
 func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 	if !PrometheusFeatureEnabled() {
 		return map[string]interface{}{
 			"available": false,
+			"source":    "none",
 			"message":   "Prometheus integration disabled (features.prometheus.enabled=false)",
 		}
 	}
-	svc := s.getPromService(ctx)
-	if svc == nil {
-		return map[string]interface{}{
-			"available": false,
-			"message":   "Prometheus not found in target cluster",
+	src := s.getPromSource(ctx)
+	if src == nil {
+		msg := "Prometheus not found in target cluster"
+		if !PrometheusDiscoverEnabled() {
+			msg = "No Prometheus URL registered for this cluster (features.prometheus.discover=false)"
 		}
+		return map[string]interface{}{"available": false, "source": "none", "message": msg}
+	}
+	if src.ext != nil {
+		ok, msg := src.ext.healthy(ctx)
+		out := map[string]interface{}{
+			"available":     ok,
+			"source":        "external",
+			"endpoint":      src.ext.baseURL,
+			"auth":          src.ext.authHeader != "",
+			"cluster_label": src.ext.labelValue,
+			"label_name":    PrometheusClusterLabelName(),
+		}
+		if !ok {
+			out["message"] = msg
+		}
+		return out
 	}
 	return map[string]interface{}{
 		"available": true,
-		"endpoint":  fmt.Sprintf("%s/%s:%d (via K8s API proxy)", svc.Namespace, svc.Name, svc.Port),
+		"source":    "proxy",
+		"endpoint":  fmt.Sprintf("%s/%s:%d (via K8s API proxy)", src.proxy.Namespace, src.proxy.Name, src.proxy.Port),
 	}
 }
 
@@ -117,12 +137,15 @@ func (s *Service) PrometheusQuery(ctx context.Context, query string) ([]Promethe
 	if !PrometheusFeatureEnabled() {
 		return nil, nil
 	}
-	svc := s.getPromService(ctx)
-	if svc == nil {
+	src := s.getPromSource(ctx)
+	if src == nil {
 		return nil, nil
 	}
-
-	raw, err := s.prometheusViaProxy(ctx, svc, "/api/v1/query?query="+url.QueryEscape(query))
+	query, err := src.scoped(query)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := s.promFetch(ctx, src, "/api/v1/query?query="+url.QueryEscape(query))
 	if err != nil {
 		return nil, err
 	}
@@ -144,11 +167,15 @@ func (s *Service) PrometheusQueryRaw(ctx context.Context, query string) ([]map[s
 	if !PrometheusFeatureEnabled() {
 		return nil, nil
 	}
-	svc := s.getPromService(ctx)
-	if svc == nil {
+	src := s.getPromSource(ctx)
+	if src == nil {
 		return nil, nil
 	}
-	return s.prometheusViaProxy(ctx, svc, "/api/v1/query?query="+url.QueryEscape(query))
+	query, err := src.scoped(query)
+	if err != nil {
+		return nil, err
+	}
+	return s.promFetch(ctx, src, "/api/v1/query?query="+url.QueryEscape(query))
 }
 
 // PrometheusRangeSeries is one labelled time series returned by a range query.
@@ -173,9 +200,13 @@ func (s *Service) PrometheusQueryRange(ctx context.Context, query string, start,
 	if !PrometheusFeatureEnabled() {
 		return nil, nil
 	}
-	svc := s.getPromService(ctx)
-	if svc == nil {
+	src := s.getPromSource(ctx)
+	if src == nil {
 		return nil, nil
+	}
+	query, err := src.scoped(query)
+	if err != nil {
+		return nil, err
 	}
 	if stepSeconds <= 0 {
 		stepSeconds = 60
@@ -185,7 +216,7 @@ func (s *Service) PrometheusQueryRange(ctx context.Context, query string, start,
 	params.Set("start", strconv.FormatInt(start.Unix(), 10))
 	params.Set("end", strconv.FormatInt(end.Unix(), 10))
 	params.Set("step", strconv.Itoa(stepSeconds))
-	raw, err := s.prometheusViaProxy(ctx, svc, "/api/v1/query_range?"+params.Encode())
+	raw, err := s.promFetch(ctx, src, "/api/v1/query_range?"+params.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -330,15 +361,6 @@ func (s *Service) verifyPrometheusProxy(ctx context.Context, info *promServiceIn
 		return false
 	}
 	return true
-}
-
-// prometheusViaProxy coalesces + caches identical queries per cluster (step 15)
-// then delegates to the uncached proxy call.
-func (s *Service) prometheusViaProxy(ctx context.Context, info *promServiceInfo, promPath string) ([]map[string]interface{}, error) {
-	key := string(ctxClusterID(ctx)) + "|" + promPath
-	return s.promQ.do(key, func() ([]map[string]interface{}, error) {
-		return s.prometheusViaProxyUncached(ctx, info, promPath)
-	})
 }
 
 // prometheusViaProxyUncached queries Prometheus through the K8s API server service
