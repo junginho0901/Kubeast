@@ -111,9 +111,16 @@ auth:
     # and is bound to each listed ClusterRole (view, edit, admin, cluster-admin,
     # kubeast:cluster-reader or your own). Apply the same rendering to every
     # registered cluster (templates/impersonation-custom-roles.yaml).
+    # An entry with namespaces binds the group with a RoleBinding in each of
+    # them instead of cluster-wide — the shape a namespace-scoped grant needs;
+    # name Read, Write or Admin there to bind the system roles' scoped groups
+    # (kubeast:role:read/write/admin, already allowed for impersonation).
     customRoles: []
     #  - name: sre-readonly
     #    clusterRoles: [view, "kubeast:cluster-reader"]
+    #  - name: Read                      # Read grants limited to these namespaces
+    #    namespaces: [team-a, team-b]
+    #    clusterRoles: [view]
   # Access requests: a user who already reaches a cluster asks for a higher
   # role on it for a bounded time with a reason; an admin (admin.users.update,
   # never the requester) approves or rejects in Admin → Access requests. The

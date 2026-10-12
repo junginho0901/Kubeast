@@ -1,10 +1,13 @@
 {{- if and .Values.auth.impersonation.enabled .Values.auth.impersonation.customRoles }}
 # Custom Kubeast roles granted on a cluster act as group kubeast:role:<slug>
-# (services/pkg/auth/impersonation.go). files/impersonation-rbac.yaml allows
-# impersonating only the four fixed groups, so this adds the custom groups to
-# the impersonator (bound the same two ways: the kubeast:impersonator group for
-# external credentials and the two service accounts here) and binds each group
-# to the ClusterRoles it names. Apply to every registered cluster:
+# (services/pkg/auth/impersonation.go), and so does a Read/Write/Admin grant
+# limited to namespaces. files/impersonation-rbac.yaml allows impersonating the
+# fixed groups and kubeast:role:read/write/admin only, so this adds the custom
+# groups to the impersonator (bound the same two ways: the kubeast:impersonator
+# group for external credentials and the two service accounts here) and binds
+# each group to the ClusterRoles it names — cluster-wide, or, when the entry
+# lists namespaces, with a RoleBinding in each of them. Apply to every
+# registered cluster:
 #   helm template kubeast helm/kubeast -s templates/impersonation-custom-roles.yaml -f <values> | kubectl --context <cluster> apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -44,6 +47,26 @@ subjects:
 {{- range $role := .Values.auth.impersonation.customRoles }}
 {{- $group := printf "kubeast:role:%s" (include "kubeast.roleSlug" $role.name) }}
 {{- range $cr := $role.clusterRoles }}
+{{- if $role.namespaces }}
+{{- range $ns := $role.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-%s" $group (include "kubeast.roleSlug" $cr) | replace ":" "-" }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kubeast.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $cr }}
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ $group }}
+{{- end }}
+{{- else }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -59,6 +82,7 @@ subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
     name: {{ $group }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

@@ -17,3 +17,25 @@ tests:
           value: rbac.cluster-admin
       - isNotEmpty:
           path: metadata.annotations["kubeast.io/hygiene-exempt-reason"]
+
+  - it: allows the namespace-scoped system role groups for impersonation
+    asserts:
+      - isKind:
+          of: ClusterRole
+        documentIndex: 0
+      - contains:
+          path: rules[1].resourceNames
+          content: kubeast:role:read
+        documentIndex: 0
+      - contains:
+          path: rules[1].resourceNames
+          content: kubeast:role:write
+        documentIndex: 0
+      - contains:
+          path: rules[1].resourceNames
+          content: kubeast:role:admin
+        documentIndex: 0
+      - notContains:
+          path: rules[1].resourceNames
+          content: system:masters
+        documentIndex: 0

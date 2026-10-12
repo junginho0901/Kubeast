@@ -90,3 +90,43 @@ tests:
           path: roleRef.name
           value: cluster-admin
         documentIndex: 4
+
+  - it: binds a namespace-scoped entry with a RoleBinding in each namespace, not cluster-wide
+    set:
+      auth.impersonation.customRoles:
+        - name: Read
+          namespaces: [web, api]
+          clusterRoles: [view]
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: rules[0].resourceNames
+          value: ["kubeast:role:read"]
+        documentIndex: 0
+      - isKind:
+          of: RoleBinding
+        documentIndex: 2
+      - equal:
+          path: metadata.namespace
+          value: web
+        documentIndex: 2
+      - equal:
+          path: metadata.name
+          value: kubeast-role-read-view
+        documentIndex: 2
+      - equal:
+          path: roleRef.name
+          value: view
+        documentIndex: 2
+      - equal:
+          path: subjects[0].name
+          value: kubeast:role:read
+        documentIndex: 2
+      - isKind:
+          of: RoleBinding
+        documentIndex: 3
+      - equal:
+          path: metadata.namespace
+          value: api
+        documentIndex: 3
