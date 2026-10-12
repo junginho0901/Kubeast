@@ -123,16 +123,16 @@ test.describe('service backends from EndpointSlices', () => {
   test('the AI service check reports the same ready count through MCP', async ({ request }) => {
     const config = await request.get('/api/v1/ai/mcp/config', { headers: bearer(admin) })
     test.skip(!config.ok() || !(await config.json()).enabled, 'the MCP server is off (mcp.enabled)')
-    // The agent acts under a user's key, and the tools follow that user's cluster grant. The MCP server and the
-    // ai.tool.* permissions come with the Write role (the Read role has neither), so a Member with Write on self.
+    // The agent acts under a user's key, and the tools follow that user's cluster grant: the service check is a read
+    // tool, so a Member with Read on self and a Read-ceiling key is enough.
     const raw = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
     const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E eps', email: READER, password: PW, role_id: member.id } })
     expect(created.status(), await created.text()).toBe(201)
     readerId = (await created.json()).id
-    expect((await request.put(`/api/v1/auth/admin/users/${readerId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Write' } })).ok()).toBeTruthy()
+    expect((await request.put(`/api/v1/auth/admin/users/${readerId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })).ok()).toBeTruthy()
     const reader = await login(request, READER, PW)
-    const keyRes = await request.post('/api/v1/auth/api-keys', { headers: bearer(reader), data: { name: 'e2e eps', expires_in_days: 1, cluster_ids: ['self'], role_ceiling: 'Write' } })
+    const keyRes = await request.post('/api/v1/auth/api-keys', { headers: bearer(reader), data: { name: 'e2e eps', expires_in_days: 1, cluster_ids: ['self'], role_ceiling: 'Read' } })
     expect(keyRes.status(), await keyRes.text()).toBe(201)
     const key = await keyRes.json()
     const res = await request.post(MCP, { headers: { ...RPC, Authorization: `Bearer ${key.key}` }, data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'k8s_check_service_connectivity', arguments: { cluster: 'self', namespace: NS, service_name: 'web' } } }, failOnStatusCode: false })

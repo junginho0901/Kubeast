@@ -1,8 +1,9 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // C1: AI tool permissions are decided per cluster. A user with the Write role
-// (ai.tool.*) on `test2` and only Read on `self` must get tool calls on test2
-// and NO tool calls on self, even though both grants live in the same token.
+// (ai.tool.*) on `test2` and only Read on `self` gets tool calls on both — the
+// Read role carries the eleven read tools — but every tool call recorded on
+// self is a read tool, even though both grants live in the same token.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -32,7 +33,7 @@ async function chatReply(page: Page, cluster: string): Promise<string> {
 test.describe('AI tool permissions are per cluster (C1)', () => {
   test.setTimeout(10 * 60 * 1000)
 
-  test('Write on test2 gets tool calls, Read on self gets none', async ({ browser, request }) => {
+  test('Write on test2 and Read on self both get tool calls; on self only read tools are ever called', async ({ browser, request }) => {
     const admin = { Authorization: `Bearer ${await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)}` }
     const email = `e2e-toolscope-${Date.now()}@kubeast.local`
     const password = 'toolscope1234'
@@ -67,17 +68,25 @@ test.describe('AI tool permissions are per cluster (C1)', () => {
       }
       expect(toolOnTest2, 'test2 reply should carry a tool call marker').toContain('🔧')
 
-      // self (Read → no ai.tool.*): no tool is offered, so no tool call can appear.
-      const replyOnSelf = await chatReply(page, 'self')
-      expect(replyOnSelf, 'self reply must not carry a tool call marker').not.toContain('🔧')
+      // self (Read → the read tools only): the same list question is answered with a tool call too.
+      let replyOnSelf = ''
+      for (let attempt = 1; attempt <= 3 && !replyOnSelf.includes('🔧'); attempt++) {
+        replyOnSelf = await chatReply(page, 'self')
+      }
+      expect(replyOnSelf, 'self reply should carry a tool call marker (read tools)').toContain('🔧')
 
-      // Audit: every tool call recorded for this user must be on test2.
+      // Audit: every tool call recorded for this user on self is a read tool (after.tool), never a write tool.
       const audit = await request.get('/api/v1/auth/admin/audit-logs?action=ai.tool.call&limit=100', { headers: admin })
-      if (audit.ok()) {
-        const rows = (await audit.json()) as any
-        const list: any[] = Array.isArray(rows) ? rows : rows.items || rows.logs || []
-        const mine = list.filter((r) => r.actor_user_id === userId)
-        for (const r of mine) expect(r.cluster, `audit row ${r.id}`).toBe('test2')
+      expect(audit.ok(), 'audit log read').toBeTruthy()
+      const rows = (await audit.json()) as any
+      const list: any[] = Array.isArray(rows) ? rows : rows.items || rows.logs || []
+      const mine = list.filter((r) => (r.actor_user_id ?? r.ActorUserID) === userId)
+      expect(mine.length, 'tool calls recorded for this user').toBeGreaterThan(0)
+      const onSelf = mine.filter((r) => (r.cluster ?? r.Cluster) === 'self')
+      expect(onSelf.length, 'tool calls on self').toBeGreaterThan(0)
+      for (const r of onSelf) {
+        const tool = String((r.after ?? r.After)?.tool ?? '')
+        expect(tool, `audit row ${r.id} on self`).not.toMatch(/apply|create|delete|patch|scale|rollout|execute|label|annotat/)
       }
       await ctx.close()
     } finally {

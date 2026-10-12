@@ -134,8 +134,11 @@ test.describe('MCP write tools', () => {
       expect(tools.find((t) => t.name === 'k8s_label_resource')!.annotations?.destructiveHint).toBe(false)
       expect(tools.filter((t) => !WRITE_TOOLS.includes(t.name) && t.name !== 'request_access').every((t) => t.annotations?.readOnlyHint === true)).toBe(true)
 
-      // Read ceiling, same user: the key carries no ai.mcp.use — nothing to run, only the way to ask; a write is refused.
-      expect((await listTools(request, readKey.key)).map((t) => t.name)).toEqual(['request_access'])
+      // Read ceiling, same user: the read tools and the way to ask, no write tool; a write is refused.
+      const readNames = (await listTools(request, readKey.key)).map((t) => t.name)
+      for (const w of WRITE_TOOLS) expect(readNames, w).not.toContain(w)
+      expect(readNames).toContain('request_access')
+      expect(readNames).toContain('k8s_get_resources')
       const refused = await callTool(request, readKey.key, 'k8s_scale', { cluster: 'self', resource_type: 'deployment', resource_name: 'web', namespace: ns, replicas: 2 })
       expect(refused.isError).toBe(true)
       expect(refused.content[0].text).toMatch(/forbidden/)
@@ -202,8 +205,11 @@ test.describe('MCP write tools', () => {
       const readerToken = await login(request, reader, PW)
       const key = await issueKey(request, readerToken, 'Write')
 
-      // Read on self: no ai.mcp.use, so the only tool is the request; a write is refused and audited.
-      expect((await listTools(request, key.key)).map((t) => t.name)).toEqual(['request_access'])
+      // Read on self: the read tools and the request, no write tool (a Write ceiling cannot add what the grant lacks); a write is refused and audited.
+      const readerNames = (await listTools(request, key.key)).map((t) => t.name)
+      for (const w of WRITE_TOOLS) expect(readerNames, w).not.toContain(w)
+      expect(readerNames).toContain('request_access')
+      expect(readerNames).toContain('k8s_get_resources')
       const before = await callTool(request, key.key, 'k8s_scale', { cluster: 'self', resource_type: 'deployment', resource_name: 'web', namespace: ns, replicas: 2 })
       expect(before.isError).toBe(true)
       expect(before.content[0].text).toMatch(/forbidden/)

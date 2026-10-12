@@ -9,6 +9,8 @@ allowlist 방식 — 신규 tool 이 추가돼도 명시적으로 여기 넣기 
 from typing import Any, Dict, List
 
 
+# The same eleven names are the Read role's ai.tool.* permissions
+# (auth-service repository.ReadAIToolPermissions) — keep the two lists the same.
 READONLY_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "get_cluster_overview",

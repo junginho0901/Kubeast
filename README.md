@@ -195,8 +195,8 @@ AI 어시스턴트가 활성화됩니다.
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인만 되고 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`) · Helm 읽기 · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret을 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다 |
-| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부 | `kubeast:operator` = `edit` + viewer |
+| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`) · Helm 읽기 · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 11종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret을 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다 |
+| **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창이 이 그룹 이름을 보여 준다 |
 
@@ -600,7 +600,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 ```
 
 - 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼짐이고, 꺼져 있으면 경로가 없습니다.
-- 권한: 그 클러스터에 `ai.mcp.use`(시스템 Write 역할에 포함, Admin은 전부)와 쓰려는 도구의 `ai.tool.<이름>`. `list_clusters`가
+- 권한: 그 클러스터에 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 전부)와 쓰려는 도구의 `ai.tool.<이름>`(Read는 읽기 도구 11종만, Write는 전부). `list_clusters`가
   연결한 사람이 쓸 수 있는 클러스터와 도구를 알려 주고, 나머지 도구는 `cluster` 인자가 필수입니다(기본 클러스터로 떨어지지 않음).
 - 인증: `Authorization: Bearer` 헤더에 API 키(`kbk_…`) 또는 액세스 토큰. 키는 서버가 짧은 토큰으로 교환해 쓰고(교환도 감사), 키를
   폐기하면 다음 호출부터 거부됩니다. 세션이 없어(stateless) 요청마다 검사하고, 복제본이 여럿이어도 됩니다.

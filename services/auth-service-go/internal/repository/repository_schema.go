@@ -8,6 +8,23 @@ import (
 // The schema (tables, columns, indexes) is defined by the versioned migrations
 // in services/pkg/dbmigrate and applied before this repository is used.
 
+// ReadAIToolPermissions are the ai.tool.* permissions of the read-only AI
+// tools (ai-service READONLY_TOOL_NAMES — keep the two lists the same): the
+// Read role gets exactly these, never a write tool.
+var ReadAIToolPermissions = []string{
+	"ai.tool.get_cluster_overview",
+	"ai.tool.get_pod_metrics",
+	"ai.tool.get_node_metrics",
+	"ai.tool.k8s_get_resources",
+	"ai.tool.k8s_get_resource_yaml",
+	"ai.tool.k8s_describe_resource",
+	"ai.tool.k8s_get_pod_logs",
+	"ai.tool.k8s_get_events",
+	"ai.tool.k8s_get_available_api_resources",
+	"ai.tool.k8s_get_cluster_configuration",
+	"ai.tool.k8s_check_service_connectivity",
+}
+
 // SeedSystemRoles ensures the four system roles exist and migrates auth_users.role → role_id.
 func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 	type seedRole struct {
@@ -21,14 +38,18 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 		// comes entirely from per-cluster grants. (Read/Write/Admin below are the
 		// roles assignable per-cluster; only Admin is meaningful as a GLOBAL role.)
 		{"Member", "일반 사용자 (클러스터별 권한으로 접근)", nil},
-		{"Read", "읽기 전용", []string{
+		{"Read", "읽기 전용", append([]string{
 			"menu.workloads", "menu.network", "menu.storage", "menu.security",
 			"menu.cluster", "menu.gateway", "menu.gpu", "menu.helm",
 			"menu.configuration", "menu.dashboard",
 			"resource.*.read",
 			"resource.helm.read",
 			"resource.pod.logfile",
-		}},
+			// The AI chat's read-only tools and the MCP server, as the user: a read
+			// tool shows what the user may already see, under the cluster's viewer
+			// RBAC; every write tool stays with Write.
+			"ai.mcp.use",
+		}, ReadAIToolPermissions...)},
 		{"Write", "읽기/쓰기", []string{
 			"menu.*",
 			"resource.*.read", "resource.*.create", "resource.*.edit", "resource.*.delete",
