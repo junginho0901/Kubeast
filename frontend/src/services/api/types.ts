@@ -1348,6 +1348,8 @@ export interface Member {
   // client paces its refresh on. The browser cannot read the HttpOnly cookie.
   permissions_matrix?: Record<string, string[]>
   cluster_roles?: Record<string, string>
+  // Namespace-scoped grants: cluster id → the namespaces the grant there is limited to (absent = whole cluster).
+  cluster_namespaces?: Record<string, string[]>
   token_ttl_minutes?: number
   // How the account was created: 'password' (form/admin) or 'oidc' (single
   // sign-on, no password).

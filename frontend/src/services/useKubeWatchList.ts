@@ -39,6 +39,18 @@ const applyWatchEvent = (prev: any[] | undefined, event: WatchEvent) => {
   return items
 }
 
+// scopedPaths turns an all-namespaces watch path into one path per granted
+// namespace for a namespace-scoped grant (the server refuses the cluster-wide
+// watch for them): /api/v1/pods → /api/v1/namespaces/<ns>/pods,
+// /apis/apps/v1/deployments → /apis/apps/v1/namespaces/<ns>/deployments.
+// A path that already names a namespace, or an unscoped caller, is unchanged.
+export function scopedPaths(path: string, scope: string[] | undefined): string[] {
+  if (!scope || scope.length === 0 || path.includes('/namespaces/')) return [path]
+  const cut = path.lastIndexOf('/')
+  if (cut <= 0) return [path]
+  return scope.map((ns) => `${path.slice(0, cut)}/namespaces/${ns}${path.slice(cut)}`)
+}
+
 export function useKubeWatchList(options: {
   enabled: boolean
   queryKey: any[]
@@ -49,6 +61,11 @@ export function useKubeWatchList(options: {
 }) {
   const queryClient = useQueryClient()
   const query = options.query ?? 'watch=1'
+  const clusterId = getCurrentClusterID() || 'default'
+  // A namespace-scoped grant (me.cluster_namespaces) watches per namespace; the
+  // scope is keyed by content so a re-render with the same list keeps the watch.
+  const me = queryClient.getQueryData<{ cluster_namespaces?: Record<string, string[]> }>(['me'])
+  const scopeKey = JSON.stringify(me?.cluster_namespaces?.[clusterId] ?? null)
 
   // 콜백과 queryKey 는 ref 로 읽는다 — identity 가 render 마다 바뀌어도 watch 를
   // 끊지 않고, queryKey 는 contents(queryKeyDep)가 바뀔 때만 재구독.
@@ -65,12 +82,7 @@ export function useKubeWatchList(options: {
   useEffect(() => {
     if (!options.enabled) return
 
-    const msg = {
-      type: 'REQUEST' as const,
-      clusterId: getCurrentClusterID() || 'default',
-      path: options.path,
-      query,
-    }
+    const paths = scopedPaths(options.path, (JSON.parse(scopeKey) as string[] | null) ?? undefined)
 
     const handle = (message: any) => {
       if (message?.type !== 'DATA') return
@@ -88,13 +100,16 @@ export function useKubeWatchList(options: {
       onEventRef.current?.(event)
     }
 
-    let cleanup: (() => void) | undefined
-    watchMultiplexer.subscribe(msg, handle).then((fn) => {
-      cleanup = fn
-    })
+    const cleanups: (() => void)[] = []
+    for (const path of paths) {
+      const msg = { type: 'REQUEST' as const, clusterId, path, query }
+      watchMultiplexer.subscribe(msg, handle).then((fn) => {
+        cleanups.push(fn)
+      })
+    }
 
     return () => {
-      cleanup?.()
+      for (const fn of cleanups) fn()
     }
-  }, [options.enabled, options.path, query, queryClient, queryKeyDep])
+  }, [options.enabled, options.path, query, queryClient, queryKeyDep, clusterId, scopeKey])
 }

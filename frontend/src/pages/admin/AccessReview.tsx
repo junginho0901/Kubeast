@@ -110,6 +110,7 @@ export default function AccessReview() {
       { key: 'user_email', label: tr('accessReview.col.email', 'Email'), render: (r) => <span className="text-white">{r.user_email}</span>, text: (r) => r.user_email },
       { key: 'cluster', label: tr('accessReview.col.cluster', 'Cluster'), render: (r) => r.cluster, text: (r) => r.cluster },
       { key: 'role', label: tr('accessReview.col.role', 'Role'), render: (r) => r.role, text: (r) => r.role },
+      { key: 'namespaces', label: tr('accessReview.col.namespaces', 'Namespaces'), render: (r) => (r.namespaces?.length ? r.namespaces.join(', ') : tr('accessReview.wholeCluster', 'whole cluster')), text: (r) => (r.namespaces ?? []).join(' ') },
       { key: 'granted_via', label: tr('accessReview.col.grantedVia', 'Granted via'), render: (r) => r.granted_via, text: (r) => r.granted_via },
       { key: 'expires_at', label: tr('accessReview.col.expires', 'Expires'), render: (r) => whenCell(r.expires_at) },
       { key: 'restore_role', label: tr('accessReview.col.restoreRole', 'Then back to'), render: (r) => r.restore_role || '-' },

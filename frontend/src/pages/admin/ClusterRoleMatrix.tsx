@@ -5,6 +5,7 @@ import { ShieldCheck, Loader2 } from 'lucide-react'
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
 import CustomDropdown from '@/components/CustomDropdown'
+import NamespaceScopeInput from '@/components/NamespaceScopeInput'
 
 interface Props {
   userID: string
@@ -33,12 +34,22 @@ export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }
     queryFn: () => api.getUserClusterRoles(userID),
     enabled: !!userID,
   })
+  // The grants with their namespace scope (the role map above has no room for it).
+  const { data: grants = [] } = useQuery({
+    queryKey: ['user-cluster-grants', userID],
+    queryFn: () => api.getUserClusterGrants(userID),
+    enabled: !!userID,
+  })
+  const namespacesOf = (clusterId: string) => grants.find((g) => g.cluster_id === clusterId)?.namespaces
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['user-cluster-roles', userID] })
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['user-cluster-roles', userID] })
+    queryClient.invalidateQueries({ queryKey: ['user-cluster-grants', userID] })
+  }
 
   const setMutation = useMutation({
-    mutationFn: ({ clusterId, role }: { clusterId: string; role: string }) =>
-      api.setUserClusterRole(userID, clusterId, role),
+    mutationFn: ({ clusterId, role, namespaces }: { clusterId: string; role: string; namespaces?: string[] }) =>
+      api.setUserClusterRole(userID, clusterId, role, namespaces ?? namespacesOf(clusterId)),
     onSuccess: invalidate,
   })
   const removeMutation = useMutation({
@@ -65,7 +76,8 @@ export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }
         {tr(
           'admin.userClusterRoles.denyNote',
           'The user only sees clusters you grant a role on; ungranted clusters are denied. Changes apply after the user logs in again.',
-        )}
+        )}{' '}
+        {tr('admin.userClusterRoles.namespacesNote', 'A role can be limited to namespaces (the box next to it; empty = the whole cluster).')}
       </p>
 
       {userIsGlobalAdmin ? (
@@ -90,6 +102,15 @@ export default function ClusterRoleMatrix({ userID, canEdit, userIsGlobalAdmin }
                     <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
                   )}
                 </span>
+                {current && (
+                  <NamespaceScopeInput
+                    testId={`cluster-role-${c.id}-namespaces`}
+                    value={namespacesOf(c.id)}
+                    disabled={!canEdit || pending}
+                    onCommit={(namespaces) => setMutation.mutate({ clusterId: c.id, role: current, namespaces })}
+                    className="w-44 shrink-0"
+                  />
+                )}
                 {/* Pending/Member are account-level (no cluster perms), so only
                     the access roles are offered per cluster. */}
                 <CustomDropdown

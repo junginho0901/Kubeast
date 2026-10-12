@@ -355,6 +355,7 @@ func main() {
 
 			// Per-cluster role grants (step 08) — admin.users.update.
 			r.Get("/admin/users/{user_id}/cluster-roles", authHandler.GetUserClusterRoles)
+			r.Get("/admin/users/{user_id}/cluster-grants", authHandler.GetUserClusterGrants)
 			r.Put("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.SetUserClusterRole)
 			r.Delete("/admin/users/{user_id}/cluster-roles/{cluster_id}", authHandler.DeleteUserClusterRole)
 			// Inverse view: the per-cluster access list (who has a grant on a cluster).

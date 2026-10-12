@@ -37,6 +37,8 @@ export interface AccessRequest {
   expires_at?: string
   ended_at?: string
   end_reason?: AccessRequestEndReason
+  // The temporary grant's namespaces; absent = the whole cluster.
+  namespaces?: string[]
 }
 
 export interface CreateAccessRequestInput {
@@ -44,6 +46,8 @@ export interface CreateAccessRequestInput {
   role: string
   duration_minutes: number
   reason: string
+  // Limit the temporary grant to these namespaces (required when the current grant is namespace-scoped).
+  namespaces?: string[]
 }
 
 export const accessRequestsApi = {

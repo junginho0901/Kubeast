@@ -34,6 +34,7 @@ export interface AccessReviewClusterRoleRow {
   user_email: string
   cluster: string
   role: string
+  namespaces?: string[]
   granted_via: string
   expires_at?: string
   restore_role?: string

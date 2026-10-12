@@ -28,6 +28,16 @@ export interface ClusterUserRole {
   role: string
   // Set for a temporary grant (approved access request): when it ends.
   expires_at?: string
+  // A namespace-scoped grant's list; absent = the whole cluster.
+  namespaces?: string[]
+}
+
+// One of a user's grants, with its scope and expiry (GET …/cluster-grants).
+export interface UserClusterGrant {
+  cluster_id: string
+  role: string
+  expires_at?: string
+  namespaces?: string[]
 }
 
 export const adminApi = {
@@ -124,8 +134,15 @@ export const adminApi = {
     return data && typeof data === 'object' ? data : {}
   },
 
-  setUserClusterRole: async (userId: string, clusterId: string, role: string): Promise<void> => {
-    await client.put(`/auth/admin/users/${userId}/cluster-roles/${clusterId}`, { role })
+  // namespaces limits the grant to those namespaces (at most 50); omitted or
+  // empty = the whole cluster.
+  setUserClusterRole: async (userId: string, clusterId: string, role: string, namespaces?: string[]): Promise<void> => {
+    await client.put(`/auth/admin/users/${userId}/cluster-roles/${clusterId}`, { role, namespaces: namespaces ?? [] })
+  },
+
+  getUserClusterGrants: async (userId: string): Promise<UserClusterGrant[]> => {
+    const { data } = await client.get(`/auth/admin/users/${userId}/cluster-grants`)
+    return Array.isArray(data) ? data : []
   },
 
   removeUserClusterRole: async (userId: string, clusterId: string): Promise<void> => {

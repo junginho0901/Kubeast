@@ -213,6 +213,7 @@
     "search": "Search...",
     "never": "never",
     "allClusters": "all",
+    "wholeCluster": "whole cluster",
     "system": "system",
     "open": "Open",
     "noHistory": "No review has been signed off yet.",
@@ -252,6 +253,7 @@
       "flags": "Flags",
       "cluster": "Cluster",
       "role": "Role",
+      "namespaces": "Namespaces",
       "grantedVia": "Granted via",
       "expires": "Expires",
       "restoreRole": "Then back to",
@@ -368,7 +370,11 @@
       "reason": "Reason",
       "reasonPlaceholder": "What you need to do and why (ticket, incident, deploy…)",
       "cancel": "Cancel",
-      "submit": "Send request"
+      "submit": "Send request",
+      "namespaces": "Namespaces",
+      "namespacesPlaceholder": "Empty = the whole cluster — or list some, comma-separated",
+      "namespacesScoped": "Your access here is limited to {{namespaces}}; a request stays within them.",
+      "namespacesHint": "The temporary role applies to the listed namespaces only."
     }
   },
   "nav": {
@@ -466,7 +472,8 @@
     "forbidden": {
       "title": "No permission",
       "body": "You do not have permission to view {{resources}} in this cluster. Ask an administrator for a role that includes it.",
-      "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles)."
+      "customRole": "Your role \"{{role}}\" acts on this cluster as the Kubernetes group {{group}}. If every page shows this notice, the cluster has not allowed and bound that group yet (chart auth.impersonation.customRoles).",
+      "namespaces": "Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown."
     },
     "clusterChecking": "Checking connection...",
     "clusterConnected": "Cluster connected",
@@ -3507,7 +3514,8 @@
       "denyNote": "The user only sees clusters you grant a role on; ungranted clusters are denied. Changes apply after the user logs in again.",
       "adminAll": "Global admin — reaches every cluster automatically.",
       "none": "No access",
-      "noClusters": "No clusters registered."
+      "noClusters": "No clusters registered.",
+      "namespacesNote": "A role can be limited to namespaces (the box next to it; empty = the whole cluster)."
     },
     "aiModels": {
       "add": "Add Model",
@@ -3902,5 +3910,9 @@
       "failurePolicy": "Failure policy",
       "age": "Age"
     }
+  },
+  "namespaceScope": {
+    "placeholder": "All namespaces — or list some, comma-separated",
+    "hint": "Empty = the whole cluster. Up to 50 namespaces; the cluster must bind the role in each (chart auth.impersonation.customRoles)."
   }
 }

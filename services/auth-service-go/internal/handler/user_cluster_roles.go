@@ -20,7 +20,8 @@ import (
 // user_cluster_roles at login. All three require admin.users.update.
 //
 // Mounted under the existing admin-users group:
-//   GET    /auth/admin/users/{user_id}/cluster-roles
+//   GET    /auth/admin/users/{user_id}/cluster-roles            { clusterID: roleName }
+//   GET    /auth/admin/users/{user_id}/cluster-grants           [{cluster_id, role, namespaces?, expires_at?}]
 //   PUT    /auth/admin/users/{user_id}/cluster-roles/{cluster_id}   { "role": "Read", "namespaces": ["web", "api"] }
 //   DELETE /auth/admin/users/{user_id}/cluster-roles/{cluster_id}
 
@@ -49,6 +50,27 @@ func (h *AuthHandler) GetUserClusterRoles(w http.ResponseWriter, r *http.Request
 		return
 	}
 	response.JSON(w, http.StatusOK, roles)
+}
+
+// GetUserClusterGrants returns the user's active grants with their namespace
+// scope and expiry — what the grant editor shows and edits (GetUserClusterRoles
+// keeps the {clusterID: roleName} shape other screens read).
+func (h *AuthHandler) GetUserClusterGrants(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireClusterRoleAdmin(w, r); !ok {
+		return
+	}
+	userID := chi.URLParam(r, "user_id")
+	target, err := h.repo.GetUserByID(r.Context(), userID)
+	if err != nil || target == nil {
+		response.Error(w, http.StatusNotFound, "User not found")
+		return
+	}
+	grants, err := h.repo.ListUserClusterGrants(r.Context(), userID)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, grants)
 }
 
 // GetClusterUserRoles returns the per-cluster access list for one cluster: every

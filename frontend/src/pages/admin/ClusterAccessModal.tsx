@@ -5,6 +5,7 @@ import { ShieldCheck, Loader2, Trash2, UserPlus, X } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import CustomDropdown from '@/components/CustomDropdown'
+import NamespaceScopeInput from '@/components/NamespaceScopeInput'
 import { api } from '@/services/api'
 import type { ClusterMeta } from '@/services/api/clusters'
 import { formatTime } from '@/utils/time'
@@ -47,8 +48,8 @@ export default function ClusterAccessModal({
   const invalidate = () => queryClient.invalidateQueries({ queryKey: grantsKey })
 
   const setMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
-      api.setUserClusterRole(userId, cluster.id, role),
+    mutationFn: ({ userId, role, namespaces }: { userId: string; role: string; namespaces?: string[] }) =>
+      api.setUserClusterRole(userId, cluster.id, role, namespaces ?? grants.find((g) => g.user_id === userId)?.namespaces),
     onSuccess: invalidate,
   })
   const removeMutation = useMutation({
@@ -65,11 +66,13 @@ export default function ClusterAccessModal({
   )
   const [addUserId, setAddUserId] = useState('')
   const [addRole, setAddRole] = useState('Read')
+  const [addNamespaces, setAddNamespaces] = useState<string[]>([])
 
   const onAdd = () => {
     if (!addUserId) return
-    setMutation.mutate({ userId: addUserId, role: addRole })
+    setMutation.mutate({ userId: addUserId, role: addRole, namespaces: addNamespaces })
     setAddUserId('')
+    setAddNamespaces([])
   }
 
   return (
@@ -124,6 +127,13 @@ export default function ClusterAccessModal({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <NamespaceScopeInput
+                    testId={`cluster-access-namespaces-${g.user_id}`}
+                    value={g.namespaces}
+                    disabled={pending}
+                    onCommit={(namespaces) => setMutation.mutate({ userId: g.user_id, role: g.role, namespaces })}
+                    className="w-40"
+                  />
                   <CustomDropdown
                     testId={`cluster-access-role-${g.user_id}`}
                     value={g.role}
@@ -170,6 +180,13 @@ export default function ClusterAccessModal({
               label: u.email ? `${u.name || u.email} (${u.email})` : u.name || u.id,
               testId: `cluster-access-add-user-opt-${u.id}`,
             }))}
+          />
+          <NamespaceScopeInput
+            testId="cluster-access-add-namespaces"
+            value={addNamespaces}
+            disabled={pending}
+            onCommit={setAddNamespaces}
+            className="w-40 shrink-0"
           />
           <CustomDropdown
             testId="cluster-access-add-role"

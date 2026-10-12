@@ -13,6 +13,7 @@ import { modalButton } from '@/components/modalStyles'
 import StatusBadge from '@/components/AccessRequestStatusBadge'
 import AccessHelp from '@/components/AccessHelp'
 import { formatDuration, formatWhen } from '@/pages/admin/accessRequestFormat'
+import { parseNamespaceList } from '@/utils/namespaceScope'
 
 // Settings → Cluster access: the signed-in user's role on each cluster, a
 // "request temporary access" modal (role, duration, reason) and their
@@ -55,8 +56,13 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
   const [role, setRole] = useState('')
   const [duration, setDuration] = useState(60)
   const [reason, setReason] = useState('')
+  const [namespaces, setNamespaces] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // A namespace-scoped grant may only ask within its namespaces; the field is prefilled and required then.
+  const myNamespaces = me?.cluster_namespaces ?? {}
+  const scopedTo = target ? myNamespaces[target] : undefined
+  const namespaceList = parseNamespaceList(namespaces)
 
   const open = (clusterId: string) => {
     const current = myRoles[clusterId]
@@ -64,12 +70,20 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
     setRole(choices[0] ?? config?.roles?.[0] ?? '')
     setDuration(durations.includes(60) ? 60 : durations[0])
     setReason('')
+    setNamespaces((myNamespaces[clusterId] ?? []).join(', '))
     setError(null)
     setTarget(clusterId)
   }
 
   const create = useMutation({
-    mutationFn: () => api.createAccessRequest({ cluster_id: target!, role, duration_minutes: duration, reason: reason.trim() }),
+    mutationFn: () =>
+      api.createAccessRequest({
+        cluster_id: target!,
+        role,
+        duration_minutes: duration,
+        reason: reason.trim(),
+        ...(namespaceList.length > 0 ? { namespaces: namespaceList } : {}),
+      }),
     onSuccess: () => {
       setTarget(null)
       setNotice(tr('accessRequests.mine.sent', 'Request sent. An admin will review it; once approved you will be signed out and back in with the role.'))
@@ -208,7 +222,7 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
               <button
                 type="button"
                 data-testid="access-request-submit"
-                disabled={create.isPending || !role || !reason.trim()}
+                disabled={create.isPending || !role || !reason.trim() || (!!scopedTo?.length && namespaceList.length === 0)}
                 onClick={() => create.mutate()}
                 className={modalButton.primary}
               >
@@ -238,6 +252,21 @@ export default function ClusterAccessSection({ me }: { me: Member | undefined })
                   className="mt-1 w-full"
                   options={durations.map((m) => ({ value: String(m), label: formatDuration(m), testId: `access-request-duration-opt-${m}` }))}
                 />
+              </label>
+              <label className="block text-xs font-semibold text-slate-400">
+                {tr('accessRequests.modal.namespaces', 'Namespaces')}
+                <input
+                  data-testid="access-request-namespaces"
+                  value={namespaces}
+                  onChange={(e) => setNamespaces(e.target.value)}
+                  placeholder={tr('accessRequests.modal.namespacesPlaceholder', 'Empty = the whole cluster — or list some, comma-separated')}
+                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden"
+                />
+                <span className="mt-1 block font-normal text-[11px] text-slate-500" data-testid="access-request-namespaces-hint">
+                  {scopedTo?.length
+                    ? tr('accessRequests.modal.namespacesScoped', 'Your access here is limited to {{namespaces}}; a request stays within them.', { namespaces: scopedTo.join(', ') })
+                    : tr('accessRequests.modal.namespacesHint', 'The temporary role applies to the listed namespaces only.')}
+                </span>
               </label>
               <label className="block text-xs font-semibold text-slate-400">
                 {tr('accessRequests.modal.reason', 'Reason')}

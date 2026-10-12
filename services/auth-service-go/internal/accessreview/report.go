@@ -69,7 +69,8 @@ type ClusterRoleRow struct {
 	UserEmail   string     `json:"user_email"`
 	Cluster     string     `json:"cluster"`
 	Role        string     `json:"role"`
-	GrantedVia  string     `json:"granted_via"` // permanent | request:<id>
+	GrantedVia  string     `json:"granted_via"`          // permanent | request:<id>
+	Namespaces  []string   `json:"namespaces,omitempty"` // a namespace-scoped grant's list; empty = the whole cluster
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 	RestoreRole string     `json:"restore_role,omitempty"`
 	Flags       []string   `json:"flags"`
@@ -236,7 +237,7 @@ func Build(now time.Time, s Settings, since time.Time, in Input) *Report {
 	rep.Summary.Users = len(rep.Users)
 
 	for _, g := range in.Grants {
-		row := ClusterRoleRow{UserEmail: g.UserEmail, Cluster: g.ClusterName, Role: g.Role, GrantedVia: "permanent", ExpiresAt: utcPtr(g.ExpiresAt), Flags: []string{}}
+		row := ClusterRoleRow{UserEmail: g.UserEmail, Cluster: g.ClusterName, Role: g.Role, Namespaces: g.Namespaces, GrantedVia: "permanent", ExpiresAt: utcPtr(g.ExpiresAt), Flags: []string{}}
 		if g.RequestID != nil && *g.RequestID != "" {
 			row.GrantedVia = "request:" + *g.RequestID
 		}

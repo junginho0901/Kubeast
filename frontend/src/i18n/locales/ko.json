@@ -213,6 +213,7 @@
     "search": "검색...",
     "never": "없음",
     "allClusters": "전체",
+    "wholeCluster": "클러스터 전체",
     "system": "시스템",
     "open": "열기",
     "noHistory": "아직 서명된 검토가 없습니다.",
@@ -252,6 +253,7 @@
       "flags": "플래그",
       "cluster": "클러스터",
       "role": "역할",
+      "namespaces": "네임스페이스",
       "grantedVia": "부여 경로",
       "expires": "만료",
       "restoreRole": "복귀 역할",
@@ -368,7 +370,11 @@
       "reason": "사유",
       "reasonPlaceholder": "무엇을 왜 해야 하는지 (티켓, 장애, 배포 등)",
       "cancel": "취소",
-      "submit": "요청 보내기"
+      "submit": "요청 보내기",
+      "namespaces": "네임스페이스",
+      "namespacesPlaceholder": "비우면 클러스터 전체 — 한정하려면 쉼표로 나열",
+      "namespacesScoped": "이 클러스터의 내 권한은 {{namespaces}}에 한정됩니다. 요청도 그 안에서만 됩니다.",
+      "namespacesHint": "적은 네임스페이스에서만 임시 역할이 적용됩니다."
     }
   },
   "nav": {
@@ -466,7 +472,8 @@
     "forbidden": {
       "title": "권한 없음",
       "body": "{{resources}}: 이 클러스터에서 볼 권한이 없습니다. 관리자에게 해당 권한이 포함된 역할을 요청하세요.",
-      "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles)."
+      "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles).",
+      "namespaces": "이 클러스터에서는 네임스페이스 {{namespaces}}만 볼 수 있습니다. 클러스터 범위 화면과 다른 네임스페이스는 보이지 않습니다."
     },
     "clusterChecking": "연결 확인 중...",
     "clusterConnected": "클러스터 연결됨",
@@ -2466,7 +2473,8 @@
       "denyNote": "역할을 부여한 클러스터만 이 회원이 볼 수 있습니다. 부여 안 하면 접근 불가. 변경은 회원이 다시 로그인하면 적용됩니다.",
       "adminAll": "전역 admin — 모든 클러스터에 자동 접근합니다.",
       "none": "접근 없음",
-      "noClusters": "등록된 클러스터가 없습니다."
+      "noClusters": "등록된 클러스터가 없습니다.",
+      "namespacesNote": "역할은 네임스페이스로 한정할 수 있습니다(옆 칸, 비우면 클러스터 전체)."
     }
   },
   "adminUsers": {
@@ -4567,5 +4575,9 @@
       "failurePolicy": "Failure policy",
       "age": "Age"
     }
+  },
+  "namespaceScope": {
+    "placeholder": "전체 네임스페이스 — 한정하려면 쉼표로 나열",
+    "hint": "비우면 클러스터 전체. 최대 50개, 클러스터가 그 네임스페이스마다 역할을 묶어야 합니다(차트 auth.impersonation.customRoles)."
   }
 }

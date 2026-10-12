@@ -17,7 +17,7 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
   const { t } = useTranslation()
   const location = useLocation()
   const resources = useForbiddenLabels()
-  const { clusterRole, permissions } = usePermission()
+  const { clusterRole, permissions, clusterNamespaces } = usePermission()
   // A custom role acts on the cluster as its own group; until the cluster
   // allows and binds it, every request is refused — say which group that is.
   const isGlobalAdmin = (permissions['*'] ?? []).includes('*')
@@ -44,6 +44,14 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
             resources: joinResources(resources),
           })}
         </div>
+        {clusterNamespaces && clusterNamespaces.length > 0 && (
+          <div data-testid="forbidden-namespace-hint" className="mt-1 text-amber-100/80">
+            {t('layout.forbidden.namespaces', {
+              defaultValue: 'Your access to this cluster is limited to the namespaces {{namespaces}}; cluster-wide pages and other namespaces are not shown.',
+              namespaces: clusterNamespaces.join(', '),
+            })}
+          </div>
+        )}
         {group && (
           <div data-testid="forbidden-custom-role-hint" className="mt-1 text-amber-100/80">
             {t('layout.forbidden.customRole', {

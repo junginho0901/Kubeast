@@ -35,9 +35,9 @@ func accessReviewCSV(rep *accessreview.Report, section string) ([]string, [][]st
 		return []string{"email", "name", "team", "auth_source", "global_role", "created_at", "last_login_at", "locked_until", "dormant_locked_at", "cluster_roles", "api_keys", "temporary_grants", "flags"}, rows
 	case "cluster_roles":
 		for _, g := range rep.ClusterRoles {
-			rows = append(rows, csvCells(g.UserEmail, g.Cluster, g.Role, g.GrantedVia, csvTime(g.ExpiresAt), g.RestoreRole, strings.Join(g.Flags, ";")))
+			rows = append(rows, csvCells(g.UserEmail, g.Cluster, g.Role, strings.Join(g.Namespaces, ";"), g.GrantedVia, csvTime(g.ExpiresAt), g.RestoreRole, strings.Join(g.Flags, ";")))
 		}
-		return []string{"user_email", "cluster", "role", "granted_via", "expires_at", "restore_role", "flags"}, rows
+		return []string{"user_email", "cluster", "role", "namespaces", "granted_via", "expires_at", "restore_role", "flags"}, rows
 	case "api_keys":
 		for _, k := range rep.APIKeys {
 			rows = append(rows, csvCells(k.OwnerEmail, k.Name, k.KeyPrefix, strings.Join(k.Clusters, ";"), k.RoleCeiling, csvTime(&k.CreatedAt), csvTime(&k.ExpiresAt),

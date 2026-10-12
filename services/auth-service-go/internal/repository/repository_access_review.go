@@ -56,13 +56,14 @@ type ReviewClusterGrant struct {
 	ExpiresAt   *time.Time
 	RestoreRole *string
 	RequestID   *string
+	Namespaces  []string // empty = the whole cluster
 }
 
 // ListClusterGrantsForReview returns every active per-cluster grant.
 func (r *Repository) ListClusterGrantsForReview(ctx context.Context) ([]ReviewClusterGrant, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT ucr.user_id, u.email, u.name, ucr.cluster_id, c.display_name, ucr.role_id, ro.name,
-		        ucr.expires_at, rr.name, ucr.request_id
+		        ucr.expires_at, rr.name, ucr.request_id, ucr.namespaces
 		   FROM user_cluster_roles ucr
 		   JOIN auth_users u ON u.id = ucr.user_id
 		   JOIN clusters c ON c.id = ucr.cluster_id
@@ -78,7 +79,7 @@ func (r *Repository) ListClusterGrantsForReview(ctx context.Context) ([]ReviewCl
 	for rows.Next() {
 		var g ReviewClusterGrant
 		if err := rows.Scan(&g.UserID, &g.UserEmail, &g.UserName, &g.ClusterID, &g.ClusterName, &g.RoleID, &g.Role,
-			&g.ExpiresAt, &g.RestoreRole, &g.RequestID); err != nil {
+			&g.ExpiresAt, &g.RestoreRole, &g.RequestID, &g.Namespaces); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
