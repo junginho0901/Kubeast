@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
@@ -191,6 +192,10 @@ func (h *Handler) CreateResourcesFromYAML(w http.ResponseWriter, r *http.Request
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(body.YAML) == "" {
+		response.Error(w, http.StatusBadRequest, "yaml is required")
 		return
 	}
 	// A decode error is the service's to report; the documents before it are the ones it creates.

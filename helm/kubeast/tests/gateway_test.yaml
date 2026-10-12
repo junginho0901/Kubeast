@@ -26,6 +26,14 @@ tests:
         template: gateway.yaml
         documentIndex: 0
 
+  - it: forwards every node sub-path to k8s-service, not only the ones with their own location
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'rewrite \^/api/v1/cluster/nodes/\(\.\+\)\$ /api/v1/nodes/\$1 break;'
+        template: gateway.yaml
+        documentIndex: 0
+
   - it: lets the session recording player compile WebAssembly without opening JS eval
     asserts:
       - matchRegex:

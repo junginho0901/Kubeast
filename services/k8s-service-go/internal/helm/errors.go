@@ -15,6 +15,10 @@ var ErrNotFound = errors.New("release not found")
 // Mapped to HTTP 400 in the handler layer.
 var ErrInvalidSection = errors.New("invalid section")
 
+// ErrInvalidRevision is returned when a diff names a revision that is not
+// positive. Mapped to HTTP 400 in the handler layer.
+var ErrInvalidRevision = errors.New("from/to revisions must be positive")
+
 // translateSDKError converts a low-level Helm SDK error to one of our
 // sentinel errors where possible, preserving the original message.
 // Used so callers can errors.Is(err, helm.ErrNotFound) without importing

@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -34,4 +35,15 @@ func TestTranslateSDKError(t *testing.T) {
 			t.Error("unrelated error should pass through unchanged")
 		}
 	})
+}
+
+// A diff of a non-positive revision is refused before any lookup, with the
+// sentinel the handler maps to 400.
+func TestDiffRevisionsRejectsNonPositive(t *testing.T) {
+	s := &Service{}
+	for _, req := range []DiffRequest{{From: 0, To: 1, Section: SectionManifest}, {From: 1, To: -1, Section: SectionManifest}} {
+		if _, err := s.DiffRevisions(context.Background(), "ns", "rel", req); !errors.Is(err, ErrInvalidRevision) {
+			t.Fatalf("%+v: err = %v, want ErrInvalidRevision", req, err)
+		}
+	}
 }

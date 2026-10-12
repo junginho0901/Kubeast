@@ -22,7 +22,7 @@ func (s *Service) DiffRevisions(ctx context.Context, namespace, name string, req
 		return nil, ErrInvalidSection
 	}
 	if req.From <= 0 || req.To <= 0 {
-		return nil, fmt.Errorf("from/to revisions must be positive")
+		return nil, ErrInvalidRevision
 	}
 
 	fromText, err := s.GetRevisionSection(ctx, namespace, name, req.From, req.Section)
