@@ -14,6 +14,22 @@ import (
 
 // GetNamespaces returns all namespaces.
 func (s *Service) GetNamespaces(ctx context.Context) ([]map[string]interface{}, error) {
+	// A namespace-scoped grant: the list is the grant itself (the cluster would
+	// refuse "list namespaces" for a group bound per namespace). Each entry is
+	// read as the user when the cluster allows it, so status and labels show.
+	if scope := scopeFromCtx(ctx); len(scope) > 0 {
+		result := make([]map[string]interface{}, 0, len(scope))
+		for _, name := range scope {
+			entry := map[string]interface{}{"name": name, "status": "Active", "created_at": "", "labels": map[string]string{}}
+			if ns, err := s.clientsetCtx(ctx).CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{}); err == nil {
+				entry["status"] = string(ns.Status.Phase)
+				entry["created_at"] = toISO(&ns.CreationTimestamp)
+				entry["labels"] = ns.Labels
+			}
+			result = append(result, entry)
+		}
+		return result, nil
+	}
 	nsList, err := s.clientsetCtx(ctx).CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list namespaces: %w", err)

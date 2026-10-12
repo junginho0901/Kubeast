@@ -21,11 +21,13 @@ func (s *Service) GetRoles(ctx context.Context, namespace string) ([]map[string]
 
 // GetAllRoles lists roles across all namespaces.
 func (s *Service) GetAllRoles(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).RbacV1().Roles("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all roles: %w", err)
-	}
-	return formatRoleList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).RbacV1().Roles(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all roles: %w", err)
+		}
+		return formatRoleList(list.Items), nil
+	})
 }
 
 // DescribeRole returns detailed info about a role.

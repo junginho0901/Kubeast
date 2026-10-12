@@ -35,6 +35,7 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.types import ASGIApp
 
 from app.security import TokenPayload, decode_access_token
+from app.services.ai.permissions import namespace_scope_error
 from app.services.ai.tools import CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
@@ -164,6 +165,7 @@ def _payload_to_claims(payload: TokenPayload) -> Dict[str, Any]:
         "email": payload.email,
         "role": payload.role,
         "matrix": {cid: list(perms) for cid, perms in payload.matrix.items()},
+        "ns": {cid: list(ns) for cid, ns in (payload.namespaces or {}).items()},
         "akid": payload.api_key_id,
     }
 
@@ -178,6 +180,7 @@ def payload_of(token: AccessToken) -> TokenPayload:
         permissions=matrix.get("*", ()),
         matrix=matrix,
         api_key_id=str(claims.get("akid") or ""),
+        namespaces={cid: tuple(v) for cid, v in (claims.get("ns") or {}).items() if v},
     )
 
 
@@ -376,6 +379,9 @@ class KubeastMCPServer(MCPServer):
             reason = f"forbidden: {name} is not granted to you in cluster {cluster}"
             await write_audit(**audit, after=after, result="failure", error="forbidden")
             return _text(reason, error=True)
+        if reason := namespace_scope_error(payload, cluster, name, args):
+            await write_audit(**audit, after=after, result="failure", error="forbidden: namespace scope")
+            return _text(reason, error=True)
 
         # The row is a precondition for a sensitive read (pod logs, describe):
         # no store, no call.
@@ -489,6 +495,7 @@ class KubeastMCPServer(MCPServer):
                     "mode": item.get("mode"),
                     "mcp": bool(tools),
                     "tools": tools,
+                    "namespaces": list(payload.namespaces.get(cid, ())) or None,
                 }
             )
         return _text(json.dumps({"clusters": out}, ensure_ascii=False))

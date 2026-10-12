@@ -25,11 +25,13 @@ func (s *Service) GetCronJobs(ctx context.Context, namespace string) ([]map[stri
 
 // GetAllCronJobs lists cronjobs across all namespaces.
 func (s *Service) GetAllCronJobs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).BatchV1().CronJobs("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all cronjobs: %w", err)
-	}
-	return formatCronJobList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all cronjobs: %w", err)
+		}
+		return formatCronJobList(list.Items), nil
+	})
 }
 
 // DescribeCronJob returns detailed info about a cronjob.

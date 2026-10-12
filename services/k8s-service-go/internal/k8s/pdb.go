@@ -21,11 +21,13 @@ func (s *Service) GetPDBs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllPDBs lists PDBs across all namespaces.
 func (s *Service) GetAllPDBs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).PolicyV1().PodDisruptionBudgets("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all pdbs: %w", err)
-	}
-	return formatPDBList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).PolicyV1().PodDisruptionBudgets(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all pdbs: %w", err)
+		}
+		return formatPDBList(list.Items), nil
+	})
 }
 
 // DescribePDB returns detailed info about a PDB.

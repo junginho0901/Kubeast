@@ -237,6 +237,9 @@ func main() {
 		// Resolve the target cluster from ?cluster= for every protected route
 		// (+ fail-fast for clusters the health checker has marked down).
 		r.Use(h.ClusterMiddleware)
+		// A namespace-scoped grant reaches only its namespaces (403 before any
+		// cluster call); lists and the overview narrow inside the service.
+		r.Use(h.NamespaceScopeMiddleware)
 		// Fail-closed: a mutation is refused (503) while the audit store cannot
 		// record it. POST /search is a read. Audited GET paths check inside.
 		r.Use(audit.RequireWritable(auditStore, "/api/v1/search"))

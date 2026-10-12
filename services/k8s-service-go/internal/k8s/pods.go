@@ -22,11 +22,13 @@ func (s *Service) GetPods(ctx context.Context, namespace string, labelSelector s
 
 // GetAllPods lists pods across all namespaces.
 func (s *Service) GetAllPods(ctx context.Context) ([]map[string]interface{}, error) {
-	podList, err := s.clientsetCtx(ctx).CoreV1().Pods("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all pods: %w", err)
-	}
-	return formatPodList(podList.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		podList, err := s.clientsetCtx(ctx).CoreV1().Pods(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all pods: %w", err)
+		}
+		return formatPodList(podList.Items), nil
+	})
 }
 
 // DeletePod deletes a pod with optional force deletion.

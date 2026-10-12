@@ -20,11 +20,13 @@ func (s *Service) GetServiceAccounts(ctx context.Context, namespace string) ([]m
 
 // GetAllServiceAccounts lists serviceaccounts across all namespaces.
 func (s *Service) GetAllServiceAccounts(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all serviceaccounts: %w", err)
-	}
-	return formatServiceAccountList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all serviceaccounts: %w", err)
+		}
+		return formatServiceAccountList(list.Items), nil
+	})
 }
 
 // DescribeServiceAccount returns detailed info about a serviceaccount.

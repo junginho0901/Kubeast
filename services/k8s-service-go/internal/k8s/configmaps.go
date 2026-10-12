@@ -43,33 +43,35 @@ func (s *Service) GetConfigMaps(ctx context.Context, namespace string) ([]map[st
 
 // GetAllConfigMaps lists configmaps across all namespaces.
 func (s *Service) GetAllConfigMaps(ctx context.Context) ([]map[string]interface{}, error) {
-	cmList, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all configmaps: %w", err)
-	}
-
-	result := make([]map[string]interface{}, 0, len(cmList.Items))
-	for _, cm := range cmList.Items {
-		dataKeys := make([]string, 0, len(cm.Data))
-		for k := range cm.Data {
-			dataKeys = append(dataKeys, k)
-		}
-		binaryKeys := make([]string, 0, len(cm.BinaryData))
-		for k := range cm.BinaryData {
-			binaryKeys = append(binaryKeys, k)
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		cmList, err := s.clientsetCtx(ctx).CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all configmaps: %w", err)
 		}
 
-		result = append(result, map[string]interface{}{
-			"name":        cm.Name,
-			"namespace":   cm.Namespace,
-			"data_count":  len(cm.Data),
-			"data_keys":   dataKeys,
-			"binary_keys": binaryKeys,
-			"labels":      cm.Labels,
-			"created_at":  toISO(&cm.CreationTimestamp),
-		})
-	}
-	return result, nil
+		result := make([]map[string]interface{}, 0, len(cmList.Items))
+		for _, cm := range cmList.Items {
+			dataKeys := make([]string, 0, len(cm.Data))
+			for k := range cm.Data {
+				dataKeys = append(dataKeys, k)
+			}
+			binaryKeys := make([]string, 0, len(cm.BinaryData))
+			for k := range cm.BinaryData {
+				binaryKeys = append(binaryKeys, k)
+			}
+
+			result = append(result, map[string]interface{}{
+				"name":        cm.Name,
+				"namespace":   cm.Namespace,
+				"data_count":  len(cm.Data),
+				"data_keys":   dataKeys,
+				"binary_keys": binaryKeys,
+				"labels":      cm.Labels,
+				"created_at":  toISO(&cm.CreationTimestamp),
+			})
+		}
+		return result, nil
+	})
 }
 
 // DescribeConfigMap returns detailed info about a configmap.
@@ -185,29 +187,31 @@ func (s *Service) GetSecrets(ctx context.Context, namespace string) ([]map[strin
 
 // GetAllSecrets lists secrets across all namespaces (data values masked).
 func (s *Service) GetAllSecrets(ctx context.Context) ([]map[string]interface{}, error) {
-	secretList, err := s.clientsetCtx(ctx).CoreV1().Secrets("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all secrets: %w", err)
-	}
-
-	result := make([]map[string]interface{}, 0, len(secretList.Items))
-	for _, secret := range secretList.Items {
-		dataKeys := make([]string, 0, len(secret.Data))
-		for k := range secret.Data {
-			dataKeys = append(dataKeys, k)
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		secretList, err := s.clientsetCtx(ctx).CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all secrets: %w", err)
 		}
 
-		result = append(result, map[string]interface{}{
-			"name":       secret.Name,
-			"namespace":  secret.Namespace,
-			"type":       string(secret.Type),
-			"data_count": len(secret.Data),
-			"data_keys":  dataKeys,
-			"labels":     secret.Labels,
-			"created_at": toISO(&secret.CreationTimestamp),
-		})
-	}
-	return result, nil
+		result := make([]map[string]interface{}, 0, len(secretList.Items))
+		for _, secret := range secretList.Items {
+			dataKeys := make([]string, 0, len(secret.Data))
+			for k := range secret.Data {
+				dataKeys = append(dataKeys, k)
+			}
+
+			result = append(result, map[string]interface{}{
+				"name":       secret.Name,
+				"namespace":  secret.Namespace,
+				"type":       string(secret.Type),
+				"data_count": len(secret.Data),
+				"data_keys":  dataKeys,
+				"labels":     secret.Labels,
+				"created_at": toISO(&secret.CreationTimestamp),
+			})
+		}
+		return result, nil
+	})
 }
 
 // DescribeSecret returns detailed info about a secret.

@@ -75,6 +75,41 @@ var (
 	errForbidden = errors.New("forbidden")
 )
 
+// clusterWideTools take no namespace: refused outright for a caller whose
+// grant on the cluster is limited to namespaces (the token's "ns" claim).
+var clusterWideTools = map[string]struct{}{
+	"k8s_get_available_api_resources": {}, "k8s_get_cluster_configuration": {},
+	"k8s_apply_manifest": {}, "k8s_create_resource": {},
+	"get_cluster_overview": {}, "get_node_metrics": {},
+}
+
+var errNamespaceScope = errors.New("namespace scope")
+
+// namespaceGate applies a namespace-scoped grant to a tool call: the call
+// must name one of the granted namespaces, and a tool that spans the cluster
+// is refused. An unscoped caller passes untouched.
+func namespaceGate(payload auth.TokenPayload, clusterID, tool string, args map[string]interface{}) error {
+	if clusterID == "" {
+		clusterID = defaultClusterID
+	}
+	scope := payload.Namespaces[clusterID]
+	if len(scope) == 0 {
+		return nil
+	}
+	if _, wide := clusterWideTools[tool]; wide {
+		return fmt.Errorf("%w: %s spans the cluster; your grant on %s is limited to namespaces %s", errNamespaceScope, tool, clusterID, strings.Join(scope, ", "))
+	}
+	ns, _ := args["namespace"].(string)
+	ns = strings.TrimSpace(ns)
+	if ns == "" {
+		return fmt.Errorf("%w: namespace is required; your grant on %s is limited to namespaces %s", errNamespaceScope, clusterID, strings.Join(scope, ", "))
+	}
+	if !payload.AllowedIn(clusterID, ns) {
+		return fmt.Errorf("%w: namespace %q is outside your grant on %s (%s)", errNamespaceScope, ns, clusterID, strings.Join(scope, ", "))
+	}
+	return nil
+}
+
 // authorizeToolCall returns the validated caller, or an HTTP status + error:
 // 401 when the token is missing/invalid, 403 when ai.tool.<tool> is not
 // granted in clusterID ("" = the default cluster).

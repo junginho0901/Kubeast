@@ -23,11 +23,13 @@ func (s *Service) GetJobs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllJobs lists jobs across all namespaces.
 func (s *Service) GetAllJobs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).BatchV1().Jobs("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all jobs: %w", err)
-	}
-	return formatJobList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all jobs: %w", err)
+		}
+		return formatJobList(list.Items), nil
+	})
 }
 
 // DescribeJob returns detailed info about a job.

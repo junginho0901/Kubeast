@@ -19,12 +19,14 @@ func (s *Service) GetHTTPRoutes(ctx context.Context, namespace string) ([]map[st
 
 // GetAllHTTPRoutes lists HTTP routes across all namespaces.
 func (s *Service) GetAllHTTPRoutes(ctx context.Context) ([]map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "httproutes")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all httproutes: %w", err)
-	}
-	return formatUnstructuredList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		gvr := s.gatewayGVR(ctx, "httproutes")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all httproutes: %w", err)
+		}
+		return formatUnstructuredList(list), nil
+	})
 }
 
 // DescribeHTTPRoute returns detailed info about an HTTP route.

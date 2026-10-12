@@ -22,11 +22,13 @@ func (s *Service) GetPVCs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllPVCs lists PVCs across all namespaces.
 func (s *Service) GetAllPVCs(ctx context.Context) ([]map[string]interface{}, error) {
-	pvcList, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all pvcs: %w", err)
-	}
-	return formatPVCList(pvcList.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		pvcList, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all pvcs: %w", err)
+		}
+		return formatPVCList(pvcList.Items), nil
+	})
 }
 
 // DescribePVC returns detailed info about a PVC.

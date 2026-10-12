@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -177,9 +178,24 @@ func (ci *clusterInformers) waitSynced(ctx context.Context, d time.Duration) boo
 
 // overview computes the dashboard summary from the stores.
 func (ci *clusterInformers) overview() map[string]interface{} {
+	return ci.overviewFor(nil)
+}
+
+// overviewFor counts the stores, limited to scope when a namespace-scoped
+// grant asks: namespaced kinds count only inside the listed namespaces, the
+// namespace count is the listed ones the cluster has, and the cluster-wide
+// kinds (nodes, PVs) are reported as 0 with "scoped": true so the UI shows
+// no number for them.
+func (ci *clusterInformers) overviewFor(scope []string) map[string]interface{} {
 	ci.touch()
+	in := func(namespace string) bool { return len(scope) == 0 || containsString(scope, namespace) }
 	podStatus := map[string]int{"Running": 0, "Pending": 0, "Failed": 0, "Succeeded": 0, "Unknown": 0}
-	pods := ci.pods.List()
+	var pods []interface{}
+	for _, o := range ci.pods.List() {
+		if p, ok := o.(*corev1.Pod); ok && in(p.Namespace) {
+			pods = append(pods, o)
+		}
+	}
 	for _, o := range pods {
 		p, ok := o.(*corev1.Pod)
 		if !ok {
@@ -198,15 +214,37 @@ func (ci *clusterInformers) overview() map[string]interface{} {
 			podStatus["Unknown"]++
 		}
 	}
+	if len(scope) == 0 {
+		return map[string]interface{}{
+			"total_namespaces":  len(ci.namespaces.ListKeys()),
+			"total_pods":        len(pods),
+			"total_services":    len(ci.services.ListKeys()),
+			"total_deployments": len(ci.deployments.ListKeys()),
+			"total_pvcs":        len(ci.pvcs.ListKeys()),
+			"total_pvs":         len(ci.pvs.ListKeys()),
+			"pod_status":        podStatus,
+			"node_count":        len(ci.nodes.ListKeys()),
+		}
+	}
+	namespaced := func(keys []string) int { // store keys are "namespace/name"
+		n := 0
+		for _, k := range keys {
+			if i := strings.IndexByte(k, '/'); i > 0 && containsString(scope, k[:i]) {
+				n++
+			}
+		}
+		return n
+	}
 	return map[string]interface{}{
-		"total_namespaces":  len(ci.namespaces.ListKeys()),
+		"scoped":            true,
+		"total_namespaces":  countIn(ci.namespaces.ListKeys(), scope),
 		"total_pods":        len(pods),
-		"total_services":    len(ci.services.ListKeys()),
-		"total_deployments": len(ci.deployments.ListKeys()),
-		"total_pvcs":        len(ci.pvcs.ListKeys()),
-		"total_pvs":         len(ci.pvs.ListKeys()),
+		"total_services":    namespaced(ci.services.ListKeys()),
+		"total_deployments": namespaced(ci.deployments.ListKeys()),
+		"total_pvcs":        namespaced(ci.pvcs.ListKeys()),
+		"total_pvs":         0,
 		"pod_status":        podStatus,
-		"node_count":        len(ci.nodes.ListKeys()),
+		"node_count":        0,
 	}
 }
 
@@ -305,4 +343,24 @@ func (b *clientBundle) syncedInformers() *clusterInformers {
 		return b.inf
 	}
 	return nil
+}
+
+func containsString(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// countIn counts the keys (namespace names) that are in scope.
+func countIn(keys, scope []string) int {
+	n := 0
+	for _, k := range keys {
+		if containsString(scope, k) {
+			n++
+		}
+	}
+	return n
 }

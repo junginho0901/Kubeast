@@ -21,11 +21,13 @@ func (s *Service) GetLeases(ctx context.Context, namespace string) ([]map[string
 
 // GetAllLeases lists Leases across all namespaces.
 func (s *Service) GetAllLeases(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).CoordinationV1().Leases("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all leases: %w", err)
-	}
-	return formatLeaseList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).CoordinationV1().Leases(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all leases: %w", err)
+		}
+		return formatLeaseList(list.Items), nil
+	})
 }
 
 // DescribeLease returns detailed info about a Lease.

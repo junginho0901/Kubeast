@@ -19,12 +19,14 @@ func (s *Service) GetGateways(ctx context.Context, namespace string) ([]map[stri
 
 // GetAllGateways lists gateways across all namespaces.
 func (s *Service) GetAllGateways(ctx context.Context) ([]map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "gateways")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all gateways: %w", err)
-	}
-	return formatUnstructuredList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		gvr := s.gatewayGVR(ctx, "gateways")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all gateways: %w", err)
+		}
+		return formatUnstructuredList(list), nil
+	})
 }
 
 // DescribeGateway returns detailed info about a gateway.

@@ -106,3 +106,29 @@ def scope_tool_args(function_args: Dict, cluster: str) -> Tuple[Dict, Optional[s
     if isinstance(supplied, str) and supplied and supplied != cluster:
         return args, supplied
     return args, None
+
+
+# Tools without a namespace argument: refused outright for a caller whose grant
+# on the cluster is limited to namespaces (the same list tool-server keeps).
+CLUSTER_WIDE_TOOLS = frozenset({
+    "k8s_get_available_api_resources", "k8s_get_cluster_configuration",
+    "k8s_apply_manifest", "k8s_create_resource", "get_cluster_overview", "get_node_metrics",
+})
+
+
+def namespace_scope_error(token, cluster: str, function_name: str, args: Dict) -> Optional[str]:
+    """Why a namespace-scoped grant refuses this call, or None. Mirrors
+    tool-server's namespaceGate so the model gets the reason before the call
+    leaves ai-service; tool-server refuses again on its own."""
+    scope = token.namespaces.get(cluster, ()) if token else ()
+    if not scope:
+        return None
+    listed = ", ".join(scope)
+    if function_name in CLUSTER_WIDE_TOOLS:
+        return f"forbidden: {function_name} spans the cluster; your grant on {cluster} is limited to namespaces {listed}"
+    ns = str((args or {}).get("namespace") or "").strip()
+    if not ns:
+        return f"forbidden: namespace is required; your grant on {cluster} is limited to namespaces {listed}"
+    if not token.allowed_in(cluster, ns):
+        return f"forbidden: namespace {ns!r} is outside your grant on {cluster} ({listed})"
+    return None

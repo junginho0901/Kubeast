@@ -21,11 +21,13 @@ func (s *Service) GetDeployments(ctx context.Context, namespace string) ([]map[s
 
 // GetAllDeployments lists deployments across all namespaces.
 func (s *Service) GetAllDeployments(ctx context.Context) ([]map[string]interface{}, error) {
-	depList, err := s.clientsetCtx(ctx).AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all deployments: %w", err)
-	}
-	return formatDeploymentList(depList.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		depList, err := s.clientsetCtx(ctx).AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all deployments: %w", err)
+		}
+		return formatDeploymentList(depList.Items), nil
+	})
 }
 
 // DescribeDeployment returns detailed info about a deployment.

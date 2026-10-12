@@ -24,11 +24,13 @@ func (s *Service) GetIngresses(ctx context.Context, namespace string) ([]map[str
 
 // GetAllIngresses lists ingresses across all namespaces.
 func (s *Service) GetAllIngresses(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all ingresses: %w", err)
-	}
-	return formatIngressList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).NetworkingV1().Ingresses(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all ingresses: %w", err)
+		}
+		return formatIngressList(list.Items), nil
+	})
 }
 
 // DescribeIngress returns detailed info about an ingress.

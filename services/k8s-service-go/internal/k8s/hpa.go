@@ -21,11 +21,13 @@ func (s *Service) GetHPAs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllHPAs lists HPAs across all namespaces.
 func (s *Service) GetAllHPAs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).AutoscalingV2().HorizontalPodAutoscalers("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all hpas: %w", err)
-	}
-	return formatHPAList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all hpas: %w", err)
+		}
+		return formatHPAList(list.Items), nil
+	})
 }
 
 // DescribeHPA returns detailed info about an HPA.

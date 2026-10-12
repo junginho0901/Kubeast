@@ -20,11 +20,13 @@ func (s *Service) GetResourceQuotas(ctx context.Context, namespace string) ([]ma
 
 // GetAllResourceQuotas lists ResourceQuotas across all namespaces.
 func (s *Service) GetAllResourceQuotas(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).CoreV1().ResourceQuotas("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all resource quotas: %w", err)
-	}
-	return formatResourceQuotaList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).CoreV1().ResourceQuotas(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all resource quotas: %w", err)
+		}
+		return formatResourceQuotaList(list.Items), nil
+	})
 }
 
 // DescribeResourceQuota returns detailed info about a ResourceQuota.

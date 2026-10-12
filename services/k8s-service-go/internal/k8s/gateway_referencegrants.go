@@ -19,12 +19,14 @@ func (s *Service) GetReferenceGrants(ctx context.Context, namespace string) ([]m
 
 // GetAllReferenceGrants lists reference grants across all namespaces.
 func (s *Service) GetAllReferenceGrants(ctx context.Context) ([]map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "referencegrants")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all referencegrants: %w", err)
-	}
-	return formatReferenceGrantList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		gvr := s.gatewayGVR(ctx, "referencegrants")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all referencegrants: %w", err)
+		}
+		return formatReferenceGrantList(list), nil
+	})
 }
 
 // DescribeReferenceGrant returns detailed info about a reference grant.

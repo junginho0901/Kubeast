@@ -21,11 +21,13 @@ func (s *Service) GetRoleBindings(ctx context.Context, namespace string) ([]map[
 
 // GetAllRoleBindings lists rolebindings across all namespaces.
 func (s *Service) GetAllRoleBindings(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).RbacV1().RoleBindings("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all rolebindings: %w", err)
-	}
-	return formatRoleBindingList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).RbacV1().RoleBindings(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all rolebindings: %w", err)
+		}
+		return formatRoleBindingList(list.Items), nil
+	})
 }
 
 // DescribeRoleBinding returns detailed info about a rolebinding.

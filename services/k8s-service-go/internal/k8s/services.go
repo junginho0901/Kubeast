@@ -24,11 +24,13 @@ func (s *Service) GetServices(ctx context.Context, namespace string) ([]map[stri
 
 // GetAllServices lists services across all namespaces.
 func (s *Service) GetAllServices(ctx context.Context) ([]map[string]interface{}, error) {
-	svcList, err := s.clientsetCtx(ctx).CoreV1().Services("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all services: %w", err)
-	}
-	return formatServiceList(svcList.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		svcList, err := s.clientsetCtx(ctx).CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all services: %w", err)
+		}
+		return formatServiceList(svcList.Items), nil
+	})
 }
 
 // DescribeService returns detailed info about a service.

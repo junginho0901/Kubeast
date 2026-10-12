@@ -31,6 +31,7 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[stri
 
 	// Limit concurrency
 	sem := make(chan struct{}, 10)
+	nsScope := scopeFromCtx(ctx) // a namespace-scoped grant: namespaced CRDs are listed per granted namespace
 
 	for _, crdItem := range crdList.Items {
 		spec, _ := crdItem.Object["spec"].(map[string]interface{})
@@ -79,14 +80,24 @@ func (s *Service) GetAllCustomResourceInstances(ctx context.Context) ([]map[stri
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			crList, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{})
-			if err != nil {
-				// Skip CRDs that fail (e.g., permission issues)
-				return
+			var crItems []unstructured.Unstructured
+			if len(nsScope) > 0 && scope == "Namespaced" {
+				for _, ns := range nsScope {
+					if l, err := s.dynamicCtx(ctx).Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{}); err == nil {
+						crItems = append(crItems, l.Items...)
+					}
+				}
+			} else {
+				crList, err := s.dynamicCtx(ctx).Resource(gvr).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					// Skip CRDs that fail (e.g., permission issues)
+					return
+				}
+				crItems = crList.Items
 			}
 
-			items := make([]map[string]interface{}, 0, len(crList.Items))
-			for _, cr := range crList.Items {
+			items := make([]map[string]interface{}, 0, len(crItems))
+			for _, cr := range crItems {
 				createdAt := ""
 				if ts := cr.GetCreationTimestamp(); !ts.IsZero() {
 					createdAt = ts.UTC().Format("2006-01-02T15:04:05Z")

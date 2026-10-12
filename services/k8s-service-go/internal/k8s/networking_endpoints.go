@@ -25,15 +25,17 @@ func (s *Service) GetEndpoints(ctx context.Context, namespace string) ([]map[str
 
 // GetAllEndpoints lists endpoints across all namespaces.
 func (s *Service) GetAllEndpoints(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).CoreV1().Endpoints("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all endpoints: %w", err)
-	}
-	result := make([]map[string]interface{}, 0, len(list.Items))
-	for _, ep := range list.Items {
-		result = append(result, formatEndpointsFull(&ep))
-	}
-	return result, nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).CoreV1().Endpoints(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all endpoints: %w", err)
+		}
+		result := make([]map[string]interface{}, 0, len(list.Items))
+		for _, ep := range list.Items {
+			result = append(result, formatEndpointsFull(&ep))
+		}
+		return result, nil
+	})
 }
 
 // DescribeEndpoints returns detailed info about an endpoints resource.

@@ -19,12 +19,14 @@ func (s *Service) GetGRPCRoutes(ctx context.Context, namespace string) ([]map[st
 
 // GetAllGRPCRoutes lists GRPC routes across all namespaces.
 func (s *Service) GetAllGRPCRoutes(ctx context.Context) ([]map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "grpcroutes")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all grpcroutes: %w", err)
-	}
-	return formatUnstructuredList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		gvr := s.gatewayGVR(ctx, "grpcroutes")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all grpcroutes: %w", err)
+		}
+		return formatUnstructuredList(list), nil
+	})
 }
 
 // DescribeGRPCRoute returns detailed info about a GRPC route.

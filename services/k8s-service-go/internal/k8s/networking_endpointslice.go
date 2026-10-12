@@ -21,11 +21,13 @@ func (s *Service) GetEndpointSlices(ctx context.Context, namespace string) ([]ma
 
 // GetAllEndpointSlices lists endpoint slices across all namespaces.
 func (s *Service) GetAllEndpointSlices(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all endpoint slices: %w", err)
-	}
-	return formatEndpointSliceList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all endpoint slices: %w", err)
+		}
+		return formatEndpointSliceList(list.Items), nil
+	})
 }
 
 // DescribeEndpointSlice returns detailed info about an endpoint slice.

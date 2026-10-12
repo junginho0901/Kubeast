@@ -109,6 +109,10 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
 		return
 	}
+	if err := namespaceGate(payload, clusterID, req.Name, req.Arguments); err != nil {
+		respondJSON(w, http.StatusForbidden, ToolCallResponse{Error: err.Error()})
+		return
+	}
 	if status, err := approvalGate(r.Header, req.Name, clusterID, payload, req.Arguments); err != nil {
 		respondJSON(w, status, ToolCallResponse{Error: err.Error()})
 		return

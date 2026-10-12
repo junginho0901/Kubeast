@@ -19,12 +19,14 @@ func (s *Service) GetBackendTLSPolicies(ctx context.Context, namespace string) (
 
 // GetAllBackendTLSPolicies lists BackendTLSPolicies across all namespaces.
 func (s *Service) GetAllBackendTLSPolicies(ctx context.Context) ([]map[string]interface{}, error) {
-	gvr := s.gatewayGVR(ctx, "backendtlspolicies")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all backendtlspolicies: %w", err)
-	}
-	return formatPolicyList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		gvr := s.gatewayGVR(ctx, "backendtlspolicies")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all backendtlspolicies: %w", err)
+		}
+		return formatPolicyList(list), nil
+	})
 }
 
 // DescribeBackendTLSPolicy returns detailed info about a BackendTLSPolicy.

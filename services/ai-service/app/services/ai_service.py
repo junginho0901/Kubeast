@@ -137,6 +137,10 @@ class AIService:
         args, discarded = permissions.scope_tool_args(function_args, permissions.effective_cluster(self))
         if discarded:
             print(f"[WARN] tool {function_name}: model-supplied cluster {discarded!r} ignored, using {args['cluster']!r}", flush=True)
+        # A namespace-scoped grant: the call must name one of its namespaces.
+        # The refusal goes back as the tool's result so the model can retry.
+        if reason := permissions.namespace_scope_error(self.token, args["cluster"], function_name, args):
+            return reason
         # A write tool reaches tool-server only through the approval endpoint,
         # which passes the approval id and a token binding it to this user,
         # cluster, tool and arguments; tool-server refuses write tools otherwise.

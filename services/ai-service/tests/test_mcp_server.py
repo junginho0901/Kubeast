@@ -26,6 +26,7 @@ TOKENS = {
     # ai.mcp.use with read tools only (a custom role): may read, may not write.
     "tok-readtools": TokenPayload(user_id="u-rt", role="member", email="rt@example.com", matrix={"self": ("ai.mcp.use", "ai.tool.k8s_get_resources", "resource.*.read")}),
 }
+TOKENS["tok-scoped"] = TokenPayload(user_id="u-scoped", role="member", email="s@example.com", matrix=MATRIX_WRITE, namespaces={"self": ("api", "web")})
 WRITE_TOOL_NAMES = {"k8s_apply_manifest", "k8s_create_resource", "k8s_delete_resource", "k8s_patch_resource", "k8s_annotate_resource", "k8s_remove_annotation", "k8s_label_resource", "k8s_remove_label", "k8s_scale", "k8s_rollout", "k8s_execute_command"}
 
 RPC_HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
@@ -227,6 +228,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     by_id = {c["id"]: c for c in data["clusters"]}
     assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS)
     assert by_id["default"]["mcp"] is False and by_id["default"]["tools"] == []
+    assert by_id["self"]["namespaces"] is None  # an unscoped grant
     assert fakes["audit"] == []
 
 
@@ -455,3 +457,19 @@ def test_disabled_by_default_and_config_route():
         finally:
             app.dependency_overrides.pop(require_auth, None)
     assert res.status_code == 200 and res.json() == {"enabled": False, "path": mcp_server.MCP_PATH, "write_tools": False}
+
+
+@pytest.mark.asyncio
+async def test_namespace_scoped_grant_limits_tool_calls(fakes, monkeypatch):
+    server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")
+    async with running_app(server) as client:
+        ok = await call(client, "tok-scoped", "tools/call", {"name": "k8s_get_resources", "arguments": {"cluster": "self", "resource_type": "pods", "namespace": "web"}})
+        assert ok.json()["result"].get("isError") in (None, False)
+        other = await call(client, "tok-scoped", "tools/call", {"name": "k8s_get_resources", "arguments": {"cluster": "self", "resource_type": "pods", "namespace": "db"}})
+        assert other.json()["result"]["isError"] is True and "outside your grant" in other.json()["result"]["content"][0]["text"]
+        none = await call(client, "tok-scoped", "tools/call", {"name": "k8s_get_resources", "arguments": {"cluster": "self", "resource_type": "pods"}})
+        assert "namespace is required" in none.json()["result"]["content"][0]["text"]
+        wide = await call(client, "tok-scoped", "tools/call", {"name": "get_cluster_overview", "arguments": {"cluster": "self"}})
+        assert "spans the cluster" in wide.json()["result"]["content"][0]["text"]
+    assert [c[1] for c in FakeToolServer.calls] == ["k8s_get_resources"]
+    assert [r["error"] for r in fakes["audit"] if r.get("result") == "failure"] == ["forbidden: namespace scope"] * 3

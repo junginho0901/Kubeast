@@ -25,12 +25,18 @@ const overviewIdentityTTL = 60 * time.Second
 // role whose group the cluster has not bound, or one bound in a single
 // namespace, must not be shown the whole cluster's counts.
 func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{}, error) {
+	scope := scopeFromCtx(ctx)
 	if b := s.bundleForCtx(ctx); b != nil {
-		if err := s.overviewIdentityAllowed(ctx, b); err != nil {
-			return nil, err
+		// A namespace-scoped grant cannot list namespaces (its group is bound
+		// per namespace) and is counted inside its grant only, so the
+		// cluster-wide identity check applies to unscoped callers.
+		if len(scope) == 0 {
+			if err := s.overviewIdentityAllowed(ctx, b); err != nil {
+				return nil, err
+			}
 		}
 		if ci := b.overviewInformers(); ci != nil && ci.waitSynced(ctx, overviewSyncWait) {
-			ov := ci.overview()
+			ov := ci.overviewFor(scope)
 			ov["cluster_version"] = ci.serverVersion(b.discovery)
 			return ov, nil
 		}
@@ -41,7 +47,13 @@ func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{
 		return cached, nil
 	}
 
-	result, err := s.getClusterOverviewUncached(ctx)
+	var result map[string]interface{}
+	var err error
+	if len(scope) > 0 {
+		result, err = s.getScopedOverviewUncached(ctx, scope)
+	} else {
+		result, err = s.getClusterOverviewUncached(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -194,4 +206,48 @@ func (b *clientBundle) mayListNamespaces(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return review.Status.Allowed, nil
+}
+
+// getScopedOverviewUncached counts a namespace-scoped caller's namespaces
+// one by one (the cluster refuses the all-namespaces lists for them).
+func (s *Service) getScopedOverviewUncached(ctx context.Context, scope []string) (map[string]interface{}, error) {
+	podStatus := map[string]int{"Running": 0, "Pending": 0, "Failed": 0, "Succeeded": 0, "Unknown": 0}
+	totalPods, totalServices, totalDeployments, totalPVCs, namespaces := 0, 0, 0, 0, 0
+	for _, ns := range scope {
+		cs := s.clientsetCtx(ctx)
+		if _, err := cs.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{}); err == nil {
+			namespaces++
+		}
+		if pods, err := cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{}); err == nil {
+			totalPods += len(pods.Items)
+			for _, p := range pods.Items {
+				switch p.Status.Phase {
+				case "Running", "Pending", "Failed", "Succeeded":
+					podStatus[string(p.Status.Phase)]++
+				default:
+					podStatus["Unknown"]++
+				}
+			}
+		}
+		if l, err := cs.CoreV1().Services(ns).List(ctx, metav1.ListOptions{}); err == nil {
+			totalServices += len(l.Items)
+		}
+		if l, err := cs.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{}); err == nil {
+			totalDeployments += len(l.Items)
+		}
+		if l, err := cs.CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{}); err == nil {
+			totalPVCs += len(l.Items)
+		}
+	}
+	return map[string]interface{}{
+		"scoped":            true,
+		"total_namespaces":  namespaces,
+		"total_pods":        totalPods,
+		"total_services":    totalServices,
+		"total_deployments": totalDeployments,
+		"total_pvcs":        totalPVCs,
+		"total_pvs":         0,
+		"pod_status":        podStatus,
+		"node_count":        0,
+	}, nil
 }

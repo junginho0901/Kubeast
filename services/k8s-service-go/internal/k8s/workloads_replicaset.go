@@ -23,11 +23,13 @@ func (s *Service) GetReplicaSets(ctx context.Context, namespace string) ([]map[s
 
 // GetAllReplicaSets lists replicasets across all namespaces.
 func (s *Service) GetAllReplicaSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all replicasets: %w", err)
-	}
-	return formatReplicaSetList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all replicasets: %w", err)
+		}
+		return formatReplicaSetList(list.Items), nil
+	})
 }
 
 // DescribeReplicaSet returns detailed info about a replicaset.

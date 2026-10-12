@@ -21,11 +21,13 @@ func (s *Service) GetLimitRanges(ctx context.Context, namespace string) ([]map[s
 
 // GetAllLimitRanges lists LimitRanges across all namespaces.
 func (s *Service) GetAllLimitRanges(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).CoreV1().LimitRanges("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all limit ranges: %w", err)
-	}
-	return formatLimitRangeList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).CoreV1().LimitRanges(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all limit ranges: %w", err)
+		}
+		return formatLimitRangeList(list.Items), nil
+	})
 }
 
 // DescribeLimitRange returns detailed info about a LimitRange.

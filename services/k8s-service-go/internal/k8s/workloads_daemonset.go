@@ -23,11 +23,13 @@ func (s *Service) GetDaemonSets(ctx context.Context, namespace string) ([]map[st
 
 // GetAllDaemonSets lists daemonsets across all namespaces.
 func (s *Service) GetAllDaemonSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).AppsV1().DaemonSets("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all daemonsets: %w", err)
-	}
-	return formatDaemonSetList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all daemonsets: %w", err)
+		}
+		return formatDaemonSetList(list.Items), nil
+	})
 }
 
 // DescribeDaemonSet returns detailed info about a daemonset.

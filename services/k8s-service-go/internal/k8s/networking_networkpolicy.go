@@ -21,11 +21,13 @@ func (s *Service) GetNetworkPolicies(ctx context.Context, namespace string) ([]m
 
 // GetAllNetworkPolicies lists network policies across all namespaces.
 func (s *Service) GetAllNetworkPolicies(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all network policies: %w", err)
-	}
-	return formatNetworkPolicyList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).NetworkingV1().NetworkPolicies(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all network policies: %w", err)
+		}
+		return formatNetworkPolicyList(list.Items), nil
+	})
 }
 
 // DescribeNetworkPolicy returns detailed info about a network policy.

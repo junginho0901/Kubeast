@@ -239,6 +239,10 @@ func (m *Multiplexer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
+			if reason := namespaceScopeRefusal(payload, effectiveClusterID(req.ClusterID), req.Path); reason != "" {
+				sendCh <- ResponseMessage{Type: "ERROR", Path: req.Path, Query: req.Query, Error: map[string]string{"message": reason}}
+				continue
+			}
 
 			// Skip if already subscribed
 			m.mu.Lock()
@@ -457,4 +461,25 @@ func resourceToGVR(resource string) (schema.GroupVersionResource, bool) {
 	}
 	gvr, ok := gvrMap[resource]
 	return gvr, ok
+}
+
+// namespaceScopeRefusal applies a namespace-scoped grant to a watch: the path
+// must name one of the granted namespaces (an all-namespaces watch is refused;
+// the client subscribes per namespace instead). "" = allowed.
+func namespaceScopeRefusal(payload auth.TokenPayload, clusterID, path string) string {
+	scope := payload.Namespaces[clusterID]
+	if len(scope) == 0 {
+		return ""
+	}
+	_, namespace, err := parsePath(path)
+	if err != nil {
+		return ""
+	}
+	if namespace == "" {
+		return "forbidden: your grant on cluster " + clusterID + " is limited to namespaces " + strings.Join(scope, ", ") + "; watch one of them"
+	}
+	if !payload.AllowedIn(clusterID, namespace) {
+		return "forbidden: namespace " + namespace + " is outside your grant on cluster " + clusterID + " (" + strings.Join(scope, ", ") + ")"
+	}
+	return ""
 }

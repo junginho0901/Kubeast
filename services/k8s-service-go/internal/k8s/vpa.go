@@ -43,14 +43,16 @@ func (s *Service) GetVPAs(ctx context.Context, namespace string) ([]map[string]i
 
 // GetAllVPAs lists VPAs across all namespaces.
 func (s *Service) GetAllVPAs(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.dynamicCtx(ctx).Resource(vpaGVR).Namespace("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		if isVPANotInstalled(err) {
-			return []map[string]interface{}{}, nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.dynamicCtx(ctx).Resource(vpaGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			if isVPANotInstalled(err) {
+				return []map[string]interface{}{}, nil
+			}
+			return nil, fmt.Errorf("list all vpas: %w", err)
 		}
-		return nil, fmt.Errorf("list all vpas: %w", err)
-	}
-	return formatVPAList(list.Items), nil
+		return formatVPAList(list.Items), nil
+	})
 }
 
 // DescribeVPA returns detailed info about a VPA.

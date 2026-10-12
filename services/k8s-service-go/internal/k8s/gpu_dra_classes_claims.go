@@ -83,15 +83,17 @@ func (s *Service) GetResourceClaims(ctx context.Context, namespace string) ([]ma
 }
 
 func (s *Service) GetAllResourceClaims(ctx context.Context) ([]map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return []map[string]interface{}{}, nil
-	}
-	gvr := s.draGVR(ctx, "resourceclaims")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all resourceclaims: %w", err)
-	}
-	return formatDRAList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		if s.isDRAUnavailable(ctx) {
+			return []map[string]interface{}{}, nil
+		}
+		gvr := s.draGVR(ctx, "resourceclaims")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all resourceclaims: %w", err)
+		}
+		return formatDRAList(list), nil
+	})
 }
 
 func (s *Service) DescribeResourceClaim(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
@@ -158,15 +160,17 @@ func (s *Service) GetResourceClaimTemplates(ctx context.Context, namespace strin
 }
 
 func (s *Service) GetAllResourceClaimTemplates(ctx context.Context) ([]map[string]interface{}, error) {
-	if s.isDRAUnavailable(ctx) {
-		return []map[string]interface{}{}, nil
-	}
-	gvr := s.draGVR(ctx, "resourceclaimtemplates")
-	list, err := s.ListResources(ctx, gvr, "", metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all resourceclaimtemplates: %w", err)
-	}
-	return formatDRAList(list), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		if s.isDRAUnavailable(ctx) {
+			return []map[string]interface{}{}, nil
+		}
+		gvr := s.draGVR(ctx, "resourceclaimtemplates")
+		list, err := s.ListResources(ctx, gvr, ns, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all resourceclaimtemplates: %w", err)
+		}
+		return formatDRAList(list), nil
+	})
 }
 
 func (s *Service) DescribeResourceClaimTemplate(ctx context.Context, namespace, name string) (map[string]interface{}, error) {

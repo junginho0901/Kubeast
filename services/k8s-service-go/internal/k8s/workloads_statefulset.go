@@ -23,11 +23,13 @@ func (s *Service) GetStatefulSets(ctx context.Context, namespace string) ([]map[
 
 // GetAllStatefulSets lists statefulsets across all namespaces.
 func (s *Service) GetAllStatefulSets(ctx context.Context) ([]map[string]interface{}, error) {
-	list, err := s.clientsetCtx(ctx).AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list all statefulsets: %w", err)
-	}
-	return formatStatefulSetList(list.Items), nil
+	return s.listAcrossNamespaces(ctx, func(ns string) ([]map[string]interface{}, error) {
+		list, err := s.clientsetCtx(ctx).AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("list all statefulsets: %w", err)
+		}
+		return formatStatefulSetList(list.Items), nil
+	})
 }
 
 // DescribeStatefulSet returns detailed info about a statefulset.
