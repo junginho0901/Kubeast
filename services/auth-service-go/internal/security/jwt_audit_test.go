@@ -9,7 +9,7 @@ func TestClaimsIgnoringExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, err := expired.CreateToken("u1", "u1@example.com", "Member", nil, nil, 0)
+	tok, err := expired.CreateToken("u1", "u1@example.com", "Member", nil, nil, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestClaimsIgnoringExpiry(t *testing.T) {
 
 func mustToken(t *testing.T, m *JWTManager) string {
 	t.Helper()
-	tok, err := m.CreateToken("u2", "u2@example.com", "Member", nil, nil, 0)
+	tok, err := m.CreateToken("u2", "u2@example.com", "Member", nil, nil, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

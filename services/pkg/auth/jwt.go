@@ -30,6 +30,9 @@ type TokenPayload struct {
 	Role   string            // 하위호환 유지
 	Perms  PermissionMatrix  // per-cluster permission matrix (cluster id → perms, "*" = all)
 	Roles  map[string]string // "roles" claim: cluster id → role name, for impersonation groups
+	// Namespaces is the "ns" claim: cluster id → the namespaces the grant there
+	// is limited to. A cluster with no entry is unrestricted (the whole cluster).
+	Namespaces map[string][]string
 	// TokenVersion is the "tv" claim: the user's token_version when the token
 	// was issued. auth-service bumps the stored version to revoke tokens.
 	TokenVersion int
@@ -75,6 +78,59 @@ func ParseRoles(raw any) map[string]string {
 		}
 	}
 	return out
+}
+
+// ParseNamespaces converts the raw "ns" claim ({cluster: [namespace, …]})
+// into a map; a missing or malformed claim yields nil (no namespace scope).
+// Empty lists are dropped: they would mean "no namespace", which no grant is.
+func ParseNamespaces(raw any) map[string][]string {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string][]string, len(m))
+	for cid, v := range m {
+		list, ok := v.([]any)
+		if !ok {
+			continue
+		}
+		var names []string
+		for _, n := range list {
+			if s, ok := n.(string); ok && s != "" {
+				names = append(names, s)
+			}
+		}
+		if len(names) > 0 {
+			out[cid] = names
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// AllowedIn reports whether the caller's grant on clusterID reaches namespace:
+// true when the grant is not namespace-scoped, otherwise only for a listed
+// namespace — so a cluster-scoped or all-namespaces call ("") is refused for
+// a scoped grant and the caller must name one of its namespaces.
+func (p TokenPayload) AllowedIn(clusterID, namespace string) bool {
+	scope := p.Namespaces[clusterID]
+	if len(scope) == 0 {
+		return true
+	}
+	for _, n := range scope {
+		if n == namespace {
+			return true
+		}
+	}
+	return false
+}
+
+// HasPermissionIn is HasPermissionForCluster narrowed to a namespace: the
+// permission must be granted in clusterID and the grant must reach namespace.
+func (p TokenPayload) HasPermissionIn(perm, clusterID, namespace string) bool {
+	return p.HasPermissionForCluster(perm, clusterID) && p.AllowedIn(clusterID, namespace)
 }
 
 // HasPermission checks a GLOBAL permission (cluster-agnostic) — i.e. the "*"
@@ -333,7 +389,7 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		authTime = int64(f)
 	}
 	akid, _ := claims["akid"].(string)
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid}, nil
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid}, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change

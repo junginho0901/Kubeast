@@ -116,28 +116,29 @@ func JWKThumbprint(pub *rsa.PublicKey) string {
 // permission matrix (cluster id → perms, "*" = all clusters); it marshals to a
 // JSON object claim. A non-nil empty matrix marshals to {} (a valid
 // deny-everything token), never null. clusterRoles ({cluster id: role name})
-// becomes the "roles" claim the Kubernetes impersonation groups derive from.
+// becomes the "roles" claim the Kubernetes impersonation groups derive from;
+// namespaces ({cluster id: [namespace…]}, scoped grants only) the "ns" claim.
 // tokenVersion is the user's revocation counter ("tv" claim): bumping it in
 // the database invalidates the token.
 // CreateToken signs a session token for a fresh authentication (login): the
 // "auth_time" claim is now.
-func (m *JWTManager) CreateToken(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int) (string, error) {
-	return m.CreateTokenAt(userID, email, roleName, permissions, clusterRoles, tokenVersion, time.Time{})
+func (m *JWTManager) CreateToken(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, namespaces map[string][]string, tokenVersion int) (string, error) {
+	return m.CreateTokenAt(userID, email, roleName, permissions, clusterRoles, namespaces, tokenVersion, time.Time{})
 }
 
 // CreateTokenAt signs a session token with an explicit authTime — when the
 // user last proved their identity. A refresh passes the previous token's
 // value through so the "auth_time" claim stays fixed and the session's
 // absolute lifetime can be enforced. A zero authTime means "now".
-func (m *JWTManager) CreateTokenAt(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, authTime time.Time) (string, error) {
-	return m.sign(m.claims(userID, email, roleName, permissions, clusterRoles, tokenVersion, authTime))
+func (m *JWTManager) CreateTokenAt(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, namespaces map[string][]string, tokenVersion int, authTime time.Time) (string, error) {
+	return m.sign(m.claims(userID, email, roleName, permissions, clusterRoles, namespaces, tokenVersion, authTime))
 }
 
 // CreateAPIKeyToken signs the token an API key is exchanged for: the same
 // claims as a sign-in (sub = the key's owner, so token_version revocation
 // applies) plus "akid", the key's id. Refresh refuses such a token.
-func (m *JWTManager) CreateAPIKeyToken(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, apiKeyID string) (string, error) {
-	claims := m.claims(userID, email, roleName, permissions, clusterRoles, tokenVersion, time.Time{})
+func (m *JWTManager) CreateAPIKeyToken(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, namespaces map[string][]string, tokenVersion int, apiKeyID string) (string, error) {
+	claims := m.claims(userID, email, roleName, permissions, clusterRoles, namespaces, tokenVersion, time.Time{})
 	claims["akid"] = apiKeyID
 	return m.sign(claims)
 }
@@ -148,7 +149,7 @@ func (m *JWTManager) sign(claims jwt.MapClaims) (string, error) {
 	return token.SignedString(m.PrivateKey)
 }
 
-func (m *JWTManager) claims(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, tokenVersion int, authTime time.Time) jwt.MapClaims {
+func (m *JWTManager) claims(userID, email, roleName string, permissions auth.PermissionMatrix, clusterRoles map[string]string, namespaces map[string][]string, tokenVersion int, authTime time.Time) jwt.MapClaims {
 	if permissions == nil {
 		permissions = auth.PermissionMatrix{}
 	}
@@ -159,7 +160,7 @@ func (m *JWTManager) claims(userID, email, roleName string, permissions auth.Per
 	if authTime.IsZero() {
 		authTime = now
 	}
-	return jwt.MapClaims{
+	claims := jwt.MapClaims{
 		"sub":         userID,
 		"email":       email,
 		"role":        roleName,
@@ -173,6 +174,12 @@ func (m *JWTManager) claims(userID, email, roleName string, permissions auth.Per
 		"iat":         now.Unix(),
 		"exp":         now.Add(time.Duration(m.ExpiresMinutes) * time.Minute).Unix(),
 	}
+	// "ns": cluster id → namespaces a grant is limited to (namespace-scoped
+	// grants only; absent = every grant reaches its whole cluster).
+	if len(namespaces) > 0 {
+		claims["ns"] = namespaces
+	}
+	return claims
 }
 
 // ValidateToken validates a JWT and returns claims.

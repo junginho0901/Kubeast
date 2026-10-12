@@ -21,7 +21,9 @@ import (
 //	kubeast:viewer         Read role in that cluster        → view + cluster-scoped read
 //	kubeast:operator       Write role in that cluster       → edit + viewer
 //	kubeast:admin          Admin role there, or global "*"  → cluster-admin
-//	kubeast:role:<name>    any other (custom) role — no rights until the cluster binds it
+//	kubeast:role:<name>    any other (custom) role — no rights until the cluster binds it;
+//	                       also a Read/Write/Admin grant limited to namespaces ("ns"
+//	                       claim), since viewer/operator/admin are bound cluster-wide
 const (
 	GroupAuthenticated = "kubeast:authenticated"
 	GroupViewer        = "kubeast:viewer"
@@ -44,7 +46,12 @@ func (p TokenPayload) Impersonation(clusterID string) (user string, groups []str
 		set[GroupAdmin] = struct{}{}
 	}
 	if role := strings.TrimSpace(p.Roles[clusterID]); role != "" {
+		if len(p.Namespaces[clusterID]) > 0 {
+			set[groupRolePrefix+groupSlug(role)] = struct{}{}
+			role = ""
+		}
 		switch strings.ToLower(role) {
+		case "":
 		case "admin":
 			set[GroupAdmin] = struct{}{}
 		case "write":

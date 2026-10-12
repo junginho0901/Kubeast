@@ -96,3 +96,78 @@ func missingPermissions(actor auth.TokenPayload, perms []string, clusterID strin
 func ceilingError(missing []string) error {
 	return fmt.Errorf("%w: cannot grant permissions you do not hold: %s", errCeiling, strings.Join(missing, ", "))
 }
+
+// maxGrantNamespaces caps a namespace-scoped grant: the list travels in every
+// token of that user and every all-namespaces read fans out over it.
+const maxGrantNamespaces = 50
+
+// normalizeNamespaces validates a grant's namespace list: trimmed, lowercase
+// DNS labels (what Kubernetes accepts as a namespace name), no duplicates, at
+// most maxGrantNamespaces, sorted. Empty in → nil (the whole cluster).
+func normalizeNamespaces(in []string) ([]string, error) {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, raw := range in {
+		n := strings.TrimSpace(raw)
+		if n == "" {
+			continue
+		}
+		if !validNamespaceName(n) {
+			return nil, fmt.Errorf("invalid namespace %q: lowercase letters, digits and '-' only, 1-63 characters", n)
+		}
+		if _, dup := seen[n]; dup {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	if len(out) > maxGrantNamespaces {
+		return nil, fmt.Errorf("at most %d namespaces per grant (grant the whole cluster instead)", maxGrantNamespaces)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func validNamespaceName(n string) bool {
+	if len(n) == 0 || len(n) > 63 {
+		return false
+	}
+	for i := 0; i < len(n); i++ {
+		c := n[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		case c == '-' && i > 0 && i < len(n)-1:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// missingNamespaces applies the ceiling to scope: a grantor whose own grant
+// on clusterID is limited to namespaces may hand out only those, and never the
+// whole cluster. An unscoped grantor (or a global admin) is not limited.
+// Returns the namespaces the grantor lacks; "*" stands for the whole cluster.
+func missingNamespaces(actor auth.TokenPayload, clusterID string, namespaces []string) []string {
+	own := actor.Namespaces[clusterID]
+	if len(own) == 0 {
+		return nil
+	}
+	if len(namespaces) == 0 {
+		return []string{"*"}
+	}
+	var missing []string
+	for _, n := range namespaces {
+		if !actor.AllowedIn(clusterID, n) {
+			missing = append(missing, n)
+		}
+	}
+	return missing
+}
+
+func ceilingNamespacesError(missing []string) error {
+	if len(missing) == 1 && missing[0] == "*" {
+		return fmt.Errorf("%w: your grant on this cluster is limited to namespaces; you cannot grant the whole cluster", errCeiling)
+	}
+	return fmt.Errorf("%w: cannot grant namespaces you do not hold: %s", errCeiling, strings.Join(missing, ", "))
+}

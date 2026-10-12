@@ -337,8 +337,21 @@ func (h *AuthHandler) ExchangeAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	narrowed, narrowedRoles := narrowForAPIKey(matrix, roles, clusterIDs, key.RoleCeiling, ceiling.Permissions)
+	// A namespace-scoped grant stays scoped under the key: the "ns" claim is
+	// kept for the clusters the key reaches.
+	allNamespaces, err := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if err != nil {
+		response.InternalError(w, r, err)
+		return
+	}
+	namespaces := map[string][]string{}
+	for c := range narrowed {
+		if ns := allNamespaces[c]; len(ns) > 0 {
+			namespaces[c] = ns
+		}
+	}
 
-	token, err := h.jwtMgr.CreateAPIKeyToken(user.ID, user.Email, user.RoleName, narrowed, narrowedRoles, user.TokenVersion, key.ID)
+	token, err := h.jwtMgr.CreateAPIKeyToken(user.ID, user.Email, user.RoleName, narrowed, narrowedRoles, namespaces, user.TokenVersion, key.ID)
 	if err != nil {
 		response.InternalError(w, r, err)
 		return

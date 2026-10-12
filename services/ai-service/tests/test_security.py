@@ -66,3 +66,20 @@ def test_wildcard_segments_match_like_go_and_frontend():
 def test_star_cluster_id_is_not_a_wildcard_lookup():
     user = _payload({"alpha": ["*"]})
     assert not user.has_permission_for_cluster("ai.tool.x", "*")
+
+
+def test_namespace_scope_limits_a_cluster_grant():
+    from app.security import TokenPayload, _parse_namespaces
+
+    ns = _parse_namespaces({"a": ["web", "api"], "b": [], "c": "nope", "d": [1, "x"]})
+    assert ns == {"a": ("web", "api"), "d": ("x",)}
+    assert _parse_namespaces(None) == {} and _parse_namespaces(["a"]) == {}
+    p = TokenPayload(user_id="u", role="member", matrix={"a": ("resource.*.read",), "b": ("resource.*.read",)}, namespaces=ns)
+    assert p.allowed_in("a", "web") and p.allowed_in("a", "api")
+    assert not p.allowed_in("a", "db") and not p.allowed_in("a", None) and not p.allowed_in("a", "")
+    assert p.allowed_in("b", "anything") and p.allowed_in("b", None)
+    assert p.has_permission_in("resource.pod.read", "a", "web")
+    assert not p.has_permission_in("resource.pod.read", "a", "db")
+    assert not p.has_permission_in("resource.pod.delete", "a", "web")
+    admin = TokenPayload(user_id="a", role="admin", permissions=("*",), matrix={"*": ("*",)})
+    assert admin.allowed_in("a", "db") and admin.has_permission_in("resource.pod.delete", "a", "db")

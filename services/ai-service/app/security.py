@@ -134,6 +134,9 @@ class TokenPayload:
     # Set when the token came from an API key exchange (the "akid" claim); the
     # audit row then names the key the automation used.
     api_key_id: str = ""
+    # The "ns" claim: cluster id → namespaces the grant there is limited to. A
+    # cluster with no entry is unrestricted.
+    namespaces: Mapping[str, tuple] = field(default_factory=dict)
 
     def has_permission(self, perm: str) -> bool:
         """Global check: the all-cluster ("*") entry only."""
@@ -147,6 +150,17 @@ class TokenPayload:
         if cid == "*":
             return False
         return _match_any(self.matrix.get(cid, ()), perm)
+
+    def allowed_in(self, cluster_id: Optional[str], namespace: Optional[str]) -> bool:
+        """The grant on cluster_id reaches namespace: always when unscoped, else
+        only a listed namespace — a missing namespace is refused for a scoped grant."""
+        scope = self.namespaces.get(cluster_id or DEFAULT_CLUSTER, ())
+        if not scope:
+            return True
+        return bool(namespace) and namespace in scope
+
+    def has_permission_in(self, perm: str, cluster_id: Optional[str], namespace: Optional[str]) -> bool:
+        return self.has_permission_for_cluster(perm, cluster_id) and self.allowed_in(cluster_id, namespace)
 
 
 def _parse_permission_matrix(raw) -> Optional[dict]:
@@ -162,6 +176,19 @@ def _parse_permission_matrix(raw) -> Optional[dict]:
     for cid, perms in raw.items():
         if isinstance(cid, str) and isinstance(perms, list):
             out[cid] = tuple(p for p in perms if isinstance(p, str))
+    return out
+
+
+def _parse_namespaces(raw) -> dict:
+    """Parse the "ns" claim into {cluster_id: (namespaces...)}; anything malformed is ignored."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    for cid, names in raw.items():
+        if isinstance(cid, str) and isinstance(names, list):
+            kept = tuple(n for n in names if isinstance(n, str) and n)
+            if kept:
+                out[cid] = kept
     return out
 
 
@@ -191,6 +218,7 @@ def decode_access_token(token: str) -> TokenPayload:
             permissions=matrix.get("*", ()),
             matrix=matrix,
             api_key_id=str(payload.get("akid") or "").strip(),
+            namespaces=_parse_namespaces(payload.get("ns")),
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")

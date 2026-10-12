@@ -11,8 +11,9 @@ import (
 // user_cluster_roles. No row for a (user, cluster) pair means no access to that
 // cluster (deny-by-default).
 type UserClusterRole struct {
-	ClusterID string
-	RoleID    int
+	ClusterID  string
+	RoleID     int
+	Namespaces []string // nil = the whole cluster
 }
 
 // activeGrant keeps the queries that feed tokens and access lists to grants
@@ -27,16 +28,18 @@ type UserClusterGrant struct {
 	RoleID    int        `json:"-"`
 	Role      string     `json:"role"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// Namespaces limits the grant to these namespaces; empty = the whole cluster.
+	Namespaces []string `json:"namespaces,omitempty"`
 }
 
 // GetUserClusterGrant returns the user's active grant on clusterID, or nil.
 func (r *Repository) GetUserClusterGrant(ctx context.Context, userID, clusterID string) (*UserClusterGrant, error) {
 	var g UserClusterGrant
 	err := r.pool.QueryRow(ctx,
-		`SELECT ucr.cluster_id, ucr.role_id, ro.name, ucr.expires_at
+		`SELECT ucr.cluster_id, ucr.role_id, ro.name, ucr.expires_at, ucr.namespaces
 		   FROM user_cluster_roles ucr JOIN roles ro ON ro.id = ucr.role_id
 		  WHERE ucr.user_id = $1 AND ucr.cluster_id = $2 AND `+activeGrant,
-		userID, clusterID).Scan(&g.ClusterID, &g.RoleID, &g.Role, &g.ExpiresAt)
+		userID, clusterID).Scan(&g.ClusterID, &g.RoleID, &g.Role, &g.ExpiresAt, &g.Namespaces)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -49,7 +52,7 @@ func (r *Repository) GetUserClusterGrant(ctx context.Context, userID, clusterID 
 // ListUserClusterGrants returns the user's active grants with their expiry.
 func (r *Repository) ListUserClusterGrants(ctx context.Context, userID string) ([]UserClusterGrant, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT ucr.cluster_id, ucr.role_id, ro.name, ucr.expires_at
+		`SELECT ucr.cluster_id, ucr.role_id, ro.name, ucr.expires_at, ucr.namespaces
 		   FROM user_cluster_roles ucr JOIN roles ro ON ro.id = ucr.role_id
 		  WHERE ucr.user_id = $1 AND `+activeGrant+` ORDER BY ucr.cluster_id`, userID)
 	if err != nil {
@@ -59,7 +62,7 @@ func (r *Repository) ListUserClusterGrants(ctx context.Context, userID string) (
 	out := []UserClusterGrant{}
 	for rows.Next() {
 		var g UserClusterGrant
-		if err := rows.Scan(&g.ClusterID, &g.RoleID, &g.Role, &g.ExpiresAt); err != nil {
+		if err := rows.Scan(&g.ClusterID, &g.RoleID, &g.Role, &g.ExpiresAt, &g.Namespaces); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -71,7 +74,7 @@ func (r *Repository) ListUserClusterGrants(ctx context.Context, userID string) (
 // when building the JWT permission matrix at login.
 func (r *Repository) ListUserClusterRoles(ctx context.Context, userID string) ([]UserClusterRole, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT cluster_id, role_id FROM user_cluster_roles WHERE user_id = $1 AND `+activeGrant, userID)
+		`SELECT cluster_id, role_id, namespaces FROM user_cluster_roles WHERE user_id = $1 AND `+activeGrant, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +83,7 @@ func (r *Repository) ListUserClusterRoles(ctx context.Context, userID string) ([
 	var out []UserClusterRole
 	for rows.Next() {
 		var ucr UserClusterRole
-		if err := rows.Scan(&ucr.ClusterID, &ucr.RoleID); err != nil {
+		if err := rows.Scan(&ucr.ClusterID, &ucr.RoleID, &ucr.Namespaces); err != nil {
 			return nil, err
 		}
 		out = append(out, ucr)
@@ -97,6 +100,8 @@ type ClusterUserRole struct {
 	Role   string `json:"role"`
 	// ExpiresAt is set for a temporary grant (approved access request).
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// Namespaces limits the grant to these namespaces; empty = the whole cluster.
+	Namespaces []string `json:"namespaces,omitempty"`
 }
 
 // ListClusterUserRoles returns every user that has a per-cluster grant on
@@ -104,7 +109,7 @@ type ClusterUserRole struct {
 // reach every cluster via the "*" matrix entry without a per-cluster row.
 func (r *Repository) ListClusterUserRoles(ctx context.Context, clusterID string) ([]ClusterUserRole, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT u.id, u.name, u.email, ro.name, ucr.expires_at
+		`SELECT u.id, u.name, u.email, ro.name, ucr.expires_at, ucr.namespaces
 		   FROM user_cluster_roles ucr
 		   JOIN auth_users u ON u.id = ucr.user_id
 		   JOIN roles ro ON ro.id = ucr.role_id
@@ -118,7 +123,7 @@ func (r *Repository) ListClusterUserRoles(ctx context.Context, clusterID string)
 	out := []ClusterUserRole{}
 	for rows.Next() {
 		var c ClusterUserRole
-		if err := rows.Scan(&c.UserID, &c.Name, &c.Email, &c.Role, &c.ExpiresAt); err != nil {
+		if err := rows.Scan(&c.UserID, &c.Name, &c.Email, &c.Role, &c.ExpiresAt, &c.Namespaces); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -149,18 +154,48 @@ func (r *Repository) ListUserClusterRoleNames(ctx context.Context, userID string
 	return out, rows.Err()
 }
 
-// SetUserClusterRole grants (or re-grants) roleID to userID on clusterID.
+// SetUserClusterRole grants (or re-grants) roleID to userID on clusterID,
+// limited to namespaces when the list is not empty (nil = the whole cluster).
 // Upsert on the (user_id, cluster_id) pair so a re-grant updates the role. An
 // explicit grant is permanent: it clears the temporary-access fields a
 // previous approval may have left.
-func (r *Repository) SetUserClusterRole(ctx context.Context, userID, clusterID string, roleID int) error {
+func (r *Repository) SetUserClusterRole(ctx context.Context, userID, clusterID string, roleID int, namespaces []string) error {
+	if len(namespaces) == 0 {
+		namespaces = nil
+	}
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO user_cluster_roles (user_id, cluster_id, role_id)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO user_cluster_roles (user_id, cluster_id, role_id, namespaces)
+		 VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (user_id, cluster_id) DO UPDATE
-		   SET role_id = EXCLUDED.role_id, expires_at = NULL, restore_role_id = NULL, request_id = NULL`,
-		userID, clusterID, roleID)
+		   SET role_id = EXCLUDED.role_id, namespaces = EXCLUDED.namespaces,
+		       expires_at = NULL, restore_role_id = NULL, restore_namespaces = NULL, request_id = NULL`,
+		userID, clusterID, roleID, namespaces)
 	return err
+}
+
+// ListUserClusterNamespaces returns the user's namespace-scoped grants as a
+// clusterID → namespaces map (the token's "ns" claim). Unscoped grants are
+// absent. No rows → empty map.
+func (r *Repository) ListUserClusterNamespaces(ctx context.Context, userID string) (map[string][]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT cluster_id, namespaces FROM user_cluster_roles
+		  WHERE user_id = $1 AND namespaces IS NOT NULL AND `+activeGrant, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var cid string
+		var ns []string
+		if err := rows.Scan(&cid, &ns); err != nil {
+			return nil, err
+		}
+		if len(ns) > 0 {
+			out[cid] = ns
+		}
+	}
+	return out, rows.Err()
 }
 
 // DeleteUserClusterRole revokes a user's access to clusterID. Returns whether a

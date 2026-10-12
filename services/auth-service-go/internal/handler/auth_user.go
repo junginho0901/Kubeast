@@ -215,7 +215,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
 		return
 	}
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
+	namespaces, err := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
+		return
+	}
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, namespaces, user.TokenVersion)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return
@@ -318,7 +323,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
 		return
 	}
-	token, err := h.jwtMgr.CreateTokenAt(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion, authTime)
+	namespaces, err := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to load cluster roles")
+		return
+	}
+	token, err := h.jwtMgr.CreateTokenAt(user.ID, user.Email, user.RoleName, matrix, clusterRoles, namespaces, user.TokenVersion, authTime)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "Failed to create token")
 		return
@@ -407,12 +417,19 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if clusterRoles == nil {
 		clusterRoles = map[string]string{}
 	}
+	// Namespace-scoped grants: the namespace selector and the notices read
+	// the same map the token carries ("ns" claim).
+	clusterNamespaces, _ := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if clusterNamespaces == nil {
+		clusterNamespaces = map[string][]string{}
+	}
 	response.JSON(w, http.StatusOK, struct {
 		model.UserResponse
 		PermissionsMatrix auth.PermissionMatrix `json:"permissions_matrix"`
 		ClusterRoles      map[string]string     `json:"cluster_roles"`
+		ClusterNamespaces map[string][]string   `json:"cluster_namespaces"`
 		TokenTTLMinutes   int                   `json:"token_ttl_minutes"`
-	}{user.ToResponseWithPermissions(permissions), matrix, clusterRoles, h.cfg.JWTExpiresMinutes})
+	}{user.ToResponseWithPermissions(permissions), matrix, clusterRoles, clusterNamespaces, h.cfg.JWTExpiresMinutes})
 }
 
 // ChangePassword handles POST /auth/change-password
@@ -496,5 +513,9 @@ func (h *AuthHandler) issueToken(ctx context.Context, user *model.User) (string,
 	if err != nil {
 		return "", fmt.Errorf("load cluster roles: %w", err)
 	}
-	return h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
+	namespaces, err := h.repo.ListUserClusterNamespaces(ctx, user.ID)
+	if err != nil {
+		return "", fmt.Errorf("load cluster namespaces: %w", err)
+	}
+	return h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, namespaces, user.TokenVersion)
 }

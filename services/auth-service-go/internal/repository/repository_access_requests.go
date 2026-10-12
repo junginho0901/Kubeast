@@ -55,12 +55,14 @@ type AccessRequest struct {
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
 	EndedAt         *time.Time `json:"ended_at,omitempty"`
 	EndReason       *string    `json:"end_reason,omitempty"`
+	// Namespaces limits the requested grant; empty = the whole cluster.
+	Namespaces []string `json:"namespaces,omitempty"`
 }
 
 const accessRequestColumns = `
 	ar.id, ar.user_id, u.email, u.name, ar.cluster_id, c.display_name, ar.role_id, ro.name,
 	ar.duration_minutes, ar.reason, ar.status, ar.created_at,
-	ar.decided_by, d.email, ar.decided_at, ar.decision_note, ar.expires_at, ar.ended_at, ar.end_reason
+	ar.decided_by, d.email, ar.decided_at, ar.decision_note, ar.expires_at, ar.ended_at, ar.end_reason, ar.namespaces
 	FROM access_requests ar
 	JOIN auth_users u ON u.id = ar.user_id
 	JOIN clusters c ON c.id = ar.cluster_id
@@ -71,7 +73,7 @@ func scanAccessRequest(row pgx.Row) (*AccessRequest, error) {
 	var a AccessRequest
 	err := row.Scan(&a.ID, &a.UserID, &a.UserEmail, &a.UserName, &a.ClusterID, &a.ClusterName, &a.RoleID, &a.Role,
 		&a.DurationMinutes, &a.Reason, &a.Status, &a.CreatedAt,
-		&a.DecidedBy, &a.DecidedByEmail, &a.DecidedAt, &a.DecisionNote, &a.ExpiresAt, &a.EndedAt, &a.EndReason)
+		&a.DecidedBy, &a.DecidedByEmail, &a.DecidedAt, &a.DecisionNote, &a.ExpiresAt, &a.EndedAt, &a.EndReason, &a.Namespaces)
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +81,14 @@ func scanAccessRequest(row pgx.Row) (*AccessRequest, error) {
 }
 
 // CreateAccessRequest stores a new pending request.
-func (r *Repository) CreateAccessRequest(ctx context.Context, id, userID, clusterID string, roleID, durationMinutes int, reason string) error {
+func (r *Repository) CreateAccessRequest(ctx context.Context, id, userID, clusterID string, roleID, durationMinutes int, reason string, namespaces []string) error {
+	if len(namespaces) == 0 {
+		namespaces = nil
+	}
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO access_requests (id, user_id, cluster_id, role_id, duration_minutes, reason)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		id, userID, clusterID, roleID, durationMinutes, reason)
+		`INSERT INTO access_requests (id, user_id, cluster_id, role_id, duration_minutes, reason, namespaces)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		id, userID, clusterID, roleID, durationMinutes, reason, namespaces)
 	return err
 }
 
@@ -182,10 +187,11 @@ func (r *Repository) ApproveAccessRequest(ctx context.Context, id, deciderID, no
 
 	var userID, clusterID string
 	var roleID, minutes int
+	var namespaces []string
 	err = tx.QueryRow(ctx,
-		`SELECT user_id, cluster_id, role_id, duration_minutes FROM access_requests
+		`SELECT user_id, cluster_id, role_id, duration_minutes, namespaces FROM access_requests
 		  WHERE id = $1 AND status = $2 FOR UPDATE`, id, AccessRequestPending).
-		Scan(&userID, &clusterID, &roleID, &minutes)
+		Scan(&userID, &clusterID, &roleID, &minutes, &namespaces)
 	if err == pgx.ErrNoRows {
 		return time.Time{}, ErrAccessRequestNotPending
 	}
@@ -194,22 +200,31 @@ func (r *Repository) ApproveAccessRequest(ctx context.Context, id, deciderID, no
 	}
 	expiresAt := now.UTC().Add(time.Duration(minutes) * time.Minute)
 
-	// The role to come back to: the current permanent grant. A current
-	// temporary grant restores what it would have restored.
+	// The role (and namespaces) to come back to: the current permanent grant.
+	// A current temporary grant restores what it would have restored.
 	var restore *int
+	var restoreNS []string
 	err = tx.QueryRow(ctx,
-		`SELECT COALESCE(restore_role_id, role_id) FROM user_cluster_roles
-		  WHERE user_id = $1 AND cluster_id = $2 FOR UPDATE`, userID, clusterID).Scan(&restore)
+		`SELECT COALESCE(restore_role_id, role_id),
+		        CASE WHEN restore_role_id IS NULL THEN namespaces ELSE restore_namespaces END
+		   FROM user_cluster_roles
+		  WHERE user_id = $1 AND cluster_id = $2 FOR UPDATE`, userID, clusterID).Scan(&restore, &restoreNS)
 	if err != nil && err != pgx.ErrNoRows {
 		return time.Time{}, err
 	}
+	if len(namespaces) == 0 {
+		namespaces = nil
+	}
+	if len(restoreNS) == 0 {
+		restoreNS = nil
+	}
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO user_cluster_roles (user_id, cluster_id, role_id, expires_at, restore_role_id, request_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO user_cluster_roles (user_id, cluster_id, role_id, namespaces, expires_at, restore_role_id, restore_namespaces, request_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 ON CONFLICT (user_id, cluster_id) DO UPDATE
-		   SET role_id = EXCLUDED.role_id, expires_at = EXCLUDED.expires_at,
-		       restore_role_id = EXCLUDED.restore_role_id, request_id = EXCLUDED.request_id`,
-		userID, clusterID, roleID, expiresAt, restore, id); err != nil {
+		   SET role_id = EXCLUDED.role_id, namespaces = EXCLUDED.namespaces, expires_at = EXCLUDED.expires_at,
+		       restore_role_id = EXCLUDED.restore_role_id, restore_namespaces = EXCLUDED.restore_namespaces, request_id = EXCLUDED.request_id`,
+		userID, clusterID, roleID, namespaces, expiresAt, restore, restoreNS, id); err != nil {
 		return time.Time{}, err
 	}
 	if _, err := tx.Exec(ctx,
@@ -263,7 +278,7 @@ func (r *Repository) ExpireGrants(ctx context.Context, now time.Time) ([]Expired
 	defer tx.Rollback(ctx)
 
 	rows, err := tx.Query(ctx,
-		`SELECT ucr.user_id, u.email, ucr.cluster_id, ro.name, ucr.restore_role_id, rr.name, ucr.request_id
+		`SELECT ucr.user_id, u.email, ucr.cluster_id, ro.name, ucr.restore_role_id, rr.name, ucr.request_id, ucr.restore_namespaces
 		   FROM user_cluster_roles ucr
 		   JOIN auth_users u ON u.id = ucr.user_id
 		   JOIN roles ro ON ro.id = ucr.role_id
@@ -276,11 +291,12 @@ func (r *Repository) ExpireGrants(ctx context.Context, now time.Time) ([]Expired
 	type pending struct {
 		g         ExpiredGrant
 		restoreID *int
+		restoreNS []string
 	}
 	var found []pending
 	for rows.Next() {
 		var p pending
-		if err := rows.Scan(&p.g.UserID, &p.g.UserEmail, &p.g.ClusterID, &p.g.Role, &p.restoreID, &p.g.RestoredRole, &p.g.RequestID); err != nil {
+		if err := rows.Scan(&p.g.UserID, &p.g.UserEmail, &p.g.ClusterID, &p.g.Role, &p.restoreID, &p.g.RestoredRole, &p.g.RequestID, &p.restoreNS); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -299,9 +315,14 @@ func (r *Repository) ExpireGrants(ctx context.Context, now time.Time) ([]Expired
 		if p.restoreID == nil {
 			_, err = tx.Exec(ctx, `DELETE FROM user_cluster_roles WHERE user_id = $1 AND cluster_id = $2`, p.g.UserID, p.g.ClusterID)
 		} else {
+			var restoreNS []string
+			if len(p.restoreNS) > 0 {
+				restoreNS = p.restoreNS
+			}
 			_, err = tx.Exec(ctx,
-				`UPDATE user_cluster_roles SET role_id = $3, expires_at = NULL, restore_role_id = NULL, request_id = NULL
-				  WHERE user_id = $1 AND cluster_id = $2`, p.g.UserID, p.g.ClusterID, *p.restoreID)
+				`UPDATE user_cluster_roles SET role_id = $3, namespaces = $4, expires_at = NULL,
+				        restore_role_id = NULL, restore_namespaces = NULL, request_id = NULL
+				  WHERE user_id = $1 AND cluster_id = $2`, p.g.UserID, p.g.ClusterID, *p.restoreID, restoreNS)
 		}
 		if err != nil {
 			return nil, err

@@ -144,13 +144,22 @@ func (h *AuthHandler) CreateAccessRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	namespaces, _ := normalizeNamespaces(in.Namespaces) // validated above
+	if err := requestWithinGrant(grant, namespaces); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	id := uuid.New().String()
-	createErr := h.repo.CreateAccessRequest(ctx, id, payload.UserID, in.ClusterID, role.ID, in.DurationMinutes, in.Reason)
+	createErr := h.repo.CreateAccessRequest(ctx, id, payload.UserID, in.ClusterID, role.ID, in.DurationMinutes, in.Reason, namespaces)
 	target := &repository.AccessRequest{ID: id, UserID: payload.UserID, UserEmail: payload.Email, ClusterID: in.ClusterID, Role: role.Name}
-	h.auditAccessRequest(r, auditAccessRequestCreate, payload, target, map[string]any{
+	createAfter := map[string]any{
 		"request_id": id, "role": role.Name, "current_role": grant.Role,
 		"duration_minutes": in.DurationMinutes, "reason": in.Reason,
-	}, createErr)
+	}
+	if len(namespaces) > 0 {
+		createAfter["namespaces"] = namespaces
+	}
+	h.auditAccessRequest(r, auditAccessRequestCreate, payload, target, createAfter, createErr)
 	if createErr != nil {
 		if repository.IsForeignKeyViolation(createErr) {
 			response.Error(w, http.StatusNotFound, "Unknown cluster: "+in.ClusterID)
@@ -285,6 +294,9 @@ func (h *AuthHandler) decideAccessRequest(w http.ResponseWriter, r *http.Request
 	after := map[string]any{
 		"request_id": id, "role": req.Role, "duration_minutes": req.DurationMinutes, "reason": req.Reason,
 	}
+	if len(req.Namespaces) > 0 {
+		after["namespaces"] = req.Namespaces
+	}
 	if in.Note != "" {
 		after["note"] = in.Note
 	}
@@ -313,6 +325,12 @@ func (h *AuthHandler) decideAccessRequest(w http.ResponseWriter, r *http.Request
 	}
 	if missing := missingPermissions(payload, perms, req.ClusterID); len(missing) > 0 {
 		err := ceilingError(missing)
+		h.auditAccessRequest(r, action, payload, req, after, err)
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
+	if missing := missingNamespaces(payload, req.ClusterID, req.Namespaces); len(missing) > 0 {
+		err := ceilingNamespacesError(missing)
 		h.auditAccessRequest(r, action, payload, req, after, err)
 		response.Error(w, http.StatusForbidden, err.Error())
 		return

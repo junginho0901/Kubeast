@@ -70,9 +70,9 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `user.register` | 자기 가입(`ALLOW_REGISTRATION`) → `Pending` 역할. actor = target = 새 계정 |
 | `user.role.update` / `user.role.sync` | 계정 등급 변경 / OIDC 그룹 동기화. 대량 API(`PATCH /admin/users/bulk-role`)는 계정마다 1행, `after.bulk = true`. 자기 등급 변경 시도·상한 위반은 거부되고 `failure`로 남는다 |
 | `user.create` / `user.update` / `user.delete` | 관리자의 계정 생성·수정·삭제. 대량 생성(`POST /admin/users/bulk`)은 계정마다 1행, `after.bulk = true` |
-| `user.cluster_role.set` / `user.cluster_role.unset` | 클러스터별 Read/Write/Admin 부여·회수. 직접 부여는 영구 — 그 뒤에 있던 승인된 권한 요청은 `superseded`/`revoked`로 닫힌다 |
-| `access.request.create` / `.cancel` | 사용자가 이미 권한이 있는 클러스터에 더 높은 역할을 기간 한정으로 요청 / 본인이 대기 중 요청을 취소(`ACCESS_REQUESTS_ENABLED`). actor = target = 요청자, `cluster` = 대상 클러스터, `after` = `{request_id, role, current_role, duration_minutes, reason}`. 권한이 없는 클러스터에 대한 요청은 거부되고 `access.request.create` failure로 남는다 |
-| `access.request.approve` / `.reject` | 관리자(`admin.users.update`, 본인 요청 불가, 상한 규칙)의 결정. 승인 = 임시 부여(`user_cluster_roles.expires_at`) + 요청자 토큰 폐기, `after`에 `expires_at`·`note`. 본인 요청·상한 위반 거부도 `failure`로 남는다 |
+| `user.cluster_role.set` / `user.cluster_role.unset` | 클러스터별 Read/Write/Admin(또는 커스텀) 부여·회수. `after.role`, 네임스페이스 범위 부여면 `after.namespaces`(부여당 최대 50, 토큰 `ns` 클레임으로 감). 직접 부여는 영구 — 그 뒤에 있던 승인된 권한 요청은 `superseded`/`revoked`로 닫힌다. 상한 위반(권한·네임스페이스 모두)은 `failure` |
+| `access.request.create` / `.cancel` | 사용자가 이미 권한이 있는 클러스터에 더 높은 역할을 기간 한정으로 요청 / 본인이 대기 중 요청을 취소(`ACCESS_REQUESTS_ENABLED`). actor = target = 요청자, `cluster` = 대상 클러스터, `after` = `{request_id, role, current_role, duration_minutes, reason, namespaces?}`(요청자의 부여가 네임스페이스 범위면 그 안에서만 요청 가능). 권한이 없는 클러스터에 대한 요청은 거부되고 `access.request.create` failure로 남는다 |
+| `access.request.approve` / `.reject` | 관리자(`admin.users.update`, 본인 요청 불가, 상한 규칙)의 결정. 승인 = 임시 부여(`user_cluster_roles.expires_at`, 요청의 `namespaces` 그대로; 만료 때 이전 부여의 네임스페이스로 복원) + 요청자 토큰 폐기, `after`에 `expires_at`·`note`·`namespaces?`. 본인 요청·상한 위반 거부도 `failure`로 남는다 |
 | `access.request.expire` | 대기 요청이 24 h 동안 결정되지 않아 소멸(`after.end_reason = not_reviewed`). actor `system` |
 | `access.grant.expire` | 임시 부여가 기간을 다해 이전 역할로 복귀(`after.restored_role`, 없으면 `null` = 부여 삭제) + 토큰 폐기. actor `system`, 스위퍼 `ACCESS_REQUESTS_SWEEP_SEC`(기본 60 s) |
 | `user.apikey.create` / `.delete` | API 키 발급·폐기(본인). `target_type = api_key`, `target_id` = 키 id, `target_email` = 소유자. `after` = `{name, key_prefix, cluster_ids, role_ceiling, expires_at}` — 키 값은 절대 안 남는다 |

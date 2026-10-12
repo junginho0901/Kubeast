@@ -19,7 +19,7 @@ func TestTokenVersion_OnlyTheSubjectsOwnToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := m.CreateToken("u1", "u1@example.com", "Read", auth.PermissionMatrix{}, nil, 3)
+	token, err := m.CreateToken("u1", "u1@example.com", "Read", auth.PermissionMatrix{}, nil, nil, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestTokenVersion_OnlyTheSubjectsOwnToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := other.CreateToken("u1", "u1@example.com", "Read", auth.PermissionMatrix{}, nil, 3)
+	foreign, err := other.CreateToken("u1", "u1@example.com", "Read", auth.PermissionMatrix{}, nil, nil, 3)
 	if err != nil {
 		t.Fatal(err)
 	}

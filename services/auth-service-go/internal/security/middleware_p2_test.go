@@ -12,7 +12,7 @@ import (
 // A pending account's token opens only the self-service paths (L15).
 func TestAuthMiddleware_PendingRoleIsScoped(t *testing.T) {
 	m := newTestManager(t)
-	tok, _ := m.CreateToken("u1", "u1@example.com", "Pending", auth.PermissionMatrix{"*": {}}, nil, 1)
+	tok, _ := m.CreateToken("u1", "u1@example.com", "Pending", auth.PermissionMatrix{"*": {}}, nil, nil, 1)
 	mw := AuthMiddleware(m, nil, "kubeast.token")
 	for path, want := range map[string]int{
 		"/api/v1/auth/me":              http.StatusOK,
@@ -37,7 +37,7 @@ func TestAuthMiddleware_PendingRoleIsScoped(t *testing.T) {
 func TestAuthMiddleware_AuthTimeIsCarried(t *testing.T) {
 	m := newTestManager(t)
 	signedIn := time.Now().Add(-3 * time.Hour).Truncate(time.Second)
-	tok, err := m.CreateTokenAt("u1", "u1@example.com", "admin", auth.PermissionMatrix{"*": {"*"}}, nil, 1, signedIn)
+	tok, err := m.CreateTokenAt("u1", "u1@example.com", "admin", auth.PermissionMatrix{"*": {"*"}}, nil, nil, 1, signedIn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestAuthMiddleware_AuthTimeIsCarried(t *testing.T) {
 	}
 
 	// a token without auth_time (CreateToken) counts from now (iat)
-	fresh, _ := m.CreateToken("u1", "u1@example.com", "admin", auth.PermissionMatrix{"*": {"*"}}, nil, 1)
+	fresh, _ := m.CreateToken("u1", "u1@example.com", "admin", auth.PermissionMatrix{"*": {"*"}}, nil, nil, 1)
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest("GET", "/api/v1/auth/me", nil)
 	req.Header.Set("Authorization", "Bearer "+fresh)

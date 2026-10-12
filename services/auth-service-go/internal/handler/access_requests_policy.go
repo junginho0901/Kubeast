@@ -16,10 +16,11 @@ import (
 
 // accessRequestInput is the body of POST /access-requests.
 type accessRequestInput struct {
-	ClusterID       string `json:"cluster_id"`
-	Role            string `json:"role"`
-	DurationMinutes int    `json:"duration_minutes"`
-	Reason          string `json:"reason"`
+	ClusterID       string   `json:"cluster_id"`
+	Role            string   `json:"role"`
+	DurationMinutes int      `json:"duration_minutes"`
+	Reason          string   `json:"reason"`
+	Namespaces      []string `json:"namespaces"` // optional: limit the temporary grant to these
 }
 
 // accessRequestCeilingRole is the system role no requestable role may exceed.
@@ -52,6 +53,27 @@ func validateAccessRequestInput(in accessRequestInput, cfg config.AccessRequests
 	}
 	if len(reason) > accessRequestReasonMax {
 		return fmt.Errorf("reason must be at most %d characters", accessRequestReasonMax)
+	}
+	if _, err := normalizeNamespaces(in.Namespaces); err != nil {
+		return err
+	}
+	return nil
+}
+
+// requestWithinGrant refuses a request that would reach beyond the
+// namespaces of the grant it escalates from: a scoped grant can only ask for
+// a role within its own namespaces (an admin widens a scope by hand).
+func requestWithinGrant(grant *repository.UserClusterGrant, namespaces []string) error {
+	if grant == nil || len(grant.Namespaces) == 0 {
+		return nil
+	}
+	if len(namespaces) == 0 {
+		return fmt.Errorf("your grant on this cluster is limited to namespaces (%s); request within them", strings.Join(grant.Namespaces, ", "))
+	}
+	for _, n := range namespaces {
+		if !containsString(grant.Namespaces, n) {
+			return fmt.Errorf("namespace %q is outside your grant on this cluster (%s)", n, strings.Join(grant.Namespaces, ", "))
+		}
 	}
 	return nil
 }

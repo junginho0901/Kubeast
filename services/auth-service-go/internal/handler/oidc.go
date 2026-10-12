@@ -421,7 +421,12 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
 		return
 	}
-	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, user.TokenVersion)
+	namespaces, err := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if err != nil {
+		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
+		return
+	}
+	token, err := h.jwtMgr.CreateToken(user.ID, user.Email, user.RoleName, matrix, clusterRoles, namespaces, user.TokenVersion)
 	if err != nil {
 		h.oidcFail(w, r, "oidc_provision", claims.Email, err)
 		return
@@ -529,7 +534,7 @@ func (h *AuthHandler) syncClusterGrants(ctx context.Context, userID string, want
 			slog.Warn("oidc: cluster group names unknown role", "cluster", clusterID, "role", roleName)
 			continue
 		}
-		if err := h.repo.SetUserClusterRole(ctx, userID, clusterID, role.ID); err != nil {
+		if err := h.repo.SetUserClusterRole(ctx, userID, clusterID, role.ID, nil); err != nil { // group-driven grants are cluster-wide
 			// A group for a cluster that is not (or no longer) registered must
 			// not fail the whole login: skip it and keep the other grants (L21).
 			if repository.IsForeignKeyViolation(err) {
