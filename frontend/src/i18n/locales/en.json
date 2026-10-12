@@ -523,6 +523,19 @@
       "statusClosed": "Disconnected",
       "openExec": "Open terminal"
     },
+    "resize": {
+      "title": "Adjust resources",
+      "apply": "Apply without restart",
+      "hint": "Requests of this container on this pod only. The QoS class is kept and a resource whose policy needs a restart is skipped. The next rollout restores the template values.",
+      "cpu": "CPU request (m)",
+      "memory": "Memory request (MiB)",
+      "outcome": {
+        "resized": "Applied.",
+        "pending": "Pending at the kubelet.",
+        "skipped": "Skipped.",
+        "error": "Failed."
+      }
+    },
     "create": "Create Pod",
     "createTitle": "Create Pod from YAML",
     "delete": "Delete Pod",
@@ -592,7 +605,8 @@
   },
   "endpointsPage": {
     "title": "Endpoints",
-    "subtitle": "Inspect and manage Endpoints across namespaces.",
+    "deprecated": "API deprecated since Kubernetes 1.33",
+    "subtitle": "Inspect and manage Endpoints across namespaces. Service details and the resource graph read EndpointSlices.",
     "create": "Create Endpoints",
     "createTitle": "Create Endpoints from YAML",
     "refresh": "Refresh",
@@ -3885,6 +3899,7 @@
     "Failed": "Failed"
   },
   "admissionPolicies": {
+    "readOnlyOn": "In this installation YAML apply is off for policies too (features.admissionPolicies.readOnly): change them in Git.",
     "validating": {
       "title": "Validating Admission Policies",
       "subtitle": "CEL policies that validate API requests in the API server, with their bindings. Read-only here; create or change them through YAML."

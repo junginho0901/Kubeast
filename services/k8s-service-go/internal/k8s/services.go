@@ -35,28 +35,21 @@ func (s *Service) GetAllServices(ctx context.Context) ([]map[string]interface{},
 
 // DescribeService returns detailed info about a service.
 func (s *Service) DescribeService(ctx context.Context, namespace, name string) (map[string]interface{}, error) {
-	// Fetch service, endpoints, endpoint slices, and events in parallel
+	// Fetch service, endpoint slices, and events in parallel
 	var svc *corev1.Service
-	var ep *corev1.Endpoints
-	var esList *discoveryv1.EndpointSliceList
+	var slices []discoveryv1.EndpointSlice
 	var events *corev1.EventList
-	var svcErr, epErr, esErr, eventsErr error
+	var svcErr, esErr, eventsErr error
 
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		svc, svcErr = s.clientsetCtx(ctx).CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	}()
 	go func() {
 		defer wg.Done()
-		ep, epErr = s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
-	}()
-	go func() {
-		defer wg.Done()
-		esList, esErr = s.clientsetCtx(ctx).DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("kubernetes.io/service-name=%s", name),
-		})
+		slices, esErr = s.serviceEndpointSlices(ctx, namespace, name)
 	}()
 	go func() {
 		defer wg.Done()
@@ -147,81 +140,25 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	}
 	result["conditions"] = conditions
 
-	// Endpoint summary
-	if epErr == nil {
-		readyCount := 0
-		notReadyCount := 0
-		readyAddresses := make([]string, 0)
-		notReadyAddresses := make([]string, 0)
-		for _, subset := range ep.Subsets {
-			readyCount += len(subset.Addresses)
-			notReadyCount += len(subset.NotReadyAddresses)
-			for _, addr := range subset.Addresses {
-				readyAddresses = append(readyAddresses, addr.IP)
-			}
-			for _, addr := range subset.NotReadyAddresses {
-				notReadyAddresses = append(notReadyAddresses, addr.IP)
-			}
-		}
+	// Endpoint summary and the address list, both from the slices
+	if esErr == nil {
+		ready, notReady := readyAddresses(slices)
 		result["endpoint_summary"] = map[string]interface{}{
-			"ready_count":         readyCount,
-			"not_ready_count":     notReadyCount,
-			"ready_addresses":     readyAddresses,
-			"not_ready_addresses": notReadyAddresses,
+			"ready_count":         len(ready),
+			"not_ready_count":     len(notReady),
+			"ready_addresses":     ready,
+			"not_ready_addresses": notReady,
 		}
-
-		// Detailed endpoints list
-		endpoints := make([]map[string]interface{}, 0)
-		for _, subset := range ep.Subsets {
-			ports := make([]map[string]interface{}, 0, len(subset.Ports))
-			for _, p := range subset.Ports {
-				ports = append(ports, map[string]interface{}{
-					"name":     p.Name,
-					"port":     p.Port,
-					"protocol": string(p.Protocol),
-				})
-			}
-			for _, addr := range subset.Addresses {
-				entry := map[string]interface{}{
-					"ip":    addr.IP,
-					"ports": ports,
-					"ready": true,
-				}
-				if addr.TargetRef != nil {
-					entry["target_ref"] = map[string]interface{}{
-						"kind":      addr.TargetRef.Kind,
-						"name":      addr.TargetRef.Name,
-						"namespace": addr.TargetRef.Namespace,
-					}
-				}
-				endpoints = append(endpoints, entry)
-			}
-			for _, addr := range subset.NotReadyAddresses {
-				entry := map[string]interface{}{
-					"ip":    addr.IP,
-					"ports": ports,
-					"ready": false,
-				}
-				if addr.TargetRef != nil {
-					entry["target_ref"] = map[string]interface{}{
-						"kind":      addr.TargetRef.Kind,
-						"name":      addr.TargetRef.Name,
-						"namespace": addr.TargetRef.Namespace,
-					}
-				}
-				endpoints = append(endpoints, entry)
-			}
-		}
-		result["endpoints"] = endpoints
+		result["endpoints"] = sliceAddresses(slices)
 	} else {
 		result["endpoints"] = []map[string]interface{}{}
 	}
 
-	// Endpoint slices (new - matching Python)
-	if esErr == nil && esList != nil {
-		endpointSlices := make([]map[string]interface{}, 0, len(esList.Items))
-		for _, es := range esList.Items {
-			endpointSlices = append(endpointSlices, formatEndpointSliceDetail(&es))
+	// Endpoint slices
+	if esErr == nil {
+		endpointSlices := make([]map[string]interface{}, 0, len(slices))
+		for i := range slices {
+			endpointSlices = append(endpointSlices, formatEndpointSliceDetail(&slices[i]))
 		}
 		result["endpoint_slices"] = endpointSlices
 	} else {
@@ -269,24 +206,25 @@ func (s *Service) CheckServiceConnectivity(ctx context.Context, namespace, name 
 		"type":      string(svc.Spec.Type),
 	}
 
-	// Check if endpoints exist
-	ep, err := s.clientsetCtx(ctx).CoreV1().Endpoints(namespace).Get(ctx, name, metav1.GetOptions{})
+	// The Service's EndpointSlices say whether anything backs it.
+	slices, err := s.serviceEndpointSlices(ctx, namespace, name)
 	if err != nil {
+		return nil, fmt.Errorf("list endpointslices of %s/%s: %w", namespace, name, err)
+	}
+	if len(slices) == 0 {
 		result["has_endpoints"] = false
 		result["connectivity"] = "no_endpoints"
-		result["message"] = "service has no endpoints object"
+		result["message"] = "service has no EndpointSlices"
 		return result, nil
 	}
 
-	readyAddresses := 0
-	for _, subset := range ep.Subsets {
-		readyAddresses += len(subset.Addresses)
-	}
+	ready, _ := readyAddresses(slices)
+	readyCount := len(ready)
 
-	result["has_endpoints"] = readyAddresses > 0
-	result["ready_endpoints"] = readyAddresses
+	result["has_endpoints"] = readyCount > 0
+	result["ready_endpoints"] = readyCount
 
-	if readyAddresses == 0 {
+	if readyCount == 0 {
 		result["connectivity"] = "no_ready_endpoints"
 		result["message"] = "service exists but has no ready endpoints"
 		return result, nil

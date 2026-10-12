@@ -10,6 +10,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
@@ -41,6 +42,7 @@ function toRawJson(kind: AdmissionPolicyKind, item: AdmissionPolicyInfo): Record
 export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind }) {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
+  const policiesReadOnly = !!useClusterFeatures().data?.admissionPolicies?.readOnly
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
   const { open: openDetail } = useResourceDetail()
@@ -181,6 +183,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
             {validating
               ? tr('admissionPolicies.validating.subtitle', 'CEL policies that validate API requests in the API server, with their bindings. Read-only here; create or change them through YAML.')
               : tr('admissionPolicies.mutating.subtitle', 'CEL policies that mutate API requests in the API server, with their bindings. Read-only here; create or change them through YAML.')}
+            {policiesReadOnly && <> {tr('admissionPolicies.readOnlyOn', 'In this installation YAML apply is off for policies too (features.admissionPolicies.readOnly): change them in Git.')}</>}
           </p>
         </div>
         <button

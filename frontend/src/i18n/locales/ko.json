@@ -526,6 +526,19 @@
       "statusError": "연결 오류",
       "statusClosed": "연결 종료",
       "openExec": "터미널 열기"
+    },
+    "resize": {
+      "title": "리소스 조정",
+      "apply": "재시작 없이 적용",
+      "hint": "이 Pod의 이 컨테이너 requests만 바꿉니다. QoS 클래스는 유지하고, 정책상 재시작이 필요한 자원은 건너뜁니다. 다음 롤아웃 때 템플릿 값으로 돌아갑니다.",
+      "cpu": "CPU 요청 (m)",
+      "memory": "메모리 요청 (MiB)",
+      "outcome": {
+        "resized": "적용됐습니다.",
+        "pending": "kubelet이 보류 중입니다.",
+        "skipped": "건너뛰었습니다.",
+        "error": "실패했습니다."
+      }
     }
   },
   "deployments": {
@@ -592,7 +605,8 @@
   },
   "endpointsPage": {
     "title": "Endpoints",
-    "subtitle": "Namespace 전반의 Endpoints를 조회하고 관리합니다.",
+    "deprecated": "Kubernetes 1.33부터 폐기된 API",
+    "subtitle": "Namespace 전반의 Endpoints를 조회하고 관리합니다. Service 상세와 리소스 그래프는 EndpointSlice를 봅니다.",
     "create": "Endpoints 생성",
     "createTitle": "YAML로 Endpoints 생성",
     "refresh": "새로고침",
@@ -4550,6 +4564,7 @@
     "Failed": "실패"
   },
   "admissionPolicies": {
+    "readOnlyOn": "이 설치에서는 정책의 YAML 적용도 꺼져 있습니다(features.admissionPolicies.readOnly). Git에서 바꾸세요.",
     "validating": {
       "title": "Validating Admission Policies",
       "subtitle": "API 서버 안에서 CEL로 요청을 검증하는 정책과 그 바인딩입니다. 여기서는 읽기만 하고, 만들거나 고치는 것은 YAML로 합니다."

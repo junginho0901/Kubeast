@@ -1,4 +1,4 @@
-import { Terminal } from 'lucide-react'
+import { SlidersHorizontal, Terminal } from 'lucide-react'
 import ContainerKvRow from './ContainerKvRow'
 import {
   formatContainerCommand,
@@ -21,6 +21,9 @@ interface Props {
   onExec?: (name: string) => void
   canExec?: boolean
   execTooltip?: string
+  onResize?: (name: string, requests?: { cpu?: string; memory?: string }) => void
+  canResize?: boolean
+  resizeTooltip?: string
   keyPrefix?: string
 }
 
@@ -32,6 +35,9 @@ export default function ContainerCard({
   onExec,
   canExec,
   execTooltip,
+  onResize,
+  canResize,
+  resizeTooltip,
   keyPrefix,
 }: Props) {
   const state = c.state || {}
@@ -54,6 +60,16 @@ export default function ContainerCard({
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-white wrap-break-word">{c.name || `${namePrefix}-${i + 1}`}</span>
         <div className="flex items-center gap-2">
+          {isContainer && canResize && stateKey === 'running' && onResize && (
+            <button
+              onClick={() => onResize(c.name, requests)}
+              className="p-1 rounded-sm hover:bg-slate-700 text-slate-400 hover:text-sky-400 transition-colors"
+              title={resizeTooltip}
+              data-testid={`pod-resize-${c.name}`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+            </button>
+          )}
           {isContainer && canExec && stateKey === 'running' && onExec && (
             <button
               onClick={() => onExec(c.name)}

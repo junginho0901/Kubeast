@@ -238,8 +238,11 @@ subsets:
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white">{tr('endpointsPage.title', 'Endpoints')}</h1>
-          <p className="mt-2 text-slate-400">{tr('endpointsPage.subtitle', 'Inspect and manage Endpoints across namespaces.')}</p>
+          <h1 className="text-3xl font-bold text-white">
+            {tr('endpointsPage.title', 'Endpoints')}
+            <span className="ml-3 align-middle text-xs font-medium text-slate-400 border border-slate-600 rounded px-1.5 py-0.5" data-testid="endpoints-deprecated">{tr('endpointsPage.deprecated', 'API deprecated since Kubernetes 1.33')}</span>
+          </h1>
+          <p className="mt-2 text-slate-400">{tr('endpointsPage.subtitle', 'Inspect and manage Endpoints across namespaces. Service details and the resource graph read EndpointSlices.')}</p>
         </div>
         <div className="flex items-center gap-2">
           {canCreate && (

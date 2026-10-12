@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
@@ -159,6 +160,12 @@ func (h *Handler) ApplyResourceYAML(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.requirePermissionForCluster(r, "resource."+permResource(kind)+".edit"); err != nil {
 		h.handleError(w, err)
+		return
+	}
+	if h.cfg.AdmissionPoliciesReadOnly && admissionPolicyKind(kind) {
+		err := fmt.Errorf("admission policies are read-only (features.admissionPolicies.readOnly)")
+		h.recordAuditWithPayload(r, "k8s.yaml.apply", body.ResourceType, body.Name, body.Namespace, err, nil, nil)
+		response.Error(w, http.StatusForbidden, err.Error())
 		return
 	}
 

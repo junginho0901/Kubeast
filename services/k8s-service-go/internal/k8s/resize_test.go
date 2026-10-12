@@ -89,3 +89,19 @@ func TestResizePendingReasonAndKinds(t *testing.T) {
 		t.Fatal("count")
 	}
 }
+
+// Kind Pod names one pod whatever owns it (the Pod drawer); a workload kind
+// takes the owner's word.
+func TestMatchesResizeTarget(t *testing.T) {
+	owner := func(p corev1.Pod) (string, string) { return "Deployment", "web" }
+	owned := &corev1.Pod{}
+	owned.Name = "web-abc-1"
+	other := &corev1.Pod{}
+	other.Name = "web-abc-2"
+	if !matchesResizeTarget(owned, ResizeRequest{Kind: "Pod", Name: "web-abc-1"}, owner) || matchesResizeTarget(other, ResizeRequest{Kind: "Pod", Name: "web-abc-1"}, owner) {
+		t.Fatal("kind Pod matches by name only")
+	}
+	if !matchesResizeTarget(owned, ResizeRequest{Kind: "Deployment", Name: "web"}, owner) || matchesResizeTarget(owned, ResizeRequest{Kind: "StatefulSet", Name: "web"}, owner) {
+		t.Fatal("workload kinds match through the owner")
+	}
+}

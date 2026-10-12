@@ -235,17 +235,6 @@ func (s *Service) fetchResourceGraphData(ctx context.Context, namespaces []strin
 		return nil
 	})
 
-	fetch("Endpoints", func() error {
-		list, err := s.clientsetCtx(ctx).CoreV1().Endpoints(ns).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		res.endpoints = list.Items
-		mu.Unlock()
-		return nil
-	})
-
 	// --- Cluster-scoped resources ---
 	fetch("PersistentVolume", func() error {
 		list, err := s.clientsetCtx(ctx).CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})

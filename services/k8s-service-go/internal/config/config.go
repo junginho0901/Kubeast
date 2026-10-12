@@ -45,6 +45,11 @@ type Config struct {
 	// route answers 404 and the button is hidden.
 	InPlaceResizeEnabled bool
 
+	// Admission policies (chart features.admissionPolicies.readOnly): on, the
+	// YAML apply route refuses ValidatingAdmissionPolicy / MutatingAdmissionPolicy
+	// and their bindings, so policies change only through Git.
+	AdmissionPoliciesReadOnly bool
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -139,6 +144,8 @@ func Load() Config {
 		HygieneTLSCriticalDays:   pkgconfig.GetEnvInt("HYGIENE_TLS_CRITICAL_DAYS", 7),
 
 		InPlaceResizeEnabled: pkgconfig.GetEnvBool("IN_PLACE_RESIZE_ENABLED", true),
+
+		AdmissionPoliciesReadOnly: pkgconfig.GetEnvBool("ADMISSION_POLICIES_READ_ONLY", false),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

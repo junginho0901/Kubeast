@@ -263,14 +263,11 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 	}
 	serviceInfo, ports := parseServiceInfo(svcOutput)
 
-	endpointsOutput, err := runKubectl(ctx, headers, "get", "endpoints", serviceName, "-n", namespace, "-o", "json")
+	slicesOutput, err := runKubectl(ctx, headers, "get", "endpointslices", "-n", namespace, "-l", "kubernetes.io/service-name="+serviceName, "-o", "json")
 	readyCount := 0
 	notReadyCount := 0
-	if err != nil {
-		readyCount = 0
-		notReadyCount = 0
-	} else {
-		readyCount, notReadyCount = parseEndpoints(endpointsOutput)
+	if err == nil {
+		readyCount, notReadyCount = parseEndpointSlices(slicesOutput)
 	}
 
 	portCheck := map[string]interface{}{}

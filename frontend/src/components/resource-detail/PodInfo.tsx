@@ -8,7 +8,7 @@ import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, Summa
 import { fmtRel, fmtTs } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { useDetailLabel } from './useDetailLabel'
-import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
+import { useClusterFeatures, usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import PodExecTerminal from '@/components/PodExecTerminal'
@@ -17,6 +17,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
+import ContainerResizeModal from './pod-info/ContainerResizeModal'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 
@@ -40,6 +41,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [logSource, setLogSource] = useState<LogSource>('stdout')
   const showLogFiles = logFilesAvailable && logSource === 'files'
   const [execTarget, setExecTarget] = useState<string | null>(null)
+  const [resizeTarget, setResizeTarget] = useState<{ container: string; requests?: { cpu?: string; memory?: string } } | null>(null)
+  const { data: features } = useClusterFeatures()
   const [execSelectContainer, setExecSelectContainer] = useState<string>('')
   const [execCommand, setExecCommand] = useState<string>('/bin/sh')
   const [isExecContainerOpen, setIsExecContainerOpen] = useState(false)
@@ -474,6 +477,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 onExec={setExecTarget}
                 canExec={has('resource.pod.exec')}
                 execTooltip={t('pods.exec.openExec', { defaultValue: 'Open terminal' })}
+                onResize={(container, requests) => setResizeTarget({ container, requests })}
+                canResize={has('resource.pod.edit') && !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports}
+                resizeTooltip={t('pods.resize.title', { defaultValue: 'Adjust resources' })}
               />
             ))}
           </div>
@@ -859,6 +865,15 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             />
           </div>
         </ModalOverlay>
+      )}
+      {resizeTarget && (
+        <ContainerResizeModal
+          namespace={namespace}
+          pod={name}
+          container={resizeTarget.container}
+          requests={resizeTarget.requests}
+          onClose={() => setResizeTarget(null)}
+        />
       )}
     </>
   )

@@ -19,6 +19,9 @@ func handleApplyManifest(ctx context.Context, args map[string]interface{}, heade
 	if err != nil {
 		return "", err
 	}
+	if err := admissionPolicyGateManifest(manifest); err != nil {
+		return "", err
+	}
 	notice, err := gitopsGuardManifest(ctx, headers, manifest)
 	if err != nil {
 		return "", err
@@ -32,6 +35,9 @@ func handleCreateResource(ctx context.Context, args map[string]interface{}, head
 	if err != nil {
 		return "", err
 	}
+	if err := admissionPolicyGateManifest(manifest); err != nil {
+		return "", err
+	}
 	return runKubectlWithInput(ctx, headers, manifest, "create", "-f", "-")
 }
 
@@ -39,6 +45,9 @@ func handleDeleteResource(ctx context.Context, args map[string]interface{}, head
 	resourceType := argString(args, "resource_type", "")
 	if resourceType == "" {
 		return "", wrapBadRequest("resource_type parameter is required")
+	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
 	}
 	resourceName := argString(args, "resource_name", "")
 	all := argBool(args, "all")
@@ -87,6 +96,9 @@ func handlePatchResource(ctx context.Context, args map[string]interface{}, heade
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
 	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
+	}
 	patchContent, err := patchFromArgs(args)
 	if err != nil {
 		return "", err
@@ -115,6 +127,9 @@ func handleAnnotateResource(ctx context.Context, args map[string]interface{}, he
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
 	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
+	}
 	annotations := argStringMap(args, "annotations")
 	if len(annotations) == 0 {
 		return "", wrapBadRequest("annotations parameter is required")
@@ -140,6 +155,9 @@ func handleRemoveAnnotation(ctx context.Context, args map[string]interface{}, he
 	resourceName := argString(args, "resource_name", "")
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
 	}
 	keys := argStringSlice(args, "keys")
 	if len(keys) == 0 {
@@ -167,6 +185,9 @@ func handleLabelResource(ctx context.Context, args map[string]interface{}, heade
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
 	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
+	}
 	labels := argStringMap(args, "labels")
 	if len(labels) == 0 {
 		return "", wrapBadRequest("labels parameter is required")
@@ -193,6 +214,9 @@ func handleRemoveLabel(ctx context.Context, args map[string]interface{}, headers
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
 	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
+	}
 	keys := argStringSlice(args, "keys")
 	if len(keys) == 0 {
 		return "", wrapBadRequest("keys parameter is required")
@@ -218,6 +242,9 @@ func handleScaleResource(ctx context.Context, args map[string]interface{}, heade
 	resourceName := argString(args, "resource_name", "")
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
 	}
 	replicas := argInt(args, "replicas", -1)
 	if replicas < 0 {
@@ -246,6 +273,9 @@ func handleRollout(ctx context.Context, args map[string]interface{}, headers htt
 	resourceName := argString(args, "resource_name", "")
 	if resourceType == "" || resourceName == "" {
 		return "", wrapBadRequest("resource_type and resource_name are required")
+	}
+	if err := admissionPolicyGate(resourceType); err != nil {
+		return "", err
 	}
 	namespace := argString(args, "namespace", "")
 	revision := argInt(args, "revision", 0)

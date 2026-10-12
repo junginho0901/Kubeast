@@ -107,7 +107,11 @@ export default function ResourceDetailDrawer() {
     target: target ? { kind: target.kind, namespace: target.namespace ?? null, name: target.name, rawJson: (target as any).rawJson } : null,
     close,
   })
-  const canEditYaml = has(`resource.${permResource(kind)}.edit`)
+  const features = useClusterFeatures().data
+  // features.admissionPolicies.readOnly: the server refuses a policy apply, so the editor stays read-only too.
+  const policyLocked = !!features?.admissionPolicies?.readOnly &&
+    ['ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding', 'MutatingAdmissionPolicy', 'MutatingAdmissionPolicyBinding'].includes(kind)
+  const canEditYaml = has(`resource.${permResource(kind)}.edit`) && !policyLocked
 
   const {
     yamlData,
@@ -127,7 +131,7 @@ export default function ResourceDetailDrawer() {
 
   // The Argo CD guard reads annotations, which the list pages' summarized
   // rawJson does not carry: fetch the full object for the badge when needed.
-  const argoCfg = useClusterFeatures().data?.gitops?.argocd
+  const argoCfg = features?.gitops?.argocd
   const rawJsonLacksAnnotations = !!target?.rawJson && !((target.rawJson as Record<string, unknown>).metadata as Record<string, unknown> | undefined)?.annotations
   // the delete window's system-object check reads labels and annotations too
   const needsRawJsonFetch = !!target

@@ -278,6 +278,20 @@ tests:
           path: data.IN_PLACE_RESIZE_ENABLED
           value: "false"
 
+  - it: leaves admission policies writable through YAML by default and locks them from features.admissionPolicies.readOnly
+    asserts:
+      - equal:
+          path: data.ADMISSION_POLICIES_READ_ONLY
+          value: "false"
+
+  - it: takes features.admissionPolicies.readOnly true
+    set:
+      features.admissionPolicies.readOnly: true
+    asserts:
+      - equal:
+          path: data.ADMISSION_POLICIES_READ_ONLY
+          value: "true"
+
   - it: turns the cluster hygiene report on by default with a 30-day interval and the system namespaces excluded
     asserts:
       - equal:

@@ -84,7 +84,7 @@ func (s *Service) ResizeWorkload(ctx context.Context, namespace string, req Resi
 	res := &ResizeResult{Kind: req.Kind, Namespace: namespace, Name: req.Name, Container: req.Container, Pods: []PodResizeResult{}}
 	for i := range podList.Items {
 		p := &podList.Items[i]
-		if kind, name := owner(*p); kind != req.Kind || name != req.Name {
+		if !matchesResizeTarget(p, req, owner) {
 			continue
 		}
 		r := PodResizeResult{Pod: p.Name}
@@ -128,6 +128,16 @@ func (s *Service) ResizeWorkload(ctx context.Context, namespace string, req Resi
 	sort.Slice(res.Pods, func(i, j int) bool { return res.Pods[i].Pod < res.Pods[j].Pod })
 	res.Resized, res.Pending, res.Skipped, res.Failed = res.count("resized"), res.count("pending"), res.count("skipped"), res.count("error")
 	return res, nil
+}
+
+// matchesResizeTarget picks the pods a request means: kind Pod names one pod
+// whoever owns it (the Pod drawer); a workload kind names every pod it owns.
+func matchesResizeTarget(p *corev1.Pod, req ResizeRequest, owner func(corev1.Pod) (string, string)) bool {
+	if req.Kind == "Pod" {
+		return p.Name == req.Name
+	}
+	kind, name := owner(*p)
+	return kind == req.Kind && name == req.Name
 }
 
 func (r *ResizeResult) count(result string) int {

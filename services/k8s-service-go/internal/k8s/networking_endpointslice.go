@@ -132,7 +132,7 @@ func formatEndpointSliceDetail(es *discoveryv1.EndpointSlice) map[string]interfa
 	endpointsReady := 0
 	endpointsNotReady := 0
 	for _, ep := range es.Endpoints {
-		if ep.Conditions.Ready != nil && *ep.Conditions.Ready {
+		if endpointReady(ep) {
 			endpointsReady++
 		} else {
 			endpointsNotReady++

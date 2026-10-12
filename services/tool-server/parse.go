@@ -55,11 +55,16 @@ type serviceResource struct {
 	} `json:"spec"`
 }
 
-type endpointResource struct {
-	Subsets []struct {
-		Addresses         []map[string]interface{} `json:"addresses"`
-		NotReadyAddresses []map[string]interface{} `json:"notReadyAddresses"`
-	} `json:"subsets"`
+// endpointSliceList is "kubectl get endpointslices -l kubernetes.io/service-name=<svc> -o json".
+type endpointSliceList struct {
+	Items []struct {
+		Endpoints []struct {
+			Addresses  []string `json:"addresses"`
+			Conditions struct {
+				Ready *bool `json:"ready"`
+			} `json:"conditions"`
+		} `json:"endpoints"`
+	} `json:"items"`
 }
 
 type eventList struct {
@@ -142,16 +147,23 @@ func parseServiceInfo(output string) (serviceInfo, []map[string]interface{}) {
 	return info, ports
 }
 
-func parseEndpoints(output string) (int, int) {
-	var eps endpointResource
-	if err := json.Unmarshal([]byte(output), &eps); err != nil {
+// parseEndpointSlices counts a Service's addresses by the ready condition
+// (unset reads as ready, as the API defines it).
+func parseEndpointSlices(output string) (int, int) {
+	var list endpointSliceList
+	if err := json.Unmarshal([]byte(output), &list); err != nil {
 		return 0, 0
 	}
 	ready := 0
 	notReady := 0
-	for _, subset := range eps.Subsets {
-		ready += len(subset.Addresses)
-		notReady += len(subset.NotReadyAddresses)
+	for _, slice := range list.Items {
+		for _, e := range slice.Endpoints {
+			if e.Conditions.Ready == nil || *e.Conditions.Ready {
+				ready += len(e.Addresses)
+			} else {
+				notReady += len(e.Addresses)
+			}
+		}
 	}
 	return ready, notReady
 }

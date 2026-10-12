@@ -601,6 +601,12 @@ features:
   # template is not changed, so the next rollout restores its values.
   inPlaceResize:
     enabled: true
+  # Admission policies (Cluster → Validating/Mutating Admission Policies) are
+  # read-only screens, but the shared YAML apply and the AI write tools can
+  # still change a policy or binding. readOnly: true refuses those too, so
+  # policies change only through Git.
+  admissionPolicies:
+    readOnly: false
   # Log files inside containers (Pod → Logs → Log files, permission
   # resource.pod.logfile, in the Read and Write roles): for applications that
   # write logs to files instead of stdout. Kubeast runs only "ls" and "tail"

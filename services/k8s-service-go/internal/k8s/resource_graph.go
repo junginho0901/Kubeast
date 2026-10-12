@@ -80,7 +80,6 @@ type rgResources struct {
 	hpas            []autoscalingv2.HorizontalPodAutoscaler
 	networkPolicies []networkingv1.NetworkPolicy
 	endpointSlices  []discoveryv1.EndpointSlice
-	endpoints       []corev1.Endpoints
 	forbidden       []string // kinds the identity may not list, left out
 }
 

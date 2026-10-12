@@ -619,6 +619,8 @@ export interface ClusterFeatures {
   logFiles?: { enabled: boolean; maxLines: number; namespaces: string[] }
   // Optimization → apply without restart (pod resize subresource, server 1.35+).
   inPlaceResize?: { enabled: boolean; serverSupports: boolean }
+  // Validating/Mutating admission policies and bindings: YAML apply (and the AI write tools) refused while on.
+  admissionPolicies?: { readOnly: boolean }
 }
 
 // POST /api/v1/cluster/namespaces/{ns}/optimization/resize — one optimization

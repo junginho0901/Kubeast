@@ -172,23 +172,5 @@ func buildNetworkConfigGraph(
 		}
 	}
 
-	// --- Endpoints → Service ---
-	for i := range res.endpoints {
-		ep := &res.endpoints[i]
-		if !inScope(ep.Namespace) {
-			continue
-		}
-		epID := rgNodeID("Endpoints", ep.Namespace, ep.Name)
-		addNode(rgNode{
-			ID: epID, Kind: "Endpoints",
-			Name: ep.Name, Namespace: ep.Namespace, Status: "Active",
-		})
-		// Endpoints share name with Service
-		svcID := rgNodeID("Service", ep.Namespace, ep.Name)
-		if _, exists := nodeMap[svcID]; exists {
-			edges = append(edges, rgEdge{Source: epID, Target: svcID, Type: RGEdgeEndpointOf})
-		}
-	}
-
 	return edges
 }
