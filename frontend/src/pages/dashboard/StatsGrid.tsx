@@ -8,7 +8,7 @@ import type { ResourceType } from './types'
 export interface StatItem {
   name: string
   resourceType: ResourceType
-  value: number
+  value: number | string
   icon: LucideIcon
   color: string
   bgColor: string

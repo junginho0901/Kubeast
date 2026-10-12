@@ -80,6 +80,7 @@ export function DashboardBody() {
 
   const {
     overview,
+    isOverviewError,
     isLoading,
     namespaces,
     isLoadingNamespaces,
@@ -386,11 +387,13 @@ export function DashboardBody() {
   const POD_PHASES = ['Running', 'Succeeded', 'Failed', 'Pending', 'Unknown']
   const NODE_STATUSES = ['Ready', 'NotReady']
 
+  // A refused overview (403: the user's cluster identity may not list namespaces) shows no number at all — 0 would read as an empty cluster.
+  const count = (n?: number) => (isOverviewError ? '—' : n || 0)
   const stats = [
     {
       name: tr('dashboard.stats.namespaces', 'Namespaces'),
       resourceType: 'namespaces' as ResourceType,
-      value: overview?.total_namespaces || 0,
+      value: count(overview?.total_namespaces),
       icon: Server,
       color: 'text-blue-400',
       bgColor: 'bg-blue-500/10',
@@ -398,7 +401,7 @@ export function DashboardBody() {
     {
       name: tr('dashboard.stats.pods', 'Pods'),
       resourceType: 'pods' as ResourceType,
-      value: overview?.total_pods || 0,
+      value: count(overview?.total_pods),
       icon: Box,
       color: 'text-green-400',
       bgColor: 'bg-green-500/10',
@@ -406,7 +409,7 @@ export function DashboardBody() {
     {
       name: tr('dashboard.stats.services', 'Services'),
       resourceType: 'services' as ResourceType,
-      value: overview?.total_services || 0,
+      value: count(overview?.total_services),
       icon: Database,
       color: 'text-purple-400',
       bgColor: 'bg-purple-500/10',
@@ -414,7 +417,7 @@ export function DashboardBody() {
     {
       name: tr('dashboard.stats.deployments', 'Deployments'),
       resourceType: 'deployments' as ResourceType,
-      value: overview?.total_deployments || 0,
+      value: count(overview?.total_deployments),
       icon: TrendingUp,
       color: 'text-yellow-400',
       bgColor: 'bg-yellow-500/10',
@@ -422,7 +425,7 @@ export function DashboardBody() {
     {
       name: tr('dashboard.stats.pvcs', 'PVCs'),
       resourceType: 'pvcs' as ResourceType,
-      value: overview?.total_pvcs || 0,
+      value: count(overview?.total_pvcs),
       icon: HardDrive,
       color: 'text-pink-400',
       bgColor: 'bg-pink-500/10',
@@ -430,7 +433,7 @@ export function DashboardBody() {
     {
       name: tr('dashboard.stats.nodes', 'Nodes'),
       resourceType: 'nodes' as ResourceType,
-      value: overview?.node_count || 0,
+      value: count(overview?.node_count),
       icon: Server,
       color: 'text-cyan-400',
       bgColor: 'bg-cyan-500/10',

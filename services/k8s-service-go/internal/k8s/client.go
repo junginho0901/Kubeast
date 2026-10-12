@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -40,6 +41,9 @@ type clientBundle struct {
 	dynamic    dynamic.Interface
 	discovery  discovery.DiscoveryInterface
 	restConfig *rest.Config
+	// authz is clientset's authorization API (SelfSubjectAccessReview as the
+	// caller), kept as an interface so tests can answer it.
+	authz authorizationv1client.AuthorizationV1Interface
 
 	// prom caches this cluster's discovered Prometheus location. It lives on the
 	// bundle (not the Service) so one cluster's Prometheus never leaks into
@@ -241,6 +245,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	}
 	return &clientBundle{
 		clientset:   clientset,
+		authz:       clientset.AuthorizationV1(),
 		dynamic:     dynClient,
 		discovery:   clientset.Discovery(),
 		restConfig:  cfg,

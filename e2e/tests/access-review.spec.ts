@@ -136,8 +136,9 @@ test.describe('Access review', () => {
     expect(rev.counts.users).toBeGreaterThanOrEqual(2)
     expect(rev.snapshot).toBeUndefined()
 
+    // The history answers the newest 100 sign-offs, so a store that already holds that many stays at 100.
     const history = await (await request.get('/api/v1/auth/admin/access-review/history', { headers: bearer(admin) })).json()
-    expect(history.length).toBe(before + 1)
+    expect(history.length).toBe(Math.min(before + 1, 100))
     expect(history[0].id).toBe(rev.id)
     expect(history[0].note).toBe(`e2e ${stamp}`)
 

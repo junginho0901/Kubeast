@@ -58,7 +58,7 @@ export function useDashboardQueries({
   const ck = currentCluster || 'default'
   const [metricsUnavailable, setMetricsUnavailable] = useState(() => isMetricsDisabled())
 
-  const { data: overview, isLoading } = useQuery({
+  const { data: overview, isLoading, isError: isOverviewError } = useQuery({
     queryKey: ['cluster-overview', ck],
     queryFn: () => api.getClusterOverview(false), // 자동 갱신은 캐시 사용
     // k8s-service answers from its informer store (no API listing per poll).
@@ -256,6 +256,7 @@ export function useDashboardQueries({
 
   return {
     overview,
+    isOverviewError,
     isLoading,
     namespaces,
     isLoadingNamespaces,

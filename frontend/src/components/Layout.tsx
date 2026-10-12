@@ -68,9 +68,9 @@ type NavGroup = {
   items: NavItem[]
   adminOnly?: boolean
   // requiredPermission hides the entire group when the user lacks the
-  // permission. Existing groups do not use it (they rely on adminOnly
-  // or show for everyone); it is introduced for Helm which is the
-  // first group gated by a non-admin menu permission.
+  // menu.* permission it names (README "역할과 권한"); the built-in roles
+  // hold menu.*, so only a custom role ever hides a group. Admin is
+  // adminOnly instead.
   requiredPermission?: string
 }
 
@@ -219,6 +219,7 @@ export default function Layout() {
     {
       id: 'core',
       label: t('nav.core'),
+      requiredPermission: 'menu.dashboard',
       items: [
         { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard, exact: true },
         { name: t('nav.clusterView'), href: '/cluster-view', icon: Layers },
@@ -232,6 +233,7 @@ export default function Layout() {
     {
       id: 'cluster',
       label: t('nav.cluster'),
+      requiredPermission: 'menu.cluster',
       items: [
         { name: t('nav.namespaces'), href: '/cluster/namespaces', icon: K.Namespace },
         { name: t('nav.nodes'), href: '/cluster/nodes', icon: K.Node },
@@ -246,6 +248,7 @@ export default function Layout() {
     {
       id: 'workloads',
       label: t('nav.workloads'),
+      requiredPermission: 'menu.workloads',
       items: [
         { name: t('nav.pods'), href: '/workloads/pods', icon: K.Pod },
         { name: t('nav.deployments'), href: '/workloads/deployments', icon: K.Deployment },
@@ -262,6 +265,7 @@ export default function Layout() {
     {
       id: 'storage',
       label: t('nav.storage'),
+      requiredPermission: 'menu.storage',
       items: [
         {
           name: t('nav.pvcs'),
@@ -292,6 +296,7 @@ export default function Layout() {
     {
       id: 'network',
       label: t('nav.network'),
+      requiredPermission: 'menu.network',
       items: [
         { name: t('nav.services'), href: '/network/services', icon: K.Service },
         { name: t('nav.endpoints'), href: '/network/endpoints', icon: K.Endpoints },
@@ -304,6 +309,7 @@ export default function Layout() {
     {
       id: 'gateway',
       label: t('nav.gateway'),
+      requiredPermission: 'menu.gateway',
       tag: t('common.beta'),
       items: [
         { name: t('nav.gateways'), href: '/gateway/gateways', icon: K.Gateway },
@@ -318,6 +324,7 @@ export default function Layout() {
     {
       id: 'gpu',
       label: t('nav.gpu'),
+      requiredPermission: 'menu.gpu',
       tag: t('common.beta'),
       items: [
         { name: t('nav.gpuDashboard'), href: '/gpu/dashboard', icon: Gauge },
@@ -332,6 +339,7 @@ export default function Layout() {
     {
       id: 'security',
       label: t('nav.security'),
+      requiredPermission: 'menu.security',
       items: [
         { name: t('nav.serviceAccounts'), href: '/security/serviceaccounts', icon: K.ServiceAccount },
         { name: t('nav.roles'), href: '/security/roles', icon: K.Role },
@@ -343,6 +351,7 @@ export default function Layout() {
     {
       id: 'configuration',
       label: t('nav.configuration'),
+      requiredPermission: 'menu.configuration',
       items: [
         { name: t('nav.configMaps'), href: '/configuration/configmaps', icon: K.ConfigMap },
         { name: t('nav.secrets'), href: '/configuration/secrets', icon: K.Secret },
@@ -362,6 +371,7 @@ export default function Layout() {
     {
       id: 'customResources',
       label: t('nav.customResources'),
+      requiredPermission: 'menu.cluster',
       items: [
         { name: t('nav.customInstances'), href: '/custom-resources/instances', icon: K.CustomResourceInstance },
         { name: t('nav.customGroups'), href: '/custom-resources/groups', icon: K.CustomResourceDefinition },

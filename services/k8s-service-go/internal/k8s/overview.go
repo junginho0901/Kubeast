@@ -2,18 +2,33 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+// overviewIdentityTTL is how long a cluster's answer about one identity is kept.
+const overviewIdentityTTL = 60 * time.Second
 
 // GetClusterOverview returns a high-level summary of the cluster state, computed
 // from the cluster's informer stores (informer_cache.go). Until those have
 // synced, or when they cannot run, it lists the cluster (cached 30s).
+//
+// The stores are watched as kubeast:cache, not as the caller, so the caller's
+// own cluster identity is asked first whether it may list namespaces: a custom
+// role whose group the cluster has not bound, or one bound in a single
+// namespace, must not be shown the whole cluster's counts.
 func (s *Service) GetClusterOverview(ctx context.Context) (map[string]interface{}, error) {
 	if b := s.bundleForCtx(ctx); b != nil {
+		if err := s.overviewIdentityAllowed(ctx, b); err != nil {
+			return nil, err
+		}
 		if ci := b.overviewInformers(); ci != nil && ci.waitSynced(ctx, overviewSyncWait) {
 			ov := ci.overview()
 			ov["cluster_version"] = ci.serverVersion(b.discovery)
@@ -137,4 +152,46 @@ func (s *Service) GetComponentStatuses(ctx context.Context) ([]map[string]interf
 		})
 	}
 	return result, nil
+}
+
+var errOverviewForbidden = apierrors.NewForbidden(schema.GroupResource{Resource: "namespaces"}, "",
+	errors.New("your identity in this cluster may not list namespaces, so the cluster overview is not shown"))
+
+// overviewIdentityAllowed answers from the cache (per cluster and identity,
+// overviewIdentityTTL) or asks the cluster through b.mayListNamespaces.
+func (s *Service) overviewIdentityAllowed(ctx context.Context, b *clientBundle) error {
+	key := s.clusterCacheKey(ctx, "overview_identity")
+	var allowed bool
+	if s.cache != nil && s.cache.Get(ctx, key, &allowed) {
+		if allowed {
+			return nil
+		}
+		return errOverviewForbidden
+	}
+	allowed, err := b.mayListNamespaces(ctx)
+	if err != nil {
+		return err
+	}
+	if s.cache != nil {
+		s.cache.Set(ctx, key, allowed, overviewIdentityTTL)
+	}
+	if !allowed {
+		return errOverviewForbidden
+	}
+	return nil
+}
+
+// mayListNamespaces is a SelfSubjectAccessReview for "list namespaces" as the
+// caller (the impersonated identity the bundle's clients carry).
+func (b *clientBundle) mayListNamespaces(ctx context.Context) (bool, error) {
+	if b.authz == nil {
+		return true, nil
+	}
+	review, err := b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
+		Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authorizationv1.ResourceAttributes{Verb: "list", Resource: "namespaces"}},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return false, err
+	}
+	return review.Status.Allowed, nil
 }
