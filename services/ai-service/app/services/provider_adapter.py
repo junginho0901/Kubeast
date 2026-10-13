@@ -1,10 +1,11 @@
 """
 Provider-Aware OpenAI Adapter — AsyncOpenAI drop-in replacement.
 
-각 LLM 프로바이더(OpenAI, Anthropic, Google, Ollama 등)의
+각 LLM 프로바이더(OpenAI, Google, Ollama 등)의
 OpenAI-compatible 엔드포인트를 사용하여,
 기존 self.client.chat.completions.create(...) 호출을 변경 없이
-모든 프로바이더에서 사용할 수 있게 합니다.
+모든 프로바이더에서 사용할 수 있게 합니다. Anthropic 은 같은 인터페이스 뒤에서
+네이티브 Messages API 를 씁니다(app/services/anthropic_messages.py).
 
 로컬/셀프호스트 모델 지원 (kagent parity):
   - options:  Ollama-native 생성 옵션(num_ctx, temperature, top_p ...)을
@@ -23,7 +24,7 @@ import httpx
 # 프로바이더별 기본 OpenAI-compatible 엔드포인트
 _PROVIDER_BASE_URLS: Dict[str, str] = {
     "openai": "https://api.openai.com/v1",
-    "anthropic": "https://api.anthropic.com/v1/",
+    "anthropic": "https://api.anthropic.com",
     "google": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "ollama": "http://localhost:11434/v1",
@@ -146,6 +147,26 @@ class ProviderAdapter:
             )
 
         http_client = httpx.AsyncClient(verify=_build_verify(tls_verify, ca_cert))
+        self._default_options = options or None
+
+        if self.provider == "anthropic":
+            from app.services.anthropic_messages import AnthropicMessagesClient
+
+            self._openai_client = None
+            self.chat = AnthropicMessagesClient(
+                model=model,
+                api_key=api_key,
+                base_url=resolved_base_url,
+                http_client=http_client,
+                default_headers=default_headers,
+                options=options,
+            ).chat
+            print(
+                f"[Provider Adapter] provider=anthropic (Messages API), model={model}, "
+                f"base_url={resolved_base_url}, ca_cert={'yes' if ca_cert else 'no'}",
+                flush=True,
+            )
+            return
 
         # Ollama 등 로컬 모델은 API 키 불필요 — 빈 값이면 더미값 사용
         effective_api_key = api_key if api_key else "ollama"
@@ -162,7 +183,6 @@ class ProviderAdapter:
         )
 
         # 생성 옵션(num_ctx 등)을 매 요청에 주입하는 프록시로 chat 인터페이스 노출
-        self._default_options = options or None
         self.chat = _ChatProxy(self._openai_client.chat, self.provider, self._default_options)
 
         print(

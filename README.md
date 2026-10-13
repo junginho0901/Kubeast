@@ -164,13 +164,19 @@ AI 어시스턴트가 활성화됩니다.
 
 AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-service·tool-server·ModelConfig 컨트롤러가 배포되지 않고(새 설치는 CRD도 없음, 켰다 끈 설치는 CRD와 ModelConfig가 남음), 게이트웨이의 `/api/v1/ai`는 JSON 503, 화면은 AI 채팅·플로팅 어시스턴트·AI 관리 페이지·MCP 안내를 숨깁니다(`/api/v1/cluster/features`의 `ai.enabled`). 켜진 설치에서도 ai-service는 모델 클라이언트를 처음 만들 때 provider SDK를, `mcp.enabled`일 때만 MCP SDK를 읽어 유휴 메모리를 줄입니다.
 
+Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages API(`/v1/messages`)로 부릅니다(`app/services/anthropic_messages.py`, 응답은 다른 공급자와 같은 모양으로 바꿔 돌려줌).
+- **샘플링 값**: Claude 4.7 이후 모델(이름에서 버전을 읽지 못하는 모델 포함)에는 `temperature`·`top_p`·`top_k`를 보내지 않습니다 — 그 모델들은 기본값이 아니면 400을 돌려줍니다.
+- **thinking**: 모델 기본값을 따릅니다(Claude 5 계열은 기본으로 켜짐). 도구 호출 사이에는 그 턴의 thinking 블록을 그대로 돌려보냅니다(API 요건).
+- **프롬프트 캐시**: 자동 캐시(`cache_control`)가 기본으로 켜집니다. 모델 설정 옵션 `prompt_cache: false`로 끕니다. 사용량의 입력 토큰은 캐시에서 읽은 토큰을 포함한 총 입력입니다.
+- 키는 지금처럼 `ANTHROPIC_API_KEY`(또는 `KUBEAST_AI_KEY_*`)에 둡니다. 예전 호환 주소(`https://api.anthropic.com/v1/`)가 base_url에 들어 있어도 그대로 동작합니다.
+
 ---
 
 ## 주요 기능
 
 ### 🤖 AI 어시스턴트
 
-- **다중 LLM 지원** — OpenAI · Anthropic · Gemini · Ollama 등 (OpenAI 호환 어댑터로 통합)
+- **다중 LLM 지원** — OpenAI · Anthropic · Gemini · Ollama 등 (OpenAI 호환 어댑터로 통합, Anthropic은 Messages API)
 - **스트리밍 채팅** — SSE 기반 실시간 응답, 세션/히스토리 보존
 - **다중 라운드 Tool Calling** — AI가 화이트리스트 툴로 K8s를 조회·변경(최대 10라운드).
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 게이팅**
