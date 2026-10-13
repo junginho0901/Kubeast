@@ -1,0 +1,23 @@
+# prometheus-community/prometheus 29.36.1 (Prometheus v3.15.0) for a cluster Kubeast reads.
+#   helm install prometheus prometheus-community/prometheus --version 29.36.1 \
+#     -n monitoring --create-namespace -f deploy/examples/target-cluster/prometheus-values.yaml
+# Kubeast looks for a Service whose name contains "prometheus" with port 9090 in
+# monitoring, prometheus, jupyterhub, kube-system, gpu-operator, observability or
+# default that answers /-/healthy; this chart's Service listens on 80, so it moves
+# to 9090. The chart's own jobs already scrape what the screens query (cAdvisor and
+# the kubelet through the API server, the bundled kube-state-metrics and
+# node-exporter). docs/cluster-requirements.md §3.
+server:
+  service:
+    servicePort: 9090
+alertmanager:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+# OpenCost writes the price metrics it reads back for the Cost page (opencost-values.yaml).
+extraScrapeConfigs: |
+  - job_name: opencost
+    honor_labels: true
+    scrape_interval: 1m
+    static_configs:
+      - targets: [opencost.opencost.svc:9003]

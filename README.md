@@ -140,6 +140,8 @@ grep DEFAULT_ADMIN_PASSWORD .env
 - **In-cluster** — Kubeast가 떠 있는 그 클러스터를 ServiceAccount 권한으로 자동 연결
 - **External** — 다른 클러스터의 kubeconfig를 등록 (멀티클러스터). API 서버 주소를 비워 두면 연결 확인 때 실제로 붙은 주소가 들어가고, 주소 없이 등록된 클러스터는 **Admin > Clusters**의 연결 테스트가 채웁니다
 
+**클러스터 준비물**: Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 권한(RBAC)은 클러스터마다 있어야 하고, 그래프·비용·정책 보고서 같은 기능은 그 클러스터의 metrics-server·Prometheus·OpenCost·Kyverno 등을 읽습니다. 기능별로 무엇이 있어야 하는지·찾는 방법·확인 명령·예시는 [docs/cluster-requirements.md](docs/cluster-requirements.md), 예시 값은 `deploy/examples/target-cluster/`, 등록 클러스터용 권한 렌더는 `scripts/render-target-rbac.sh`.
+
 **EKS 클러스터**는 IAM으로 인증합니다. k8s-service·tool-server 이미지에 `aws-iam-authenticator`가 들어 있으므로 kubeconfig에는 정적 자격증명 대신 exec 플러그인을 적습니다. Kubeast 파드의 IRSA 롤(`values.yaml`의 `aws.irsaRoleArn`)이 `-r`의 대상 롤을 AssumeRole하고, 대상 클러스터의 access entry가 그 롤을 Kubernetes 그룹에 매핑합니다(그룹 권한은 `helm/kubeast/files/impersonation-rbac.yaml`).
 
 ```yaml
@@ -245,7 +247,7 @@ AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-serv
 
 - **Topology View** — 클러스터 리소스 관계 시각화 (React Flow / dagre / elkjs)
 - **Dependency Graph** — 워크로드 간 의존성 그래프
-- **Monitoring** — Prometheus 시계열 차트, 이상 감지, 상관 분석, GPU 심층 메트릭
+- **Monitoring** — Prometheus 시계열 차트, 이상 감지, 상관 분석, GPU 심층 메트릭 (대상 클러스터에 있어야 하는 Prometheus·지표는 [docs/cluster-requirements.md §3](docs/cluster-requirements.md#3-prometheus))
 - **Node Shell** — 웹 기반 노드 터미널
 - **로그 파일** — 파일로 로그를 쓰는 앱의 컨테이너 안 로그를 허용 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, 아래 절)
 - **Advanced Search** — 표현식 기반 전역 리소스 탐색
@@ -359,6 +361,8 @@ auth:
   # 클러스터에는 로그인한 사용자 본인(이메일)으로 impersonation — 클러스터 RBAC이
   # 최종 판단, K8s audit에 사용자가 남음. 등록하는 모든 클러스터에 아래 RBAC 적용:
   #   helm template kubeast helm/kubeast -s templates/impersonation-rbac.yaml | kubectl --context <cluster> apply -f -
+  # 아래 커스텀 역할·Read 프록시·로그 파일 권한까지 한 번에(쓰지 않는 템플릿은 건너뜀, docs/cluster-requirements.md §1):
+  #   scripts/render-target-rbac.sh -f values.yaml -f <그 클러스터 값> | kubectl --context <cluster> apply -f -
   # (Kubeast 자격증명은 ClusterRole kubeast-impersonator 만 있으면 됨 — 설치된
   #  클러스터의 k8s-service·tool-server ServiceAccount도 이것과 kubeconfig Secret
   #  읽기 Role만 받음; false면 예전처럼 cluster-admin)
@@ -523,6 +527,8 @@ multicluster:
 ├── frontend/                        # React + TS + Tailwind
 ├── helm/kubeast/                    # Helm 차트 — 모든 설치 경로의 유일한 매니페스트 원본 (정본 nginx.conf = files/nginx.conf)
 ├── deploy/kind/                     # 로컬 kind 개발 설치 값 (values.yaml; 개인 값은 values.local.yaml, git 제외)
+├── deploy/examples/target-cluster/   # 대상 클러스터 준비물 예시 값 (Prometheus·OpenCost 차트, 클러스터별 RBAC 값 — docs/cluster-requirements.md)
+├── docs/                            # 운영 문서 (클러스터 준비물·메트릭·감사·백업·공급망)
 ├── e2e/                             # Playwright E2E (라이브 클러스터 대상)
 │   └── actions/                     # 옵트인 동작 스위트 — UI 동작 92개 + kubectl 검증 (E2E_ACTIONS=1 --project=actions)
 ├── scripts/                         # 빌드/배포/개발 스크립트

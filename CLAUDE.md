@@ -21,6 +21,8 @@ Requests enter through an NGINX **gateway** (`:8000`) that routes to backend ser
 | `model-config-controller-go` | Go | — | `services/model-config-controller-go` | controller-runtime operator for the `ModelConfig` CRD |
 | `frontend` | React/Vite/TS | 5173 | `frontend` | UI |
 
+**Target-cluster requirements**: Kubeast installs nothing on the clusters it manages (the node shell pod aside). Whatever a feature needs there — RBAC, metrics-server, a Prometheus Service and the metric names it queries, OpenCost, a CRD, a minimum server version, a label — is listed in [docs/cluster-requirements.md](docs/cluster-requirements.md) with how Kubeast finds it and how to check it; example values live in `deploy/examples/target-cluster/` and `scripts/render-target-rbac.sh` renders the RBAC a registered cluster needs. A change that makes a feature read something new from the target cluster updates that page in the same PR.
+
 **AI tool-calling flow**: `ai-service` (chat orchestration, provider adapters for OpenAI/Anthropic/Gemini) dispatches whitelisted tools (`app/services/tool_whitelists.py`) to `tool-server`, which calls the K8s API. Tool results stream back to the chat.
 
 ### Go module layout

@@ -1,0 +1,13 @@
+# Values for one registered cluster, layered on the install values when rendering
+# the RBAC that cluster needs:
+#   scripts/render-target-rbac.sh -f values.yaml -f deploy/examples/target-cluster/cluster-values.yaml \
+#     | kubectl --context <cluster> apply -f -
+# Only what differs per cluster goes here: the Services the Read group may GET
+# through the API server proxy, as Kubeast reports them (Admin → Clusters → edit →
+# Prometheus check, and the Cost page header). Leave the list empty if the cluster
+# has neither. docs/cluster-requirements.md §1.
+auth:
+  impersonation:
+    viewerProxyServices:
+      - {namespace: monitoring, service: prometheus-server, port: 9090}
+      - {namespace: opencost, service: opencost, port: 9003}
