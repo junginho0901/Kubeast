@@ -49,4 +49,14 @@ export const modelConfigApi = {
     const { data } = await client.post('/ai/model-configs/test', payload)
     return data
   },
+
+  // The models the provider lists for this key and address; models is empty (with error) when it cannot list them.
+  listProviderModels: async (payload: {
+    provider: string
+    base_url?: string
+    api_key_env?: string
+  }): Promise<{ models: { name: string; label?: string }[]; error?: string }> => {
+    const { data } = await client.post('/ai/model-configs/models', payload)
+    return data
+  },
 }

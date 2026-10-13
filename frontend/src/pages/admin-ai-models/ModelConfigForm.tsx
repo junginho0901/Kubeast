@@ -42,6 +42,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     rolloutMessage,
     currentProviderDef,
     currentModelOptions,
+    modelList,
     isSaving,
     resetForm,
     handleProviderChange,
@@ -91,19 +92,20 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           value={formProvider}
           onChange={handleProviderChange}
           placeholder={tr('admin.aiModels.selectProvider', 'Select provider')}
+          testId="provider-select"
         />
 
         {/* Model — 2-tier: dropdown + custom toggle */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-semibold text-slate-400">{tr('admin.aiModels.model', 'Model')}</label>
-            {currentProviderDef.models.length > 0 && (
+            {currentModelOptions.length > 0 && (
               <button
                 type="button"
                 onClick={() => {
                   setFormCustomModel(!formCustomModel)
-                  if (formCustomModel && currentProviderDef.models.length > 0) {
-                    setFormModel(currentProviderDef.models[0].name)
+                  if (formCustomModel && currentModelOptions.length > 0) {
+                    setFormModel(currentModelOptions[0].value)
                   }
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"
@@ -112,13 +114,23 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               </button>
             )}
           </div>
-          {!formCustomModel && currentProviderDef.models.length > 0 ? (
-            <CustomDropdown
-              options={currentModelOptions}
-              value={formModel}
-              onChange={setFormModel}
-              placeholder={tr('admin.aiModels.selectModel', 'Select model')}
-            />
+          {!formCustomModel && currentModelOptions.length > 0 ? (
+            <>
+              <CustomDropdown
+                options={currentModelOptions}
+                value={formModel}
+                onChange={setFormModel}
+                placeholder={tr('admin.aiModels.selectModel', 'Select model')}
+                testId="model-select"
+              />
+              <p className="mt-1 text-[10px] text-slate-500" data-testid="model-list-source" title={modelList.error}>
+                {modelList.loading
+                  ? tr('admin.aiModels.modelsLoading', 'Loading the provider\'s model list…')
+                  : modelList.fromProvider
+                    ? t('admin.aiModels.modelsFromProvider', { count: modelList.count, defaultValue: 'From the provider ({{count}})' })
+                    : tr('admin.aiModels.modelsBuiltIn', 'Built-in list — the provider\'s list could not be read')}
+              </p>
+            </>
           ) : (
             <input
               type="text"

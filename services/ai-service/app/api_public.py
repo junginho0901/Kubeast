@@ -1,17 +1,20 @@
 """
-Unauthenticated health plus the admin-only model connection test.
+Unauthenticated health plus the admin-only model connection test and model list.
 
 `public_router` carries nothing but a liveness probe. Model registration is the
-authenticated POST /model-configs (app.api); the connection test lives on
-`admin_router` because it makes outbound HTTP calls to an operator-supplied URL.
+authenticated POST /model-configs (app.api); the connection test and the model
+list live on `admin_router` because they make outbound HTTP calls to an
+operator-supplied URL.
 """
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
 from app.security import require_admin
 from app.services import model_config_policy
+from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
 
 public_router = APIRouter()
 admin_router = APIRouter(dependencies=[Depends(require_admin)])
@@ -272,3 +275,71 @@ async def test_model_connection(request: dict = None):
         raise
     except Exception as e:
         return {"success": False, "message": str(e)}
+
+
+# What an OpenAI-compatible /models list returns besides chat models.
+_NOT_CHAT = re.compile(r"embed|tts|whisper|dall-e|moderation|transcribe|image|audio|realtime|search|davinci|babbage", re.I)
+_GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+async def _list_models(provider: str, api_key: str, base: str, tls_verify: bool) -> list[dict]:
+    async with httpx.AsyncClient(verify=tls_verify, timeout=15.0) as client:
+        if provider == "anthropic":
+            resp = await client.get(
+                anthropic_root(base) + "/v1/models",
+                params={"limit": 1000},
+                headers={"x-api-key": api_key, "anthropic-version": ANTHROPIC_VERSION},
+            )
+            resp.raise_for_status()
+            return [{"name": m["id"], "label": m.get("display_name") or m["id"]} for m in resp.json().get("data") or [] if m.get("id")]
+        resp = await client.get(base.rstrip("/") + "/models", headers={"Authorization": f"Bearer {api_key or 'ollama'}"})
+        resp.raise_for_status()
+        names = {str(m.get("id") or "").removeprefix("models/") for m in resp.json().get("data") or []}
+        return [{"name": n} for n in sorted(names) if n and not _NOT_CHAT.search(n)]
+
+
+@admin_router.post("/model-configs/models")
+async def list_provider_models(request: dict = None):
+    """
+    The models the provider lists for this key and address, for the model
+    dropdown (admin.ai_models.*). Same key and base_url rules as the connection
+    test. When the provider has no list API or the call fails, the answer is
+    {"models": [], "error": ...} and the form keeps its built-in list.
+    body: { provider, base_url?, api_key_env?, tls_verify? }
+    """
+    body = request or {}
+    provider = (body.get("provider") or "openai").strip().lower()
+    api_key_env = (body.get("api_key_env") or "").strip()
+    user_base_url = (body.get("base_url") or "").strip()
+    tls_verify = body.get("tls_verify", True)
+    try:
+        model_config_policy.check_api_key_env(api_key_env)
+    except model_config_policy.PolicyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if user_base_url:
+        _validate_base_url(user_base_url)
+    api_key = (os.getenv(api_key_env) or "").strip() if api_key_env else ""
+    if provider != "ollama" and not api_key:
+        return {"models": [], "error": f"environment variable {api_key_env or '(none)'} is not set in ai-service"}
+
+    if provider == "anthropic":
+        base = user_base_url or "https://api.anthropic.com"
+    elif provider in ("google", "gemini"):
+        base = user_base_url or _GEMINI_OPENAI_BASE
+    elif provider == "ollama":
+        base = (user_base_url or "http://localhost:11434").rstrip("/")
+        base = base if base.endswith("/v1") else base + "/v1"
+    elif provider == "azure":
+        return {"models": [], "error": "Azure OpenAI lists deployments, not models; type the deployment name"}
+    else:
+        base = user_base_url or _OPENAI_COMPATIBLE_DEFAULTS.get(provider, "")
+        if not base:
+            return {"models": [], "error": f"base_url is required for provider '{provider}'"}
+
+    try:
+        return {"models": await _list_models(provider, api_key, base, tls_verify)}
+    except httpx.HTTPStatusError as e:
+        return {"models": [], "error": f"the provider answered {e.response.status_code}"}
+    except Exception as e:
+        return {"models": [], "error": type(e).__name__}
+

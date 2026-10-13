@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
 import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
@@ -67,7 +67,35 @@ export function useModelForm() {
   })
 
   const currentProviderDef: ProviderDef = getProvider(formProvider) ?? PROVIDER_CATALOG[0]
-  const currentModelOptions = useMemo(() => modelOptions(currentProviderDef), [currentProviderDef])
+  // The provider's own model list for the open form; the built-in list when it cannot be had.
+  const [listBaseUrl, setListBaseUrl] = useState(formBaseUrl)
+  useEffect(() => {
+    const id = setTimeout(() => setListBaseUrl(formBaseUrl), 500)
+    return () => clearTimeout(id)
+  }, [formBaseUrl])
+  const formOpen = isCreating || editingId != null
+  const providerModels = useQuery({
+    queryKey: ['provider-models', formProvider, listBaseUrl, formApiKeyEnv],
+    queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: formApiKeyEnv || undefined }),
+    enabled: formOpen && formProvider !== 'custom',
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+  const fetchedModels = providerModels.data?.models
+  const currentModelOptions = useMemo(() => modelOptions(currentProviderDef, fetchedModels), [currentProviderDef, fetchedModels])
+  // A new config starts on the provider's first listed model when the built-in default is not one of them;
+  // an edited config keeps its stored model.
+  useEffect(() => {
+    if (isCreating && !formCustomModel && fetchedModels?.length && !fetchedModels.some((m) => m.name === formModel)) {
+      setFormModel(fetchedModels[0].name)
+    }
+  }, [isCreating, formCustomModel, fetchedModels, formModel])
+  const modelList = {
+    loading: providerModels.isFetching,
+    fromProvider: Boolean(fetchedModels?.length),
+    count: fetchedModels?.length ?? 0,
+    error: providerModels.data?.error ?? (providerModels.error ? String(providerModels.error) : undefined),
+  }
 
   const resetForm = () => {
     setEditingId(null)
@@ -232,6 +260,7 @@ export function useModelForm() {
     rolloutMessage,
     currentProviderDef,
     currentModelOptions,
+    modelList,
     isSaving,
     deleteMutation,
     activateMutation,

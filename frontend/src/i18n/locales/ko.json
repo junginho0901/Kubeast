@@ -2585,7 +2585,10 @@
       "create": "생성",
       "testFailedHint": "연결 테스트에 실패했습니다. Kubernetes Secret에 새 API 키를 최근에 추가했다면 ai-service Pod를 재시작해야 새 환경변수를 읽습니다.",
       "checking": "확인 중…",
-      "checkHealth": "서비스 상태 확인"
+      "checkHealth": "서비스 상태 확인",
+      "modelsLoading": "프로바이더의 모델 목록을 불러오는 중…",
+      "modelsFromProvider": "프로바이더에서 불러온 목록({{count}}개)",
+      "modelsBuiltIn": "기본 목록 — 프로바이더 목록을 불러오지 못했습니다"
     },
     "userClusterRoles": {
       "title": "클러스터 접근",

@@ -3661,7 +3661,10 @@
       "options": "Generation options (JSON)",
       "optionsHint": "Standard params (temperature, top_p, seed, max_tokens) are sent to all providers. Provider-specific keys (e.g. num_ctx) are best-effort and may be ignored over OpenAI-compatible endpoints.",
       "subtitle": "Manage model connection settings used by the AI service.",
-      "title": "AI Models"
+      "title": "AI Models",
+      "modelsLoading": "Loading the provider's model list…",
+      "modelsFromProvider": "From the provider ({{count}})",
+      "modelsBuiltIn": "Built-in list — the provider's list could not be read"
     }
   },
   "adminAudit": {
