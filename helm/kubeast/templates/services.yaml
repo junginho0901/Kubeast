@@ -68,6 +68,7 @@ spec:
       targetPort: 5173
   selector:
     app: frontend
+{{- if .Values.ai.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -83,3 +84,4 @@ spec:
       targetPort: 8086
   selector:
     app: tool-server
+{{- end }}

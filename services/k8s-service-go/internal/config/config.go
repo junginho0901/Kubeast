@@ -50,6 +50,11 @@ type Config struct {
 	// and their bindings, so policies change only through Git.
 	AdmissionPoliciesReadOnly bool
 
+	// AI (chart ai.enabled): off = no ai-service, tool-server or ModelConfig
+	// controller in the release; the screens hide the AI entry points from
+	// /cluster/features.
+	AIEnabled bool
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -146,6 +151,8 @@ func Load() Config {
 		InPlaceResizeEnabled: pkgconfig.GetEnvBool("IN_PLACE_RESIZE_ENABLED", true),
 
 		AdmissionPoliciesReadOnly: pkgconfig.GetEnvBool("ADMISSION_POLICIES_READ_ONLY", false),
+
+		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

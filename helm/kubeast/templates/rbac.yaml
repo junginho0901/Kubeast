@@ -25,9 +25,11 @@ subjects:
   - kind: ServiceAccount
     name: k8s-service
     namespace: {{ include "kubeast.namespace" . }}
+{{- if .Values.ai.enabled }}
   - kind: ServiceAccount
     name: tool-server
     namespace: {{ include "kubeast.namespace" . }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -113,6 +115,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: auth-service-setup
+{{- if .Values.ai.enabled }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -148,4 +151,5 @@ subjects:
   - kind: ServiceAccount
     name: tool-server
     namespace: {{ include "kubeast.namespace" . }}
+{{- end }}
 {{- end }}

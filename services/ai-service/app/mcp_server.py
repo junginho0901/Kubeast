@@ -45,7 +45,8 @@ from app.services.tool_server_client import ToolServerClient
 
 logger = logging.getLogger(__name__)
 
-MCP_PATH = "/api/v1/ai/mcp"
+from app.mcp_flags import MCP_PATH, mcp_enabled, mcp_write_tools_enabled  # noqa: F401 — re-exported for callers and tests
+
 MCP_PERMISSION = "ai.mcp.use"
 AUDIT_ACTION = "ai.mcp.call"
 LIST_CLUSTERS_TOOL = "list_clusters"
@@ -55,16 +56,6 @@ API_KEY_PREFIX = "kbk_"
 EXCHANGE_CACHE_SECONDS = 60  # a granted access request shows up on the next exchange
 
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8004").rstrip("/")
-
-
-def mcp_enabled() -> bool:
-    return os.getenv("MCP_ENABLED", "false").strip().lower() == "true"
-
-
-def mcp_write_tools_enabled() -> bool:
-    """MCP_WRITE_TOOLS (chart mcp.writeTools, default off): offer the chat's write
-    tools and request_access to keys whose ceiling is Write."""
-    return os.getenv("MCP_WRITE_TOOLS", "false").strip().lower() == "true"
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 """
 AI 트러블슈팅 서비스
 """
-from openai import AsyncOpenAI
 from typing import Callable, List, Dict, Optional, Any
 import httpx
 import re

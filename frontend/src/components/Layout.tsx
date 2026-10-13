@@ -45,6 +45,8 @@ import ClusterSwitchProgress from './ClusterSwitchProgress'
 import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { aiEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 
 type NavItem = {
@@ -163,6 +165,8 @@ export default function Layout() {
   // cluster, so the menus reflect what you can actually do on the cluster you're
   // viewing.
   const { has: hasPermission, permissions: matrix } = usePermission()
+  // Chart ai.enabled (from /cluster/features): off hides the AI chat, the AI admin pages and the floating assistant.
+  const aiOn = aiEnabled(useClusterFeatures().data)
   // The admin section requires a GLOBAL admin permission, which lives only in
   // the matrix "*" entry — per-cluster grants never carry admin.*.
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
@@ -224,7 +228,7 @@ export default function Layout() {
         { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard, exact: true },
         { name: t('nav.clusterView'), href: '/cluster-view', icon: Layers },
         { name: t('nav.monitoring'), href: '/monitoring', icon: Activity },
-        { name: t('nav.aiChat'), href: '/ai-chat', icon: MessageSquare },
+        ...(aiOn ? [{ name: t('nav.aiChat'), href: '/ai-chat', icon: MessageSquare }] : []),
         { name: t('nav.resourceGraph'), href: '/cluster/resource-graph', icon: Waypoints },
         { name: t('nav.timeline'), href: '/timeline', icon: History },
         { name: t('nav.advancedSearch'), href: '/cluster/search', icon: Search, tag: t('common.beta') },
@@ -395,14 +399,14 @@ export default function Layout() {
           ? [{ name: t('nav.clusterHygiene', { defaultValue: 'Cluster Hygiene' }), href: '/admin/cluster-hygiene', icon: ShieldCheck, testId: 'nav-cluster-hygiene' }]
           : []),
         { name: t('nav.organizations'), href: '/admin/organizations', icon: Building2 },
-        { name: t('nav.aiModels'), href: '/admin/ai-models', icon: Bot },
+        ...(aiOn ? [{ name: t('nav.aiModels'), href: '/admin/ai-models', icon: Bot }] : []),
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
         { name: t('nav.sessionRecordings', { defaultValue: 'Session Recordings' }), href: '/admin/session-recordings', icon: Film, testId: 'nav-session-recordings' },
-        { name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: ChartColumn },
+        ...(aiOn ? [{ name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: ChartColumn }] : []),
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn])
 
   const active = useMemo(() => {
     for (const group of navGroups) {
@@ -462,7 +466,7 @@ export default function Layout() {
     <PageContextProvider>
     <div className="min-h-screen bg-slate-900">
       <ResourceDetailDrawer />
-      <FloatingAIChat />
+      {aiOn && <FloatingAIChat />}
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-3 px-6 border-b border-slate-700 h-[100px]">

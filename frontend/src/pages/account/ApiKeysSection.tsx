@@ -5,6 +5,8 @@ import { Check, Copy, KeySquare, Loader2 } from 'lucide-react'
 
 import { api } from '@/services/api'
 import { clustersApi } from '@/services/api/clusters'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { aiEnabled } from '@/utils/features'
 import type { CreatedAPIKey } from '@/services/api/api_keys'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
@@ -24,7 +26,9 @@ export default function ApiKeysSection() {
   const queryClient = useQueryClient()
 
   const { data: config } = useQuery({ queryKey: ['api-keys', 'config'], queryFn: api.getAPIKeysConfig, staleTime: 60_000 })
-  const { data: mcp } = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000 })
+  // With chart ai.enabled off there is no MCP server to ask about (the gateway answers 503), so the section stays hidden.
+  const aiOn = aiEnabled(useClusterFeatures().data)
+  const { data: mcp } = useQuery({ queryKey: ['ai', 'mcp-config'], queryFn: api.getMCPConfig, staleTime: 60_000, enabled: aiOn })
   const enabled = !!config?.enabled
   const maxDays = config?.max_days ?? 90
   const { data: keys = [] } = useQuery({ queryKey: ['api-keys', 'mine'], queryFn: api.listMyAPIKeys, enabled })

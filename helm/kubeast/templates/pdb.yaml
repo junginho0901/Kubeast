@@ -1,5 +1,7 @@
 {{- if .Values.pdb.enabled }}
-{{- range $app := list "auth-service" "ai-service" "k8s-service" "session-service" "frontend" "tool-server" "gateway" }}
+{{- $apps := list "auth-service" "k8s-service" "session-service" "frontend" "gateway" }}
+{{- if .Values.ai.enabled }}{{- $apps = concat $apps (list "ai-service" "tool-server") }}{{- end }}
+{{- range $app := $apps }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

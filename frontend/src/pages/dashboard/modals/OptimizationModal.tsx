@@ -26,6 +26,7 @@ import { api } from '@/services/api'
 import type { OptimizationResponse, OptimizationRow, ResizeResult } from '@/services/api/types'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
+import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
 import { formatBytes, formatMillicores } from '../utils'
@@ -503,7 +504,7 @@ export function OptimizationModal({
                 </details>
               )}
 
-              <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-3" data-testid="optimization-ai">
+              {aiEnabled(features) && <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-3" data-testid="optimization-ai">
                 {isStreaming ? (
                   <div className="prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{answerMarkdownForStreaming}</ReactMarkdown>
@@ -518,7 +519,7 @@ export function OptimizationModal({
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{answerMarkdown}</ReactMarkdown>
                   </div>
                 )}
-              </div>
+              </div>}
             </>
           )}
         </div>

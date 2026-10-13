@@ -3937,6 +3937,12 @@
       "age": "Age"
     }
   },
+  "ai": {
+    "disabled": {
+      "title": "AI is off in this installation",
+      "body": "The chart was installed with ai.enabled: false, so there is no AI service, no AI tools and no MCP server here."
+    }
+  },
   "namespaceScope": {
     "placeholder": "All namespaces — or list some, comma-separated",
     "hint": "Empty = the whole cluster. Up to 50 namespaces; the cluster must bind the role in each (chart auth.impersonation.customRoles)."

@@ -1,0 +1,129 @@
+suite: ai.enabled — the AI services, the ModelConfig CRD and their RBAC and policies come and go together
+# deployments.yaml includes configmap.yaml and secret.yaml for its checksum annotation.
+templates:
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+  - services.yaml
+  - model-config-crd.yaml
+  - rbac.yaml
+  - networkpolicy.yaml
+  - pdb.yaml
+  - gateway.yaml
+tests:
+  - it: renders ai-service, tool-server and the ModelConfig controller by default, with the CRD kept on removal
+    set:
+      networkPolicy.enabled: true
+      pdb.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 7
+        template: deployments.yaml
+      - equal:
+          path: metadata.name
+          value: ai-service
+        template: deployments.yaml
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: tool-server
+        template: deployments.yaml
+        documentIndex: 5
+      - equal:
+          path: metadata.name
+          value: model-config-controller-go
+        template: deployments.yaml
+        documentIndex: 6
+      - hasDocuments:
+          count: 4
+        template: model-config-crd.yaml
+      - isKind:
+          of: CustomResourceDefinition
+        template: model-config-crd.yaml
+        documentIndex: 0
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+        template: model-config-crd.yaml
+        documentIndex: 0
+      - hasDocuments:
+          count: 12
+        template: networkpolicy.yaml
+      - hasDocuments:
+          count: 7
+        template: pdb.yaml
+      - equal:
+          path: data.AI_ENABLED
+          value: "true"
+        template: configmap.yaml
+      - equal:
+          path: data.SETUP_RESTART_DEPLOYMENTS
+          value: "k8s-service,tool-server"
+        template: configmap.yaml
+
+  - it: leaves the AI services, the CRD, the tool-server RBAC and the AI policies out with ai.enabled false
+    set:
+      ai.enabled: false
+      networkPolicy.enabled: true
+      pdb.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 4
+        template: deployments.yaml
+      - equal:
+          path: metadata.name
+          value: frontend
+        template: deployments.yaml
+        documentIndex: 3
+      - hasDocuments:
+          count: 5
+        template: services.yaml
+      # The ai-service Service stays so nginx can resolve its upstream at start; tool-server's goes.
+      - equal:
+          path: metadata.name
+          value: ai-service
+        template: services.yaml
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: frontend
+        template: services.yaml
+        documentIndex: 4
+      - hasDocuments:
+          count: 0
+        template: model-config-crd.yaml
+      - hasDocuments:
+          count: 7
+        template: rbac.yaml
+      - hasDocuments:
+          count: 9
+        template: networkpolicy.yaml
+      - hasDocuments:
+          count: 5
+        template: pdb.yaml
+      - equal:
+          path: data.AI_ENABLED
+          value: "false"
+        template: configmap.yaml
+      - equal:
+          path: data.SETUP_RESTART_DEPLOYMENTS
+          value: "k8s-service"
+        template: configmap.yaml
+
+  - it: answers the AI path with a JSON 503 when nothing is behind the ai-service upstream
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'error_page 502 503 504 = @ai-unavailable;'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'return 503 .*"detail":"AI is not available'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'proxy_connect_timeout 3s;'
+        template: gateway.yaml
+        documentIndex: 0

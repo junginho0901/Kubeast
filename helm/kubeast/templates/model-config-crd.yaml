@@ -1,9 +1,13 @@
+{{- if .Values.ai.enabled }}
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: modelconfigs.ai.kubeast.io
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
+  annotations:
+    # Turning ai.enabled off (or uninstalling) leaves the CRD and the ModelConfigs in place.
+    helm.sh/resource-policy: keep
 spec:
   group: ai.kubeast.io
   scope: Namespaced
@@ -136,3 +140,4 @@ subjects:
   - kind: ServiceAccount
     name: model-config-controller-go
     namespace: {{ include "kubeast.namespace" . }}
+{{- end }}

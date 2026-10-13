@@ -28,9 +28,16 @@
 
   ⚠ 로그인 후 즉시 비밀번호를 변경하세요.
 
+{{- if .Values.ai.enabled }}
 ▸ AI 모델 등록
 
   로그인 후 [Admin > AI Models] 페이지에서 OpenAI / Anthropic / Gemini
   등의 API 키를 등록하면 챗봇이 활성화됩니다.
+{{- else }}
+▸ AI 끔 (ai.enabled: false)
+
+  ai-service · tool-server · ModelConfig 컨트롤러 없이 설치됐습니다.
+  켜려면 --set ai.enabled=true 로 upgrade 하세요.
+{{- end }}
 
 ═══════════════════════════════════════════════════════════

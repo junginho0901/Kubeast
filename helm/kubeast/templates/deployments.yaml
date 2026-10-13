@@ -100,6 +100,7 @@ spec:
         {{- end }}
         {{- end }}
         {{- include "kubeast.dbCAVolume" . | nindent 8 }}
+{{- if .Values.ai.enabled }}
 ---
 # --- AI Service ---
 apiVersion: apps/v1
@@ -161,6 +162,7 @@ spec:
         - name: tmp
           emptyDir: {}
         {{- include "kubeast.dbCAVolume" . | nindent 8 }}
+{{- end }}
 ---
 # --- K8s Service ---
 apiVersion: apps/v1
@@ -348,6 +350,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+{{- if .Values.ai.enabled }}
 ---
 # --- Tool Server ---
 apiVersion: apps/v1
@@ -484,3 +487,4 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 30
       {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
+{{- end }}

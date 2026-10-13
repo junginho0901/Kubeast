@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ssl
 from typing import Optional, Dict, Any
-from openai import AsyncOpenAI
 import httpx
 
 
@@ -151,7 +150,10 @@ class ProviderAdapter:
         # Ollama 등 로컬 모델은 API 키 불필요 — 빈 값이면 더미값 사용
         effective_api_key = api_key if api_key else "ollama"
 
-        # AsyncOpenAI 클라이언트 생성
+        # AsyncOpenAI 클라이언트 생성 — the SDK is imported here, when a model
+        # client is first made, not at service start (idle memory).
+        from openai import AsyncOpenAI
+
         self._openai_client = AsyncOpenAI(
             api_key=effective_api_key,
             base_url=resolved_base_url,

@@ -174,6 +174,7 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		"logFiles":          map[string]interface{}{"enabled": h.cfg.LogFilesEnabled, "maxLines": h.cfg.LogFilesMaxLines, "namespaces": nonNilStrings(h.cfg.LogFilesNamespaces)},
 		"inPlaceResize":     map[string]interface{}{"enabled": h.cfg.InPlaceResizeEnabled, "serverSupports": h.cfg.InPlaceResizeEnabled && h.svc.ServerSupportsResize(r.Context())},
 		"admissionPolicies": map[string]interface{}{"readOnly": h.cfg.AdmissionPoliciesReadOnly},
+		"ai":                map[string]interface{}{"enabled": h.cfg.AIEnabled},
 	})
 }
 

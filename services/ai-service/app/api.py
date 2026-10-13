@@ -589,6 +589,6 @@ async def delete_model_config(config_id: int, payload=Depends(require_auth)):
 @router.get("/mcp/config")
 async def mcp_config(payload=Depends(require_auth)):
     """Whether the MCP server is on and where (the Settings page shows how to connect)."""
-    from app import mcp_server
+    from app import mcp_flags
 
-    return {"enabled": mcp_server.mcp_enabled(), "path": mcp_server.MCP_PATH, "write_tools": mcp_server.mcp_write_tools_enabled()}
+    return {"enabled": mcp_flags.mcp_enabled(), "path": mcp_flags.MCP_PATH, "write_tools": mcp_flags.mcp_write_tools_enabled()}

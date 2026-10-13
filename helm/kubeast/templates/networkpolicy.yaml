@@ -254,6 +254,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8004
+{{- if .Values.ai.enabled }}
 ---
 # ai-service: gateway 에서 inbound (+ tool-server 양방향), postgres + redis +
 # auth(JWKS) + k8s-service + tool-server + 외부 LLM egress
@@ -305,6 +306,7 @@ spec:
         - protocol: TCP
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
+{{- end }}
 ---
 # k8s-service: gateway 에서 inbound, kube-apiserver egress + auth(JWKS)
 apiVersion: networking.k8s.io/v1
@@ -375,6 +377,7 @@ spec:
         - protocol: TCP
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
+{{- if .Values.ai.enabled }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress
 apiVersion: networking.k8s.io/v1
@@ -447,6 +450,7 @@ spec:
           port: 443
         - protocol: TCP
           port: 6443
+{{- end }}
 {{- if eq .Values.migrations.mode "job" }}
 ---
 # migration Job (migrations.mode=job): database only

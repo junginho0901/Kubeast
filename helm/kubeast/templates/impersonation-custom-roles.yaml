@@ -41,9 +41,11 @@ subjects:
   - kind: ServiceAccount
     name: k8s-service
     namespace: {{ include "kubeast.namespace" . }}
+{{- if .Values.ai.enabled }}
   - kind: ServiceAccount
     name: tool-server
     namespace: {{ include "kubeast.namespace" . }}
+{{- end }}
 {{- range $role := .Values.auth.impersonation.customRoles }}
 {{- $group := printf "kubeast:role:%s" (include "kubeast.roleSlug" $role.name) }}
 {{- range $cr := $role.clusterRoles }}

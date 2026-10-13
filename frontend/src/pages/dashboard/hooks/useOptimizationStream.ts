@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/services/api'
+import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { aiEnabled } from '@/utils/features'
 
 import { unwrapOuterMarkdownFence } from '../utils'
 
@@ -26,6 +28,7 @@ interface MetaInfo {
 
 export function useOptimizationStream() {
   const { t } = useTranslation()
+  const { data: features } = useClusterFeatures()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
 
@@ -121,7 +124,8 @@ export function useOptimizationStream() {
   }
 
   const handleRunOptimizationSuggestions = () => {
-    if (!optimizationNamespace) return
+    // Chart ai.enabled off: the table still shows the observed values; no suggestion stream (the gateway would answer 503).
+    if (!optimizationNamespace || !aiEnabled(features)) return
     setOptimizationCopied(false)
     setIsOptimizationNamespaceDropdownOpen(false)
     optimizationAbortRef.current?.abort()

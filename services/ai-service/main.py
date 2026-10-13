@@ -14,12 +14,17 @@ from app.api_public import admin_router, public_router
 from app.config import settings
 from app.security import require_auth
 from app import metrics as console_metrics
-from app import mcp_server
+from app import mcp_flags
 import uvicorn
 
 # The MCP server (MCP_ENABLED): external AI agents reach the clusters through
 # Kubeast as the signed-in user. Its session manager runs for the app's lifetime.
-_mcp = mcp_server.KubeastMCPServer() if mcp_server.mcp_enabled() else None
+# app.mcp_server (and the mcp SDK behind it) is imported only when it is on.
+_mcp = None
+if mcp_flags.mcp_enabled():
+    from app import mcp_server
+
+    _mcp = mcp_server.KubeastMCPServer()
 
 
 @asynccontextmanager
@@ -71,8 +76,10 @@ app.include_router(admin_router, prefix="/api/v1/ai")
 app.include_router(public_router, prefix="/api/v1/ai")
 
 if _mcp is not None:
+    from app import mcp_server
+
     # One exact path, so a client never meets a trailing-slash redirect.
-    app.router.routes.append(Route(mcp_server.MCP_PATH, mcp_server.build_mcp_app(_mcp)))
+    app.router.routes.append(Route(mcp_flags.MCP_PATH, mcp_server.build_mcp_app(_mcp)))
 
 # Console metrics (app/metrics.py): the shared kubeast_http_* instruments at
 # /metrics on this port. METRICS_ENABLED=false leaves it unmounted.

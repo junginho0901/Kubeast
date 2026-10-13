@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-
 import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
+import AIGate from './components/AIGate'
 import RequirePermission from './components/RequirePermission'
 import RouteFallback from './components/RouteFallback'
 import Login from './pages/Login'
@@ -165,12 +166,12 @@ function App() {
             <Route path="resources/:namespace" element={<Navigate to="/workloads/pods" replace />} />
             <Route path="topology/:namespace" element={<TopologyRedirect />} />
             <Route path="network/:namespace" element={<Navigate to="/network/services" replace />} />
-            <Route path="ai-chat" element={<AIChat />} />
+            <Route path="ai-chat" element={<AIGate><AIChat /></AIGate>} />
             <Route path="admin/clusters" element={<RequireAdmin><AdminClusters /></RequireAdmin>} />
             <Route path="admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
-            <Route path="admin/ai-models" element={<RequireAdmin><AdminAIModels /></RequireAdmin>} />
+            <Route path="admin/ai-models" element={<RequireAdmin><AIGate><AdminAIModels /></AIGate></RequireAdmin>} />
             <Route path="admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
-            <Route path="admin/ai-usage" element={<RequireAdmin><AdminAIUsage /></RequireAdmin>} />
+            <Route path="admin/ai-usage" element={<RequireAdmin><AIGate><AdminAIUsage /></AIGate></RequireAdmin>} />
             <Route path="admin/node-shell" element={<RequireAdmin><AdminNodeShell /></RequireAdmin>} />
             <Route path="admin/organizations" element={<RequireAdmin><AdminOrganizations /></RequireAdmin>} />
             <Route path="admin/roles" element={<RequireAdmin><AdminRoles /></RequireAdmin>} />

@@ -621,6 +621,8 @@ export interface ClusterFeatures {
   inPlaceResize?: { enabled: boolean; serverSupports: boolean }
   // Validating/Mutating admission policies and bindings: YAML apply (and the AI write tools) refused while on.
   admissionPolicies?: { readOnly: boolean }
+  // Chart ai.enabled: off = no AI services in the installation; the screens hide the AI entry points.
+  ai?: { enabled: boolean }
 }
 
 // POST /api/v1/cluster/namespaces/{ns}/optimization/resize — one optimization

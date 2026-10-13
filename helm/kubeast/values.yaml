@@ -256,6 +256,12 @@ gatewayApi:
 # kubeast-secrets) or point apiKeysSecret at a Secret you manage (e.g. via
 # ExternalSecrets) whose keys are the variable names.
 ai:
+  # false installs the console without AI: no ai-service, tool-server or
+  # ModelConfig controller (and no CRD on a fresh install — an existing CRD and
+  # its ModelConfigs are kept), the gateway answers /api/v1/ai with 503, and the
+  # screens hide the AI chat, the floating assistant, the AI admin pages and the
+  # MCP section.
+  enabled: true
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""

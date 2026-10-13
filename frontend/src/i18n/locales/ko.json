@@ -4602,6 +4602,12 @@
       "age": "Age"
     }
   },
+  "ai": {
+    "disabled": {
+      "title": "이 설치에서는 AI가 꺼져 있습니다",
+      "body": "차트를 ai.enabled: false로 설치해 AI 서비스·AI 도구·MCP 서버가 없습니다."
+    }
+  },
   "namespaceScope": {
     "placeholder": "전체 네임스페이스 — 한정하려면 쉼표로 나열",
     "hint": "비우면 클러스터 전체. 최대 50개, 클러스터가 그 네임스페이스마다 역할을 묶어야 합니다(차트 auth.impersonation.customRoles)."

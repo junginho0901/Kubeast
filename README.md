@@ -160,6 +160,8 @@ users:
 **Admin > AI Models**에서 OpenAI / Anthropic / Gemini 등의 API 키를 등록하면
 AI 어시스턴트가 활성화됩니다.
 
+AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-service·tool-server·ModelConfig 컨트롤러가 배포되지 않고(새 설치는 CRD도 없음, 켰다 끈 설치는 CRD와 ModelConfig가 남음), 게이트웨이의 `/api/v1/ai`는 JSON 503, 화면은 AI 채팅·플로팅 어시스턴트·AI 관리 페이지·MCP 안내를 숨깁니다(`/api/v1/cluster/features`의 `ai.enabled`). 켜진 설치에서도 ai-service는 모델 클라이언트를 처음 만들 때 provider SDK를, `mcp.enabled`일 때만 MCP SDK를 읽어 유휴 메모리를 줄입니다.
+
 ---
 
 ## 주요 기능
