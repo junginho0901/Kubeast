@@ -107,6 +107,16 @@ def test_versions_and_sampling_rule():
     ]
 
 
+def test_models_that_think_by_default_get_room_for_the_thinking():
+    assert [am.thinks_by_default(m) for m in ("claude-haiku-5-5", "claude-opus-4-8", "claude-sonnet-4-6", "claude-mythos-preview")] == [
+        True, False, False, True,
+    ]
+    c = client_for(FakeAnthropic([]))
+    msgs = [{"role": "user", "content": "hi"}]
+    assert c.build_request(dict(model="claude-haiku-5-5", messages=msgs, max_tokens=1800))["max_tokens"] == 1800 + am.THINKING_HEADROOM
+    assert c.build_request(dict(model="claude-opus-4-8", messages=msgs, max_tokens=1800))["max_tokens"] == 1800
+
+
 def test_base_url_from_the_compatible_endpoint_goes_to_the_root():
     assert am.api_root("https://api.anthropic.com/v1/") == "https://api.anthropic.com"
     assert am.api_root("https://gateway.internal/anthropic") == "https://gateway.internal/anthropic"
@@ -143,7 +153,7 @@ def test_request_hoists_system_merges_tool_results_and_maps_tools():
         {"type": "tool_result", "tool_use_id": "t2"},
     ]
     assert body["tools"] == [{"name": "k8s_get_resources", "description": "list", "input_schema": {"type": "object"}}]
-    assert body["tool_choice"] == {"type": "auto"} and body["max_tokens"] == 900 and body["stream"] is True
+    assert body["tool_choice"] == {"type": "auto"} and body["max_tokens"] == 900 + am.THINKING_HEADROOM and body["stream"] is True
     assert body["stop_sequences"] == ["\n\nHuman:"] and body["cache_control"] == {"type": "ephemeral"}
     assert not set(am.SAMPLING) & set(body) and "stream_options" not in body and "timeout" not in body
 
@@ -151,7 +161,7 @@ def test_request_hoists_system_merges_tool_results_and_maps_tools():
 def test_older_models_keep_temperature_and_drop_top_p_with_it():
     body = client_for(FakeAnthropic([]), model="claude-3-5-haiku-20241022").build_request(
         dict(messages=[{"role": "user", "content": "hi"}], temperature=0.2, top_p=0.9))
-    assert body["temperature"] == 0.2 and "top_p" not in body and body["max_tokens"] == am.DEFAULT_MAX_TOKENS
+    assert body["temperature"] == 0.2 and "top_p" not in body and body["max_tokens"] == am.DEFAULT_MAX_TOKENS  # no thinking by default
 
 
 def test_tool_choice_and_options():
@@ -162,7 +172,7 @@ def test_tool_choice_and_options():
     assert c.build_request({**base, "tool_choice": {"type": "function", "function": {"name": "x"}}})["tool_choice"] == {"type": "tool", "name": "x"}
     assert c.build_request({**base, "parallel_tool_calls": False})["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
     body = c.build_request(dict(messages=[{"role": "user", "content": "hi"}], tool_choice="auto"))
-    assert "tool_choice" not in body and "cache_control" not in body and body["max_tokens"] == 2000 and "num_ctx" not in body
+    assert "tool_choice" not in body and "cache_control" not in body and body["max_tokens"] == 2000 + am.THINKING_HEADROOM and "num_ctx" not in body
 
 
 def test_provider_adapter_sends_anthropic_to_the_messages_client():

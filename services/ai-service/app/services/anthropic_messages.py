@@ -37,6 +37,8 @@ RETRY_STATUS = frozenset({429, 500, 502, 503, 504, 529})
 MAX_RETRIES = 2
 MAX_RETRY_WAIT = 20.0
 THINKING_KEEP = 512
+# Thinking tokens count toward max_tokens; a caller's limit is sized for the answer.
+THINKING_HEADROOM = 4096
 
 STOP_REASONS = {
     "end_turn": "stop",
@@ -79,6 +81,13 @@ def takes_sampling(model: str) -> bool:
     Preview) reject temperature, top_p and top_k."""
     v = model_version(model)
     return v is not None and v < (4, 7)
+
+
+def thinks_by_default(model: str) -> bool:
+    """Claude 5 models (and names without a version, such as Mythos Preview)
+    think when the request has no thinking field."""
+    v = model_version(model)
+    return v is None or v >= (5, 0)
 
 
 def api_root(base_url: Optional[str]) -> str:
@@ -214,12 +223,11 @@ class AnthropicMessagesClient:
                     block["content"] = text
                 add("user", [block])
 
-        body: dict[str, Any] = {
-            "model": model,
-            "max_tokens": int(kwargs.get("max_tokens") or kwargs.get("max_completion_tokens")
-                              or self._options.get("max_tokens") or DEFAULT_MAX_TOKENS),
-            "messages": messages,
-        }
+        max_tokens = int(kwargs.get("max_tokens") or kwargs.get("max_completion_tokens")
+                         or self._options.get("max_tokens") or DEFAULT_MAX_TOKENS)
+        if thinks_by_default(model):
+            max_tokens += THINKING_HEADROOM
+        body: dict[str, Any] = {"model": model, "max_tokens": max_tokens, "messages": messages}
         if system:
             body["system"] = "\n".join(system)
 
