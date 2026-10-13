@@ -1,4 +1,4 @@
-# Kubeast
+# <img src="frontend/public/icon.svg" alt="" width="40" height="40" align="top"> Kubeast
 
 AI 어시스턴트를 내장한 멀티클러스터 Kubernetes 운영 플랫폼입니다. 웹 UI에서 여러
 클러스터의 리소스(Workloads, Network, Storage, RBAC, GPU, Helm 등)를 조회·관리하고,

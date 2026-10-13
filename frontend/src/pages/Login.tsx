@@ -145,7 +145,8 @@ export default function Login() {
             </div>
 
             <div className="space-y-3">
-              <h1 className="text-[clamp(2.25rem,4vw,3.75rem)] font-bold tracking-tight text-white">
+              <h1 className="flex items-center gap-4 text-[clamp(2.25rem,4vw,3.75rem)] font-bold tracking-tight text-white">
+                <img src="/icon.svg" alt="" className="h-[1.1em] w-[1.1em]" data-testid="brand-logo" />
                 Kubeast
               </h1>
             </div>

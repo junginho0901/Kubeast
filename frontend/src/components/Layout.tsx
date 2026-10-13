@@ -480,7 +480,7 @@ export default function Layout() {
       <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
         <div className="flex flex-col h-full">
           <div className="flex items-center gap-3 px-6 border-b border-slate-700 h-[100px]">
-            <Activity className="w-8 h-8 text-primary-500" />
+            <img src="/icon.svg" alt="" className="w-8 h-8" data-testid="brand-logo" />
             <div>
               {/* not an <h1>: the page title is the one heading of each screen */}
               <p className="text-xl font-bold text-white">Kubeast</p>
