@@ -1,6 +1,7 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Send, Square } from 'lucide-react'
+import { useAutoGrowTextarea, useChatTextareaKeys } from '@/hooks/useChatTextarea'
 
 interface InputAreaProps {
   onSubmit: (message: string) => void
@@ -15,6 +16,8 @@ interface InputAreaProps {
 export function InputArea({ onSubmit, onStop, isStreaming, disabled }: InputAreaProps) {
   const { t } = useTranslation()
   const [value, setValue] = useState('')
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useAutoGrowTextarea(ref, value, 128)
 
   const handleSubmit = (e?: FormEvent) => {
     e?.preventDefault()
@@ -24,12 +27,7 @@ export function InputArea({ onSubmit, onStop, isStreaming, disabled }: InputArea
     setValue('')
   }
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
+  const keys = useChatTextareaKeys(ref, setValue, () => handleSubmit())
 
   return (
     <form
@@ -37,13 +35,16 @@ export function InputArea({ onSubmit, onStop, isStreaming, disabled }: InputArea
       className="flex items-end gap-2 border-t border-slate-700 bg-slate-900/60 px-3 py-2"
     >
       <textarea
+        ref={ref}
+        data-testid="floating-chat-input"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
+        onKeyDown={keys.onKeyDown}
+        onCompositionEnd={keys.onCompositionEnd}
         placeholder={t('floatingChat.inputPlaceholder', { defaultValue: 'Ask about this page...' })}
         rows={1}
         disabled={disabled}
-        className="max-h-32 min-h-9 flex-1 resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
+        className="min-h-9 flex-1 resize-none rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500 disabled:opacity-50"
       />
       {isStreaming ? (
         <button
