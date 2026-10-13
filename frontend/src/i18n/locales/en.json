@@ -396,6 +396,7 @@
     "clusterView": "Cluster View",
     "monitoring": "Monitoring",
     "cost": "Cost",
+    "policyReports": "Policy Reports",
     "aiChat": "AI Chat",
     "namespaces": "Namespaces",
     "nodes": "Nodes",
@@ -1788,6 +1789,61 @@
     "source": "OpenCost {{endpoint}} · {{currency}} · window {{start}} – {{end}}",
     "loadError": "Could not load the cost table",
     "matchCount": "{{count}} rows match."
+  },
+  "policyReports": {
+    "title": "Policy Reports",
+    "subtitle": "What the cluster's policy engine (Kyverno, Trivy Operator, …) recorded in PolicyReports: results by policy and by namespace, and the rows behind them. Read-only.",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "tabs": {
+      "policies": "By policy",
+      "namespaces": "By namespace",
+      "results": "Results"
+    },
+    "allNamespaces": "All namespaces",
+    "allSeverities": "All severities",
+    "allPolicies": "All policies",
+    "resultFilter": {
+      "problems": "Fail · Warn · Error",
+      "all": "All results"
+    },
+    "result": {
+      "pass": "pass",
+      "fail": "fail",
+      "warn": "warn",
+      "error": "error",
+      "skip": "skip"
+    },
+    "searchPlaceholder": "Search by name...",
+    "searchResults": "Search by policy, rule, resource or message...",
+    "source": "{{reports}} reports · {{time}}",
+    "table": {
+      "policy": "Policy",
+      "category": "Category",
+      "severity": "Severity",
+      "source": "Source",
+      "fail": "Fail",
+      "warn": "Warn",
+      "error": "Error",
+      "pass": "Pass",
+      "skip": "Skip",
+      "namespaces": "Namespaces",
+      "namespace": "Namespace",
+      "policies": "Policies",
+      "result": "Result",
+      "rule": "Rule",
+      "kind": "Kind",
+      "name": "Name",
+      "message": "Message",
+      "time": "Time",
+      "resource": "Resource"
+    },
+    "clusterScope": "Cluster-scoped",
+    "checking": "Looking for policy reports in this cluster...",
+    "notInstalled": "PolicyReport (wgpolicyk8s.io) is not installed on this cluster. Install a policy engine that writes policy reports, such as Kyverno with Audit policies, and this page fills in.",
+    "scoped": "Only the namespaces of your grant are counted.",
+    "truncated": "The cluster has more reports than this page reads at once; narrow by namespace or policy to see them all.",
+    "loadError": "Could not load the policy reports"
   },
   "monitoring": {
     "title": "Monitoring",

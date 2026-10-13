@@ -27,6 +27,7 @@ import { metricsApi } from './metrics'
 import { modelConfigApi } from './model_config'
 import { networkApi } from './network'
 import { podsApi } from './pods'
+import { policyReportsApi } from './policyreports'
 import { securityApi } from './security'
 import { sessionsApi } from './sessions'
 import { storageApi } from './storage'
@@ -44,6 +45,7 @@ export const api = {
   ...clusterApi,
   ...workloadsApi,
   ...podsApi,
+  ...policyReportsApi,
   ...networkApi,
   ...gatewayApi,
   ...storageApi,

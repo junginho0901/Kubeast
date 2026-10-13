@@ -396,6 +396,7 @@
     "clusterView": "Cluster View",
     "monitoring": "Monitoring",
     "cost": "Cost",
+    "policyReports": "Policy Reports",
     "aiChat": "AI Chat",
     "namespaces": "Namespaces",
     "nodes": "Nodes",
@@ -1790,6 +1791,61 @@
     "source": "OpenCost {{endpoint}} · {{currency}} · 구간 {{start}} – {{end}}",
     "loadError": "비용 표를 불러오지 못했습니다",
     "matchCount": "{{count}}개 행이 일치합니다."
+  },
+  "policyReports": {
+    "title": "Policy Reports",
+    "subtitle": "클러스터의 정책 엔진(Kyverno·Trivy Operator 등)이 PolicyReport에 기록한 결과를 정책별·Namespace별로 모아 보여 주고, 그 아래 행까지 봅니다. 읽기 전용입니다.",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "tabs": {
+      "policies": "정책별",
+      "namespaces": "Namespace별",
+      "results": "결과"
+    },
+    "allNamespaces": "전체 Namespace",
+    "allSeverities": "전체 심각도",
+    "allPolicies": "전체 정책",
+    "resultFilter": {
+      "problems": "fail · warn · error",
+      "all": "전체 결과"
+    },
+    "result": {
+      "pass": "pass",
+      "fail": "fail",
+      "warn": "warn",
+      "error": "error",
+      "skip": "skip"
+    },
+    "searchPlaceholder": "이름으로 검색...",
+    "searchResults": "정책·규칙·리소스·메시지로 검색...",
+    "source": "보고서 {{reports}}개 · {{time}}",
+    "table": {
+      "policy": "Policy",
+      "category": "분류",
+      "severity": "심각도",
+      "source": "출처",
+      "fail": "Fail",
+      "warn": "Warn",
+      "error": "Error",
+      "pass": "Pass",
+      "skip": "Skip",
+      "namespaces": "Namespace 수",
+      "namespace": "Namespace",
+      "policies": "정책 수",
+      "result": "결과",
+      "rule": "규칙",
+      "kind": "Kind",
+      "name": "Name",
+      "message": "메시지",
+      "time": "시각",
+      "resource": "리소스"
+    },
+    "clusterScope": "클러스터 범위",
+    "checking": "이 클러스터에서 정책 보고서를 찾는 중...",
+    "notInstalled": "이 클러스터에는 PolicyReport(wgpolicyk8s.io)가 설치되어 있지 않습니다. Kyverno에 Audit 정책을 두는 식으로 정책 보고서를 쓰는 엔진을 설치하면 이 화면이 채워집니다.",
+    "scoped": "부여된 Namespace의 결과만 셉니다.",
+    "truncated": "이 화면이 한 번에 읽는 양보다 보고서가 많습니다. Namespace나 정책으로 좁히면 전부 보입니다.",
+    "loadError": "정책 보고서를 불러오지 못했습니다"
   },
   "monitoring": {
     "title": "Monitoring",
@@ -4450,6 +4506,7 @@
     "section:Claim Spec - Constraints": "Claim 스펙 - 제약",
     "section:Claim Spec - Requests": "Claim 스펙 - 요청",
     "section:Conditions": "조건",
+    "section:Policy violations": "정책 위반",
     "section:Config": "설정",
     "section:Container Policies": "컨테이너 정책",
     "section:Disruption Budget": "중단 예산",

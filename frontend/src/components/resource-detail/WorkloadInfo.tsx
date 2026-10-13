@@ -6,6 +6,7 @@ import { boolText, formatToleration } from './workload-info/workloadInfoFormatte
 import { useWorkloadData } from './workload-info/useWorkloadData'
 import WorkloadReplicasSection from './workload-info/WorkloadReplicasSection'
 import WorkloadStrategySection from './workload-info/WorkloadStrategySection'
+import PolicyViolations from './PolicyViolations'
 import WorkloadKindInfo from './workload-info/WorkloadKindInfo'
 import WorkloadOwnedResources from './workload-info/WorkloadOwnedResources'
 import WorkloadContainers from './workload-info/WorkloadContainers'
@@ -264,6 +265,8 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
           <ConditionsTable conditions={conditions} />
         </InfoSection>
       )}
+
+      <PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} />
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">

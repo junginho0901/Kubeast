@@ -137,6 +137,7 @@ data:
   ISSUES_EVENT_WINDOW_MINUTES: {{ .Values.features.issues.eventWindowMinutes | quote }}
   OPTIMIZATION_WINDOW_HOURS: {{ .Values.features.optimization.windowHours | quote }}
   COST_ENABLED: {{ .Values.features.cost.enabled | quote }}
+  POLICY_REPORTS_ENABLED: {{ .Values.features.policyReports.enabled | quote }}
   HYGIENE_ENABLED: {{ .Values.features.hygiene.enabled | quote }}
   HYGIENE_INTERVAL_DAYS: {{ .Values.features.hygiene.intervalDays | quote }}
   HYGIENE_EXCLUDE_NAMESPACES: {{ join "," .Values.features.hygiene.excludeNamespaces | quote }}

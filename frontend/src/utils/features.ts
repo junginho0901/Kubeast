@@ -11,3 +11,9 @@ export function aiEnabled(features?: ClusterFeatures | null): boolean {
 export function costEnabled(features?: ClusterFeatures | null): boolean {
   return features?.cost?.enabled === true
 }
+
+// Chart features.policyReports.enabled: Security → Policy Reports and the
+// drawer's "Policy violations" section. Unknown counts as off, as for cost.
+export function policyReportsEnabled(features?: ClusterFeatures | null): boolean {
+  return features?.policyReports?.enabled === true
+}

@@ -37,5 +37,5 @@ var permResourceKinds = map[string]bool{
 	"validatingadmissionpolicy": true, "validatingadmissionpolicybinding": true, "mutatingadmissionpolicy": true, "mutatingadmissionpolicybinding": true,
 	"gateway": true, "gatewayclass": true, "httproute": true, "grpcroute": true, "referencegrant": true, "backendtlspolicy": true,
 	"deviceclass": true, "resourceclaim": true, "resourceclaimtemplate": true, "resourceslice": true,
-	"cost": true,
+	"cost": true, "policyreport": true,
 }

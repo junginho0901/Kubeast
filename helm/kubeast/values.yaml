@@ -590,6 +590,13 @@ features:
   # Off = the routes answer 404 and the page is hidden.
   cost:
     enabled: true
+  # Policy reports (wgpolicyk8s.io PolicyReport / ClusterPolicyReport, as
+  # Kyverno, Trivy Operator and other producers write them): the Security →
+  # Policy Reports page and the "Policy violations" drawer section. Read as the
+  # caller; a cluster without the CRD says "not installed". Off = the routes
+  # answer 404 and the page is hidden.
+  policyReports:
+    enabled: true
   # Cluster hygiene report (Admin → Cluster hygiene, permissions
   # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
   # resources, namespace policy, service account tokens, RBAC, TLS expiry and

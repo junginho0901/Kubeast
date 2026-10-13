@@ -625,6 +625,85 @@ export interface ClusterFeatures {
   ai?: { enabled: boolean }
   // Cost page and the optimization table's cost columns (OpenCost in the cluster, features.cost).
   cost?: { enabled: boolean }
+  // Security → Policy Reports and the drawer's "Policy violations" section (wgpolicyk8s.io, features.policyReports).
+  policyReports?: { enabled: boolean }
+}
+
+// Policy reports (wgpolicyk8s.io/v1alpha2 PolicyReport / ClusterPolicyReport as Kyverno and others write them).
+export type PolicyReportResultValue = 'pass' | 'fail' | 'warn' | 'error' | 'skip'
+
+export interface PolicyReportCounts {
+  pass: number
+  fail: number
+  warn: number
+  error: number
+  skip: number
+}
+
+// One row of a report: what one policy rule said about one resource.
+export interface PolicyReportResult {
+  namespace: string
+  kind: string
+  name: string
+  policy: string
+  rule?: string
+  result: PolicyReportResultValue
+  severity?: string
+  category?: string
+  message?: string
+  source?: string
+  timestamp?: string
+  report: string
+}
+
+export interface PolicyReportPolicyRow extends PolicyReportCounts {
+  policy: string
+  category?: string
+  severity?: string
+  source?: string
+  namespaces: string[]
+}
+
+export interface PolicyReportNamespaceRow extends PolicyReportCounts {
+  namespace: string
+  policies: number
+}
+
+// GET /api/v1/cluster/policyreports/summary?namespace= — scoped says the caller's grant narrowed it.
+export interface PolicyReportSummary {
+  generated_at: string
+  namespace?: string
+  reports: number
+  truncated: boolean
+  scoped: boolean
+  totals: PolicyReportCounts
+  policies: PolicyReportPolicyRow[]
+  namespaces: PolicyReportNamespaceRow[]
+}
+
+// GET /api/v1/cluster/policyreports/results — total counts the matches before the limit.
+export interface PolicyReportResults {
+  generated_at: string
+  truncated: boolean
+  scoped: boolean
+  total: number
+  rows: PolicyReportResult[]
+}
+
+// GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name= — a workload includes its pods.
+export interface PolicyReportResource {
+  generated_at: string
+  kind: string
+  name: string
+  namespace: string
+  totals: PolicyReportCounts
+  rows: PolicyReportResult[]
+}
+
+export interface PolicyReportStatus {
+  enabled: boolean
+  installed: boolean
+  group: string
 }
 
 // POST /api/v1/cluster/namespaces/{ns}/optimization/resize — one optimization

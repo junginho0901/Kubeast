@@ -25,6 +25,7 @@ func TestPermResource(t *testing.T) {
 		"CustomResourceDefinition": "crd",
 		"BackendTLSPolicy":         "backendtlspolicy",
 		"Cost":                     "cost",
+		"PolicyReport":             "policyreport",
 		"ModelConfig":              "customresource",
 		"":                         "customresource",
 	}

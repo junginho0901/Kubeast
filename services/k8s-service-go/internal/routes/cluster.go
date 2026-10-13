@@ -29,6 +29,12 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/cost", h.GetCost)
 	r.Get("/api/v1/cost/status", h.GetCostStatus)
 
+	// Policy reports (wgpolicyk8s.io PolicyReport/ClusterPolicyReport, features.policyReports)
+	r.Get("/api/v1/policyreports/status", h.GetPolicyReportStatus)
+	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/policyreports/summary", h.GetPolicyReportSummary)
+	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/policyreports/results", h.GetPolicyReportResults)
+	r.With(h.ListIfServed("wgpolicyk8s.io", "policyreports")).Get("/api/v1/namespaces/{namespace}/policyreports/resource", h.GetResourcePolicyReports)
+
 	// Cluster hygiene report (Admin → Cluster hygiene)
 	r.Get("/api/v1/hygiene/config", h.HygieneConfig)
 	r.Get("/api/v1/hygiene", h.GetHygiene)

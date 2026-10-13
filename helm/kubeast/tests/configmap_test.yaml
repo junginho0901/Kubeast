@@ -292,6 +292,20 @@ tests:
           path: data.COST_ENABLED
           value: "false"
 
+  - it: turns policy reports on by default and off from features.policyReports
+    asserts:
+      - equal:
+          path: data.POLICY_REPORTS_ENABLED
+          value: "true"
+
+  - it: takes features.policyReports.enabled false
+    set:
+      features.policyReports.enabled: false
+    asserts:
+      - equal:
+          path: data.POLICY_REPORTS_ENABLED
+          value: "false"
+
   - it: leaves admission policies writable through YAML by default and locks them from features.admissionPolicies.readOnly
     asserts:
       - equal:

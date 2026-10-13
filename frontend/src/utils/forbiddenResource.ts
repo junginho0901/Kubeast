@@ -17,6 +17,7 @@ const KIND_LABELS: Record<string, string> = {
   endpointslices: 'EndpointSlice',
   ingresses: 'Ingress',
   ingressclasses: 'IngressClass',
+  policyreports: 'PolicyReport',
   networkpolicies: 'NetworkPolicy',
   configmaps: 'ConfigMap',
   secrets: 'Secret',

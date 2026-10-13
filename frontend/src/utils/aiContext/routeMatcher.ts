@@ -98,6 +98,8 @@ const STATIC_MAP: Record<string, StaticEntry> = {
   '/helm/releases':                       { pageType: 'helm-list',                                       titleKey: 'nav.helmReleases',            pageTitle: 'Releases' },
 
   '/monitoring':                          { pageType: 'monitoring',                                      titleKey: 'nav.monitoring',              pageTitle: '리소스 모니터링' },
+  '/cost':                                { pageType: 'cost',                                            titleKey: 'nav.cost',                    pageTitle: '비용' },
+  '/security/policyreports':              { pageType: 'policy-reports',                                  titleKey: 'nav.policyReports',           pageTitle: '정책 보고서' },
   '/cluster-view':                        { pageType: 'cluster-view',                                    titleKey: 'nav.clusterView',             pageTitle: '클러스터 뷰' },
   '/ai-chat':                             { pageType: 'ai-chat',                                         titleKey: 'nav.aiChat',                  pageTitle: 'AI 챗' },
   '/account':                             { pageType: 'account',                                         titleKey: 'layout.account',              pageTitle: '설정' },

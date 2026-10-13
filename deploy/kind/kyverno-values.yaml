@@ -1,0 +1,24 @@
+# Kyverno for the e2e second kind cluster (scripts/add-kind-cluster.sh --addons): chart kyverno/kyverno 3.9.1
+# (app v1.19.1) rendered with `helm template --no-hooks` and applied server-side (no Helm release on the
+# cluster), one replica of each controller, no cleanup controller, small requests, policy reports on (the
+# chart default).
+admissionController:
+  replicas: 1
+  container:
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 512Mi}
+backgroundController:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+reportsController:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+cleanupController:
+  enabled: false

@@ -24,6 +24,7 @@ import {
   Microchip,
   ScrollText,
   Search,
+  ShieldAlert,
   ShieldCheck,
   SquareTerminal,
   Users,
@@ -47,7 +48,7 @@ import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { aiEnabled, costEnabled } from '@/utils/features'
+import { aiEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 
 type NavItem = {
@@ -170,6 +171,7 @@ export default function Layout() {
   const clusterFeatures = useClusterFeatures().data
   const aiOn = aiEnabled(clusterFeatures)
   const costOn = costEnabled(clusterFeatures)
+  const policyReportsOn = policyReportsEnabled(clusterFeatures)
   // The admin section requires a GLOBAL admin permission, which lives only in
   // the matrix "*" entry — per-cluster grants never carry admin.*.
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
@@ -354,6 +356,7 @@ export default function Layout() {
         { name: t('nav.clusterRoles'), href: '/security/clusterroles', icon: K.ClusterRole },
         { name: t('nav.roleBindings'), href: '/security/rolebindings', icon: K.RoleBinding },
         { name: t('nav.clusterRoleBindings'), href: '/security/clusterrolebindings', icon: K.ClusterRoleBinding },
+        ...(policyReportsOn ? [{ name: t('nav.policyReports'), href: '/security/policyreports', icon: ShieldAlert }] : []),
       ],
     },
     {
@@ -410,7 +413,7 @@ export default function Layout() {
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn])
 
   const active = useMemo(() => {
     for (const group of navGroups) {

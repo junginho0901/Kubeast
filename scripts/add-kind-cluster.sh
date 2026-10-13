@@ -17,6 +17,7 @@
 #   scripts/add-kind-cluster.sh test2
 #   scripts/add-kind-cluster.sh default --addons   # the e2e suite's second cluster: metrics-server,
 #                                                   # kube-state-metrics, Prometheus, OpenCost (deploy/kind/second-cluster.yaml)
+#                                                   # and Kyverno 1.19.1 with two Audit policies (deploy/kind/kyverno-*.yaml)
 #
 # Provide an admin JWT via --token or KUBEAST_TOKEN, or set
 # KUBEAST_EMAIL/KUBEAST_PASSWORD to log in automatically.
@@ -82,6 +83,37 @@ if [ "$ADDONS" = 1 ]; then
     kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n "${d%/*}" rollout status "deploy/${d#*/}" --timeout=3m
   done
   kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n monitoring rollout status ds/node-exporter --timeout=3m
+
+  # 4d. Kyverno (policy-reports.spec.ts): the pinned chart rendered with deploy/kind/kyverno-values.yaml and
+  #     applied server-side, so the cluster holds no Helm release (helm.spec.ts expects `default` to have
+  #     none) — --no-hooks keeps the chart's pre-delete webhook cleanup Job from running on apply. Then two
+  #     Audit policies (deploy/kind/kyverno-policies.yaml) so PolicyReports exist. Images are imported from
+  #     the host when present, like the add-ons above.
+  KYVERNO_CHART_VERSION=3.9.1
+  for image in reg.kyverno.io/kyverno/kyverno:v1.19.1 reg.kyverno.io/kyverno/kyvernopre:v1.19.1 \
+      reg.kyverno.io/kyverno/background-controller:v1.19.1 reg.kyverno.io/kyverno/reports-controller:v1.19.1; do
+    if docker image inspect "$image" >/dev/null 2>&1; then
+      docker save "$image" | docker exec --privileged -i "$CP" \
+        ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs - >/dev/null
+    fi
+  done
+  helm repo add kyverno https://kyverno.github.io/kyverno/ >/dev/null 2>&1 || true
+  helm repo update kyverno >/dev/null
+  KC=$(mktemp); kind get kubeconfig --name "$NAME" > "$KC"
+  kubectl --kubeconfig "$KC" create namespace kyverno --dry-run=client -o yaml | kubectl --kubeconfig "$KC" apply -f -
+  SERVER_VERSION=$(kubectl --kubeconfig "$KC" version -o json | jq -r .serverVersion.gitVersion)
+  helm template kyverno kyverno/kyverno --version "$KYVERNO_CHART_VERSION" -n kyverno --no-hooks \
+    --kube-version "$SERVER_VERSION" -f "$ROOT/deploy/kind/kyverno-values.yaml" \
+    | kubectl --kubeconfig "$KC" apply --server-side --force-conflicts -f -
+  for d in kyverno-admission-controller kyverno-background-controller kyverno-reports-controller; do
+    kubectl --kubeconfig "$KC" -n kyverno rollout status "deploy/$d" --timeout=3m
+  done
+  rm -f "$KC"
+  # The policy webhook answers a few seconds after the pods are Ready ("connection refused" until then).
+  for _ in $(seq 1 20); do
+    kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f "$ROOT/deploy/kind/kyverno-policies.yaml" && break
+    sleep 3
+  done
 fi
 
 # 5. Register with kubeast as an external cluster.

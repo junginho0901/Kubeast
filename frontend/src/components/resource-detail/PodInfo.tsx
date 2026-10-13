@@ -20,6 +20,7 @@ import ContainerCard from './pod-info/ContainerCard'
 import ContainerResizeModal from './pod-info/ContainerResizeModal'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
+import PolicyViolations from './PolicyViolations'
 
 interface Props {
   name: string
@@ -740,6 +741,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           </div>
         </InfoSection>
       )}
+
+      <PolicyViolations kind="Pod" namespace={namespace} name={name} />
 
       {/* Labels & Annotations */}
       <InfoSection title="Labels">

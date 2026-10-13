@@ -176,6 +176,7 @@ AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-serv
   를 이해하고 답변 (read-only 툴로 제한)
 - **리소스 최적화 제안** — 네임스페이스 관측값(requests/limits·사용량) 표 + AI 제안 스트리밍 + 행마다 **재시작 없이 적용**(Pod `resize` 하위 리소스, Kubernetes 1.35+, `features.inPlaceResize`); Pod 드로어의 컨테이너 카드에서도 값을 직접 넣어 같은 방식으로 조정
 - **비용(OpenCost)** — 클러스터 안의 OpenCost를 Prometheus처럼 찾아(이름에 `opencost`가 든 9003 Service, API 서버 프록시) Namespace별·워크로드별 비용 표(Cost 메뉴)와 최적화 표의 **월 비용·월 절약** 열을 보여 줌(`features.cost`). 권한 `resource.cost.read`, Namespace 범위 부여는 그 Namespace만
+- **정책 보고서(Policy Reports)** — Kyverno·Trivy Operator 등이 쓰는 `wgpolicyk8s.io` PolicyReport/ClusterPolicyReport를 읽어 Security → Policy Reports에 정책별·Namespace별 pass/fail/warn/error/skip과 결과 행을, 워크로드·Pod 드로어에 "Policy violations" 절을 보여 줌(`features.policyReports`, CRD 없으면 "설치되어 있지 않습니다"). 권한 `resource.policyreport.read`, Namespace 범위 부여는 그 Namespace만
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
   **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐). 운영자가 켜면(`mcp.writeTools`) 상한이 Write인 키에 쓰기 도구와
   접근 요청 도구도 — 승인 카드 없이 그 사람 권한(영구·임시) 그대로, Argo CD 가드·감사 동일
@@ -223,7 +224,7 @@ AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-serv
 | **Gateway API** | Gateway, GatewayClass, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, Policies(모든 구현체의 정책 한 화면 — `gateway.networking.k8s.io/policy` 라벨 CRD 자동 탐색 + Envoy Gateway·Istio 내장 + `gatewayApi.policyKinds`) |
 | **Storage** | PV, PVC, StorageClass, VolumeAttachment |
 | **Configuration** | ConfigMap, Secret, ResourceQuota, LimitRange, PriorityClass, RuntimeClass, Lease |
-| **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount |
+| **Security (RBAC)** | Role, ClusterRole, RoleBinding, ClusterRoleBinding, ServiceAccount · Policy Reports(`wgpolicyk8s.io` 보고서 모음, CRD 있을 때) |
 | **Cluster** | Node, Namespace, Webhook Configuration(Mutating/Validating), Admission Policy(Validating/Mutating — `admissionregistration.k8s.io/v1`, 읽기 전용, API가 없으면 "설치 안 됨"; `features.admissionPolicies.readOnly: true`면 공용 YAML 적용과 AI 쓰기 도구도 정책·바인딩 4종을 거부해 Git으로만 바꿈) |
 | **Custom Resources** | CRD 동적 탐색 및 인스턴스 편집 |
 
@@ -559,7 +560,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 
 전제(없으면 해당 스펙은 실패하지 않고 사유를 남기며 건너뜀):
 
-- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus·그 Prometheus를 읽고 또 그 Prometheus가 긁는 OpenCost(`deploy/kind/second-cluster.yaml`)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
+- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus·그 Prometheus를 읽고 또 그 Prometheus가 긁는 OpenCost(`deploy/kind/second-cluster.yaml`), 그리고 Audit 정책 2개를 둔 Kyverno 1.19(차트 3.9.1을 `helm template --no-hooks`로 렌더해 server-side 적용 — `default`엔 Helm 릴리스가 없어야 `helm.spec.ts`의 빈 목록 기준선이 맞음; `deploy/kind/kyverno-values.yaml`·`kyverno-policies.yaml`, `policy-reports.spec.ts`가 읽는 PolicyReport의 출처)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
 - **픽스처** — `deploy/kind/fixtures.yaml`(`kind-deploy.sh`가 적용): CronJob·TLS Ingress·StatefulSet·HPA·RuntimeClass·Argo CD 어노테이션 Deployment, 이슈 스펙용 깨진 객체 2(스케줄 안 되는 Deployment, 실패한 Job), 로그를 파일로만 쓰는 `e2e-logfile-writer`(`logfiles.spec.ts`용). dev 값은 `features.prometheus.enabled`와 `features.logFiles`(`/var/log/app/*.log`, `default`)가 켜져 있습니다.
 - **AI 스펙** — 기본 모델 1개(위 Ollama `ModelConfig`).
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인·Mailpit·웹훅 수신기)과 dev 값의 싱크·`sessionRecording.enabled`.
@@ -633,6 +634,16 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
 - **검토 완료** 버튼이 메모와 함께 그 시점 보고서를 통째로 저장합니다(`access_reviews`, 보존 `retention.reviewDays` 기본 3년). 지난 검토는 목록에서 열어 보고 그때 CSV로 다시 내려받을 수 있습니다.
 - 권한 `admin.review.read` · `admin.review.export` · `admin.review.signoff`(시스템 Admin 역할에 포함), 감사 액션도 같은 이름. 쓰기는 서명뿐이고 권한 변경은 기존 화면에서 합니다.
 - 끄려면 `auth.accessReview.enabled: false`(메뉴·API가 사라짐). 비용: 페이지를 열 때 조회 7번, 서명 1건당 스냅샷 수십 KB.
+
+### 정책 보고서 (Policy Reports)
+
+Kyverno·Trivy Operator 같은 정책 엔진이 리소스마다 쓰는 `wgpolicyk8s.io/v1alpha2` `PolicyReport`(Namespace 리소스)·`ClusterPolicyReport`(클러스터 리소스)를 **읽기만** 해서 모아 보여 줍니다. Kubeast는 정책을 만들거나 데이터를 저장하지 않습니다.
+
+- **화면** — Security → Policy Reports: fail·warn·error·pass·skip 합계, 정책별(분류·심각도·출처·Namespace 수)·Namespace별 탭, 결과 탭(결과·심각도·정책·Namespace·검색 필터, 행을 누르면 그 리소스 드로어). 워크로드·Pod 드로어의 "Policy violations" 절은 그 리소스의 fail/warn/error 행이며 워크로드는 자기 파드의 행을 함께 보여 줍니다(대부분의 정책이 Pod를 봄). CRD가 없는 클러스터는 "설치되어 있지 않습니다", 드로어 절은 숨김.
+- **API** — `GET /api/v1/cluster/policyreports/status`(켜짐·CRD 유무) · `…/summary?namespace=`(정책별·Namespace별 집계 — 보고서의 `summary`가 아니라 결과 행을 셈) · `…/results?namespace=&policy=&result=fail,warn&severity=&kind=&search=&limit=`(기본 fail·warn·error, 최대 2,000행, `total`은 자르기 전 수) · `GET /api/v1/cluster/namespaces/{ns}/policyreports/resource?kind=&name=`. 데이터 라우트는 CRD가 없으면 빈 목록 + `X-Kubeast-Not-Installed`.
+- **신원·범위** — 보고서는 **로그인 사용자로** 읽으므로 클러스터 RBAC이 상한입니다. Kyverno 차트 기본(`rbac.roles.aggregate.view: true`)이 `view`에 보고서 읽기를 붙이므로 Read(`kubeast:viewer`)도 읽힙니다. Namespace 범위 부여는 그 Namespace들의 보고서만 Namespace마다 따로 읽고(전체 목록 없음), ClusterPolicyReport는 클러스터 전체 보기에서만.
+- **무게** — 열 때만 읽고 결과를 클러스터·Namespace·사용자별로 60초 둡니다(`force_refresh=true` = 화면의 새로고침은 그 캐시를 건너뛰고 다시 읽어 캐시를 갈아 끼움 — Kyverno는 새 객체의 보고서를 Pod·Deployment 약 20초, ReplicaSet 약 40초 뒤에 씀). 보고서 5,000개·결과 50,000행에서 읽기를 멈추고 `truncated: true`(화면 안내 — Namespace나 정책으로 좁히면 됨). 500개씩 페이지로 받습니다.
+- 권한 `resource.policyreport.read`(Read 역할의 `resource.*.read`에 포함), 차트 `features.policyReports.enabled`(기본 켬, 끄면 404·메뉴·절 숨김), 감사 없음(일반 읽기). dev 2번 클러스터의 Kyverno·정책은 `deploy/kind/kyverno-*.yaml`.
 
 ### 클러스터 위생 점검 (Cluster hygiene)
 
