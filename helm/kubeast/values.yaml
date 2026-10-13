@@ -121,6 +121,17 @@ auth:
     #  - name: Read                      # Read grants limited to these namespaces
     #    namespaces: [team-a, team-b]
     #    clusterRoles: [view]
+    # Services the Read group (kubeast:viewer) may GET through the API server
+    # proxy — the cluster's Prometheus and OpenCost, which the cost page, the
+    # optimization usage, storage analysis and the drawers' metrics query that
+    # way. Built-in `view` has no services/proxy, so without an entry those
+    # screens refuse Read users. Each entry renders a Role in that namespace
+    # allowing get on "<service>:<port>" only (templates/impersonation-viewer-proxy.yaml);
+    # list only Services that exist, per cluster. Namespace-scoped grants are
+    # not bound (Prometheus holds every namespace's metrics).
+    viewerProxyServices: []
+    #  - {namespace: monitoring, service: prometheus, port: 9090}
+    #  - {namespace: opencost, service: opencost, port: 9003}
   # Access requests: a user who already reaches a cluster asks for a higher
   # role on it for a bounded time with a reason; an admin (admin.users.update,
   # never the requester) approves or rejects in Admin → Access requests. The

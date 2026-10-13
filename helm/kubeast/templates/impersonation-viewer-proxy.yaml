@@ -1,0 +1,54 @@
+{{- if and .Values.auth.impersonation.enabled .Values.auth.impersonation.viewerProxyServices }}
+{{- /*
+The Read group (kubeast:viewer = view + kubeast:cluster-reader) has no
+services/proxy, so the screens that query Prometheus or OpenCost through the
+API server proxy refuse it. This lets that group GET exactly the listed
+Services — a Role in each Service's namespace, resourceNames "<service>:<port>"
+(the proxy URL segment Kubeast uses), verb get only — and nothing else.
+Namespace-scoped grants (kubeast:role:*) are not bound. Apply to every
+registered cluster with that cluster's list:
+  helm template kubeast helm/kubeast -s templates/impersonation-viewer-proxy.yaml -f <values> | kubectl --context <cluster> apply -f -
+*/}}
+{{- $byNamespace := dict }}
+{{- range .Values.auth.impersonation.viewerProxyServices }}
+{{- $ns := required "auth.impersonation.viewerProxyServices[].namespace is required" .namespace }}
+{{- $svc := required "auth.impersonation.viewerProxyServices[].service is required" .service }}
+{{- $port := required "auth.impersonation.viewerProxyServices[].port is required" .port }}
+{{- $names := get $byNamespace $ns | default list }}
+{{- $_ := set $byNamespace $ns (append $names (printf "%s:%v" $svc $port)) }}
+{{- end }}
+{{- range $ns, $names := $byNamespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubeast:viewer-proxy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kubeast.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    verbs: ["get"]
+    resourceNames:
+    {{- range $names }}
+      - {{ . | quote }}
+    {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubeast:viewer-proxy
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kubeast.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubeast:viewer-proxy
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: kubeast:viewer
+{{- end }}
+{{- end }}

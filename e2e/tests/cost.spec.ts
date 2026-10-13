@@ -109,12 +109,12 @@ test.describe('cost (OpenCost)', () => {
     expect(wl.rows.every((r) => r.namespace.length > 0)).toBeTruthy()
   })
 
-  // The allocation is read as the signed-in user, so the cluster's RBAC is the ceiling: kubeast:viewer (Read)
-  // is bound to `view` + kubeast:cluster-reader, neither of which has services/proxy, so the cluster refuses —
-  // even right after an admin warmed the answer cache (answers are cached per identity). kubeast:operator
-  // (Write) is bound to `edit`, which may proxy. A namespace-scoped grant acts as kubeast:role:read, which the
-  // dev second cluster binds nowhere: refused as well, never served the whole cluster's rows.
-  test('cluster RBAC is the ceiling: a Read grant is refused even with a warm cache, a scoped Read too, Write reads, no grant refuses', async ({ request }) => {
+  // The allocation is read as the signed-in user, so the cluster's RBAC is the ceiling. kubeast:viewer (Read) may
+  // GET the OpenCost Service through the proxy because the dev second cluster lists it in
+  // auth.impersonation.viewerProxyServices (viewer-proxy.spec.ts checks the Role itself); kubeast:operator (Write)
+  // has `edit`. A namespace-scoped grant acts as kubeast:role:read, which that Role does not bind: refused — even
+  // right after an admin warmed the answer cache, since answers are cached per identity.
+  test('cluster RBAC is the ceiling: Read and Write read, a scoped Read is refused even with a warm cache, no grant refuses', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const asAdmin: CostResponse = await (await request.get('/api/v1/cluster/cost?cluster=default&window=1h&aggregate=namespace', { headers: bearer(admin) })).json()
     expect(asAdmin.rows.length).toBeGreaterThan(0)
@@ -128,9 +128,11 @@ test.describe('cost (OpenCost)', () => {
       const status = await request.get('/api/v1/cluster/cost/status?cluster=default', { headers: bearer(reader) })
       expect(status.status()).toBe(200)
       expect((await status.json()).available).toBe(true)
-      const refused = await request.get('/api/v1/cluster/cost?cluster=default&window=1h&aggregate=namespace', { headers: bearer(reader), failOnStatusCode: false })
-      expect(refused.status()).toBe(403)
-      expect((await refused.json()).detail).toContain('403')
+      const asReaderRes = await request.get('/api/v1/cluster/cost?cluster=default&window=1h&aggregate=namespace', { headers: bearer(reader) })
+      expect(asReaderRes.status()).toBe(200)
+      const asReader: CostResponse = await asReaderRes.json()
+      expect(asReader.scoped).toBe(false)
+      expect(asReader.rows.map((r) => r.name).sort()).toEqual(asAdmin.rows.map((r) => r.name).sort())
       const noGrant = await request.get('/api/v1/cluster/cost?cluster=self&window=1h', { headers: bearer(reader), failOnStatusCode: false })
       expect(noGrant.status()).toBe(403)
       expect((await noGrant.json()).detail).toContain('no access to cluster')
@@ -138,8 +140,11 @@ test.describe('cost (OpenCost)', () => {
       // The scope is a token claim: sign in again after the grant changes.
       expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, { headers: bearer(admin), data: { role: 'Read', namespaces: ['kube-system'] } })).ok()).toBeTruthy()
       const scoped = await login(request, email, PW)
+      // Warm the admin's answer for the same window and aggregate first: the scoped caller must not get it.
+      expect((await request.get('/api/v1/cluster/cost?cluster=default&window=1h&aggregate=controller', { headers: bearer(admin) })).status()).toBe(200)
       const scopedRes = await request.get('/api/v1/cluster/cost?cluster=default&window=1h&aggregate=controller', { headers: bearer(scoped), failOnStatusCode: false })
       expect(scopedRes.status()).toBe(403)
+      expect((await scopedRes.json()).detail).toContain('403')
 
       expect((await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/default`, { headers: bearer(admin), data: { role: 'Write' } })).ok()).toBeTruthy()
       const writer = await login(request, email, PW)

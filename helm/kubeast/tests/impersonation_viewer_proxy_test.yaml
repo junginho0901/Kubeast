@@ -1,0 +1,84 @@
+suite: impersonation — the Read group may GET the listed Services through the API server proxy, nothing else
+templates:
+  - impersonation-viewer-proxy.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing when impersonation is off
+    set:
+      auth.impersonation.enabled: false
+      auth.impersonation.viewerProxyServices:
+        - {namespace: monitoring, service: prometheus, port: 9090}
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: grants get on "<service>:<port>" per namespace and binds only kubeast:viewer
+    set:
+      auth.impersonation.viewerProxyServices:
+        - {namespace: opencost, service: opencost, port: 9003}
+        - {namespace: monitoring, service: prometheus, port: 9090}
+        - {namespace: monitoring, service: prometheus-operated, port: 9090}
+    asserts:
+      - hasDocuments:
+          count: 4
+      # Namespaces come out sorted: monitoring first, its two Services in one Role.
+      - isKind:
+          of: Role
+        documentIndex: 0
+      - equal:
+          path: metadata.namespace
+          value: monitoring
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: kubeast:viewer-proxy
+        documentIndex: 0
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: ["services/proxy"]
+              verbs: ["get"]
+              resourceNames: ["prometheus:9090", "prometheus-operated:9090"]
+        documentIndex: 0
+      - isKind:
+          of: RoleBinding
+        documentIndex: 1
+      - equal:
+          path: metadata.namespace
+          value: monitoring
+        documentIndex: 1
+      - equal:
+          path: roleRef
+          value: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: "kubeast:viewer-proxy"}
+        documentIndex: 1
+      - equal:
+          path: subjects
+          value:
+            - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:viewer"}
+        documentIndex: 1
+      - equal:
+          path: metadata.namespace
+          value: opencost
+        documentIndex: 2
+      - equal:
+          path: rules[0].resourceNames
+          value: ["opencost:9003"]
+        documentIndex: 2
+      - equal:
+          path: subjects
+          value:
+            - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:viewer"}
+        documentIndex: 3
+
+  - it: refuses an entry without a port
+    set:
+      auth.impersonation.viewerProxyServices:
+        - {namespace: monitoring, service: prometheus}
+    asserts:
+      - failedTemplate:
+          errorPattern: "viewerProxyServices\\[\\]\\.port is required"
