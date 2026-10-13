@@ -6,10 +6,11 @@ import type { TFunction } from 'i18next'
 import type { Message } from './types'
 import { truncateToolResultsInContent } from './messageContent'
 import { ApprovalCard } from './ApprovalCard'
+import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 
-// 단일 메시지 말풍선 — user / assistant 아바타 + 콘텐츠 + (assistant 의 경우)
-// Copy / Download ZIP 버튼 + 답변 대기 중인 로딩 점. AIChat.tsx 의 ~115줄
-// 인라인 JSX 를 그대로 떼옴.
+// 단일 메시지 말풍선 — user / assistant 아바타 + 콘텐츠 + 답변 대기 중인 로딩 점 +
+// (assistant 의 경우) 아래쪽 Copy / Download ZIP 줄. 그 줄은 스트리밍 중에도 같은 높이로
+// 자리를 잡아 두어 답이 끝날 때 말풍선 높이가 바뀌지 않는다.
 
 interface Props {
   message: Message
@@ -21,6 +22,9 @@ interface Props {
 }
 
 export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownloadJson, t }: Props) {
+  const messageKey = message.id != null ? `db-${message.id}` : `tmp-${idx}`
+  const showCopyButton = message.role === 'assistant' && !message.isTemporary && Boolean(message.content)
+  const isCopied = copiedMessageKey === messageKey
   return (
     <div
       key={message.id != null ? `db-${message.id}` : `tmp-${idx}`}
@@ -56,46 +60,12 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
               message.role === 'assistant' &&
               (message.streamingPhase === 'waiting' || message.streamingPhase === 'tools')
 
-            const messageKey = message.id != null ? `db-${message.id}` : `tmp-${idx}`
-            const showCopyButton = message.role === 'assistant' && !message.isTemporary
-            const isCopied = copiedMessageKey === messageKey
             return (
               <>
-                {(showCopyButton || (message.toolCalls && message.toolCalls.length > 0)) && (
-                  <div className="flex justify-end gap-2 mb-2">
-                    {showCopyButton && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onCopy(message, messageKey)
-                        }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
-                        title={isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}
-                      >
-                        {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}</span>
-                      </button>
-                    )}
-                    {message.toolCalls && message.toolCalls.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onDownloadJson(message)
-                        }}
-                        className="px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
-                      >
-                        {t('aiChat.resultZipDownload')}
-                      </button>
-                    )}
-                  </div>
-                )}
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
+                  components={{ details: MarkdownDetails, summary: MarkdownSummary }}
                 >
                   {message.role === 'assistant'
                     ? truncateToolResultsInContent(message.content)
@@ -146,6 +116,38 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
           }
           return null
         })()}
+        {message.role === 'assistant' && (
+          <div className="not-prose mt-3 flex h-7 justify-end gap-2" data-testid="message-actions">
+            {showCopyButton && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onCopy(message, messageKey)
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100 transition-opacity duration-200 starting:opacity-0"
+                title={isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}
+              >
+                {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{isCopied ? t('aiChat.copied') : t('aiChat.copyMessage')}</span>
+              </button>
+            )}
+            {message.content && message.toolCalls && message.toolCalls.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onDownloadJson(message)
+                }}
+                className="px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100 transition-opacity duration-200 starting:opacity-0"
+              >
+                {t('aiChat.resultZipDownload')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

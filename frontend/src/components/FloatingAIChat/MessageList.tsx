@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
+import { MarkdownDetails, MarkdownSummary } from '@/components/MarkdownDisclosure'
 
 import { MarkdownLink } from './MarkdownLink'
 
@@ -108,7 +109,7 @@ function MessageBubble({ role, content, pending }: MessageBubbleProps) {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               urlTransform={urlTransform}
-              components={{ a: MarkdownLink }}
+              components={{ a: MarkdownLink, details: MarkdownDetails, summary: MarkdownSummary }}
             >
               {content}
             </ReactMarkdown>

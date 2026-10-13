@@ -250,21 +250,16 @@ body {
   }
 }
 
-/* Tool Call 스타일 - KAgent 스타일 */
-.prose details {
+/* Tool Call 스타일 - KAgent 스타일 (components/MarkdownDisclosure.tsx) */
+.prose .md-details {
   @apply my-2 rounded-lg border border-slate-600 bg-slate-800/50 overflow-hidden;
 }
 
-.prose details summary {
-  @apply px-4 py-2.5 cursor-pointer select-none font-medium text-slate-200 hover:bg-slate-700/50 transition-colors;
-  list-style: none;
+.prose .md-summary {
+  @apply flex w-full items-center px-4 py-2.5 text-left cursor-pointer select-none font-medium text-slate-200 hover:bg-slate-700/50 transition-colors;
 }
 
-.prose details summary::-webkit-details-marker {
-  display: none;
-}
-
-.prose details summary::before {
+.prose .md-summary::before {
   content: '▶';
   display: inline-block;
   margin-right: 8px;
@@ -272,40 +267,30 @@ body {
   font-size: 0.75rem;
 }
 
-.prose details[open] summary::before {
+.prose .md-details[data-open] > .md-summary::before {
   transform: rotate(90deg);
 }
 
-.prose details[open] summary {
+.prose .md-details[data-open] > .md-summary {
   @apply border-b border-slate-600;
 }
 
 /* 중첩된 details (Arguments, Results) */
-.prose details details {
+.prose .md-details .md-details {
   @apply my-2 mx-4 rounded-sm border border-slate-600/50 bg-slate-800/30;
 }
 
-.prose details details summary {
+.prose .md-details .md-details > .md-summary {
   @apply px-3 py-2 text-sm;
 }
 
-/* 중첩된 details - 닫힌 상태 (기본) */
-.prose details details summary::before {
-  content: '▶' !important;
-  display: inline-block !important;
-  margin-right: 6px !important;
-  transition: transform 0.2s !important;
-  font-size: 0.65rem !important;
-  transform: rotate(0deg) !important;
-}
-
-/* 중첩된 details - 열린 상태 */
-.prose details details[open] > summary::before {
-  transform: rotate(90deg) !important;
+.prose .md-details .md-details > .md-summary::before {
+  margin-right: 6px;
+  font-size: 0.65rem;
 }
 
 /* 코드 블록 스타일 - 가로 스크롤 가능하되 말풍선 너비 제한 */
-.prose details pre {
+.prose .md-details pre {
   @apply my-2 mx-4 rounded-sm bg-slate-900/50;
   overflow-x: auto !important;
   max-width: 100% !important;
@@ -313,13 +298,13 @@ body {
   word-break: normal !important;
 }
 
-.prose details pre code {
+.prose .md-details pre code {
   white-space: pre !important;
   word-break: normal !important;
   display: block !important;
 }
 
-.prose details p {
+.prose .md-details p {
   @apply my-2 mx-4;
   word-wrap: break-word !important;
   overflow-wrap: break-word !important;
