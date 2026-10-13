@@ -395,6 +395,7 @@
     "dashboard": "Dashboard",
     "clusterView": "Cluster View",
     "monitoring": "Monitoring",
+    "cost": "Cost",
     "aiChat": "AI Chat",
     "namespaces": "Namespaces",
     "nodes": "Nodes",
@@ -1745,6 +1746,49 @@
       "List services in the default namespace"
     ]
   },
+  "cost": {
+    "title": "Cost",
+    "subtitle": "What each namespace or workload cost over the window, as OpenCost allocates it from the cluster's Prometheus. Prices come from the cloud provider's price list, or OpenCost's default on-prem prices.",
+    "refresh": "Refresh",
+    "refreshTitle": "Force refresh",
+    "window": "Window",
+    "windows": {
+      "1h": "Last 1 hour",
+      "6h": "Last 6 hours",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days"
+    },
+    "aggregate": {
+      "namespace": "By namespace",
+      "controller": "By workload"
+    },
+    "searchPlaceholder": "Search by name...",
+    "stats": {
+      "total": "Total cost",
+      "cpu": "CPU",
+      "ram": "Memory",
+      "pv": "Storage (PV)",
+      "network": "Network"
+    },
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "cpu": "CPU",
+      "ram": "Memory",
+      "pv": "PV",
+      "network": "Network",
+      "total": "Total",
+      "efficiency": "Efficiency"
+    },
+    "noController": "No controller",
+    "checking": "Looking for OpenCost in this cluster...",
+    "notInstalled": "OpenCost is not installed on this cluster. Install it next to the cluster's Prometheus (opencost.io/docs/installation) and have that Prometheus scrape OpenCost itself; this page then fills in.",
+    "scoped": "Only the namespaces of your grant are shown; the totals add up those rows.",
+    "source": "OpenCost {{endpoint}} · {{currency}} · window {{start}} – {{end}}",
+    "loadError": "Could not load the cost table",
+    "matchCount": "{{count}} rows match."
+  },
   "monitoring": {
     "title": "Monitoring",
     "subtitle": "Monitor real-time resource usage for nodes and pods.",
@@ -1877,6 +1921,8 @@
         "none": "No usage data (no Prometheus or metrics-server in this cluster)"
       },
       "totals": "Requests {{cpuReq}} CPU · {{memReq}} memory → recommended {{cpuRec}} · {{memRec}}",
+      "totalsCost": "→ requests cost {{cost}}/mo, the recommendation saves {{saving}}/mo",
+      "pricing": "OpenCost prices · CPU {{cpu}}/core-h · memory {{ram}}/GiB-h · requests × 730 h",
       "table": {
         "workload": "Workload",
         "container": "Container",
@@ -1887,6 +1933,8 @@
         "memReqLim": "Mem req / lim",
         "memUsage": "Mem usage",
         "memRecommend": "Mem rec.",
+        "costMonth": "Cost / mo",
+        "savingMonth": "Saving / mo",
         "flags": "Flags"
       },
       "flags": {

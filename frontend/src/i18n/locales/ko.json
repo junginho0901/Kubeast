@@ -395,6 +395,7 @@
     "dashboard": "Dashboard",
     "clusterView": "Cluster View",
     "monitoring": "Monitoring",
+    "cost": "Cost",
     "aiChat": "AI Chat",
     "namespaces": "Namespaces",
     "nodes": "Nodes",
@@ -1747,6 +1748,49 @@
       "default Namespace의 Service 목록을 조회해줘"
     ]
   },
+  "cost": {
+    "title": "Cost",
+    "subtitle": "구간 동안 Namespace·워크로드가 쓴 비용입니다. OpenCost가 클러스터의 Prometheus 데이터로 배분해 계산하며, 단가는 클라우드 가격표 또는 OpenCost 기본(온프렘) 단가를 씁니다.",
+    "refresh": "새로고침",
+    "refreshTitle": "강제 새로고침",
+    "window": "구간",
+    "windows": {
+      "1h": "최근 1시간",
+      "6h": "최근 6시간",
+      "24h": "최근 24시간",
+      "7d": "최근 7일",
+      "30d": "최근 30일"
+    },
+    "aggregate": {
+      "namespace": "Namespace별",
+      "controller": "워크로드별"
+    },
+    "searchPlaceholder": "이름으로 검색...",
+    "stats": {
+      "total": "총 비용",
+      "cpu": "CPU",
+      "ram": "메모리",
+      "pv": "스토리지(PV)",
+      "network": "네트워크"
+    },
+    "table": {
+      "name": "Name",
+      "namespace": "Namespace",
+      "cpu": "CPU",
+      "ram": "메모리",
+      "pv": "PV",
+      "network": "네트워크",
+      "total": "합계",
+      "efficiency": "효율"
+    },
+    "noController": "컨트롤러 없음",
+    "checking": "이 클러스터에서 OpenCost를 찾는 중...",
+    "notInstalled": "이 클러스터에는 OpenCost가 설치되어 있지 않습니다. 클러스터의 Prometheus 옆에 설치하고(opencost.io/docs/installation) 그 Prometheus가 OpenCost 자체도 수집하게 하면 이 화면이 채워집니다.",
+    "scoped": "부여된 Namespace만 표시하며 합계도 그 행만 더한 값입니다.",
+    "source": "OpenCost {{endpoint}} · {{currency}} · 구간 {{start}} – {{end}}",
+    "loadError": "비용 표를 불러오지 못했습니다",
+    "matchCount": "{{count}}개 행이 일치합니다."
+  },
   "monitoring": {
     "title": "Monitoring",
     "subtitle": "Node와 Pod의 실시간 리소스 사용량을 봅니다.",
@@ -1887,6 +1931,8 @@
         "none": "사용량 데이터 없음 (이 클러스터에 Prometheus·metrics-server 없음)"
       },
       "totals": "요청 CPU {{cpuReq}} · 메모리 {{memReq}} → 추천 {{cpuRec}} · {{memRec}}",
+      "totalsCost": "→ 요청 기준 월 {{cost}}, 추천대로면 월 {{saving}} 절약",
+      "pricing": "OpenCost 단가 · CPU {{cpu}}/core-h · 메모리 {{ram}}/GiB-h · 요청 × 730시간",
       "table": {
         "workload": "워크로드",
         "container": "컨테이너",
@@ -1897,6 +1943,8 @@
         "memReqLim": "메모리 요청 / 제한",
         "memUsage": "메모리 사용",
         "memRecommend": "메모리 추천",
+        "costMonth": "월 비용",
+        "savingMonth": "월 절약",
         "flags": "플래그"
       },
       "flags": {

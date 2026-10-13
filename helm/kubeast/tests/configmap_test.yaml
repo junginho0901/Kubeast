@@ -278,6 +278,20 @@ tests:
           path: data.IN_PLACE_RESIZE_ENABLED
           value: "false"
 
+  - it: turns cost on by default and off from features.cost
+    asserts:
+      - equal:
+          path: data.COST_ENABLED
+          value: "true"
+
+  - it: takes features.cost.enabled false
+    set:
+      features.cost.enabled: false
+    asserts:
+      - equal:
+          path: data.COST_ENABLED
+          value: "false"
+
   - it: leaves admission policies writable through YAML by default and locks them from features.admissionPolicies.readOnly
     asserts:
       - equal:

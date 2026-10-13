@@ -19,6 +19,7 @@ const Timeline = lazy(() => import('./pages/Timeline'))
 const AIChat = lazy(() => import('./pages/AIChat'))
 const ClusterView = lazy(() => import('./pages/ClusterView'))
 const Monitoring = lazy(() => import('./pages/Monitoring'))
+const Cost = lazy(() => import('./pages/Cost'))
 const Storage = lazy(() => import('./pages/Storage'))
 const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 const AdminAIModels = lazy(() => import('./pages/AdminAIModels'))
@@ -161,6 +162,7 @@ function App() {
             <Route path="helm/releases" element={<HelmReleasesPage />} />
             <Route path="helm/releases/:namespace/:name" element={<HelmReleaseDetailPage />} />
             <Route path="monitoring" element={<Monitoring />} />
+            <Route path="cost" element={<Cost />} />
             <Route path="cluster-view" element={<ClusterView />} />
             <Route path="account" element={<Account />} />
             <Route path="resources/:namespace" element={<Navigate to="/workloads/pods" replace />} />

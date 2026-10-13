@@ -24,6 +24,7 @@ func TestPermResource(t *testing.T) {
 		"PersistentVolumeClaim":    "pvc",
 		"CustomResourceDefinition": "crd",
 		"BackendTLSPolicy":         "backendtlspolicy",
+		"Cost":                     "cost",
 		"ModelConfig":              "customresource",
 		"":                         "customresource",
 	}

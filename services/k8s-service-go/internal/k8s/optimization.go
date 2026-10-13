@@ -31,11 +31,15 @@ type OptimizationRow struct {
 	MemUsageBytes     *int64   `json:"mem_usage_bytes,omitempty"`
 	MemRecommendBytes *int64   `json:"mem_recommend_bytes,omitempty"`
 	Flags             []string `json:"flags"`
+	// With an OpenCost in the cluster (Pricing set): what the row's requests
+	// cost a month and what its recommendation would save (cost.go).
+	CostMonthUSD   *float64 `json:"cost_month_usd,omitempty"`
+	SavingMonthUSD *float64 `json:"saving_month_usd,omitempty"`
 }
 
 // OptimizationResult: Source says where the usage came from — "prometheus"
 // (percentile/peak over WindowHours), "metrics-server" (one instant sample)
-// or "none".
+// or "none". Pricing is set when the cluster has an OpenCost.
 type OptimizationResult struct {
 	Namespace   string             `json:"namespace"`
 	WindowHours int                `json:"window_hours"`
@@ -43,15 +47,18 @@ type OptimizationResult struct {
 	GeneratedAt string             `json:"generated_at"`
 	Rows        []OptimizationRow  `json:"rows"`
 	Totals      OptimizationTotals `json:"totals"`
+	Pricing     *CostUnitPrices    `json:"pricing,omitempty"`
 }
 
 // OptimizationTotals sums requests and recommendations over all pods of the rows.
 type OptimizationTotals struct {
-	Pods              int   `json:"pods"`
-	CPURequestM       int64 `json:"cpu_request_m"`
-	CPURecommendM     int64 `json:"cpu_recommend_m"`
-	MemRequestBytes   int64 `json:"mem_request_bytes"`
-	MemRecommendBytes int64 `json:"mem_recommend_bytes"`
+	Pods              int      `json:"pods"`
+	CPURequestM       int64    `json:"cpu_request_m"`
+	CPURecommendM     int64    `json:"cpu_recommend_m"`
+	MemRequestBytes   int64    `json:"mem_request_bytes"`
+	MemRecommendBytes int64    `json:"mem_recommend_bytes"`
+	CostMonthUSD      *float64 `json:"cost_month_usd,omitempty"`
+	SavingMonthUSD    *float64 `json:"saving_month_usd,omitempty"`
 }
 
 const (
@@ -122,6 +129,7 @@ func (s *Service) CollectOptimization(ctx context.Context, namespace string, win
 			res.Totals.MemRecommendBytes += *r.MemRecommendBytes * n
 		}
 	}
+	applyCostPricing(res, s.costUnitPricesForCtx(ctx, windowHours))
 	return res, nil
 }
 

@@ -57,7 +57,8 @@ async function loginUI(page: Page, email: string, password: string): Promise<voi
 }
 
 async function auditRows(request: APIRequestContext, admin: string, action: string) {
-  const res = await request.get(`/api/v1/auth/admin/audit-logs?action=${action}&limit=50`, { headers: bearer(admin) })
+  // limit well above the rows this action accumulates on a dev database: the count below is "before + 1".
+  const res = await request.get(`/api/v1/auth/admin/audit-logs?action=${action}&limit=1000`, { headers: bearer(admin) })
   return ((await res.json()).items ?? []) as any[]
 }
 

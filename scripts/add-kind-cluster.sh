@@ -16,7 +16,7 @@
 #   scripts/add-kind-cluster.sh <name> [--token <admin-jwt>] [--gateway http://localhost:30080] [--addons]
 #   scripts/add-kind-cluster.sh test2
 #   scripts/add-kind-cluster.sh default --addons   # the e2e suite's second cluster: metrics-server,
-#                                                   # kube-state-metrics, Prometheus (deploy/kind/second-cluster.yaml)
+#                                                   # kube-state-metrics, Prometheus, OpenCost (deploy/kind/second-cluster.yaml)
 #
 # Provide an admin JWT via --token or KUBEAST_TOKEN, or set
 # KUBEAST_EMAIL/KUBEAST_PASSWORD to log in automatically.

@@ -175,6 +175,7 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		"inPlaceResize":     map[string]interface{}{"enabled": h.cfg.InPlaceResizeEnabled, "serverSupports": h.cfg.InPlaceResizeEnabled && h.svc.ServerSupportsResize(r.Context())},
 		"admissionPolicies": map[string]interface{}{"readOnly": h.cfg.AdmissionPoliciesReadOnly},
 		"ai":                map[string]interface{}{"enabled": h.cfg.AIEnabled},
+		"cost":              map[string]interface{}{"enabled": k8s.CostFeatureEnabled()},
 	})
 }
 

@@ -52,6 +52,9 @@ type clientBundle struct {
 	// promExt is the cluster's external Prometheus source (registration or the
 	// deployment-wide PROMETHEUS_URL); nil = discover one inside the cluster.
 	promExt *promExternal
+	// cost caches this cluster's discovered OpenCost and its recent allocation
+	// answers (cost.go), on the bundle for the same reasons as prom.
+	cost *costCache
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
@@ -251,6 +254,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		restConfig:  cfg,
 		prom:        &promCache{},
 		promExt:     externalFromInfo(info),
+		cost:        &costCache{},
 		id:          info.ID,
 		cacheClient: cacheClient,
 	}, nil

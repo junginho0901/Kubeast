@@ -108,6 +108,13 @@ data:
             regex: (.+)
             target_label: __metrics_path__
             replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+      # OpenCost (below) emits the node/PV price metrics it reads back for allocation.
+      - job_name: opencost
+        honor_labels: true
+        scrape_interval: 1m
+        static_configs:
+          - targets: [opencost.opencost.svc:9003]
+            labels: {cluster: kubeast-b}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -738,3 +745,133 @@ spec:
       port: 9091
       targetPort: http
       nodePort: 30091
+---
+# OpenCost 1.121.3 (chart opencost-2.5.32's image, env and ClusterRole, as plain manifests): allocation costs from
+# the Prometheus above, read by Kubeast's Cost page (GET /api/v1/cost) through the API server proxy. Default
+# (on-prem) prices apply on kind.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opencost
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opencost
+  namespace: opencost
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opencost
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, nodes, nodes/proxy, pods, services, resourcequotas, replicationcontrollers, limitranges, persistentvolumeclaims, persistentvolumes, namespaces, endpoints, events]
+    verbs: [get, list, watch]
+  - apiGroups: [extensions]
+    resources: [daemonsets, deployments, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [statefulsets, deployments, daemonsets, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opencost
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencost
+subjects:
+  - kind: ServiceAccount
+    name: opencost
+    namespace: opencost
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opencost
+  namespace: opencost
+  labels:
+    app: opencost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opencost
+  template:
+    metadata:
+      labels:
+        app: opencost
+    spec:
+      serviceAccountName: opencost
+      containers:
+        - name: opencost
+          # 1.121.3
+          image: ghcr.io/opencost/opencost@sha256:4cdd173253e5abba048dfe2cfa968707a5b59d774157d5356940d0d923a6c281
+          env:
+            - name: PROMETHEUS_SERVER_ENDPOINT
+              value: http://prometheus.monitoring.svc:9090
+            - name: CLUSTER_ID
+              value: kubeast-b
+            - name: EMIT_KSM_V1_METRICS
+              value: "false"
+            - name: EMIT_KSM_V1_METRICS_ONLY
+              value: "false"
+            - name: LOG_LEVEL
+              value: info
+            - name: API_PORT
+              value: "9003"
+          ports:
+            - name: api
+              containerPort: 9003
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9003
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9003
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 55Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opencost
+  namespace: opencost
+  labels:
+    app: opencost
+spec:
+  selector:
+    app: opencost
+  ports:
+    - name: api
+      port: 9003
+      targetPort: api

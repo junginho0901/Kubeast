@@ -584,6 +584,12 @@ features:
     eventWindowMinutes: 60
   optimization:
     windowHours: 24
+  # Cost (OpenCost): the Cost page and the optimization table's cost columns
+  # read OpenCost's allocation API through the API server proxy — a Service
+  # named *opencost* on port 9003 inside the cluster, found like Prometheus.
+  # Off = the routes answer 404 and the page is hidden.
+  cost:
+    enabled: true
   # Cluster hygiene report (Admin → Cluster hygiene, permissions
   # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
   # resources, namespace policy, service account tokens, RBAC, TLS expiry and

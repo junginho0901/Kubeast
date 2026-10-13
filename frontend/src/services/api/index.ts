@@ -17,6 +17,7 @@ import { authApi } from './auth'
 import { clusterApi } from './cluster'
 import { clustersApi } from './clusters'
 import { configurationApi } from './configuration'
+import { costApi } from './cost'
 import { customResourcesApi } from './custom_resources'
 import { gatewayApi } from './gateway'
 import { gpuApi } from './gpu'
@@ -48,6 +49,7 @@ export const api = {
   ...storageApi,
   ...securityApi,
   ...configurationApi,
+  ...costApi,
   ...customResourcesApi,
   ...topologyApi,
   ...metricsApi,

@@ -30,6 +30,7 @@ import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
 import { formatBytes, formatMillicores } from '../utils'
+import { formatMoney } from '@/utils/money'
 
 interface UsageInfo {
   completion_tokens?: number
@@ -124,6 +125,8 @@ export function OptimizationModal({
   const confirm = useConfirm()
   const queryClient = useQueryClient()
   const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
+  // The cluster has an OpenCost: the server priced each row's requests (cost.go).
+  const priced = !!table?.pricing
   const rowKey = (row: OptimizationRow) => `${row.kind}/${row.name}/${row.container}`
   const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
   const resize = useMutation({
@@ -215,6 +218,8 @@ export function OptimizationModal({
       <td className="px-2 py-1.5 text-right text-slate-300 whitespace-nowrap">{reqLim(row.mem_request_bytes, row.mem_limit_bytes, formatBytes)}</td>
       <td className="px-2 py-1.5 text-right text-slate-300">{row.mem_usage_bytes != null ? formatBytes(row.mem_usage_bytes) : '-'}</td>
       <td className="px-2 py-1.5 text-right text-slate-100">{row.mem_recommend_bytes != null ? formatBytes(row.mem_recommend_bytes) : '-'}</td>
+      {priced && <td className="px-2 py-1.5 text-right text-slate-300 whitespace-nowrap" data-testid="optimization-cost">{formatMoney(row.cost_month_usd)}</td>}
+      {priced && <td className="px-2 py-1.5 text-right text-slate-100 whitespace-nowrap" data-testid="optimization-saving">{formatMoney(row.saving_month_usd)}</td>}
       {canResize && (
         <td className="px-2 py-1.5 max-w-[260px]">
           {resizable(row) && (
@@ -387,6 +392,20 @@ export function OptimizationModal({
                   cpuRec: formatMillicores(table.totals.cpu_recommend_m),
                   memRec: formatBytes(table.totals.mem_recommend_bytes),
                 })}
+                {priced && table.totals.cost_month_usd != null && (
+                  <> {tr('dashboard.optimization.totalsCost', '→ requests cost {{cost}}/mo, the recommendation saves {{saving}}/mo', {
+                    cost: formatMoney(table.totals.cost_month_usd),
+                    saving: formatMoney(table.totals.saving_month_usd ?? 0),
+                  })}</>
+                )}
+              </span>
+            )}
+            {table?.pricing && (
+              <span className="badge badge-neutral" data-testid="optimization-pricing">
+                {tr('dashboard.optimization.pricing', 'OpenCost prices · CPU {{cpu}}/core-h · memory {{ram}}/GiB-h · requests × 730 h', {
+                  cpu: formatMoney(table.pricing.cpu_core_hour_usd),
+                  ram: formatMoney(table.pricing.ram_byte_hour_usd * 1024 ** 3),
+                })}
               </span>
             )}
             {!!usage && (
@@ -448,6 +467,8 @@ export function OptimizationModal({
                     <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.memReqLim', 'Mem req / lim')}</th>
                     <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.memUsage', 'Mem usage')}</th>
                     <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.memRecommend', 'Mem rec.')}</th>
+                    {priced && <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.costMonth', 'Cost / mo')}</th>}
+                    {priced && <th className="px-2 py-2 text-right font-medium">{tr('dashboard.optimization.table.savingMonth', 'Saving / mo')}</th>}
                     {canResize && <th className="px-2 py-2 text-left font-medium">{tr('dashboard.optimization.resize.column', 'Apply')}</th>}
                     <th className="px-2 py-2 text-left font-medium">{tr('dashboard.optimization.table.flags', 'Flags')}</th>
                   </tr>

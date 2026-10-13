@@ -25,6 +25,10 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/optimization", h.GetClusterOptimization)
 	r.Post("/api/v1/namespaces/{namespace}/optimization/resize", h.ResizeOptimization)
 
+	// Cost (OpenCost allocation through the API server proxy, features.cost)
+	r.Get("/api/v1/cost", h.GetCost)
+	r.Get("/api/v1/cost/status", h.GetCostStatus)
+
 	// Cluster hygiene report (Admin → Cluster hygiene)
 	r.Get("/api/v1/hygiene/config", h.HygieneConfig)
 	r.Get("/api/v1/hygiene", h.GetHygiene)

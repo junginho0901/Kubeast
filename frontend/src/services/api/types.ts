@@ -623,6 +623,8 @@ export interface ClusterFeatures {
   admissionPolicies?: { readOnly: boolean }
   // Chart ai.enabled: off = no AI services in the installation; the screens hide the AI entry points.
   ai?: { enabled: boolean }
+  // Cost page and the optimization table's cost columns (OpenCost in the cluster, features.cost).
+  cost?: { enabled: boolean }
 }
 
 // POST /api/v1/cluster/namespaces/{ns}/optimization/resize — one optimization
@@ -721,6 +723,72 @@ export interface OptimizationRow {
   mem_usage_bytes?: number
   mem_recommend_bytes?: number
   flags: string[]
+  // With an OpenCost in the cluster (response.pricing): the row's requests a month, and what its recommendation saves.
+  cost_month_usd?: number
+  saving_month_usd?: number
+}
+
+// Hourly unit prices read back from OpenCost's allocation (cost ÷ hours over every namespace).
+export interface CostUnitPrices {
+  cpu_core_hour_usd: number
+  ram_byte_hour_usd: number
+  window: string
+  source: 'opencost'
+}
+
+// GET /api/v1/cluster/cost/status
+export interface CostStatus {
+  available: boolean
+  source: 'proxy' | 'none'
+  endpoint?: string
+  message?: string
+}
+
+export type CostWindow = '1h' | '6h' | '12h' | '24h' | '48h' | '7d' | '14d' | '30d'
+export type CostAggregate = 'namespace' | 'controller'
+
+// One allocation: a namespace, or a workload (controller) inside one. Costs are the window's total.
+export interface CostRow {
+  name: string
+  namespace: string
+  kind?: string
+  cpu_cost: number
+  ram_cost: number
+  gpu_cost: number
+  pv_cost: number
+  network_cost: number
+  load_balancer_cost: number
+  total_cost: number
+  cpu_core_hours: number
+  ram_byte_hours: number
+  cpu_efficiency: number
+  ram_efficiency: number
+  total_efficiency: number
+  minutes: number
+}
+
+// GET /api/v1/cluster/cost?window=&aggregate= — scoped says the caller's namespace grant narrowed rows and totals.
+export interface CostResponse {
+  window: CostWindow
+  aggregate: CostAggregate
+  currency: string
+  start?: string
+  end?: string
+  source: { namespace: string; service: string; port: number }
+  scoped: boolean
+  generated_at: string
+  rows: CostRow[]
+  totals: {
+    cpu_cost: number
+    ram_cost: number
+    gpu_cost: number
+    pv_cost: number
+    network_cost: number
+    load_balancer_cost: number
+    total_cost: number
+    cpu_core_hours: number
+    ram_byte_hours: number
+  }
 }
 
 export interface OptimizationResponse {
@@ -735,7 +803,11 @@ export interface OptimizationResponse {
     cpu_recommend_m: number
     mem_request_bytes: number
     mem_recommend_bytes: number
+    cost_month_usd?: number
+    saving_month_usd?: number
   }
+  // Set when the cluster has an OpenCost: the rows then carry cost_month_usd / saving_month_usd.
+  pricing?: CostUnitPrices
 }
 
 // kubelet_volume_stats_* via Prometheus; null when the driver reports no

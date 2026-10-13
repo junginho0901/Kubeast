@@ -5,3 +5,9 @@ import type { ClusterFeatures } from '@/services/api/types'
 export function aiEnabled(features?: ClusterFeatures | null): boolean {
   return features?.ai?.enabled !== false
 }
+
+// Chart features.cost.enabled: the Cost page and the optimization table's cost
+// columns. Unknown counts as off — an older server has no /cluster/cost to show.
+export function costEnabled(features?: ClusterFeatures | null): boolean {
+  return features?.cost?.enabled === true
+}

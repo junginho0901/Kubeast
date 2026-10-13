@@ -78,6 +78,7 @@ const PERM_RESOURCES = new Set([
   'validatingadmissionpolicy', 'validatingadmissionpolicybinding', 'mutatingadmissionpolicy', 'mutatingadmissionpolicybinding',
   'gateway', 'gatewayclass', 'httproute', 'grpcroute', 'referencegrant', 'backendtlspolicy',
   'deviceclass', 'resourceclaim', 'resourceclaimtemplate', 'resourceslice',
+  'cost',
   'hpa', 'vpa', 'pdb', 'pv', 'pvc', 'crd',
 ])
 

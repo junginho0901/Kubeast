@@ -9,6 +9,7 @@ import {
   ChartColumn,
   ClipboardCheck,
   Cloud,
+  Coins,
   FileSearch,
   Film,
   Gauge,
@@ -46,7 +47,7 @@ import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { aiEnabled } from '@/utils/features'
+import { aiEnabled, costEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 
 type NavItem = {
@@ -166,7 +167,9 @@ export default function Layout() {
   // viewing.
   const { has: hasPermission, permissions: matrix } = usePermission()
   // Chart ai.enabled (from /cluster/features): off hides the AI chat, the AI admin pages and the floating assistant.
-  const aiOn = aiEnabled(useClusterFeatures().data)
+  const clusterFeatures = useClusterFeatures().data
+  const aiOn = aiEnabled(clusterFeatures)
+  const costOn = costEnabled(clusterFeatures)
   // The admin section requires a GLOBAL admin permission, which lives only in
   // the matrix "*" entry — per-cluster grants never carry admin.*.
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
@@ -228,6 +231,7 @@ export default function Layout() {
         { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard, exact: true },
         { name: t('nav.clusterView'), href: '/cluster-view', icon: Layers },
         { name: t('nav.monitoring'), href: '/monitoring', icon: Activity },
+        ...(costOn ? [{ name: t('nav.cost'), href: '/cost', icon: Coins }] : []),
         ...(aiOn ? [{ name: t('nav.aiChat'), href: '/ai-chat', icon: MessageSquare }] : []),
         { name: t('nav.resourceGraph'), href: '/cluster/resource-graph', icon: Waypoints },
         { name: t('nav.timeline'), href: '/timeline', icon: History },
@@ -406,7 +410,7 @@ export default function Layout() {
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn])
 
   const active = useMemo(() => {
     for (const group of navGroups) {
