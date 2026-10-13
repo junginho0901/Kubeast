@@ -624,8 +624,8 @@ features:
   # kubeast:investigator, which templates/impersonation-investigator.yaml binds
   # read-only (no Secrets, exec or writes) — apply that render to every
   # cluster alerts come from (scripts/render-target-rbac.sh). Needs
-  # auth.impersonation.enabled. With secrets.existingSecret, that Secret must
-  # hold ALERT_WEBHOOK_TOKEN.
+  # auth.impersonation.enabled and ai.enabled (the render fails without them).
+  # With secrets.existingSecret, that Secret must hold ALERT_WEBHOOK_TOKEN.
   alertInvestigation:
     enabled: false
     severities: [critical, warning]

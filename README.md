@@ -720,7 +720,7 @@ Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tra
 
 ### 알림 → AI 조사 (Alertmanager)
 
-알림이 울리면 Kubeast가 **읽기 도구만으로 1차 조사를 해 두고** 보고서를 남깁니다. 쓰기는 하지 않습니다 — 고치는 건 사람이 보고서를 보고 합니다. 기본 off(`features.alertInvestigation.enabled`).
+알림이 울리면 Kubeast가 **읽기 도구만으로 1차 조사를 해 두고** 보고서를 남깁니다. 쓰기는 하지 않습니다 — 고치는 건 사람이 보고서를 보고 합니다. 기본 off(`features.alertInvestigation.enabled`). 켜려면 `auth.impersonation.enabled`와 `ai.enabled`도 켜져 있어야 합니다(아니면 차트 렌더가 실패).
 
 - **받는 곳**: Alertmanager 웹훅 수신자를 `POST <Kubeast 주소>/api/v1/alerts/webhook?cluster=<클러스터 ID>`로, `http_config.authorization`에 Bearer `ALERT_WEBHOOK_TOKEN`(kubeast-secrets, 차트가 생성)을 둡니다. 형식은 Alertmanager v4 그대로. 토큰이 틀리면 401, 모르는 클러스터는 404, 꺼져 있으면 404.
 - **거르기**: `firing`이고 `severity` 라벨이 `severities`(기본 critical·warning)에 있는 알림만. 같은 클러스터·fingerprint는 `dedupeHours`(24) 안에선 `repeat_count`만 올립니다(Alertmanager가 4시간마다 다시 보냄). 시간당 `maxPerHour`(6)·하루 `dailyTokenBudget`(200,000 토큰, UTC)을 넘으면 `skipped`로 남깁니다. 응답은 바로 `{accepted, duplicate, filtered, skipped, resolved, dropped}`.

@@ -193,7 +193,7 @@ Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracki
 - **인증**: `Authorization: Bearer <kubeast-secrets의 ALERT_WEBHOOK_TOKEN>`. 차트가 만들고 업그레이드 때 유지합니다(`secrets.existingSecret`이면 그 Secret에 넣어야 함).
 - **조사되는 알림**: `status=firing`이고 `severity` 라벨이 `features.alertInvestigation.severities`(기본 critical·warning)에 있는 것. 같은 클러스터·fingerprint는 `dedupeHours`(기본 24) 안에선 다시 조사하지 않습니다 — Alertmanager는 `repeat_interval`(기본 4h)마다 다시 보냅니다. resolved는 조사하지 않습니다.
 - **`namespace` 라벨**: 있으면 조사가 그 Namespace로 한정됩니다(토큰의 `ns`). 없으면 클러스터 전체를 읽습니다.
-- **Kubeast 쪽**: `features.alertInvestigation.enabled: true`, 모델 하나(기본 모델 또는 `model`), 대상 클러스터에 §1의 조사 신원 RBAC.
+- **Kubeast 쪽**: `features.alertInvestigation.enabled: true`(`auth.impersonation.enabled`·`ai.enabled`도 켜져 있어야 함 — 아니면 차트 렌더 실패), 모델 하나(기본 모델 또는 `model`), 대상 클러스터에 §1의 조사 신원 RBAC.
 
 ```yaml
 # Alertmanager v0.34.1 — 수신자 예시 (토큰은 파일로)
