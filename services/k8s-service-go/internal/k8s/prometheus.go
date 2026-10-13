@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // ========== Prometheus Client ==========
@@ -278,7 +280,15 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 // costs one round-trip, not the sum of all of them (this runs at most once per
 // cluster per promCacheTTL, but a remote cluster makes even one slow). Hits are
 // written by index so the namespace preference order is still honoured.
+// It runs as the discovery identity (client.go discoveryClient), not the
+// caller: the result is remembered for the whole cluster, so a caller who may
+// not list a namespace or proxy to the Service must not turn it into "not
+// found" for everyone. The queries themselves still go out as the caller.
 func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
+	cs := s.discoveryClient(ctx)
+	if cs == nil {
+		return nil
+	}
 	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
@@ -299,7 +309,7 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 		wg.Add(1)
 		go func(i int, ns string) {
 			defer wg.Done()
-			hits[i] = s.probePrometheusNamespace(probeCtx, ns)
+			hits[i] = probePrometheusNamespace(probeCtx, cs, ns)
 		}(i, ns)
 	}
 	wg.Wait()
@@ -318,8 +328,8 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 
 // probePrometheusNamespace returns the first verified Prometheus :9090 service in
 // ns, or nil (a missing namespace / RBAC denial / no match all map to nil).
-func (s *Service) probePrometheusNamespace(ctx context.Context, ns string) *promServiceInfo {
-	svcList, err := s.clientsetCtx(ctx).CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
+func probePrometheusNamespace(ctx context.Context, cs kubernetes.Interface, ns string) *promServiceInfo {
+	svcList, err := cs.CoreV1().Services(ns).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil
 	}
@@ -330,7 +340,7 @@ func (s *Service) probePrometheusNamespace(ctx context.Context, ns string) *prom
 		for _, port := range svc.Spec.Ports {
 			if port.Port == 9090 {
 				info := &promServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Port: port.Port}
-				if s.verifyPrometheusProxy(ctx, info) {
+				if verifyPrometheusProxy(ctx, cs, info) {
 					return info
 				}
 			}
@@ -339,24 +349,30 @@ func (s *Service) probePrometheusNamespace(ctx context.Context, ns string) *prom
 	return nil
 }
 
-// verifyPrometheusProxy checks if a service is Prometheus by hitting /-/healthy via K8s API proxy.
-func (s *Service) verifyPrometheusProxy(ctx context.Context, info *promServiceInfo) bool {
+// verifyPrometheusProxy checks if a service is Prometheus by hitting /-/healthy
+// via the K8s API proxy. A refusal (403) still counts as found: the Service is
+// there, and the cluster decides on each caller's own query, not on the
+// discovery identity's.
+func verifyPrometheusProxy(ctx context.Context, cs kubernetes.Interface, info *promServiceInfo) bool {
 	proxyBase := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%d/proxy",
 		info.Namespace, info.Name, info.Port)
 
-	result := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().
+	result := cs.CoreV1().RESTClient().Get().
 		AbsPath(proxyBase).
 		Suffix("-", "healthy").
 		Do(ctx)
 
-	body, err := result.Raw()
-	if err != nil {
-		slog.Debug("Prometheus verify failed", "err", err)
-		return false
-	}
 	var statusCode int
 	result.StatusCode(&statusCode)
-	if statusCode != 200 {
+	body, err := result.Raw()
+	if err != nil {
+		if statusCode == http.StatusForbidden {
+			return true
+		}
+		slog.Debug("Prometheus verify failed", "status", statusCode, "err", err)
+		return false
+	}
+	if statusCode != http.StatusOK {
 		slog.Debug("Prometheus verify non-200", "status", statusCode, "body", string(body))
 		return false
 	}

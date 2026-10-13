@@ -574,24 +574,7 @@ func costTotals(rows []CostRow) CostTotals {
 	return t
 }
 
-// --- discovery (the Prometheus pattern, as the overview cache identity) ---
-
-// costDiscoveryClient is the identity discovery runs as: the overview cache's
-// fixed viewer (informer_cache.go), which may list Services everywhere; the
-// bundle's own clientset when no cache identity was set up (tests).
-func (s *Service) costDiscoveryClient(ctx context.Context) kubernetes.Interface {
-	b := s.bundleForCtx(ctx)
-	if b == nil {
-		return nil
-	}
-	if b.cacheClient != nil {
-		return b.cacheClient
-	}
-	if b.clientset != nil {
-		return b.clientset
-	}
-	return nil
-}
+// --- discovery (the Prometheus pattern, as the overview cache identity: client.go discoveryClient) ---
 
 func (s *Service) getCostService(ctx context.Context) *costServiceInfo {
 	b := s.bundleForCtx(ctx)
@@ -618,7 +601,7 @@ func (s *Service) getCostService(ctx context.Context) *costServiceInfo {
 }
 
 func (s *Service) discoverOpenCost(ctx context.Context) *costServiceInfo {
-	cs := s.costDiscoveryClient(ctx)
+	cs := s.discoveryClient(ctx)
 	if cs == nil {
 		return nil
 	}

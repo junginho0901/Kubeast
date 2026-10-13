@@ -528,6 +528,25 @@ func (s *Service) clientsetCtx(ctx context.Context) *kubernetes.Clientset {
 	return nil
 }
 
+// discoveryClient is the identity that service discovery (Prometheus, OpenCost)
+// runs as: the overview cache's fixed viewer (informer_cache.go), which may
+// list Services everywhere, so one caller's rights never decide what the
+// whole cluster remembers; the bundle's own clientset when no cache identity
+// was set up (tests). The reads themselves still go out as the caller.
+func (s *Service) discoveryClient(ctx context.Context) kubernetes.Interface {
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return nil
+	}
+	if b.cacheClient != nil {
+		return b.cacheClient
+	}
+	if b.clientset != nil {
+		return b.clientset
+	}
+	return nil
+}
+
 // clusterCacheKey namespaces a (shared Redis) cache key by the ctx cluster and
 // by the signed-in identity (auth.TokenPayload.CacheIdentity), so a value read
 // for one cluster or one user — overview totals, resource YAML, dependency
