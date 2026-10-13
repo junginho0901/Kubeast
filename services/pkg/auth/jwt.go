@@ -45,6 +45,9 @@ type TokenPayload struct {
 	// key (POST /auth/token) rather than a sign-in. Such a token cannot be
 	// refreshed; the client exchanges the key again.
 	APIKeyID string
+	// System is the "sys" claim: set only on tokens auth-service issues to a
+	// non-human principal (SystemInvestigator), never on a sign-in.
+	System string
 }
 
 // PendingAllowedPaths are the only paths a token with the "pending" role may
@@ -389,7 +392,8 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		authTime = int64(f)
 	}
 	akid, _ := claims["akid"].(string)
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid}, nil
+	sys, _ := claims["sys"].(string)
+	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, APIKeyID: akid, System: sys}, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change

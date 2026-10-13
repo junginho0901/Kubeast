@@ -30,6 +30,12 @@ func TestImpersonation_Groups(t *testing.T) {
 			"a@example.com", []string{GroupAuthenticated, "kubeast:role:sre-on-call"}},
 		{"no email falls back to user id", TokenPayload{UserID: "uid-9", Roles: map[string]string{"prod": "Read"}}, "prod",
 			"uid-9", []string{GroupAuthenticated, GroupViewer}},
+		{"investigator → its own user and group only, whatever else the token carries",
+			TokenPayload{UserID: "system", Email: UserInvestigator, System: SystemInvestigator, Roles: map[string]string{"prod": "Admin"}, Perms: PermissionMatrix{"*": {"*"}}}, "prod",
+			UserInvestigator, []string{GroupInvestigator}},
+		{"unknown system principal → authenticated only",
+			TokenPayload{UserID: "system", Email: "kubeast:other", System: "other", Roles: map[string]string{"prod": "Read"}}, "prod",
+			"kubeast:other", []string{GroupAuthenticated}},
 	}
 	for _, c := range cases {
 		user, groups := c.payload.Impersonation(c.cluster)

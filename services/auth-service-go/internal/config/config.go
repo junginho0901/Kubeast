@@ -110,6 +110,13 @@ type Config struct {
 	// (kubeconfig validate, bundle invalidate) — services/pkg/internalauth.
 	InternalAPIToken string
 	ToolServerURL    string
+	// AlertInvestigationEnabled (features.alertInvestigation.enabled) lets
+	// ai-service fetch the investigator's short token at
+	// /internal/investigator-token; off, that route and the investigator's
+	// token-version answer refuse, so an issued token stops working at once.
+	AlertInvestigationEnabled bool
+	// InvestigatorTokenMinutes is that token's lifetime.
+	InvestigatorTokenMinutes int
 	// Credential plugins a registered kubeconfig may name (exec.command base names).
 	KubeconfigExecCommands []string
 
@@ -343,6 +350,9 @@ func Load() Config {
 		// registration; k8s-service enforces the same list when it runs them).
 		KubeconfigExecCommands: pkgconfig.GetEnvList("KUBECONFIG_EXEC_COMMANDS", cluster.DefaultExecCommands),
 		ToolServerURL:          pkgconfig.GetEnv("TOOL_SERVER_URL", "http://tool-server:8086"),
+
+		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
+		InvestigatorTokenMinutes:  pkgconfig.GetEnvInt("INVESTIGATOR_TOKEN_MINUTES", 10),
 
 		PodNamespace:  pkgconfig.GetEnv("POD_NAMESPACE", "kubeast"),
 		KubeconfigDir: pkgconfig.GetEnv("KUBECONFIG_DIR", "/var/kubeast/kubeconfigs"),

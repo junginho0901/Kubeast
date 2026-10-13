@@ -82,3 +82,18 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "viewerProxyServices\\[\\]\\.port is required"
+
+  - it: binds the alert investigator too while features.alertInvestigation is on
+    set:
+      features.alertInvestigation.enabled: true
+      auth.impersonation.viewerProxyServices:
+        - {namespace: monitoring, service: prometheus, port: 9090}
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: subjects
+          value:
+            - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:viewer"}
+            - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:investigator"}
+        documentIndex: 1

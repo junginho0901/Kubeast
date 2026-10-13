@@ -31,6 +31,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/pkg/internalauth"
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 	pkglogger "github.com/junginho0901/kubeast/services/pkg/logger"
 	"github.com/junginho0901/kubeast/services/pkg/metrics"
@@ -311,6 +312,9 @@ func main() {
 		// Service-to-service: the other services' validators ask for the
 		// bearer's current token_version (not routed by the gateway).
 		r.Get("/internal/token-version/{userID}", authHandler.TokenVersion)
+		// The alert investigator's short token (features.alertInvestigation):
+		// ai-service asks with the internal token, per investigation.
+		r.With(internalauth.Middleware(cfg.InternalAPIToken)).Post("/internal/investigator-token", authHandler.InvestigatorToken)
 		// API key → access token (Authorization: Bearer kbk_…); the gateway
 		// rate-limits it like sign-in.
 		r.Post("/token", authHandler.ExchangeAPIKey)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"sync"
 
 	"github.com/google/uuid"
@@ -25,6 +26,8 @@ type AuthHandler struct {
 	// enumeration). Built once with the configured iteration count.
 	dummyOnce sync.Once
 	dummyHash string
+	// listClusterIDs replaces the cluster registry lookup in tests.
+	listClusterIDs func(context.Context) ([]string, error)
 }
 
 func (h *AuthHandler) dummyPasswordHash() string {

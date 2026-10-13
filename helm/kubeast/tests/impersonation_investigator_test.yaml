@@ -1,0 +1,80 @@
+suite: impersonation — the alert investigator may be impersonated and reads only
+templates:
+  - impersonation-investigator.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: refuses to render without impersonation (the tools would run as the service account)
+    set:
+      features.alertInvestigation.enabled: true
+      auth.impersonation.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "needs auth.impersonation.enabled"
+
+  - it: allows impersonating kubeast:investigator only, for external credentials and both service accounts
+    set:
+      features.alertInvestigation.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: rules
+          value:
+            - {apiGroups: [""], resources: ["groups"], verbs: ["impersonate"], resourceNames: ["kubeast:investigator"]}
+        documentIndex: 0
+      - equal:
+          path: subjects[0]
+          value: {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:impersonator"}
+        documentIndex: 1
+      - lengthEqual:
+          path: subjects
+          count: 3
+        documentIndex: 1
+
+  - it: drops the tool-server service account when AI is off
+    set:
+      features.alertInvestigation.enabled: true
+      ai.enabled: false
+    asserts:
+      - lengthEqual:
+          path: subjects
+          count: 2
+        documentIndex: 1
+
+  - it: binds the group read-only — get, list and watch only, no Secrets, exec, proxy or token
+    set:
+      features.alertInvestigation.enabled: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: kubeast:investigator
+        documentIndex: 2
+      - notContains:
+          path: rules[0].resources
+          content: secrets
+        documentIndex: 2
+      - notContains:
+          path: rules[0].resources
+          content: pods/exec
+        documentIndex: 2
+      - notContains:
+          path: rules[0].resources
+          content: services/proxy
+        documentIndex: 2
+      - notContains:
+          path: rules[0].resources
+          content: serviceaccounts/token
+        documentIndex: 2
+      - contains:
+          path: rules[0].resources
+          content: pods/log
+        documentIndex: 2
+      - equal:
+          path: subjects
+          value:
+            - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:investigator"}
+        documentIndex: 3

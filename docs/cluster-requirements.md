@@ -9,6 +9,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다(노�
 | 기능 | 대상 클러스터에 있어야 하는 것 | Kubeast 쪽 스위치(기본) | 없으면 |
 | --- | --- | --- | --- |
 | 전부 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 사용자 요청이 클러스터에서 403 |
+| 알림 → AI 조사 | 조사 신원 RBAC — §1 | `features.alertInvestigation.enabled`(끔) | 조사의 읽기 도구가 클러스터에서 403 |
 | 노드·파드 사용량, Monitoring, 최적화(대체) | metrics-server — §2 | — | 사용량 칸이 비고 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨고 최적화는 metrics-server 순간값 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
@@ -32,6 +33,7 @@ Kubeast는 클러스터에 **로그인한 사람으로**(impersonation) 요청�
 | 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할·NS 한정 부여를 쓸 때 | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read가 비용·그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
 | 로그 파일 Namespace의 `pods/exec` | 로그 파일 보기를 켤 때(§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
+| 알림 조사 신원 `kubeast:investigator` — impersonate 허용 + 읽기 전용 ClusterRole(get·list·watch, Secret·exec·프록시·쓰기 없음) | 알림 → AI 조사를 켤 때. Kubeast가 사람 대신 이 신원으로 읽기 도구를 돌린다 | `features.alertInvestigation` → `templates/impersonation-investigator.yaml`(impersonation이 꺼져 있으면 렌더 실패) |
 
 **Kubeast가 설치된 클러스터**는 차트가 이걸 전부 만듭니다. 값을 바꾸고 `helm upgrade`하면 됩니다(이 클러스터에는 아래 스크립트를 쓰지 않습니다 — 차트가 소유한 객체에 kubectl 주석이 붙습니다).
 
@@ -50,6 +52,9 @@ scripts/render-target-rbac.sh -f values.yaml -f cluster-b-values.yaml | kubectl 
 kubectl --context <cluster> get clusterrole kubeast-impersonator kubeast:cluster-reader
 kubectl --context <cluster> auth can-i list pods -A --as=check --as-group=kubeast:viewer --as-group=system:authenticated   # yes
 kubectl --context <cluster> auth can-i get secrets -A --as=check --as-group=kubeast:viewer --as-group=system:authenticated # no
+# 알림 조사를 켰다면
+kubectl --context <cluster> auth can-i get pods --subresource=log -A --as=kubeast:investigator --as-group=kubeast:investigator # yes
+kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator --as-group=kubeast:investigator                  # no
 ```
 
 ## 2. metrics-server

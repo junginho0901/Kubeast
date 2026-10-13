@@ -608,6 +608,14 @@ features:
   # answer 404 and the page is hidden.
   policyReports:
     enabled: true
+  # Alert → AI investigation (off by default). auth-service issues the
+  # investigator a short token for one cluster with the read-only AI tools
+  # only, and the cluster sees user and group kubeast:investigator, which
+  # templates/impersonation-investigator.yaml binds read-only (no Secrets,
+  # exec or writes) — apply that render to every cluster alerts come from
+  # (scripts/render-target-rbac.sh). Needs auth.impersonation.enabled.
+  alertInvestigation:
+    enabled: false
   # Cluster hygiene report (Admin → Cluster hygiene, permissions
   # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
   # resources, namespace policy, service account tokens, RBAC, TLS expiry and

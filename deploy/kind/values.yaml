@@ -115,6 +115,10 @@ features:
     enabled: true
     paths: [/var/log/app/*.log]
     namespaces: [default]
+  # Alert → AI investigation (investigator-*.spec.ts); the second cluster gets the same RBAC from
+  # scripts/add-kind-cluster.sh --addons.
+  alertInvestigation:
+    enabled: true
 gitops:
   argocd:
     enabled: true

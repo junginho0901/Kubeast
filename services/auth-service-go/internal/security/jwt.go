@@ -143,6 +143,27 @@ func (m *JWTManager) CreateAPIKeyToken(userID, email, roleName string, permissio
 	return m.sign(claims)
 }
 
+// CreateInvestigatorToken signs the alert investigator's token for one
+// cluster: no person behind it (sub "system", "sys": "investigator", so every
+// service impersonates kubeast:investigator in the cluster), only the
+// read-only AI tools there, limited to namespace when one is given, valid for
+// ttl. tv is 0; the token-version route answers 0 for it while the feature is
+// on and refuses once it is off.
+func (m *JWTManager) CreateInvestigatorToken(clusterID, namespace string, readTools []string, ttl time.Duration) (string, error) {
+	var ns map[string][]string
+	if namespace != "" {
+		ns = map[string][]string{clusterID: {namespace}}
+	}
+	claims := m.claims(InvestigatorSubject, auth.UserInvestigator, "read", auth.PermissionMatrix{clusterID: readTools}, nil, ns, 0, time.Time{})
+	claims["sys"] = auth.SystemInvestigator
+	claims["exp"] = time.Now().Add(ttl).Unix()
+	return m.sign(claims)
+}
+
+// InvestigatorSubject is the "sub" of the investigator's token — the audit
+// log's "system" actor, as for the other background work.
+const InvestigatorSubject = "system"
+
 func (m *JWTManager) sign(claims jwt.MapClaims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = m.KeyID

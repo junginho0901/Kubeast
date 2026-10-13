@@ -33,6 +33,14 @@ const (
 
 	HeaderImpersonateUser  = "Impersonate-User"
 	HeaderImpersonateGroup = "Impersonate-Group"
+
+	// The alert investigator (features.alertInvestigation) is not a person:
+	// auth-service issues it a short token with "sys": "investigator" and it
+	// acts in a cluster as this user and group only, which
+	// templates/impersonation-investigator.yaml binds read-only.
+	SystemInvestigator = "investigator"
+	UserInvestigator   = "kubeast:investigator"
+	GroupInvestigator  = "kubeast:investigator"
 )
 
 // Impersonation returns the Kubernetes identity to act as in clusterID.
@@ -40,6 +48,12 @@ func (p TokenPayload) Impersonation(clusterID string) (user string, groups []str
 	user = strings.TrimSpace(p.Email)
 	if user == "" {
 		user = p.UserID
+	}
+	if p.System != "" {
+		if p.System == SystemInvestigator {
+			return UserInvestigator, []string{GroupInvestigator}
+		}
+		return user, []string{GroupAuthenticated}
 	}
 	set := map[string]struct{}{GroupAuthenticated: {}}
 	if matchAny(p.Perms["*"], "*") {

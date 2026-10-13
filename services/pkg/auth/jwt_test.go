@@ -122,6 +122,25 @@ func TestValidate_AuthTimeClaimFallsBackToIat(t *testing.T) {
 	}
 }
 
+func TestValidate_SysClaim(t *testing.T) {
+	s := newJWKSServer(t, "kid-a")
+	v := newValidator(s)
+	p, err := v.Validate(signClaims(t, s.key, "kid-a", jwt.MapClaims{"sys": SystemInvestigator}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.System != SystemInvestigator {
+		t.Fatalf("sys claim: got %q", p.System)
+	}
+	p, err = v.Validate(signClaims(t, s.key, "kid-a", jwt.MapClaims{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.System != "" {
+		t.Fatalf("a sign-in token carries no sys claim, got %q", p.System)
+	}
+}
+
 func TestMiddleware_PendingRoleIsScoped(t *testing.T) {
 	s := newJWKSServer(t, "kid-a")
 	v := newValidator(s)

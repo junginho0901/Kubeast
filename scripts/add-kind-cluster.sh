@@ -88,6 +88,10 @@ if [ "$ADDONS" = 1 ]; then
   helm template kubeast "$ROOT/helm/kubeast" -s templates/impersonation-viewer-proxy.yaml \
     --set-json 'auth.impersonation.viewerProxyServices=[{"namespace":"monitoring","service":"prometheus","port":9090},{"namespace":"opencost","service":"opencost","port":9003}]' \
     | kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f -
+  # The alert investigator (deploy/kind/values.yaml turns features.alertInvestigation on): impersonating
+  # kubeast:investigator and its read-only ClusterRole (templates/impersonation-investigator.yaml).
+  helm template kubeast "$ROOT/helm/kubeast" -s templates/impersonation-investigator.yaml -f "$ROOT/deploy/kind/values.yaml" \
+    | kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f -
 
   # 4d. Kyverno (policy-reports.spec.ts): the pinned chart rendered with deploy/kind/kyverno-values.yaml and
   #     applied server-side, so the cluster holds no Helm release (helm.spec.ts expects `default` to have
