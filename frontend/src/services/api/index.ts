@@ -23,6 +23,7 @@ import { gatewayApi } from './gateway'
 import { gpuApi } from './gpu'
 import { helmApi } from './helm'
 import { hygieneApi } from './hygiene'
+import { investigationsApi } from './investigations'
 import { metricsApi } from './metrics'
 import { modelConfigApi } from './model_config'
 import { networkApi } from './network'
@@ -42,6 +43,7 @@ export const api = {
   ...hygieneApi,
   ...apiKeysApi,
   ...recordingsApi,
+  ...investigationsApi,
   ...clusterApi,
   ...workloadsApi,
   ...podsApi,

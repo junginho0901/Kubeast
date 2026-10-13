@@ -29,6 +29,7 @@ import {
   SquareTerminal,
   Users,
   Waypoints,
+  Siren,
 } from 'lucide-react'
 import { KIND_ICONS as K } from './kindIcons'
 import { api } from '@/services/api'
@@ -48,7 +49,7 @@ import RouteFallback from './RouteFallback'
 import { useCluster } from '../contexts/ClusterContext'
 import { usePermission } from '@/hooks/usePermission'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { aiEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
+import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from '@/utils/features'
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
 
 type NavItem = {
@@ -172,6 +173,7 @@ export default function Layout() {
   const aiOn = aiEnabled(clusterFeatures)
   const costOn = costEnabled(clusterFeatures)
   const policyReportsOn = policyReportsEnabled(clusterFeatures)
+  const investigationsOn = aiOn && alertInvestigationEnabled(clusterFeatures)
   // The admin section requires a GLOBAL admin permission, which lives only in
   // the matrix "*" entry — per-cluster grants never carry admin.*.
   const isAdmin = (matrix['*'] ?? []).some((p) => p === '*' || p.startsWith('admin.'))
@@ -410,10 +412,11 @@ export default function Layout() {
         { name: t('nav.auditLogs'), href: '/admin/audit', icon: FileSearch },
         { name: t('nav.sessionRecordings', { defaultValue: 'Session Recordings' }), href: '/admin/session-recordings', icon: Film, testId: 'nav-session-recordings' },
         ...(aiOn ? [{ name: t('nav.aiUsage'), href: '/admin/ai-usage', icon: ChartColumn }] : []),
+        ...(investigationsOn ? [{ name: t('nav.investigations', { defaultValue: 'Investigations' }), href: '/admin/investigations', icon: Siren, testId: 'nav-investigations' }] : []),
         { name: t('nav.nodeShell'), href: '/admin/node-shell', icon: SquareTerminal },
       ],
     },
-  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn])
+  ], [t, accessRequestsOn, pendingAccessCount, accessReviewOn, hygieneOn, aiOn, costOn, policyReportsOn, investigationsOn])
 
   const active = useMemo(() => {
     for (const group of navGroups) {

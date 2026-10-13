@@ -24,7 +24,8 @@ async function auditRows(request: APIRequestContext, token: string, action: stri
     params: { action, since, limit: 20 },
   })
   expect(res.ok()).toBeTruthy()
-  return ((await res.json()) as { items: AuditItem[] }).items
+  // no rows yet comes back as null: an empty list, so the poll below keeps waiting for the cancelled row
+  return ((await res.json()) as { items: AuditItem[] | null }).items ?? []
 }
 
 test.describe('AI usage accounting — cancelled turns and cluster column', () => {

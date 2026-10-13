@@ -17,3 +17,9 @@ export function costEnabled(features?: ClusterFeatures | null): boolean {
 export function policyReportsEnabled(features?: ClusterFeatures | null): boolean {
   return features?.policyReports?.enabled === true
 }
+
+// Chart features.alertInvestigation.enabled (with AI on): Admin → Investigations.
+// Unknown counts as off, as for cost.
+export function alertInvestigationEnabled(features?: ClusterFeatures | null): boolean {
+  return features?.alertInvestigation?.enabled === true
+}

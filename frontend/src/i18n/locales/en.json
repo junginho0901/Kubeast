@@ -465,7 +465,8 @@
     "aiUsage": "AI Usage",
     "sessionRecordings": "Session Recordings",
     "validatingAdmissionPolicies": "Validating Admission Policies",
-    "mutatingAdmissionPolicies": "Mutating Admission Policies"
+    "mutatingAdmissionPolicies": "Mutating Admission Policies",
+    "investigations": "Investigations"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -3999,6 +4000,68 @@
       "title": "Session recording",
       "text": "Text",
       "close": "Close"
+    }
+  },
+  "investigations": {
+    "title": "Investigations",
+    "subtitle": "What the AI found with read-only tools when Alertmanager sent an alert. Opening a report is audited.",
+    "refresh": "Refresh",
+    "disabled": "Alert investigation is off on this installation (features.alertInvestigation.enabled). Earlier reports stay listed.",
+    "filter": {
+      "status": "Status",
+      "cluster": "Cluster",
+      "clusterPlaceholder": "cluster ID",
+      "apply": "Search"
+    },
+    "status": {
+      "all": "All",
+      "queued": "Queued",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "col": {
+      "received": "Received",
+      "cluster": "Cluster",
+      "alert": "Alert",
+      "namespace": "Namespace",
+      "status": "Status",
+      "repeats": "Repeats",
+      "tokens": "Tokens",
+      "duration": "Duration"
+    },
+    "loading": "Loading…",
+    "open": "Report",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "skipReason": "Skipped: {{reason}}",
+    "report": "Report",
+    "loadFailed": "The report could not be opened.",
+    "meta": {
+      "status": "Status",
+      "severity": "Severity",
+      "model": "Model",
+      "tokens": "Tokens",
+      "steps": "Model calls",
+      "duration": "Duration",
+      "repeats": "Repeats"
+    },
+    "section": {
+      "report": "Report",
+      "alert": "Alert",
+      "tools": "Tool calls ({{count}})"
+    },
+    "noAnnotations": "No annotations",
+    "noTools": "The model answered without calling a tool.",
+    "link": {
+      "source": "Source query"
+    },
+    "tool": {
+      "name": "Tool",
+      "args": "Arguments",
+      "result": "Result",
+      "error": "refused",
+      "chars": "{{n}} chars"
     }
   },
   "notFound": {

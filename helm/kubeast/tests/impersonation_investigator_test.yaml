@@ -35,15 +35,13 @@ tests:
           count: 3
         documentIndex: 1
 
-  - it: drops the tool-server service account when AI is off
+  - it: refuses to render without AI (the investigation runs in ai-service)
     set:
       features.alertInvestigation.enabled: true
       ai.enabled: false
     asserts:
-      - lengthEqual:
-          path: subjects
-          count: 2
-        documentIndex: 1
+      - failedTemplate:
+          errorPattern: "needs ai.enabled"
 
   - it: binds the group read-only — get, list and watch only, no Secrets, exec, proxy or token
     set:

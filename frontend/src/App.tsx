@@ -34,6 +34,7 @@ const AdminAccessRequests = lazy(() => import('./pages/admin/AccessRequests'))
 const AdminAccessReview = lazy(() => import('./pages/admin/AccessReview'))
 const AdminClusterHygiene = lazy(() => import('./pages/admin/ClusterHygiene'))
 const AdminSessionRecordings = lazy(() => import('./pages/admin/SessionRecordings'))
+const AdminInvestigations = lazy(() => import('./pages/admin/Investigations'))
 const Account = lazy(() => import('./pages/Account'))
 const HPAs = lazy(() => import('./pages/workloads/HPAs'))
 const VPAs = lazy(() => import('./pages/workloads/VPAs'))
@@ -183,6 +184,7 @@ function App() {
             <Route path="admin/access-review" element={<RequirePermission permission="admin.review.read"><AdminAccessReview /></RequirePermission>} />
             <Route path="admin/cluster-hygiene" element={<RequirePermission permission="admin.hygiene.read"><AdminClusterHygiene /></RequirePermission>} />
             <Route path="admin/session-recordings" element={<RequirePermission permission="admin.sessions.read"><AdminSessionRecordings /></RequirePermission>} />
+            <Route path="admin/investigations" element={<RequirePermission permission="admin.investigations.read"><AIGate><AdminInvestigations /></AIGate></RequirePermission>} />
             <Route path="*" element={<NotFound />} />
           </Route>
           </Routes>

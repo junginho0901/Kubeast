@@ -55,6 +55,11 @@ type Config struct {
 	// /cluster/features.
 	AIEnabled bool
 
+	// Alert → AI investigation (chart features.alertInvestigation): reported in
+	// /cluster/features so the screens show Admin → Investigations. ai-service
+	// runs it; it needs AI on.
+	AlertInvestigationEnabled bool
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -153,6 +158,8 @@ func Load() Config {
 		AdmissionPoliciesReadOnly: pkgconfig.GetEnvBool("ADMISSION_POLICIES_READ_ONLY", false),
 
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
+
+		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

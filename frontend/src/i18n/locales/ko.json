@@ -465,7 +465,8 @@
     "aiUsage": "AI Usage",
     "sessionRecordings": "Session Recordings",
     "validatingAdmissionPolicies": "Validating Admission Policies",
-    "mutatingAdmissionPolicies": "Mutating Admission Policies"
+    "mutatingAdmissionPolicies": "Mutating Admission Policies",
+    "investigations": "Investigations"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -4627,6 +4628,68 @@
       "title": "세션 기록",
       "text": "텍스트",
       "close": "닫기"
+    }
+  },
+  "investigations": {
+    "title": "Investigations",
+    "subtitle": "Alertmanager가 알림을 보냈을 때 AI가 읽기 도구로 조사한 결과입니다. 보고서를 열면 감사 기록이 남습니다.",
+    "refresh": "새로고침",
+    "disabled": "이 설치에선 알림 조사가 꺼져 있습니다(features.alertInvestigation.enabled). 이전 보고서는 그대로 보입니다.",
+    "filter": {
+      "status": "상태",
+      "cluster": "클러스터",
+      "clusterPlaceholder": "클러스터 ID",
+      "apply": "검색"
+    },
+    "status": {
+      "all": "전체",
+      "queued": "대기",
+      "running": "조사 중",
+      "done": "완료",
+      "failed": "실패",
+      "skipped": "건너뜀"
+    },
+    "col": {
+      "received": "받은 시각",
+      "cluster": "클러스터",
+      "alert": "알림",
+      "namespace": "Namespace",
+      "status": "상태",
+      "repeats": "반복",
+      "tokens": "토큰",
+      "duration": "소요"
+    },
+    "loading": "불러오는 중…",
+    "open": "보고서",
+    "range": "{{total}}건 중 {{from}}–{{to}}",
+    "skipReason": "건너뜀: {{reason}}",
+    "report": "보고서",
+    "loadFailed": "보고서를 열 수 없습니다.",
+    "meta": {
+      "status": "상태",
+      "severity": "심각도",
+      "model": "모델",
+      "tokens": "토큰",
+      "steps": "모델 호출",
+      "duration": "소요",
+      "repeats": "반복"
+    },
+    "section": {
+      "report": "보고서",
+      "alert": "알림",
+      "tools": "도구 호출 ({{count}})"
+    },
+    "noAnnotations": "주석 없음",
+    "noTools": "모델이 도구를 부르지 않고 답했습니다.",
+    "link": {
+      "source": "원본 쿼리"
+    },
+    "tool": {
+      "name": "도구",
+      "args": "인자",
+      "result": "결과",
+      "error": "거부됨",
+      "chars": "{{n}}자"
     }
   },
   "comingSoon": {

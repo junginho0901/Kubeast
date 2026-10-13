@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiEnabled, costEnabled, policyReportsEnabled } from './features'
+import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from './features'
 
 describe('aiEnabled', () => {
   it('is off only when the server says so', () => {
@@ -25,5 +25,14 @@ describe('policyReportsEnabled', () => {
     expect(policyReportsEnabled({ prometheus: { enabled: false }, policyReports: { enabled: false } })).toBe(false)
     expect(policyReportsEnabled({ prometheus: { enabled: false } })).toBe(false)
     expect(policyReportsEnabled(undefined)).toBe(false)
+  })
+})
+
+describe('alertInvestigationEnabled', () => {
+  it('is on only when the server says so', () => {
+    expect(alertInvestigationEnabled({ prometheus: { enabled: false }, alertInvestigation: { enabled: true } })).toBe(true)
+    expect(alertInvestigationEnabled({ prometheus: { enabled: false }, alertInvestigation: { enabled: false } })).toBe(false)
+    expect(alertInvestigationEnabled({ prometheus: { enabled: false } })).toBe(false)
+    expect(alertInvestigationEnabled(undefined)).toBe(false)
   })
 })

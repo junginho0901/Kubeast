@@ -71,7 +71,7 @@ async function waitFinished(request: APIRequestContext, admin: string, alertname
 async function auditRows(request: APIRequestContext, admin: string, action: string, since: string) {
   const res = await request.get('/api/v1/auth/admin/audit-logs', { headers: bearer(admin), params: { action, since, limit: 50 } })
   expect(res.ok()).toBeTruthy()
-  return ((await res.json()).items as Array<Record<string, any>>).map((i) => ({ ...i, after: i.After ?? i.after ?? {} }))
+  return (((await res.json()).items ?? []) as Array<Record<string, any>>).map((i) => ({ ...i, after: i.After ?? i.after ?? {} }))
 }
 
 test.describe('alert investigation', () => {

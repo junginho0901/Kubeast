@@ -627,6 +627,8 @@ export interface ClusterFeatures {
   cost?: { enabled: boolean }
   // Security → Policy Reports and the drawer's "Policy violations" section (wgpolicyk8s.io, features.policyReports).
   policyReports?: { enabled: boolean }
+  // Admin → Investigations: alert → AI investigation reports (ai-service, features.alertInvestigation, needs AI).
+  alertInvestigation?: { enabled: boolean }
 }
 
 // Policy reports (wgpolicyk8s.io/v1alpha2 PolicyReport / ClusterPolicyReport as Kyverno and others write them).
