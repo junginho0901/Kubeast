@@ -62,15 +62,20 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
 
             return (
               <>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={{ details: MarkdownDetails, summary: MarkdownSummary }}
-                >
-                  {message.role === 'assistant'
-                    ? truncateToolResultsInContent(message.content)
-                    : message.content}
-                </ReactMarkdown>
+                {message.role === 'user' ? (
+                  // what was typed, line breaks included (markdown would join Shift+Enter lines)
+                  <p className="m-0 whitespace-pre-wrap wrap-break-word" data-testid="user-message-text">
+                    {message.content}
+                  </p>
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={{ details: MarkdownDetails, summary: MarkdownSummary }}
+                  >
+                    {truncateToolResultsInContent(message.content)}
+                  </ReactMarkdown>
+                )}
                 {message.role === 'assistant' &&
                   (message.toolCalls || [])
                     .filter((tc: any) => tc && tc.approval_id)

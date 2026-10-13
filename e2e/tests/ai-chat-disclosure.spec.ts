@@ -49,10 +49,13 @@ test.describe('AI chat — tool disclosure and the action row', () => {
     try {
       const saved = await page.request.post(`/api/v1/sessions/${sessionId}/messages?cluster=self`, {
         headers: XRW,
-        data: { messages: [{ role: 'user', content: 'list the pods' }, { role: 'assistant', content: TOOL_MESSAGE }] },
+        data: { messages: [{ role: 'user', content: 'list the pods\nin default' }, { role: 'assistant', content: TOOL_MESSAGE }] },
       })
       expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
       await openSession(page, title)
+
+      // the question keeps its Shift+Enter line break (shown as typed, not as markdown)
+      await expect(page.getByTestId('user-message-text').last()).toHaveText('list the pods\nin default', { useInnerText: true })
 
       const bubble = page.locator(ASSISTANT).last()
       const tool = bubble.getByRole('button', { name: /🔧 k8s_get_resources/ })
