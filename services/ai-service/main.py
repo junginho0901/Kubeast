@@ -11,6 +11,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 from app.api import router
 from app.api_public import admin_router, public_router
+from app.api_investigations import router as investigations_router
+from app.services.investigation import settings as investigation_settings
+from app.services.investigation.webhook import router as alerts_router
 from app.config import settings
 from app.security import require_auth
 from app import metrics as console_metrics
@@ -29,11 +32,25 @@ if mcp_flags.mcp_enabled():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if _mcp is None:
-        yield
-        return
-    async with _mcp.session_manager.run():
-        yield
+    # Alert investigation (features.alertInvestigation): one worker, only while on.
+    stop, worker_task = None, None
+    if investigation_settings.load().enabled:
+        import asyncio
+
+        from app.services.investigation.runner import worker
+
+        stop = asyncio.Event()
+        worker_task = asyncio.create_task(worker(stop))
+    try:
+        if _mcp is None:
+            yield
+        else:
+            async with _mcp.session_manager.run():
+                yield
+    finally:
+        if worker_task is not None:
+            stop.set()
+            worker_task.cancel()
 
 
 app = FastAPI(
@@ -74,6 +91,11 @@ app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_au
 # 관리자 전용(모델 연결 테스트) / 공개(health)
 app.include_router(admin_router, prefix="/api/v1/ai")
 app.include_router(public_router, prefix="/api/v1/ai")
+
+# Alert investigation: Alertmanager's webhook (its own Bearer token, not a user)
+# and the reports for admin.investigations.read.
+app.include_router(alerts_router, prefix="/api/v1/alerts")
+app.include_router(investigations_router, prefix="/api/v1/ai/investigations")
 
 if _mcp is not None:
     from app import mcp_server

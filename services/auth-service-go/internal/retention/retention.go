@@ -37,20 +37,24 @@ const BatchSize = 5000
 
 // Config is the retention policy. Zero means keep forever. ReviewDays covers
 // sign-offs with their snapshots: access reviews (access_reviews) and cluster
-// hygiene reviews (hygiene_reviews).
+// hygiene reviews (hygiene_reviews). InvestigationDays covers the alert
+// investigation reports (alert_investigations), which can quote pod logs.
 type Config struct {
-	AuditDays  int
-	ChatDays   int
-	ReviewDays int
+	AuditDays         int
+	ChatDays          int
+	ReviewDays        int
+	InvestigationDays int
 }
 
 // Enabled reports whether any window is set.
-func (c Config) Enabled() bool { return c.AuditDays > 0 || c.ChatDays > 0 || c.ReviewDays > 0 }
+func (c Config) Enabled() bool {
+	return c.AuditDays > 0 || c.ChatDays > 0 || c.ReviewDays > 0 || c.InvestigationDays > 0
+}
 
 // Validate rejects negative windows.
 func (c Config) Validate() error {
-	if c.AuditDays < 0 || c.ChatDays < 0 || c.ReviewDays < 0 {
-		return fmt.Errorf("retention: days must be 0 or positive (audit=%d chat=%d review=%d)", c.AuditDays, c.ChatDays, c.ReviewDays)
+	if c.AuditDays < 0 || c.ChatDays < 0 || c.ReviewDays < 0 || c.InvestigationDays < 0 {
+		return fmt.Errorf("retention: days must be 0 or positive (audit=%d chat=%d review=%d investigation=%d)", c.AuditDays, c.ChatDays, c.ReviewDays, c.InvestigationDays)
 	}
 	return nil
 }
@@ -59,6 +63,15 @@ func (c Config) Validate() error {
 func (c Config) ReviewCutoff(now time.Time) time.Time {
 	if c.ReviewDays > 0 {
 		return now.AddDate(0, 0, -c.ReviewDays)
+	}
+	return time.Time{}
+}
+
+// InvestigationCutoff returns the timestamp before which alert investigations
+// are deleted (zero when off).
+func (c Config) InvestigationCutoff(now time.Time) time.Time {
+	if c.InvestigationDays > 0 {
+		return now.AddDate(0, 0, -c.InvestigationDays)
 	}
 	return time.Time{}
 }
@@ -82,6 +95,7 @@ type Result struct {
 	SessionRecordings int64 `json:"session_recordings"` // index rows (and database-stored parts); objects in S3/files are the store's to expire
 	AccessReviews     int64 `json:"access_reviews"`
 	HygieneReviews    int64 `json:"hygiene_reviews"`
+	Investigations    int64 `json:"alert_investigations"`
 }
 
 // Purger executes the policy against a database.
@@ -126,7 +140,8 @@ func (p Purger) RunOnce(ctx context.Context) Result {
 		slog.Error("retention: purge failed", "error", err, "deleted", res)
 	} else {
 		slog.Info("retention: purge done", "audit_rows", res.AuditRows, "sessions", res.Sessions, "tool_approvals", res.ToolApprovals, "session_recordings", res.SessionRecordings,
-			"access_reviews", res.AccessReviews, "hygiene_reviews", res.HygieneReviews, "audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays)
+			"access_reviews", res.AccessReviews, "hygiene_reviews", res.HygieneReviews, "alert_investigations", res.Investigations,
+			"audit_days", p.Cfg.AuditDays, "chat_days", p.Cfg.ChatDays, "review_days", p.Cfg.ReviewDays, "investigation_days", p.Cfg.InvestigationDays)
 	}
 	p.record(ctx, now, res, err)
 	return res
@@ -207,6 +222,13 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 			`DELETE FROM hygiene_reviews WHERE id IN (SELECT id FROM hygiene_reviews WHERE reviewed_at < $1 ORDER BY reviewed_at LIMIT $2)`, reviewCutoff)
 		if err != nil {
 			return res, fmt.Errorf("hygiene reviews: %w", err)
+		}
+	}
+	if cutoff := p.Cfg.InvestigationCutoff(now); !cutoff.IsZero() {
+		res.Investigations, err = deleteBatched(ctx, p.Pool,
+			`DELETE FROM alert_investigations WHERE id IN (SELECT id FROM alert_investigations WHERE received_at < $1 ORDER BY received_at LIMIT $2)`, cutoff)
+		if err != nil {
+			return res, fmt.Errorf("alert investigations: %w", err)
 		}
 	}
 	return res, nil

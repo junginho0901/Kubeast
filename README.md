@@ -718,6 +718,17 @@ Argo CD가 배포한 객체에는 추적 어노테이션(`argocd.argoproj.io/tra
 - **스토리지 분석** — PVC 목록(`?usage=true`)에 Prometheus의 `kubelet_volume_stats_*`로 사용률·용량과 6시간 추세로 계산한 "n일 뒤 가득 참"을 붙입니다(`features.prometheus.enabled`가 켜져 있고 Prometheus가 kubelet `/metrics`를 긁어야 함). CSI 드라이버가 볼륨 통계를 내지 않으면(hostPath·local-path 등) N/A로 표시합니다. 85%/97% 색 경계와 "4일 내 가득 참"은 kube-prometheus의 `KubePersistentVolumeFillingUp` 규칙과 같습니다.
 - **Prometheus 소스(클러스터별)** — 기본은 대상 클러스터 안에서 이름에 `prometheus`가 든 9090 Service를 찾아 API 서버 프록시로 질의합니다. 찾기(어느 Service인지, 클러스터마다 10분 기억)는 개요 캐시 식별자(`kubeast:cache`, 그룹 `kubeast:viewer`)로 하고 `/-/healthy`가 403이어도 "있음"으로 칩니다 — 그래서 누가 먼저 열었든 결과가 같습니다. 질의 자체는 로그인한 사람으로 나가므로 Read(`kubeast:viewer`)는 `auth.impersonation.viewerProxyServices`에 그 Prometheus Service를 적어야 읽힙니다(적지 않으면 클러스터가 거부, 위 Read 역할 표). 중앙 저장소(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API)를 쓰면 Admin → Clusters → 편집에서 **주소·인증(bearer/basic, `cluster-prometheus-<id>` Secret에 보관)·클러스터 레이블 값**을 적습니다(`PATCH /api/v1/clusters/{id}`의 `prometheus_url`·`prometheus_auth`·`prometheus_cluster_label`). 레이블 값이 있으면 모든 PromQL의 벡터 셀렉터에 `cluster="<값>"`(이름은 `features.prometheus.clusterLabel`)을 파서로 주입해 그 클러스터 시리즈만 봅니다. 차트 `features.prometheus.url`·`auth.existingSecret`(키 `authorization`)은 자기 주소가 없는 클러스터의 기본값, `discover: false`는 클러스터 안 자동 발견 끄기, `egressCIDRs`는 NetworkPolicy가 켜진 설치에서 443·6443 밖 포트의 저장소로 k8s-service 송신을 여는 목록(`{cidr, port}`). `GET /api/v1/cluster/prometheus/status?cluster=<id>`가 `source`(external/proxy/none)·주소·인증 여부·레이블과 연결 상태를 답합니다.
 
+### 알림 → AI 조사 (Alertmanager)
+
+알림이 울리면 Kubeast가 **읽기 도구만으로 1차 조사를 해 두고** 보고서를 남깁니다. 쓰기는 하지 않습니다 — 고치는 건 사람이 보고서를 보고 합니다. 기본 off(`features.alertInvestigation.enabled`).
+
+- **받는 곳**: Alertmanager 웹훅 수신자를 `POST <Kubeast 주소>/api/v1/alerts/webhook?cluster=<클러스터 ID>`로, `http_config.authorization`에 Bearer `ALERT_WEBHOOK_TOKEN`(kubeast-secrets, 차트가 생성)을 둡니다. 형식은 Alertmanager v4 그대로. 토큰이 틀리면 401, 모르는 클러스터는 404, 꺼져 있으면 404.
+- **거르기**: `firing`이고 `severity` 라벨이 `severities`(기본 critical·warning)에 있는 알림만. 같은 클러스터·fingerprint는 `dedupeHours`(24) 안에선 `repeat_count`만 올립니다(Alertmanager가 4시간마다 다시 보냄). 시간당 `maxPerHour`(6)·하루 `dailyTokenBudget`(200,000 토큰, UTC)을 넘으면 `skipped`로 남깁니다. 응답은 바로 `{accepted, duplicate, filtered, skipped, resolved, dropped}`.
+- **조사**: 작업자 하나가 줄을 선 알림을 하나씩(복제본이 여럿이어도 한 번만) 처리합니다. auth-service가 그 클러스터용 **조사 전용 토큰**(읽기 도구 11개 권한만, 알림에 `namespace` 라벨이 있으면 그 Namespace로 한정, 10분)을 주고, 클러스터에는 사용자·그룹 `kubeast:investigator`로 갑니다(읽기 전용 ClusterRole — Secret·exec·쓰기 없음, `templates/impersonation-investigator.yaml`). 모델 = `model`(ModelConfig 이름) 또는 기본 모델, 호출 `maxSteps`(8)번까지 — 마지막 호출엔 도구를 주지 않아 답을 받습니다 — 전체 `timeoutSeconds`(300). 알림의 라벨·주석은 프롬프트에서 "신뢰하지 않는 데이터"로 분리합니다.
+- **보고서**: 요약 · 확인한 것 · 가능한 원인 · 다음에 볼 것(`language`, 기본 en). `GET /api/v1/ai/investigations`(목록, `status`·`cluster` 거르기)·`/{id}`(상세: 보고서·도구 호출·토큰), 권한 `admin.investigations.read`. 상세 열람은 파드 로그가 인용될 수 있어 `ai.investigation.view`로 남깁니다. 보존 `retention.investigationDays`(90일).
+- **감사·알림**: 조사 1건 = `ai.investigation.run`(actor `system` / `kubeast:investigator`, `after`에 알림·모델·토큰·도구 호출 수·소요·요약 500자·링크), 도구 호출 = `ai.tool.call`. 감사 싱크의 `filter.actions`에 `ai.investigation.run`을 넣으면 Slack·메일로 요약이 갑니다. `consoleUrl`을 적으면 요약에 보고서 링크가 붙습니다.
+- **클러스터 쪽**: 조사 신원 RBAC과 Alertmanager 설정 예시는 [docs/cluster-requirements.md](docs/cluster-requirements.md) §1·§13. dev는 2번 클러스터의 Alertmanager에 `amtool alert add`로 가짜 알림을 넣어 확인합니다(`deploy/kind/alertmanager.yaml`).
+
 ### 감사 싱크 (S3 · 웹훅 · 메일 · 파일)
 
 감사 로그의 1차 저장소는 DB이고, 싱크는 그 행을 **밖으로 복사**합니다. auth-service 한 replica가 싱크마다

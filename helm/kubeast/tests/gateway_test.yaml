@@ -121,3 +121,11 @@ tests:
           path: data.COOKIE_SECURE
           value: "false"
         template: configmap.yaml
+
+  - it: sends Alertmanager's webhook to ai-service, with the JSON 503 when ai-service is not there
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location /api/v1/alerts/ \{\s+error_page 502 503 504 = @ai-unavailable;[\s\S]*?proxy_pass http://ai-service/api/v1/alerts/;'
+        template: gateway.yaml
+        documentIndex: 0

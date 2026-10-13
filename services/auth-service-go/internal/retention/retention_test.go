@@ -84,3 +84,20 @@ func TestRunOnceRecordsTheRunEvenWhenItFails(t *testing.T) {
 		t.Fatalf("cutoffs in payload: %v", after)
 	}
 }
+
+func TestInvestigationWindow(t *testing.T) {
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	c := Config{InvestigationDays: 90}
+	if !c.Enabled() || c.Validate() != nil {
+		t.Fatalf("%+v should be enabled and valid", c)
+	}
+	if got := c.InvestigationCutoff(now); got != now.AddDate(0, 0, -90) {
+		t.Fatalf("cutoff = %v", got)
+	}
+	if !(Config{AuditDays: 30}).InvestigationCutoff(now).IsZero() {
+		t.Fatal("investigation cutoff must be zero when off")
+	}
+	if err := (Config{InvestigationDays: -1}).Validate(); err == nil {
+		t.Fatal("negative window should be rejected")
+	}
+}

@@ -139,7 +139,7 @@ func main() {
 		go sinks.Run(ctx)
 	}
 
-	retentionCfg := retention.Config{AuditDays: cfg.RetentionAuditDays, ChatDays: cfg.RetentionChatDays, ReviewDays: cfg.RetentionReviewDays}
+	retentionCfg := retention.Config{AuditDays: cfg.RetentionAuditDays, ChatDays: cfg.RetentionChatDays, ReviewDays: cfg.RetentionReviewDays, InvestigationDays: cfg.RetentionInvestigationDays}
 	if err := retentionCfg.Validate(); err != nil {
 		slog.Error("invalid retention configuration", "error", err)
 		os.Exit(1)

@@ -1,0 +1,89 @@
+# Alertmanager v0.34.1 on the second dev cluster (alert-investigation.spec.ts): every alert goes to Kubeast's webhook
+# for cluster "default" (this cluster's id in Kubeast). The Bearer token is the Secret alertmanager-kubeast-webhook,
+# which scripts/add-kind-cluster.sh --addons copies from Kubeast's kubeast-secrets (ALERT_WEBHOOK_TOKEN).
+# Fake alerts: kubectl -n monitoring exec deploy/alertmanager -- amtool alert add <name> severity=warning namespace=… \
+#   --alertmanager.url=http://localhost:9093
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    route:
+      receiver: kubeast
+      group_by: [alertname, namespace]
+      group_wait: 5s
+      group_interval: 1m
+      repeat_interval: 4h
+    receivers:
+      - name: kubeast
+        webhook_configs:
+          - url: http://kubeast-control-plane:30080/api/v1/alerts/webhook?cluster=default
+            send_resolved: true
+            max_alerts: 20
+            timeout: 10s
+            http_config:
+              authorization:
+                type: Bearer
+                credentials_file: /etc/alertmanager/kubeast/token
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels: {app: alertmanager}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: alertmanager}
+  template:
+    metadata:
+      labels: {app: alertmanager}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: alertmanager
+          image: quay.io/prometheus/alertmanager:v0.34.1
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+            - --cluster.listen-address=
+          ports:
+            - {name: http, containerPort: 9093}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/alertmanager/alertmanager.yml, subPath: alertmanager.yml}
+            - {name: token, mountPath: /etc/alertmanager/kubeast, readOnly: true}
+            - {name: data, mountPath: /alertmanager}
+      volumes:
+        - name: config
+          configMap: {name: alertmanager}
+        - name: token
+          secret: {secretName: alertmanager-kubeast-webhook}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  selector: {app: alertmanager}
+  ports:
+    - {name: http, port: 9093, targetPort: http}

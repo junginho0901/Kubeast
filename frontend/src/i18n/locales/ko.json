@@ -3461,7 +3461,8 @@
         "admin_review_signoff": "접근 권한 검토 서명",
         "admin_hygiene_read": "클러스터 위생 점검 보고서 보기",
         "admin_hygiene_export": "클러스터 위생 점검 내보내기(CSV·JSON)",
-        "admin_hygiene_signoff": "클러스터 위생 점검 서명"
+        "admin_hygiene_signoff": "클러스터 위생 점검 서명",
+        "admin_investigations_read": "알림 조사 보고서 보기"
       }
     },
     "viewUsers": "이 역할의 사용자 보기",

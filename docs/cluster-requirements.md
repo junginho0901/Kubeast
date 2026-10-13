@@ -2,14 +2,14 @@
 
 Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다(노드 셸 파드 하나만 예외, §9). 기능마다 클러스터에 미리 있어야 하는 것이 있고, 없으면 그 기능은 "없음"·"설치 안 됨"·"권한 없음"으로 표시되거나 영역이 숨습니다. 이 문서는 기능별로 **무엇이 있어야 하는지 · Kubeast가 그걸 어떻게 찾는지 · 없으면 어떻게 보이는지 · 어떻게 확인하는지 · 예시**를 적습니다. 예시 파일은 [`deploy/examples/target-cluster/`](../deploy/examples/target-cluster/)에 있습니다.
 
-"대상 클러스터"는 Kubeast가 관리하는 클러스터(설치된 클러스터 자신 포함)이고, Kubeast가 설치되는 클러스터의 조건은 §13에 따로 있습니다.
+"대상 클러스터"는 Kubeast가 관리하는 클러스터(설치된 클러스터 자신 포함)이고, Kubeast가 설치되는 클러스터의 조건은 §14에 따로 있습니다.
 
 ## 한눈에
 
 | 기능 | 대상 클러스터에 있어야 하는 것 | Kubeast 쪽 스위치(기본) | 없으면 |
 | --- | --- | --- | --- |
 | 전부 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 사용자 요청이 클러스터에서 403 |
-| 알림 → AI 조사 | 조사 신원 RBAC — §1 | `features.alertInvestigation.enabled`(끔) | 조사의 읽기 도구가 클러스터에서 403 |
+| 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 안 오거나, 조사의 읽기 도구가 클러스터에서 403 |
 | 노드·파드 사용량, Monitoring, 최적화(대체) | metrics-server — §2 | — | 사용량 칸이 비고 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨고 최적화는 metrics-server 순간값 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
@@ -185,7 +185,33 @@ Kubeast가 사용자 신원의 `pods/exec`로 `ls`·`tail`만 실행합니다.
 
 Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracking-id`, Argo CD 3.x 기본 추적 방식)이 있어야 배지·경고가 붙습니다. 라벨 방식(`app.kubernetes.io/instance` 등)을 쓰는 설치는 `gitops.argocd.instanceLabel`에 그 키를 적습니다. Argo CD 자체가 대상 클러스터에 있을 필요는 없습니다.
 
-## 13. Kubeast가 설치되는 클러스터
+## 13. Alertmanager (알림 → AI 조사)
+
+조사는 Alertmanager가 보내는 웹훅으로 시작합니다. Kubeast는 Alertmanager를 설치하지 않고, 알림 규칙도 만들지 않습니다.
+
+- **보내는 곳**: `POST <Kubeast 주소>/api/v1/alerts/webhook?cluster=<Kubeast 클러스터 ID>` — 클러스터 ID는 Admin → Clusters의 ID. 클러스터마다 수신자(또는 `cluster` 값)를 따로 둡니다.
+- **인증**: `Authorization: Bearer <kubeast-secrets의 ALERT_WEBHOOK_TOKEN>`. 차트가 만들고 업그레이드 때 유지합니다(`secrets.existingSecret`이면 그 Secret에 넣어야 함).
+- **조사되는 알림**: `status=firing`이고 `severity` 라벨이 `features.alertInvestigation.severities`(기본 critical·warning)에 있는 것. 같은 클러스터·fingerprint는 `dedupeHours`(기본 24) 안에선 다시 조사하지 않습니다 — Alertmanager는 `repeat_interval`(기본 4h)마다 다시 보냅니다. resolved는 조사하지 않습니다.
+- **`namespace` 라벨**: 있으면 조사가 그 Namespace로 한정됩니다(토큰의 `ns`). 없으면 클러스터 전체를 읽습니다.
+- **Kubeast 쪽**: `features.alertInvestigation.enabled: true`, 모델 하나(기본 모델 또는 `model`), 대상 클러스터에 §1의 조사 신원 RBAC.
+
+```yaml
+# Alertmanager v0.34.1 — 수신자 예시 (토큰은 파일로)
+receivers:
+  - name: kubeast
+    webhook_configs:
+      - url: https://kubeast.example.com/api/v1/alerts/webhook?cluster=prod-1
+        send_resolved: false
+        max_alerts: 20
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager/kubeast/token
+```
+
+- **확인**: Kubeast Admin → Investigations에 행이 생기는지(심각도 필터에 걸리면 행이 없음). 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved}`가 Alertmanager 로그에 남습니다. 개발용 전체 예시는 [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml).
+
+## 14. Kubeast가 설치되는 클러스터
 
 | 무엇 | 조건 |
 | --- | --- |
@@ -206,6 +232,7 @@ Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracki
 | kube-prometheus-stack | 92.3.0 | 렌더로 Service 이름·포트만 확인 |
 | metrics-server | 0.9.0 | 개발용 2번 클러스터(`deploy/kind/second-cluster.yaml`) |
 | Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
+| Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 
 kind 노드는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비고, local-path 볼륨은 볼륨 통계가 없습니다 — 실제 노드·CSI 드라이버에서는 나오는 값입니다.

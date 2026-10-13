@@ -23,9 +23,10 @@ type Config struct {
 	// Data retention in days (0 = keep forever): audit log rows, and AI chat
 	// sessions with their messages and tool approvals. auth-service purges
 	// once at boot and then daily (internal/retention).
-	RetentionAuditDays  int
-	RetentionChatDays   int
-	RetentionReviewDays int // access review sign-offs (0 = keep forever)
+	RetentionAuditDays         int
+	RetentionChatDays          int
+	RetentionReviewDays        int // access review sign-offs (0 = keep forever)
+	RetentionInvestigationDays int // alert_investigations (RETENTION_INVESTIGATION_DAYS, 90; 0 = keep)
 
 	// JWT
 	JWTIssuer         string
@@ -301,9 +302,10 @@ func Load() Config {
 		MigrationsMode: pkgconfig.GetEnv("MIGRATIONS_MODE", "startup"),
 		MigrateOnly:    pkgconfig.GetEnvBool("MIGRATE_ONLY", false),
 
-		RetentionAuditDays:  pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
-		RetentionChatDays:   pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
-		RetentionReviewDays: pkgconfig.GetEnvInt("RETENTION_REVIEW_DAYS", 1095),
+		RetentionAuditDays:         pkgconfig.GetEnvInt("RETENTION_AUDIT_DAYS", 0),
+		RetentionChatDays:          pkgconfig.GetEnvInt("RETENTION_CHAT_DAYS", 0),
+		RetentionReviewDays:        pkgconfig.GetEnvInt("RETENTION_REVIEW_DAYS", 1095),
+		RetentionInvestigationDays: pkgconfig.GetEnvInt("RETENTION_INVESTIGATION_DAYS", 90),
 
 		JWTIssuer:            pkgconfig.GetEnv("JWT_ISSUER", "kubeast-auth"),
 		JWTAudience:          pkgconfig.GetEnv("JWT_AUDIENCE", "kubeast"),

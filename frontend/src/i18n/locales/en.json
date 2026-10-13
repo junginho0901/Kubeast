@@ -3364,7 +3364,8 @@
         "admin_review_signoff": "Sign off an access review",
         "admin_hygiene_read": "View the cluster hygiene report",
         "admin_hygiene_export": "Export the cluster hygiene report (CSV/JSON)",
-        "admin_hygiene_signoff": "Sign off a cluster hygiene report"
+        "admin_hygiene_signoff": "Sign off a cluster hygiene report",
+        "admin_investigations_read": "View alert investigation reports"
       }
     },
     "viewUsers": "View users with this role",

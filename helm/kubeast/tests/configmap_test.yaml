@@ -493,3 +493,40 @@ tests:
           path: data.OPTIMIZATION_WINDOW_HOURS
           value: "168"
 
+
+  - it: passes the alert investigation values to the services, numbers as integers
+    set:
+      features.alertInvestigation:
+        enabled: true
+        severities: [critical]
+        dedupeHours: 12
+        maxPerHour: 3
+        dailyTokenBudget: 5000000
+        maxSteps: 6
+        timeoutSeconds: 600
+        model: ollama-granite
+        language: ko
+        consoleUrl: https://kubeast.example.com
+      retention.investigationDays: 30
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_ENABLED
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_SEVERITIES
+          value: critical
+      - equal:
+          path: data.ALERT_INVESTIGATION_DAILY_TOKEN_BUDGET
+          value: "5000000"
+      - equal:
+          path: data.ALERT_INVESTIGATION_MODEL
+          value: ollama-granite
+      - equal:
+          path: data.ALERT_INVESTIGATION_CONSOLE_URL
+          value: https://kubeast.example.com
+      - equal:
+          path: data.INVESTIGATOR_TOKEN_MINUTES
+          value: "15"
+      - equal:
+          path: data.RETENTION_INVESTIGATION_DAYS
+          value: "30"

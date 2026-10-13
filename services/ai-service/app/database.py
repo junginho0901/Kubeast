@@ -112,9 +112,43 @@ class ModelConfig(Base):
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class AlertInvestigation(Base):
+    """Alert → AI investigation (services/pkg/dbmigrate 00014_alert_investigations.sql)."""
+    __tablename__ = "alert_investigations"
+
+    id = Column(String, primary_key=True)
+    cluster = Column(String, nullable=False)
+    fingerprint = Column(String, nullable=False)
+    alertname = Column(String, nullable=False, default="")
+    severity = Column(String, nullable=False, default="")
+    namespace = Column(String, nullable=False, default="")
+    status = Column(String, nullable=False)
+    skip_reason = Column(String, nullable=False, default="")
+    labels = Column(JSON, nullable=False, default=dict)
+    annotations = Column(JSON, nullable=False, default=dict)
+    starts_at = Column(DateTime, nullable=True)
+    generator_url = Column(Text, nullable=False, default="")
+    alertmanager_url = Column(Text, nullable=False, default="")
+    group_key = Column(Text, nullable=False, default="")
+    received_at = Column(DateTime, nullable=False, default=utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    repeat_count = Column(Integer, nullable=False, default=1)
+    last_seen_at = Column(DateTime, nullable=False, default=utcnow)
+    provider = Column(String, nullable=False, default="")
+    model = Column(String, nullable=False, default="")
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    iterations = Column(Integer, nullable=False, default=0)
+    tool_calls = Column(JSON, nullable=False, default=list)
+    report = Column(Text, nullable=False, default="")
+    error = Column(Text, nullable=False, default="")
+
+
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 3
+REQUIRED_SCHEMA_VERSION = 14
 
 
 async def read_schema_version(engine) -> int:

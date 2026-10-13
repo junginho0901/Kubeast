@@ -399,6 +399,8 @@ retention:
   chatDays: 0
   # Access review and cluster hygiene sign-offs (three years; 0 = keep forever).
   reviewDays: 1095
+  # Alert investigation reports (they can quote pod logs; 0 = keep forever).
+  investigationDays: 90
 
 # --- Schema migrations ---
 # auth-service owns the database schema (versioned SQL, services/pkg/dbmigrate).
@@ -608,14 +610,33 @@ features:
   # answer 404 and the page is hidden.
   policyReports:
     enabled: true
-  # Alert → AI investigation (off by default). auth-service issues the
-  # investigator a short token for one cluster with the read-only AI tools
-  # only, and the cluster sees user and group kubeast:investigator, which
-  # templates/impersonation-investigator.yaml binds read-only (no Secrets,
-  # exec or writes) — apply that render to every cluster alerts come from
-  # (scripts/render-target-rbac.sh). Needs auth.impersonation.enabled.
+  # Alert → AI investigation (off by default). Alertmanager posts to
+  # /api/v1/alerts/webhook?cluster=<Kubeast cluster id> with
+  # Authorization: Bearer <ALERT_WEBHOOK_TOKEN from the kubeast-secrets Secret>.
+  # A firing alert whose severity label is listed is queued (a repeat of the
+  # same cluster + fingerprint within dedupeHours only counts), unless the
+  # hourly cap or the daily token budget (UTC day) is reached; one worker then
+  # investigates it with the read-only AI tools and stores the report (Admin →
+  # Investigations), audited as ai.investigation.run — add that action to an
+  # audit sink's filter to get the summary in Slack or mail. auth-service
+  # issues the investigator a short token for that cluster (and the alert's
+  # namespace label), and the cluster sees user and group
+  # kubeast:investigator, which templates/impersonation-investigator.yaml binds
+  # read-only (no Secrets, exec or writes) — apply that render to every
+  # cluster alerts come from (scripts/render-target-rbac.sh). Needs
+  # auth.impersonation.enabled. With secrets.existingSecret, that Secret must
+  # hold ALERT_WEBHOOK_TOKEN.
   alertInvestigation:
     enabled: false
+    severities: [critical, warning]
+    dedupeHours: 24           # Alertmanager repeats a firing group every repeat_interval (4h)
+    maxPerHour: 6             # 0 = no cap
+    dailyTokenBudget: 200000  # 0 = no budget
+    maxSteps: 8               # model calls per investigation; the last one gets no tools
+    timeoutSeconds: 300
+    model: ""                 # ModelConfig name; empty = the default model
+    language: en              # report language (en, ko, …)
+    consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
   # Cluster hygiene report (Admin → Cluster hygiene, permissions
   # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
   # resources, namespace policy, service account tokens, RBAC, TLS expiry and

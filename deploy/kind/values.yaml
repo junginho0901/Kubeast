@@ -115,10 +115,14 @@ features:
     enabled: true
     paths: [/var/log/app/*.log]
     namespaces: [default]
-  # Alert → AI investigation (investigator-*.spec.ts); the second cluster gets the same RBAC from
-  # scripts/add-kind-cluster.sh --addons.
+  # Alert → AI investigation (investigator-rbac.spec.ts, alert-investigation.spec.ts); the second cluster gets the
+  # same RBAC and an Alertmanager pointed at this install from scripts/add-kind-cluster.sh --addons.
   alertInvestigation:
     enabled: true
+    consoleUrl: http://localhost:30080
+    # e2e runs repeat within the hour and the day; the cap and the budget are covered by the ai-service unit tests.
+    maxPerHour: 0
+    dailyTokenBudget: 0
 gitops:
   argocd:
     enabled: true

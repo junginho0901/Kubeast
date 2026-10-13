@@ -227,3 +227,22 @@ func TestPostgresPurgeDropsOldFinishedRecordings(t *testing.T) {
 		t.Fatalf("parts left %d, want 0 (cascade)", n)
 	}
 }
+
+func TestPostgresPurgeDropsOldInvestigations(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for i, at := range []time.Time{now.AddDate(0, 0, -120), now.AddDate(0, 0, -91), now.AddDate(0, 0, -10)} {
+		if _, err := pool.Exec(ctx, `INSERT INTO alert_investigations (id, cluster, fingerprint, status, received_at) VALUES ($1, 'self', $2, 'done', $3)`,
+			fmt.Sprintf("inv-%d", i), fmt.Sprintf("fp-%d", i), at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := Purger{Pool: pool, Cfg: Config{InvestigationDays: 90}}.Purge(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Investigations != 2 || count(t, pool, "alert_investigations") != 1 {
+		t.Fatalf("deleted %d, left %d; want 2 and 1", res.Investigations, count(t, pool, "alert_investigations"))
+	}
+}

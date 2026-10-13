@@ -128,6 +128,7 @@ data:
   RETENTION_AUDIT_DAYS: {{ .Values.retention.auditDays | quote }}
   RETENTION_CHAT_DAYS: {{ .Values.retention.chatDays | quote }}
   RETENTION_REVIEW_DAYS: {{ .Values.retention.reviewDays | quote }}
+  RETENTION_INVESTIGATION_DAYS: {{ .Values.retention.investigationDays | int64 | quote }}
   TOOL_SERVER_USE_INCLUSTER: "false"
   # Feature flags — wired to frontend via /api/v1/cluster/features.
   PROMETHEUS_ENABLED: {{ .Values.features.prometheus.enabled | quote }}
@@ -139,6 +140,19 @@ data:
   COST_ENABLED: {{ .Values.features.cost.enabled | quote }}
   POLICY_REPORTS_ENABLED: {{ .Values.features.policyReports.enabled | quote }}
   ALERT_INVESTIGATION_ENABLED: {{ .Values.features.alertInvestigation.enabled | quote }}
+  {{- with .Values.features.alertInvestigation }}
+  ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
+  ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}
+  ALERT_INVESTIGATION_MAX_PER_HOUR: {{ .maxPerHour | int64 | quote }}
+  ALERT_INVESTIGATION_DAILY_TOKEN_BUDGET: {{ .dailyTokenBudget | int64 | quote }}
+  ALERT_INVESTIGATION_MAX_STEPS: {{ .maxSteps | int64 | quote }}
+  ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
+  ALERT_INVESTIGATION_MODEL: {{ .model | quote }}
+  ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
+  ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
+  {{- end }}
+  AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"
+  INVESTIGATOR_TOKEN_MINUTES: {{ add (div (int .Values.features.alertInvestigation.timeoutSeconds) 60) 5 | quote }}
   HYGIENE_ENABLED: {{ .Values.features.hygiene.enabled | quote }}
   HYGIENE_INTERVAL_DAYS: {{ .Values.features.hygiene.intervalDays | quote }}
   HYGIENE_EXCLUDE_NAMESPACES: {{ join "," .Values.features.hygiene.excludeNamespaces | quote }}

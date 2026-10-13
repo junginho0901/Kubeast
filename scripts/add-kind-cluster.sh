@@ -71,7 +71,7 @@ kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f "$ROOT/helm/
 #     the way kind-deploy.sh does it, so a node behind a proxy does not have to pull them.
 if [ "$ADDONS" = 1 ]; then
   echo "═══ applying add-ons to '$NAME' ═══"
-  sed -n 's/^ *image: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$ROOT/deploy/kind/second-cluster.yaml" | sort -u \
+  sed -n 's/^ *image: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$ROOT/deploy/kind/second-cluster.yaml" "$ROOT/deploy/kind/alertmanager.yaml" | sort -u \
     | while IFS= read -r image; do
       if docker image inspect "$image" >/dev/null 2>&1; then
         docker save "$image" | docker exec --privileged -i "$CP" \
@@ -85,13 +85,22 @@ if [ "$ADDONS" = 1 ]; then
   kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n monitoring rollout status ds/node-exporter --timeout=3m
   # Read users (kubeast:viewer) may GET this Prometheus and OpenCost through the API server proxy, nothing else
   # (templates/impersonation-viewer-proxy.yaml rendered with this cluster's two Services; viewer-proxy.spec.ts).
-  helm template kubeast "$ROOT/helm/kubeast" -s templates/impersonation-viewer-proxy.yaml \
+  # With the dev values the alert investigator is bound too (features.alertInvestigation on).
+  helm template kubeast "$ROOT/helm/kubeast" -s templates/impersonation-viewer-proxy.yaml -f "$ROOT/deploy/kind/values.yaml" \
     --set-json 'auth.impersonation.viewerProxyServices=[{"namespace":"monitoring","service":"prometheus","port":9090},{"namespace":"opencost","service":"opencost","port":9003}]' \
     | kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f -
   # The alert investigator (deploy/kind/values.yaml turns features.alertInvestigation on): impersonating
   # kubeast:investigator and its read-only ClusterRole (templates/impersonation-investigator.yaml).
   helm template kubeast "$ROOT/helm/kubeast" -s templates/impersonation-investigator.yaml -f "$ROOT/deploy/kind/values.yaml" \
     | kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f -
+  # Alertmanager (alert-investigation.spec.ts) sends every alert to Kubeast's webhook for cluster "default" with the
+  # Bearer token copied from the Kubeast install (kubeast-secrets ALERT_WEBHOOK_TOKEN on $KUBEAST_CONTEXT).
+  KUBEAST_CONTEXT="${KUBEAST_CONTEXT:-kind-kubeast}"
+  kubectl --context "$KUBEAST_CONTEXT" -n "${KUBEAST_NAMESPACE:-kubeast}" get secret kubeast-secrets -o jsonpath='{.data.ALERT_WEBHOOK_TOKEN}' \
+    | base64 -d | kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n monitoring create secret generic alertmanager-kubeast-webhook \
+      --from-file=token=/dev/stdin --dry-run=client -o yaml | kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f -
+  kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") apply -f "$ROOT/deploy/kind/alertmanager.yaml"
+  kubectl --kubeconfig <(kind get kubeconfig --name "$NAME") -n monitoring rollout status deploy/alertmanager --timeout=3m
 
   # 4d. Kyverno (policy-reports.spec.ts): the pinned chart rendered with deploy/kind/kyverno-values.yaml and
   #     applied server-side, so the cluster holds no Helm release (helm.spec.ts expects `default` to have
