@@ -12,7 +12,7 @@ export default function AIGate({ children }: { children: ReactNode }) {
   const { data: features } = useClusterFeatures()
   if (aiEnabled(features)) return <>{children}</>
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-6 text-slate-300 flex items-start gap-3" data-testid="ai-disabled-notice">
+    <div className="m-6 rounded-lg border border-slate-700 bg-slate-800/50 p-6 text-slate-300 flex items-start gap-3" data-testid="ai-disabled-notice">
       <Bot className="w-5 h-5 mt-0.5 text-slate-400 shrink-0" />
       <div>
         <div className="font-semibold text-white">{t('ai.disabled.title', { defaultValue: 'AI is off in this installation' })}</div>
