@@ -162,11 +162,13 @@ users:
 **Admin > AI Models**에서 OpenAI / Anthropic / Gemini 등의 API 키를 등록하면
 AI 어시스턴트가 활성화됩니다.
 
+모델 드롭다운은 공급자가 그 키·주소로 알려 주는 모델 목록입니다 — ai-service가 Anthropic `GET /v1/models`, 그 외(OpenAI·Gemini·Ollama·OpenAI 호환 게이트웨이)는 `GET {base_url}/models`를 부르고(`POST /api/v1/ai/model-configs/models`, 관리자, 연결 테스트와 같은 키·주소 규칙) 임베딩·음성·이미지 모델은 뺍니다. 키가 없거나 목록을 못 받으면 내장 목록과 그 이유가 보이고, "모델 이름 직접 입력"도 됩니다. 브라우저는 Kubeast 밖으로 나가지 않으므로 내부망에서도 그 설정의 주소(사내 게이트웨이·Ollama)의 목록이 나옵니다.
+
 AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-service·tool-server·ModelConfig 컨트롤러가 배포되지 않고(새 설치는 CRD도 없음, 켰다 끈 설치는 CRD와 ModelConfig가 남음), 게이트웨이의 `/api/v1/ai`는 JSON 503, 화면은 AI 채팅·플로팅 어시스턴트·AI 관리 페이지·MCP 안내를 숨깁니다(`/api/v1/cluster/features`의 `ai.enabled`). 켜진 설치에서도 ai-service는 모델 클라이언트를 처음 만들 때 provider SDK를, `mcp.enabled`일 때만 MCP SDK를 읽어 유휴 메모리를 줄입니다.
 
 Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages API(`/v1/messages`)로 부릅니다(`app/services/anthropic_messages.py`, 응답은 다른 공급자와 같은 모양으로 바꿔 돌려줌).
 - **샘플링 값**: Claude 4.7 이후 모델(이름에서 버전을 읽지 못하는 모델 포함)에는 `temperature`·`top_p`·`top_k`를 보내지 않습니다 — 그 모델들은 기본값이 아니면 400을 돌려줍니다.
-- **thinking**: 모델 기본값을 따릅니다(Claude 5 계열은 기본으로 켜짐). 도구 호출 사이에는 그 턴의 thinking 블록을 그대로 돌려보냅니다(API 요건).
+- **thinking**: 모델 기본값을 따릅니다(Claude 5 계열은 기본으로 켜짐). 도구 호출 사이에는 그 턴의 thinking 블록을 그대로 돌려보냅니다(API 요건). thinking 토큰도 `max_tokens`에 들어가므로 Claude 5 계열(이름에 버전이 없는 모델 포함)에는 호출부의 `max_tokens`에 4,096을 더해 보냅니다 — 상한일 뿐 쓴 만큼만 과금됩니다.
 - **프롬프트 캐시**: 자동 캐시(`cache_control`)가 기본으로 켜집니다. 모델 설정 옵션 `prompt_cache: false`로 끕니다. 사용량의 입력 토큰은 캐시에서 읽은 토큰을 포함한 총 입력입니다.
 - 키는 지금처럼 `ANTHROPIC_API_KEY`(또는 `KUBEAST_AI_KEY_*`)에 둡니다. 예전 호환 주소(`https://api.anthropic.com/v1/`)가 base_url에 들어 있어도 그대로 동작합니다.
 
