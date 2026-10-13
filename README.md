@@ -198,7 +198,7 @@ AI 없이 콘솔만 쓰려면 `ai.enabled: false`로 설치합니다 — ai-serv
 | --- | --- | --- | --- |
 | **Pending** | 가입·SSO 직후 기본값 | 없음 — 로그인만 되고 API는 403 | — |
 | **Member** | 계정 등급 | 전역 권한 없음, **클러스터별 부여로만** 접근 | `kubeast:authenticated`(권한 없음) |
-| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`) · Helm 읽기 · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 11종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret을 제외하므로 Secret과 Helm 릴리스(Secret에 저장)는 클러스터가 거부하고 화면은 권한 안내를 띄운다 |
+| **Read** | 클러스터별 | 메뉴 10 · 모든 리소스 읽기(`resource.*.read`, 비용 `resource.cost.read` 포함) · Helm 읽기 · 컨테이너 안 로그 파일 읽기(`resource.pod.logfile`, 기능을 켰을 때) · AI 채팅의 읽기 도구 11종(`ai.tool.<읽기 도구>`)과 MCP 연결(`ai.mcp.use`) — 쓰기 도구는 없음 | `kubeast:viewer` = `view` + `kubeast:cluster-reader`. `view`는 Secret과 `services/proxy`를 제외하므로 Secret과 Helm 릴리스(Secret에 저장), 그리고 API 서버 프록시로 읽는 Prometheus·OpenCost(최적화 사용량·스토리지 분석·비용)는 클러스터가 거부하고 화면은 권한 안내를 띄운다(프록시는 `kubeast:operator`=`edit`부터; Read에게 열려면 `kubeast:cluster-reader`에 `services/proxy` get을 `resourceNames`로 추가) |
 | **Write** | 클러스터별 | `menu.*` · 리소스 생성/수정/삭제 · CronJob suspend/trigger · Secret 값 보기 · 로그 파일 읽기 · Helm rollback/upgrade/test · AI 툴 전부(`ai.tool.*`, 쓰기 도구 포함) · MCP 연결 | `kubeast:operator` = `edit` + viewer |
 | **Admin** | 계정 등급(`*`) 또는 클러스터별 | 전부 — 관리자 메뉴, 모든 클러스터(나중에 등록한 것 포함) | `kubeast:admin` = `cluster-admin` |
 | 커스텀 | 클러스터별 | 고른 권한만(만드는 사람이 가진 권한 안에서) | `kubeast:role:<이름>` — 클러스터가 이 그룹을 바인딩하기 전엔 모든 호출이 403(`auth.impersonation.customRoles`). 화면의 권한 없음 배너와 역할 만들기 창이 이 그룹 이름을 보여 준다 |
@@ -559,7 +559,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 
 전제(없으면 해당 스펙은 실패하지 않고 사유를 남기며 건너뜀):
 
-- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus(`deploy/kind/second-cluster.yaml`)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
+- **두 번째 클러스터 `default`** — `scripts/add-kind-cluster.sh default --addons`: `kubeast` 네임스페이스는 없고 metrics-server·kube-state-metrics·node-exporter·작은 Prometheus·그 Prometheus를 읽고 또 그 Prometheus가 긁는 OpenCost(`deploy/kind/second-cluster.yaml`)가 있는 kind. `?cluster=` 없이 연 화면은 이 클러스터를 보여 주므로, 객체가 필요한 드로어 스펙은 `?cluster=self`로 고정합니다.
 - **픽스처** — `deploy/kind/fixtures.yaml`(`kind-deploy.sh`가 적용): CronJob·TLS Ingress·StatefulSet·HPA·RuntimeClass·Argo CD 어노테이션 Deployment, 이슈 스펙용 깨진 객체 2(스케줄 안 되는 Deployment, 실패한 Job), 로그를 파일로만 쓰는 `e2e-logfile-writer`(`logfiles.spec.ts`용). dev 값은 `features.prometheus.enabled`와 `features.logFiles`(`/var/log/app/*.log`, `default`)가 켜져 있습니다.
 - **AI 스펙** — 기본 모델 1개(위 Ollama `ModelConfig`).
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인·Mailpit·웹훅 수신기)과 dev 값의 싱크·`sessionRecording.enabled`.

@@ -2,8 +2,9 @@
 # (scripts/add-kind-cluster.sh --addons): metrics-server v0.9.0 and
 # kube-state-metrics v2.20.0 as published upstream (kube-system), plus a
 # one-pod Prometheus v3.15.0 and node-exporter v1.12.1 in `monitoring`; the
-# Prometheus keeps two hours in memory.
-# The multi-cluster and Prometheus specs compare this cluster with `self`.
+# Prometheus keeps two hours in memory. OpenCost 1.121.3 in `opencost` reads
+# that Prometheus and the Prometheus scrapes OpenCost back (cost.spec.ts).
+# The multi-cluster, Prometheus and cost specs compare this cluster with `self`.
 ---
 apiVersion: v1
 kind: Namespace
