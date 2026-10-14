@@ -36,6 +36,8 @@ Kubeast는 클러스터에 **로그인한 사람으로**(impersonation) 요청�
 | 로그 파일 Namespace의 `pods/exec` | 로그 파일 보기를 켤 때(§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
 | 알림 조사 신원 `kubeast:investigator` — impersonate 허용 + 읽기 전용 ClusterRole(get·list·watch, Secret·exec·프록시·쓰기 없음) | 알림 → AI 조사를 켤 때. Kubeast가 사람 대신 이 신원으로 읽기 도구를 돌린다 | `features.alertInvestigation` → `templates/impersonation-investigator.yaml`(impersonation이 꺼져 있으면 렌더 실패) |
 
+**Write = Kubernetes 기본 `edit`**: Secret 읽기·쓰기, `pods/exec`·`pods/portforward`, 모든 Service 프록시(`services/proxy`)까지 들어 있습니다(kubectl로 `edit`을 받은 사람과 같은 범위). Kubeast 화면의 셸은 Admin만 열지만 클러스터 권한으로는 할 수 있으니, 더 좁혀야 하는 사람에게는 Write 대신 커스텀 역할(`auth.impersonation.customRoles`, Namespace 범위 가능)을 부여합니다.
+
 **Kubeast가 설치된 클러스터**는 차트가 이걸 전부 만듭니다. 값을 바꾸고 `helm upgrade`하면 됩니다(이 클러스터에는 아래 스크립트를 쓰지 않습니다 — 차트가 소유한 객체에 kubectl 주석이 붙습니다).
 
 **등록한 다른 클러스터**에는 Kubeast가 RBAC을 만들지 않으므로 같은 렌더를 직접 적용합니다. 설치 값에 그 클러스터만의 값(Prometheus·OpenCost Service 이름 등, [`cluster-values.yaml`](../deploy/examples/target-cluster/cluster-values.yaml))을 겹쳐 한 번에 렌더합니다. 해당 기능을 안 쓰면 그 템플릿은 비어 있어 건너뜁니다(helm은 빈 `--show-only`에서 멈추므로 스크립트가 템플릿마다 따로 렌더합니다).
