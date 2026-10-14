@@ -15,6 +15,8 @@ import { Search, X, ChevronDown, CheckCircle, Download } from 'lucide-react'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
+import { LogSearchView } from '@/components/LogSearchView'
+import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 
 interface PodLike {
@@ -48,8 +50,11 @@ export function PodLogsTab({
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadFailed, setDownloadFailed] = useState(false)
   const logFilesAvailable = useLogFilesAvailable(pod.namespace)
+  const logSearchAvailable = useLogSearchAvailable()
   const [source, setSource] = useState<LogSource>('stdout')
   const showFiles = logFilesAvailable && source === 'files'
+  const showSearch = logSearchAvailable && source === 'search'
+  const sources: LogSource[] = ['stdout', ...(logFilesAvailable ? (['files'] as const) : []), ...(logSearchAvailable ? (['search'] as const) : [])]
 
   const logsEndRef = useRef<HTMLDivElement>(null)
   const containerDropdownRef = useRef<HTMLDivElement>(null)
@@ -61,7 +66,7 @@ export function PodLogsTab({
   // close + 새 EventSource. EventSource 가 자동 reconnect 처리하므로
   // ws 시절의 cancelled flag / detachAndClose / FileReader 분기 다 제거.
   useEffect(() => {
-    if (!selectedContainer || showFiles) {
+    if (!selectedContainer || showFiles || showSearch) {
       setLogs('')
       setIsStreamingLogs(false)
       return
@@ -107,7 +112,7 @@ export function PodLogsTab({
       es.close()
       setIsStreamingLogs(false)
     }
-  }, [pod, selectedContainer, showFiles])
+  }, [pod, selectedContainer, showFiles, showSearch])
 
   // 자동 스크롤
   useEffect(() => {
@@ -185,7 +190,7 @@ export function PodLogsTab({
 
   // 컨테이너 선택 - 커스텀 드롭다운 (컨테이너 출력·로그 파일 공용)
   const containerPicker = (
-        <div className={showFiles ? 'relative min-w-[200px]' : 'flex-1 relative'} ref={containerDropdownRef}>
+        <div className={showFiles || showSearch ? 'relative min-w-[200px]' : 'flex-1 relative'} ref={containerDropdownRef}>
           <label className="block text-xs font-semibold text-slate-400 mb-1">
             {tr('clusterView.logs.containerLabel', 'Container')}
           </label>
@@ -273,12 +278,21 @@ export function PodLogsTab({
 
   return (
     <div className="flex flex-col h-full">
-      {logFilesAvailable && (
+      {sources.length > 1 && (
         <div className="pb-3 shrink-0">
-          <LogSourceToggle value={source} onChange={setSource} />
+          <LogSourceToggle value={source} onChange={setSource} sources={sources} />
         </div>
       )}
-      {showFiles ? (
+      {showSearch ? (
+        <div className="flex-1 min-h-0">
+          <LogSearchView
+            namespace={pod.namespace}
+            pod={pod.name}
+            container={selectedContainer}
+            leading={containerPicker}
+          />
+        </div>
+      ) : showFiles ? (
         <div className="flex-1 min-h-0">
           <LogFilesView
             namespace={pod.namespace}

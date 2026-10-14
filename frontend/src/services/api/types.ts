@@ -617,6 +617,8 @@ export interface ClusterFeatures {
   optimization?: { windowHours: number }
   // Log files inside containers; namespaces empty = every namespace.
   logFiles?: { enabled: boolean; maxLines: number; namespaces: string[] }
+  // Log store search (Loki): the clusters it is configured for, and its limits.
+  logSearch?: { enabled: boolean; clusters: string[]; defaultRangeMinutes?: number; maxRangeMinutes?: number; maxLines?: number }
   // Optimization → apply without restart (pod resize subresource, server 1.35+).
   inPlaceResize?: { enabled: boolean; serverSupports: boolean }
   // Validating/Mutating admission policies and bindings: YAML apply (and the AI write tools) refused while on.
@@ -764,6 +766,39 @@ export interface LogFileContent {
   lines: number
   content: string
   truncated: boolean
+}
+
+// /api/v1/cluster/namespaces/{ns}/logsearch — lines from the log store, newest first.
+export interface LogSearchLine {
+  ts: string
+  namespace: string
+  pod: string
+  container: string
+  line: string
+}
+
+export interface LogSearchResult {
+  lines: LogSearchLine[]
+  // More lines in the range: ask again with end = oldest.
+  truncated: boolean
+  oldest?: string
+  newest?: string
+  bytes: number
+}
+
+export interface LogSearchParams {
+  namespace: string
+  q?: string
+  match?: 'contains' | 'regex'
+  ignore_case?: boolean
+  pod?: string
+  container?: string
+  workload_kind?: string
+  workload_name?: string
+  since?: string
+  start?: string
+  end?: string
+  limit?: number
 }
 
 // /api/v1/cluster/issues — the dashboard's "Check issues": pods, workloads,

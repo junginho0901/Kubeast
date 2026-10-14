@@ -851,6 +851,7 @@ features:
 
 `pods/log`는 살아 있는 파드의 지금 로그만 줍니다. 켜면(`features.logSearch.enabled`, 기본 off) 로그 저장소(Loki)에서 **재시작·삭제된 파드까지** 텍스트·기간으로 찾습니다 — Loki와 수집기는 따로 둡니다([docs/cluster-requirements.md §14](docs/cluster-requirements.md#14-로그-저장소-로그-검색)).
 
+- **화면**: Pod 드로어 Logs 칸과 클러스터 뷰 Logs 탭의 출처 전환에 "검색(기록)"(그 파드·컨테이너), Deployment·StatefulSet·DaemonSet·ReplicaSet·Job·CronJob 드로어에 "로그 검색" 섹션(그 워크로드의 파드들, 펼칠 때만 검색). 텍스트·기간(15분~최대)·정규식(`.*`)·대소문자 구분(`Aa`), 일치 부분 강조, "더 이전". 검색은 열 때 한 번과 검색 버튼에서만(검색마다 감사). 그 클러스터에 설정이 없거나 `resource.pod.read`가 없으면 보이지 않음.
 - **API**: `GET /api/v1/namespaces/{ns}/logsearch`(한 Namespace) · `GET /api/v1/cluster/logsearch`(전체). 조건 `q`(256자까지) · `match=contains|regex` · `ignore_case` · `pod` 또는 `workload_kind`+`workload_name`(Deployment·StatefulSet·DaemonSet·ReplicaSet·Job·CronJob → 그 컨트롤러가 만드는 파드 이름) · `container` · `since` 또는 `start`·`end`(RFC 3339) · `limit` · `direction`. 응답 = 최신부터 줄(`ts`·`namespace`·`pod`·`container`·`line`), `truncated`이면 `oldest`를 `end`로 다시.
 - **쿼리는 서버가 만듭니다**: 사용자는 LogQL을 쓰지 않고, 값은 전부 따옴표 안 문자열로만 들어갑니다. 클러스터 라벨 매처(`clusters`의 값)는 항상 붙어 Loki 하나를 여러 클러스터가 써도 섞이지 않습니다.
 - **권한**: `resource.pod.read`(그 클러스터) + 사용자 신원으로 `get pods/log`를 물어 허용될 때만 — 클러스터 RBAC이 정합니다. 전체 검색은 그 클러스터에 Namespace 범위 부여가 있으면 403(Namespace를 고름).

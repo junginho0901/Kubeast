@@ -17,23 +17,27 @@ const LINE_OPTIONS = [100, 500, 1000, 2000]
 // Following keeps this many lines on screen; older ones scroll away.
 const FOLLOW_KEEP_LINES = 5000
 
-export type LogSource = 'stdout' | 'files'
+export type LogSource = 'stdout' | 'files' | 'search'
 
 export function LogSourceToggle({
   value,
   onChange,
   size = 'md',
+  sources = ['stdout', 'files'],
 }: {
   value: LogSource
   onChange: (v: LogSource) => void
   size?: 'sm' | 'md'
+  sources?: LogSource[]
 }) {
   const { t } = useTranslation()
   const item = size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm'
-  const options: Array<{ v: LogSource; label: string }> = [
-    { v: 'stdout', label: t('clusterView.logFiles.sourceStdout', 'Container output') },
-    { v: 'files', label: t('clusterView.logFiles.sourceFiles', 'Log files') },
-  ]
+  const labels: Record<LogSource, string> = {
+    stdout: t('clusterView.logFiles.sourceStdout', 'Container output'),
+    files: t('clusterView.logFiles.sourceFiles', 'Log files'),
+    search: t('clusterView.logSearch.source', 'Search history'),
+  }
+  const options = sources.map((v) => ({ v, label: labels[v] }))
   return (
     <div
       role="group"

@@ -2346,6 +2346,31 @@
         "generic": "파일을 읽지 못했습니다: {{detail}}"
       }
     },
+    "logSearch": {
+      "source": "검색(기록)",
+      "minutes": "{{count}}분",
+      "hours": "{{count}}시간",
+      "placeholder": "줄에 든 텍스트",
+      "regexPlaceholder": "정규식(RE2)",
+      "textLabel": "검색 텍스트",
+      "regex": "정규식",
+      "matchCase": "대소문자 구분",
+      "search": "검색",
+      "summary": "최근 {{range}} · {{count}}줄 · {{bytes}} 읽음.",
+      "notice": "로그 저장소의 줄입니다(없어진 파드 포함). 검색마다 감사 로그에 남습니다.",
+      "searching": "검색 중...",
+      "noLines": "이 기간에 줄이 없습니다.",
+      "older": "더 이전",
+      "hide": "접기",
+      "open": "로그 검색",
+      "workloadHint": "이 {{kind}}의 파드 로그를 로그 저장소에서 찾습니다(없어진 파드 포함).",
+      "errors": {
+        "tooMany": "1분에 검색이 너무 많습니다. 잠시 뒤 다시 하세요.",
+        "forbidden": "허용되지 않음: {{detail}}",
+        "timeout": "로그 저장소가 제때 답하지 않았습니다. 기간이나 조건을 좁히세요.",
+        "generic": "검색 실패: {{detail}}"
+      }
+    },
     "title": "Cluster View",
     "subtitle": "Node별 Pod 배치를 확인합니다.",
     "searchPlaceholder": "Pod 이름 검색...",
@@ -4512,6 +4537,7 @@
     "section:Claim Spec - Requests": "Claim 스펙 - 요청",
     "section:Conditions": "조건",
     "section:Policy violations": "정책 위반",
+    "section:Log search": "로그 검색",
     "section:Config": "설정",
     "section:Container Policies": "컨테이너 정책",
     "section:Disruption Budget": "중단 예산",

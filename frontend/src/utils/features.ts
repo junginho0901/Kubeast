@@ -18,6 +18,11 @@ export function policyReportsEnabled(features?: ClusterFeatures | null): boolean
   return features?.policyReports?.enabled === true
 }
 
+// Chart features.logSearch for this cluster: the log store keeps its logs. Unknown counts as off, as for cost.
+export function logSearchEnabledFor(features: ClusterFeatures | null | undefined, clusterId: string): boolean {
+  return features?.logSearch?.enabled === true && !!clusterId && (features.logSearch.clusters ?? []).includes(clusterId)
+}
+
 // Chart features.alertInvestigation.enabled (with AI on): Admin → Investigations.
 // Unknown counts as off, as for cost.
 export function alertInvestigationEnabled(features?: ClusterFeatures | null): boolean {

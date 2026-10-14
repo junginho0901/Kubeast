@@ -19,6 +19,8 @@ import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
 import ContainerResizeModal from './pod-info/ContainerResizeModal'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
+import { LogSearchView } from '@/components/LogSearchView'
+import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
 import PolicyViolations from './PolicyViolations'
 
@@ -39,8 +41,11 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [showLogs, setShowLogs] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
   const logFilesAvailable = useLogFilesAvailable(namespace)
+  const logSearchAvailable = useLogSearchAvailable()
   const [logSource, setLogSource] = useState<LogSource>('stdout')
   const showLogFiles = logFilesAvailable && logSource === 'files'
+  const showLogSearch = logSearchAvailable && logSource === 'search'
+  const logSources: LogSource[] = ['stdout', ...(logFilesAvailable ? (['files'] as const) : []), ...(logSearchAvailable ? (['search'] as const) : [])]
   const [execTarget, setExecTarget] = useState<string | null>(null)
   const [resizeTarget, setResizeTarget] = useState<{ container: string; requests?: { cpu?: string; memory?: string } } | null>(null)
   const { data: features } = useClusterFeatures()
@@ -797,8 +802,25 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       <div ref={logSectionRef}>
       <InfoSection title="Logs">
         <div className="space-y-3">
-          {logFilesAvailable && <LogSourceToggle size="sm" value={logSource} onChange={setLogSource} />}
-          {showLogFiles ? (
+          {logSources.length > 1 && <LogSourceToggle size="sm" value={logSource} onChange={setLogSource} sources={logSources} />}
+          {showLogSearch ? (
+            <LogSearchView
+              size="sm"
+              namespace={namespace}
+              pod={name}
+              container={logContainer}
+              leading={
+                <CustomDropdown
+                  size="sm"
+                  className="w-40"
+                  testId="pod-logs-container"
+                  value={logContainer}
+                  onChange={setLogContainer}
+                  options={containerNames.map((n: string) => ({ value: n, label: n }))}
+                />
+              }
+            />
+          ) : showLogFiles ? (
             <LogFilesView
               size="sm"
               namespace={namespace}

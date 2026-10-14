@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiEnabled, alertInvestigationEnabled, costEnabled, policyReportsEnabled } from './features'
+import { aiEnabled, alertInvestigationEnabled, costEnabled, logSearchEnabledFor, policyReportsEnabled } from './features'
 
 describe('aiEnabled', () => {
   it('is off only when the server says so', () => {
@@ -36,3 +36,16 @@ describe('alertInvestigationEnabled', () => {
     expect(alertInvestigationEnabled(undefined)).toBe(false)
   })
 })
+
+describe('logSearchEnabledFor', () => {
+  it('is on only for a cluster the log store is configured for', () => {
+    const on = { prometheus: { enabled: false }, logSearch: { enabled: true, clusters: ['self', 'alpha'] } }
+    expect(logSearchEnabledFor(on, 'alpha')).toBe(true)
+    expect(logSearchEnabledFor(on, 'prod')).toBe(false)
+    expect(logSearchEnabledFor(on, '')).toBe(false)
+    expect(logSearchEnabledFor({ prometheus: { enabled: false }, logSearch: { enabled: false, clusters: ['self'] } }, 'self')).toBe(false)
+    expect(logSearchEnabledFor({ prometheus: { enabled: false } }, 'self')).toBe(false)
+    expect(logSearchEnabledFor(undefined, 'self')).toBe(false)
+  })
+})
+

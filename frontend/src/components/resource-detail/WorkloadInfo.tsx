@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
@@ -7,6 +8,8 @@ import { useWorkloadData } from './workload-info/useWorkloadData'
 import WorkloadReplicasSection from './workload-info/WorkloadReplicasSection'
 import WorkloadStrategySection from './workload-info/WorkloadStrategySection'
 import PolicyViolations from './PolicyViolations'
+import { LogSearchView } from '@/components/LogSearchView'
+import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import WorkloadKindInfo from './workload-info/WorkloadKindInfo'
 import WorkloadOwnedResources from './workload-info/WorkloadOwnedResources'
 import WorkloadContainers from './workload-info/WorkloadContainers'
@@ -22,9 +25,15 @@ interface Props {
   writesBlocked?: boolean
 }
 
+// Kinds whose pods the log search can name from the workload (the controller's pod name pattern).
+const LOG_SEARCH_KINDS = ['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob']
+
 export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlocked = false }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
+  const logSearchAvailable = useLogSearchAvailable()
+  // Each search is an audited read: the section searches once opened, not when the drawer opens.
+  const [logSearchOpen, setLogSearchOpen] = useState(false)
 
   const data = useWorkloadData({ name, namespace, kind, rawJson })
 
@@ -267,6 +276,31 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       )}
 
       <PolicyViolations kind={kind} namespace={namespace ?? ''} name={name} />
+
+      {logSearchAvailable && namespace && LOG_SEARCH_KINDS.includes(kind) && (
+        <InfoSection
+          title="Log search"
+          actions={
+            <button
+              type="button"
+              data-testid="workload-logsearch-toggle"
+              aria-expanded={logSearchOpen}
+              onClick={() => setLogSearchOpen((o) => !o)}
+              className="text-xs text-primary-400 hover:text-primary-300 whitespace-nowrap"
+            >
+              {logSearchOpen ? tr('clusterView.logSearch.hide', 'Hide') : tr('clusterView.logSearch.open', 'Search logs')}
+            </button>
+          }
+        >
+          {logSearchOpen ? (
+            <LogSearchView size="sm" namespace={namespace} workload={{ kind, name }} />
+          ) : (
+            <p className="text-xs text-slate-500">
+              {tr('clusterView.logSearch.workloadHint', "Search this {{kind}}'s pods in the log store, including pods that are gone.", { kind })}
+            </p>
+          )}
+        </InfoSection>
+      )}
 
       {Object.keys(labels).length > 0 && (
         <InfoSection title="Labels">

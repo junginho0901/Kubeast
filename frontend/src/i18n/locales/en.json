@@ -2331,6 +2331,31 @@
         "generic": "Could not read the file: {{detail}}"
       }
     },
+    "logSearch": {
+      "source": "Search history",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "placeholder": "Text in the line",
+      "regexPlaceholder": "Regular expression (RE2)",
+      "textLabel": "Search text",
+      "regex": "Regular expression",
+      "matchCase": "Match case",
+      "search": "Search",
+      "summary": "{{count}} lines from the last {{range}} · {{bytes}} scanned.",
+      "notice": "Lines come from the log store, including pods that are gone. Each search is recorded in the audit log.",
+      "searching": "Searching...",
+      "noLines": "No lines in this range.",
+      "older": "Load older",
+      "hide": "Hide",
+      "open": "Search logs",
+      "workloadHint": "Search this {{kind}}'s pods in the log store, including pods that are gone.",
+      "errors": {
+        "tooMany": "Too many searches in a minute. Try again shortly.",
+        "forbidden": "Not allowed: {{detail}}",
+        "timeout": "The log store did not answer in time. Narrow the range or the filters.",
+        "generic": "Search failed: {{detail}}"
+      }
+    },
     "title": "Cluster View",
     "subtitle": "Review pod placement across nodes",
     "searchPlaceholder": "Search pod name...",
