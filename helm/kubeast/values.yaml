@@ -92,6 +92,25 @@ auth:
     defaultRole: Pending
     syncRoles: true
     clusterGroupPrefix: "kubeast:cluster:"
+    # "<group>=<cluster-id>:<Read|Write|Admin>" for groups whose name cannot
+    # follow clusterGroupPrefix (a Google group email, an Entra group ID).
+    clusterGroupMapping: []
+    # Google's ID token has no groups: with this on, the sign-in also reads the
+    # user's Google Workspace groups (Admin SDK Directory API) and the mappings
+    # above apply to the ones they name. The service account needs the
+    # Workspace admin role Groups Reader (no domain-wide delegation).
+    # credentialsSecret holds credentials.json: an external_account file
+    # (Workload Identity Federation — no key; with a federation from this
+    # cluster set tokenAudience to its provider, the token lands at
+    # /var/run/secrets/google/token) or a service_account key. domain = the
+    # Workspace domain (empty = the user's email domain). A failed lookup keeps
+    # the user's current role. GET /api/v1/auth/admin/oidc/groups?email=
+    # previews the groups and roles for one user.
+    googleGroups:
+      enabled: false
+      credentialsSecret: ""
+      domain: ""
+      tokenAudience: ""
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
   # so the cluster's RBAC decides and its audit log names the person. The

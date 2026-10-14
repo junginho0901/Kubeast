@@ -230,3 +230,18 @@ annotations:
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+"true" when auth-service reads Google Workspace groups at sign-in (auth.oidc.googleGroups).
+*/}}
+{{- define "kubeast.googleGroups" -}}
+{{- with .Values.auth.oidc -}}
+{{- if and .enabled .googleGroups.enabled -}}
+{{- if not .googleGroups.credentialsSecret -}}
+{{- fail "auth.oidc.googleGroups needs credentialsSecret: a Secret with credentials.json (external_account or service_account)" -}}
+{{- end -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end }}
+

@@ -52,6 +52,12 @@ data:
   OIDC_DEFAULT_ROLE: {{ .defaultRole | quote }}
   OIDC_SYNC_ROLES: {{ .syncRoles | quote }}
   OIDC_CLUSTER_GROUP_PREFIX: {{ .clusterGroupPrefix | quote }}
+  OIDC_CLUSTER_GROUP_MAPPING: {{ join "," .clusterGroupMapping | quote }}
+  {{- if .googleGroups.enabled }}
+  OIDC_GOOGLE_GROUPS_ENABLED: "true"
+  OIDC_GOOGLE_GROUPS_CREDENTIALS: /etc/kubeast/google/credentials.json
+  OIDC_GOOGLE_GROUPS_DOMAIN: {{ .googleGroups.domain | quote }}
+  {{- end }}
   {{- end }}
   {{- end }}
   NODE_SHELL_ENABLED: {{ .Values.nodeShell.enabled | quote }}

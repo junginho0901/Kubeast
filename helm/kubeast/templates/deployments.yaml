@@ -64,6 +64,16 @@ spec:
               mountPath: /var/lib/kubeast-audit
             {{- end }}
             {{- end }}
+            {{- if include "kubeast.googleGroups" . }}
+            - name: google-groups
+              mountPath: /etc/kubeast/google
+              readOnly: true
+            {{- if .Values.auth.oidc.googleGroups.tokenAudience }}
+            - name: google-token
+              mountPath: /var/run/secrets/google
+              readOnly: true
+            {{- end }}
+            {{- end }}
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
           readinessProbe:
             httpGet:
@@ -82,6 +92,24 @@ spec:
           secret:
             secretName: {{ .Values.auth.signingKey.existingSecret | default "kubeast-auth-keys" }}
             defaultMode: 0440
+        {{- if include "kubeast.googleGroups" . }}
+        - name: google-groups
+          secret:
+            secretName: {{ .Values.auth.oidc.googleGroups.credentialsSecret }}
+            defaultMode: 0440
+            items:
+              - key: credentials.json
+                path: credentials.json
+        {{- with .Values.auth.oidc.googleGroups.tokenAudience }}
+        - name: google-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: {{ . | quote }}
+                  expirationSeconds: 3600
+                  path: token
+        {{- end }}
+        {{- end }}
         {{- if .Values.audit.sinks }}
         - name: audit-sinks
           configMap:

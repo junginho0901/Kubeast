@@ -19,8 +19,10 @@ type AuthHandler struct {
 	cfg        config.Config
 	auditStore audit.Store
 	oidc       *oidcClient
-	dormant    *dormant.Sweeper // "sweep now"; nil until SetDormantSweeper
-	chain      *AuditChain      // audit log integrity; nil when off or until SetAuditChain
+	// googleGroups adds Google Workspace groups at OIDC sign-in; nil when off.
+	googleGroups groupLookup
+	dormant      *dormant.Sweeper // "sweep now"; nil until SetDormantSweeper
+	chain        *AuditChain      // audit log integrity; nil when off or until SetAuditChain
 	// dummyHash is verified against when the login email does not exist, so
 	// an unknown address costs the same as a wrong password (no timing
 	// enumeration). Built once with the configured iteration count.

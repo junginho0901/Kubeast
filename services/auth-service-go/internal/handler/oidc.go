@@ -395,6 +395,7 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		h.oidcFail(w, r, "oidc_domain", claims.Email, errors.New("email domain not allowed"))
 		return
 	}
+	groupsLookup := h.addGoogleGroups(r.Context(), &claims)
 
 	user, err := h.provisionOIDCUser(r, claims)
 	if err != nil {
@@ -432,8 +433,11 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAuthCookie(w, r, token)
-	h.writeAuditLog(r, "user.login.success", &user.ID, &user.Email, &user.ID, &user.Email, nil,
-		jsonRaw(map[string]any{"method": "oidc", "issuer": h.cfg.OIDC.IssuerURL}))
+	loginAfter := map[string]any{"method": "oidc", "issuer": h.cfg.OIDC.IssuerURL}
+	if groupsLookup != "" {
+		loginAfter["groups_lookup"] = groupsLookup
+	}
+	h.writeAuditLog(r, "user.login.success", &user.ID, &user.Email, &user.ID, &user.Email, nil, jsonRaw(loginAfter))
 	h.touchLastLogin(r, user)
 	http.Redirect(w, r, st.Next, http.StatusFound)
 }
@@ -500,7 +504,7 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	}
 
 	if h.cfg.OIDC.SyncRoles && claims.HasGroups {
-		if err := h.syncClusterGrants(ctx, user.ID, clusterGrants(claims.Groups, h.cfg.OIDC.ClusterGroupPrefix)); err != nil {
+		if err := h.syncClusterGrants(ctx, user.ID, h.clusterGrantsOf(claims.Groups)); err != nil {
 			return nil, err
 		}
 	}

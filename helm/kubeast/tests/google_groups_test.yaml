@@ -1,0 +1,84 @@
+suite: OIDC Google group lookup — env, auth-service credential volume, projected token, guard
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - secret.yaml
+set:
+  auth.oidc.enabled: true
+  auth.oidc.issuerUrl: https://accounts.google.com
+  auth.oidc.clientId: client
+  auth.oidc.clientSecret: secret
+  auth.oidc.redirectUrl: http://localhost:30080/api/v1/auth/oidc/callback
+tests:
+  - it: is off by default — no env, no volumes; the cluster group mapping still renders
+    set:
+      auth.oidc.clusterGroupMapping: ["team@example.com=self:Write", "ops@example.com=prod:Admin"]
+    asserts:
+      - notExists:
+          path: data.OIDC_GOOGLE_GROUPS_ENABLED
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.OIDC_CLUSTER_GROUP_MAPPING
+          value: team@example.com=self:Write,ops@example.com=prod:Admin
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: google-groups}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+  - it: mounts the credential file and the projected token for a federation from this cluster
+    set:
+      auth.oidc.googleGroups.enabled: true
+      auth.oidc.googleGroups.credentialsSecret: kubeast-google-groups
+      auth.oidc.googleGroups.domain: jobplanet.com
+      auth.oidc.googleGroups.tokenAudience: //iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/p/providers/k
+    asserts:
+      - equal:
+          path: data.OIDC_GOOGLE_GROUPS_CREDENTIALS
+          value: /etc/kubeast/google/credentials.json
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.OIDC_GOOGLE_GROUPS_DOMAIN
+          value: jobplanet.com
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: google-groups
+            secret: {secretName: kubeast-google-groups, defaultMode: 0440, items: [{key: credentials.json, path: credentials.json}]}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: google-token
+            projected: {sources: [{serviceAccountToken: {audience: //iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/p/providers/k, expirationSeconds: 3600, path: token}}]}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: google-token, mountPath: /var/run/secrets/google, readOnly: true}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+  - it: a key file needs no projected token
+    set:
+      auth.oidc.googleGroups.enabled: true
+      auth.oidc.googleGroups.credentialsSecret: kubeast-google-groups
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: google-token, mountPath: /var/run/secrets/google, readOnly: true}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+  - it: fails without the credential Secret
+    set:
+      auth.oidc.googleGroups.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "auth.oidc.googleGroups needs credentialsSecret: a Secret with credentials.json (external_account or service_account)"
+        template: deployments.yaml

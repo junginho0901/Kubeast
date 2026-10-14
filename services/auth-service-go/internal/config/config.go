@@ -154,7 +154,24 @@ type OIDCConfig struct {
 	// ClusterGroupPrefix: groups "<prefix><cluster-id>:<Read|Write|Admin>" grant
 	// a per-cluster role.
 	ClusterGroupPrefix string
-	DisplayName        string
+	// ClusterGroupMapping grants a per-cluster role to a group whose name cannot
+	// follow ClusterGroupPrefix (a Google group email, an Entra group ID):
+	// group → "<cluster-id>:<Read|Write|Admin>".
+	ClusterGroupMapping map[string]string
+	DisplayName         string
+	GoogleGroups        GoogleGroupsConfig
+}
+
+// GoogleGroupsConfig adds the signed-in user's Google Workspace groups (Admin
+// SDK Directory API) to the token's groups — Google's ID token carries none.
+// CredentialsFile is a Google credential file: external_account (Workload
+// Identity Federation, no key) or a service_account key; the service account
+// needs the Workspace admin role Groups Reader. Domain is the Workspace domain
+// to look in (empty = the user's email domain).
+type GoogleGroupsConfig struct {
+	Enabled         bool
+	CredentialsFile string
+	Domain          string
 }
 
 // AccessRequestsConfig bounds what a user may request. Roles lists the role
@@ -247,21 +264,27 @@ func Load() Config {
 	return Config{
 		PasswordLogin: pkgconfig.GetEnv("PASSWORD_LOGIN", "on"),
 		OIDC: OIDCConfig{
-			Enabled:            pkgconfig.GetEnvBool("OIDC_ENABLED", false),
-			IssuerURL:          pkgconfig.GetEnv("OIDC_ISSUER_URL", ""),
-			ClientID:           pkgconfig.GetEnv("OIDC_CLIENT_ID", ""),
-			ClientSecret:       pkgconfig.GetEnv("OIDC_CLIENT_SECRET", ""),
-			RedirectURL:        pkgconfig.GetEnv("OIDC_REDIRECT_URL", ""),
-			Scopes:             pkgconfig.GetEnvList("OIDC_SCOPES", "openid,email,profile"),
-			EmailClaim:         pkgconfig.GetEnv("OIDC_EMAIL_CLAIM", "email"),
-			NameClaim:          pkgconfig.GetEnv("OIDC_NAME_CLAIM", "name"),
-			GroupsClaim:        pkgconfig.GetEnv("OIDC_GROUPS_CLAIM", "groups"),
-			AllowedDomains:     pkgconfig.GetEnvList("OIDC_ALLOWED_DOMAINS", ""),
-			RoleMapping:        parseRoleMapping(pkgconfig.GetEnv("OIDC_ROLE_MAPPING", "")),
-			DefaultRole:        pkgconfig.GetEnv("OIDC_DEFAULT_ROLE", "Pending"),
-			SyncRoles:          pkgconfig.GetEnvBool("OIDC_SYNC_ROLES", true),
-			ClusterGroupPrefix: pkgconfig.GetEnv("OIDC_CLUSTER_GROUP_PREFIX", "kubeast:cluster:"),
-			DisplayName:        pkgconfig.GetEnv("OIDC_DISPLAY_NAME", "SSO"),
+			Enabled:             pkgconfig.GetEnvBool("OIDC_ENABLED", false),
+			IssuerURL:           pkgconfig.GetEnv("OIDC_ISSUER_URL", ""),
+			ClientID:            pkgconfig.GetEnv("OIDC_CLIENT_ID", ""),
+			ClientSecret:        pkgconfig.GetEnv("OIDC_CLIENT_SECRET", ""),
+			RedirectURL:         pkgconfig.GetEnv("OIDC_REDIRECT_URL", ""),
+			Scopes:              pkgconfig.GetEnvList("OIDC_SCOPES", "openid,email,profile"),
+			EmailClaim:          pkgconfig.GetEnv("OIDC_EMAIL_CLAIM", "email"),
+			NameClaim:           pkgconfig.GetEnv("OIDC_NAME_CLAIM", "name"),
+			GroupsClaim:         pkgconfig.GetEnv("OIDC_GROUPS_CLAIM", "groups"),
+			AllowedDomains:      pkgconfig.GetEnvList("OIDC_ALLOWED_DOMAINS", ""),
+			RoleMapping:         parseRoleMapping(pkgconfig.GetEnv("OIDC_ROLE_MAPPING", "")),
+			DefaultRole:         pkgconfig.GetEnv("OIDC_DEFAULT_ROLE", "Pending"),
+			SyncRoles:           pkgconfig.GetEnvBool("OIDC_SYNC_ROLES", true),
+			ClusterGroupPrefix:  pkgconfig.GetEnv("OIDC_CLUSTER_GROUP_PREFIX", "kubeast:cluster:"),
+			ClusterGroupMapping: parseRoleMapping(pkgconfig.GetEnv("OIDC_CLUSTER_GROUP_MAPPING", "")),
+			DisplayName:         pkgconfig.GetEnv("OIDC_DISPLAY_NAME", "SSO"),
+			GoogleGroups: GoogleGroupsConfig{
+				Enabled:         pkgconfig.GetEnvBool("OIDC_GOOGLE_GROUPS_ENABLED", false),
+				CredentialsFile: pkgconfig.GetEnv("OIDC_GOOGLE_GROUPS_CREDENTIALS", ""),
+				Domain:          pkgconfig.GetEnv("OIDC_GOOGLE_GROUPS_DOMAIN", ""),
+			},
 		},
 		AccessRequests: AccessRequestsConfig{
 			Enabled:  pkgconfig.GetEnvBool("ACCESS_REQUESTS_ENABLED", false),

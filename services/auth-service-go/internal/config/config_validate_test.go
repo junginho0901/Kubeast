@@ -49,4 +49,22 @@ func TestValidate(t *testing.T) {
 	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "OIDC_DEFAULT_ROLE") {
 		t.Fatalf("global Read default must be rejected: %v", err)
 	}
+
+	bad = oidcOK()
+	bad.OIDC.ClusterGroupMapping = map[string]string{"team@example.com": "Write"}
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "<cluster-id>:<role>") {
+		t.Fatalf("a cluster group mapping without a cluster must be rejected: %v", err)
+	}
+
+	bad = oidcOK()
+	bad.OIDC.GoogleGroups = GoogleGroupsConfig{Enabled: true}
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "OIDC_GOOGLE_GROUPS_CREDENTIALS") {
+		t.Fatalf("the Google group lookup needs a credential file: %v", err)
+	}
+	good := oidcOK()
+	good.OIDC.ClusterGroupMapping = map[string]string{"team@example.com": "self:Write"}
+	good.OIDC.GoogleGroups = GoogleGroupsConfig{Enabled: true, CredentialsFile: "/etc/kubeast/google/credentials.json"}
+	if err := good.Validate(); err != nil {
+		t.Fatalf("valid Google group settings rejected: %v", err)
+	}
 }

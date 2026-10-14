@@ -79,6 +79,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서. 코드가 기준이�
 | `user.apikey.exchange` | API 키를 액세스 토큰으로 교환(`POST /auth/token`). 성공·실패(모르는/폐기/만료 키, 소유자 없음·Pending) 모두 1행; actor = 키 소유자(키를 못 찾으면 actor 없음, `target_id` = 제시된 접두). 성공 `after`에 `akid`(키 id)와 토큰이 받은 `clusters` |
 | `admin.apikey.delete` | 관리자(`admin.users.update`)가 남의 키를 폐기. target = 키(id), `target_email` = 소유자 |
 | `admin.users.create` / `.read` / `.update` / `.delete` | 관리자 사용자 관리 |
+| `admin.oidc.groups.read` | 관리자(`admin.users.read`)가 한 사용자의 Google Workspace 그룹 조회 결과와 매핑을 미리 봄(`GET /api/v1/auth/admin/oidc/groups?email=`, `auth.oidc.googleGroups`). target = 그 이메일, `after` = `{mapped_groups, other_groups, role, cluster_grants}`(개수와 역할만 — 그룹 이름은 남기지 않음), 조회 실패면 result failure |
 | `admin.roles.create` / `.update` / `.delete` | 역할 생성·수정·삭제. `before`/`after` = `{name, description, permissions}` — 권한 목록 변경이 그대로 남는다 |
 | `admin.organizations.create` / `.delete` | 조직(팀) 생성·삭제. `after`/`before` = `{type, name}` |
 | `admin.cluster.register` / `.update` / `.delete` / `.test` | 클러스터 등록·수정·삭제·연결 테스트. `.update`의 `after`에는 외부 Prometheus 소스(`prometheus_url`·`prometheus_cluster_label`·`prometheus_auth`(있음/없음)·`prometheus_auth_change: set|cleared`)가 들어가고 인증 헤더 값은 Secret `cluster-prometheus-<id>`에만 있어 기록되지 않는다. API 서버 주소를 비워 등록하면 연결 확인이 본 주소가 들어가고, 주소가 빈 클러스터는 연결 테스트가 채움(`.test`의 `after.server`) |

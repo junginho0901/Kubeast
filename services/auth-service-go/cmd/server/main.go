@@ -23,6 +23,7 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditsink"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/dormant"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/googlegroups"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
@@ -247,6 +248,15 @@ func main() {
 	authHandler := handler.NewAuthHandler(repo, jwtMgr, cfg, auditStore)
 	authHandler.SetDormantSweeper(&dormantSweeper)
 	authHandler.SetAuditChain(auditChain)
+	if gg := cfg.OIDC.GoogleGroups; cfg.OIDC.Enabled && gg.Enabled {
+		lookup, err := googlegroups.New(gg.CredentialsFile, gg.Domain)
+		if err != nil {
+			slog.Error("google group lookup", "error", err)
+			os.Exit(1)
+		}
+		authHandler.SetGoogleGroups(lookup)
+		slog.Info("google group lookup on", "domain", gg.Domain)
+	}
 	roleHandler := handler.NewRoleHandler(repo, auditStore)
 	setupHandler := handler.NewSetupHandler(cfg, registry, secretStore, auditStore)
 	clustersHandler := handler.NewClustersHandler(registry, secretStore, auditStore, cfg)
@@ -353,6 +363,7 @@ func main() {
 			r.Patch("/admin/users/bulk-role", authHandler.AdminBulkUpdateRole)
 			r.Post("/admin/users", authHandler.AdminCreateUser)
 			r.Get("/admin/users", authHandler.AdminListUsers)
+			r.Get("/admin/oidc/groups", authHandler.AdminOIDCGroups)
 			r.Patch("/admin/users/{user_id}", authHandler.AdminUpdateUser)
 			r.Post("/admin/users/{user_id}/reset-password", authHandler.AdminResetPassword)
 			r.Delete("/admin/users/{user_id}", authHandler.AdminDeleteUser)

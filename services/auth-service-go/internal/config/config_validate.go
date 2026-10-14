@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Validate rejects settings the service would otherwise mishandle silently.
 // Called once at startup; an error is fatal.
@@ -53,6 +56,14 @@ func (c Config) Validate() error {
 	}
 	if isClusterOnlyRole(c.OIDC.DefaultRole) {
 		return fmt.Errorf("OIDC_DEFAULT_ROLE %s: Read/Write are per-cluster roles; use Pending or Member", c.OIDC.DefaultRole)
+	}
+	for group, grant := range c.OIDC.ClusterGroupMapping {
+		if id, role, ok := strings.Cut(grant, ":"); !ok || id == "" || role == "" {
+			return fmt.Errorf("OIDC_CLUSTER_GROUP_MAPPING %s=%s: want <group>=<cluster-id>:<role>", group, grant)
+		}
+	}
+	if c.OIDC.GoogleGroups.Enabled && c.OIDC.GoogleGroups.CredentialsFile == "" {
+		return fmt.Errorf("OIDC_GOOGLE_GROUPS_CREDENTIALS is required when OIDC_GOOGLE_GROUPS_ENABLED=true")
 	}
 	return nil
 }
