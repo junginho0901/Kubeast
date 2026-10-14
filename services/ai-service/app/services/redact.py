@@ -8,6 +8,9 @@ floating widget's page snapshot). Keep the two rule lists in sync.
 Secret objects are handled unconditionally: a document with ``kind: Secret``
 loses every value under data/stringData and its last-applied annotation,
 whether redaction is enabled or not.
+
+Beyond the Go list, the provider_key rule also masks the model API keys this
+process uses (``remember_secret``), whatever their shape.
 """
 from __future__ import annotations
 
@@ -106,6 +109,29 @@ _AUTHORIZATION = re.compile(r"\b(Bearer|Basic)\s+([A-Za-z0-9._~+/=\-]{16,})", re
 _JWT = re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b")
 _AWS_ACCESS_KEY = re.compile(r"\b(AKIA|ASIA)[0-9A-Z]{16}\b")
 _AWS_SECRET_VALUE = re.compile(r'(aws_secret_access_key\s*[:=]\s*"?)([A-Za-z0-9/+=]{40})', re.I)
+# API keys by their published prefixes (the gitleaks rule set), with looser lengths since an error message may cut a
+# key short. A bare sk- run counts only with an upper-case letter and a digit, which a Kubernetes name never has.
+_PROVIDER_KEY = re.compile(
+    r"\b(?:sk-[A-Za-z0-9_\-]{20,}|AIza[A-Za-z0-9_\-]{35}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}"
+    r"|xox[abposr]-[A-Za-z0-9\-]{10,}|hf_[A-Za-z0-9]{30,})"
+)
+_UPPER_AND_DIGIT = re.compile(r"(?=.*[A-Z])(?=.*[0-9])")
+
+# Model API keys this process uses, masked by value (a key with no published shape: Azure, a gateway's own).
+_REMEMBERED: set = set()
+
+
+def remember_secret(value: Optional[str]) -> None:
+    """Mask this credential wherever text repeats it. Values under 12 characters are placeholders ("ollama")."""
+    if value and len(value) >= 12:
+        _REMEMBERED.add(value)
+
+
+def _provider_key(m: re.Match) -> str:
+    k = m.group(0)
+    if k.startswith("sk-") and not _UPPER_AND_DIGIT.match(k):
+        return k
+    return "<REDACTED:api_key>"
 
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
 _KR_PHONE = re.compile(r"\b01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}\b")
@@ -244,6 +270,12 @@ def redact_text(text: Optional[str], opts: Optional[Options] = None) -> Tuple[st
     if o.on("aws_key"):
         text = _sub_count(_AWS_ACCESS_KEY, text, lambda m: "<REDACTED:aws_access_key>", stats, "aws_key")
         text = _sub_count(_AWS_SECRET_VALUE, text, lambda m: m.group(1) + "<REDACTED:aws_secret_key>", stats, "aws_key")
+    if o.on("provider_key"):
+        text = _sub_count(_PROVIDER_KEY, text, _provider_key, stats, "provider_key")
+        for value in sorted(_REMEMBERED, key=len, reverse=True):
+            if value in text:
+                stats.add("provider_key", text.count(value))
+                text = text.replace(value, "<REDACTED:api_key>")
     if o.on("key_name"):
         def _pair(m: re.Match) -> str:
             key, value = m.group(2), m.group(4)

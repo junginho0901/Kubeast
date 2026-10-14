@@ -312,12 +312,15 @@ ai:
   writeApproval: true
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
-  # JWTs, credentials in URLs, Authorization values) in tool results, log
+  # JWTs, credentials in URLs, Authorization values, API keys with a known
+  # prefix such as sk-/sk-ant-/AIza/ghp_, and the model keys ai-service uses) in tool results, log
   # analysis, resource explanations and the floating widget's page snapshot.
   # A Secret's data is always stripped regardless of this switch. The screen
   # is not affected. pii adds e-mail / phone / resident-registration / card
   # number masking; disable lists rule names to skip (key_name, private_key,
-  # url_credentials, authorization, jwt, aws_key, email, phone, rrn, card).
+  # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
+  # rrn, card). Error messages shown on screen or written to the audit log are
+  # masked with every credential rule, whatever these settings.
   redaction:
     enabled: true
     pii: false

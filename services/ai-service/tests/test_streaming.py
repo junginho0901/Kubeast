@@ -93,6 +93,21 @@ async def test_observations_failure_yields_error_and_done():
 
 
 @pytest.mark.asyncio
+async def test_error_event_masks_a_provider_key():
+    """A provider error that repeats the key reaches the browser masked."""
+    key = "sk-" + "proj-" + ("aB3dE6" * 10)
+    service = _make_service()
+    service._build_optimization_observations = AsyncMock(
+        side_effect=RuntimeError(f"Error code: 401 - Incorrect API key provided: {key}")
+    )
+
+    events = [chunk async for chunk in suggest_optimization_stream(service, "default")]
+    payload = json.loads(events[0][len("data: "):].rstrip("\n"))
+    assert key not in events[0]
+    assert "Incorrect API key provided: <REDACTED:api_key>" in payload.get("error", "")
+
+
+@pytest.mark.asyncio
 async def test_happy_path_yields_observed_then_answer_then_meta_then_done():
     """정상 흐름: observed → answer chunks → meta → (usage if available) → DONE."""
     service = _make_service()

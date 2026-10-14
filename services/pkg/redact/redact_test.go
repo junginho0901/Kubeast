@@ -270,3 +270,36 @@ func TestFromEnv(t *testing.T) {
 		t.Errorf("defaults: %+v", o)
 	}
 }
+
+func TestProviderKeys(t *testing.T) {
+	// Built from pieces so the test file holds no key-shaped literal.
+	r := func(n int) string { return strings.Repeat("aB3dE6", n)[:n] }
+	keys := []string{
+		"sk-" + "proj-" + r(60),
+		"sk-" + "ant-api03-" + r(60),
+		"sk-" + r(48),
+		"AIza" + r(35),
+		"gh" + "p_" + r(36),
+		"github" + "_pat_" + r(40),
+		"xox" + "b-" + "1234567890-" + r(20),
+		"hf" + "_" + r(34),
+	}
+	for _, k := range keys {
+		in := "401 - {'error': {'message': 'Incorrect API key provided: " + k + ". You can find your API key at ...'}}"
+		out, st := Text(in, on())
+		if strings.Contains(out, k) || !strings.Contains(out, "<REDACTED:api_key>") || st.Kinds["provider_key"] != 1 {
+			t.Errorf("%s… not masked: %s (%+v)", k[:8], out, st)
+		}
+	}
+	// lower-case sk- names (a Deployment, a namespace) and short or placeholder values stay
+	for _, kept := range []string{"sk-telecom-production-application-backend", "task-runner-0123456789abcdefghij", "sk-1234", "api_key=ollama"} {
+		out, _ := Text("deploy "+kept+" ready", on())
+		if !strings.Contains(out, kept) {
+			t.Errorf("masked a non-key %q: %s", kept, out)
+		}
+	}
+	off := Options{Enabled: true, Disabled: map[string]bool{"provider_key": true}}
+	if out, _ := Text("key "+keys[0], off); !strings.Contains(out, keys[0]) {
+		t.Errorf("REDACTION_DISABLE=provider_key still masked: %s", out)
+	}
+}

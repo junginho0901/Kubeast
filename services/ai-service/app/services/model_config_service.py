@@ -15,6 +15,7 @@ import asyncio
 from app.config import settings
 from app.database import get_db_service, ModelConfig
 from app.services import model_config_policy
+from app.services.redact import remember_secret
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     if not config:
         # 환경변수 fallback (DB에 모델 설정이 없을 때)
         fallback_base_url = (settings.OPENAI_BASE_URL or "").strip() or None
+        remember_secret(settings.OPENAI_API_KEY)
         return ResolvedModelConfig(
             provider="openai",
             model=settings.OPENAI_MODEL,
@@ -79,6 +81,8 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
 
     provider = (config.provider or "openai").strip().lower()
     api_key = _resolve_api_key(config) or settings.OPENAI_API_KEY
+    # A provider error can repeat the key; masked by value from now on (redact.remember_secret).
+    remember_secret(api_key)
     # 로컬/셀프호스트(Ollama 등)는 키 없이 동작. 클라우드 프로바이더만 키 필수.
     if not api_key and provider in _PROVIDERS_REQUIRING_KEY:
         raise ValueError(f"API key is missing for active model config (provider={provider})")

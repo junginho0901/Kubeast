@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
 from app.security import require_admin
+from app.services.ai.debug_dump import safe_error
 from app.services import model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
 from app.services.tls import build_verify
@@ -277,7 +278,7 @@ async def test_model_connection(request: dict = None):
     except HTTPException:
         raise
     except Exception as e:
-        return {"success": False, "message": str(e)}
+        return {"success": False, "message": safe_error(e, [api_key])}
 
 
 # What an OpenAI-compatible /models list returns besides chat models.

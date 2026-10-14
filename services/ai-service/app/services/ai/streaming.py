@@ -161,7 +161,7 @@ async def suggest_optimization_stream(
         raise
     except Exception as e:
         err = e
-        yield "data: " + json.dumps({"kind": "error", "error": str(e)}, ensure_ascii=False) + "\n\n"
+        yield "data: " + json.dumps({"kind": "error", "error": safe_error(e)}, ensure_ascii=False) + "\n\n"
 
     await _audit_chat_complete(
         service,
@@ -502,12 +502,12 @@ async def session_chat_stream(
 
             except Exception as api_error:
                 log.error("OpenAI API call failed: %s", safe_error(api_error))
-                yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {str(api_error)}'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {safe_error(api_error)}'}, ensure_ascii=False)}\n\n"
                 await _audit_chat_complete(
                     service, session_id, audit_actor, audit_http,
                     turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
                     started=turn_started, finish_reason=None, message_length=0,
-                    result="failure", error=str(api_error),
+                    result="failure", error=safe_error(api_error),
                 )
                 turn_completed = True
                 yield "data: [DONE]\n\n"
@@ -832,4 +832,4 @@ async def session_chat_stream(
         raise
     except Exception as e:
         log.error("Session chat error: %s", safe_error(e))
-        yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'error': safe_error(e)}, ensure_ascii=False)}\n\n"

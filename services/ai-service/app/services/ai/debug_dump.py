@@ -16,10 +16,10 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from typing import Any
+from typing import Any, Iterable, Optional
 
 from app.config import settings
-from app.services.redact import redact_text
+from app.services.redact import Options, redact_text
 
 log = logging.getLogger("kubeast.ai")
 # The service configures no logging of its own and uvicorn only configures its
@@ -56,7 +56,14 @@ def dump(label: str, payload: Any = None, limit: int = _LIMIT) -> None:
     log.info("%s %s", label, text)
 
 
-def safe_error(err: Any) -> str:
-    """str(err) with credentials masked — provider errors can echo the request."""
-    text, _ = redact_text(str(err))
+# Errors go to the screen and the audit log, not to a model: every credential rule applies, whatever REDACTION_*.
+_ERROR_RULES = Options(enabled=True)
+
+
+def safe_error(err: Any, secrets: Iterable[Optional[str]] = ()) -> str:
+    """str(err) with credentials masked — provider errors can echo the request (and the key it carried)."""
+    text, _ = redact_text(str(err), _ERROR_RULES)
+    for value in secrets:
+        if value and len(value) >= 8:
+            text = text.replace(value, "<REDACTED:api_key>")
     return text
