@@ -222,6 +222,7 @@ Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 �
 - **클러스터 라벨**: Loki 하나에 여러 클러스터를 넣으면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적습니다. 적지 않은 클러스터는 검색이 없습니다.
 - **권한**: 사용자 신원으로 `get pods/log`(그 Namespace, 전체 검색은 전체)를 묻습니다. `view`·`edit`에 들어 있으므로 §1의 Read·Write 그룹이면 됩니다. Namespace 범위 부여는 그 Namespace에 바인딩이 있어야 합니다.
 - **네트워크**: k8s-service에서 Loki로. `networkPolicy`가 켜져 있고 443이 아닌 포트면 `features.logSearch.egressCIDRs`.
+- **트레이스 링크**(`features.tracing`, 쓸 때): 줄의 trace ID를 Loki 라벨에서 먼저 읽습니다. 앱이 OTLP로 로그를 보내면 Loki가 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려주므로(Loki 3.x, 10-14 kind 실측) 따로 할 일이 없습니다. 위처럼 컨테이너 로그를 파일로 읽는 수집기는 trace ID를 모르므로 줄 글자(`trace_id=…` 등)에서 찾습니다 — 앱이 로그 문장에 trace ID를 쓰거나, 수집기에서 JSON 줄을 파싱해 trace 필드로 옮기면 됩니다. 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이라 Kubeast 쪽 통신은 없습니다.
 
 ```yaml
 # OpenTelemetry Collector contrib 0.162.0 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)

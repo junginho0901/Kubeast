@@ -5,13 +5,15 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, History } from 'lucide-react'
+import { Search, History, Waypoints } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import type { LogSearchLine } from '@/services/api/types'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { formatBytes, highlightParts, rangeOptions } from '@/utils/logSearch'
+import { traceTemplates } from '@/utils/features'
+import { fillTraceTemplate } from '@/utils/traceLinks'
 import { absoluteTitle, formatTime } from '@/utils/time'
 
 interface Props {
@@ -38,6 +40,9 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
   const { currentCluster } = useCluster()
   const { data: features } = useClusterFeatures()
   const maxMinutes = features?.logSearch?.maxRangeMinutes || 1440
+  const traceUrl = traceTemplates(features)?.traceUrl
+  const traceHref = (l: LogSearchLine) =>
+    l.traceId ? fillTraceTemplate(traceUrl, { traceId: l.traceId, cluster: currentCluster, namespace: l.namespace, pod: l.pod, container: l.container, service: l.service }) : null
   const ranges = rangeOptions(maxMinutes)
   const defaultRange = ranges.includes(features?.logSearch?.defaultRangeMinutes ?? 60) ? (features?.logSearch?.defaultRangeMinutes ?? 60) : ranges[0]
 
@@ -211,22 +216,38 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
           <p className="text-slate-500" data-testid="logsearch-empty">{t('clusterView.logSearch.noLines', 'No lines in this range.')}</p>
         ) : (
           <ul className="space-y-0.5">
-            {lines.map((l, i) => (
-              <li key={`${l.ts}-${i}`} data-testid="logsearch-line" className="flex gap-3">
-                <span className="shrink-0 text-slate-500 tabular-nums" title={absoluteTitle(l.ts)}>{formatTime(l.ts)}</span>
-                {showPod && <span className="shrink-0 text-sky-400" data-testid="logsearch-line-pod">{l.pod}</span>}
-                {showContainer && <span className="shrink-0 text-violet-400">{l.container}</span>}
-                <span className="min-w-0 whitespace-pre-wrap wrap-break-word" data-testid="logsearch-line-text">
-                  {highlightParts(l.line, submitted?.q ?? '', submitted?.regex ?? false, submitted?.ignoreCase ?? false).map((p, j) =>
-                    p.match ? (
-                      <mark key={j} className="bg-amber-500/30 text-amber-100 rounded-sm">{p.text}</mark>
-                    ) : (
-                      <span key={j}>{p.text}</span>
-                    ),
+            {lines.map((l, i) => {
+              const href = traceHref(l)
+              return (
+                <li key={`${l.ts}-${i}`} data-testid="logsearch-line" className="flex gap-3">
+                  <span className="shrink-0 text-slate-500 tabular-nums" title={absoluteTitle(l.ts)}>{formatTime(l.ts)}</span>
+                  {showPod && <span className="shrink-0 text-sky-400" data-testid="logsearch-line-pod">{l.pod}</span>}
+                  {showContainer && <span className="shrink-0 text-violet-400">{l.container}</span>}
+                  <span className="min-w-0 whitespace-pre-wrap wrap-break-word" data-testid="logsearch-line-text">
+                    {highlightParts(l.line, submitted?.q ?? '', submitted?.regex ?? false, submitted?.ignoreCase ?? false).map((p, j) =>
+                      p.match ? (
+                        <mark key={j} className="bg-amber-500/30 text-amber-100 rounded-sm">{p.text}</mark>
+                      ) : (
+                        <span key={j}>{p.text}</span>
+                      ),
+                    )}
+                  </span>
+                  {href && (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="logsearch-line-trace"
+                      title={t('clusterView.logSearch.traceTitle', 'Open trace {{id}} in a new tab', { id: l.traceId })}
+                      className="shrink-0 self-start ml-auto inline-flex items-center gap-1 text-sky-400 hover:text-sky-300"
+                    >
+                      <Waypoints className="w-3 h-3" />
+                      {t('clusterView.logSearch.trace', 'Trace')}
+                    </a>
                   )}
-                </span>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>

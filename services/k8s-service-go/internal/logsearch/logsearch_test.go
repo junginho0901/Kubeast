@@ -202,6 +202,49 @@ func TestSearchReadsLokiStreams(t *testing.T) {
 	}
 }
 
+func TestSearchCarriesServiceAndTraceID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Loki returns a line's structured metadata (OTLP trace_id) with the stream labels.
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"streams","result":[
+		 {"stream":{"k8s_namespace_name":"apps","k8s_pod_name":"web-1","k8s_container_name":"app","service_name":"web","trace_id":"meta"},"values":[["1760443200000000002","served"]]},
+		 {"stream":{"k8s_namespace_name":"apps","k8s_pod_name":"web-1","k8s_container_name":"app"},"values":[["1760443200000000001","text"]]}]}}`))
+	}))
+	defer srv.Close()
+	c := testConfig(srv.URL)
+	c.Labels.Service = "service_name"
+	var seen []string
+	c.TraceID = func(labels map[string]string, line string) string {
+		seen = append(seen, labels["trace_id"]+"|"+line)
+		return "id-of-" + line
+	}
+	s, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := Request{Cluster: "b", Namespace: "apps", Limit: 10}
+	if err := c.Normalize(&req, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Search(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Lines) != 2 || res.Lines[0].Service != "web" || res.Lines[0].TraceID != "id-of-served" || res.Lines[1].Service != "" || res.Lines[1].TraceID != "id-of-text" {
+		t.Fatalf("lines: %+v", res.Lines)
+	}
+	if len(seen) != 2 || seen[0] != "meta|served" || seen[1] != "|text" {
+		t.Fatalf("TraceID got the stream labels and the line: %v", seen)
+	}
+
+	// without tracing, no trace ID is looked for
+	c.TraceID = nil
+	s, _ = New(c)
+	res, _ = s.Search(context.Background(), req)
+	if res.Lines[0].TraceID != "" {
+		t.Fatalf("trace ID without tracing: %+v", res.Lines[0])
+	}
+}
+
 func TestSearchErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Query().Get("query"), "slow") {

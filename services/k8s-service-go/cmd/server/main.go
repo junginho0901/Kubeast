@@ -27,6 +27,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -157,9 +158,24 @@ func main() {
 		slog.Info("log files view enabled", "paths", patterns.List(), "namespaces", cfg.LogFilesNamespaces, "max_lines", cfg.LogFilesMaxLines)
 	}
 
+	// Trace links (off unless TRACING_ENABLED): a template that is not an
+	// http(s) URL stops the service.
+	trCfg := tracing.LoadConfig()
+	if trCfg.Enabled {
+		if err := trCfg.Validate(); err != nil {
+			slog.Error("invalid tracing configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetTracing(trCfg)
+		slog.Info("trace links enabled", "trace_url", trCfg.TraceURL != "", "search_url", trCfg.SearchURL != "", "labels", trCfg.Labels)
+	}
+
 	// Log store search (off unless LOG_SEARCH_ENABLED): a configuration that
 	// could not keep searches to one cluster stops the service.
 	if lsCfg := logsearch.LoadConfig(); lsCfg.Enabled {
+		if trCfg.Enabled {
+			lsCfg.TraceID = trCfg.TraceID
+		}
 		searcher, err := logsearch.New(lsCfg)
 		if err != nil {
 			slog.Error("invalid log search configuration", "err", err)

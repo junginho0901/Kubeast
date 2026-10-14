@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiEnabled, alertInvestigationEnabled, costEnabled, logSearchEnabledFor, policyReportsEnabled } from './features'
+import { aiEnabled, alertInvestigationEnabled, costEnabled, logSearchEnabledFor, policyReportsEnabled, traceTemplates } from './features'
 
 describe('aiEnabled', () => {
   it('is off only when the server says so', () => {
@@ -49,3 +49,10 @@ describe('logSearchEnabledFor', () => {
   })
 })
 
+describe('traceTemplates', () => {
+  it('gives the templates only when tracing is on', () => {
+    expect(traceTemplates(undefined)).toBeUndefined()
+    expect(traceTemplates({ prometheus: { enabled: false }, tracing: { enabled: false, traceUrl: 'https://x/{{traceId}}' } })).toBeUndefined()
+    expect(traceTemplates({ prometheus: { enabled: false }, tracing: { enabled: true, traceUrl: 'https://x/{{traceId}}', searchUrl: '' } })).toEqual({ traceUrl: 'https://x/{{traceId}}', searchUrl: undefined })
+  })
+})

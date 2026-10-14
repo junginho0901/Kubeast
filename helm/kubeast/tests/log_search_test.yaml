@@ -54,6 +54,11 @@ tests:
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
       - equal:
+          path: data.LOG_SEARCH_LABEL_SERVICE
+          value: service_name
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
           path: data.LOG_SEARCH_MAX_RANGE
           value: 6h
         template: configmap.yaml

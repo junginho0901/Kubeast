@@ -190,6 +190,7 @@ data:
   LOG_SEARCH_LABEL_NAMESPACE: {{ .labels.namespace | quote }}
   LOG_SEARCH_LABEL_POD: {{ .labels.pod | quote }}
   LOG_SEARCH_LABEL_CONTAINER: {{ .labels.container | quote }}
+  LOG_SEARCH_LABEL_SERVICE: {{ .labels.service | default "" | quote }}
   {{- $pairs := list }}
   {{- range $id, $value := .clusters }}{{ $pairs = append $pairs (printf "%s=%s" $id $value) }}{{ end }}
   LOG_SEARCH_CLUSTERS: {{ join "," $pairs | quote }}
@@ -198,6 +199,23 @@ data:
   LOG_SEARCH_MAX_LINES: {{ .maxLines | quote }}
   LOG_SEARCH_TIMEOUT: {{ .timeout | quote }}
   LOG_SEARCH_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+{{- end }}
+{{- end }}
+{{- with .Values.features.tracing }}
+  TRACING_ENABLED: {{ .enabled | quote }}
+{{- if .enabled }}
+{{- if and (not .traceUrl) (not .searchUrl) }}
+  {{- fail "features.tracing needs traceUrl or searchUrl when enabled" }}
+{{- end }}
+{{- range $key, $url := dict "traceUrl" .traceUrl "searchUrl" .searchUrl }}
+{{- if and $url (not (regexMatch "^https?://" $url)) }}
+  {{- fail (printf "features.tracing.%s must start with http:// or https://" $key) }}
+{{- end }}
+{{- end }}
+  TRACING_TRACE_URL: {{ .traceUrl | quote }}
+  TRACING_SEARCH_URL: {{ .searchUrl | quote }}
+  TRACING_TRACE_ID_LABELS: {{ join "," .traceIdLabels | quote }}
+  TRACING_TRACE_ID_PATTERN: {{ .traceIdPattern | quote }}
 {{- end }}
 {{- end }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}

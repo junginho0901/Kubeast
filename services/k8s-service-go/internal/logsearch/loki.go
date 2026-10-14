@@ -21,6 +21,10 @@ type Line struct {
 	Pod       string    `json:"pod"`
 	Container string    `json:"container"`
 	Line      string    `json:"line"`
+	// Service and TraceID come from the stream's labels (Loki returns a line's
+	// structured metadata with them) or, for the trace ID, the line text.
+	Service string `json:"service,omitempty"`
+	TraceID string `json:"traceId,omitempty"`
 }
 
 // Result is a page of lines, newest first unless the request was forward.
@@ -132,13 +136,20 @@ func (l *loki) search(ctx context.Context, req Request, clusterValue string) (Re
 			if err != nil {
 				continue
 			}
-			res.Lines = append(res.Lines, Line{
+			line := Line{
 				TS:        time.Unix(0, ns).UTC(),
 				Namespace: s.Stream[l.cfg.Labels.Namespace],
 				Pod:       s.Stream[l.cfg.Labels.Pod],
 				Container: s.Stream[l.cfg.Labels.Container],
 				Line:      v[1],
-			})
+			}
+			if l.cfg.Labels.Service != "" {
+				line.Service = s.Stream[l.cfg.Labels.Service]
+			}
+			if l.cfg.TraceID != nil {
+				line.TraceID = l.cfg.TraceID(s.Stream, v[1])
+			}
+			res.Lines = append(res.Lines, line)
 		}
 	}
 	// Loki applies the limit across streams but returns them stream by stream.

@@ -619,6 +619,8 @@ export interface ClusterFeatures {
   logFiles?: { enabled: boolean; maxLines: number; namespaces: string[] }
   // Log store search (Loki): the clusters it is configured for, and its limits.
   logSearch?: { enabled: boolean; clusters: string[]; defaultRangeMinutes?: number; maxRangeMinutes?: number; maxLines?: number }
+  // Trace links: URL templates with {{traceId}} {{cluster}} {{namespace}} {{pod}} {{container}} {{service}}.
+  tracing?: { enabled: boolean; traceUrl?: string; searchUrl?: string }
   // Optimization → apply without restart (pod resize subresource, server 1.35+).
   inPlaceResize?: { enabled: boolean; serverSupports: boolean }
   // Validating/Mutating admission policies and bindings: YAML apply (and the AI write tools) refused while on.
@@ -775,6 +777,9 @@ export interface LogSearchLine {
   pod: string
   container: string
   line: string
+  // OpenTelemetry service name and trace ID, when the store has them (trace ID only with features.tracing).
+  service?: string
+  traceId?: string
 }
 
 export interface LogSearchResult {

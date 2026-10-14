@@ -1,0 +1,45 @@
+# Trace links (features.tracing) on kind: a Jaeger to link to, in the second cluster (kubeast-b) next to
+# the Loki of scripts/kind-logsearch.sh. Jaeger v2 all-in-one with its built-in configuration (in-memory
+# storage, OTLP on 4317/4318, UI and query API on 16686). Applied by scripts/kind-tracing.sh. From the
+# laptop: kubectl port-forward -n tracing svc/jaeger 16686 (the dev values link to localhost:16686).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tracing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: tracing
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: jaeger}
+  template:
+    metadata:
+      labels: {app: jaeger}
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/jaeger:2.22.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: ui, containerPort: 16686}
+            - {name: otlp-http, containerPort: 4318}
+          readinessProbe:
+            httpGet: {path: /, port: 16686}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: tracing
+spec:
+  selector: {app: jaeger}
+  ports:
+    - {name: ui, port: 16686, targetPort: ui}
+    - {name: otlp-http, port: 4318, targetPort: otlp-http}

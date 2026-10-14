@@ -1,0 +1,7 @@
+# Kubeast values for trace links on kind (scripts/kind-tracing.sh up): links to the Jaeger in kubeast-b
+# (deploy/kind/tracing-jaeger.yaml) through a port-forward on the laptop.
+features:
+  tracing:
+    enabled: true
+    traceUrl: "http://localhost:16686/trace/{{traceId}}"
+    searchUrl: "http://localhost:16686/search?service={{service}}"

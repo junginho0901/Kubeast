@@ -1,0 +1,68 @@
+suite: Trace links — env and render checks
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - secret.yaml
+tests:
+  - it: is off by default — no templates
+    asserts:
+      - equal:
+          path: data.TRACING_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.TRACING_TRACE_URL
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+  - it: renders the templates, the label list and the pattern
+    set:
+      features.tracing.enabled: true
+      features.tracing.traceUrl: "https://jaeger.example.com/trace/{{traceId}}"
+      features.tracing.searchUrl: "https://jaeger.example.com/search?service={{service}}"
+      features.tracing.traceIdPattern: 'req=([0-9a-f]{32})'
+    asserts:
+      - equal:
+          path: data.TRACING_TRACE_URL
+          value: "https://jaeger.example.com/trace/{{traceId}}"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACING_SEARCH_URL
+          value: "https://jaeger.example.com/search?service={{service}}"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACING_TRACE_ID_LABELS
+          value: trace_id,traceid,traceID,traceId
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.TRACING_TRACE_ID_PATTERN
+          value: 'req=([0-9a-f]{32})'
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+  - it: refuses to render when enabled without a URL
+    set:
+      features.tracing.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: features.tracing needs traceUrl or searchUrl
+        template: deployments.yaml
+  - it: refuses a template that is not an http(s) URL
+    set:
+      features.tracing.enabled: true
+      features.tracing.traceUrl: "javascript:alert(1)//{{traceId}}"
+    asserts:
+      - failedTemplate:
+          errorPattern: features.tracing.traceUrl must start with http:// or https://
+        template: deployments.yaml
+  - it: refuses a search template that is not an http(s) URL
+    set:
+      features.tracing.enabled: true
+      features.tracing.traceUrl: "https://jaeger.example.com/trace/{{traceId}}"
+      features.tracing.searchUrl: "ftp://jaeger.example.com/{{service}}"
+    asserts:
+      - failedTemplate:
+          errorPattern: features.tracing.searchUrl must start with http:// or https://
+        template: deployments.yaml

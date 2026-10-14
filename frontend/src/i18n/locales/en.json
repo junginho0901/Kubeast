@@ -2349,6 +2349,10 @@
       "hide": "Hide",
       "open": "Search logs",
       "workloadHint": "Search this {{kind}}'s pods in the log store, including pods that are gone.",
+      "trace": "Trace",
+      "traceTitle": "Open trace {{id}} in a new tab",
+      "traces": "Traces",
+      "tracesTitle": "Search the traces of {{service}} in a new tab",
       "errors": {
         "tooMany": "Too many searches in a minute. Try again shortly.",
         "forbidden": "Not allowed: {{detail}}",

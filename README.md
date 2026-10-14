@@ -873,6 +873,24 @@ features:
 
 개발용(kind): `scripts/kind-logsearch.sh up` — 2번 클러스터에 Loki 하나, 두 클러스터에 OpenTelemetry Collector, Kubeast 값까지(`down`으로 되돌림).
 
+### 트레이스 링크
+
+Kubeast는 트레이스를 저장하지 않고, 트레이스 저장소(Jaeger·Tempo·APM)로 가는 링크만 만듭니다(`features.tracing.enabled`, 기본 off).
+
+- **로그 줄 → 트레이스**: 로그 검색 결과에서 trace ID가 있는 줄 끝에 "트레이스"(`traceUrl`). trace ID는 줄의 라벨에서 먼저 찾고(`traceIdLabels`, 기본 `trace_id` 등 — Loki는 OTLP 로그의 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려줌), 없으면 줄 글자에서(`traceIdPattern`, 기본 `trace_id=…`·`traceID=…`·`"traceId":"…"`). 16진수 16자·32자만 씁니다.
+- **Pod → 그 서비스의 트레이스**: Pod 드로어 머리에 "트레이스"(`searchUrl`). `{{service}}` = OpenTelemetry 순서(주석 `resource.opentelemetry.io/service.name` → `app.kubernetes.io/instance` → `app.kubernetes.io/name` → 소유 워크로드 → Pod 이름).
+- **템플릿**: `{{traceId}}` `{{cluster}}`(Kubeast 클러스터 ID) `{{namespace}}` `{{pod}}` `{{container}}` `{{service}}` — 채운 값은 URL 인코딩, 빈 자리가 있으면 링크를 만들지 않습니다. 둘 다 `http(s)://`로 시작해야 렌더됩니다. 새 탭(`noopener noreferrer`)으로 열고, 서버 동작이 아니라 감사 항목은 없습니다(로그 검색 자체는 `k8s.pod.logs.search`).
+
+```yaml
+features:
+  tracing:
+    enabled: true
+    traceUrl: https://jaeger.example.com/trace/{{traceId}}
+    searchUrl: https://jaeger.example.com/search?service={{service}}
+```
+
+개발용(kind): `scripts/kind-logsearch.sh up` 다음 `scripts/kind-tracing.sh up` — 2번 클러스터에 Jaeger 2.22, 링크는 `kubectl port-forward -n tracing svc/jaeger 16686`(kubeast-b) 뒤 `localhost:16686`.
+
 ### 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)
 
 Kubeast 서비스는 밖으로 여는 TLS(Loki·외부 Prometheus·OIDC 발급자·Google API·감사 싱크·LLM 엔드포인트)에서 이미지에 든 공인 CA만 신뢰합니다. 사설 CA(AWS Private CA·사내 루트·자체 서명)로 연 엔드포인트나 TLS를 가로채는 사내 프록시 뒤라면 `customCAs`에 그 CA를 적습니다 — 공인 CA는 그대로 두고 더합니다.

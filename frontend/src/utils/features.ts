@@ -23,6 +23,12 @@ export function logSearchEnabledFor(features: ClusterFeatures | null | undefined
   return features?.logSearch?.enabled === true && !!clusterId && (features.logSearch.clusters ?? []).includes(clusterId)
 }
 
+// Chart features.tracing: the URL templates of trace links, or undefined when off. Unknown counts as off.
+export function traceTemplates(features?: ClusterFeatures | null): { traceUrl?: string; searchUrl?: string } | undefined {
+  const t = features?.tracing
+  return t?.enabled ? { traceUrl: t.traceUrl || undefined, searchUrl: t.searchUrl || undefined } : undefined
+}
+
 // Chart features.alertInvestigation.enabled (with AI on): Admin → Investigations.
 // Unknown counts as off, as for cost.
 export function alertInvestigationEnabled(features?: ClusterFeatures | null): boolean {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
-import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal } from 'lucide-react'
+import { CheckCircle, ChevronDown, Download, RefreshCw, Terminal, Waypoints } from 'lucide-react'
 import CustomDropdown from '@/components/CustomDropdown'
 import { InfoSection, InfoRow, KeyValueTags, ConditionsTable, EventsTable, SummaryBadge, StatusBadge, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
@@ -22,6 +22,9 @@ import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogF
 import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
 import { useLogFilesAvailable } from '@/hooks/useLogFilesAvailable'
+import { useCluster } from '@/contexts/ClusterContext'
+import { traceTemplates } from '@/utils/features'
+import { fillTraceTemplate, podServiceName } from '@/utils/traceLinks'
 import PolicyViolations from './PolicyViolations'
 
 interface Props {
@@ -49,6 +52,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const [execTarget, setExecTarget] = useState<string | null>(null)
   const [resizeTarget, setResizeTarget] = useState<{ container: string; requests?: { cpu?: string; memory?: string } } | null>(null)
   const { data: features } = useClusterFeatures()
+  const { currentCluster } = useCluster()
   const [execSelectContainer, setExecSelectContainer] = useState<string>('')
   const [execCommand, setExecCommand] = useState<string>('/bin/sh')
   const [isExecContainerOpen, setIsExecContainerOpen] = useState(false)
@@ -207,6 +211,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const hostIPC = podDescribe?.host_ipc ?? spec.hostIPC
   const nodeSelector = (podDescribe?.node_selector as Record<string, string> | undefined) || (spec.nodeSelector as Record<string, string> | undefined)
   const ownerRefs = (podDescribe?.owner_references as any[] | undefined) || (meta.ownerReferences as any[] | undefined) || []
+  const podService = podServiceName({ name, labels, annotations, ownerReferences: ownerRefs })
+  const tracesHref = fillTraceTemplate(traceTemplates(features)?.searchUrl, { service: podService, namespace, pod: name, cluster: currentCluster })
   const finalizers = (podDescribe?.finalizers as string[] | undefined) || (meta.finalizers as string[] | undefined) || []
   const readyPair = String(podDescribe?.ready || '').match(/^(\d+)\/(\d+)$/)
   const readyContainers = readyPair ? Number(readyPair[1]) || 0 : containers.filter((c: any) => c.ready).length
@@ -256,8 +262,21 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
         <SummaryBadge label="Phase" value={phase} color={phase === 'Running' ? 'green' : phase === 'Pending' ? 'amber' : phase === 'Failed' ? 'red' : 'default'} />
         <SummaryBadge label="Restarts" value={restartCount} color={restartCount > 5 ? 'amber' : 'default'} />
         <SummaryBadge label="Containers" value={containerNames.length} />
+        {tracesHref && (
+          <a
+            href={tracesHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="pod-traces-link"
+            title={t('clusterView.logSearch.tracesTitle', 'Search the traces of {{service}} in a new tab', { service: podService })}
+            className="ml-auto flex items-center gap-1 h-7 px-2.5 rounded-lg border border-sky-700 bg-sky-900/30 text-sky-300 text-[11px] hover:bg-sky-800/40 transition-colors"
+          >
+            <Waypoints className="w-3.5 h-3.5" />
+            {t('clusterView.logSearch.traces', 'Traces')}
+          </a>
+        )}
         {has('resource.pod.exec') && phase === 'Running' && containerNames.length > 0 && (
-          <div className="flex items-center gap-2 ml-auto">
+          <div className={`flex items-center gap-2 ${tracesHref ? '' : 'ml-auto'}`}>
             {/* Container 커스텀 드롭다운 */}
             <div className="relative" ref={execContainerRef}>
               <button

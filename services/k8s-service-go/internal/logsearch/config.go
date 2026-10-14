@@ -24,6 +24,9 @@ type Labels struct {
 	Namespace string
 	Pod       string
 	Container string
+	// Service is the OpenTelemetry service name (OTLP service.name → service_name);
+	// read when present, never queried on.
+	Service string
 }
 
 // Config is the deployment-wide log search configuration (chart
@@ -39,7 +42,10 @@ type Config struct {
 	// streams carry. A cluster that is not listed has no log search. With an
 	// empty Labels.Cluster the store holds one cluster: the single entry names
 	// it and its value is unused.
-	Clusters         map[string]string
+	Clusters map[string]string
+	// TraceID finds a line's trace ID in its labels or text (features.tracing);
+	// nil leaves lines without one.
+	TraceID          func(labels map[string]string, line string) string
 	DefaultRange     time.Duration
 	MaxRange         time.Duration
 	MaxLines         int
@@ -60,6 +66,7 @@ func LoadConfig() Config {
 			Namespace: envOr("LOG_SEARCH_LABEL_NAMESPACE", "k8s_namespace_name"),
 			Pod:       envOr("LOG_SEARCH_LABEL_POD", "k8s_pod_name"),
 			Container: envOr("LOG_SEARCH_LABEL_CONTAINER", "k8s_container_name"),
+			Service:   envOr("LOG_SEARCH_LABEL_SERVICE", "service_name"),
 		},
 		Clusters:         parseClusters(os.Getenv("LOG_SEARCH_CLUSTERS")),
 		DefaultRange:     envDuration("LOG_SEARCH_DEFAULT_RANGE", time.Hour),
@@ -122,6 +129,9 @@ func (c Config) Validate() error {
 	}
 	if c.Labels.Cluster != "" && !labelName.MatchString(c.Labels.Cluster) {
 		return fmt.Errorf("log search cluster label %q is not a label name", c.Labels.Cluster)
+	}
+	if c.Labels.Service != "" && !labelName.MatchString(c.Labels.Service) {
+		return fmt.Errorf("log search service label %q is not a label name", c.Labels.Service)
 	}
 	if len(c.Clusters) == 0 {
 		return fmt.Errorf("LOG_SEARCH_CLUSTERS lists no cluster (Kubeast cluster ID → cluster label value)")

@@ -739,6 +739,7 @@ features:
       namespace: k8s_namespace_name
       pod: k8s_pod_name
       container: k8s_container_name
+      service: service_name
     clusters: {}
     defaultRange: 1h
     maxRange: 24h
@@ -748,6 +749,25 @@ features:
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here.
     egressCIDRs: []
+  # Trace links (off by default). Kubeast stores no traces: a log search line
+  # that carries a trace ID gets a link to it (traceUrl), and the Pod drawer a
+  # link to the service's traces (searchUrl). Placeholders, URL-encoded when
+  # filled: {{traceId}} {{cluster}} {{namespace}} {{pod}} {{container}}
+  # {{service}} ({{service}} in the Pod drawer: annotation
+  # resource.opentelemetry.io/service.name, then app.kubernetes.io/instance or
+  # name, then the owning workload — OpenTelemetry's order). Both must be
+  # http(s) URLs. The trace ID is read from the first of traceIdLabels a line
+  # carries (Loki returns OTLP's trace_id structured metadata with the line),
+  # else from the line text with traceIdPattern (empty = trace_id=…, traceID=…,
+  # "traceId":"…"; one group around the ID); only 16 or 32 hex digits count.
+  # Examples: Jaeger https://jaeger.example.com/trace/{{traceId}} and
+  # https://jaeger.example.com/search?service={{service}}.
+  tracing:
+    enabled: false
+    traceUrl: ""
+    searchUrl: ""
+    traceIdLabels: [trace_id, traceid, traceID, traceId]
+    traceIdPattern: ""
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with
