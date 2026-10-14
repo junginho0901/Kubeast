@@ -320,8 +320,8 @@ NGINX 게이트웨이가 모든 요청을 받아 각 마이크로서비스로 �
 | `tool-server` | Go | — | AI Tool 호출 백엔드 (kubectl 실행) |
 | `model-config-controller` | Go (controller-runtime) | — | `ModelConfig` CRD 컨트롤러 |
 | `frontend` | React + Vite + TS | 5173 | UI (prod 정적 빌드, nginx 서빙) |
-| `postgres` | — | 5432 | 메인 DB (durable state) |
-| `redis` | — | 6379 | 캐시 / 세션 컨텍스트 |
+| `postgres` | — | 5432 | 메인 DB (durable state) — PostgreSQL 18 |
+| `redis` | — | 6379 | 캐시 / 세션 컨텍스트 — Valkey 9.1(Redis 프로토콜) |
 
 ### 컨테이너 이미지
 
@@ -929,7 +929,7 @@ curl http://localhost:8000/health   # Gateway
 **Backend**
 - Go 1.26 (auth · k8s · session · tool-server · controller · pkg)
 - Python 3.14 + FastAPI (ai-service)
-- PostgreSQL 15, Redis 7
+- PostgreSQL 18, Valkey 9(Redis 호환 캐시, BSD)
 - controller-runtime (CRD operator)
 
 **Frontend**

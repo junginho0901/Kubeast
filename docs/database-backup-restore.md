@@ -57,7 +57,7 @@ Two independent layers; use both.
    format so `pg_restore` can restore selectively):
 
    ```bash
-   kubectl -n <ns> exec deploy/postgres -- pg_dump -Fc -U kubeast kubeast > kubeast-$(date -u +%Y%m%dT%H%M%SZ).dump
+   kubectl -n <ns> exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast kubeast > kubeast-$(date -u +%Y%m%dT%H%M%SZ).dump
    ```
 
    The dump is a consistent snapshot taken at the start; the services keep
@@ -78,7 +78,7 @@ for d in auth-service session-service k8s-service ai-service model-config-contro
 done
 # 2. restore over the freshly migrated schema
 POD=$(kubectl -n $NS get pod -l app=postgres -o name | head -1)
-kubectl -n $NS exec -i $POD -- pg_restore --clean --if-exists --no-owner -U kubeast -d kubeast < kubeast-<stamp>.dump
+kubectl -n $NS exec -i $POD -c postgres -- pg_restore --clean --if-exists --no-owner -U kubeast -d kubeast < kubeast-<stamp>.dump
 # 3. start the services; auth-service sees goose_db_version at the required version and applies nothing
 for d in auth-service session-service k8s-service ai-service model-config-controller-go; do
   kubectl -n $NS scale deploy/$d --replicas=1
@@ -111,6 +111,37 @@ boot (`MIGRATIONS_MODE=startup`) or the hook Job does on the next upgrade.
    The chart stops rendering its own PVC and mounts yours. The data directory
    is a complete PostgreSQL cluster, so no `pg_restore` is needed; the server
    starts from it. Do the same login / count checks.
+
+## Upgrading the PostgreSQL major version
+
+A PostgreSQL server does not start on a data directory from another major
+version ("database files are incompatible with server"), so changing
+`images.postgres` to a new major needs the data moved once. On a new volume,
+keeping the old one for a rollback (rehearsed 15 → 18):
+
+```bash
+NS=<ns>
+# 1. dump with the running server
+kubectl -n $NS exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast kubeast > kubeast-before-upgrade.dump
+# 2. a new claim (size and StorageClass as the current one)
+kubectl -n $NS apply -f - <<'EOF'
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: kubeast-postgres-data-new}
+spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 5Gi}}}
+EOF
+# 3. upgrade onto it with the new image: the new server initializes the empty volume
+helm upgrade kubeast <chart> -n $NS --reset-then-reuse-values \
+  --set images.postgres=<new image> --set postgresql.persistence.existingClaim=kubeast-postgres-data-new
+# 4. restore as in "From a logical dump" above: stop the writers, pg_restore --clean, start them
+```
+
+Do the same checks. Rollback: the old image with the old claim
+(`postgresql.persistence.existingClaim`), untouched. The old claim stays until
+you delete it. docker-compose: dump the same way (`docker compose exec postgres
+pg_dump …`), move the `postgres_data` volume aside, start the new image on a new
+one, and restore with `docker compose exec -T postgres pg_restore --clean
+--if-exists --no-owner -U kubeast -d kubeast < kubeast-before-upgrade.dump`.
 
 ## Retention
 

@@ -813,7 +813,11 @@ images:
   sessionService: ghcr.io/junginho0901/kubeast-session-service
   toolServer: ghcr.io/junginho0901/kubeast-tool-server
   modelConfigController: ghcr.io/junginho0901/kubeast-model-config-controller-go
-  postgres: postgres:15-alpine
-  redis: redis:7-alpine
+  # In-cluster database. Moving to another major version: docs/database-backup-restore.md.
+  postgres: postgres:18-alpine
+  # Cache (k8s-service). Valkey, the BSD-licensed fork of Redis 7.2; the redis.*
+  # values and REDIS_PASSWORD keep their names. Nothing to carry over: a new
+  # pod starts with an empty cache, as on any restart.
+  redis: valkey/valkey:9.1-alpine
   # unprivileged nginx (uid 101, pid/temp under /tmp) — required for runAsNonRoot
   gateway: nginxinc/nginx-unprivileged:1.31-alpine

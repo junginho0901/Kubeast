@@ -83,3 +83,15 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+
+  - it: runs PostgreSQL 18 by default with PGDATA on the volume
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: postgres:18-alpine
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
