@@ -1,0 +1,128 @@
+suite: customCAs — one projected volume, SSL_CERT_DIR for the Go services, CUSTOM_CA_DIR for ai-service
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - secret.yaml
+tests:
+  - it: is off by default — no volume, no env
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - notExists:
+          path: spec.template.spec.containers[0].env
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: session-service}
+      - notExists:
+          path: spec.template.spec.volumes
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: session-service}
+  - it: mounts a Secret and a ConfigMap into the six services that open TLS outward
+    set:
+      customCAs:
+        - secret: corp-root-ca
+        - configMap: proxy-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: custom-ca
+            projected:
+              sources:
+                - secret: {name: corp-root-ca}
+                - configMap: {name: proxy-ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: custom-ca, mountPath: /etc/kubeast/ca, readOnly: true}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: model-config-controller-go}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: session-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: tool-server}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: model-config-controller-go}
+      - contains:
+          path: spec.template.spec.volumes
+          content: {name: custom-ca, projected: {sources: [{secret: {name: corp-root-ca}}, {configMap: {name: proxy-ca}}]}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: session-service}
+  # httpx would let SSL_CERT_DIR replace its bundle; ai-service adds the CAs itself.
+  - it: gives ai-service CUSTOM_CA_DIR and not SSL_CERT_DIR
+    set:
+      customCAs:
+        - secret: corp-root-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: CUSTOM_CA_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: ai-service}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: ai-service}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: custom-ca, mountPath: /etc/kubeast/ca, readOnly: true}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: ai-service}
+  - it: keeps the OIDC client secret env next to the CA env on auth-service
+    set:
+      customCAs: [{secret: corp-root-ca}]
+      auth.oidc.enabled: true
+      auth.oidc.issuerUrl: https://idp.example.com
+      auth.oidc.clientId: kubeast
+      auth.oidc.existingSecret: oidc
+      auth.oidc.redirectUrl: https://kubeast.example.com/api/v1/auth/oidc/callback
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: OIDC_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: oidc, key: client_secret}}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_DIR, value: /etc/kubeast/ca}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: auth-service}
+  - it: refuses an entry with neither a secret nor a configMap
+    set:
+      customCAs: [{name: corp-root-ca}]
+    asserts:
+      - failedTemplate:
+          errorMessage: "customCAs: every entry needs secret or configMap"
+        template: deployments.yaml
+  - it: refuses an entry with both
+    set:
+      customCAs: [{secret: a, configMap: b}]
+    asserts:
+      - failedTemplate:
+          errorMessage: "customCAs: an entry names a secret or a configMap, not both"
+        template: deployments.yaml

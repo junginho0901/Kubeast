@@ -8,6 +8,8 @@ operator-supplied URL.
 """
 import os
 import re
+import ssl
+from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
@@ -15,6 +17,7 @@ import httpx
 from app.security import require_admin
 from app.services import model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
+from app.services.tls import build_verify
 
 public_router = APIRouter()
 admin_router = APIRouter(dependencies=[Depends(require_admin)])
@@ -38,7 +41,7 @@ async def _test_openai_compatible(
     api_key: str,
     model: str,
     base_url: str,
-    tls_verify: bool = True,
+    verify: Union[bool, ssl.SSLContext] = True,
 ) -> dict:
     """Test OpenAI-compatible endpoints (OpenAI, Groq, DeepSeek, Mistral, etc.)"""
     from openai import AsyncOpenAI
@@ -46,7 +49,7 @@ async def _test_openai_compatible(
     client = AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
-        http_client=httpx.AsyncClient(verify=tls_verify),
+        http_client=httpx.AsyncClient(verify=verify),
         timeout=15.0,
     )
     resp = await client.chat.completions.create(
@@ -61,10 +64,10 @@ async def _test_anthropic(
     api_key: str,
     model: str,
     base_url: str = "https://api.anthropic.com",
-    tls_verify: bool = True,
+    verify: Union[bool, ssl.SSLContext] = True,
 ) -> dict:
     """Test Anthropic Messages API directly."""
-    async with httpx.AsyncClient(verify=tls_verify, timeout=15.0) as client:
+    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
         resp = await client.post(
             f"{base_url.rstrip('/')}/v1/messages",
             headers={
@@ -97,14 +100,14 @@ async def _test_anthropic(
 async def _test_google(
     api_key: str,
     model: str,
-    tls_verify: bool = True,
+    verify: Union[bool, ssl.SSLContext] = True,
 ) -> dict:
     """Test Google Gemini generateContent API directly."""
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model}:generateContent?key={api_key}"
     )
-    async with httpx.AsyncClient(verify=tls_verify, timeout=15.0) as client:
+    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
         resp = await client.post(
             url,
             json={
@@ -152,7 +155,7 @@ async def _test_azure_openai(
     model: str,
     base_url: str,
     api_version: str = "2024-06-01",
-    tls_verify: bool = True,
+    verify: Union[bool, ssl.SSLContext] = True,
 ) -> dict:
     """Test Azure OpenAI endpoint."""
     # Azure base_url 형식: https://<resource>.openai.azure.com/openai/deployments/<deployment>
@@ -168,7 +171,7 @@ async def _test_azure_openai(
         api_key=api_key,
         base_url=clean_base,
         default_headers={"api-key": api_key},
-        http_client=httpx.AsyncClient(verify=tls_verify),
+        http_client=httpx.AsyncClient(verify=verify),
         timeout=15.0,
     )
     resp = await client.chat.completions.create(
@@ -183,7 +186,7 @@ async def _test_azure_openai(
 async def _test_ollama(
     model: str,
     base_url: str = "http://localhost:11434",
-    tls_verify: bool = True,
+    verify: Union[bool, ssl.SSLContext] = True,
 ) -> dict:
     """Test Ollama connection via its OpenAI-compatible endpoint."""
     from openai import AsyncOpenAI
@@ -195,7 +198,7 @@ async def _test_ollama(
     client = AsyncOpenAI(
         api_key="ollama",  # Ollama doesn't need a real key
         base_url=clean_base,
-        http_client=httpx.AsyncClient(verify=tls_verify),
+        http_client=httpx.AsyncClient(verify=verify),
         timeout=15.0,
     )
     try:
@@ -216,7 +219,7 @@ async def _test_ollama(
 async def test_model_connection(request: dict = None):
     """
     모델 연결 테스트 (admin.ai_models.*).
-    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, azure_api_version? }
+    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert?, azure_api_version? }
     api_key_env names an environment variable of this service (how saved
     configs reference keys); api_key is a literal for ad-hoc API use.
     """
@@ -234,7 +237,7 @@ async def test_model_connection(request: dict = None):
             raise HTTPException(status_code=400, detail=f"environment variable {api_key_env} is not set in ai-service")
     model = body.get("model", "")
     provider = (body.get("provider") or "openai").strip().lower()
-    tls_verify = body.get("tls_verify", True)
+    verify = build_verify(body.get("tls_verify", True), body.get("ca_cert"))
     user_base_url = (body.get("base_url") or "").strip()
 
     if not model:
@@ -249,17 +252,17 @@ async def test_model_connection(request: dict = None):
     try:
         if provider == "anthropic":
             base = user_base_url or "https://api.anthropic.com"
-            return await _test_anthropic(api_key, model, base, tls_verify)
+            return await _test_anthropic(api_key, model, base, verify)
 
         elif provider in ("google", "gemini"):
-            return await _test_google(api_key, model, tls_verify)
+            return await _test_google(api_key, model, verify)
 
         elif provider == "azure":
             api_version = body.get("azure_api_version", "2024-06-01")
-            return await _test_azure_openai(api_key, model, user_base_url, api_version, tls_verify)
+            return await _test_azure_openai(api_key, model, user_base_url, api_version, verify)
 
         elif provider == "ollama":
-            return await _test_ollama(model, user_base_url or "http://localhost:11434", tls_verify)
+            return await _test_ollama(model, user_base_url or "http://localhost:11434", verify)
 
         else:
             # OpenAI-compatible providers
@@ -269,7 +272,7 @@ async def test_model_connection(request: dict = None):
                     status_code=400,
                     detail=f"base_url is required for provider '{provider}'",
                 )
-            return await _test_openai_compatible(api_key, model, base, tls_verify)
+            return await _test_openai_compatible(api_key, model, base, verify)
 
     except HTTPException:
         raise
@@ -282,8 +285,8 @@ _NOT_CHAT = re.compile(r"embed|tts|whisper|dall-e|moderation|transcribe|image|au
 _GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 
-async def _list_models(provider: str, api_key: str, base: str, tls_verify: bool) -> list[dict]:
-    async with httpx.AsyncClient(verify=tls_verify, timeout=15.0) as client:
+async def _list_models(provider: str, api_key: str, base: str, verify: Union[bool, ssl.SSLContext]) -> list[dict]:
+    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
         if provider == "anthropic":
             resp = await client.get(
                 anthropic_root(base) + "/v1/models",
@@ -305,13 +308,13 @@ async def list_provider_models(request: dict = None):
     dropdown (admin.ai_models.*). Same key and base_url rules as the connection
     test. When the provider has no list API or the call fails, the answer is
     {"models": [], "error": ...} and the form keeps its built-in list.
-    body: { provider, base_url?, api_key_env?, tls_verify? }
+    body: { provider, base_url?, api_key_env?, tls_verify?, ca_cert? }
     """
     body = request or {}
     provider = (body.get("provider") or "openai").strip().lower()
     api_key_env = (body.get("api_key_env") or "").strip()
     user_base_url = (body.get("base_url") or "").strip()
-    tls_verify = body.get("tls_verify", True)
+    verify = build_verify(body.get("tls_verify", True), body.get("ca_cert"))
     try:
         model_config_policy.check_api_key_env(api_key_env)
     except model_config_policy.PolicyError as e:
@@ -337,9 +340,11 @@ async def list_provider_models(request: dict = None):
             return {"models": [], "error": f"base_url is required for provider '{provider}'"}
 
     try:
-        return {"models": await _list_models(provider, api_key, base, tls_verify)}
+        return {"models": await _list_models(provider, api_key, base, verify)}
     except httpx.HTTPStatusError as e:
         return {"models": [], "error": f"the provider answered {e.response.status_code}"}
     except Exception as e:
+        if "CERTIFICATE_VERIFY_FAILED" in str(e):
+            return {"models": [], "error": "the provider's TLS certificate is not trusted: add its CA (chart customCAs, or this model's CA)"}
         return {"models": [], "error": type(e).__name__}
 

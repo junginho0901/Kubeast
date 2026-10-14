@@ -30,13 +30,16 @@ spec:
           {{- include "kubeast.resources" (dict "root" $ "key" "authService") | nindent 10 }}
           ports:
             - containerPort: 8004
-          {{- if and .Values.auth.oidc.enabled .Values.auth.oidc.existingSecret }}
+          {{- if or (and .Values.auth.oidc.enabled .Values.auth.oidc.existingSecret) .Values.customCAs }}
           env:
+            {{- if and .Values.auth.oidc.enabled .Values.auth.oidc.existingSecret }}
             - name: OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.oidc.existingSecret }}
                   key: client_secret
+            {{- end }}
+            {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           {{- end }}
           envFrom:
             - configMapRef:
@@ -75,6 +78,7 @@ spec:
             {{- end }}
             {{- end }}
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
+            {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -128,6 +132,7 @@ spec:
         {{- end }}
         {{- end }}
         {{- include "kubeast.dbCAVolume" . | nindent 8 }}
+        {{- include "kubeast.customCAVolume" . | nindent 8 }}
 {{- if .Values.ai.enabled }}
 ---
 # --- AI Service ---
@@ -170,10 +175,16 @@ spec:
             - secretRef:
                 name: {{ . }}
             {{- end }}
+          {{- if .Values.customCAs }}
+          env:
+            - name: CUSTOM_CA_DIR
+              value: /etc/kubeast/ca
+          {{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
+            {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /api/v1/ai/health
@@ -190,6 +201,7 @@ spec:
         - name: tmp
           emptyDir: {}
         {{- include "kubeast.dbCAVolume" . | nindent 8 }}
+        {{- include "kubeast.customCAVolume" . | nindent 8 }}
 {{- end }}
 ---
 # --- K8s Service ---
@@ -266,10 +278,12 @@ spec:
             {{- end }}
             {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
-          {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled }}
+            {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
+          {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs }}
           volumeMounts:
             {{- with include "kubeast.dbCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
             {{- with include "kubeast.recordingVolumeMounts" . }}{{ . | trim | nindent 12 }}{{ end }}
+            {{- with include "kubeast.customCAVolumeMount" . }}{{ . | trim | nindent 12 }}{{ end }}
           {{- end }}
           readinessProbe:
             httpGet:
@@ -283,10 +297,11 @@ spec:
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
-      {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled }}
+      {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled .Values.customCAs }}
       volumes:
         {{- with include "kubeast.dbCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
         {{- with include "kubeast.recordingVolumes" . }}{{ . | trim | nindent 8 }}{{ end }}
+        {{- with include "kubeast.customCAVolume" . }}{{ . | trim | nindent 8 }}{{ end }}
       {{- end }}
 ---
 # --- Session Service ---
@@ -325,7 +340,11 @@ spec:
                 name: kubeast-config
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
-          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
+          {{- with include "kubeast.customCAGoEnv" . }}
+          env:
+            {{- . | trim | nindent 12 }}
+          {{- end }}
+          {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -338,7 +357,7 @@ spec:
               port: 8003
             initialDelaySeconds: 10
             periodSeconds: 30
-      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
+      {{- include "kubeast.serviceVolumesBlock" . | nindent 6 }}
 ---
 # --- Frontend ---
 apiVersion: apps/v1
@@ -437,9 +456,11 @@ spec:
             - name: KUBECACHEDIR
               value: /tmp/kube-cache
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
+            {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -455,6 +476,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "kubeast.customCAVolume" . | nindent 8 }}
 ---
 # --- Model Config Controller ---
 apiVersion: apps/v1
@@ -505,12 +527,13 @@ spec:
               value: v1alpha1
             - name: MODEL_CONFIG_PLURAL
               value: modelconfigs
+            {{- with include "kubeast.customCAGoEnv" . }}{{ . | trim | nindent 12 }}{{ end }}
           envFrom:
             - configMapRef:
                 name: kubeast-config
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
-          {{- include "kubeast.dbCAVolumeMountsBlock" . | nindent 10 }}
+          {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
           readinessProbe:
             httpGet:
               path: /readyz
@@ -523,5 +546,5 @@ spec:
               port: 8081
             initialDelaySeconds: 10
             periodSeconds: 30
-      {{- include "kubeast.dbCAVolumesBlock" . | nindent 6 }}
+      {{- include "kubeast.serviceVolumesBlock" . | nindent 6 }}
 {{- end }}

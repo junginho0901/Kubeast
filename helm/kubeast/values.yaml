@@ -562,6 +562,18 @@ ingress:
   tls: false
   tlsSecretName: ""
 
+# --- Extra certificate authorities ---
+# CAs every Kubeast service trusts for the TLS it opens outward, on top of the
+# images' public CA bundle: a private CA in front of Loki, Prometheus, an OIDC
+# issuer, an LLM gateway or an audit sink, or a proxy that intercepts TLS. Each
+# entry names a Secret or a ConfigMap in the release namespace; every key holds
+# PEM certificates, and key names must differ across entries. Read at start —
+# restart the services after changing them. A model's own CA (Admin → AI Models)
+# is added on top for that model.
+customCAs: []
+#  - secret: corp-root-ca
+#  - configMap: proxy-ca
+
 # --- NetworkPolicy ---
 # Default-deny plus exactly the flows the services use (gateway → services,
 # services → database/cache/auth, apiserver and model APIs out). Enforced by

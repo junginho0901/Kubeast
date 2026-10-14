@@ -16,9 +16,10 @@ OpenAI-compatible 엔드포인트를 사용하여,
 
 from __future__ import annotations
 
-import ssl
 from typing import Optional, Dict, Any
 import httpx
+
+from app.services.tls import build_verify
 
 
 # 프로바이더별 기본 OpenAI-compatible 엔드포인트
@@ -31,22 +32,6 @@ _PROVIDER_BASE_URLS: Dict[str, str] = {
     # Azure는 사용자가 base_url을 직접 지정해야 함 (endpoint + deployment)
     # "azure": "https://<resource>.openai.azure.com/openai/deployments/<deployment>/",
 }
-
-
-def _build_verify(tls_verify: bool, ca_cert: Optional[str]):
-    """httpx 의 ``verify`` 인자를 구성.
-
-    - tls_verify=False        → 검증 비활성화 (개발/테스트 전용)
-    - ca_cert(PEM) 제공        → 시스템 CA + 커스텀 CA 둘 다 신뢰 (kagent 기본 동작)
-    - 그 외                    → 기본 시스템 CA 검증
-    """
-    if not tls_verify:
-        return False
-    if ca_cert and ca_cert.strip():
-        ctx = ssl.create_default_context()  # 시스템 CA 포함
-        ctx.load_verify_locations(cadata=ca_cert)  # 커스텀 CA 추가 신뢰
-        return ctx
-    return True
 
 
 # OpenAI-호환 엔드포인트가 top-level 파라미터로 인식하는 표준 생성 파라미터.
@@ -146,7 +131,7 @@ class ProviderAdapter:
                 self.provider, "https://api.openai.com/v1"
             )
 
-        http_client = httpx.AsyncClient(verify=_build_verify(tls_verify, ca_cert))
+        http_client = httpx.AsyncClient(verify=build_verify(tls_verify, ca_cert))
         self._default_options = options or None
 
         if self.provider == "anthropic":

@@ -69,14 +69,18 @@ export function useModelForm() {
   const currentProviderDef: ProviderDef = getProvider(formProvider) ?? PROVIDER_CATALOG[0]
   // The provider's own model list for the open form; the built-in list when it cannot be had.
   const [listBaseUrl, setListBaseUrl] = useState(formBaseUrl)
+  const [listCaCert, setListCaCert] = useState(formCaCert.trim())
   useEffect(() => {
-    const id = setTimeout(() => setListBaseUrl(formBaseUrl), 500)
+    const id = setTimeout(() => {
+      setListBaseUrl(formBaseUrl)
+      setListCaCert(formCaCert.trim())
+    }, 500)
     return () => clearTimeout(id)
-  }, [formBaseUrl])
+  }, [formBaseUrl, formCaCert])
   const formOpen = isCreating || editingId != null
   const providerModels = useQuery({
-    queryKey: ['provider-models', formProvider, listBaseUrl, formApiKeyEnv],
-    queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: formApiKeyEnv || undefined }),
+    queryKey: ['provider-models', formProvider, listBaseUrl, formApiKeyEnv, listCaCert],
+    queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: formApiKeyEnv || undefined, ca_cert: listCaCert || undefined }),
     enabled: formOpen && formProvider !== 'custom',
     staleTime: 5 * 60_000,
     retry: false,
@@ -210,6 +214,7 @@ export function useModelForm() {
         model: formModel,
         base_url: formBaseUrl || undefined,
         api_key_env: formApiKeyEnv.trim() || undefined,
+        ca_cert: formCaCert.trim() || undefined,
       })
       setTestResult(result)
     } catch (e: any) {

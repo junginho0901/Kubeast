@@ -1,0 +1,18 @@
+# Kubeast values for customCAs on kind (scripts/kind-private-ca.sh up), on top of deploy/kind/values.yaml and
+# deploy/kind/logsearch-values.yaml: trust the throwaway CA, search Loki through the HTTPS front, and let
+# ai-service list models there. Lists replace the dev values' lists, so theirs are repeated.
+customCAs:
+  - secret: kubeast-dev-ca
+features:
+  logSearch:
+    url: https://kubeast-b-control-plane:31443
+    egressCIDRs:
+      - {cidr: 172.18.0.0/16, port: 31443}
+ai:
+  baseUrlAllowedHosts:
+    - host.docker.internal
+    - kubeast-b-control-plane
+networkPolicy:
+  allowExternalEgressCIDRs:
+    - {cidr: 192.168.65.0/24, port: 11434}
+    - {cidr: 172.18.0.0/16, port: 31443}

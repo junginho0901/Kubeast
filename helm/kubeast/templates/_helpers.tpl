@@ -94,6 +94,65 @@ volumes:
 {{- end -}}
 
 {{/*
+customCAs: extra certificate authorities for outbound TLS, every entry's keys
+merged into /etc/kubeast/ca. Go reads every file of SSL_CERT_DIR on top of the
+image's bundle file; ai-service (httpx) gets CUSTOM_CA_DIR instead, because
+httpx would let SSL_CERT_DIR replace its bundle.
+*/}}
+{{- define "kubeast.customCAVolumeMount" -}}
+{{- if .Values.customCAs }}
+- name: custom-ca
+  mountPath: /etc/kubeast/ca
+  readOnly: true
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.customCAVolume" -}}
+{{- if .Values.customCAs }}
+- name: custom-ca
+  projected:
+    sources:
+      {{- range .Values.customCAs }}
+      {{- if and .secret .configMap }}
+      {{- fail "customCAs: an entry names a secret or a configMap, not both" }}
+      {{- else if .secret }}
+      - secret:
+          name: {{ .secret | quote }}
+      {{- else if .configMap }}
+      - configMap:
+          name: {{ .configMap | quote }}
+      {{- else }}
+      {{- fail "customCAs: every entry needs secret or configMap" }}
+      {{- end }}
+      {{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.customCAGoEnv" -}}
+{{- if .Values.customCAs }}
+- name: SSL_CERT_DIR
+  value: /etc/kubeast/ca
+{{- end }}
+{{- end -}}
+
+{{/* The database CA and the custom CAs, with the volumeMounts: / volumes: keys, for pods that have none otherwise. */}}
+{{- define "kubeast.serviceVolumeMountsBlock" -}}
+{{- if or .Values.postgresql.sslRootCert.secretName .Values.customCAs }}
+volumeMounts:
+  {{- with include "kubeast.dbCAVolumeMount" . }}{{ . | trim | nindent 2 }}{{ end }}
+  {{- with include "kubeast.customCAVolumeMount" . }}{{ . | trim | nindent 2 }}{{ end }}
+{{- end }}
+{{- end -}}
+
+{{- define "kubeast.serviceVolumesBlock" -}}
+{{- if or .Values.postgresql.sslRootCert.secretName .Values.customCAs }}
+volumes:
+  {{- with include "kubeast.dbCAVolume" . }}{{ . | trim | nindent 2 }}{{ end }}
+  {{- with include "kubeast.customCAVolume" . }}{{ . | trim | nindent 2 }}{{ end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Pod-level security (Pod Security Standards "restricted"). Every workload runs
 as a fixed non-root uid; images carry the matching USER. Usage:
   {{ include "kubeast.podSecurityContext" (dict "root" $ "uid" 65532 "fsGroup" 70) }}

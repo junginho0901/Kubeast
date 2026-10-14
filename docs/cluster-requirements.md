@@ -253,6 +253,7 @@ service:
 | NetworkPolicy | `networkPolicy.enabled`(기본 켬)는 NetworkPolicy를 지원하는 CNI(Calico·Cilium·EKS VPC CNI 네트워크 정책)에서만 효과 |
 | 콘솔 메트릭 수집 | `metrics.serviceMonitor`·`metrics.prometheusRule`을 켜면 prometheus-operator CRD 필요([metrics.md](metrics.md)) |
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
+| 사설 CA·TLS 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 함(없으면 새 파드가 볼륨을 기다리며 안 뜸 — 이전 파드는 계속 응답) |
 
 ## 검증한 버전 (2026-10-13)
 

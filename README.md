@@ -872,6 +872,22 @@ features:
 
 개발용(kind): `scripts/kind-logsearch.sh up` — 2번 클러스터에 Loki 하나, 두 클러스터에 OpenTelemetry Collector, Kubeast 값까지(`down`으로 되돌림).
 
+### 신뢰할 CA 추가 (사설 CA·TLS 가로채는 프록시)
+
+Kubeast 서비스는 밖으로 여는 TLS(Loki·외부 Prometheus·OIDC 발급자·Google API·감사 싱크·LLM 엔드포인트)에서 이미지에 든 공인 CA만 신뢰합니다. 사설 CA(AWS Private CA·사내 루트·자체 서명)로 연 엔드포인트나 TLS를 가로채는 사내 프록시 뒤라면 `customCAs`에 그 CA를 적습니다 — 공인 CA는 그대로 두고 더합니다.
+
+```yaml
+customCAs:
+  - secret: corp-root-ca      # 키마다 PEM 인증서(여러 장 가능), 키 이름은 항목끼리 겹치지 않게
+  - configMap: proxy-ca
+```
+
+- **어디에**: 밖으로 TLS를 여는 6개(auth·k8s·session·tool-server·model-config-controller·ai-service)에 `/etc/kubeast/ca`로 마운트. Go 서비스는 `SSL_CERT_DIR`(기본 번들 파일은 그대로 읽힘), ai-service는 `CUSTOM_CA_DIR` — httpx는 `SSL_CERT_*`를 주면 자기 번들을 바꿔 버려서 코드가 certifi 위에 더합니다. 모델별 CA(Admin → AI Models)는 그 모델에 한해 그 위에 더해지고, 모델 연결 시험·모델 목록도 같은 CA로 검증합니다.
+- **언제 읽나**: 시작할 때. CA를 바꾸면 서비스를 재시작합니다. 적은 Secret·ConfigMap이 없으면 새 파드가 볼륨을 기다리며 뜨지 않고 이전 파드가 계속 응답합니다.
+- **인증서 조건**: CA는 CA답게(`basicConstraints CA:TRUE`, `keyUsage keyCertSign`), 서버 인증서엔 키 식별자 확장 — Python 3.13+는 엄격 검증(`VERIFY_X509_STRICT`)이라 이게 없는 손수 만든 인증서는 ai-service에서만 거부됩니다.
+
+개발용(kind): `scripts/kind-private-ca.sh up` — 버리는 CA로 서명한 HTTPS 앞단을 2번 클러스터에 두고(로그 검색 Loki 경로·고정 모델 목록) Kubeast가 그 CA를 신뢰하게 함(`scripts/kind-logsearch.sh up` 다음, `down`으로 되돌림).
+
 ### 프론트엔드
 
 ```bash

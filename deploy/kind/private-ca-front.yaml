@@ -1,0 +1,74 @@
+# customCAs on kind: an HTTPS front in the second cluster whose certificate a throwaway CA signed
+# (scripts/kind-private-ca.sh makes the CA, the Secret ca-front-tls and Kubeast's kubeast-dev-ca).
+# /loki/ goes to the Loki of deploy/kind/logsearch-loki.yaml (k8s-service, Go) and /v1/models answers
+# a fixed list (ai-service's model list, Python), so both trust paths meet a private CA.
+# https://kubeast-b-control-plane:31443 on the kind docker network.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ca-front
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ca-front
+  namespace: ca-front
+data:
+  default.conf: |
+    server {
+      listen 8443 ssl;
+      ssl_certificate /etc/nginx/tls/tls.crt;
+      ssl_certificate_key /etc/nginx/tls/tls.key;
+      location /loki/ {
+        proxy_pass http://loki.loki.svc:3100;
+      }
+      location = /v1/models {
+        default_type application/json;
+        return 200 '{"object":"list","data":[{"id":"private-ca-model","object":"model"}]}';
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ca-front
+  namespace: ca-front
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ca-front}
+  template:
+    metadata:
+      labels: {app: ca-front}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.31-alpine
+          ports:
+            - {name: https, containerPort: 8443}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: conf, mountPath: /etc/nginx/conf.d}
+            - {name: tls, mountPath: /etc/nginx/tls, readOnly: true}
+      volumes:
+        - name: conf
+          configMap: {name: ca-front}
+        - name: tls
+          secret: {secretName: ca-front-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ca-front
+  namespace: ca-front
+spec:
+  type: NodePort
+  selector: {app: ca-front}
+  ports:
+    - {name: https, port: 8443, targetPort: https, nodePort: 31443}
