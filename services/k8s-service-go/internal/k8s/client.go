@@ -49,6 +49,9 @@ type clientBundle struct {
 	// bundle (not the Service) so one cluster's Prometheus never leaks into
 	// another, and a kubeconfig rotation that rebuilds the bundle re-discovers.
 	prom *promCache
+	// promSvc is a Prometheus Service named for the cluster (registration or
+	// PROMETHEUS_SERVICE), reached through the proxy without discovery.
+	promSvc *promServiceInfo
 	// promExt is the cluster's external Prometheus source (registration or the
 	// deployment-wide PROMETHEUS_URL); nil = discover one inside the cluster.
 	promExt *promExternal
@@ -246,6 +249,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create cache clientset: %w", err)
 	}
+	promExt, promSvc := promSourceFromInfo(info)
 	return &clientBundle{
 		clientset:   clientset,
 		authz:       clientset.AuthorizationV1(),
@@ -253,7 +257,8 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		discovery:   clientset.Discovery(),
 		restConfig:  cfg,
 		prom:        &promCache{},
-		promExt:     externalFromInfo(info),
+		promExt:     promExt,
+		promSvc:     promSvc,
 		cost:        &costCache{},
 		id:          info.ID,
 		cacheClient: cacheClient,

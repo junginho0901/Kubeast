@@ -25,6 +25,9 @@ type AuthType = 'keep' | 'none' | 'bearer' | 'basic'
 const inputClass = 'mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-hidden'
 const labelClass = 'block text-xs font-semibold text-slate-400'
 
+// namespace/service:port — the server checks the same (services/pkg/cluster ParsePrometheusService).
+const PROM_SERVICE_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?\/[a-z0-9]([-a-z0-9]*[a-z0-9])?:[0-9]{1,5}$/
+
 export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) {
   const { t } = useTranslation()
   const tr = (k: string, d: string, opts?: Record<string, unknown>) => t(k, { defaultValue: d, ...opts })
@@ -32,6 +35,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
 
   const [displayName, setDisplayName] = useState(cluster.display_name)
   const [kubeconfig, setKubeconfig] = useState('')
+  const [promService, setPromService] = useState(cluster.prometheus_service ?? '')
   const [promUrl, setPromUrl] = useState(cluster.prometheus_url ?? '')
   const [promLabel, setPromLabel] = useState(cluster.prometheus_cluster_label ?? '')
   const [authType, setAuthType] = useState<AuthType>(cluster.prometheus_auth ? 'keep' : 'none')
@@ -51,13 +55,15 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
 
   const authChanged = authType !== (cluster.prometheus_auth ? 'keep' : 'none')
   const authComplete = authType === 'bearer' ? token.trim() !== '' : authType === 'basic' ? username !== '' && password !== '' : true
+  const serviceValid = promService.trim() === '' || PROM_SERVICE_RE.test(promService.trim())
   const dirty =
     displayName.trim() !== cluster.display_name ||
     kubeconfig.trim() !== '' ||
+    promService.trim() !== (cluster.prometheus_service ?? '') ||
     promUrl.trim() !== (cluster.prometheus_url ?? '') ||
     promLabel.trim() !== (cluster.prometheus_cluster_label ?? '') ||
     authChanged
-  const canSave = displayName.trim() !== '' && dirty && authComplete && !saving
+  const canSave = displayName.trim() !== '' && dirty && authComplete && serviceValid && !saving
 
   const save = async () => {
     setSaving(true)
@@ -66,6 +72,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
       const patch: ClusterPatch = {}
       if (displayName.trim() !== cluster.display_name) patch.display_name = displayName.trim()
       if (kubeconfig.trim() !== '') patch.kubeconfig = kubeconfig
+      if (promService.trim() !== (cluster.prometheus_service ?? '')) patch.prometheus_service = promService.trim()
       if (promUrl.trim() !== (cluster.prometheus_url ?? '')) patch.prometheus_url = promUrl.trim()
       if (promLabel.trim() !== (cluster.prometheus_cluster_label ?? '')) patch.prometheus_cluster_label = promLabel.trim()
       if (authType === 'none' && cluster.prometheus_auth) patch.prometheus_auth = { type: 'none' }
@@ -96,6 +103,12 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
   const statusText = (s: PrometheusStatus) => {
     if (s.source === 'external') {
       return tr('cluster.edit.prometheus.resultExternal', 'External store {{endpoint}} — {{state}}', {
+        endpoint: s.endpoint,
+        state: s.available ? tr('cluster.edit.prometheus.ok', 'OK') : tr('cluster.edit.prometheus.fail', 'failed: {{message}}', { message: s.message ?? '' }),
+      })
+    }
+    if (s.source === 'proxy' && s.configured) {
+      return tr('cluster.edit.prometheus.resultConfigured', 'Service {{endpoint}} — {{state}}', {
         endpoint: s.endpoint,
         state: s.available ? tr('cluster.edit.prometheus.ok', 'OK') : tr('cluster.edit.prometheus.fail', 'failed: {{message}}', { message: s.message ?? '' }),
       })
@@ -165,7 +178,20 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
         <div className="mt-5 border-t border-slate-700 pt-4" data-testid="edit-prometheus">
           <p className="text-sm font-semibold text-white">{tr('cluster.edit.prometheus.title', 'Prometheus')}</p>
           <p className="mt-1 text-[11px] text-slate-500">
-            {tr('cluster.edit.prometheus.hint', 'Leave empty to find Prometheus inside the cluster. For a central store (Thanos, Mimir, VictoriaMetrics, …) enter its URL and the value of this cluster\'s label.')}
+            {tr('cluster.edit.prometheus.hint', 'Leave everything empty to find Prometheus inside the cluster. Name its Service if discovery cannot; for a central store (Thanos, Mimir, VictoriaMetrics, …) enter its URL and the value of this cluster\'s label.')}
+          </p>
+          <label className={`${labelClass} mt-3`}>{tr('cluster.edit.prometheus.service', 'Service in the cluster')}</label>
+          <input
+            data-testid="edit-prometheus-service"
+            value={promService}
+            onChange={(e) => setPromService(e.target.value)}
+            placeholder="monitoring/prometheus:9090"
+            className={inputClass}
+          />
+          <p className={`mt-1 text-[11px] ${serviceValid ? 'text-slate-500' : 'text-red-400'}`} data-testid="edit-prometheus-service-hint">
+            {serviceValid
+              ? tr('cluster.edit.prometheus.serviceHint', 'namespace/service:port, read through the API server. Leave empty to find it by label, then by name. A URL below takes precedence.')
+              : tr('cluster.edit.prometheus.serviceInvalid', 'Use namespace/service:port, for example monitoring/prometheus:9090.')}
           </p>
           <label className={`${labelClass} mt-3`}>{tr('cluster.edit.prometheus.url', 'URL')}</label>
           <input

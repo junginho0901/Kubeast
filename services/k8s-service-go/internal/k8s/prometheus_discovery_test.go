@@ -19,9 +19,12 @@ import (
 type promServer struct {
 	found      bool
 	healthy403 bool
-	mu         sync.Mutex
-	lists      int
-	queries    int
+	// labelled: an "o11y/prometheus-server" Service on port 80 carries the
+	// prometheus chart's server labels (found by the cluster-wide label list).
+	labelled bool
+	mu       sync.Mutex
+	lists    int
+	queries  int
 }
 
 func (p *promServer) counts() (lists, queries int) {
@@ -41,12 +44,24 @@ func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset,
 			ps.mu.Lock()
 			ps.lists++
 			ps.mu.Unlock()
+			if ps.labelled && p == "/api/v1/services" && r.URL.Query().Get("labelSelector") == "app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server" {
+				_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"prometheus-server","namespace":"o11y"},"spec":{"ports":[{"name":"http","port":80}]}}]}`))
+				return
+			}
 			if ps.found && p == "/api/v1/namespaces/monitoring/services" {
 				_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"prometheus","namespace":"monitoring"},"spec":{"ports":[{"name":"web","port":9090}]}}]}`))
 				return
 			}
 			_, _ = w.Write([]byte(`{"items":[]}`))
-		case p == "/api/v1/namespaces/monitoring/services/prometheus:9090/proxy/-/healthy":
+		case ps.found && p == "/api/v1/namespaces/monitoring/services/prometheus":
+			_, _ = w.Write([]byte(`{"metadata":{"name":"prometheus","namespace":"monitoring"},"spec":{"ports":[{"name":"web","port":9090}]}}`))
+		case ps.healthy403 && strings.HasSuffix(p, "/proxy/-/healthy"):
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403}`))
+		case ps.labelled && p == "/api/v1/namespaces/o11y/services/prometheus-server:80/proxy/-/healthy":
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("Prometheus Server is Healthy.\n"))
+		case ps.found && p == "/api/v1/namespaces/monitoring/services/prometheus:9090/proxy/-/healthy":
 			if ps.healthy403 {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403}`))
@@ -88,7 +103,11 @@ func promDiscoveryEnv(t *testing.T) {
 	t.Setenv("PROMETHEUS_URL", "")
 	t.Setenv("PROMETHEUS_AUTH_HEADER", "")
 	t.Setenv("PROMETHEUS_DISCOVER", "")
+	t.Setenv("PROMETHEUS_SERVICE", "")
 }
+
+// One discovery round: a cluster-wide list per label selector, then the namespaces.
+var oneRound = len(PrometheusServiceLabels) + 7
 
 // Discovery runs as the cache identity (which may list the Service even when
 // the caller may not), the result is remembered for the cluster, and the
@@ -118,8 +137,8 @@ func TestPrometheusDiscovery_RunsAsCacheIdentity(t *testing.T) {
 	if _, ok := s.PrometheusStatus(ctx)["endpoint"]; !ok {
 		t.Fatal("status lost the endpoint")
 	}
-	if lists, _ := view.counts(); lists != 7 {
-		t.Fatalf("service lists = %d, want one round of 7 namespaces", lists)
+	if lists, _ := view.counts(); lists != oneRound {
+		t.Fatalf("service lists = %d, want one round (%d)", lists, oneRound)
 	}
 }
 
@@ -133,8 +152,8 @@ func TestPrometheusDiscovery_ForbiddenHealthyStillFound(t *testing.T) {
 	if st["available"] != true || st["source"] != "proxy" {
 		t.Fatalf("status with a refused /-/healthy = %v", st)
 	}
-	if lists, _ := srv.counts(); lists != 7 {
-		t.Fatalf("service lists = %d, want 7 (bundle clientset stands in for the cache identity)", lists)
+	if lists, _ := srv.counts(); lists != oneRound {
+		t.Fatalf("service lists = %d, want %d (bundle clientset stands in for the cache identity)", lists, oneRound)
 	}
 }
 
@@ -149,7 +168,68 @@ func TestPrometheusDiscovery_NotFoundProbedOnce(t *testing.T) {
 			t.Fatalf("call %d: status = %v", i+1, st)
 		}
 	}
-	if lists, _ := srv.counts(); lists != 7 {
-		t.Fatalf("service lists = %d, want one round of 7", lists)
+	if lists, _ := srv.counts(); lists != oneRound {
+		t.Fatalf("service lists = %d, want one round (%d)", lists, oneRound)
+	}
+}
+
+// A Service with the prometheus chart's server labels, in a namespace and on a
+// port the old probe never looks at, is found first.
+func TestPrometheusDiscovery_LabelsFirstAnyNamespaceAnyPort(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	srv.labelled = true
+	s := newPromService(cs, nil)
+	st := s.PrometheusStatus(context.Background())
+	if st["available"] != true || st["endpoint"] != "o11y/prometheus-server:80 (via K8s API proxy)" || st["configured"] != false {
+		t.Fatalf("status = %v", st)
+	}
+	if lists, _ := srv.counts(); lists != 2 {
+		t.Fatalf("service lists = %d, want 2 (the first selector found nothing, the second did)", lists)
+	}
+}
+
+// A Service named in the settings is used without discovery; the status says
+// whether it answers.
+func TestPrometheusStatus_ConfiguredService(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	s := newPromService(cs, nil)
+	b := s.defaultBundle.Load()
+	b.promSvc = &promServiceInfo{Namespace: "monitoring", Name: "prometheus", Port: 9090}
+	st := s.PrometheusStatus(context.Background())
+	if st["available"] != true || st["configured"] != true || st["endpoint"] != "monitoring/prometheus:9090 (via K8s API proxy)" {
+		t.Fatalf("configured status = %v", st)
+	}
+	if lists, _ := srv.counts(); lists != 0 {
+		t.Fatalf("a named Service must not be discovered: %d lists", lists)
+	}
+	b.promSvc = &promServiceInfo{Namespace: "monitoring", Name: "prometheus", Port: 9999}
+	st = s.PrometheusStatus(context.Background())
+	if st["available"] != false || !strings.Contains(st["message"].(string), "has no port 9999") {
+		t.Fatalf("wrong port status = %v", st)
+	}
+	b.promSvc = &promServiceInfo{Namespace: "monitoring", Name: "nope", Port: 9090}
+	st = s.PrometheusStatus(context.Background())
+	if st["available"] != false || !strings.Contains(st["message"].(string), "monitoring/nope:9090") {
+		t.Fatalf("missing Service status = %v", st)
+	}
+}
+
+// The discovery identity is refused services/proxy on a real cluster (view has
+// no proxy): a refused /-/healthy must not make a Service that does not exist
+// look available.
+func TestPrometheusStatus_ConfiguredServiceRefusedProxy(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, _ := newPromServer(t, true, true)
+	s := newPromService(cs, nil)
+	b := s.defaultBundle.Load()
+	b.promSvc = &promServiceInfo{Namespace: "monitoring", Name: "nope", Port: 9090}
+	if st := s.PrometheusStatus(context.Background()); st["available"] != false {
+		t.Fatalf("a missing Service behind a refused proxy = %v", st)
+	}
+	b.promSvc = &promServiceInfo{Namespace: "monitoring", Name: "prometheus", Port: 9090}
+	if st := s.PrometheusStatus(context.Background()); st["available"] != true {
+		t.Fatalf("an existing Service behind a refused proxy = %v", st)
 	}
 }

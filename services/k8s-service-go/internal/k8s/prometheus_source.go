@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -28,10 +29,12 @@ type promExternal struct {
 }
 
 // promSource is where one cluster's metrics come from: an external store, or
-// a Prometheus Service found inside the cluster (proxy).
+// a Prometheus Service inside the cluster (proxy) — named in the settings
+// (configured) or found by discovery.
 type promSource struct {
-	ext   *promExternal
-	proxy *promServiceInfo
+	ext        *promExternal
+	proxy      *promServiceInfo
+	configured bool
 }
 
 // externalFromInfo resolves the cluster's external source: its own URL (with
@@ -49,6 +52,37 @@ func externalFromInfo(info cluster.Info) *promExternal {
 		return nil
 	}
 	return &promExternal{baseURL: base, authHeader: auth, labelValue: strings.TrimSpace(info.PrometheusClusterLabel)}
+}
+
+// promSourceFromInfo resolves a cluster's configured source, most specific
+// first: its own URL, its own Service, the deployment-wide PROMETHEUS_URL, the
+// deployment-wide PROMETHEUS_SERVICE. Both nil = discover (if on).
+func promSourceFromInfo(info cluster.Info) (*promExternal, *promServiceInfo) {
+	if strings.TrimSpace(info.PrometheusURL) != "" {
+		return externalFromInfo(info), nil
+	}
+	if svc := parsePromService(info.PrometheusService, "cluster "+string(info.ID)); svc != nil {
+		return nil, svc
+	}
+	if ext := externalFromInfo(info); ext != nil {
+		return ext, nil
+	}
+	return nil, parsePromService(os.Getenv("PROMETHEUS_SERVICE"), "PROMETHEUS_SERVICE")
+}
+
+// parsePromService reads "namespace/service:port"; a malformed value is logged
+// and ignored (the cluster then discovers, as if it were empty).
+func parsePromService(ref, where string) *promServiceInfo {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil
+	}
+	ns, name, port, err := cluster.ParsePrometheusService(ref)
+	if err != nil {
+		slog.Warn("prometheus service ignored", "where", where, "err", err)
+		return nil
+	}
+	return &promServiceInfo{Namespace: ns, Name: name, Port: port}
 }
 
 // PrometheusDiscoverEnabled reports whether a cluster without an external
@@ -188,6 +222,9 @@ func (s *Service) getPromSource(ctx context.Context) *promSource {
 	}
 	if b.promExt != nil {
 		return &promSource{ext: b.promExt}
+	}
+	if b.promSvc != nil {
+		return &promSource{proxy: b.promSvc, configured: true}
 	}
 	if !PrometheusDiscoverEnabled() {
 		return nil

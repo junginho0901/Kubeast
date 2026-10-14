@@ -226,6 +226,9 @@ tests:
       - equal:
           path: data.PROMETHEUS_DISCOVER
           value: "true"
+      - equal:
+          path: data.PROMETHEUS_SERVICE
+          value: ""
 
   - it: takes the external Prometheus source from features.prometheus
     set:
@@ -242,6 +245,21 @@ tests:
       - equal:
           path: data.PROMETHEUS_DISCOVER
           value: "false"
+
+  - it: takes a deployment-wide Prometheus Service (empty by default)
+    set:
+      features.prometheus.service: o11y/prometheus-server:80
+    asserts:
+      - equal:
+          path: data.PROMETHEUS_SERVICE
+          value: o11y/prometheus-server:80
+
+  - it: refuses a Prometheus Service that is not namespace/service:port
+    set:
+      features.prometheus.service: http://prometheus:9090
+    asserts:
+      - failedTemplate:
+          errorPattern: features.prometheus.service must be namespace/service:port
 
   - it: keeps the MCP server and its write tools off by default and takes both from mcp
     asserts:

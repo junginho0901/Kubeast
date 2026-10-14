@@ -17,6 +17,8 @@ export interface ClusterMeta {
   prometheus_url?: string
   prometheus_cluster_label?: string
   prometheus_auth?: boolean
+  // Prometheus Service in the cluster, namespace/service:port (empty = discover).
+  prometheus_service?: string
   health_status: string
   last_healthcheck_at?: string
   created_by: string
@@ -39,6 +41,7 @@ export interface ClusterPatch {
   prometheus_url?: string
   prometheus_cluster_label?: string
   prometheus_auth?: { type: 'none' | 'bearer' | 'basic'; token?: string; username?: string; password?: string }
+  prometheus_service?: string
 }
 
 export interface ConnectionResult {

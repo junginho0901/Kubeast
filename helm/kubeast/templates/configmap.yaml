@@ -141,6 +141,12 @@ data:
   PROMETHEUS_URL: {{ .Values.features.prometheus.url | quote }}
   PROMETHEUS_CLUSTER_LABEL: {{ .Values.features.prometheus.clusterLabel | quote }}
   PROMETHEUS_DISCOVER: {{ .Values.features.prometheus.discover | quote }}
+{{- with .Values.features.prometheus.service }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-a-z0-9]*[a-z0-9])?:[0-9]{1,5}$" .) }}
+  {{- fail "features.prometheus.service must be namespace/service:port" }}
+{{- end }}
+{{- end }}
+  PROMETHEUS_SERVICE: {{ .Values.features.prometheus.service | default "" | quote }}
   ISSUES_EVENT_WINDOW_MINUTES: {{ .Values.features.issues.eventWindowMinutes | quote }}
   OPTIMIZATION_WINDOW_HOURS: {{ .Values.features.optimization.windowHours | quote }}
   COST_ENABLED: {{ .Values.features.cost.enabled | quote }}

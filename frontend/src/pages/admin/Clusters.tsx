@@ -131,6 +131,11 @@ export default function AdminClusters() {
                         {tr('cluster.admin.prometheusExternal', 'Prometheus: external')}
                       </span>
                     )}
+                    {!c.prometheus_url && c.prometheus_service && (
+                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300" title={c.prometheus_service} data-testid="cluster-prometheus-service">
+                        {tr('cluster.admin.prometheusService', 'Prometheus: Service set')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">

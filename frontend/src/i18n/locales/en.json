@@ -3616,7 +3616,8 @@
         "disconnected": "Unreachable",
         "unknown": "Not checked"
       },
-      "prometheusExternal": "Prometheus: external"
+      "prometheusExternal": "Prometheus: external",
+      "prometheusService": "Prometheus: Service set"
     },
     "register": {
       "title": "Register cluster",
@@ -3643,7 +3644,7 @@
     "edit": {
       "prometheus": {
         "title": "Prometheus",
-        "hint": "Leave empty to find Prometheus inside the cluster. For a central store (Thanos, Mimir, VictoriaMetrics, …) enter its URL and the value of this cluster's label.",
+        "hint": "Leave everything empty to find Prometheus inside the cluster. Name its Service if discovery cannot; for a central store (Thanos, Mimir, VictoriaMetrics, …) enter its URL and the value of this cluster's label.",
         "url": "URL",
         "urlPlaceholder": "https://metrics.example.com/prometheus",
         "label": "Cluster label value",
@@ -3660,6 +3661,10 @@
         "check": "Check connection",
         "checking": "Checking...",
         "resultExternal": "External store {{endpoint}} — {{state}}",
+        "service": "Service in the cluster",
+        "serviceHint": "namespace/service:port, read through the API server. Leave empty to find it by label, then by name. A URL below takes precedence.",
+        "serviceInvalid": "Use namespace/service:port, for example monitoring/prometheus:9090.",
+        "resultConfigured": "Service {{endpoint}} — {{state}}",
         "resultProxy": "Found inside the cluster: {{endpoint}}",
         "resultNone": "No Prometheus: {{message}}",
         "ok": "OK",

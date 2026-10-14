@@ -582,6 +582,8 @@ export interface PrometheusStatus {
   auth?: boolean
   cluster_label?: string
   label_name?: string
+  // proxy: the Service was named in the settings (true) or found by discovery.
+  configured?: boolean
   message?: string
 }
 

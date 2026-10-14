@@ -49,6 +49,10 @@ type Info struct {
 	PrometheusURL          string
 	PrometheusAuthHeader   string
 	PrometheusClusterLabel string
+	// PrometheusService names the cluster's Prometheus Service
+	// ("namespace/service:port", ParsePrometheusService) to reach through the
+	// API server proxy instead of discovering one. Ignored with a URL.
+	PrometheusService string
 }
 
 // Registry is the source of truth for the set of managed clusters.

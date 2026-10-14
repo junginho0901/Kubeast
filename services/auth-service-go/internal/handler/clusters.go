@@ -272,7 +272,13 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		h.invalidateToolServer(r, id)
 	}
 
-	patch := cluster.MetaPatch{DisplayName: req.DisplayName, APIServerURL: req.APIServerURL, PrometheusURL: req.PrometheusURL, PrometheusClusterLabel: req.PrometheusClusterLabel}
+	patch := cluster.MetaPatch{DisplayName: req.DisplayName, APIServerURL: req.APIServerURL, PrometheusURL: req.PrometheusURL, PrometheusClusterLabel: req.PrometheusClusterLabel, PrometheusService: req.PrometheusService}
+	if req.PrometheusService != nil && *req.PrometheusService != "" {
+		if _, _, _, verr := cluster.ParsePrometheusService(*req.PrometheusService); verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+	}
 	if req.PrometheusURL != nil && *req.PrometheusURL != "" {
 		if verr := validatePrometheusURL(*req.PrometheusURL); verr != nil {
 			response.Error(w, http.StatusBadRequest, verr.Error())
@@ -328,7 +334,7 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 	}
 	// A changed Prometheus source takes effect on the next query: k8s-service
 	// keeps the source on its per-cluster bundle.
-	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil {
+	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil || req.PrometheusService != nil {
 		h.invalidateK8sBundle(r, id)
 	}
 	after := struct {

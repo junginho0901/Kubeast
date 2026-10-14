@@ -73,9 +73,11 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 ### Kubeast가 찾는 방법
 
-- **클러스터 안 자동 발견**: 이름에 `prometheus`가 든 Service 중 **포트 9090**을 `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default` 순서로 찾고, API 서버 프록시로 `/-/healthy`가 답하면 씁니다. 찾은 결과는 클러스터마다 10분 기억합니다.
+- **순서**: 클러스터에 적은 주소 → 클러스터에 적은 Service → 차트 `features.prometheus.url` → 차트 `features.prometheus.service` → 자동 발견.
+- **Service 지정**(Admin → Clusters → 편집 "클러스터 안 Service", 또는 차트 `features.prometheus.service`): `namespace/service:port`(Lens·Headlamp와 같은 형식). API 서버 프록시로 읽고, 상태 API가 `/-/healthy`로 닿는지 알려 줍니다.
+- **클러스터 안 자동 발견**: ① 모든 Namespace에서 레이블로 — `kubeast.io/prometheus=true` → prometheus 차트 서버(`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, 포트 80) → Prometheus Operator의 `prometheus-operated`(`operated-prometheus=true`), Service의 포트를 모두 시험 ② 없으면 이름에 `prometheus`가 든 Service 중 **포트 9090**을 `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default` 순서로. `/-/healthy`가 답하면 쓰고, 찾은 결과는 클러스터마다 10분 기억합니다. 찾기는 개요 캐시 식별자(`kubeast:cache`, `view`)로 하므로 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 그대로).
 - **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다(README "Prometheus 소스"). 이때 아래 지표가 그 클러스터 레이블을 달고 있어야 합니다.
-- Namespace가 위 7곳이 아니거나 포트가 9090이 아니면 자동 발견이 못 찾습니다 — Service 포트를 9090으로 두거나 주소를 직접 적습니다.
+- 자동 발견이 못 찾는 설치(다른 이름·레이블)는 Service에 `kubeast.io/prometheus=true`를 붙이거나 Service를 직접 적습니다.
 
 ### 있어야 하는 지표
 
@@ -93,14 +95,14 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 
 ### 예시
 
-- **prometheus-community/prometheus 차트** — [`prometheus-values.yaml`](../deploy/examples/target-cluster/prometheus-values.yaml). 서버 Service가 기본 80이라 9090으로 옮기고, 기본 수집 작업(cAdvisor·kubelet·kube-state-metrics·node-exporter)에 OpenCost를 더합니다.
+- **prometheus-community/prometheus 차트** — [`prometheus-values.yaml`](../deploy/examples/target-cluster/prometheus-values.yaml). 서버 Service는 레이블로 찾으므로 Namespace·포트(기본 80)와 상관없습니다 — 예시는 Read 프록시 값(`cluster-values.yaml`의 `viewerProxyServices`)과 맞추려고 9090으로 둡니다. 기본 수집 작업(cAdvisor·kubelet·kube-state-metrics·node-exporter)에 OpenCost를 더합니다.
 
   ```bash
   helm install prometheus prometheus-community/prometheus --version 29.36.1 \
     -n monitoring --create-namespace -f deploy/examples/target-cluster/prometheus-values.yaml
   ```
 
-- **kube-prometheus-stack** `92.3.0`: Prometheus Service(`<릴리스>-kube-prometheus-stack-prometheus`)와 operator가 만드는 `prometheus-operated`가 기본으로 9090이라 `monitoring` 같은 위 7곳에 설치하면 그대로 찾습니다. 지표도 기본 ServiceMonitor로 다 모입니다(렌더로만 확인).
+- **kube-prometheus-stack** `92.3.0`: operator가 만드는 `prometheus-operated`(레이블 `operated-prometheus=true`, 9090 — Prometheus Operator v0.94.1 소스 확인)를 레이블로 찾으므로 어느 Namespace에 설치해도 그대로 찾습니다. 지표도 기본 ServiceMonitor로 다 모입니다(렌더로만 확인).
 
 ### 확인
 

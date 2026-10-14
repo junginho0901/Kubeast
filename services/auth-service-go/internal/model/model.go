@@ -259,6 +259,8 @@ type UpdateClusterRequest struct {
 	PrometheusURL          *string                `json:"prometheus_url,omitempty"`
 	PrometheusClusterLabel *string                `json:"prometheus_cluster_label,omitempty"`
 	PrometheusAuth         *PrometheusAuthRequest `json:"prometheus_auth,omitempty"`
+	// Prometheus Service inside the cluster, "namespace/service:port"; "" clears it.
+	PrometheusService *string `json:"prometheus_service,omitempty"`
 }
 
 // PrometheusAuthRequest sets ("bearer" with Token, "basic" with Username and

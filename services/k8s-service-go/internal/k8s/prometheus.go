@@ -126,11 +126,47 @@ func (s *Service) PrometheusStatus(ctx context.Context) map[string]interface{} {
 		}
 		return out
 	}
-	return map[string]interface{}{
-		"available": true,
-		"source":    "proxy",
-		"endpoint":  fmt.Sprintf("%s/%s:%d (via K8s API proxy)", src.proxy.Namespace, src.proxy.Name, src.proxy.Port),
+	out := map[string]interface{}{
+		"available":  true,
+		"source":     "proxy",
+		"endpoint":   fmt.Sprintf("%s/%s:%d (via K8s API proxy)", src.proxy.Namespace, src.proxy.Name, src.proxy.Port),
+		"configured": src.configured,
 	}
+	// A discovered Service was verified when found; a named one is checked here,
+	// so a typo shows up instead of empty charts.
+	if src.configured {
+		if ok, msg := checkConfiguredService(ctx, s.discoveryClient(ctx), src.proxy); !ok {
+			out["available"] = false
+			out["message"] = msg
+		}
+	}
+	return out
+}
+
+// checkConfiguredService tells whether a Service named in the settings exists
+// with that port and answers /-/healthy. Existence comes first: the proxy check
+// alone counts a refusal (403) as "there", which only holds for a Service the
+// discovery listed.
+func checkConfiguredService(ctx context.Context, cs kubernetes.Interface, info *promServiceInfo) (bool, string) {
+	ref := fmt.Sprintf("%s/%s:%d", info.Namespace, info.Name, info.Port)
+	if cs == nil {
+		return false, "no client for this cluster"
+	}
+	svc, err := cs.CoreV1().Services(info.Namespace).Get(ctx, info.Name, metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Sprintf("Prometheus Service %s: %v", ref, err)
+	}
+	hasPort := false
+	for _, p := range svc.Spec.Ports {
+		hasPort = hasPort || p.Port == info.Port
+	}
+	if !hasPort {
+		return false, fmt.Sprintf("Prometheus Service %s/%s has no port %d", info.Namespace, info.Name, info.Port)
+	}
+	if !verifyPrometheusProxy(ctx, cs, info) {
+		return false, fmt.Sprintf("Prometheus Service %s does not answer through the API server proxy", ref)
+	}
+	return true, ""
 }
 
 // PrometheusQuery runs an instant query and returns parsed results.
@@ -292,7 +328,15 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	// Common namespaces where Prometheus might live, in preference order.
+	// Labels first, in every namespace (Headlamp's order): a Service marked for
+	// Kubeast, the prometheus chart's server, the Operator's prometheus-operated.
+	if info := probePrometheusLabels(probeCtx, cs); info != nil {
+		slog.Info("Prometheus discovered by label via K8s API proxy",
+			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
+		return info
+	}
+
+	// Then the common namespaces, in preference order.
 	namespaces := []string{
 		"monitoring",
 		"prometheus",
@@ -323,6 +367,36 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 	}
 
 	slog.Warn("Prometheus not found in target cluster")
+	return nil
+}
+
+// PrometheusServiceLabels are the label selectors discovery tries, in order,
+// across all namespaces.
+var PrometheusServiceLabels = []string{
+	"kubeast.io/prometheus=true",
+	"app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server",
+	"operated-prometheus=true",
+}
+
+// probePrometheusLabels returns the first Service matching PrometheusServiceLabels
+// that answers on one of its ports, or nil (listing every namespace refused
+// counts as nothing found: the namespace probe follows).
+func probePrometheusLabels(ctx context.Context, cs kubernetes.Interface) *promServiceInfo {
+	for _, selector := range PrometheusServiceLabels {
+		list, err := cs.CoreV1().Services("").List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			slog.Debug("Prometheus label discovery: list failed", "selector", selector, "err", err)
+			continue
+		}
+		for _, svc := range list.Items {
+			for _, port := range svc.Spec.Ports {
+				info := &promServiceInfo{Namespace: svc.Namespace, Name: svc.Name, Port: port.Port}
+				if verifyPrometheusProxy(ctx, cs, info) {
+					return info
+				}
+			}
+		}
+	}
 	return nil
 }
 

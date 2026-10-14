@@ -120,3 +120,34 @@ func TestPromExternalHealthAndQuery(t *testing.T) {
 		t.Fatalf("bad auth query must fail with the status: %v", err)
 	}
 }
+
+// The most specific setting wins: the cluster's URL, the cluster's Service, the
+// deployment-wide URL, the deployment-wide Service; a malformed one is ignored.
+func TestPromSourceFromInfoOrder(t *testing.T) {
+	t.Setenv("PROMETHEUS_URL", "")
+	t.Setenv("PROMETHEUS_AUTH_HEADER", "")
+	t.Setenv("PROMETHEUS_SERVICE", "")
+	if ext, svc := promSourceFromInfo(cluster.Info{}); ext != nil || svc != nil {
+		t.Fatal("nothing set must mean discover")
+	}
+	t.Setenv("PROMETHEUS_SERVICE", "monitoring/global-prom:9090")
+	if _, svc := promSourceFromInfo(cluster.Info{}); svc == nil || svc.Name != "global-prom" {
+		t.Fatalf("deployment-wide Service: %+v", svc)
+	}
+	t.Setenv("PROMETHEUS_URL", "http://central:9090")
+	if ext, svc := promSourceFromInfo(cluster.Info{}); ext == nil || svc != nil {
+		t.Fatalf("deployment-wide URL beats the deployment-wide Service: %+v %+v", ext, svc)
+	}
+	ext, svc := promSourceFromInfo(cluster.Info{PrometheusService: "o11y/prometheus-server:80"})
+	if ext != nil || svc == nil || *svc != (promServiceInfo{Namespace: "o11y", Name: "prometheus-server", Port: 80}) {
+		t.Fatalf("the cluster's Service beats the deployment-wide URL: %+v %+v", ext, svc)
+	}
+	ext, svc = promSourceFromInfo(cluster.Info{PrometheusURL: "http://mine:9090", PrometheusService: "o11y/prometheus-server:80"})
+	if ext == nil || ext.baseURL != "http://mine:9090" || svc != nil {
+		t.Fatalf("the cluster's URL beats its Service: %+v %+v", ext, svc)
+	}
+	t.Setenv("PROMETHEUS_URL", "")
+	if _, svc := promSourceFromInfo(cluster.Info{PrometheusService: "not a ref"}); svc == nil || svc.Name != "global-prom" {
+		t.Fatalf("a malformed cluster Service is ignored: %+v", svc)
+	}
+}
