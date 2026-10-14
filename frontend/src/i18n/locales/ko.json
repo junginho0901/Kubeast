@@ -2849,24 +2849,7 @@
       "or": "또는 비밀번호로 로그인"
     },
     "badge": "Kubernetes 운영을 더 빠르게",
-    "features": {
-      "dashboard": {
-        "title": "대시보드",
-        "subtitle": "클러스터 개요/핵심 지표를 빠르게 확인"
-      },
-      "monitoring": {
-        "title": "모니터링",
-        "subtitle": "Node/Pod 리소스 사용량 실시간 조회"
-      },
-      "clusterView": {
-        "title": "클러스터 뷰",
-        "subtitle": "Pod/컨테이너 로그/매니페스트 확인"
-      },
-      "aiChat": {
-        "title": "AI 챗",
-        "subtitle": "운영 질문/원인 분석/가이드 추천"
-      }
-    },
+    "featuresLabel": "Kubeast가 다루는 리소스",
     "form": {
       "loginTitle": "로그인",
       "registerTitle": "회원가입",

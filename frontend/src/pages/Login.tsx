@@ -4,9 +4,11 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/services/api'
 import { clearRedirectAfterLogin, getRedirectAfterLogin } from '@/services/auth'
 import { clearStoredCluster } from '@/contexts/ClusterContext'
-import { Activity, KeyRound, Layers, LayoutDashboard, Lock, MessageSquare, UserPlus } from 'lucide-react'
+import { KeyRound, Lock, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
+import { LoginHero } from '@/components/login/LoginHero'
+import { LOGIN_WORDS } from '@/components/login/features'
 
 type Mode = 'login' | 'register'
 
@@ -130,7 +132,8 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    // overflow-clip: the hero's names come in from past the window's edges, without scroll bars
+    <div className="min-h-screen overflow-clip bg-slate-950">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.18),rgba(2,6,23,0))]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(34,211,238,0.12),rgba(2,6,23,0))]" />
@@ -139,60 +142,31 @@ export default function Login() {
       <div className="relative mx-auto flex min-h-screen w-[min(92vw,1440px)] items-center px-6 py-12 lg:py-16">
         <div className="grid w-full grid-cols-1 items-center gap-10 lg:gap-14 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs text-slate-300">
+            {/* z-10 here and on the sign-in box: the hero's dots pass behind them on their way in */}
+            <div className="relative z-10 inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/40 px-3 py-1 text-xs text-slate-300">
               <div className="h-2 w-2 rounded-full bg-primary-500" />
               {tr('login.badge', 'Operate Kubernetes faster')}
             </div>
 
-            <div className="space-y-3">
+            <div className="relative z-10 space-y-3">
               <h1 className="flex items-center gap-4 text-[clamp(2.25rem,4vw,3.75rem)] font-bold tracking-tight text-white">
                 <img src="/icon.svg" alt="" className="h-[1.1em] w-[1.1em]" data-testid="brand-logo" />
                 Kubeast
               </h1>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 2xl:p-5">
-                <div className="flex items-center gap-2 text-sm 2xl:text-base font-semibold text-white">
-                  <LayoutDashboard className="h-4 w-4 text-primary-400" />
-                  {tr('login.features.dashboard.title', 'Dashboard')}
-                </div>
-                <p className="mt-1 text-xs 2xl:text-sm text-slate-400">
-                  {tr('login.features.dashboard.subtitle', 'Quickly review cluster overview and key metrics')}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 2xl:p-5">
-                <div className="flex items-center gap-2 text-sm 2xl:text-base font-semibold text-white">
-                  <Activity className="h-4 w-4 text-cyan-400" />
-                  {tr('login.features.monitoring.title', 'Monitoring')}
-                </div>
-                <p className="mt-1 text-xs 2xl:text-sm text-slate-400">
-                  {tr('login.features.monitoring.subtitle', 'Real-time node/pod resource usage')}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 2xl:p-5">
-                <div className="flex items-center gap-2 text-sm 2xl:text-base font-semibold text-white">
-                  <Layers className="h-4 w-4 text-primary-400" />
-                  {tr('login.features.clusterView.title', 'Cluster view')}
-                </div>
-                <p className="mt-1 text-xs 2xl:text-sm text-slate-400">
-                  {tr('login.features.clusterView.subtitle', 'View pod/container logs and manifests')}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 2xl:p-5">
-                <div className="flex items-center gap-2 text-sm 2xl:text-base font-semibold text-white">
-                  <MessageSquare className="h-4 w-4 text-primary-400" />
-                  {tr('login.features.aiChat.title', 'AI Chat')}
-                </div>
-                <p className="mt-1 text-xs 2xl:text-sm text-slate-400">
-                  {tr('login.features.aiChat.subtitle', 'Operations Q&A, root cause analysis, guidance')}
-                </p>
-              </div>
+            {/* Wide screens: the icon as particles with the features around it; narrow ones: the names only. */}
+            <div className="hidden md:block">
+              <LoginHero />
             </div>
-
+            <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-slate-400 md:hidden">
+              {LOGIN_WORDS.map((f) => (
+                <li key={f.id}>{f.text}</li>
+              ))}
+            </ul>
           </div>
 
-          <div className="w-full">
+          <div className="relative z-10 w-full">
             {registered ? (
               <div className="mx-auto w-full max-w-[clamp(420px,34vw,560px)] rounded-3xl border border-slate-800 bg-slate-900/40 p-6 lg:p-8 shadow-xl backdrop-blur-sm text-center">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20">
