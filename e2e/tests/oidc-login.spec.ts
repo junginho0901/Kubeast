@@ -17,9 +17,20 @@ test.beforeEach(async ({ request }) => {
   test.skip(!cfg.enabled, 'OIDC not enabled on auth-service — run e2e/scripts/oidc-mock.sh up')
 })
 
+// Accounts the mock provisions, removed after the run.
+const created: string[] = []
+function newEmail(name: string): string {
+  const email = `${name}-${Date.now()}@example.com`
+  created.push(email)
+  return email
+}
+
 // Drive the mock provider's login form: any username, plus the claims the ID
-// token should carry.
+// token should carry. Starts signed out from a blank page, so an app page left
+// open cannot answer the cleared cookie with its own redirect and abort this one.
 async function signInWithMock(page: Page, claims: Record<string, unknown>) {
+  await page.goto('about:blank')
+  await page.context().clearCookies()
   await page.goto('/login')
   await page.getByTestId('sso-login').click()
   await page.waitForURL(/host\.docker\.internal:8080\/default\/authorize/)
@@ -40,6 +51,15 @@ async function adminToken(request: APIRequestContext): Promise<string> {
 }
 
 test.describe('OIDC sign-in', () => {
+  test.afterAll(async ({ request }) => {
+    if (!created.length) return
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    const users = await (await request.get('/api/v1/auth/admin/users?limit=500', { headers })).json()
+    for (const u of users.filter((x: { email: string }) => created.includes(x.email))) {
+      await request.delete(`/api/v1/auth/admin/users/${u.id}`, { headers, failOnStatusCode: false })
+    }
+  })
+
   test('login page shows the provider button and the config is public', async ({ page, request }) => {
     const cfg = await (await request.get('/api/v1/auth/oidc/config')).json()
     expect(cfg).toMatchObject({ enabled: true, display_name: 'Mock IdP' })
@@ -48,7 +68,7 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('first sign-in provisions the user with the mapped account level and sets the session cookie', async ({ page }) => {
-    const email = `alice-${Date.now()}@example.com`
+    const email = newEmail('alice')
     await signInWithMock(page, {
       email,
       email_verified: true,
@@ -73,27 +93,24 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('groups drive the account level on every sign-in (sync up, then down)', async ({ page }) => {
-    const email = `bob-${Date.now()}@example.com`
+    const email = newEmail('bob')
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     expect((await me(page)).body.role?.name).toBe('Member')
 
-    await page.context().clearCookies()
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-admins'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     expect((await me(page)).body.role?.name).toBe('Admin')
 
     // Removed from every mapped group: back to the default role (Pending).
-    await page.context().clearCookies()
     await signInWithMock(page, { email, email_verified: true, groups: ['unrelated-team'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     expect((await me(page)).body.role?.name).toBe('Pending')
   })
 
   test('cluster groups grant and revoke a per-cluster role', async ({ page }) => {
-    const email = `erin-${Date.now()}@example.com`
+    const email = newEmail('erin')
     const signIn = async (groups: string[]) => {
-      await page.context().clearCookies()
       await signInWithMock(page, { email, email_verified: true, groups })
       await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
       return (await me(page)).body
@@ -126,7 +143,7 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('an unverified email is refused', async ({ page }) => {
-    await signInWithMock(page, { email: `mallory-${Date.now()}@example.com`, email_verified: false })
+    await signInWithMock(page, { email: newEmail('mallory'), email_verified: false })
     await page.waitForURL(/\/login\?error=oidc_email_unverified/)
     expect((await me(page)).status).toBe(401)
   })
@@ -138,7 +155,7 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('a provisioned account cannot sign in with a password', async ({ page, request }) => {
-    const email = `carol-${Date.now()}@example.com`
+    const email = newEmail('carol')
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
     const res = await request.post('/api/v1/auth/login', { data: { email, password: '' } })
@@ -148,10 +165,9 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('audit rows: provision, role sync, and login success/failure name the OIDC path', async ({ page, request }) => {
-    const email = `dave-${Date.now()}@example.com`
+    const email = newEmail('dave')
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
-    await page.context().clearCookies()
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-admins'] })
     await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
 

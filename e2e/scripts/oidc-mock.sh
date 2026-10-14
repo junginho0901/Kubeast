@@ -14,6 +14,7 @@ set -euo pipefail
 NS="${KUBEAST_NAMESPACE:-kubeast}"
 MOCK_IMAGE="ghcr.io/navikt/mock-oauth2-server:6.0.3"
 MOCK_NAME="kubeast-oidc-mock"
+EGRESS_NP="kubeast-e2e-oidc-mock-egress"
 ISSUER="http://host.docker.internal:8080/default"
 BASE_URL="${E2E_BASE_URL:-http://localhost:30080}"
 
@@ -26,6 +27,24 @@ case "${1:-}" in
       curl -fs "http://localhost:8080/default/.well-known/openid-configuration" >/dev/null && break
       sleep 1
     done
+    # The chart's NetworkPolicy lets auth-service out on 443/6443 only; open 8080 while the mock runs.
+    if kubectl -n "$NS" get networkpolicy -o name | grep -- '-auth-service$' >/dev/null; then
+      kubectl -n "$NS" apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: $EGRESS_NP
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+EOF
+    fi
     kubectl -n "$NS" set env deployment/auth-service \
       OIDC_ENABLED=true \
       OIDC_ISSUER_URL="$ISSUER" \
@@ -42,6 +61,7 @@ case "${1:-}" in
       OIDC_ENABLED- OIDC_ISSUER_URL- OIDC_CLIENT_ID- OIDC_CLIENT_SECRET- OIDC_REDIRECT_URL- \
       OIDC_DISPLAY_NAME- OIDC_ALLOWED_DOMAINS- OIDC_ROLE_MAPPING-
     kubectl -n "$NS" rollout status deployment/auth-service --timeout=120s
+    kubectl -n "$NS" delete networkpolicy "$EGRESS_NP" --ignore-not-found
     docker rm -f "$MOCK_NAME" >/dev/null 2>&1 || true
     ;;
   *)
