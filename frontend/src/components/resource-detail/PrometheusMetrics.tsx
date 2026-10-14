@@ -146,8 +146,9 @@ export function Sparkline({
   const fillPath = `${linePath} L ${coords[coords.length - 1].x.toFixed(1)} ${h - pad} L ${coords[0].x.toFixed(1)} ${h - pad} Z`
   const gradientId = `spark-grad-${Math.random().toString(36).slice(2, 9)}`
 
+  // width is the drawing's resolution; the graph takes its box's width and the line keeps its thickness.
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block">
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="block">
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={fillFrom} />
@@ -155,7 +156,7 @@ export function Sparkline({
         </linearGradient>
       </defs>
       <path d={fillPath} fill={`url(#${gradientId})`} stroke="none" />
-      <path d={linePath} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={linePath} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }
