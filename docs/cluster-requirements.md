@@ -87,7 +87,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 | `nginx_ingress_controller_request_duration_seconds_bucket` | ingress-nginx 컨트롤러 | Ingress 드로어 지연(P50/P95/P99) |
 | OpenCost가 내는 지표 | OpenCost(§4) | 비용 |
 
-**노드 드로어의 노드별 값**: node-exporter 시리즈의 `instance`(또는 `nodename`) 라벨에 **노드 이름이 들어 있어야** 그 노드의 값을 고릅니다(노드가 하나뿐이면 상관없음). 아래 두 차트 모두 기본값은 `instance=<노드 IP>:9100`이라, 노드가 여럿이면 노드 드로어의 카드와 24시간 추세가 비어 보입니다. kube-prometheus-stack은 node-exporter ServiceMonitor의 `relabelings`로 `instance`를 노드 이름(`__meta_kubernetes_pod_node_name`)으로 바꾸면 맞습니다. 대시보드처럼 클러스터 전체를 합치는 값은 영향이 없습니다.
+**노드 드로어의 노드별 값**: node-exporter 시리즈의 `instance`가 **노드 이름이나 노드 주소(InternalIP·ExternalIP)**여야(포트는 있어도 없어도 됨) 그 노드의 값을 고릅니다. 아래 두 차트의 기본값 `instance=<노드 IP>:9100`은 그대로 맞습니다. 그 밖의 형식(예: node-exporter 파드 IP)이면 노드 드로어의 카드와 24시간 추세가 비어 보입니다 — 다른 노드 값으로 대신 채우지 않습니다. 그때는 scrape 설정의 `relabelings`로 `instance`를 노드 이름(`__meta_kubernetes_pod_node_name`)으로 바꿉니다. 디스크·네트워크 I/O는 그 노드 장치를 합친 값(`device!="lo"`, node-exporter node-mixin과 같은 방식)입니다. 대시보드처럼 클러스터 전체를 합치는 값은 영향이 없습니다.
 
 ### 예시
 

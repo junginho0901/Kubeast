@@ -1,39 +1,28 @@
 import { usePrometheusQueries, usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard, Sparkline } from '../PrometheusMetrics'
 import { Tx } from '../DetailCommon'
+import { nodeInstanceSelector, nodeQueries } from '@/utils/nodeMetrics'
 
 interface NodePrometheusMetricsProps {
   name: string
+  // The node's InternalIP / ExternalIP: node-exporter's instance is often <IP>:9100.
+  addresses?: string[]
   tr: (key: string, fallback: string, opts?: Record<string, any>) => string
 }
 
-export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetricsProps) {
+export default function NodePrometheusMetrics({ name, addresses = [], tr }: NodePrometheusMetricsProps) {
+  const sel = nodeInstanceSelector(name, addresses)
   const promNodeMetrics = usePrometheusQueries(
-    ['node-detail', name],
-    [
-      { name: 'cpu', promql: `100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)` },
-      { name: 'memory', promql: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100` },
-      { name: 'disk_read', promql: `rate(node_disk_read_bytes_total[5m])` },
-      { name: 'disk_write', promql: `rate(node_disk_written_bytes_total[5m])` },
-      { name: 'network_rx', promql: `rate(node_network_receive_bytes_total{device!="lo"}[5m])` },
-      { name: 'network_tx', promql: `rate(node_network_transmit_bytes_total{device!="lo"}[5m])` },
-      { name: 'load1', promql: `node_load1` },
-      { name: 'filesystem', promql: `(1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100` },
-    ],
+    ['node-detail', name, sel],
+    Object.entries(nodeQueries(sel)).map(([metric, promql]) => ({ name: metric, promql })),
     { enabled: !!name },
   )
 
-  // Find this node's metrics from Prometheus results (match by hostname/instance containing node name)
+  // The queries select this node already; no series means no value (never another node's).
   const findNodeValue = (metricName: string): number | null => {
     const resp = promNodeMetrics.data[metricName]
     if (!resp?.available || !resp.results?.length) return null
-    // Try to match by instance label containing the node name
-    const match = resp.results.find((r) => {
-      const instance = r.metric?.instance || r.metric?.nodename || ''
-      return instance.includes(name)
-    })
-    // If only one result or no match, use first
-    return match ? match.value : (resp.results.length === 1 ? resp.results[0].value : null)
+    return resp.results[0].value
   }
 
   return (
@@ -52,7 +41,7 @@ export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetric
           <MetricCard label="Load (1m)" value={findNodeValue('load1')!} unit="" thresholds={{ warn: 4, danger: 8 }} />
         )}
       </div>
-      <NodeResourceTrend name={name} />
+      <NodeResourceTrend name={name} sel={sel} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(findNodeValue('disk_read') !== null || findNodeValue('disk_write') !== null) && (
@@ -94,30 +83,15 @@ export default function NodePrometheusMetrics({ name, tr }: NodePrometheusMetric
   )
 }
 
-// NodeResourceTrend — last-24h CPU% / Memory% sparklines for the selected node.
-// node_exporter's `instance` label varies across deployments (sometimes
-// `<nodeName>:9100`, sometimes just `<nodeName>`); we render the first
-// matching series in the response. Gracefully hidden if there's no data.
-function NodeResourceTrend({ name }: { name: string }) {
-  const esc = name.replace(/"/g, '\\"')
-  // We don't pin to a single `instance="<node>:9100"` here — different
-  // node-exporter deployments expose 9100 / 9101 / no-port. Instead we ask
-  // Prometheus for *all* series and the JS layer picks the one whose
-  // `instance` contains the node name (matches the existing pattern used by
-  // findNodeValue() above).
-  const cpuQ = `100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`
-  const memQ = `(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100`
-
-  const cpu = usePrometheusRangeQuery(['node-cpu-24h', name], cpuQ, { step: 300 })
-  const mem = usePrometheusRangeQuery(['node-mem-24h', name], memQ, { step: 300 })
+// NodeResourceTrend — last-24h CPU% / Memory% sparklines for the selected node. Hidden if there's no data.
+function NodeResourceTrend({ name, sel }: { name: string; sel: string }) {
+  const q = nodeQueries(sel)
+  const cpu = usePrometheusRangeQuery(['node-cpu-24h', name, sel], q.cpu, { step: 300 })
+  const mem = usePrometheusRangeQuery(['node-mem-24h', name, sel], q.memory, { step: 300 })
 
   const pickSeries = (resp: typeof cpu.data) => {
     if (!resp?.available || !resp.results?.length) return null
-    const match = resp.results.find((r) => {
-      const inst = String(r.metric?.instance || r.metric?.nodename || '')
-      return inst.includes(esc)
-    })
-    return (match ?? (resp.results.length === 1 ? resp.results[0] : null))?.points ?? null
+    return resp.results[0].points ?? null
   }
 
   const cpuPoints = pickSeries(cpu.data)
