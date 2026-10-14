@@ -166,7 +166,12 @@ test.describe('cost (OpenCost)', () => {
 
     const body: CostResponse = await (await page.request.get('/api/v1/cluster/cost?cluster=default&window=24h&aggregate=namespace')).json()
     expect(body.rows.length).toBeGreaterThan(0)
-    await expect(page.getByTestId('cost-row')).toHaveCount(body.rows.length)
+    // The table pages its rows ("Fit" by default): the pager counts every row, the first page shows its range.
+    const pager = page.getByTestId('list-pager')
+    await expect(pager).toContainText(new RegExp(`of ${body.rows.length}(?!\\d)`))
+    const shown = Number((await pager.textContent())?.match(/Showing 1-(\d+) of/)?.[1])
+    expect(shown).toBeGreaterThan(0)
+    await expect(page.getByTestId('cost-row')).toHaveCount(shown)
     await expect(page.getByTestId('cost-total')).toHaveText(money(body.totals.total_cost))
     await expect(page.getByTestId('cost-row').first()).toContainText(body.rows[0].name)
     await expect(page.getByTestId('cost-source')).toContainText('opencost/opencost:9003')
