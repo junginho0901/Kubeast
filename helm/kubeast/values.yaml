@@ -804,4 +804,4 @@ images:
   postgres: postgres:15-alpine
   redis: redis:7-alpine
   # unprivileged nginx (uid 101, pid/temp under /tmp) — required for runAsNonRoot
-  gateway: nginxinc/nginx-unprivileged:1.27-alpine
+  gateway: nginxinc/nginx-unprivileged:1.31-alpine
