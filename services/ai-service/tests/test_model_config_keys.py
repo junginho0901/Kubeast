@@ -93,3 +93,16 @@ async def test_create_route_returns_400_for_plaintext_key():
         await api_module.create_model_config(payload=Admin(), request={"name": "x", "model": "m", "api_key": "sk-1"})
     assert exc.value.status_code == 400
     assert "api_key is not stored" in exc.value.detail
+
+
+def test_resolved_key_is_masked_in_errors(monkeypatch):
+    from types import SimpleNamespace
+    from app.services.ai.debug_dump import safe_error
+    from app.services.model_config_service import _build_resolved
+
+    key = "9c" * 16  # an Azure-style key: no prefix the patterns know
+    monkeypatch.setenv("KUBEAST_AI_KEY_AZURE", key)
+    cfg = SimpleNamespace(provider="openai", model="m", base_url=None, api_key_env="KUBEAST_AI_KEY_AZURE", api_key_secret_key=None,
+                          extra_headers=None, tls_verify=None, ca_cert=None, options=None)
+    assert _build_resolved(cfg).api_key == key
+    assert key not in safe_error(RuntimeError(f"401 invalid subscription key {key}"))

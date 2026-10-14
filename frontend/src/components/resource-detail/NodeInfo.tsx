@@ -127,7 +127,11 @@ export default function NodeInfo({ name }: Props) {
 
       <NodeGpuInfo nodeDescribe={nodeDescribe} tr={tr} />
 
-      <NodePrometheusMetrics name={name} tr={tr} />
+      <NodePrometheusMetrics
+        name={name}
+        addresses={(nodeDescribe.addresses ?? []).filter((a: any) => a.type === 'InternalIP' || a.type === 'ExternalIP').map((a: any) => a.address)}
+        tr={tr}
+      />
 
       {/* Conditions */}
       <InfoSection title={tr('nodes.detail.conditions', 'Conditions')}>

@@ -226,3 +226,54 @@ def test_from_env(monkeypatch):
     monkeypatch.delenv("REDACTION_DISABLE")
     o = from_env()
     assert o.enabled and not o.pii and not o.disabled
+
+
+def _r(n: int) -> str:
+    return ("aB3dE6" * n)[:n]
+
+
+# Built from pieces so the test file holds no key-shaped literal (same fixtures as redact_test.go).
+_PROVIDER_KEYS = [
+    "sk-" + "proj-" + _r(60),
+    "sk-" + "ant-api03-" + _r(60),
+    "sk-" + _r(48),
+    "AIza" + _r(35),
+    "gh" + "p_" + _r(36),
+    "github" + "_pat_" + _r(40),
+    "xox" + "b-" + "1234567890-" + _r(20),
+    "hf" + "_" + _r(34),
+]
+
+
+def test_provider_keys():
+    for k in _PROVIDER_KEYS:
+        text = "401 - {'error': {'message': 'Incorrect API key provided: " + k + ". You can find your API key at ...'}}"
+        out, st = redact_text(text, on())
+        assert k not in out and "<REDACTED:api_key>" in out and st.kinds.get("provider_key") == 1, (k[:8], out)
+    for kept in ["sk-telecom-production-application-backend", "task-runner-0123456789abcdefghij", "sk-1234", "api_key=ollama"]:
+        out, _ = redact_text("deploy " + kept + " ready", on())
+        assert kept in out, out
+    out, _ = redact_text("key " + _PROVIDER_KEYS[0], Options(enabled=True, disabled={"provider_key"}))
+    assert _PROVIDER_KEYS[0] in out
+
+
+def test_remembered_secret_masked_by_value():
+    from app.services.redact import remember_secret
+
+    azure_like = "0f" * 16  # 32 hex characters: no published prefix
+    remember_secret(azure_like)
+    remember_secret("ollama")  # a placeholder, too short to remember
+    out, st = redact_text(f"Access denied due to invalid subscription key {azure_like}. ollama is fine", on())
+    assert azure_like not in out and "<REDACTED:api_key>" in out and "ollama is fine" in out
+    assert st.kinds.get("provider_key") == 1
+
+
+def test_safe_error_masks_whatever_the_redaction_switch(monkeypatch):
+    from app.services.ai.debug_dump import safe_error
+
+    monkeypatch.setenv("REDACTION_ENABLED", "false")
+    monkeypatch.setenv("REDACTION_DISABLE", "provider_key")
+    err = RuntimeError("Incorrect API key provided: " + _PROVIDER_KEYS[0])
+    assert _PROVIDER_KEYS[0] not in safe_error(err)
+    # a key the caller holds, even one with no known shape
+    assert "typed-in-key-123" not in safe_error(RuntimeError("bad key typed-in-key-123"), ["typed-in-key-123"])

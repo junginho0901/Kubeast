@@ -8,7 +8,8 @@
 //   - key names: a `key: value` / `key=value` / `"key": "value"` line whose key
 //     looks like a credential (password, token, api_key, ...) loses its value;
 //   - value patterns: AWS keys, private-key blocks, JWTs, credentials inside
-//     URLs, Bearer/Basic authorization values.
+//     URLs, Bearer/Basic authorization values, API keys with a published
+//     prefix (OpenAI, Anthropic, Google, GitHub, Slack, Hugging Face).
 //
 // Secret objects are handled separately and unconditionally: a YAML/JSON
 // document with `kind: Secret` loses every value under data/stringData and
@@ -35,8 +36,8 @@ type Options struct {
 	// e-mail, Korean phone and resident registration numbers, card numbers.
 	PII bool
 	// Disabled lists rule names to skip (REDACTION_DISABLE=a,b): key_name,
-	// private_key, url_credentials, authorization, jwt, aws_key, email, phone,
-	// rrn, card.
+	// private_key, url_credentials, authorization, jwt, aws_key, provider_key,
+	// email, phone, rrn, card.
 	Disabled map[string]bool
 }
 
@@ -152,6 +153,10 @@ var (
 	jwtToken        = regexp.MustCompile(`\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b`)
 	awsAccessKey    = regexp.MustCompile(`\b(AKIA|ASIA)[0-9A-Z]{16}\b`)
 	awsSecretValue  = regexp.MustCompile(`(?i)(aws_secret_access_key\s*[:=]\s*"?)([A-Za-z0-9/+=]{40})`)
+	// providerKey: API keys by their published prefixes (the gitleaks rule set), with looser lengths since an
+	// error message may cut a key short. A bare sk- run counts only with an upper-case letter and a digit,
+	// which a Kubernetes object name (lower case) never has.
+	providerKey = regexp.MustCompile(`\b(?:sk-[A-Za-z0-9_\-]{20,}|AIza[A-Za-z0-9_\-]{35}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|xox[abposr]-[A-Za-z0-9\-]{10,}|hf_[A-Za-z0-9]{30,})`)
 
 	emailAddr = regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b`)
 	krPhone   = regexp.MustCompile(`\b01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}\b`)
@@ -198,6 +203,14 @@ func Text(s string, o Options) (string, Stats) {
 			sub := awsSecretValue.FindStringSubmatch(m)
 			return sub[1] + "<REDACTED:aws_secret_key>"
 		}, &st, "aws_key")
+	}
+	if o.on("provider_key") {
+		s = replaceCount(providerKey, s, func(m string) string {
+			if strings.HasPrefix(m, "sk-") && !(strings.ContainsAny(m, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") && strings.ContainsAny(m, "0123456789")) {
+				return m
+			}
+			return "<REDACTED:api_key>"
+		}, &st, "provider_key")
 	}
 	if o.on("key_name") {
 		s = replaceCount(jsonPair, s, func(m string) string {
