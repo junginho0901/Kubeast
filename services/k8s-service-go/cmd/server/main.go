@@ -24,6 +24,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/routes"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -154,6 +155,18 @@ func main() {
 		}
 		h.SetLogFilePatterns(patterns)
 		slog.Info("log files view enabled", "paths", patterns.List(), "namespaces", cfg.LogFilesNamespaces, "max_lines", cfg.LogFilesMaxLines)
+	}
+
+	// Log store search (off unless LOG_SEARCH_ENABLED): a configuration that
+	// could not keep searches to one cluster stops the service.
+	if lsCfg := logsearch.LoadConfig(); lsCfg.Enabled {
+		searcher, err := logsearch.New(lsCfg)
+		if err != nil {
+			slog.Error("invalid log search configuration", "err", err)
+			os.Exit(1)
+		}
+		h.SetLogSearch(searcher)
+		slog.Info("log search enabled", "backend", lsCfg.Backend, "clusters", lsCfg.ClusterIDs(), "max_range", lsCfg.MaxRange.String(), "max_lines", lsCfg.MaxLines)
 	}
 
 	// Terminal session recording (off unless SESSION_RECORDING_ENABLED): the

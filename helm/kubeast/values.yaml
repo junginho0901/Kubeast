@@ -700,6 +700,39 @@ features:
     paths: []
     namespaces: []
     maxLines: 2000
+  # Log search (off by default): Pod and workload drawers search a log store
+  # (Loki) by text and time range, including pods that are gone. Read as the
+  # user's right to the logs: resource.pod.read plus, asked of the cluster as
+  # the user, get pods/log in the namespace (every namespace only for a grant
+  # not limited to namespaces). Audited as k8s.pod.logs.search. Queries are
+  # built from the filters, never typed by the user, and always carry the
+  # cluster's matcher. labels are the store's label names (defaults: Loki's
+  # OTLP labels; logs shipped with Promtail/Alloy discovery use namespace,
+  # pod, container). clusters maps a Kubeast cluster ID to the value of
+  # labels.cluster its streams carry — a cluster not listed has no search. A
+  # store holding one cluster: labels.cluster "" and that one cluster listed
+  # with "". auth.existingSecret key "authorization" = the full header value.
+  logSearch:
+    enabled: false
+    backend: loki
+    url: ""
+    auth:
+      existingSecret: ""
+    tenant: ""
+    labels:
+      cluster: k8s_cluster_name
+      namespace: k8s_namespace_name
+      pod: k8s_pod_name
+      container: k8s_container_name
+    clusters: {}
+    defaultRange: 1h
+    maxRange: 24h
+    maxLines: 1000
+    timeout: 15s
+    perUserPerMinute: 20
+    # With networkPolicy on, k8s-service reaches outside the cluster on 443
+    # and 6443 only; a store on another port needs {cidr, port} here.
+    egressCIDRs: []
 
 # Argo CD guard. An object that carries Argo CD's tracking annotation
 # (argocd.argoproj.io/tracking-id, naming the object itself) is badged with

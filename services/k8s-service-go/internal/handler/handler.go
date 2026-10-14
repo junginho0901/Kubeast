@@ -16,6 +16,7 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/hygiene"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logfiles"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -38,6 +39,10 @@ type Handler struct {
 	logFilePatterns logfiles.Patterns
 	// logFileExec replaces the container exec in tests.
 	logFileExec containerCommandFunc
+	// logSearch reads the log store (nil: log search off).
+	logSearch *logsearch.Searcher
+	// logSearchCanI replaces the pods/log access review in tests.
+	logSearchCanI func(ctx context.Context, namespace string) (bool, error)
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).

@@ -1,0 +1,112 @@
+suite: Log search — env, auth header Secret, k8s-service egress, guard
+templates:
+  - configmap.yaml
+  - deployments.yaml
+  - networkpolicy.yaml
+  - secret.yaml
+tests:
+  - it: is off by default — no store settings, no header, no egress
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_ENABLED
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notExists:
+          path: data.LOG_SEARCH_URL
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: LOG_SEARCH_AUTH_HEADER}
+          any: true
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+  - it: renders the store, labels, clusters, limits, the header and the egress
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: https://loki.monitoring.example.com
+      features.logSearch.tenant: team-a
+      features.logSearch.auth.existingSecret: loki-auth
+      features.logSearch.labels.pod: pod
+      features.logSearch.clusters: {alpha: eks-alpha, self: kind}
+      features.logSearch.maxRange: 6h
+      features.logSearch.egressCIDRs: [{cidr: 10.84.0.0/16, port: 3100}]
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_URL
+          value: https://loki.monitoring.example.com
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.LOG_SEARCH_CLUSTERS
+          value: alpha=eks-alpha,self=kind
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.LOG_SEARCH_LABEL_POD
+          value: pod
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.LOG_SEARCH_LABEL_NAMESPACE
+          value: k8s_namespace_name
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.LOG_SEARCH_MAX_RANGE
+          value: 6h
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.LOG_SEARCH_TENANT
+          value: team-a
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOG_SEARCH_AUTH_HEADER
+            valueFrom: {secretKeyRef: {name: loki-auth, key: authorization}}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.egress
+          content:
+            to: [{ipBlock: {cidr: 10.84.0.0/16}}]
+            ports: [{protocol: TCP, port: 3100}]
+        template: networkpolicy.yaml
+        documentSelector: {path: metadata.name, value: RELEASE-NAME-k8s-service}
+  - it: a store holding one cluster keeps the empty cluster label
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+      features.logSearch.labels.cluster: ""
+      features.logSearch.clusters: {self: ""}
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_LABEL_CLUSTER
+          value: ""
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.LOG_SEARCH_CLUSTERS
+          value: self=
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+  - it: refuses to render when enabled without a store or clusters
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.clusters: {self: kind}
+    asserts:
+      - failedTemplate:
+          errorPattern: features.logSearch needs url and clusters
+        template: deployments.yaml
+  - it: refuses to render when enabled without clusters
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+    asserts:
+      - failedTemplate:
+          errorPattern: features.logSearch needs url and clusters
+        template: deployments.yaml

@@ -377,6 +377,17 @@ spec:
         - protocol: TCP
           port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
     {{- end }}
+    {{- if .Values.features.logSearch.enabled }}
+    {{- range .Values.features.logSearch.egressCIDRs }}
+    # log store (features.logSearch.egressCIDRs)
+    - to:
+        - ipBlock:
+            cidr: {{ if kindIs "map" . }}{{ .cidr }}{{ else }}{{ . }}{{ end }}
+      ports:
+        - protocol: TCP
+          port: {{ if kindIs "map" . }}{{ .port | default 443 }}{{ else }}443{{ end }}
+    {{- end }}
+    {{- end }}
 {{- if .Values.ai.enabled }}
 ---
 # tool-server: ai-service 에서 inbound, kube-apiserver + ai-service egress

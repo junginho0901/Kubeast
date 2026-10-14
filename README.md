@@ -259,13 +259,14 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **Monitoring** — Prometheus 시계열 차트, 이상 감지, 상관 분석, GPU 심층 메트릭 (대상 클러스터에 있어야 하는 Prometheus·지표는 [docs/cluster-requirements.md §3](docs/cluster-requirements.md#3-prometheus))
 - **Node Shell** — 웹 기반 노드 터미널
 - **로그 파일** — 파일로 로그를 쓰는 앱의 컨테이너 안 로그를 허용 경로에서만 읽고 따라가기(고정 `tail`, 기본 off, 아래 절)
+- **로그 검색** — Loki에서 재시작·삭제된 파드까지 텍스트·기간으로 찾기, 클러스터 RBAC(`pods/log`)대로(기본 off, 아래 절)
 - **Advanced Search** — 표현식 기반 전역 리소스 탐색
 
 ### 🔐 인증 · 감사
 
 - JWT 기반 자체 인증(JWKS) — 조직(Organization) / 팀(Team) / 사용자 계층
 - **API 키** — 스크립트·CI용 자격(Settings → API keys). 키는 짧은 액세스 토큰으로 교환해 쓰며 클러스터 범위·역할 상한·만료를 갖고, 발급자의 권한을 넘지 못함(아래 "API 키" 절)
-- **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, 컨테이너 로그 파일 열람, Helm 변경 등)를
+- **감사 로그** — 모든 쓰기 작업 + 민감 조회(Secret 열람, Node Shell, 컨테이너 로그 파일 열람, 로그 검색, Helm 변경 등)를
   기록, 성공/실패 모두 추적
 - **클러스터 위생 점검** — Pod Security Standards·이미지 태그·리소스·Namespace 정책·RBAC·TLS 만료를 보는 사람 권한으로 읽어 한 장으로, CSV/JSON과 클러스터별 월간 서명(Admin → Cluster hygiene, 아래 절)
 - **AI 사용량** — 채팅 턴과 Optimization의 AI 설명마다 남는 `ai.chat.complete` 감사 행(제공자가 보낸 토큰 수를 턴 단위로 합산)을 사용자·모델·클러스터별로 집계(Admin → AI Usage). 한도는 없고 누가 얼마나 썼는지 본다; 제공자가 usage를 안 보낸 호출은 합계에서 빼고 건수로 표시
@@ -845,6 +846,31 @@ features:
     namespaces: [apps]       # 비우면 모든 네임스페이스(그때는 RoleBinding을 만들지 않으므로 Read 그룹은 클러스터가 거부)
     maxLines: 2000
 ```
+
+### 로그 검색 (Loki)
+
+`pods/log`는 살아 있는 파드의 지금 로그만 줍니다. 켜면(`features.logSearch.enabled`, 기본 off) 로그 저장소(Loki)에서 **재시작·삭제된 파드까지** 텍스트·기간으로 찾습니다 — Loki와 수집기는 따로 둡니다([docs/cluster-requirements.md §14](docs/cluster-requirements.md#14-로그-저장소-로그-검색)).
+
+- **API**: `GET /api/v1/namespaces/{ns}/logsearch`(한 Namespace) · `GET /api/v1/cluster/logsearch`(전체). 조건 `q`(256자까지) · `match=contains|regex` · `ignore_case` · `pod` 또는 `workload_kind`+`workload_name`(Deployment·StatefulSet·DaemonSet·ReplicaSet·Job·CronJob → 그 컨트롤러가 만드는 파드 이름) · `container` · `since` 또는 `start`·`end`(RFC 3339) · `limit` · `direction`. 응답 = 최신부터 줄(`ts`·`namespace`·`pod`·`container`·`line`), `truncated`이면 `oldest`를 `end`로 다시.
+- **쿼리는 서버가 만듭니다**: 사용자는 LogQL을 쓰지 않고, 값은 전부 따옴표 안 문자열로만 들어갑니다. 클러스터 라벨 매처(`clusters`의 값)는 항상 붙어 Loki 하나를 여러 클러스터가 써도 섞이지 않습니다.
+- **권한**: `resource.pod.read`(그 클러스터) + 사용자 신원으로 `get pods/log`를 물어 허용될 때만 — 클러스터 RBAC이 정합니다. 전체 검색은 그 클러스터에 Namespace 범위 부여가 있으면 403(Namespace를 고름).
+- **한도**: 기본 1시간·최대 `maxRange`(24h) · 줄 `maxLines`(1,000) · 질의 `timeout`(15s, 넘으면 504) · 사용자별 분당 `perUserPerMinute`(20, k8s-service 레플리카마다).
+- **감사**: 검색마다 `k8s.pod.logs.search`(민감 조회 — 기록이 안 되면 503). `after` = 조건·기간·줄 수·처리 바이트, 줄 본문은 남기지 않습니다. 클러스터가 거부(403)·한도 초과(429)·저장소 오류(502·504)도 실패 행.
+
+```yaml
+features:
+  logSearch:
+    enabled: true
+    url: https://loki.example.com
+    auth:
+      existingSecret: loki-auth        # 키 authorization = "Bearer …" 또는 "Basic …"
+    tenant: ""                         # X-Scope-OrgID (멀티 테넌트 Loki)
+    clusters:                          # Kubeast 클러스터 ID: k8s_cluster_name 값
+      prod-1: prod-1
+      alpha: eks-alpha
+```
+
+개발용(kind): `scripts/kind-logsearch.sh up` — 2번 클러스터에 Loki 하나, 두 클러스터에 OpenTelemetry Collector, Kubeast 값까지(`down`으로 되돌림).
 
 ### 프론트엔드
 

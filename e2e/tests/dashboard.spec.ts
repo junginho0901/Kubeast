@@ -16,13 +16,16 @@ test.describe('Dashboard', () => {
 
     // Mask the dynamic data regions: pod-name hashes change on every
     // restart, CPU/Memory percentages refresh every 5s (the Prometheus
-    // utilization card too, when the cluster has Prometheus). We compare
-    // layout, not values.
+    // utilization card too, when the cluster has Prometheus), and the
+    // object counts and the pod status bars move with whatever the dev
+    // clusters run. We compare layout, not values.
     await expect(page).toHaveScreenshot('dashboard-initial.png', {
       fullPage: true,
       animations: 'disabled',
       maxDiffPixels: 500,
       mask: [
+        page.locator('[data-testid^="stat-value-"]'),
+        page.locator('.card').filter({ hasText: /^Pod (status|상태)/i }),
         page.locator('.card').filter({ hasText: /top.*pod|top.*파드/i }),
         page.locator('.card').filter({ hasText: /top.*node|top.*노드/i }),
         page.locator('.card').filter({ hasText: /Cluster Resource Utilization|클러스터 리소스/i }),

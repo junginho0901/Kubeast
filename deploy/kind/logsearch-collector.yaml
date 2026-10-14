@@ -1,0 +1,77 @@
+# Log search on kind: an OpenTelemetry Collector per cluster that tails the node's
+# container logs (/var/log/pods) and sends them to Loki over OTLP — the path a company
+# collector takes. The container parser reads the pod, namespace and container from the
+# file path, so the collector needs no Kubernetes API access. scripts/kind-logsearch.sh
+# fills CLUSTER_NAME (k8s.cluster.name → Loki label k8s_cluster_name) and LOKI_OTLP.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: otel
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  namespace: otel
+data:
+  config.yaml: |
+    receivers:
+      filelog:
+        include: [/var/log/pods/*/*/*.log]
+        exclude: [/var/log/pods/otel_*/*/*.log, /var/log/pods/loki_*/*/*.log]
+        start_at: end
+        include_file_path: true
+        operators:
+          - type: container
+    processors:
+      resource:
+        attributes:
+          - {key: k8s.cluster.name, value: CLUSTER_NAME, action: upsert}
+      batch:
+        timeout: 2s
+    exporters:
+      otlphttp:
+        endpoint: LOKI_OTLP
+    service:
+      telemetry:
+        logs: {level: warn}
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [resource, batch]
+          exporters: [otlphttp]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: otel
+spec:
+  selector:
+    matchLabels: {app: otel-collector}
+  template:
+    metadata:
+      labels: {app: otel-collector}
+    spec:
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.162.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otel/config.yaml"]
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            # /var/log/pods is readable by root only on kind nodes.
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL], add: [DAC_READ_SEARCH]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/otel}
+            - {name: pods, mountPath: /var/log/pods, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: otel-collector}
+        - name: pods
+          hostPath: {path: /var/log/pods}

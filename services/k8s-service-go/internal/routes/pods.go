@@ -21,6 +21,9 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/logfiles/content", h.GetLogFileContent)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/logfiles/stream", h.LogFileStream)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/rbac", h.GetPodRBAC)
+	// Log store search (features.logSearch): one namespace, or every namespace for an unscoped grant.
+	r.Get("/api/v1/namespaces/{namespace}/logsearch", h.LogSearchNamespace)
+	r.Get("/api/v1/logsearch", h.LogSearchAll)
 	r.Delete("/api/v1/namespaces/{namespace}/pods/{pod_name}", h.DeletePod)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/exec/ws", h.PodExecWS)
 }

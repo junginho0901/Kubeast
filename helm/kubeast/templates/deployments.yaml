@@ -256,6 +256,15 @@ spec:
                   name: {{ . | quote }}
                   key: authorization
             {{- end }}
+            {{- if .Values.features.logSearch.enabled }}
+            {{- with .Values.features.logSearch.auth.existingSecret }}
+            - name: LOG_SEARCH_AUTH_HEADER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: authorization
+            {{- end }}
+            {{- end }}
             {{- with include "kubeast.awsEnv" . }}{{ nindent 12 . }}{{- end }}
           {{- if or .Values.postgresql.sslRootCert.secretName .Values.sessionRecording.enabled }}
           volumeMounts:

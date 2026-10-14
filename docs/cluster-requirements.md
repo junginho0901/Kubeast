@@ -2,7 +2,7 @@
 
 Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다(노드 셸 파드 하나만 예외, §9). 기능마다 클러스터에 미리 있어야 하는 것이 있고, 없으면 그 기능은 "없음"·"설치 안 됨"·"권한 없음"으로 표시되거나 영역이 숨습니다. 이 문서는 기능별로 **무엇이 있어야 하는지 · Kubeast가 그걸 어떻게 찾는지 · 없으면 어떻게 보이는지 · 어떻게 확인하는지 · 예시**를 적습니다. 예시 파일은 [`deploy/examples/target-cluster/`](../deploy/examples/target-cluster/)에 있습니다.
 
-"대상 클러스터"는 Kubeast가 관리하는 클러스터(설치된 클러스터 자신 포함)이고, Kubeast가 설치되는 클러스터의 조건은 §14에 따로 있습니다.
+"대상 클러스터"는 Kubeast가 관리하는 클러스터(설치된 클러스터 자신 포함)이고, Kubeast가 설치되는 클러스터의 조건은 §15에 따로 있습니다.
 
 ## 한눈에
 
@@ -19,6 +19,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다(노�
 | 재시작 없이 적용(resize) | Kubernetes 1.35 이상 — §8 | `features.inPlaceResize.enabled`(켬) | 버튼이 숨고 API 409 |
 | 노드 셸 | 특권 파드 허용과 이미지 — §9 | `nodeShell.enabled`(끔) | 파드 생성 실패 |
 | 컨테이너 안 로그 파일 | 이미지에 `ls`·`tail`, exec 권한 — §10 | `features.logFiles.enabled`(끔) | 422 "볼 수 없음" |
+| 로그 검색 | 로그를 Loki로 보내는 수집기, `pods/log` 읽기 권한 — §14 | `features.logSearch.enabled`(끔) | 검색이 안 보이고 API 404 |
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패" |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
 
@@ -211,7 +212,38 @@ receivers:
 
 - **확인**: Kubeast Admin → Investigations에 행이 생기는지(심각도 필터에 걸리면 행이 없음). 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved}`가 Alertmanager 로그에 남습니다. 개발용 전체 예시는 [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml).
 
-## 14. Kubeast가 설치되는 클러스터
+## 14. 로그 저장소 (로그 검색)
+
+Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 설치하지 않습니다.
+
+- **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것. 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `filelog` + `container` 파서 또는 `k8sattributes`, `otlphttp` → Loki `/otlp`). Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
+- **클러스터 라벨**: Loki 하나에 여러 클러스터를 넣으면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적습니다. 적지 않은 클러스터는 검색이 없습니다.
+- **권한**: 사용자 신원으로 `get pods/log`(그 Namespace, 전체 검색은 전체)를 묻습니다. `view`·`edit`에 들어 있으므로 §1의 Read·Write 그룹이면 됩니다. Namespace 범위 부여는 그 Namespace에 바인딩이 있어야 합니다.
+- **네트워크**: k8s-service에서 Loki로. `networkPolicy`가 켜져 있고 443이 아닌 포트면 `features.logSearch.egressCIDRs`.
+
+```yaml
+# OpenTelemetry Collector contrib 0.162.0 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)
+receivers:
+  filelog:
+    include: [/var/log/pods/*/*/*.log]
+    include_file_path: true
+    operators:
+      - type: container          # 경로에서 k8s.namespace.name·k8s.pod.name·k8s.container.name
+processors:
+  resource:
+    attributes:
+      - {key: k8s.cluster.name, value: prod-1, action: upsert}
+exporters:
+  otlphttp:
+    endpoint: https://loki.example.com/otlp
+service:
+  pipelines:
+    logs: {receivers: [filelog], processors: [resource], exporters: [otlphttp]}
+```
+
+- **확인**: Loki에서 `/loki/api/v1/label/k8s_cluster_name/values`에 그 값이 보이는지, Kubeast에서 그 클러스터의 Pod 로그 검색이 줄을 돌려주는지. 개발용 전체 예시는 `scripts/kind-logsearch.sh`(`deploy/kind/logsearch-*.yaml`).
+
+## 15. Kubeast가 설치되는 클러스터
 
 | 무엇 | 조건 |
 | --- | --- |
@@ -233,6 +265,7 @@ receivers:
 | metrics-server | 0.9.0 | 개발용 2번 클러스터(`deploy/kind/second-cluster.yaml`) |
 | Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
+| Loki · OpenTelemetry Collector contrib | 3.7.8 · 0.162.0 | 10-14, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 
 kind 노드는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비고, local-path 볼륨은 볼륨 통계가 없습니다 — 실제 노드·CSI 드라이버에서는 나오는 값입니다.

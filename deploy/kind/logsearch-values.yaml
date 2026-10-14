@@ -1,0 +1,12 @@
+# Kubeast values for log search on kind (scripts/kind-logsearch.sh up). The store is the
+# Loki in kubeast-b (deploy/kind/logsearch-loki.yaml), reached by its container name on the
+# kind docker network; k8s-service's NetworkPolicy gets that network on the NodePort.
+features:
+  logSearch:
+    enabled: true
+    url: http://kubeast-b-control-plane:31100
+    clusters:
+      self: kubeast
+      default: kubeast-b
+    egressCIDRs:
+      - {cidr: 172.18.0.0/16, port: 31100}

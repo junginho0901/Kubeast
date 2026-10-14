@@ -177,6 +177,29 @@ data:
   LOG_FILES_MAX_LINES: {{ .maxLines | quote }}
 {{- end }}
 {{- end }}
+{{- with .Values.features.logSearch }}
+  LOG_SEARCH_ENABLED: {{ .enabled | quote }}
+{{- if .enabled }}
+{{- if or (not .url) (not .clusters) }}
+  {{- fail "features.logSearch needs url and clusters (Kubeast cluster ID: value of labels.cluster) when enabled" }}
+{{- end }}
+  LOG_SEARCH_BACKEND: {{ .backend | quote }}
+  LOG_SEARCH_URL: {{ .url | quote }}
+  LOG_SEARCH_TENANT: {{ .tenant | quote }}
+  LOG_SEARCH_LABEL_CLUSTER: {{ .labels.cluster | quote }}
+  LOG_SEARCH_LABEL_NAMESPACE: {{ .labels.namespace | quote }}
+  LOG_SEARCH_LABEL_POD: {{ .labels.pod | quote }}
+  LOG_SEARCH_LABEL_CONTAINER: {{ .labels.container | quote }}
+  {{- $pairs := list }}
+  {{- range $id, $value := .clusters }}{{ $pairs = append $pairs (printf "%s=%s" $id $value) }}{{ end }}
+  LOG_SEARCH_CLUSTERS: {{ join "," $pairs | quote }}
+  LOG_SEARCH_DEFAULT_RANGE: {{ .defaultRange | quote }}
+  LOG_SEARCH_MAX_RANGE: {{ .maxRange | quote }}
+  LOG_SEARCH_MAX_LINES: {{ .maxLines | quote }}
+  LOG_SEARCH_TIMEOUT: {{ .timeout | quote }}
+  LOG_SEARCH_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+{{- end }}
+{{- end }}
   GITOPS_ARGOCD_ENABLED: {{ .Values.gitops.argocd.enabled | quote }}
   GITOPS_ARGOCD_MODE: {{ .Values.gitops.argocd.mode | quote }}
   GITOPS_ARGOCD_TRACKING_ANNOTATION: {{ .Values.gitops.argocd.trackingAnnotation | quote }}
