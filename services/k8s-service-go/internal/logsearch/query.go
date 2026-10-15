@@ -102,10 +102,11 @@ func (c Config) Normalize(req *Request, now time.Time) error {
 
 // LogQL builds the Loki query for req on cluster value clusterValue. Every
 // user value is a quoted literal; the cluster matcher (when the store has a
-// cluster label) and a namespace matcher are always present.
+// cluster label and this cluster a value in it — a cluster's own store may
+// hold it alone) and a namespace matcher are always present.
 func (c Config) LogQL(req Request, clusterValue string) string {
 	var m []string
-	if c.Labels.Cluster != "" {
+	if c.Labels.Cluster != "" && clusterValue != "" {
 		m = append(m, c.Labels.Cluster+"="+strconv.Quote(clusterValue))
 	}
 	if req.Namespace != "" {

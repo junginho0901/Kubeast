@@ -172,7 +172,7 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		"issues":             map[string]interface{}{"eventWindowMinutes": h.cfg.IssuesEventWindowMinutes},
 		"optimization":       map[string]interface{}{"windowHours": h.cfg.OptimizationWindowHours},
 		"logFiles":           map[string]interface{}{"enabled": h.cfg.LogFilesEnabled, "maxLines": h.cfg.LogFilesMaxLines, "namespaces": nonNilStrings(h.cfg.LogFilesNamespaces)},
-		"logSearch":          h.logSearchFeature(),
+		"logSearch":          h.logSearchFeature(r.Context()),
 		"tracing":            h.tracingFeature(),
 		"inPlaceResize":      map[string]interface{}{"enabled": h.cfg.InPlaceResizeEnabled, "serverSupports": h.cfg.InPlaceResizeEnabled && h.svc.ServerSupportsResize(r.Context())},
 		"admissionPolicies":  map[string]interface{}{"readOnly": h.cfg.AdmissionPoliciesReadOnly},

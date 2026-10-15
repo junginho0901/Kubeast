@@ -187,11 +187,11 @@ func TestLogSearchRateLimitAndStoreErrors(t *testing.T) {
 }
 
 func TestLogSearchFeature(t *testing.T) {
-	if got := (&Handler{}).logSearchFeature(); got["enabled"] != false {
+	if got := (&Handler{}).logSearchFeature(context.Background()); got["enabled"] != false {
 		t.Fatalf("off: %v", got)
 	}
 	f := newLogSearchFixture(t, lokiAnswers())
-	got := f.h.logSearchFeature()
+	got := f.h.logSearchFeature(context.Background())
 	if got["enabled"] != true || got["maxLines"] != 100 || got["maxRangeMinutes"] != 1440 || len(got["clusters"].([]string)) != 1 {
 		t.Fatalf("on: %v", got)
 	}

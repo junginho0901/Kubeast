@@ -136,6 +136,11 @@ export default function AdminClusters() {
                         {tr('cluster.admin.prometheusService', 'Prometheus: Service set')}
                       </span>
                     )}
+                    {c.log_search_url && (
+                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300" title={c.log_search_url} data-testid="cluster-logsearch-own">
+                        {tr('cluster.admin.logSearchOwn', 'Log search: own store')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">

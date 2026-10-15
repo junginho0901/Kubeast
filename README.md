@@ -857,6 +857,7 @@ features:
 - **권한**: `resource.pod.read`(그 클러스터) + 사용자 신원으로 `get pods/log`를 물어 허용될 때만 — 클러스터 RBAC이 정합니다. 전체 검색은 그 클러스터에 Namespace 범위 부여가 있으면 403(Namespace를 고름).
 - **한도**: 기본 1시간·최대 `maxRange`(24h) · 줄 `maxLines`(1,000) · 질의 `timeout`(15s, 넘으면 504) · 사용자별 분당 `perUserPerMinute`(20, k8s-service 레플리카마다).
 - **감사**: 검색마다 `k8s.pod.logs.search`(민감 조회 — 기록이 안 되면 503). `after` = 조건·기간·줄 수·처리 바이트, 줄 본문은 남기지 않습니다. 클러스터가 거부(403)·한도 초과(429)·저장소 오류(502·504)도 실패 행.
+- **클러스터마다 다른 Loki**: 어떤 클러스터의 로그가 다른 저장소에 있으면 Admin → Clusters → 편집의 "로그 검색"에 그 저장소의 주소·인증(Bearer/Basic, 값은 `cluster-logsearch-<id>` Secret)·테넌트(`X-Scope-OrgID`)·그 저장소에서 이 클러스터가 갖는 레이블 값(비우면 "그 저장소엔 이 클러스터뿐")을 적습니다 — 그 클러스터는 `url` 대신 그 저장소를 씁니다. 모든 클러스터가 자기 저장소를 적는 운영이면 `url`·`clusters`는 둘 다 비워도 됩니다. 레이블 **이름**과 한도는 배포 전체 값 그대로. "연결 확인"(`GET /api/v1/cluster/logsearch/status`)이 어느 저장소를 쓰는지와 인증·테넌트까지 답하는지를 보여 줍니다. `networkPolicy`가 켜져 있으면 그 저장소의 호스트·포트도 `egressCIDRs`에.
 
 ```yaml
 features:

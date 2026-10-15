@@ -745,6 +745,10 @@ features:
   # labels.cluster its streams carry — a cluster not listed has no search. A
   # store holding one cluster: labels.cluster "" and that one cluster listed
   # with "". auth.existingSecret key "authorization" = the full header value.
+  # A cluster whose logs live in another store names it in Admin → Clusters
+  # → Edit (URL, credentials, tenant, its cluster label value); that comes
+  # before url, and url and clusters may both stay empty when every cluster
+  # does so. Another store's host and port need egress too (egressCIDRs).
   logSearch:
     enabled: false
     backend: loki

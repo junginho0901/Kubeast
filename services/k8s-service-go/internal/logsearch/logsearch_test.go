@@ -282,7 +282,8 @@ func TestAllowIsPerUser(t *testing.T) {
 	if !s.Allow("u2") {
 		t.Fatal("another user shares the budget")
 	}
-	if !s.Configured("b") || s.Configured("test2") || (*Searcher)(nil).Configured("self") {
+	ctx := context.Background()
+	if !s.Configured(ctx, "b") || s.Configured(ctx, "test2") || (*Searcher)(nil).Configured(ctx, "self") {
 		t.Fatal("Configured")
 	}
 }

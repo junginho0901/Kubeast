@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/gitops"
@@ -55,6 +56,9 @@ type clientBundle struct {
 	// promExt is the cluster's external Prometheus source (registration or the
 	// deployment-wide PROMETHEUS_URL); nil = discover one inside the cluster.
 	promExt *promExternal
+	// logStore is the log store the cluster names for itself (registration);
+	// nil = the deployment-wide one, if any (logstore.go).
+	logStore *logsearch.Store
 	// cost caches this cluster's discovered OpenCost and its recent allocation
 	// answers (cost.go), on the bundle for the same reasons as prom.
 	cost *costCache
@@ -259,6 +263,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		prom:        &promCache{},
 		promExt:     promExt,
 		promSvc:     promSvc,
+		logStore:    logStoreFromInfo(info),
 		cost:        &costCache{},
 		id:          info.ID,
 		cacheClient: cacheClient,

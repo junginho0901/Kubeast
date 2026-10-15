@@ -78,7 +78,45 @@ type lokiResponse struct {
 	} `json:"data"`
 }
 
-func (l *loki) search(ctx context.Context, req Request, clusterValue string) (Result, error) {
+// get asks store for path with the store's headers.
+func (l *loki) get(ctx context.Context, store Store, path string, params url.Values) (*http.Response, error) {
+	hreq, err := http.NewRequestWithContext(ctx, http.MethodGet, store.URL+path+"?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	hreq.Header.Set("Accept", "application/json")
+	if store.AuthHeader != "" {
+		hreq.Header.Set("Authorization", store.AuthHeader)
+	}
+	if store.Tenant != "" {
+		hreq.Header.Set("X-Scope-OrgID", store.Tenant)
+	}
+	return l.http.Do(hreq)
+}
+
+// healthy asks store for its label names over the last five minutes: a 200
+// means the URL, the credentials and the tenant all work.
+func (l *loki) healthy(ctx context.Context, store Store) (bool, string) {
+	now := time.Now()
+	params := url.Values{}
+	params.Set("start", strconv.FormatInt(now.Add(-5*time.Minute).UnixNano(), 10))
+	params.Set("end", strconv.FormatInt(now.UnixNano(), 10))
+	resp, err := l.get(ctx, store, "/loki/api/v1/labels", params)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || isTimeout(err) {
+			return false, ErrTimeout.Error()
+		}
+		return false, err.Error()
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	if resp.StatusCode != http.StatusOK {
+		return false, (&StoreError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body))}).Error()
+	}
+	return true, ""
+}
+
+func (l *loki) search(ctx context.Context, req Request, store Store, clusterValue string) (Result, error) {
 	query := l.cfg.LogQL(req, clusterValue)
 	params := url.Values{}
 	params.Set("query", query)
@@ -91,18 +129,7 @@ func (l *loki) search(ctx context.Context, req Request, clusterValue string) (Re
 	}
 	params.Set("direction", direction)
 
-	hreq, err := http.NewRequestWithContext(ctx, http.MethodGet, l.cfg.URL+"/loki/api/v1/query_range?"+params.Encode(), nil)
-	if err != nil {
-		return Result{Query: query}, err
-	}
-	hreq.Header.Set("Accept", "application/json")
-	if l.cfg.AuthHeader != "" {
-		hreq.Header.Set("Authorization", l.cfg.AuthHeader)
-	}
-	if l.cfg.Tenant != "" {
-		hreq.Header.Set("X-Scope-OrgID", l.cfg.Tenant)
-	}
-	resp, err := l.http.Do(hreq)
+	resp, err := l.get(ctx, store, "/loki/api/v1/query_range", params)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || isTimeout(err) {
 			return Result{Query: query}, ErrTimeout

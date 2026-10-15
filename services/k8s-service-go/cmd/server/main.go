@@ -181,6 +181,10 @@ func main() {
 			slog.Error("invalid log search configuration", "err", err)
 			os.Exit(1)
 		}
+		// A cluster may name its own store in its registration (before the
+		// deployment-wide one).
+		searcher.OwnStore = k8sSvc.LogStore
+		searcher.OwnStoreClusters = k8sSvc.LogStoreClusters
 		h.SetLogSearch(searcher)
 		slog.Info("log search enabled", "backend", lsCfg.Backend, "clusters", lsCfg.ClusterIDs(), "max_range", lsCfg.MaxRange.String(), "max_lines", lsCfg.MaxLines)
 	}

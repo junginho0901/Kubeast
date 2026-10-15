@@ -83,12 +83,18 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 		promSecret *string
 		promLabel  *string
 		promSvc    *string
+		lsURL      *string
+		lsSecret   *string
+		lsTenant   *string
+		lsLabel    *string
 	)
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster,
-		       prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service
+		       prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service,
+		       log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label
 		FROM clusters WHERE id = $1`, id,
-	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster, &promURL, &promSecret, &promLabel, &promSvc)
+	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster, &promURL, &promSecret, &promLabel, &promSvc,
+		&lsURL, &lsSecret, &lsTenant, &lsLabel)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -112,6 +118,24 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 			slog.Warn("cluster: prometheus auth secret unreadable", "id", id, "secret", *promSecret, "err", err)
 		} else {
 			info.PrometheusAuthHeader = h
+		}
+	}
+	if lsURL != nil {
+		info.LogSearchURL = *lsURL
+	}
+	if lsTenant != nil {
+		info.LogSearchTenant = *lsTenant
+	}
+	if lsLabel != nil {
+		info.LogSearchClusterLabel = *lsLabel
+	}
+	// Same for the log store: without the header the store answers 401 and the
+	// log search status says so.
+	if lsSecret != nil && *lsSecret != "" && r.secrets != nil {
+		if h, err := r.secrets.ReadValue(ctx, *lsSecret, LogSearchAuthKey); err != nil {
+			slog.Warn("cluster: log search auth secret unreadable", "id", id, "secret", *lsSecret, "err", err)
+		} else {
+			info.LogSearchAuthHeader = h
 		}
 	}
 
@@ -163,12 +187,18 @@ type Meta struct {
 	PrometheusClusterLabel string `json:"prometheus_cluster_label,omitempty"`
 	PrometheusAuth         bool   `json:"prometheus_auth"`
 	// Prometheus Service in the cluster ("namespace/service:port"; empty = discover).
-	PrometheusService string     `json:"prometheus_service,omitempty"`
-	HealthStatus      string     `json:"health_status"`
-	LastHealthcheckAt *time.Time `json:"last_healthcheck_at,omitempty"`
-	CreatedBy         string     `json:"created_by"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	PrometheusService string `json:"prometheus_service,omitempty"`
+	// This cluster's own log store (empty = the deployment-wide one); the auth
+	// header never leaves the Secret, only whether one is set.
+	LogSearchURL          string     `json:"log_search_url,omitempty"`
+	LogSearchTenant       string     `json:"log_search_tenant,omitempty"`
+	LogSearchClusterLabel string     `json:"log_search_cluster_label,omitempty"`
+	LogSearchAuth         bool       `json:"log_search_auth"`
+	HealthStatus          string     `json:"health_status"`
+	LastHealthcheckAt     *time.Time `json:"last_healthcheck_at,omitempty"`
+	CreatedBy             string     `json:"created_by"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 func scanMeta(row pgx.Row) (Meta, error) {
@@ -182,11 +212,26 @@ func scanMeta(row pgx.Row) (Meta, error) {
 		promSecret *string
 		promLabel  *string
 		promSvc    *string
+		lsURL      *string
+		lsSecret   *string
+		lsTenant   *string
+		lsLabel    *string
 	)
 	if err := row.Scan(&m.ID, &m.DisplayName, &mode, &apiURL, &m.IsSelfCluster,
-		&health, &lastCheck, &m.CreatedBy, &m.CreatedAt, &m.UpdatedAt, &promURL, &promSecret, &promLabel, &promSvc); err != nil {
+		&health, &lastCheck, &m.CreatedBy, &m.CreatedAt, &m.UpdatedAt, &promURL, &promSecret, &promLabel, &promSvc,
+		&lsURL, &lsSecret, &lsTenant, &lsLabel); err != nil {
 		return Meta{}, err
 	}
+	if lsURL != nil {
+		m.LogSearchURL = *lsURL
+	}
+	if lsTenant != nil {
+		m.LogSearchTenant = *lsTenant
+	}
+	if lsLabel != nil {
+		m.LogSearchClusterLabel = *lsLabel
+	}
+	m.LogSearchAuth = lsSecret != nil && *lsSecret != ""
 	m.Mode = Mode(mode)
 	if apiURL != nil {
 		m.APIServerURL = *apiURL
@@ -210,7 +255,8 @@ func scanMeta(row pgx.Row) (Meta, error) {
 
 const metaColumns = `id, display_name, mode, api_server_url, is_self_cluster,
 	health_status, last_healthcheck_at, created_by, created_at, updated_at,
-	prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service`
+	prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service,
+	log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label`
 
 // ListMeta returns metadata for every registered cluster (admin CRUD list).
 func (r *PostgresRegistry) ListMeta(ctx context.Context) ([]Meta, error) {
@@ -337,8 +383,8 @@ func (r *PostgresRegistry) AddSelf(ctx context.Context, displayName, createdBy s
 // best-effort removes its kubeconfig secret. A secret-delete failure does not
 // fail the call — the row is already gone.
 func (r *PostgresRegistry) Remove(ctx context.Context, id ID, writer SecretWriter) error {
-	var secretName, promSecret *string
-	err := r.pool.QueryRow(ctx, `SELECT kubeconfig_secret_name, prometheus_auth_secret_name FROM clusters WHERE id = $1`, id).Scan(&secretName, &promSecret)
+	var secretName, promSecret, lsSecret *string
+	err := r.pool.QueryRow(ctx, `SELECT kubeconfig_secret_name, prometheus_auth_secret_name, log_search_auth_secret_name FROM clusters WHERE id = $1`, id).Scan(&secretName, &promSecret, &lsSecret)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -358,6 +404,11 @@ func (r *PostgresRegistry) Remove(ctx context.Context, id ID, writer SecretWrite
 			slog.Warn("cluster: best-effort prometheus secret delete failed", "id", id, "secret", *promSecret, "err", err)
 		}
 	}
+	if lsSecret != nil && *lsSecret != "" && writer != nil {
+		if err := writer.DeleteSecret(ctx, *lsSecret); err != nil {
+			slog.Warn("cluster: best-effort log search secret delete failed", "id", id, "secret", *lsSecret, "err", err)
+		}
+	}
 	return nil
 }
 
@@ -370,6 +421,24 @@ type MetaPatch struct {
 	PrometheusAuthSecretName *string
 	PrometheusClusterLabel   *string
 	PrometheusService        *string
+	LogSearchURL             *string
+	LogSearchAuthSecretName  *string
+	LogSearchTenant          *string
+	LogSearchClusterLabel    *string
+}
+
+// LogSearchAuthSecretName returns the name of the Secret holding cluster id's
+// log store Authorization header, or "" when none is set.
+func (r *PostgresRegistry) LogSearchAuthSecretName(ctx context.Context, id ID) (string, error) {
+	var name *string
+	err := r.pool.QueryRow(ctx, `SELECT log_search_auth_secret_name FROM clusters WHERE id = $1`, id).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil || name == nil {
+		return "", err
+	}
+	return *name, nil
 }
 
 // PrometheusAuthSecretName returns the name of the Secret holding cluster id's
@@ -397,8 +466,13 @@ func (r *PostgresRegistry) UpdateMeta(ctx context.Context, id ID, patch MetaPatc
 		    prometheus_auth_secret_name = CASE WHEN $5::varchar IS NULL THEN prometheus_auth_secret_name ELSE NULLIF($5, '') END,
 		    prometheus_cluster_label    = CASE WHEN $6::varchar IS NULL THEN prometheus_cluster_label ELSE NULLIF($6, '') END,
 		    prometheus_service          = CASE WHEN $7::varchar IS NULL THEN prometheus_service ELSE NULLIF($7, '') END,
+		    log_search_url              = CASE WHEN $8::varchar IS NULL THEN log_search_url ELSE NULLIF($8, '') END,
+		    log_search_auth_secret_name = CASE WHEN $9::varchar IS NULL THEN log_search_auth_secret_name ELSE NULLIF($9, '') END,
+		    log_search_tenant           = CASE WHEN $10::varchar IS NULL THEN log_search_tenant ELSE NULLIF($10, '') END,
+		    log_search_cluster_label    = CASE WHEN $11::varchar IS NULL THEN log_search_cluster_label ELSE NULLIF($11, '') END,
 		    updated_at                  = NOW()
-		WHERE id = $1`, id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel, patch.PrometheusService)
+		WHERE id = $1`, id, patch.DisplayName, patch.APIServerURL, patch.PrometheusURL, patch.PrometheusAuthSecretName, patch.PrometheusClusterLabel, patch.PrometheusService,
+		patch.LogSearchURL, patch.LogSearchAuthSecretName, patch.LogSearchTenant, patch.LogSearchClusterLabel)
 	if err != nil {
 		return nil, err
 	}

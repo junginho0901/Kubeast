@@ -222,6 +222,7 @@ Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 �
 
 - **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것. 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `filelog` + `container` 파서 또는 `k8sattributes`, `otlphttp` → Loki `/otlp`). Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
 - **클러스터 라벨**: Loki 하나에 여러 클러스터를 넣으면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적습니다. 적지 않은 클러스터는 검색이 없습니다.
+- **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다(`features.logSearch.url`보다 먼저 쓰임). 라벨 이름은 배포 전체 값과 같아야 하므로 그 저장소의 수집기도 같은 라벨 이름으로 보내야 합니다. 그 저장소의 호스트·포트도 네트워크 정책(아래)에 넣습니다.
 - **권한**: 사용자 신원으로 `get pods/log`(그 Namespace, 전체 검색은 전체)를 묻습니다. `view`·`edit`에 들어 있으므로 §1의 Read·Write 그룹이면 됩니다. Namespace 범위 부여는 그 Namespace에 바인딩이 있어야 합니다.
 - **네트워크**: k8s-service에서 Loki로. `networkPolicy`가 켜져 있고 443이 아닌 포트면 `features.logSearch.egressCIDRs`.
 - **트레이스 링크**(`features.tracing`, 쓸 때): 줄의 trace ID를 Loki 라벨에서 먼저 읽습니다. 앱이 OTLP로 로그를 보내면 Loki가 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려주므로(Loki 3.x, 10-14 kind 실측) 따로 할 일이 없습니다. 위처럼 컨테이너 로그를 파일로 읽는 수집기는 trace ID를 모르므로 줄 글자(`trace_id=…` 등)에서 찾습니다 — 앱이 로그 문장에 trace ID를 쓰거나, 수집기에서 JSON 줄을 파싱해 trace 필드로 옮기면 됩니다. 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이라 Kubeast 쪽 통신은 없습니다.

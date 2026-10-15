@@ -38,7 +38,7 @@ func (h *Handler) LogSearchAll(w http.ResponseWriter, r *http.Request) {
 // pod logs there (get pods/log) before anything is read.
 func (h *Handler) serveLogSearch(w http.ResponseWriter, r *http.Request, namespace string) {
 	id, _ := cluster.FromContext(r.Context())
-	if !h.logSearch.Configured(string(id)) {
+	if !h.logSearch.Configured(r.Context(), string(id)) {
 		response.Error(w, http.StatusNotFound, "log search is not configured for this cluster")
 		return
 	}
@@ -208,14 +208,26 @@ func namespaceOrAll(ns string) string {
 }
 
 // logSearchFeature is features.logSearch for GET /api/v1/cluster/features.
-func (h *Handler) logSearchFeature() map[string]interface{} {
+// LogSearchStatus handles GET /api/v1/logsearch/status: where the request's
+// cluster reads its logs from (its own store or the deployment-wide one) and
+// whether that store answers.
+func (h *Handler) LogSearchStatus(w http.ResponseWriter, r *http.Request) {
+	if h.logSearch == nil {
+		response.JSON(w, http.StatusOK, map[string]interface{}{"available": false, "source": "none", "message": "log search is off (features.logSearch.enabled=false)"})
+		return
+	}
+	id, _ := cluster.FromContext(r.Context())
+	response.JSON(w, http.StatusOK, h.logSearch.Status(r.Context(), string(id)))
+}
+
+func (h *Handler) logSearchFeature(ctx context.Context) map[string]interface{} {
 	if h.logSearch == nil {
 		return map[string]interface{}{"enabled": false, "clusters": []string{}}
 	}
 	c := h.logSearch.Config()
 	return map[string]interface{}{
 		"enabled":             true,
-		"clusters":            c.ClusterIDs(),
+		"clusters":            h.logSearch.ClusterIDs(ctx),
 		"defaultRangeMinutes": int(c.DefaultRange.Minutes()),
 		"maxRangeMinutes":     int(c.MaxRange.Minutes()),
 		"maxLines":            c.MaxLines,

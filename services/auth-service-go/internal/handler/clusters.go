@@ -272,7 +272,27 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		h.invalidateToolServer(r, id)
 	}
 
-	patch := cluster.MetaPatch{DisplayName: req.DisplayName, APIServerURL: req.APIServerURL, PrometheusURL: req.PrometheusURL, PrometheusClusterLabel: req.PrometheusClusterLabel, PrometheusService: req.PrometheusService}
+	patch := cluster.MetaPatch{
+		DisplayName: req.DisplayName, APIServerURL: req.APIServerURL,
+		PrometheusURL: req.PrometheusURL, PrometheusClusterLabel: req.PrometheusClusterLabel, PrometheusService: req.PrometheusService,
+		LogSearchURL: req.LogSearchURL, LogSearchTenant: req.LogSearchTenant, LogSearchClusterLabel: req.LogSearchClusterLabel,
+	}
+	if req.LogSearchURL != nil && *req.LogSearchURL != "" {
+		if verr := validateLogSearchURL(*req.LogSearchURL); verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+	}
+	if req.LogSearchTenant != nil && *req.LogSearchTenant != "" {
+		if verr := validateLogSearchTenant(*req.LogSearchTenant); verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+	}
+	if req.LogSearchClusterLabel != nil && *req.LogSearchClusterLabel != "" && !promLabelValue.MatchString(*req.LogSearchClusterLabel) {
+		response.Error(w, http.StatusBadRequest, "log_search_cluster_label: letters, digits, _ . : / - only (max 128)")
+		return
+	}
 	if req.PrometheusService != nil && *req.PrometheusService != "" {
 		if _, _, _, verr := cluster.ParsePrometheusService(*req.PrometheusService); verr != nil {
 			response.Error(w, http.StatusBadRequest, verr.Error())
@@ -321,6 +341,37 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 			promAuthChange = "set"
 		}
 	}
+	// The log store's header goes to cluster-logsearch-<id> the same way.
+	logSearchAuthChange := ""
+	if req.LogSearchAuth != nil {
+		header, verr := logSearchAuthHeader(*req.LogSearchAuth)
+		if verr != nil {
+			response.Error(w, http.StatusBadRequest, verr.Error())
+			return
+		}
+		if header == "" {
+			if name, _ := h.registry.LogSearchAuthSecretName(r.Context(), id); name != "" && h.secrets != nil {
+				if derr := h.secrets.DeleteSecret(r.Context(), name); derr != nil {
+					slog.Warn("cluster: log search auth secret delete failed", "id", id, "err", derr)
+				}
+			}
+			cleared := ""
+			patch.LogSearchAuthSecretName = &cleared
+			logSearchAuthChange = "cleared"
+		} else {
+			if h.secrets == nil {
+				response.Error(w, http.StatusBadRequest, "no secret store configured for this deployment mode")
+				return
+			}
+			name := cluster.LogSearchSecretName(id)
+			if werr := h.secrets.WriteValue(r.Context(), name, cluster.LogSearchAuthKey, header); werr != nil {
+				response.Error(w, http.StatusInternalServerError, "store log search auth: "+werr.Error())
+				return
+			}
+			patch.LogSearchAuthSecretName = &name
+			logSearchAuthChange = "set"
+		}
+	}
 
 	meta, err := h.registry.UpdateMeta(r.Context(), id, patch)
 	if errors.Is(err, cluster.ErrNotFound) {
@@ -332,15 +383,17 @@ func (h *ClustersHandler) UpdateCluster(w http.ResponseWriter, r *http.Request) 
 		response.InternalError(w, r, err)
 		return
 	}
-	// A changed Prometheus source takes effect on the next query: k8s-service
-	// keeps the source on its per-cluster bundle.
-	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil || req.PrometheusService != nil {
+	// A changed Prometheus source or log store takes effect on the next query:
+	// k8s-service keeps both on its per-cluster bundle.
+	if req.PrometheusURL != nil || req.PrometheusClusterLabel != nil || req.PrometheusAuth != nil || req.PrometheusService != nil ||
+		req.LogSearchURL != nil || req.LogSearchTenant != nil || req.LogSearchClusterLabel != nil || req.LogSearchAuth != nil {
 		h.invalidateK8sBundle(r, id)
 	}
 	after := struct {
 		*cluster.Meta
 		PrometheusAuthChange string `json:"prometheus_auth_change,omitempty"`
-	}{meta, promAuthChange}
+		LogSearchAuthChange  string `json:"log_search_auth_change,omitempty"`
+	}{meta, promAuthChange, logSearchAuthChange}
 	h.audit(r, "admin.cluster.update", payload, string(id), before, after, nil)
 	response.JSON(w, http.StatusOK, meta)
 }

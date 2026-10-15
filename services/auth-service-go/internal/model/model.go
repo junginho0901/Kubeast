@@ -261,7 +261,18 @@ type UpdateClusterRequest struct {
 	PrometheusAuth         *PrometheusAuthRequest `json:"prometheus_auth,omitempty"`
 	// Prometheus Service inside the cluster, "namespace/service:port"; "" clears it.
 	PrometheusService *string `json:"prometheus_service,omitempty"`
+	// This cluster's own log store (features.logSearch is the deployment-wide
+	// one). An empty string clears the field; the auth value is written to the
+	// cluster-logsearch-<id> Secret and never read back.
+	LogSearchURL          *string            `json:"log_search_url,omitempty"`
+	LogSearchTenant       *string            `json:"log_search_tenant,omitempty"`
+	LogSearchClusterLabel *string            `json:"log_search_cluster_label,omitempty"`
+	LogSearchAuth         *AuthHeaderRequest `json:"log_search_auth,omitempty"`
 }
+
+// AuthHeaderRequest is PrometheusAuthRequest for the other stores a cluster
+// can name (its log store).
+type AuthHeaderRequest = PrometheusAuthRequest
 
 // PrometheusAuthRequest sets ("bearer" with Token, "basic" with Username and
 // Password) or clears ("none") the Authorization header for a cluster's

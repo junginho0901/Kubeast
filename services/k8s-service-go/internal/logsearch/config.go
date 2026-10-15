@@ -29,6 +29,17 @@ type Labels struct {
 	Service string
 }
 
+// Store is one log store: the deployment-wide one (Config URL, AuthHeader and
+// Tenant) or the one a cluster names for itself in its registration.
+type Store struct {
+	URL        string
+	AuthHeader string
+	Tenant     string
+	// ClusterLabel is the value of Labels.Cluster the cluster's streams carry
+	// in this store; "" = the store holds this cluster only, so no matcher.
+	ClusterLabel string
+}
+
 // Config is the deployment-wide log search configuration (chart
 // features.logSearch).
 type Config struct {
@@ -113,13 +124,20 @@ func parseClusters(raw string) map[string]string {
 
 var labelName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
+// global is the deployment-wide store.
+func (c Config) global() Store { return Store{URL: c.URL, AuthHeader: c.AuthHeader, Tenant: c.Tenant} }
+
 // Validate rejects a configuration that could not search, or could search
-// beyond one cluster's streams. Only called when Enabled.
+// beyond one cluster's streams. Only called when Enabled. No URL and no
+// clusters is fine: every cluster then names its own store.
 func (c Config) Validate() error {
 	if c.Backend != "loki" {
 		return fmt.Errorf("LOG_SEARCH_BACKEND %q: only \"loki\" is supported", c.Backend)
 	}
-	if !strings.HasPrefix(c.URL, "http://") && !strings.HasPrefix(c.URL, "https://") {
+	if c.URL == "" && len(c.Clusters) > 0 {
+		return fmt.Errorf("LOG_SEARCH_CLUSTERS lists clusters but LOG_SEARCH_URL is empty")
+	}
+	if c.URL != "" && !strings.HasPrefix(c.URL, "http://") && !strings.HasPrefix(c.URL, "https://") {
 		return fmt.Errorf("LOG_SEARCH_URL must be an http(s) URL")
 	}
 	for name, v := range map[string]string{"namespace": c.Labels.Namespace, "pod": c.Labels.Pod, "container": c.Labels.Container} {
@@ -133,7 +151,7 @@ func (c Config) Validate() error {
 	if c.Labels.Service != "" && !labelName.MatchString(c.Labels.Service) {
 		return fmt.Errorf("log search service label %q is not a label name", c.Labels.Service)
 	}
-	if len(c.Clusters) == 0 {
+	if c.URL != "" && len(c.Clusters) == 0 {
 		return fmt.Errorf("LOG_SEARCH_CLUSTERS lists no cluster (Kubeast cluster ID → cluster label value)")
 	}
 	for id, v := range c.Clusters {

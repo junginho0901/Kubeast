@@ -186,8 +186,8 @@ data:
 {{- with .Values.features.logSearch }}
   LOG_SEARCH_ENABLED: {{ .enabled | quote }}
 {{- if .enabled }}
-{{- if or (not .url) (not .clusters) }}
-  {{- fail "features.logSearch needs url and clusters (Kubeast cluster ID: value of labels.cluster) when enabled" }}
+{{- if ne (empty .url) (empty .clusters) }}
+  {{- fail "features.logSearch needs url and clusters together (Kubeast cluster ID: value of labels.cluster) when enabled — or neither, when every cluster names its own store in Admin → Clusters" }}
 {{- end }}
   LOG_SEARCH_BACKEND: {{ .backend | quote }}
   LOG_SEARCH_URL: {{ .url | quote }}

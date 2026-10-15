@@ -3600,7 +3600,8 @@
         "unknown": "Not checked"
       },
       "prometheusExternal": "Prometheus: external",
-      "prometheusService": "Prometheus: Service set"
+      "prometheusService": "Prometheus: Service set",
+      "logSearchOwn": "Log search: own store"
     },
     "register": {
       "title": "Register cluster",
@@ -3653,6 +3654,21 @@
         "ok": "OK",
         "fail": "failed: {{message}}",
         "checkNote": "The check uses the saved settings. Save first, then check changed values."
+      },
+      "logSearch": {
+        "title": "Log search",
+        "hint": "Leave everything empty to search the deployment's log store (features.logSearch). Enter a URL when this cluster's logs live in another Loki — it is used for this cluster only.",
+        "url": "URL",
+        "urlPlaceholder": "https://loki.example.com",
+        "tenant": "Tenant (X-Scope-OrgID)",
+        "tenantHint": "For a multi-tenant Loki. Leave empty otherwise.",
+        "label": "Cluster label value",
+        "labelHint": "The {{name}} label this cluster's streams carry in that store — every query gets {{name}}=\"value\". Leave empty when the store holds only this cluster.",
+        "auth": "Authentication",
+        "check": "Check connection",
+        "resultCluster": "This cluster's store {{endpoint}} — {{state}}",
+        "resultGlobal": "Deployment store {{endpoint}} — {{state}}",
+        "resultNone": "No log store: {{message}}"
       }
     }
   },

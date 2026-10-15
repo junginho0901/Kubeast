@@ -592,6 +592,18 @@ export interface PrometheusQueryResponse {
   results: PrometheusQueryResult[]
 }
 
+// GET /cluster/logsearch/status — where the cluster's log search reads from.
+export interface LogSearchStatus {
+  available: boolean
+  source?: 'cluster' | 'global' | 'none'
+  endpoint?: string
+  auth?: boolean
+  tenant?: string
+  cluster_label?: string
+  label_name?: string
+  message?: string
+}
+
 // Range query — one (t, v) per sample, points ordered chronologically.
 export interface PrometheusRangePoint {
   t: number // unix seconds

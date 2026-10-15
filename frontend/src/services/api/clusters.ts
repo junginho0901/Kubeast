@@ -19,6 +19,11 @@ export interface ClusterMeta {
   prometheus_auth?: boolean
   // Prometheus Service in the cluster, namespace/service:port (empty = discover).
   prometheus_service?: string
+  // the cluster's own log store (empty = the deployment-wide features.logSearch); auth = a header is stored
+  log_search_url?: string
+  log_search_tenant?: string
+  log_search_cluster_label?: string
+  log_search_auth?: boolean
   health_status: string
   last_healthcheck_at?: string
   created_by: string
@@ -42,6 +47,10 @@ export interface ClusterPatch {
   prometheus_cluster_label?: string
   prometheus_auth?: { type: 'none' | 'bearer' | 'basic'; token?: string; username?: string; password?: string }
   prometheus_service?: string
+  log_search_url?: string
+  log_search_tenant?: string
+  log_search_cluster_label?: string
+  log_search_auth?: { type: 'none' | 'bearer' | 'basic'; token?: string; username?: string; password?: string }
 }
 
 export interface ConnectionResult {

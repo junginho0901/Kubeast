@@ -3952,7 +3952,8 @@
         "unknown": "확인 전"
       },
       "prometheusExternal": "Prometheus: 외부",
-      "prometheusService": "Prometheus: Service 지정"
+      "prometheusService": "Prometheus: Service 지정",
+      "logSearchOwn": "로그 검색: 자기 저장소"
     },
     "register": {
       "title": "클러스터 등록",
@@ -4018,6 +4019,21 @@
         "ok": "정상",
         "fail": "실패: {{message}}",
         "checkNote": "연결 확인은 저장된 설정으로 합니다. 바꾼 값은 저장 뒤에 확인하세요."
+      },
+      "logSearch": {
+        "title": "로그 검색",
+        "hint": "모두 비워 두면 배포 전체의 로그 저장소(features.logSearch)를 검색합니다. 이 클러스터의 로그가 다른 Loki에 있으면 주소를 적으세요 — 이 클러스터에만 쓰입니다.",
+        "url": "주소 (URL)",
+        "urlPlaceholder": "https://loki.example.com",
+        "tenant": "테넌트 (X-Scope-OrgID)",
+        "tenantHint": "멀티테넌트 Loki일 때. 아니면 비워 둡니다.",
+        "label": "클러스터 레이블 값",
+        "labelHint": "그 저장소에서 이 클러스터의 스트림에 붙은 {{name}} 레이블 값 — 모든 질의에 {{name}}=\"값\"이 더해집니다. 저장소에 이 클러스터만 있으면 비워 둡니다.",
+        "auth": "인증",
+        "check": "연결 확인",
+        "resultCluster": "이 클러스터의 저장소 {{endpoint}} — {{state}}",
+        "resultGlobal": "배포 저장소 {{endpoint}} — {{state}}",
+        "resultNone": "로그 저장소 없음: {{message}}"
       }
     },
     "noAccess": {

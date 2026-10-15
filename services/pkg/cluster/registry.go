@@ -53,6 +53,17 @@ type Info struct {
 	// ("namespace/service:port", ParsePrometheusService) to reach through the
 	// API server proxy instead of discovering one. Ignored with a URL.
 	PrometheusService string
+
+	// Log store of this cluster's own when one is registered (the deployment
+	// has one in features.logSearch): its base URL, the Authorization header
+	// to send (resolved from the cluster-logsearch-<id> Secret), its tenant
+	// (X-Scope-OrgID) and the value of the cluster label its streams carry
+	// ("" = the store holds this cluster only). An empty URL = the
+	// deployment-wide store.
+	LogSearchURL          string
+	LogSearchAuthHeader   string
+	LogSearchTenant       string
+	LogSearchClusterLabel string
 }
 
 // Registry is the source of truth for the set of managed clusters.

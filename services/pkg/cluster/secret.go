@@ -19,6 +19,10 @@ const kubeconfigSecretKey = "kubeconfig"
 // the full Authorization header value for the cluster's external Prometheus.
 const PrometheusAuthKey = "authorization"
 
+// LogSearchAuthKey is the key of the cluster-logsearch-<id> Secret that holds
+// the full Authorization header value for the cluster's own log store.
+const LogSearchAuthKey = "authorization"
+
 // SecretReader loads a cluster's kubeconfig from a backing secret store.
 type SecretReader interface {
 	ReadKubeconfig(ctx context.Context, secretName string) (string, error)
@@ -48,6 +52,10 @@ func SecretName(id ID) string { return "cluster-kubeconfig-" + string(id) }
 // PrometheusSecretName returns the Secret name holding cluster id's external
 // Prometheus Authorization header (key PrometheusAuthKey).
 func PrometheusSecretName(id ID) string { return "cluster-prometheus-" + string(id) }
+
+// LogSearchSecretName returns the Secret name holding cluster id's own log
+// store Authorization header (key LogSearchAuthKey).
+func LogSearchSecretName(id ID) string { return "cluster-logsearch-" + string(id) }
 
 // --- K8s Secret store (helm mode) ---
 
