@@ -431,6 +431,108 @@ K8S_READONLY_TOOLS: List[Dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_jq_query",
+            "description": (
+                "kubectl get -o json for a resource type, filtered by a jq expression — the way to read a large list without pulling it "
+                "all into the conversation. The expression receives the list object, so start from .items[]: "
+                ".items[] | select(.status.phase != \"Running\") | .metadata.name, or .items[] | {name: .metadata.name, image: .spec.containers[0].image}. "
+                "Narrow with namespace (or every namespace), label_selector and field_selector so the server does the filtering. "
+                "Returns total_items_processed, matches_found and results (at most limit, default 50, max 200; 256 KB). The program runs here with "
+                "no environment or file access and a 5 s limit; a syntax or runtime error comes back as a bad request to fix. "
+                "Prefer this over k8s_get_resources whenever you only need a few fields of many objects."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_type": {"type": "string", "description": "Resource type (pods, deployments, nodes, events …)"},
+                    "jq": {"type": "string", "description": "jq expression applied to the list object, e.g. .items[] | select(.status.phase == \"Pending\") | .metadata.name"},
+                    "namespace": {"type": "string", "description": "One namespace (empty = every namespace)"},
+                    "label_selector": {"type": "string", "description": "Server-side label selector, e.g. app=web,tier!=db"},
+                    "field_selector": {"type": "string", "description": "Server-side field selector, e.g. status.phase!=Running or spec.nodeName=node-1"},
+                    "limit": {"type": "integer", "description": "Maximum results (default 50, max 200)"},
+                },
+                "required": ["resource_type", "jq"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_tabular_query",
+            "description": (
+                "kubectl get as a table with exactly the columns you name — HEADER:.json.path pairs separated by commas, e.g. "
+                "NAME:.metadata.name,NODE:.spec.nodeName,RESTARTS:.status.containerStatuses[0].restartCount — optionally sorted by a field "
+                "(sort_by=.metadata.creationTimestamp) and capped at limit rows (default 100, max 200). Cheaper than -o wide or json when you need "
+                "a few fields of many objects, and the first line says how many rows there were in total. Default columns: NAMESPACE and NAME."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_type": {"type": "string", "description": "Resource type (pods, nodes, deployments …)"},
+                    "columns": {"type": "string", "description": "HEADER:.path pairs, comma-separated (default NAMESPACE:.metadata.namespace,NAME:.metadata.name)"},
+                    "namespace": {"type": "string", "description": "One namespace (empty = every namespace)"},
+                    "label_selector": {"type": "string", "description": "Server-side label selector"},
+                    "field_selector": {"type": "string", "description": "Server-side field selector"},
+                    "sort_by": {"type": "string", "description": "Field path to sort by, e.g. .metadata.creationTimestamp"},
+                    "limit": {"type": "integer", "description": "Maximum rows (default 100, max 200)"},
+                },
+                "required": ["resource_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_count",
+            "description": (
+                "How many objects of a type match, optionally grouped by one field: group_by=.status.phase (pods per phase), "
+                ".metadata.namespace (per namespace), .spec.nodeName (pods per node), .status.conditions[0].type. One call answers "
+                "\"how many pods are Pending\", \"which node runs the most pods\", \"deployments per namespace\" without listing anything. "
+                "Narrow with namespace, label_selector and field_selector. Groups are sorted by count, at most 100."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_type": {"type": "string", "description": "Resource type (pods, deployments, nodes …)"},
+                    "group_by": {"type": "string", "description": "Field path to group by, e.g. .status.phase"},
+                    "namespace": {"type": "string", "description": "One namespace (empty = every namespace)"},
+                    "label_selector": {"type": "string", "description": "Server-side label selector"},
+                    "field_selector": {"type": "string", "description": "Server-side field selector"},
+                },
+                "required": ["resource_type"],
+            },
+        },
+    },
+]
+
+# Preview of a write, for users who may write: the server dry-runs the apply (the same RBAC as
+# the write, so Read users are not offered it — features.py REQUIRED_PERMISSIONS), nothing is
+# applied, no approval card. Not part of the Read role's seed.
+WRITE_PREVIEW_TOOLS: List[Dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_diff",
+            "description": (
+                "Preview what applying a manifest would change, without applying it: the API server dry-runs the apply (defaults, "
+                "validation and admission all run) and the result is diffed against the live object as JSON, ignoring server-owned fields "
+                "and status. Returns status created | changed | unchanged, lines_added, lines_removed and the unified diff. One object per call. "
+                "Use it before k8s_apply_manifest or k8s_patch_resource so the user sees exactly what will change, and to check a manifest "
+                "the user wrote. {\"status\":\"forbidden\"} means the user lacks the write permission (a dry run needs the same RBAC as the write)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "yaml_content": {"type": "string", "description": "The manifest (YAML or JSON), one object"},
+                    "resource_manifest": {"type": "object", "description": "The manifest as a JSON object (alternative to yaml_content)"},
+                    "namespace": {"type": "string", "description": "Namespace when the manifest has none"},
+                },
+            },
+        },
+    },
 ]
 
 # Read tools for Admin only: offered when the token holds the permission k8s-service asks for
@@ -731,5 +833,6 @@ def get_tools_definition(service) -> List[Dict]:
     tools = list(CLUSTER_METRICS_TOOLS)
     tools.extend(K8S_READONLY_TOOLS)
     tools.extend(ADMIN_READ_TOOLS)
+    tools.extend(WRITE_PREVIEW_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)

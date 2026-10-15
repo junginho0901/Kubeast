@@ -108,6 +108,12 @@ var argRules = map[string]argCheck{
 	"check":         checkLowerWord,
 	"verb":          checkLowerWord,
 	"group":         checkAPIGroup,
+	// Query tools: a jq program, custom columns, a sort/group path, selectors.
+	"jq":             checkJQ,
+	"columns":        checkColumns,
+	"sort_by":        checkFieldPath,
+	"group_by":       checkFieldPath,
+	"label_selector": checkLabelSelector,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -287,6 +293,44 @@ func checkQualifiedPath(field, v string) error {
 func checkAPIGroup(field, v string) error {
 	if len(v) > dns1123SubdomainMaxLength || !apiGroupRe.MatchString(v) {
 		return badArg(field, v, "an API group such as apps or networking.k8s.io")
+	}
+	return nil
+}
+
+var (
+	// custom-columns: HEADER:.json.path pairs separated by commas.
+	columnsRe   = regexp.MustCompile(`^[A-Za-z0-9_-]+:\.[A-Za-z0-9_.\[\]*'"/-]+(,[A-Za-z0-9_-]+:\.[A-Za-z0-9_.\[\]*'"/-]+)*$`)
+	fieldPathRe = regexp.MustCompile(`^\.[A-Za-z0-9_.\[\]*-]+$`)
+)
+
+// checkJQ: the program never reaches argv (gojq runs it here), but it is kept
+// to printable text of bounded length; gojq reports syntax errors itself.
+func checkJQ(field, v string) error {
+	if len(v) > 1000 || strings.IndexFunc(v, func(r rune) bool { return (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a jq program of at most 1000 characters")
+	}
+	return nil
+}
+
+func checkColumns(field, v string) error {
+	if len(v) > 1000 || !columnsRe.MatchString(v) {
+		return badArg(field, v, "custom columns such as NAME:.metadata.name,STATUS:.status.phase")
+	}
+	return nil
+}
+
+func checkFieldPath(field, v string) error {
+	if len(v) > 200 || !fieldPathRe.MatchString(v) {
+		return badArg(field, v, "a field path such as .status.phase or .metadata.namespace")
+	}
+	return nil
+}
+
+// checkLabelSelector: what kubectl -l takes (app=web, tier in (a,b), !canary),
+// never something pflag would read as a flag.
+func checkLabelSelector(field, v string) error {
+	if len(v) > 500 || strings.HasPrefix(v, "-") || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a label selector such as app=web,tier!=db")
 	}
 	return nil
 }

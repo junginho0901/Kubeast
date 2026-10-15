@@ -2,13 +2,17 @@ module github.com/junginho0901/kubeast/tool-server
 
 go 1.26.0
 
-require github.com/junginho0901/kubeast/services/pkg v0.0.0
+require (
+	github.com/itchyny/gojq v0.12.19
+	github.com/junginho0901/kubeast/services/pkg v0.0.0
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-chi/chi/v5 v5.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/itchyny/timefmt-go v0.1.8 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.11.0 // indirect

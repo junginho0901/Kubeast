@@ -44,6 +44,10 @@ FEATURE_TOOL_ARGS = {
     "optimization": ({"namespace"}, set(), {"window_hours"}),
     "can_i": ({"verb", "resource", "group", "namespace"}, set(), set()),
     "resource_graph": ({"namespace"}, set(), set()),
+    # Query tools (kubectl + jq / columns / count, filtered in tool-server).
+    "k8s_jq_query": ({"resource_type", "jq", "namespace", "label_selector", "field_selector"}, set(), {"limit"}),
+    "k8s_tabular_query": ({"resource_type", "columns", "namespace", "label_selector", "field_selector", "sort_by"}, set(), {"limit"}),
+    "k8s_count": ({"resource_type", "group_by", "namespace", "label_selector", "field_selector"}, set(), set()),
 }
 
 
@@ -417,6 +421,17 @@ async def execute_function_with_context(
                 tool_args["api_version"] = api_version.strip()
             if _flag(function_args.get("recursive")):
                 tool_args["recursive"] = True
+            result = await service._call_tool_server(function_name, tool_args)
+
+        elif function_name == "k8s_diff":
+            # A write preview: the manifest travels like apply's, nothing is applied.
+            tool_args = {}
+            for key in ("yaml_content", "manifest", "namespace"):
+                value = function_args.get(key)
+                if isinstance(value, str) and value.strip():
+                    tool_args[key] = value.strip() if key == "namespace" else value
+            if isinstance(function_args.get("resource_manifest"), (dict, str)):
+                tool_args["resource_manifest"] = function_args["resource_manifest"]
             result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name in FEATURE_TOOL_ARGS:

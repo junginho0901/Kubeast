@@ -117,8 +117,8 @@ async def test_list_tools_is_read_only_and_needs_the_permission(fakes):
         assert res.status_code == 200, res.text
         names = tool_names(res)
         assert "list_clusters" in names and "k8s_get_pod_logs" in names and "get_node_metrics" in names
-        # Every read tool but the Admin-only hygiene report, plus list_clusters.
-        assert "hygiene" not in names and len(names) == len(mcp_server.READ_TOOLS)
+        # Every read tool but the Admin-only hygiene report and the write preview (no edit grant), plus list_clusters.
+        assert "hygiene" not in names and "k8s_diff" not in names and len(names) == len(mcp_server.READ_TOOLS) - 1
         assert not any(n.startswith(("k8s_apply", "k8s_delete", "k8s_scale", "k8s_execute")) for n in names)
         tools = res.json()["result"]["tools"]
         assert all(t["annotations"]["readOnlyHint"] is True for t in tools)
@@ -129,7 +129,7 @@ async def test_list_tools_is_read_only_and_needs_the_permission(fakes):
         assert tool_names(await call(client, "tok-read", "tools/list")) == []
         # A global admin sees everything, the hygiene report included.
         admin_names = tool_names(await call(client, "tok-admin", "tools/list"))
-        assert "hygiene" in admin_names and len(admin_names) == len(mcp_server.READ_TOOLS) + 1
+        assert "hygiene" in admin_names and "k8s_diff" in admin_names and len(admin_names) == len(mcp_server.READ_TOOLS) + 1
 
 
 @pytest.mark.asyncio
@@ -238,8 +238,9 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
 
         data = json.loads(res.json()["result"]["content"][0]["text"])
     by_id = {c["id"]: c for c in data["clusters"]}
-    # A Write grant (ai.tool.*, resource.*.read) gets every read tool but the Admin-only hygiene report.
-    assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS) - {"hygiene"}
+    # A grant with ai.tool.* and resource.*.read (no edit) gets every read tool but the Admin-only
+    # hygiene report and the write preview, which needs the write's RBAC.
+    assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS) - {"hygiene", "k8s_diff"}
     assert by_id["default"]["mcp"] is False and by_id["default"]["tools"] == []
     assert by_id["self"]["namespaces"] is None  # an unscoped grant
     assert feature_calls == [("Bearer tok-write", "self", "self")]
@@ -252,7 +253,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
         data = json.loads(res.json()["result"]["content"][0]["text"])
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
     assert "issues" in tools and "prometheus_query" not in tools and "logsearch" not in tools
-    assert set(tools) == set(mcp_server.READ_TOOLS) - {"prometheus_query", "logsearch", "cost", "policy_reports", "hygiene"}
+    assert set(tools) == set(mcp_server.READ_TOOLS) - {"prometheus_query", "logsearch", "cost", "policy_reports", "hygiene", "k8s_diff"}
 
     # The admin (global *) is offered the hygiene report too.
     features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True}}
@@ -266,7 +267,7 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
         res = await call(client, "tok-admin", "tools/call", {"name": "list_clusters", "arguments": {}})
         data = json.loads(res.json()["result"]["content"][0]["text"])
     tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
-    assert "hygiene" in tools and set(tools) == set(mcp_server.READ_TOOLS)
+    assert "hygiene" in tools and "k8s_diff" in tools and set(tools) == set(mcp_server.READ_TOOLS)
 
 
 @pytest.mark.asyncio
@@ -366,8 +367,8 @@ async def test_write_tools_follow_the_switch_and_the_users_permissions(fakes, mo
         res = await call(client, "tok-write", "tools/list")
         tools = {t["name"]: t for t in res.json()["result"]["tools"]}
         assert WRITE_TOOL_NAMES <= set(tools) and "request_access" in tools
-        # read tools (not the Admin-only hygiene) + write tools + list_clusters + request_access
-        assert "hygiene" not in tools and len(tools) == len(mcp_server.READ_TOOLS) - 1 + len(WRITE_TOOL_NAMES) + 2
+        # read tools (not the Admin-only hygiene nor k8s_diff without an edit grant) + write tools + list_clusters + request_access
+        assert "hygiene" not in tools and "k8s_diff" not in tools and len(tools) == len(mcp_server.READ_TOOLS) - 2 + len(WRITE_TOOL_NAMES) + 2
         # Honest annotations: writes are not read-only, destructive unless they only touch labels/annotations.
         assert tools["k8s_delete_resource"]["annotations"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False}
         assert tools["k8s_label_resource"]["annotations"]["destructiveHint"] is False and tools["k8s_label_resource"]["annotations"]["readOnlyHint"] is False
@@ -376,7 +377,7 @@ async def test_write_tools_follow_the_switch_and_the_users_permissions(fakes, mo
 
         # Read tools only (no ai.tool.k8s_delete_resource): read tools are listed as before, no write tool is, and a write call is refused + audited.
         names = tool_names(await call(client, "tok-readtools", "tools/list"))
-        assert not (set(names) & WRITE_TOOL_NAMES) and "request_access" in names and len(names) == len(mcp_server.READ_TOOLS) - 1 + 2
+        assert not (set(names) & WRITE_TOOL_NAMES) and "request_access" in names and len(names) == len(mcp_server.READ_TOOLS) - 2 + 2
         res = await call(client, "tok-readtools", "tools/call", {"name": "k8s_delete_resource", "arguments": {"cluster": "self", "resource_type": "pod", "resource_name": "p", "namespace": "ns"}})
         assert res.json()["result"]["isError"] is True and "forbidden" in res.json()["result"]["content"][0]["text"]
         # No MCP anywhere: only the way to ask for a role.

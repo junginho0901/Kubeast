@@ -204,6 +204,26 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleResourceGraph,
 	})
 	register(ToolDefinition{
+		Name:        "k8s_jq_query",
+		Description: "kubectl get -o json filtered by a jq expression (capped results)",
+		Handler:     handleJQQuery,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_tabular_query",
+		Description: "kubectl get as a custom-columns table, optionally sorted, capped rows",
+		Handler:     handleTabularQuery,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_count",
+		Description: "How many objects match, optionally grouped by a field",
+		Handler:     handleCount,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_diff",
+		Description: "Preview what a manifest would change: server dry run against the live object, nothing applied",
+		Handler:     handleDiff,
+	})
+	register(ToolDefinition{
 		Name:        "k8s_apply_manifest",
 		Description: "Apply a Kubernetes manifest (kubectl apply -f -)",
 		Handler:     handleApplyManifest,

@@ -28,6 +28,9 @@ EXPECTED_READONLY_NAMES = {
     "optimization",
     "can_i",
     "resource_graph",
+    "k8s_jq_query",
+    "k8s_tabular_query",
+    "k8s_count",
 }
 
 EXPECTED_WRITE_NAMES = {

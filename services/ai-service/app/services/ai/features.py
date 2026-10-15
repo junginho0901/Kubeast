@@ -55,6 +55,8 @@ REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
     "policy_reports": ("cluster", "resource.policyreport.read"),
     "cost": ("cluster", "resource.cost.read"),
     "helm_read": ("cluster", "resource.helm.read"),
+    # A server dry run needs the write's RBAC; the Write role's edit permission stands for it.
+    "k8s_diff": ("cluster", "resource.*.edit"),
 }
 
 
@@ -71,11 +73,18 @@ def permitted(name: str, token, cluster: Optional[str]) -> bool:
 
 def permitted_anywhere(name: str, token) -> bool:
     """For a cluster-agnostic list (MCP tools/list): a global requirement must be
-    held; a per-cluster one is decided later, per cluster (list_clusters)."""
+    held; a per-cluster one in at least one cluster of the token's matrix
+    (list_clusters then decides per cluster)."""
     req = REQUIRED_PERMISSIONS.get(name)
-    if req is None or token is None or req[0] != "global":
+    if req is None or token is None:
         return True
-    return bool(token.has_permission(req[1]))
+    scope, perm = req
+    if scope == "global":
+        return bool(token.has_permission(perm))
+    clusters = [c for c in (getattr(token, "matrix", None) or {}) if c != "*"]
+    if not clusters:
+        return bool(token.has_permission_for_cluster(perm, None))
+    return any(token.has_permission_for_cluster(perm, c) for c in clusters)
 
 _cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
 

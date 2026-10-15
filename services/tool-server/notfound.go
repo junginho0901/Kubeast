@@ -25,6 +25,7 @@ var (
 	reNoPrevious      = regexp.MustCompile(`previous terminated container "([^"]+)" in pod "([^"]+)" not found`)
 	reChooseContainer = regexp.MustCompile(`a container name must be specified for pod ([^,]+), choose one of: \[([^\]]*)\]`)
 	reMetricsMissing  = regexp.MustCompile(`Metrics API not available|metrics\.k8s\.io`)
+	reForbidden       = regexp.MustCompile(`(?i)error from server \(Forbidden\): (.*)`)
 	// A ReplicaSet pod template hash or a pod's random suffix: 5–10 characters
 	// from Kubernetes' safe-encoding alphabet (no vowels, so "cache" or "redis"
 	// are not stripped).
@@ -62,6 +63,9 @@ func classifyKubectlFailure(err error) (kubectlFailure, bool) {
 	}
 	if reMetricsMissing.MatchString(text) {
 		return kubectlFailure{Status: "unavailable", Kind: "metrics-server"}, true
+	}
+	if m := reForbidden.FindStringSubmatch(text); m != nil {
+		return kubectlFailure{Status: "forbidden", Name: strings.TrimSpace(m[1])}, true
 	}
 	return kubectlFailure{}, false
 }
@@ -127,6 +131,12 @@ func failureResult(ctx context.Context, headers http.Header, err error, kind, na
 			"feature":     f.Kind,
 			"reason":      strings.TrimPrefix(err.Error(), "kubectl failed: "),
 			"alternative": "This cluster has no metrics-server, so CPU/memory usage is not available. Use k8s_describe_resource (requests, limits, restarts) and k8s_get_events instead, and say that usage figures are unavailable here.",
+		}
+	case "forbidden":
+		result = map[string]interface{}{
+			"status": "forbidden",
+			"reason": f.Name,
+			"hint":   "The cluster refused this for the signed-in user (RBAC). Tell the user what was refused; do not try another way around it.",
 		}
 	default:
 		return "", false

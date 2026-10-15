@@ -156,6 +156,31 @@ async def test_second_batch_feature_tools_pass_declared_arguments_only():
 
 
 @pytest.mark.asyncio
+async def test_query_and_diff_tools_pass_declared_arguments_only():
+    service = _service()
+    await execute_function_with_context(
+        service, "k8s_jq_query", {"resource_type": "pods", "jq": ".items[].metadata.name", "namespace": "shop", "label_selector": "app=web", "limit": 10, "output": "json"}, _ctx(),
+    )
+    service._call_tool_server.assert_awaited_once_with(
+        "k8s_jq_query", {"resource_type": "pods", "jq": ".items[].metadata.name", "namespace": "shop", "label_selector": "app=web", "limit": 10},
+    )
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "k8s_count", {"resource_type": "pods", "group_by": ".status.phase"}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("k8s_count", {"resource_type": "pods", "group_by": ".status.phase"})
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "k8s_tabular_query", {"resource_type": "nodes", "columns": "NAME:.metadata.name", "sort_by": ".metadata.name", "limit": 5}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("k8s_tabular_query", {"resource_type": "nodes", "columns": "NAME:.metadata.name", "sort_by": ".metadata.name", "limit": 5})
+
+    service._call_tool_server.reset_mock()
+    manifest = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
+    await execute_function_with_context(service, "k8s_diff", {"yaml_content": manifest, "namespace": " shop ", "dry_run": True}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("k8s_diff", {"yaml_content": manifest, "namespace": "shop"})
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "k8s_diff", {"resource_manifest": {"kind": "ConfigMap"}}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("k8s_diff", {"resource_manifest": {"kind": "ConfigMap"}})
+
+
+@pytest.mark.asyncio
 async def test_new_read_tools_are_cached_like_the_others():
     service = _service()
     ctx = _ctx()

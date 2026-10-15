@@ -11,6 +11,8 @@ const SEND_RE = /^전송$|^send$/i
 test.describe('ai_service refactor regression', () => {
 
   test('Korean greeting — build_language_directive 가 정상 동작 (Korean 응답)', async ({ page }) => {
+    // The first request pays the cold prompt evaluation (system prompt + tool catalogue, ~7.6k tokens).
+    test.setTimeout(90_000)
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
 

@@ -81,8 +81,9 @@ var clusterWideTools = map[string]struct{}{
 	"k8s_get_available_api_resources": {}, "k8s_get_cluster_configuration": {},
 	"k8s_apply_manifest": {}, "k8s_create_resource": {},
 	"get_cluster_overview": {}, "get_node_metrics": {},
-	// PromQL is not bounded by a namespace; the hygiene report covers the cluster.
-	"prometheus_query": {}, "hygiene": {},
+	// PromQL is not bounded by a namespace; the hygiene report covers the cluster;
+	// a manifest preview names its own object.
+	"prometheus_query": {}, "hygiene": {}, "k8s_diff": {},
 }
 
 // namespaceAwareTools apply a namespace-scoped grant themselves — the handler

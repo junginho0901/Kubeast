@@ -69,6 +69,15 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     hygiene_only = _Token(set(), {"admin.hygiene.read"})
     assert "hygiene" in features.gated_names(names, feats, "self", hygiene_only)
     assert "helm_read" not in features.gated_names(names, feats, "self", hygiene_only)
+    # The write preview needs the write's RBAC: a Read grant does not get it, a Write grant does.
+    assert features.gated_names(["k8s_diff", "k8s_count"], feats, "self", reader) == ["k8s_count"]
+    writer = _Token({"resource.*.edit", "resource.*.read"})
+    assert features.gated_names(["k8s_diff", "k8s_count"], feats, "self", writer) == ["k8s_diff", "k8s_count"]
+    # The cluster-agnostic list hides a cluster-scoped requirement the token holds nowhere.
+    assert features.permitted_anywhere("k8s_diff", reader) is False
+    assert features.permitted_anywhere("k8s_diff", writer) is True
+    assert features.permitted_anywhere("hygiene", reader) is False
+    assert features.permitted_anywhere("k8s_count", reader) is True
     # filter_tools applies the same rule to tool definitions, in order.
     tools = _tools("hygiene", "k8s_get_pod_logs", "cost")
     assert _names(features.filter_tools(tools, feats, "self", reader)) == ["k8s_get_pod_logs", "cost"]
