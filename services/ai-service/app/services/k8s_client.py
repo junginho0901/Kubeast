@@ -31,6 +31,13 @@ class K8sServiceClient:
         response.raise_for_status()
         return response.json()["id"]
 
+    async def get_features(self) -> Dict:
+        """What this cluster can serve (prometheus, logSearch, cost, …) — k8s-service GET /features."""
+        response = await self.client.get("/features")
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
     async def get_namespaces(self) -> List[Dict]:
         """네임스페이스 목록 조회"""
         response = await self.client.get("/namespaces")

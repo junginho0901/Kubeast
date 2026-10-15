@@ -44,6 +44,9 @@ def test_tool_usage_guide():
         "k8s_get_events",
         "k8s_find_resource",
         "k8s_explain",
+        "issues",
+        "prometheus_query",
+        "logsearch",
         "get_cluster_overview",
         "get_pod_metrics",
         "get_node_metrics",
@@ -59,6 +62,10 @@ def test_not_found_protocol():
         assert keyword in SYSTEM_MESSAGE, f"{keyword} 처리 규칙이 프롬프트에 없음"
     assert "반복하지 마세요" in SYSTEM_MESSAGE
     assert "한 번만" in SYSTEM_MESSAGE
+    # Feature tools: the state question starts with issues, trends go to Prometheus, gone pods to the log store.
+    assert "`issues` **한 번**으로 시작" in SYSTEM_MESSAGE
+    assert "prometheus_query`(range=true)" in SYSTEM_MESSAGE
+    assert "`logsearch`로" in SYSTEM_MESSAGE
     assert "all_namespaces=true" not in SYSTEM_MESSAGE.split("### 못 찾았을 때")[0].split("### 네임스페이스/리소스 식별 규칙")[1], (
         "느슨한 이름은 k8s_find_resource로 찾는다 (옛 all_namespaces 규칙 제거)"
     )

@@ -45,6 +45,9 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `k8s_get_events`: 이벤트 조회 (kubectl get events) — `kind`+`name` 또는 `field_selector`(type=Warning)로 좁히기
 - `k8s_find_resource`: 이름 조각·레이블로 여러 종류·전체 네임스페이스에서 리소스 찾기 (이름을 대충 알 때, not_found 뒤 한 번)
 - `k8s_explain`: 리소스 종류·필드의 스키마 설명 (kubectl explain) — 필드 이름을 추측하지 말고 확인
+- `issues`: 클러스터·네임스페이스에 지금 무엇이 잘못됐는지 한 번에(파드·워크로드·노드·PVC·경고 이벤트, 심각도별 개수) — "문제 있어?"·"상태 어때?"류 질문의 **첫 호출**
+- `prometheus_query`: PromQL 즉시·범위 질의 — 사용량 추이·오류율·재시작 수 (이 클러스터에 Prometheus가 있을 때만 제공)
+- `logsearch`: 로그 저장소 검색 — 죽은·재시작된 파드, 워크로드 전체 파드의 로그를 텍스트로 필터 (이 클러스터에 로그 검색이 있을 때만 제공)
 - `k8s_get_available_api_resources`: api-resources 조회
 - `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
 - `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
@@ -60,6 +63,8 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - 로그를 받았으면 바로 분석하세요. describe나 events를 추가로 호출하지 마세요 (로그만으로 판단이 불가능한 경우에만 추가 호출).
 - 같은 데이터를 다른 파라미터로 재요청하지 마세요.
 - **도구 호출은 최소한으로**: 보통 1~3회면 충분합니다. 정보가 충분하면 멈추고 답변하세요.
+- 클러스터·네임스페이스의 상태를 묻는 질문("문제 있어?", "뭐가 깨졌어?", "건강해?")은 `issues` **한 번**으로 시작하고, 거기 나온 객체만 describe/logs로 파세요. 파드를 전부 나열해 훑지 마세요.
+- 수치의 추이(지난 1시간 CPU, 재시작 횟수 변화, 오류율)는 `prometheus_query`(range=true)로, 지금 값만은 `get_pod_metrics`/`get_node_metrics`로. 사라진 파드나 재시작 이전의 로그는 `logsearch`로.
 
 ### 네임스페이스/리소스 식별 규칙
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
@@ -167,6 +172,9 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 # Available Tools (kubectl equivalent)
 
 **Cluster Overview:**
+- `issues(namespace, severity, window_minutes)` - What is failing right now: pods, workloads, nodes, PVCs, Warning events, with counts — the first call for "what's wrong?"
+- `prometheus_query(promql, range, since, step)` - PromQL through the cluster's Prometheus (trend with range=true); offered only where Prometheus exists
+- `logsearch(namespace, text, pod, workload_kind, workload_name, since, limit)` - Log store search, also for pods that are gone; offered only where log search exists
 - `get_cluster_overview()` - Overall health snapshot
 - `k8s_get_resources(resource_type=namespaces)` - Namespace list
 - `k8s_get_resources(resource_type=nodes)` - Node status

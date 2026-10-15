@@ -403,6 +403,27 @@ async def execute_function_with_context(
                 tool_args["recursive"] = True
             result = await service._call_tool_server(function_name, tool_args)
 
+        elif function_name in ("issues", "prometheus_query", "logsearch"):
+            # Feature tools: tool-server calls k8s-service as the user; only the
+            # declared arguments travel, booleans and integers normalised.
+            spec = {
+                "issues": ({"namespace", "severity"}, set(), {"window_minutes"}),
+                "prometheus_query": ({"promql", "since"}, {"range"}, {"step"}),
+                "logsearch": ({"namespace", "text", "pod", "container", "workload_kind", "workload_name", "since"}, {"regex"}, {"limit"}),
+            }[function_name]
+            tool_args = {}
+            for key in spec[0]:
+                value = function_args.get(key)
+                if isinstance(value, str) and value.strip():
+                    tool_args[key] = value.strip()
+            for key in spec[1]:
+                if _flag(function_args.get(key)):
+                    tool_args[key] = True
+            for key in spec[2]:
+                if function_args.get(key) is not None:
+                    tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
+            result = await service._call_tool_server(function_name, tool_args)
+
         elif function_name == "k8s_get_available_api_resources":
             result = await service._call_tool_server(function_name, {})
 

@@ -87,6 +87,13 @@ var argRules = map[string]argCheck{
 	"resource":       checkExplainResource,
 	"api_version":    checkAPIVersion,
 	"grep":           checkGrep,
+	// Feature tools (k8s-service, never argv): still one printable line each.
+	"promql":        checkPromQL,
+	"text":          checkSearchText,
+	"pod":           checkObjectName,
+	"workload_kind": checkKindName,
+	"workload_name": checkObjectName,
+	"severity":      checkSeverity,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -199,6 +206,28 @@ func checkGrep(field, v string) error {
 		return badArg(field, v, "a search text of at most 200 printable characters")
 	}
 	return nil
+}
+
+func checkPromQL(field, v string) error {
+	if len(v) > 2000 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a PromQL expression of at most 2000 printable characters")
+	}
+	return nil
+}
+
+func checkSearchText(field, v string) error {
+	if len(v) > 500 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a search text of at most 500 printable characters")
+	}
+	return nil
+}
+
+func checkSeverity(field, v string) error {
+	switch strings.ToLower(v) {
+	case "critical", "warning", "info":
+		return nil
+	}
+	return badArg(field, v, "one of critical, warning, info")
 }
 
 func badArg(field, value, want string) error {

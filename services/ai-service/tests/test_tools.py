@@ -19,6 +19,9 @@ EXPECTED_READONLY_NAMES = {
     "k8s_describe_resource",
     "k8s_find_resource",
     "k8s_explain",
+    "issues",
+    "prometheus_query",
+    "logsearch",
 }
 
 EXPECTED_WRITE_NAMES = {

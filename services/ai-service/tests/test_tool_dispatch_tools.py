@@ -109,6 +109,31 @@ async def test_find_resource_and_explain_pass_through():
 
 
 @pytest.mark.asyncio
+async def test_feature_tools_pass_declared_arguments_only():
+    service = _service()
+    await execute_function_with_context(
+        service, "prometheus_query", {"promql": " up ", "range": "true", "since": "2h", "step": "30", "cluster": "x", "bogus": 1}, _ctx(),
+    )
+    service._call_tool_server.assert_awaited_once_with("prometheus_query", {"promql": "up", "since": "2h", "range": True, "step": 30})
+
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(
+        service, "logsearch", {"namespace": "shop", "text": "error", "regex": False, "workload_kind": "Deployment", "workload_name": "web", "limit": 50}, _ctx(),
+    )
+    service._call_tool_server.assert_awaited_once_with(
+        "logsearch", {"namespace": "shop", "text": "error", "workload_kind": "Deployment", "workload_name": "web", "limit": 50},
+    )
+
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "issues", {"severity": "critical", "window_minutes": 90}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("issues", {"severity": "critical", "window_minutes": 90})
+
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "issues", {}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("issues", {})
+
+
+@pytest.mark.asyncio
 async def test_new_read_tools_are_cached_like_the_others():
     service = _service()
     ctx = _ctx()

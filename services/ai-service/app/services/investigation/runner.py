@@ -123,7 +123,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
 
     token = await asyncio.wait_for(fetch_token(cfg, row.cluster, row.namespace), timeout=remaining())
     service = await build_service(cfg, token, row.cluster)
-    tools = readonly_tool_filter(service._get_tools_definition())
+    from app.services.ai import features as feature_gate
+    tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},

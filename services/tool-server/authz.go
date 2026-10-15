@@ -81,12 +81,14 @@ var clusterWideTools = map[string]struct{}{
 	"k8s_get_available_api_resources": {}, "k8s_get_cluster_configuration": {},
 	"k8s_apply_manifest": {}, "k8s_create_resource": {},
 	"get_cluster_overview": {}, "get_node_metrics": {},
+	// PromQL is not bounded by a namespace.
+	"prometheus_query": {},
 }
 
 // namespaceAwareTools apply a namespace-scoped grant themselves — the handler
 // reads the token's "ns" claim and searches only those namespaces — so they
 // pass the gate without naming one.
-var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}}
+var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}}
 
 // namespaceFreeTools return API schema, not object data, so a scoped grant
 // may call them without a namespace.

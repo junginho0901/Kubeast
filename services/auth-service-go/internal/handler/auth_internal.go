@@ -109,7 +109,7 @@ func (h *AuthHandler) InvestigatorToken(w http.ResponseWriter, r *http.Request) 
 		minutes = 10
 	}
 	ttl := time.Duration(minutes) * time.Minute
-	token, err := h.jwtMgr.CreateInvestigatorToken(req.ClusterID, req.Namespace, repository.ReadAIToolPermissions, ttl)
+	token, err := h.jwtMgr.CreateInvestigatorToken(req.ClusterID, req.Namespace, repository.InvestigatorPermissions, ttl)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "token signing failed")
 		return

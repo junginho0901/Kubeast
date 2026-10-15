@@ -154,6 +154,21 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleExplain,
 	})
 	register(ToolDefinition{
+		Name:        "prometheus_query",
+		Description: "Run PromQL against the cluster's Prometheus through Kubeast (instant or range)",
+		Handler:     handlePrometheusQuery,
+	})
+	register(ToolDefinition{
+		Name:        "logsearch",
+		Description: "Search the cluster's log store (Loki) through Kubeast — also pods that no longer exist",
+		Handler:     handleLogSearch,
+	})
+	register(ToolDefinition{
+		Name:        "issues",
+		Description: "Kubeast's issue check: failing pods, workloads, nodes, PVCs and Warning events in one pass",
+		Handler:     handleIssues,
+	})
+	register(ToolDefinition{
 		Name:        "k8s_apply_manifest",
 		Description: "Apply a Kubernetes manifest (kubectl apply -f -)",
 		Handler:     handleApplyManifest,

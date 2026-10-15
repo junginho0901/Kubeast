@@ -133,11 +133,12 @@ func TestInvestigatorToken(t *testing.T) {
 			t.Fatalf("identity claims: %v %v %v", claims["sub"], claims["email"], claims["sys"])
 		}
 		perms := auth.ParsePermissions(claims["permissions"])
-		if len(perms) != 1 || len(perms["default"]) != len(repository.ReadAIToolPermissions) {
+		if len(perms) != 1 || len(perms["default"]) != len(repository.InvestigatorPermissions) {
 			t.Fatalf("permissions: %v", perms)
 		}
+		// The read tools and the one read permission the log store search asks for — never a write.
 		for _, p := range perms["default"] {
-			if !strings.HasPrefix(p, "ai.tool.") {
+			if !strings.HasPrefix(p, "ai.tool.") && p != "resource.pod.read" {
 				t.Fatalf("unexpected permission %q", p)
 			}
 		}

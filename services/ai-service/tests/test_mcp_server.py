@@ -220,6 +220,16 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
         return Res()
 
     monkeypatch.setattr(server._clusters, "get", get)
+
+    # Feature tools follow k8s-service /features, asked as the caller for that cluster.
+    feature_calls = []
+    features = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}}
+
+    async def fetch_features(k8s_client, cluster):
+        feature_calls.append((k8s_client.client.headers.get("Authorization"), k8s_client.client.params.get("cluster"), cluster))
+        return features
+
+    monkeypatch.setattr(mcp_server.feature_gate, "fetch_features", fetch_features)
     async with running_app(server) as client:
         res = await call(client, "tok-write", "tools/call", {"name": "list_clusters", "arguments": {}})
         import json
@@ -229,7 +239,17 @@ async def test_list_clusters_names_the_tools_allowed_in_each(fakes, monkeypatch)
     assert by_id["self"]["mcp"] is True and set(by_id["self"]["tools"]) == set(mcp_server.READ_TOOLS)
     assert by_id["default"]["mcp"] is False and by_id["default"]["tools"] == []
     assert by_id["self"]["namespaces"] is None  # an unscoped grant
+    assert feature_calls == [("Bearer tok-write", "self", "self")]
     assert fakes["audit"] == []
+
+    # Without Prometheus or a log store on self, those two tools are not offered there.
+    features = {"prometheus": {"enabled": False}, "logSearch": {"enabled": True, "clusters": ["elsewhere"]}}
+    async with running_app(server) as client:
+        res = await call(client, "tok-write", "tools/call", {"name": "list_clusters", "arguments": {}})
+        data = json.loads(res.json()["result"]["content"][0]["text"])
+    tools = {c["id"]: c["tools"] for c in data["clusters"]}["self"]
+    assert "issues" in tools and "prometheus_query" not in tools and "logsearch" not in tools
+    assert set(tools) == set(mcp_server.READ_TOOLS) - {"prometheus_query", "logsearch"}
 
 
 @pytest.mark.asyncio

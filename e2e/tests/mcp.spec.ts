@@ -139,14 +139,14 @@ test.describe('MCP server', () => {
       expect(podsRow?.Cluster ?? podsRow?.cluster).toBe('self')
       expect(after?.credential).toEqual({ type: 'api_key', akid: key.id })
 
-      // A Read user on self has ai.mcp.use and the thirteen read tools, never a write tool (with write tools on, also the way to ask for a role).
+      // A Read user on self has ai.mcp.use and the sixteen read tools, never a write tool (with write tools on, also the way to ask for a role).
       const readList = await rpc(request, readerToken, 'tools/list')
       expect(readList.status()).toBe(200)
       const readNames = ((await readList.json()).result.tools as { name: string }[]).map((t) => t.name).sort()
       expect(readNames.filter((n) => /apply|create|delete|patch|scale|rollout|execute|label|annotat/.test(n))).toEqual([])
       expect(readNames).toContain('k8s_get_resources')
       expect(readNames.includes('request_access')).toBe(!!cfg.write_tools)
-      expect(readNames.filter((n) => n !== 'request_access' && n !== 'list_clusters').length).toBe(13)
+      expect(readNames.filter((n) => n !== 'request_access' && n !== 'list_clusters').length).toBe(16)
 
       // The official client SDK connects the same way Claude Code does (a static Authorization header).
       const transport = new StreamableHTTPClientTransport(new URL(MCP, process.env.E2E_BASE_URL || 'http://localhost:30080'), {

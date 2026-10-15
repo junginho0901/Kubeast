@@ -385,6 +385,9 @@ async def session_chat_stream(
         
         # Function definitions
         tools = service._get_tools_definition()
+        # Feature tools (Prometheus, log store) only where this cluster serves them.
+        from app.services.ai import features as feature_gate
+        tools = await feature_gate.gate_tools(tools, service)
         # YAML/WIDE 요청 시 legacy JSON-only 도구는 제외
         tools = service._filter_tools_for_output_preference(tools, message)
         # 확장점: 호출자가 넘긴 tool filter (ex. READONLY 화이트리스트)

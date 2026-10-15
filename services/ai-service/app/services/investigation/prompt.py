@@ -25,6 +25,8 @@ def system_prompt(*, cluster: str, namespace: str, language: str) -> str:
         f"- Stay within {scope}.\n"
         "- Use a few targeted tool calls: the object the alert names, its events, its logs, its owner.\n"
         "- For a crashed or restarting container read the previous log (k8s_get_pod_logs previous=true); narrow events with kind and name.\n"
+        "- When the alert does not name one object, start with the issues tool for its namespace. Use prometheus_query for a metric's recent trend "
+        "and logsearch for the logs of pods that are gone — when those tools are offered; when they are not, the cluster has no such feature.\n"
         "- A tool result with status not_found lists similar names: use one of them or call k8s_find_resource once, then stop looking and report what was searched. "
         "Status unavailable means the cluster lacks that feature (for example metrics-server): say so and use the alternative named in the result.\n"
         "- When something is a guess, say it is a guess.\n"

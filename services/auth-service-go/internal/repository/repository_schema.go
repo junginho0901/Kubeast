@@ -25,7 +25,16 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.k8s_check_service_connectivity",
 	"ai.tool.k8s_find_resource",
 	"ai.tool.k8s_explain",
+	"ai.tool.issues",
+	"ai.tool.prometheus_query",
+	"ai.tool.logsearch",
 }
+
+// InvestigatorPermissions is what the alert investigator's token carries: the
+// read tools, plus resource.pod.read, which k8s-service asks for before it
+// searches the log store (the cluster itself still decides through the
+// investigator's RBAC).
+var InvestigatorPermissions = append(append([]string{}, ReadAIToolPermissions...), "resource.pod.read")
 
 // SeedSystemRoles ensures the four system roles exist and migrates auth_users.role → role_id.
 func (r *Repository) SeedSystemRoles(ctx context.Context) error {

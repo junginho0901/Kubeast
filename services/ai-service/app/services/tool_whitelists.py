@@ -9,7 +9,7 @@ allowlist 방식 — 신규 tool 이 추가돼도 명시적으로 여기 넣기 
 from typing import Any, Dict, List
 
 
-# The same thirteen names are the Read role's ai.tool.* permissions
+# The same sixteen names are the Read role's ai.tool.* permissions
 # (auth-service repository.ReadAIToolPermissions) — keep the two lists the same.
 READONLY_TOOL_NAMES: frozenset[str] = frozenset(
     {
@@ -26,6 +26,10 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "k8s_describe_resource",
         "k8s_find_resource",
         "k8s_explain",
+        # Feature tools: Kubeast's own APIs through tool-server (app/services/ai/features.py gates them by cluster).
+        "issues",
+        "prometheus_query",
+        "logsearch",
     }
 )
 

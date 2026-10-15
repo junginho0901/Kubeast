@@ -36,7 +36,9 @@ from starlette.types import ASGIApp
 
 from app.security import TokenPayload, decode_access_token
 from app.services.ai.permissions import namespace_scope_error
+from app.services.ai import features as feature_gate
 from app.services.ai.tools import CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
+from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
 from app.services.tool_whitelists import write_approval_required
@@ -479,6 +481,10 @@ class KubeastMCPServer(MCPServer):
             if not cid:
                 continue
             tools = _tools_allowed_in(payload, cid)
+            if any(name in feature_gate.GATES for name in tools):
+                # Feature tools only where that cluster serves them (k8s-service /features, as the caller).
+                features = await feature_gate.fetch_features(K8sServiceClient(authorization=f"Bearer {token.token}", cluster_name=cid), cid)
+                tools = feature_gate.gated_names(tools, features, cid)
             out.append(
                 {
                     "id": cid,

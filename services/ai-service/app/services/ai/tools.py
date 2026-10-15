@@ -218,6 +218,80 @@ K8S_READONLY_TOOLS: List[Dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "issues",
+            "description": (
+                "Kubeast's issue check for the cluster in one call: failing or pending pods (CrashLoopBackOff, ImagePullBackOff, OOMKilled, "
+                "unschedulable), workloads below their desired replicas, failed Jobs, unhealthy nodes (pressure, NotReady), unbound PVCs and the "
+                "Warning events of the last window — each with kind, namespace, name, severity (critical | warning | info), reason, message, count and last_seen, "
+                "plus counts per severity. Call it FIRST when the user asks what is wrong, whether something is failing, or for a health check, and only then "
+                "describe/logs on the objects it names. namespace narrows to one namespace, severity to one level, window_minutes changes the event window. "
+                "An empty list means nothing is failing in that scope right now."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Only issues in this namespace (default: every namespace the user may see)"},
+                    "severity": {"type": "string", "description": "Only this severity: critical, warning or info"},
+                    "window_minutes": {"type": "integer", "description": "How far back Warning events are read (default: server setting)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prometheus_query",
+            "description": (
+                "Run a PromQL expression against the Prometheus Kubeast reads for this cluster (its own Prometheus Service, or the external store "
+                "registered for it — Kubeast adds the cluster matcher). Instant by default; range=true returns points over since (default 1h; step "
+                "automatic, at least 15s) for a trend. Use it for usage history, error rates and saturation: container_cpu_usage_seconds_total, "
+                "container_memory_working_set_bytes, kube_pod_container_status_restarts_total, node_* from node-exporter. Results are capped at 100 series "
+                "and 120 points each. {\"status\":\"unavailable\"} means no Prometheus reaches this cluster: use get_pod_metrics / get_node_metrics for "
+                "current values and say that history is unavailable. The tool is only offered when the cluster has the Prometheus feature."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "promql": {"type": "string", "description": "PromQL expression, e.g. sum(rate(container_cpu_usage_seconds_total{namespace=\"shop\"}[5m])) by (pod)"},
+                    "range": {"type": "boolean", "description": "Return a series of points over since instead of one value"},
+                    "since": {"type": "string", "description": "Range window, e.g. 30m, 6h, 2d (default 1h, max 7d)"},
+                    "step": {"type": "integer", "description": "Seconds between points (default: window/120, at least 15)"},
+                },
+                "required": ["promql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "logsearch",
+            "description": (
+                "Search the cluster's log store (Loki) through Kubeast — lines from pods that have restarted, been rescheduled or deleted, across many pods "
+                "at once — filtered by text (case-insensitive substring; regex=true for a pattern), namespace, pod, container or workload (workload_kind + "
+                "workload_name, e.g. Deployment web), within since (default 1h) and up to limit lines (default 100, max 200). Use it when k8s_get_pod_logs "
+                "cannot help: the pod is gone, lines predate the last restart, or you need every pod of a workload. Returns lines with ts, namespace, pod, "
+                "container and line. {\"status\":\"unavailable\"} = no log store for this cluster; {\"status\":\"forbidden\"} = the cluster does not let the user "
+                "read pod logs there. A grant limited to namespaces must name one of them. Only offered when the cluster has log search."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "Namespace to search (empty = every namespace, for an unscoped grant)"},
+                    "text": {"type": "string", "description": "Text the line must contain (case-insensitive), or a regex with regex=true"},
+                    "regex": {"type": "boolean", "description": "Treat text as a regular expression"},
+                    "pod": {"type": "string", "description": "Only this pod"},
+                    "container": {"type": "string", "description": "Only this container"},
+                    "workload_kind": {"type": "string", "description": "Only pods of this workload kind (Deployment, StatefulSet, DaemonSet, Job, CronJob)"},
+                    "workload_name": {"type": "string", "description": "Only pods of this workload"},
+                    "since": {"type": "string", "description": "Window, e.g. 15m, 2h, 1d (default 1h)"},
+                    "limit": {"type": "integer", "description": "Maximum lines (default 100, max 200)"},
+                },
+            },
+        },
+    },
 ]
 
 K8S_WRITE_TOOLS: List[Dict] = [
