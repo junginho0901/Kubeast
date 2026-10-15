@@ -169,6 +169,41 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleIssues,
 	})
 	register(ToolDefinition{
+		Name:        "hygiene",
+		Description: "The cluster hygiene report (Pod Security, image tags, TLS expiry, upgrade readiness) — Admin",
+		Handler:     handleHygiene,
+	})
+	register(ToolDefinition{
+		Name:        "policy_reports",
+		Description: "PolicyReport / ClusterPolicyReport summary or result rows (Kyverno, Trivy Operator …)",
+		Handler:     handlePolicyReports,
+	})
+	register(ToolDefinition{
+		Name:        "helm_read",
+		Description: "Helm releases read-only: list, detail, values, manifest, history, resources, images, revisions, diff",
+		Handler:     handleHelmRead,
+	})
+	register(ToolDefinition{
+		Name:        "cost",
+		Description: "OpenCost allocation by namespace or controller for a window",
+		Handler:     handleCost,
+	})
+	register(ToolDefinition{
+		Name:        "optimization",
+		Description: "Requests vs usage with a recommendation per container of one namespace",
+		Handler:     handleOptimization,
+	})
+	register(ToolDefinition{
+		Name:        "can_i",
+		Description: "Whether the signed-in user may do a verb on a resource in this cluster (SelfSubjectAccessReview)",
+		Handler:     handleCanI,
+	})
+	register(ToolDefinition{
+		Name:        "resource_graph",
+		Description: "The objects of one namespace and the edges between them, with counts by kind",
+		Handler:     handleResourceGraph,
+	})
+	register(ToolDefinition{
 		Name:        "k8s_apply_manifest",
 		Description: "Apply a Kubernetes manifest (kubectl apply -f -)",
 		Handler:     handleApplyManifest,

@@ -9,8 +9,9 @@ allowlist 방식 — 신규 tool 이 추가돼도 명시적으로 여기 넣기 
 from typing import Any, Dict, List
 
 
-# The same sixteen names are the Read role's ai.tool.* permissions
+# The same twenty-two names are the Read role's ai.tool.* permissions
 # (auth-service repository.ReadAIToolPermissions) — keep the two lists the same.
+# The Admin-only read tool (hygiene, tools.ADMIN_READ_TOOLS) is deliberately not here.
 READONLY_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "get_cluster_overview",
@@ -30,6 +31,12 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "issues",
         "prometheus_query",
         "logsearch",
+        "policy_reports",
+        "helm_read",
+        "cost",
+        "optimization",
+        "can_i",
+        "resource_graph",
     }
 )
 

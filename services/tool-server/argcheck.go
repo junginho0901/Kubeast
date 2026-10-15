@@ -94,6 +94,20 @@ var argRules = map[string]argCheck{
 	"workload_kind": checkKindName,
 	"workload_name": checkObjectName,
 	"severity":      checkSeverity,
+	"what":          checkEnum("list", "get", "values", "manifest", "notes", "hooks", "history", "resources", "images", "diff", "revision"),
+	"view":          checkEnum("summary", "results"),
+	"section":       checkEnum("manifest", "values", "notes", "hooks"),
+	"aggregate":     checkEnum("namespace", "controller"),
+	"window":        checkEnum("1h", "6h", "12h", "24h", "48h", "7d", "14d", "30d"),
+	"release":       checkObjectName,
+	"status":        checkLowerWord,
+	"policy":        checkQualifiedPath,
+	"search":        checkSearchText,
+	"results":       checkWordList,
+	"severities":    checkWordList,
+	"check":         checkLowerWord,
+	"verb":          checkLowerWord,
+	"group":         checkAPIGroup,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -228,6 +242,53 @@ func checkSeverity(field, v string) error {
 		return nil
 	}
 	return badArg(field, v, "one of critical, warning, info")
+}
+
+// checkEnum accepts one of a fixed set of words.
+func checkEnum(words ...string) argCheck {
+	return func(field, v string) error {
+		for _, w := range words {
+			if v == w {
+				return nil
+			}
+		}
+		return badArg(field, v, "one of "+strings.Join(words, ", "))
+	}
+}
+
+var (
+	lowerWordRe     = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	wordListRe      = regexp.MustCompile(`^[a-z]+(,[a-z]+)*$`)
+	qualifiedPathRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?$`)
+	apiGroupRe      = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
+)
+
+func checkLowerWord(field, v string) error {
+	if len(v) > dns1123LabelMaxLength || !lowerWordRe.MatchString(v) {
+		return badArg(field, v, "a lowercase word")
+	}
+	return nil
+}
+
+func checkWordList(field, v string) error {
+	if len(v) > 200 || !wordListRe.MatchString(v) {
+		return badArg(field, v, "lowercase words separated by commas")
+	}
+	return nil
+}
+
+func checkQualifiedPath(field, v string) error {
+	if len(v) > dns1123SubdomainMaxLength || !qualifiedPathRe.MatchString(v) {
+		return badArg(field, v, "a policy name (letters, digits, . _ / -)")
+	}
+	return nil
+}
+
+func checkAPIGroup(field, v string) error {
+	if len(v) > dns1123SubdomainMaxLength || !apiGroupRe.MatchString(v) {
+		return badArg(field, v, "an API group such as apps or networking.k8s.io")
+	}
+	return nil
 }
 
 func badArg(field, value, want string) error {

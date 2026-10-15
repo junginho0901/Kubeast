@@ -37,7 +37,7 @@ from starlette.types import ASGIApp
 from app.security import TokenPayload, decode_access_token
 from app.services.ai.permissions import namespace_scope_error
 from app.services.ai import features as feature_gate
-from app.services.ai.tools import CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
+from app.services.ai.tools import ADMIN_READ_TOOLS, CLUSTER_METRICS_TOOLS, K8S_READONLY_TOOLS, K8S_WRITE_TOOLS
 from app.services.k8s_client import K8sServiceClient
 from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
@@ -79,7 +79,7 @@ def _with_cluster(parameters: Dict[str, Any]) -> Dict[str, Any]:
 
 def _read_tools() -> Dict[str, Tool]:
     tools: Dict[str, Tool] = {}
-    for entry in [*CLUSTER_METRICS_TOOLS, *K8S_READONLY_TOOLS]:
+    for entry in [*CLUSTER_METRICS_TOOLS, *K8S_READONLY_TOOLS, *ADMIN_READ_TOOLS]:
         fn = entry["function"]
         tools[fn["name"]] = Tool(
             name=fn["name"],
@@ -316,7 +316,8 @@ class KubeastMCPServer(MCPServer):
         if not _may_use_mcp(payload):
             # Nothing to call yet; with write tools on the agent may still ask for a role.
             return [REQUEST_ACCESS] if mcp_write_tools_enabled() else []
-        tools = [LIST_CLUSTERS, *READ_TOOLS.values(), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
+        # The Admin-only read tool is listed only for a token that holds its global permission.
+        tools = [LIST_CLUSTERS, *(t for n, t in READ_TOOLS.items() if feature_gate.permitted_anywhere(n, payload)), *(WRITE_TOOLS[n] for n in _write_tools_anywhere(payload))]
         if mcp_write_tools_enabled():
             tools.append(REQUEST_ACCESS)
         return tools
@@ -481,10 +482,13 @@ class KubeastMCPServer(MCPServer):
             if not cid:
                 continue
             tools = _tools_allowed_in(payload, cid)
-            if any(name in feature_gate.GATES for name in tools):
-                # Feature tools only where that cluster serves them (k8s-service /features, as the caller).
-                features = await feature_gate.fetch_features(K8sServiceClient(authorization=f"Bearer {token.token}", cluster_name=cid), cid)
-                tools = feature_gate.gated_names(tools, features, cid)
+            if any(feature_gate.gated(name) for name in tools):
+                # Feature tools only where that cluster serves them (k8s-service /features, as the caller)
+                # and where the caller holds what k8s-service will ask for.
+                features = None
+                if any(name in feature_gate.GATES and feature_gate.permitted(name, payload, cid) for name in tools):
+                    features = await feature_gate.fetch_features(K8sServiceClient(authorization=f"Bearer {token.token}", cluster_name=cid), cid)
+                tools = feature_gate.gated_names(tools, features, cid, payload)
             out.append(
                 {
                     "id": cid,

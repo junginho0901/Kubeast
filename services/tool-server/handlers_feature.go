@@ -74,8 +74,11 @@ func featureFailure(feature, alternative string, status int, body []byte) (strin
 	detail := detailOf(body)
 	var result map[string]interface{}
 	switch {
-	case status == http.StatusNotFound && strings.Contains(detail, "not configured"):
+	case status == http.StatusNotFound && featureMissing(detail):
 		result = map[string]interface{}{"status": "unavailable", "feature": feature, "reason": detail, "alternative": alternative}
+	case status == http.StatusNotFound && strings.Contains(strings.ToLower(detail), "not found") && !strings.Contains(strings.ToLower(detail), "cluster not found"):
+		result = map[string]interface{}{"status": "not_found", "feature": feature, "reason": detail,
+			"hint": "The named object does not exist here. List first (what=list / k8s_find_resource) instead of guessing names."}
 	case status == http.StatusForbidden:
 		result = map[string]interface{}{"status": "forbidden", "feature": feature, "reason": detail,
 			"hint": "Your grant does not reach this. Tell the user what was refused instead of trying another way."}
@@ -89,6 +92,17 @@ func featureFailure(feature, alternative string, status int, body []byte) (strin
 	}
 	out, err := marshalJSON(result)
 	return out, err == nil, err
+}
+
+// featureMissing: k8s-service's 404 says the feature, not an object, is absent.
+func featureMissing(detail string) bool {
+	d := strings.ToLower(detail)
+	for _, phrase := range []string{"not configured", "disabled", "is off", "opencost not found", "not installed", "not served"} {
+		if strings.Contains(d, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func unavailableResult(feature, reason, alternative string) (string, error) {

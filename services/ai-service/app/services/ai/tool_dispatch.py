@@ -31,6 +31,22 @@ def _flag(value) -> bool:
     return bool(value)
 
 
+# Feature tools (tool-server → k8s-service): the string, boolean and integer
+# arguments each one declares. Anything else the model sends is dropped.
+FEATURE_TOOL_ARGS = {
+    "issues": ({"namespace", "severity"}, set(), {"window_minutes"}),
+    "prometheus_query": ({"promql", "since"}, {"range"}, {"step"}),
+    "logsearch": ({"namespace", "text", "pod", "container", "workload_kind", "workload_name", "since"}, {"regex"}, {"limit"}),
+    "hygiene": ({"severity", "check"}, set(), set()),
+    "policy_reports": ({"view", "namespace", "policy", "kind", "results", "severities", "search"}, set(), {"limit"}),
+    "helm_read": ({"what", "namespace", "release", "status", "section"}, set(), {"revision", "from", "to"}),
+    "cost": ({"window", "aggregate", "namespace"}, set(), set()),
+    "optimization": ({"namespace"}, set(), {"window_hours"}),
+    "can_i": ({"verb", "resource", "group", "namespace"}, set(), set()),
+    "resource_graph": ({"namespace"}, set(), set()),
+}
+
+
 async def execute_function_with_context(
     service: "AIService",
     function_name: str,
@@ -403,14 +419,10 @@ async def execute_function_with_context(
                 tool_args["recursive"] = True
             result = await service._call_tool_server(function_name, tool_args)
 
-        elif function_name in ("issues", "prometheus_query", "logsearch"):
+        elif function_name in FEATURE_TOOL_ARGS:
             # Feature tools: tool-server calls k8s-service as the user; only the
             # declared arguments travel, booleans and integers normalised.
-            spec = {
-                "issues": ({"namespace", "severity"}, set(), {"window_minutes"}),
-                "prometheus_query": ({"promql", "since"}, {"range"}, {"step"}),
-                "logsearch": ({"namespace", "text", "pod", "container", "workload_kind", "workload_name", "since"}, {"regex"}, {"limit"}),
-            }[function_name]
+            spec = FEATURE_TOOL_ARGS[function_name]
             tool_args = {}
             for key in spec[0]:
                 value = function_args.get(key)

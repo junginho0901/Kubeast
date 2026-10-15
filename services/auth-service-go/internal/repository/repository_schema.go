@@ -28,6 +28,12 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.issues",
 	"ai.tool.prometheus_query",
 	"ai.tool.logsearch",
+	"ai.tool.policy_reports",
+	"ai.tool.helm_read",
+	"ai.tool.cost",
+	"ai.tool.optimization",
+	"ai.tool.can_i",
+	"ai.tool.resource_graph",
 }
 
 // InvestigatorPermissions is what the alert investigator's token carries: the

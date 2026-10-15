@@ -36,7 +36,51 @@ def test_gated_names_by_feature_and_cluster():
     assert features.gated_names(names, None, "self") == ["k8s_get_resources", "issues"]
     # The gate knows every feature tool the whitelist carries.
     gated = {t["function"]["name"] for t in K8S_READONLY_TOOLS if t["function"]["name"] in features.GATES}
-    assert gated == {"prometheus_query", "logsearch"}
+    assert gated == {"prometheus_query", "logsearch", "cost", "policy_reports"}
+    feats = {"cost": {"enabled": True}, "policyReports": {"enabled": False}}
+    assert features.gated_names(["cost", "policy_reports", "helm_read"], feats, "self") == ["cost", "helm_read"]
+
+
+class _Token:
+    """A token with the given cluster permissions and optional global ones."""
+
+    def __init__(self, cluster_perms, global_perms=()):
+        self.cluster_perms = set(cluster_perms)
+        self.global_perms = set(global_perms)
+
+    def has_permission(self, perm):
+        return "*" in self.global_perms or perm in self.global_perms
+
+    def has_permission_for_cluster(self, perm, cluster):
+        return self.has_permission(perm) or perm in self.cluster_perms
+
+
+def test_permission_gate_follows_what_k8s_service_asks_for():
+    feats = {"prometheus": {"enabled": True}, "logSearch": {"enabled": True, "clusters": ["self"]}, "cost": {"enabled": True}, "policyReports": {"enabled": True}}
+    names = ["issues", "hygiene", "policy_reports", "helm_read", "cost", "can_i"]
+    # No token (legacy role mode): nothing is hidden by permission.
+    assert features.gated_names(names, feats, "self") == names
+    reader = _Token({"resource.helm.read", "resource.policyreport.read", "resource.cost.read"})
+    assert features.gated_names(names, feats, "self", reader) == ["issues", "policy_reports", "helm_read", "cost", "can_i"]
+    bare = _Token({"ai.tool.*"})
+    assert features.gated_names(names, feats, "self", bare) == ["issues", "can_i"]
+    admin = _Token(set(), {"*"})
+    assert features.gated_names(names, feats, "self", admin) == names
+    hygiene_only = _Token(set(), {"admin.hygiene.read"})
+    assert "hygiene" in features.gated_names(names, feats, "self", hygiene_only)
+    assert "helm_read" not in features.gated_names(names, feats, "self", hygiene_only)
+    # filter_tools applies the same rule to tool definitions, in order.
+    tools = _tools("hygiene", "k8s_get_pod_logs", "cost")
+    assert _names(features.filter_tools(tools, feats, "self", reader)) == ["k8s_get_pod_logs", "cost"]
+
+
+@pytest.mark.asyncio
+async def test_gate_tools_skips_the_features_call_when_no_permitted_feature_tool_remains():
+    k8s = SimpleNamespace(get_features=AsyncMock(return_value={}))
+    service = SimpleNamespace(cluster_name="c1", k8s_service=k8s, token=_Token({"ai.tool.*"}))
+    out = await features.gate_tools(_tools("issues", "cost", "hygiene", "helm_read"), service)
+    assert _names(out) == ["issues"]
+    k8s.get_features.assert_not_called()
 
 
 def test_filter_tools_keeps_order_and_ungated_tools():

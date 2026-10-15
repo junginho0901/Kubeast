@@ -134,6 +134,28 @@ async def test_feature_tools_pass_declared_arguments_only():
 
 
 @pytest.mark.asyncio
+async def test_second_batch_feature_tools_pass_declared_arguments_only():
+    service = _service()
+    await execute_function_with_context(
+        service, "helm_read", {"what": "diff", "namespace": "kubeast", "release": "kubeast", "from": "5", "to": 6, "section": "values", "cluster": "x", "values": {"a": 1}}, _ctx(),
+    )
+    service._call_tool_server.assert_awaited_once_with(
+        "helm_read", {"what": "diff", "namespace": "kubeast", "release": "kubeast", "section": "values", "from": 5, "to": 6},
+    )
+    for name, args, expected in [
+        ("policy_reports", {"view": "results", "results": "fail,warn", "limit": 50, "force_refresh": True}, {"view": "results", "results": "fail,warn", "limit": 50}),
+        ("cost", {"window": "7d", "aggregate": "controller", "namespace": " shop "}, {"window": "7d", "aggregate": "controller", "namespace": "shop"}),
+        ("optimization", {"namespace": "shop", "window_hours": 48}, {"namespace": "shop", "window_hours": 48}),
+        ("can_i", {"verb": "delete", "resource": "pods", "namespace": "shop", "group": ""}, {"verb": "delete", "resource": "pods", "namespace": "shop"}),
+        ("resource_graph", {"namespace": "shop", "depth": 3}, {"namespace": "shop"}),
+        ("hygiene", {"severity": "critical", "check": "pss-level"}, {"severity": "critical", "check": "pss-level"}),
+    ]:
+        service._call_tool_server.reset_mock()
+        await execute_function_with_context(service, name, args, _ctx())
+        service._call_tool_server.assert_awaited_once_with(name, expected)
+
+
+@pytest.mark.asyncio
 async def test_new_read_tools_are_cached_like_the_others():
     service = _service()
     ctx = _ctx()

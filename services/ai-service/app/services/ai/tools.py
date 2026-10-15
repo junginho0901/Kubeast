@@ -292,6 +292,171 @@ K8S_READONLY_TOOLS: List[Dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "policy_reports",
+            "description": (
+                "Policy results from PolicyReport / ClusterPolicyReport (wgpolicyk8s.io — Kyverno, Trivy Operator and others write them). "
+                "view=summary (default) gives totals per policy and per namespace (pass, fail, warn, error, skip); view=results lists the "
+                "rows — each with namespace, kind, name, policy, rule, result, severity, message — filtered by namespace, policy, kind, "
+                "results (e.g. fail,warn), severities (e.g. high,critical) or a search text, up to limit rows (max 200). Use it for "
+                "\"which workloads violate policy X\", \"what fails in namespace Y\" or a compliance overview. {\"status\":\"unavailable\"} means the "
+                "cluster has no PolicyReport source. Only offered where the policy reports feature is on and the user may read them."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "view": {"type": "string", "description": "summary (default) or results"},
+                    "namespace": {"type": "string", "description": "Only this namespace"},
+                    "policy": {"type": "string", "description": "results: only this policy"},
+                    "kind": {"type": "string", "description": "results: only objects of this kind (Pod, Deployment …)"},
+                    "results": {"type": "string", "description": "results: comma-separated result kinds to keep: pass,fail,warn,error,skip (default all)"},
+                    "severities": {"type": "string", "description": "results: comma-separated severities to keep, e.g. critical,high"},
+                    "search": {"type": "string", "description": "results: text to match in object name, policy or message"},
+                    "limit": {"type": "integer", "description": "results: maximum rows (default 100, max 200)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "helm_read",
+            "description": (
+                "Read Helm releases — never change them (upgrades, rollbacks and uninstalls go through helm_execute and the approval card). "
+                "what=list (default; optional namespace, status) lists releases with chart, version, revision, status and updated time. "
+                "For one release (namespace + release): what=get (summary, description, notes, values up to 32 KB), what=values / manifest / notes / hooks "
+                "(that section as text), what=history (every revision with status and description), what=resources (the objects the release owns), "
+                "what=images (container images), what=revision with revision=N and section (that revision's values or manifest), "
+                "what=diff with from=N and to=M and section (manifest by default) — the unified diff between two revisions. Text is cut at 64 KB; "
+                "secret values are redacted. A missing release answers {\"status\":\"not_found\"}: list first instead of guessing. "
+                "Use it for \"what changed in the last upgrade\", \"which image does release X run\", \"what values is X deployed with\"."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "what": {"type": "string", "description": "list, get, values, manifest, notes, hooks, history, resources, images, revision or diff"},
+                    "namespace": {"type": "string", "description": "Release namespace (list: optional filter)"},
+                    "release": {"type": "string", "description": "Release name (everything but list)"},
+                    "status": {"type": "string", "description": "list: only releases in this status, e.g. deployed, failed"},
+                    "revision": {"type": "integer", "description": "revision: the revision number"},
+                    "from": {"type": "integer", "description": "diff: older revision"},
+                    "to": {"type": "integer", "description": "diff: newer revision"},
+                    "section": {"type": "string", "description": "revision/diff: manifest, values, notes or hooks"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cost",
+            "description": (
+                "Cost allocation from the cluster's OpenCost: per namespace (aggregate=namespace, default) or per workload (aggregate=controller) over a "
+                "window (1h, 6h, 12h, 24h — default —, 48h, 7d, 14d, 30d), each row with cpu_cost, ram_cost, gpu_cost, pv_cost, network_cost and the total in "
+                "the cluster's currency, plus the hours the cost covers. namespace narrows to one namespace. Use it for \"what does namespace X cost\", "
+                "\"the most expensive workloads this week\". {\"status\":\"unavailable\"} means no OpenCost is reachable; then use optimization "
+                "(requests vs usage) for sizing without prices. Only offered where the cost feature is on and the user may read costs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "window": {"type": "string", "description": "1h, 6h, 12h, 24h (default), 48h, 7d, 14d or 30d"},
+                    "aggregate": {"type": "string", "description": "namespace (default) or controller (per workload)"},
+                    "namespace": {"type": "string", "description": "Only this namespace"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "optimization",
+            "description": (
+                "Requests versus actual usage per container of one namespace, with a recommendation: rows carry kind, name, container, pods, "
+                "cpu_request_m, cpu_usage_m, cpu_recommend_m, mem_request_bytes, mem_usage_bytes, mem_recommend_bytes and flags (over-provisioned, "
+                "no requests, near limit …), plus totals and — with OpenCost — the monthly cost and saving. Usage comes from Prometheus or "
+                "metrics-server over window_hours (default from settings). Use it for \"is namespace X over-provisioned\", \"what should the requests "
+                "of deployment Y be\". Rows with a recommendation come first."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The namespace to analyse"},
+                    "window_hours": {"type": "integer", "description": "Usage window in hours (default: server setting, max 720)"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "can_i",
+            "description": (
+                "Ask the cluster whether the signed-in user may do verb on resource (SelfSubjectAccessReview as that user — their RBAC, not "
+                "Kubeast's). verb: get, list, watch, create, update, patch, delete …; resource: the plural type (pods, deployments, secrets); group for a "
+                "non-core API (apps, batch, networking.k8s.io); namespace for a namespaced check (empty = cluster scope). Returns allowed true/false. "
+                "Use it before suggesting an action the user may not be allowed to do, or to explain a 403."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "verb": {"type": "string", "description": "Kubernetes verb, e.g. delete"},
+                    "resource": {"type": "string", "description": "Plural resource type, e.g. pods"},
+                    "group": {"type": "string", "description": "API group, e.g. apps (empty for core)"},
+                    "namespace": {"type": "string", "description": "Namespace (empty = cluster scope)"},
+                },
+                "required": ["verb", "resource"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "resource_graph",
+            "description": (
+                "The objects of one namespace and the edges between them — owner (Deployment → ReplicaSet → Pod), selector (Service → Pod), "
+                "volume and config references (Pod → ConfigMap/Secret/PVC), Ingress → Service — as nodes and edges plus counts by kind. "
+                "Use it to answer \"what depends on Service X\", \"which pods does this ConfigMap feed\", \"what would break if I delete Y\". "
+                "Large namespaces are cut at 200 nodes and 400 edges; narrow with k8s_get_resources when the answer needs one object's neighbours."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The namespace to map"},
+                },
+                "required": ["namespace"],
+            },
+        },
+    },
+]
+
+# Read tools for Admin only: offered when the token holds the permission k8s-service asks for
+# (app/services/ai/features.py REQUIRED_PERMISSIONS). Not part of the Read role's seed.
+ADMIN_READ_TOOLS: List[Dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "hygiene",
+            "description": (
+                "The cluster hygiene report (Admin → Cluster hygiene; permission admin.hygiene.read): Pod Security Standards level per namespace, "
+                "containers running as root or privileged, images by mutable tag (latest), TLS certificates about to expire, deprecated APIs and "
+                "other upgrade-readiness checks against the next Kubernetes minor, with counts per severity, the list of checks and the findings "
+                "(check, severity, kind, namespace, name, message, exempt). Filter with severity (critical, warning, info) or check (one check's id). "
+                "Use it for \"is this cluster ready for the upgrade\", \"what breaks Pod Security\", a periodic review. The report also says when it "
+                "was last signed off and whether a review is due. {\"status\":\"unavailable\"} means the report is off (features.hygiene.enabled)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "severity": {"type": "string", "description": "Only findings of this severity: critical, warning or info"},
+                    "check": {"type": "string", "description": "Only findings of this check id (from the report's checks list)"},
+                },
+            },
+        },
+    },
 ]
 
 K8S_WRITE_TOOLS: List[Dict] = [
@@ -565,5 +730,6 @@ def get_tools_definition(service) -> List[Dict]:
     프로퍼티에 의존하므로 AIService 에 잔존)."""
     tools = list(CLUSTER_METRICS_TOOLS)
     tools.extend(K8S_READONLY_TOOLS)
+    tools.extend(ADMIN_READ_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)

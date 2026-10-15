@@ -22,6 +22,12 @@ EXPECTED_READONLY_NAMES = {
     "issues",
     "prometheus_query",
     "logsearch",
+    "policy_reports",
+    "helm_read",
+    "cost",
+    "optimization",
+    "can_i",
+    "resource_graph",
 }
 
 EXPECTED_WRITE_NAMES = {
