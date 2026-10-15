@@ -308,6 +308,7 @@ func allPermissions() []map[string]interface{} {
 			{"admin.hygiene.export", "Export the cluster hygiene report (CSV/JSON)"},
 			{"admin.hygiene.signoff", "Sign off a cluster hygiene report"},
 			{"admin.investigations.read", "View alert investigation reports"},
+			{"admin.logsearch.query", "Run LogQL against the log store (the cluster and namespace matchers are added)"},
 		}},
 	}
 	return categories

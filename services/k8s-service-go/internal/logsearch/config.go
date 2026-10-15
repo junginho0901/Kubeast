@@ -54,6 +54,10 @@ type Config struct {
 	// empty Labels.Cluster the store holds one cluster: the single entry names
 	// it and its value is unused.
 	Clusters map[string]string
+	// LogQLEnabled lets admins (admin.logsearch.query) run LogQL they write,
+	// with the cluster and namespace matchers added to every selector (chart
+	// features.logSearch.logql).
+	LogQLEnabled bool
 	// TraceID finds a line's trace ID in its labels or text (features.tracing);
 	// nil leaves lines without one.
 	TraceID          func(labels map[string]string, line string) string
@@ -80,6 +84,7 @@ func LoadConfig() Config {
 			Service:   envOr("LOG_SEARCH_LABEL_SERVICE", "service_name"),
 		},
 		Clusters:         parseClusters(os.Getenv("LOG_SEARCH_CLUSTERS")),
+		LogQLEnabled:     pkgconfig.GetEnvBool("LOG_SEARCH_LOGQL", false),
 		DefaultRange:     envDuration("LOG_SEARCH_DEFAULT_RANGE", time.Hour),
 		MaxRange:         envDuration("LOG_SEARCH_MAX_RANGE", 24*time.Hour),
 		MaxLines:         pkgconfig.GetEnvInt("LOG_SEARCH_MAX_LINES", 1000),

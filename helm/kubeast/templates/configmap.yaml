@@ -205,6 +205,7 @@ data:
   LOG_SEARCH_MAX_LINES: {{ .maxLines | quote }}
   LOG_SEARCH_TIMEOUT: {{ .timeout | quote }}
   LOG_SEARCH_PER_USER_PER_MINUTE: {{ .perUserPerMinute | quote }}
+  LOG_SEARCH_LOGQL: {{ .logql | default false | quote }}
 {{- end }}
 {{- end }}
 {{- with .Values.features.tracing }}

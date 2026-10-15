@@ -228,6 +228,7 @@ func (h *Handler) logSearchFeature(ctx context.Context) map[string]interface{} {
 	return map[string]interface{}{
 		"enabled":             true,
 		"clusters":            h.logSearch.ClusterIDs(ctx),
+		"logql":               c.LogQLEnabled,
 		"defaultRangeMinutes": int(c.DefaultRange.Minutes()),
 		"maxRangeMinutes":     int(c.MaxRange.Minutes()),
 		"maxLines":            c.MaxLines,

@@ -82,20 +82,26 @@ func (c Config) Normalize(req *Request, now time.Time) error {
 		}
 	}
 
-	if req.End.IsZero() || req.End.After(now) {
-		req.End = now
+	return c.NormalizeRange(&req.Start, &req.End, &req.Limit, now)
+}
+
+// NormalizeRange fills and checks the range (the default window, at most
+// MaxRange, end not in the future) and the line limit.
+func (c Config) NormalizeRange(start, end *time.Time, limit *int, now time.Time) error {
+	if end.IsZero() || end.After(now) {
+		*end = now
 	}
-	if req.Start.IsZero() {
-		req.Start = req.End.Add(-c.DefaultRange)
+	if start.IsZero() {
+		*start = end.Add(-c.DefaultRange)
 	}
-	if !req.Start.Before(req.End) {
+	if !start.Before(*end) {
 		return fmt.Errorf("start must be before end")
 	}
-	if req.End.Sub(req.Start) > c.MaxRange {
+	if end.Sub(*start) > c.MaxRange {
 		return fmt.Errorf("the range is longer than %s", c.MaxRange)
 	}
-	if req.Limit <= 0 || req.Limit > c.MaxLines {
-		req.Limit = c.MaxLines
+	if *limit <= 0 || *limit > c.MaxLines {
+		*limit = c.MaxLines
 	}
 	return nil
 }

@@ -3,7 +3,7 @@
 // the dedicated WebSocket multiplexer in /api/v1/ws).
 
 import { client } from './client'
-import type { LogFileContent, LogFileList, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodRbacResponse } from './types'
+import type { LogFileContent, LogFileList, LogQLParams, LogSearchParams, LogSearchResult, LogSearchStatus, PodInfo, PodRbacResponse } from './types'
 
 export const podsApi = {
   getPods: async (namespace: string, labelSelector?: string, forceRefresh = false): Promise<PodInfo[]> => {
@@ -65,6 +65,12 @@ export const podsApi = {
   // Where a cluster's log search reads from (the admin page asks about one cluster explicitly).
   getLogSearchStatus: async (cluster?: string): Promise<LogSearchStatus> => {
     const { data } = await client.get('/cluster/logsearch/status', { params: cluster ? { cluster } : undefined })
+    return data
+  },
+
+  // LogQL written by an admin (features.logSearch.logql): the server adds the cluster and namespace matchers.
+  queryLogQL: async ({ namespace, ...params }: LogQLParams): Promise<LogSearchResult> => {
+    const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/logsearch/query`, { params })
     return data
   },
 

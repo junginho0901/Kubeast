@@ -2353,10 +2353,16 @@
       "traceTitle": "Open trace {{id}} in a new tab",
       "traces": "Traces",
       "tracesTitle": "Search the traces of {{service}} in a new tab",
+      "logql": "LogQL",
+      "logqlTitle": "Write the query yourself (admins). The cluster and namespace matchers are added to every selector.",
+      "logqlLabel": "LogQL query",
+      "logqlPlaceholder": "{} |= \"error\" | json | level=\"error\"",
+      "effective": "Sent: {{query}}",
       "errors": {
         "tooMany": "Too many searches in a minute. Try again shortly.",
         "forbidden": "Not allowed: {{detail}}",
         "timeout": "The log store did not answer in time. Narrow the range or the filters.",
+        "rejected": "Rejected: {{detail}}",
         "generic": "Search failed: {{detail}}"
       }
     },

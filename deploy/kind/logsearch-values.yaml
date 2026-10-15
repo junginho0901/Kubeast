@@ -4,6 +4,7 @@
 features:
   logSearch:
     enabled: true
+    logql: true
     url: http://kubeast-b-control-plane:31100
     clusters:
       self: kubeast

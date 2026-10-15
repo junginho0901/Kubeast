@@ -25,6 +25,8 @@ func RegisterPods(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/namespaces/{namespace}/logsearch", h.LogSearchNamespace)
 	r.Get("/api/v1/logsearch", h.LogSearchAll)
 	r.Get("/api/v1/logsearch/status", h.LogSearchStatus)
+	r.Get("/api/v1/namespaces/{namespace}/logsearch/query", h.LogQLNamespace)
+	r.Get("/api/v1/logsearch/query", h.LogQLAll)
 	r.Delete("/api/v1/namespaces/{namespace}/pods/{pod_name}", h.DeletePod)
 	r.Get("/api/v1/namespaces/{namespace}/pods/{name}/exec/ws", h.PodExecWS)
 }

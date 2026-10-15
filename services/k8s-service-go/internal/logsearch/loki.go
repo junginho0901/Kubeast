@@ -37,10 +37,16 @@ type Result struct {
 	Newest    time.Time `json:"newest,omitempty"`
 	Bytes     int64     `json:"bytes"`
 	Query     string    `json:"-"`
+	// EffectiveQuery is the LogQL actually sent for a query an admin wrote
+	// (Searcher.Query): theirs with the cluster and namespace matchers added.
+	EffectiveQuery string `json:"effectiveQuery,omitempty"`
 }
 
 // ErrTimeout marks a search the store did not answer in time.
 var ErrTimeout = errors.New("log store did not answer in time")
+
+// ErrNotLogQuery is a query the store answered with samples, not log lines.
+var ErrNotLogQuery = errors.New("only log queries are run here, not metric queries")
 
 // StoreError is a non-200 answer from the store.
 type StoreError struct {
@@ -116,15 +122,20 @@ func (l *loki) healthy(ctx context.Context, store Store) (bool, string) {
 	return true, ""
 }
 
+// search runs a structured request: the query is built from its filters.
 func (l *loki) search(ctx context.Context, req Request, store Store, clusterValue string) (Result, error) {
-	query := l.cfg.LogQL(req, clusterValue)
+	return l.run(ctx, store, l.cfg.LogQL(req, clusterValue), req.Start, req.End, req.Limit, req.Forward)
+}
+
+// run sends query to store's query_range and reads the streams back.
+func (l *loki) run(ctx context.Context, store Store, query string, start, end time.Time, limit int, forward bool) (Result, error) {
 	params := url.Values{}
 	params.Set("query", query)
-	params.Set("start", strconv.FormatInt(req.Start.UnixNano(), 10))
-	params.Set("end", strconv.FormatInt(req.End.UnixNano(), 10))
-	params.Set("limit", strconv.Itoa(req.Limit))
+	params.Set("start", strconv.FormatInt(start.UnixNano(), 10))
+	params.Set("end", strconv.FormatInt(end.UnixNano(), 10))
+	params.Set("limit", strconv.Itoa(limit))
 	direction := "backward"
-	if req.Forward {
+	if forward {
 		direction = "forward"
 	}
 	params.Set("direction", direction)
@@ -148,12 +159,22 @@ func (l *loki) search(ctx context.Context, req Request, store Store, clusterValu
 		}
 		return Result{Query: query}, &StoreError{Status: resp.StatusCode, Body: msg}
 	}
+	// the kind first: a metric query's samples are [number, string] pairs,
+	// which the streams shape would not read
+	var kind struct {
+		Data struct {
+			ResultType string `json:"resultType"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &kind); err != nil {
+		return Result{Query: query}, fmt.Errorf("log store: unreadable answer: %w", err)
+	}
+	if kind.Data.ResultType != "streams" {
+		return Result{Query: query}, fmt.Errorf("%w (the store answered with %q)", ErrNotLogQuery, kind.Data.ResultType)
+	}
 	var lr lokiResponse
 	if err := json.Unmarshal(body, &lr); err != nil {
 		return Result{Query: query}, fmt.Errorf("log store: unreadable answer: %w", err)
-	}
-	if lr.Data.ResultType != "streams" {
-		return Result{Query: query}, fmt.Errorf("log store: expected streams, got %q", lr.Data.ResultType)
 	}
 
 	res := Result{Query: query, Bytes: lr.Data.Stats.Summary.TotalBytesProcessed, Lines: []Line{}}
@@ -181,18 +202,18 @@ func (l *loki) search(ctx context.Context, req Request, store Store, clusterValu
 	}
 	// Loki applies the limit across streams but returns them stream by stream.
 	sort.SliceStable(res.Lines, func(i, j int) bool {
-		if req.Forward {
+		if forward {
 			return res.Lines[i].TS.Before(res.Lines[j].TS)
 		}
 		return res.Lines[i].TS.After(res.Lines[j].TS)
 	})
-	if len(res.Lines) > req.Limit {
-		res.Lines = res.Lines[:req.Limit]
+	if len(res.Lines) > limit {
+		res.Lines = res.Lines[:limit]
 	}
-	res.Truncated = len(res.Lines) == req.Limit
+	res.Truncated = len(res.Lines) == limit
 	if n := len(res.Lines); n > 0 {
 		first, last := res.Lines[0].TS, res.Lines[n-1].TS
-		if req.Forward {
+		if forward {
 			res.Oldest, res.Newest = first, last
 		} else {
 			res.Oldest, res.Newest = last, first

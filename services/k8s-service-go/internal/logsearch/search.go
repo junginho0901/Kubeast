@@ -108,6 +108,42 @@ func (s *Searcher) Search(ctx context.Context, req Request) (Result, error) {
 	return s.store.search(ctx, req, store, value)
 }
 
+// QueryRequest is a LogQL query written by an admin, run on one cluster (and
+// one namespace, when Namespace is set) with the range already normalized.
+type QueryRequest struct {
+	Cluster   string
+	Namespace string
+	Query     string
+	Start     time.Time
+	End       time.Time
+	Limit     int
+	Forward   bool
+}
+
+// Query adds the cluster's matcher (when its store has a cluster label) and
+// the namespace matcher to every stream selector of req.Query, then runs it.
+// The query actually sent comes back as Result.EffectiveQuery.
+func (s *Searcher) Query(ctx context.Context, req QueryRequest) (Result, error) {
+	store, value, ok := s.resolve(ctx, req.Cluster)
+	if !ok {
+		return Result{}, ErrNotConfigured
+	}
+	var scope []Matcher
+	if s.cfg.Labels.Cluster != "" && value != "" {
+		scope = append(scope, Matcher{Name: s.cfg.Labels.Cluster, Value: value})
+	}
+	if req.Namespace != "" {
+		scope = append(scope, Matcher{Name: s.cfg.Labels.Namespace, Value: req.Namespace})
+	}
+	effective, err := InjectMatchers(req.Query, scope)
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := s.store.run(ctx, store, effective, req.Start, req.End, req.Limit, req.Forward)
+	res.EffectiveQuery = effective
+	return res, err
+}
+
 // Status says where cluster id's log search reads from and whether that
 // store answers (GET /api/v1/logsearch/status).
 func (s *Searcher) Status(ctx context.Context, id string) map[string]interface{} {

@@ -11,6 +11,7 @@ import { api } from '@/services/api'
 import type { LogSearchLine } from '@/services/api/types'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { usePermission } from '@/hooks/usePermission'
 import { formatBytes, highlightParts, rangeOptions } from '@/utils/logSearch'
 import { traceTemplates } from '@/utils/features'
 import { fillTraceTemplate } from '@/utils/traceLinks'
@@ -33,12 +34,16 @@ interface Submitted {
   ignoreCase: boolean
   start: string
   end: string
+  // LogQL written by an admin (features.logSearch.logql): the server adds the scope matchers.
+  logql?: string
 }
 
 export function LogSearchView({ namespace, pod, workload, container, size = 'md', leading }: Props) {
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
   const { data: features } = useClusterFeatures()
+  const { has } = usePermission()
+  const logqlAllowed = !!features?.logSearch?.logql && has('admin.logsearch.query')
   const maxMinutes = features?.logSearch?.maxRangeMinutes || 1440
   const traceUrl = traceTemplates(features)?.traceUrl
   const traceHref = (l: LogSearchLine) =>
@@ -57,12 +62,16 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
   const [bytes, setBytes] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [logql, setLogql] = useState(false)
+  const [query, setQuery] = useState('{}')
+  const [effective, setEffective] = useState<string | undefined>()
   const seq = useRef(0)
 
   const errorText = useCallback(
     (err: any): string => {
       const status: number | undefined = err?.response?.status
       const detail: string = err?.response?.data?.detail || err?.message || ''
+      if (status === 400) return t('clusterView.logSearch.errors.rejected', 'Rejected: {{detail}}', { detail })
       if (status === 429) return t('clusterView.logSearch.errors.tooMany', 'Too many searches in a minute. Try again shortly.')
       if (status === 403) return t('clusterView.logSearch.errors.forbidden', 'Not allowed: {{detail}}', { detail })
       if (status === 504) return t('clusterView.logSearch.errors.timeout', 'The log store did not answer in time. Narrow the range or the filters.')
@@ -77,19 +86,23 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
       setBusy(true)
       setError(null)
       try {
-        const res = await api.searchLogs({
-          namespace,
-          pod,
-          container: container || undefined,
-          workload_kind: workload?.kind,
-          workload_name: workload?.name,
-          q: s.q || undefined,
-          match: s.regex ? 'regex' : 'contains',
-          ignore_case: s.ignoreCase,
-          start: s.start,
-          end: older ?? s.end,
-        })
+        const res =
+          s.logql !== undefined
+            ? await api.queryLogQL({ namespace, q: s.logql, start: s.start, end: older ?? s.end })
+            : await api.searchLogs({
+                namespace,
+                pod,
+                container: container || undefined,
+                workload_kind: workload?.kind,
+                workload_name: workload?.name,
+                q: s.q || undefined,
+                match: s.regex ? 'regex' : 'contains',
+                ignore_case: s.ignoreCase,
+                start: s.start,
+                end: older ?? s.end,
+              })
         if (mine !== seq.current) return
+        setEffective(res.effectiveQuery)
         setLines((prev) => (older ? [...prev, ...res.lines] : res.lines))
         setTruncated(res.truncated)
         setOldest(res.oldest)
@@ -105,10 +118,17 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
 
   const search = useCallback(() => {
     const end = new Date()
-    const s: Submitted = { q: text.trim(), regex, ignoreCase, start: new Date(end.getTime() - minutes * 60_000).toISOString(), end: end.toISOString() }
+    const s: Submitted = {
+      q: logql ? '' : text.trim(),
+      regex,
+      ignoreCase,
+      start: new Date(end.getTime() - minutes * 60_000).toISOString(),
+      end: end.toISOString(),
+      logql: logql ? query.trim() : undefined,
+    }
     setSubmitted(s)
     void run(s, undefined)
-  }, [text, regex, ignoreCase, minutes, run])
+  }, [text, regex, ignoreCase, minutes, logql, query, run])
 
   // Opening the view, or a different pod / container / workload, searches once.
   useEffect(() => {
@@ -138,16 +158,30 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
         className={sm ? 'flex flex-wrap items-center gap-2' : 'flex flex-wrap items-end gap-4 pb-4 shrink-0 border-b border-slate-700'}
       >
         {leading}
-        <input
-          type="search"
-          data-testid="logsearch-text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={256}
-          placeholder={regex ? t('clusterView.logSearch.regexPlaceholder', 'Regular expression (RE2)') : t('clusterView.logSearch.placeholder', 'Text in the line')}
-          aria-label={t('clusterView.logSearch.textLabel', 'Search text')}
-          className={`${sm ? 'h-8 text-xs min-w-[140px]' : 'h-10 text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
-        />
+        {logql ? (
+          <textarea
+            data-testid="logsearch-logql-query"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            maxLength={4096}
+            rows={sm ? 2 : 3}
+            spellCheck={false}
+            placeholder={t('clusterView.logSearch.logqlPlaceholder', '{} |= "error" | json | level="error"')}
+            aria-label={t('clusterView.logSearch.logqlLabel', 'LogQL query')}
+            className={`${sm ? 'text-xs min-w-[140px]' : 'text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 font-mono text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
+          />
+        ) : (
+          <input
+            type="search"
+            data-testid="logsearch-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={256}
+            placeholder={regex ? t('clusterView.logSearch.regexPlaceholder', 'Regular expression (RE2)') : t('clusterView.logSearch.placeholder', 'Text in the line')}
+            aria-label={t('clusterView.logSearch.textLabel', 'Search text')}
+            className={`${sm ? 'h-8 text-xs min-w-[140px]' : 'h-10 text-sm min-w-[260px]'} flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-primary-500`}
+          />
+        )}
         <CustomDropdown
           size={sm ? 'sm' : 'md'}
           className={sm ? 'w-24' : 'min-w-[110px]'}
@@ -157,6 +191,19 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
           options={ranges.map((m) => ({ value: String(m), label: rangeLabel(m) }))}
         />
         <div className="flex items-center gap-1">
+          {logqlAllowed && (
+            <button
+              type="button"
+              data-testid="logsearch-logql"
+              aria-pressed={logql}
+              title={t('clusterView.logSearch.logqlTitle', 'Write the query yourself (admins). The cluster and namespace matchers are added to every selector.')}
+              onClick={() => setLogql((v) => !v)}
+              className={`${sm ? 'h-8 px-2 text-xs' : 'h-10 px-3 text-sm'} rounded-lg border font-mono transition-colors ${logql ? toggleOn : toggleOff}`}
+            >
+              {t('clusterView.logSearch.logql', 'LogQL')}
+            </button>
+          )}
+          {!logql && (
           <button
             type="button"
             data-testid="logsearch-regex"
@@ -168,6 +215,8 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
           >
             .*
           </button>
+          )}
+          {!logql && (
           <button
             type="button"
             data-testid="logsearch-match-case"
@@ -179,6 +228,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
           >
             Aa
           </button>
+          )}
         </div>
         <button
           type="submit"
@@ -200,6 +250,11 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
           : ''}
         {t('clusterView.logSearch.notice', 'Lines come from the log store, including pods that are gone. Each search is recorded in the audit log.')}
       </p>
+      {effective && !error && (
+        <p className="mt-1 font-mono text-[11px] text-slate-400 break-all" data-testid="logsearch-effective">
+          {t('clusterView.logSearch.effective', 'Sent: {{query}}', { query: effective })}
+        </p>
+      )}
       <div
         data-testid="logsearch-output"
         className={

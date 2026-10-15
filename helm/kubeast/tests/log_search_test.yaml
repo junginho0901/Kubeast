@@ -99,6 +99,31 @@ tests:
           value: self=
         template: configmap.yaml
         documentSelector: {path: metadata.name, value: kubeast-config}
+  - it: keeps LogQL queries off unless asked
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+      features.logSearch.clusters: {self: kind}
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_LOGQL
+          value: "false"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: turns LogQL queries on
+    set:
+      features.logSearch.enabled: true
+      features.logSearch.url: http://loki:3100
+      features.logSearch.clusters: {self: kind}
+      features.logSearch.logql: true
+    asserts:
+      - equal:
+          path: data.LOG_SEARCH_LOGQL
+          value: "true"
+        template: configmap.yaml
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
   - it: refuses to render when enabled without a store or clusters
     set:
       features.logSearch.enabled: true

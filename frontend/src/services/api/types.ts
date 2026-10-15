@@ -632,7 +632,7 @@ export interface ClusterFeatures {
   // Log files inside containers; namespaces empty = every namespace.
   logFiles?: { enabled: boolean; maxLines: number; namespaces: string[] }
   // Log store search (Loki): the clusters it is configured for, and its limits.
-  logSearch?: { enabled: boolean; clusters: string[]; defaultRangeMinutes?: number; maxRangeMinutes?: number; maxLines?: number }
+  logSearch?: { enabled: boolean; clusters: string[]; logql?: boolean; defaultRangeMinutes?: number; maxRangeMinutes?: number; maxLines?: number }
   // Trace links: URL templates with {{traceId}} {{cluster}} {{namespace}} {{pod}} {{container}} {{service}}.
   tracing?: { enabled: boolean; traceUrl?: string; searchUrl?: string }
   // Optimization → apply without restart (pod resize subresource, server 1.35+).
@@ -803,6 +803,18 @@ export interface LogSearchResult {
   oldest?: string
   newest?: string
   bytes: number
+  // A LogQL query as sent: the admin's with the cluster and namespace matchers added.
+  effectiveQuery?: string
+}
+
+// GET /cluster/namespaces/{ns}/logsearch/query — LogQL written by an admin (admin.logsearch.query).
+export interface LogQLParams {
+  namespace: string
+  q: string
+  since?: string
+  start?: string
+  end?: string
+  limit?: number
 }
 
 export interface LogSearchParams {
