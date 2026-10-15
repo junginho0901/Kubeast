@@ -677,6 +677,18 @@ features:
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
+    # More read-only rules for the investigator, appended to the
+    # kubeast:investigator ClusterRole: the CRDs an investigation should see
+    # (Kyverno PolicyReports, Argo Rollouts, KEDA ScaledObjects, cert-manager
+    # Certificates, …). A rule takes apiGroups, resources, verbs and optionally
+    # resourceNames; the render fails on any verb but get, list and watch, on
+    # apiGroups "*", on a "*" or "*/…" resource, and on Secrets, exec, attach,
+    # port-forward, proxies and tokens. Re-apply the render to every cluster
+    # alerts come from (scripts/render-target-rbac.sh).
+    # - apiGroups: [wgpolicyk8s.io]
+    #   resources: [policyreports, clusterpolicyreports]
+    #   verbs: [get, list, watch]
+    extraRules: []
   # Cluster hygiene report (Admin → Cluster hygiene, permissions
   # admin.hygiene.read/export/signoff): Pod Security Standards, image tags,
   # resources, namespace policy, service account tokens, RBAC, TLS expiry and

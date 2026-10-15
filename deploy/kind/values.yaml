@@ -123,6 +123,11 @@ features:
     # e2e runs repeat within the hour and the day; the cap and the budget are covered by the ai-service unit tests.
     maxPerHour: 0
     dailyTokenBudget: 0
+    # investigator-rbac.spec.ts: the investigator reads the second cluster's Kyverno PolicyReports, nothing more.
+    extraRules:
+      - apiGroups: [wgpolicyk8s.io]
+        resources: [policyreports, clusterpolicyreports]
+        verbs: [get, list, watch]
 gitops:
   argocd:
     enabled: true

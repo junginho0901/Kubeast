@@ -25,7 +25,7 @@ function kubectlFor(kindName: string) {
       return /forbidden/i.test(err) ? 'forbidden' : `error: ${err.slice(0, 200)}`
     }
   }
-  return { as, run }
+  return { as, run, dir }
 }
 
 for (const kindName of ['kubeast-b', 'kubeast']) {
@@ -47,6 +47,29 @@ for (const kindName of ['kubeast-b', 'kubeast']) {
     expect(as('get --raw /api/v1/namespaces/kube-system/services/kube-dns:53/proxy/')).toBe('forbidden')
   })
 }
+
+// features.alertInvestigation.extraRules in the dev values add Kyverno PolicyReports (read only); the second cluster
+// has Kyverno, the first only the rule.
+test('the investigator reads PolicyReports where the dev values add them, and still cannot write them', () => {
+  const b = kubectlFor('kubeast-b')
+  expect(b.as('get policyreports.wgpolicyk8s.io -A -o name')).toBe('allowed')
+  expect(b.as('get clusterpolicyreports.wgpolicyk8s.io -o name')).toBe('allowed')
+  // a real report by name: `delete --all` on an empty namespace would delete nothing and pass
+  const [ns, name] = b.run('get policyreports.wgpolicyk8s.io -A -o jsonpath={.items[0].metadata.namespace}/{.items[0].metadata.name}').trim().split('/')
+  expect(name).toBeTruthy()
+  expect(b.as(`-n ${ns} delete policyreports.wgpolicyk8s.io ${name} --dry-run=server`)).toBe('forbidden')
+  expect(b.as('get clusterpolicies.kyverno.io -o name')).toBe('forbidden')
+  // the first cluster has no PolicyReport CRD, so `auth can-i` cannot resolve the type: ask the API server for the
+  // RBAC decision itself
+  const a = kubectlFor('kubeast')
+  const review = (verb: string) => {
+    const file = path.join(a.dir, `review-${verb}.yaml`)
+    fs.writeFileSync(file, `apiVersion: authorization.k8s.io/v1\nkind: SelfSubjectAccessReview\nspec:\n  resourceAttributes:\n    group: wgpolicyk8s.io\n    resource: policyreports\n    verb: ${verb}\n`)
+    return a.run(`--as=kubeast:investigator --as-group=kubeast:investigator create -f ${file} -o jsonpath={.status.allowed}`).trim()
+  }
+  expect(review('list')).toBe('true')
+  expect(review('create')).toBe('false')
+})
 
 test('kubeast-b: the investigator may GET the listed Prometheus through the proxy, like the Read group', () => {
   const { as } = kubectlFor('kubeast-b')

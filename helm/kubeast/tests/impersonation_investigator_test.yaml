@@ -76,3 +76,96 @@ tests:
           value:
             - {apiGroup: rbac.authorization.k8s.io, kind: Group, name: "kubeast:investigator"}
         documentIndex: 3
+      - lengthEqual:
+          path: rules
+          count: 11
+        documentIndex: 2
+
+  - it: appends extra rules after the built-in ones, as given
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - apiGroups: [wgpolicyk8s.io]
+          resources: [policyreports, clusterpolicyreports]
+          verbs: [get, list, watch]
+        - apiGroups: [argoproj.io]
+          resources: [rollouts]
+          resourceNames: [web]
+          verbs: [get]
+    asserts:
+      - lengthEqual:
+          path: rules
+          count: 13
+        documentIndex: 2
+      - equal:
+          path: rules[11]
+          value: {apiGroups: [wgpolicyk8s.io], resources: [policyreports, clusterpolicyreports], verbs: [get, list, watch]}
+        documentIndex: 2
+      - equal:
+          path: rules[12]
+          value: {apiGroups: [argoproj.io], resources: [rollouts], resourceNames: [web], verbs: [get]}
+        documentIndex: 2
+
+  - it: refuses an extra rule that writes
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: [wgpolicyk8s.io], resources: [policyreports], verbs: [get, create]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraRules\[0\]: verb "create"'
+
+  - it: refuses extra rules on Secrets, exec, proxies and wildcards
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: [apps], resources: [deployments], verbs: [get]}
+        - {apiGroups: [""], resources: [configmaps, secrets], verbs: [get]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraRules\[1\]: resource "secrets"'
+
+  - it: refuses an extra rule on pods/exec
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: [""], resources: [pods/exec], verbs: [get]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'resource "pods/exec"'
+
+  - it: refuses an extra rule on every resource or every subresource
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: [""], resources: ["*/proxy"], verbs: [get]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'resource "\*/proxy"'
+
+  - it: refuses an extra rule on every API group
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: ["*"], resources: [policyreports], verbs: [get]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'apiGroups "\*"'
+
+  - it: refuses an extra rule with nonResourceURLs or a missing field
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: [""], resources: [nodes], verbs: [get], nonResourceURLs: [/metrics]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'unknown field "nonResourceURLs"'
+
+  - it: refuses an extra rule without verbs
+    set:
+      features.alertInvestigation.enabled: true
+      features.alertInvestigation.extraRules:
+        - {apiGroups: [wgpolicyk8s.io], resources: [policyreports]}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraRules\[0\] needs apiGroups, resources and verbs'

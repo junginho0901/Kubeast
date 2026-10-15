@@ -87,6 +87,37 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
     verbs: ["get", "list"]
+{{- /*
+features.alertInvestigation.extraRules follow, each checked against the read-only promise above: only
+get/list/watch, named API groups and resources, and never Secrets, exec, attach, port-forward, proxies or tokens.
+*/}}
+{{- range $i, $rule := .Values.features.alertInvestigation.extraRules }}
+{{- $where := printf "features.alertInvestigation.extraRules[%d]" $i }}
+{{- range $key, $_ := $rule }}
+{{- if not (has $key (list "apiGroups" "resources" "verbs" "resourceNames")) }}
+{{- fail (printf "%s: unknown field %q — a rule takes apiGroups, resources, verbs and resourceNames" $where $key) }}
+{{- end }}
+{{- end }}
+{{- if or (not $rule.apiGroups) (not $rule.resources) (not $rule.verbs) }}
+{{- fail (printf "%s needs apiGroups, resources and verbs" $where) }}
+{{- end }}
+{{- range $verb := $rule.verbs }}
+{{- if not (has $verb (list "get" "list" "watch")) }}
+{{- fail (printf "%s: verb %q — the investigator only reads (get, list, watch)" $where $verb) }}
+{{- end }}
+{{- end }}
+{{- range $group := $rule.apiGroups }}
+{{- if eq $group "*" }}
+{{- fail (printf "%s: apiGroups \"*\" — name the API group" $where) }}
+{{- end }}
+{{- end }}
+{{- range $resource := $rule.resources }}
+{{- if or (eq $resource "*") (hasPrefix "*/" $resource) (eq $resource "secrets") (eq $resource "pods/exec") (eq $resource "pods/attach") (eq $resource "pods/portforward") (hasSuffix "/proxy" $resource) (eq $resource "serviceaccounts/token") }}
+{{- fail (printf "%s: resource %q — the investigator never reads Secrets, opens exec, attach, port-forward or proxies, mints tokens, or takes a wildcard" $where $resource) }}
+{{- end }}
+{{- end }}
+{{- toYaml (list $rule) | nindent 2 }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
