@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const (
@@ -37,6 +38,21 @@ var (
 	resourceTypeSegFmt = `[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?(\.[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?)*`
 	resourceTypeRe     = regexp.MustCompile(`^` + resourceTypeSegFmt + `(,` + resourceTypeSegFmt + `)*$`)
 	timeoutRe          = regexp.MustCompile(`^[0-9]+(ms|s|m|h)$`)
+	// kubectl logs --since: a relative duration such as 5s, 2m, 3h or 1h30m.
+	sinceRe = regexp.MustCompile(`^([0-9]+(s|m|h))+$`)
+	// kubectl explain argument: a type, optionally followed by a dotted field path.
+	explainResourceRe = regexp.MustCompile(`^[A-Za-z0-9]([-A-Za-z0-9]*[A-Za-z0-9])?(\.[A-Za-z0-9_-]+)*$`)
+	apiVersionRe      = regexp.MustCompile(`^([a-z0-9]([-a-z0-9.]*[a-z0-9])?/)?v[0-9]+((alpha|beta)[0-9]+)?$`)
+	kindNameRe        = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
+	// A k8s_find_resource query: a name fragment, or key=value for a label.
+	findQueryRe = regexp.MustCompile(`^[A-Za-z0-9._/-]+(=[A-Za-z0-9._-]*)?$`)
+	// Event field selectors: key(=|==|!=)value pairs separated by commas; the keys
+	// are the ones the events API accepts as field selectors.
+	eventSelectorKeys = map[string]bool{
+		"involvedObject.kind": true, "involvedObject.namespace": true, "involvedObject.name": true,
+		"involvedObject.uid": true, "involvedObject.apiVersion": true, "involvedObject.resourceVersion": true,
+		"involvedObject.fieldPath": true, "reason": true, "reportingComponent": true, "source": true, "type": true,
+	}
 
 	rolloutActions = map[string]bool{"restart": true, "undo": true, "pause": true, "resume": true, "status": true, "history": true}
 	patchTypes     = map[string]bool{"json": true, "merge": true, "strategic": true}
@@ -52,18 +68,25 @@ type argCheck func(field, value string) error
 // argRules maps a tool argument name to its check. Only arguments that reach
 // argv are listed; the handlers read the same names.
 var argRules = map[string]argCheck{
-	"resource_type": checkResourceType,
-	"resource_name": checkObjectName,
-	"pod_name":      checkObjectName,
-	"service_name":  checkObjectName,
-	"service":       checkObjectName,
-	"name":          checkObjectName,
-	"namespace":     checkDNSLabel,
-	"container":     checkDNSLabel,
-	"output":        checkOutput,
-	"action":        checkRolloutAction,
-	"patch_type":    checkPatchType,
-	"timeout":       checkTimeout,
+	"resource_type":  checkResourceType,
+	"resource_name":  checkObjectName,
+	"pod_name":       checkObjectName,
+	"service_name":   checkObjectName,
+	"service":        checkObjectName,
+	"name":           checkObjectName,
+	"namespace":      checkDNSLabel,
+	"container":      checkDNSLabel,
+	"output":         checkOutput,
+	"action":         checkRolloutAction,
+	"patch_type":     checkPatchType,
+	"timeout":        checkTimeout,
+	"since":          checkSince,
+	"field_selector": checkFieldSelector,
+	"kind":           checkKindName,
+	"query":          checkFindQuery,
+	"resource":       checkExplainResource,
+	"api_version":    checkAPIVersion,
+	"grep":           checkGrep,
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -92,6 +115,88 @@ func validateToolArgs(args map[string]interface{}) error {
 		if err := checkQualifiedName("keys", k); err != nil {
 			return err
 		}
+	}
+	for _, k := range argStringSlice(args, "kinds") {
+		if err := checkResourceType("kinds", k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkSince(field, v string) error {
+	if len(v) > 20 || !sinceRe.MatchString(v) {
+		return badArg(field, v, "a relative duration such as 5s, 2m, 3h or 1h30m")
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 || d > 7*24*time.Hour {
+		return badArg(field, v, "a duration between 1s and 7d")
+	}
+	return nil
+}
+
+func checkFieldSelector(field, v string) error {
+	if len(v) > 512 {
+		return badArg(field, v, "a field selector of at most 512 characters")
+	}
+	for _, part := range strings.Split(v, ",") {
+		op := strings.IndexAny(part, "=!")
+		if op <= 0 {
+			return badArg(field, v, "a field selector such as involvedObject.name=web,type=Warning")
+		}
+		key := part[:op]
+		rest := part[op:]
+		switch {
+		case strings.HasPrefix(rest, "=="), strings.HasPrefix(rest, "!="):
+			rest = rest[2:]
+		case strings.HasPrefix(rest, "="):
+			rest = rest[1:]
+		default:
+			return badArg(field, v, "a field selector using =, == or !=")
+		}
+		if !eventSelectorKeys[key] {
+			return badArg(field, v, "a field selector on an events field (involvedObject.kind/name/namespace/uid, reason, type, source, reportingComponent)")
+		}
+		if strings.ContainsAny(rest, " \t\r\n,") || len(rest) > dns1123SubdomainMaxLength {
+			return badArg(field, v, "a field selector value without spaces or commas")
+		}
+	}
+	return nil
+}
+
+func checkKindName(field, v string) error {
+	if len(v) > dns1123LabelMaxLength || !kindNameRe.MatchString(v) {
+		return badArg(field, v, "a resource kind such as Pod or deployments")
+	}
+	return nil
+}
+
+func checkFindQuery(field, v string) error {
+	if len(v) < 2 || len(v) > 2*dns1123LabelMaxLength || !findQueryRe.MatchString(v) {
+		return badArg(field, v, "a name fragment (2 to 126 characters) or a label key=value")
+	}
+	return nil
+}
+
+func checkExplainResource(field, v string) error {
+	if len(v) > dns1123SubdomainMaxLength || !explainResourceRe.MatchString(v) {
+		return badArg(field, v, "a resource type with an optional field path (deployments, deployments.spec.strategy)")
+	}
+	return nil
+}
+
+func checkAPIVersion(field, v string) error {
+	if len(v) > dns1123SubdomainMaxLength || !apiVersionRe.MatchString(v) {
+		return badArg(field, v, "an API version such as v1, apps/v1 or autoscaling/v2")
+	}
+	return nil
+}
+
+// grep never reaches argv (the filter runs here), but a pattern the model
+// sent is still kept to one printable line.
+func checkGrep(field, v string) error {
+	if len(v) > 200 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return badArg(field, v, "a search text of at most 200 printable characters")
 	}
 	return nil
 }

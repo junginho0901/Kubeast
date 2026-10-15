@@ -279,6 +279,8 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.k8s_get_available_api_resources", "Read tool: API resources"},
 			{"ai.tool.k8s_get_cluster_configuration", "Read tool: cluster configuration"},
 			{"ai.tool.k8s_check_service_connectivity", "Read tool: service connectivity"},
+			{"ai.tool.k8s_find_resource", "Read tool: find resources by name or label"},
+			{"ai.tool.k8s_explain", "Read tool: explain a resource type or field"},
 			{"ai.tool.k8s_execute_command", "Run kubectl commands"},
 			{"ai.tool.helm_execute", "AI runs Helm commands (including writes)"},
 			{"ai.mcp.use", "Connect an external AI agent (MCP) to this cluster"},

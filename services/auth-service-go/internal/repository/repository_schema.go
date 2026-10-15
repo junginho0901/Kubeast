@@ -23,6 +23,8 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.k8s_get_available_api_resources",
 	"ai.tool.k8s_get_cluster_configuration",
 	"ai.tool.k8s_check_service_connectivity",
+	"ai.tool.k8s_find_resource",
+	"ai.tool.k8s_explain",
 }
 
 // SeedSystemRoles ensures the four system roles exist and migrates auth_users.role → role_id.

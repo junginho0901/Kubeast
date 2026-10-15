@@ -83,6 +83,15 @@ var clusterWideTools = map[string]struct{}{
 	"get_cluster_overview": {}, "get_node_metrics": {},
 }
 
+// namespaceAwareTools apply a namespace-scoped grant themselves — the handler
+// reads the token's "ns" claim and searches only those namespaces — so they
+// pass the gate without naming one.
+var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}}
+
+// namespaceFreeTools return API schema, not object data, so a scoped grant
+// may call them without a namespace.
+var namespaceFreeTools = map[string]struct{}{"k8s_explain": {}}
+
 var errNamespaceScope = errors.New("namespace scope")
 
 // namespaceGate applies a namespace-scoped grant to a tool call: the call
@@ -99,8 +108,14 @@ func namespaceGate(payload auth.TokenPayload, clusterID, tool string, args map[s
 	if _, wide := clusterWideTools[tool]; wide {
 		return fmt.Errorf("%w: %s spans the cluster; your grant on %s is limited to namespaces %s", errNamespaceScope, tool, clusterID, strings.Join(scope, ", "))
 	}
+	if _, free := namespaceFreeTools[tool]; free {
+		return nil
+	}
 	ns, _ := args["namespace"].(string)
 	ns = strings.TrimSpace(ns)
+	if _, aware := namespaceAwareTools[tool]; aware && ns == "" {
+		return nil
+	}
 	if ns == "" {
 		return fmt.Errorf("%w: namespace is required; your grant on %s is limited to namespaces %s", errNamespaceScope, clusterID, strings.Join(scope, ", "))
 	}

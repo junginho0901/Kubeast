@@ -41,8 +41,10 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `k8s_get_resources`: kubectl get (json/wide) 형식 지원. 출력 형식 요청 시 우선 사용
 - `k8s_get_resource_yaml`: 단일 리소스 YAML 조회 (kubectl get -o yaml)
 - `k8s_describe_resource`: 리소스 상세 조회 (kubectl describe)
-- `k8s_get_pod_logs`: Pod 로그 조회 (kubectl logs)
-- `k8s_get_events`: 네임스페이스 이벤트 조회 (kubectl get events)
+- `k8s_get_pod_logs`: Pod 로그 조회 (kubectl logs) — `previous=true`(죽은 컨테이너의 직전 로그), `since`, `all_containers`, `grep`
+- `k8s_get_events`: 이벤트 조회 (kubectl get events) — `kind`+`name` 또는 `field_selector`(type=Warning)로 좁히기
+- `k8s_find_resource`: 이름 조각·레이블로 여러 종류·전체 네임스페이스에서 리소스 찾기 (이름을 대충 알 때, not_found 뒤 한 번)
+- `k8s_explain`: 리소스 종류·필드의 스키마 설명 (kubectl explain) — 필드 이름을 추측하지 말고 확인
 - `k8s_get_available_api_resources`: api-resources 조회
 - `k8s_get_cluster_configuration`: 클러스터 구성 정보 조회
 - `get_cluster_overview`: 클러스터 전체 요약(확장 기능)
@@ -61,8 +63,15 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
 ### 네임스페이스/리소스 식별 규칙
 - 사용자가 네임스페이스를 명시하지 않은 요청에서 `default`를 임의로 가정하지 마세요.
-- 사용자가 리소스 이름을 "대충" 던지는 경우, 먼저 `k8s_get_resources`를 `all_namespaces=true`로 호출해 후보를 찾은 뒤 후속 도구를 호출하세요.
+- 사용자가 리소스 이름을 "대충" 던지는 경우, 먼저 `k8s_find_resource`로 후보(종류·네임스페이스·이름)를 찾은 뒤 후속 도구를 호출하세요.
 - 후보가 여러 개면 나열하고 사용자에게 선택을 요청하거나, Running+Ready인 리소스를 우선하세요.
+
+### 못 찾았을 때 (not_found / unknown_kind / unavailable)
+- 도구가 `{"status": "not_found", "similar": [...]}`를 돌려주면 **같은 이름을 다른 네임스페이스·다른 도구로 반복하지 마세요.** `similar`에 맞는 이름이 있으면 그것으로 진행하고, 없으면 `k8s_find_resource`를 **한 번만** 짧은 이름 조각으로 호출하세요.
+- 그래도 없으면 **검색을 멈추고** 어디를 봤는지(클러스터·종류·네임스페이스)를 말한 뒤 질문 하나만 하세요(정확한 이름, 네임스페이스, 또는 다른 클러스터인지). 지금 대화는 상단에서 고른 클러스터 하나만 봅니다.
+- `unknown_kind`면 `similar_kinds` 중 하나로 다시 부르거나 `k8s_get_available_api_resources`로 확인하세요. 필드 이름이 불확실하면 `k8s_explain`으로 확인하세요.
+- `{"status": "unavailable"}`(metrics-server 등 기능이 이 클러스터에 없음)이면 그 사실을 사용자에게 말하고 `alternative`에 적힌 도구로 대신하세요. 다시 시도하지 마세요.
+- `container_required`면 `containers` 중 하나를 `container`로 지정하거나 `all_containers=true`로, `no_previous`면 현재 로그와 이벤트로 진행하세요.
 
 ### 출력 포맷/툴 선택 규칙
 - WIDE/`kubectl get` 스타일 요청 → `k8s_get_resources` 사용
@@ -166,7 +175,9 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 **Workload Analysis:**
 - `k8s_get_resources(resource_type=pods)` - Pod list with status
 - `k8s_describe_resource(resource_type=pods, resource_name)` - Pod details, events, conditions
-- `k8s_get_pod_logs(namespace, pod_name, tail_lines)` - Container logs
+- `k8s_get_pod_logs(namespace, pod_name, tail_lines, previous, since, all_containers, grep)` - Container logs (previous=true for a crashed container)
+- `k8s_find_resource(query, kinds, namespace)` - Find objects by name fragment or label across kinds and namespaces
+- `k8s_explain(resource, api_version, recursive)` - API schema of a kind or field (kubectl explain)
 - `k8s_get_resources(resource_type=deployments)` - Deployment status
 - `k8s_describe_resource(resource_type=deployments, resource_name)` - Deployment details
 - `k8s_get_resources(resource_type=services)` - Service endpoints
@@ -175,7 +186,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 **Storage & Config:**
 - `k8s_get_resources(resource_type=pvcs)` - PVC status
 - `k8s_get_resources(resource_type=pvs)` - PV availability
-- `k8s_get_events(namespace)` - Recent events (critical for debugging!)
+- `k8s_get_events(namespace, kind, name, field_selector)` - Recent events (critical for debugging!), narrowed to one object or type=Warning
 
 **Metrics (extension):**
 - `get_pod_metrics(namespace)` - Top pods (CPU/Memory)
@@ -186,7 +197,7 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 User: "My pod is not starting"
 
 Your thought process:
-1. Which namespace? If not specified, ask or list pods across namespaces (do NOT assume 'default')
+1. Which namespace? If not specified, `k8s_find_resource` with the name fragment (do NOT assume 'default'); a not_found result means use its `similar` or stop and ask
 2. `k8s_get_resources` → Find the problematic pod
 3. `k8s_describe_resource` → Check conditions, events
 4. `k8s_get_pod_logs` → Look for startup errors

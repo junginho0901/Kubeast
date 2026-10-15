@@ -3458,6 +3458,8 @@
         "ai_tool_k8s_get_available_api_resources": "읽기 도구: API 리소스 목록",
         "ai_tool_k8s_get_cluster_configuration": "읽기 도구: 클러스터 설정",
         "ai_tool_k8s_check_service_connectivity": "읽기 도구: Service 연결 점검",
+        "ai_tool_k8s_find_resource": "읽기 도구: 이름·레이블로 리소스 찾기",
+        "ai_tool_k8s_explain": "읽기 도구: 리소스 종류·필드 설명(explain)",
         "ai_tool_k8s_execute_command": "K8s 명령어 실행",
         "ai_tool_helm_execute": "AI가 Helm 명령 실행 (쓰기 포함)",
         "ai_mcp_use": "외부 AI 에이전트(MCP)를 이 클러스터에 연결",
@@ -3484,6 +3486,7 @@
         "admin_hygiene_read": "클러스터 위생 점검 보고서 보기",
         "admin_hygiene_export": "클러스터 위생 점검 내보내기(CSV·JSON)",
         "admin_hygiene_signoff": "클러스터 위생 점검 서명",
+        "admin_logsearch_query": "로그 저장소에 LogQL 직접 질의(클러스터·네임스페이스 매처가 붙음)",
         "admin_investigations_read": "알림 조사 보고서 보기"
       }
     },

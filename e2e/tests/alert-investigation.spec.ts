@@ -15,6 +15,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const READ_TOOLS = new Set([
   'get_cluster_overview', 'get_pod_metrics', 'get_node_metrics', 'k8s_get_resources', 'k8s_get_resource_yaml', 'k8s_get_pod_logs',
   'k8s_get_events', 'k8s_get_available_api_resources', 'k8s_get_cluster_configuration', 'k8s_check_service_connectivity', 'k8s_describe_resource',
+  'k8s_find_resource', 'k8s_explain',
 ])
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 

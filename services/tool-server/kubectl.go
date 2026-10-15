@@ -43,9 +43,17 @@ func capOutput(output []byte) string {
 	return string(output[:outputMaxBytes]) + fmt.Sprintf(truncatedMarker, outputMaxBytes)
 }
 
+// kubectlExec runs the kubectl binary; tests replace it to script outputs.
+var kubectlExec = func(ctx context.Context, args []string, stdin *string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
+	if stdin != nil {
+		cmd.Stdin = strings.NewReader(*stdin)
+	}
+	return cmd.CombinedOutput()
+}
+
 func runKubectl(ctx context.Context, headers http.Header, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "kubectl", kubectlArgs(ctx, args)...)
-	output, err := cmd.CombinedOutput()
+	output, err := kubectlExec(ctx, kubectlArgs(ctx, args), nil)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {
@@ -58,9 +66,7 @@ func runKubectl(ctx context.Context, headers http.Header, args ...string) (strin
 }
 
 func runKubectlWithInput(ctx context.Context, headers http.Header, input string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "kubectl", kubectlArgs(ctx, args)...)
-	cmd.Stdin = strings.NewReader(input)
-	output, err := cmd.CombinedOutput()
+	output, err := kubectlExec(ctx, kubectlArgs(ctx, args), &input)
 	if err != nil {
 		errText := strings.TrimSpace(capOutput(output))
 		if errText == "" {

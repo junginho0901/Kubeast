@@ -15,7 +15,12 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "type": "function",
         "function": {
             "name": "k8s_get_resources",
-            "description": "Kubernetes 리소스를 조회합니다 (kubectl get). 출력 형식(wide/json) 요청 시 우선 사용.",
+            "description": (
+                "Kubernetes 리소스를 조회합니다 (kubectl get). 출력 형식(wide/json) 요청 시 우선 사용. "
+                "A named object that does not exist answers {\"status\":\"not_found\",\"namespace_exists\":…,\"similar\":[...]} — "
+                "pick from similar or call k8s_find_resource once; do not retry the name in other namespaces. "
+                "An unknown resource_type answers {\"status\":\"unknown_kind\",\"similar_kinds\":[...]}."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -64,14 +69,27 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "type": "function",
         "function": {
             "name": "k8s_get_pod_logs",
-            "description": "Pod 로그를 조회합니다 (kubectl logs).",
+            "description": (
+                "Pod 로그를 조회합니다 (kubectl logs). Returns the last tail_lines lines of one container. "
+                "For a crashed or restarting container set previous=true to read the log of the terminated run — "
+                "that is where the crash reason is; the current log only shows the restart. "
+                "since narrows to a time window (5m, 2h), all_containers reads every container with a [pod/container] prefix, "
+                "and grep keeps only lines containing a text (case-insensitive) while scanning up to 2000 lines. "
+                "A missing pod comes back as {\"status\":\"not_found\",\"similar\":[...]}; a pod with several containers and no "
+                "container as {\"status\":\"container_required\",\"containers\":[...]}; previous=true without a restart as "
+                "{\"status\":\"no_previous\"}. Act on those results instead of retrying the same name."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "pod_name": {"type": "string", "description": "Pod 이름"},
                     "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
                     "container": {"type": "string", "description": "컨테이너 이름 (선택)"},
-                    "tail_lines": {"type": "integer", "description": "마지막 N줄 (기본: 50)"},
+                    "tail_lines": {"type": "integer", "description": "마지막 N줄 (기본: 50, 최대 2000)"},
+                    "previous": {"type": "boolean", "description": "Read the previous (terminated) container's log — use for CrashLoopBackOff"},
+                    "since": {"type": "string", "description": "Only lines newer than this relative duration, e.g. 5m, 2h, 1h30m (max 7d)"},
+                    "all_containers": {"type": "boolean", "description": "Read every container of the pod, each line prefixed with [pod/container]"},
+                    "grep": {"type": "string", "description": "Keep only lines containing this text (case-insensitive substring, not a regex)"},
                 },
                 "required": ["pod_name"],
             },
@@ -81,11 +99,23 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "type": "function",
         "function": {
             "name": "k8s_get_events",
-            "description": "네임스페이스 이벤트 조회 (kubectl get events).",
+            "description": (
+                "이벤트 조회 (kubectl get events). Returns events of one namespace, or of every namespace when none is given "
+                "or all_namespaces=true. Narrow to one object with kind and name (the events of pod web-1: kind=Pod, name=web-1) "
+                "or with field_selector (type=Warning, reason=BackOff, involvedObject.name=web-1); without a filter a busy "
+                "namespace returns hundreds of events, so filter when you know the object."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "namespace": {"type": "string", "description": "네임스페이스 (기본: default)"},
+                    "namespace": {"type": "string", "description": "네임스페이스 (비우면 모든 네임스페이스)"},
+                    "all_namespaces": {"type": "boolean", "description": "Every namespace, ignoring namespace"},
+                    "kind": {"type": "string", "description": "Only events about objects of this kind (Pod, Deployment, Node …)"},
+                    "name": {"type": "string", "description": "Only events about the object with this name"},
+                    "field_selector": {
+                        "type": "string",
+                        "description": "Events field selector, comma-separated: type=Warning, reason=BackOff, involvedObject.kind/name/namespace, source, reportingComponent",
+                    },
                 },
             },
         },
@@ -126,7 +156,10 @@ K8S_READONLY_TOOLS: List[Dict] = [
         "type": "function",
         "function": {
             "name": "k8s_describe_resource",
-            "description": "리소스 상세 조회 (kubectl describe).",
+            "description": (
+                "리소스 상세 조회 (kubectl describe) — conditions, events and container states of one object. "
+                "A missing object answers {\"status\":\"not_found\",\"similar\":[...]}: use similar or k8s_find_resource instead of guessing namespaces."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -135,6 +168,53 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "namespace": {"type": "string", "description": "네임스페이스 (선택)"},
                 },
                 "required": ["resource_type", "resource_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_find_resource",
+            "description": (
+                "Find resources by a name fragment or a label across several kinds and namespaces in one call "
+                "(web → pods, deployments and services whose name or labels contain 'web'; app=web → objects carrying that label). "
+                "Use it when the user names something loosely, when another tool answered {\"status\":\"not_found\"} with an empty similar list, "
+                "or to learn the namespace before calling describe/logs. Searches pods, deployments, statefulsets, daemonsets, services, "
+                "ingresses, configmaps, jobs and cronjobs unless kinds is given; a namespace-scoped grant searches only its namespaces. "
+                "Returns matches (kind, namespace, name), what was searched, and notes for kinds the cluster does not serve. "
+                "Call it at most once per name: an empty result means the object is not in this cluster's searched kinds — say so and ask, do not keep guessing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Name fragment (2+ characters) or label key=value"},
+                    "kinds": {"type": "array", "items": {"type": "string"}, "description": "Resource types to search (default: common workload kinds), at most 12"},
+                    "namespace": {"type": "string", "description": "Limit the search to one namespace"},
+                    "limit": {"type": "integer", "description": "Maximum matches (default 20, max 50)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "k8s_explain",
+            "description": (
+                "Explain a resource type or one of its fields from this cluster's API schema (kubectl explain): "
+                "deployments, deployments.spec.strategy, pods.spec.containers.resources. Use it before writing or patching a manifest "
+                "and whenever you are unsure which fields a kind — including a CRD — actually has, instead of guessing field names. "
+                "api_version picks a version (apps/v1, autoscaling/v2); recursive=true lists every nested field (long). "
+                "An unknown type answers {\"status\":\"unknown_kind\",\"similar_kinds\":[...]}, an unknown field {\"status\":\"unknown_field\"}."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource": {"type": "string", "description": "Type with optional field path, e.g. deployments or deployments.spec.strategy"},
+                    "api_version": {"type": "string", "description": "API version such as apps/v1 (optional)"},
+                    "recursive": {"type": "boolean", "description": "List all nested fields"},
+                },
+                "required": ["resource"],
             },
         },
     },

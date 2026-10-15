@@ -24,6 +24,13 @@ if TYPE_CHECKING:
     from app.services.ai_service import AIService, ToolContext
 
 
+def _flag(value) -> bool:
+    """A boolean tool argument as the model may send it (True, "true", 1)."""
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
+
 async def execute_function_with_context(
     service: "AIService",
     function_name: str,
@@ -312,46 +319,89 @@ async def execute_function_with_context(
                 pod_name = pod_name.split("/")[-1]
             tail_lines = resolvers._coerce_limit(service, function_args.get("tail_lines", 50), default=50, max_value=2000)
             requested_container = function_args.get("container")
+            every_container = _flag(function_args.get("all_containers"))
 
             if not isinstance(namespace, str) or not namespace.strip():
                 matches = await resolvers._find_pods(service, str(pod_name), namespace=None, limit=20)
-                chosen = await resolvers._resolve_single(service, "pods", str(pod_name), matches)
-                namespace = str(chosen.get("namespace", ""))
-                pod_name = str(chosen.get("name", pod_name))
+                if matches:
+                    chosen = await resolvers._resolve_single(service, "pods", str(pod_name), matches)
+                    namespace = str(chosen.get("namespace", ""))
+                    pod_name = str(chosen.get("name", pod_name))
+                else:
+                    # Nothing matched here: tool-server answers not_found with
+                    # the similar names across the namespaces the user may see.
+                    namespace = ""
 
-            chosen_container, all_containers = await resolvers._pick_log_container(service, 
-                namespace,
-                pod_name,
-                explicit_container=requested_container,
-            )
+            chosen_container, all_containers = None, None
+            if namespace and not every_container:
+                chosen_container, all_containers = await resolvers._pick_log_container(service,
+                    namespace,
+                    pod_name,
+                    explicit_container=requested_container,
+                )
 
             if chosen_container is None and all_containers:
                 result = json.dumps(
                     {
-                        "error": (
-                            f"Pod '{pod_name}' in namespace '{namespace}' has multiple containers "
-                            f"({', '.join(all_containers)}). "
-                            "로그를 조회할 컨테이너를 'container' 인자로 명시해주세요."
-                        )
+                        "status": "container_required",
+                        "pod": pod_name,
+                        "namespace": namespace,
+                        "containers": all_containers,
+                        "hint": "The pod has several containers. Call again with container=<one of containers>, or all_containers=true.",
                     },
                     ensure_ascii=False,
                 )
             else:
-                result = await service._call_tool_server(
-                    function_name,
-                    {
-                        "namespace": namespace,
-                        "pod_name": pod_name,
-                        "tail_lines": tail_lines,
-                        "container": chosen_container,
-                    },
-                )
+                tool_args = {
+                    "namespace": namespace or None,
+                    "pod_name": pod_name,
+                    "tail_lines": tail_lines,
+                    "container": chosen_container,
+                }
+                for key in ("previous", "all_containers"):
+                    if _flag(function_args.get(key)):
+                        tool_args[key] = True
+                for key in ("since", "grep"):
+                    value = function_args.get(key)
+                    if isinstance(value, str) and value.strip():
+                        tool_args[key] = value.strip()
+                result = await service._call_tool_server(function_name, tool_args)
                 tool_context.state["last_log_pod"] = pod_name
 
         elif function_name == "k8s_get_events":
             namespace = function_args.get("namespace")
             ns = namespace if isinstance(namespace, str) and namespace.strip() else None
-            result = await service._call_tool_server(function_name, {"namespace": ns})
+            tool_args = {"namespace": ns}
+            if _flag(function_args.get("all_namespaces")):
+                tool_args["all_namespaces"] = True
+            for key in ("kind", "name", "field_selector"):
+                value = function_args.get(key)
+                if isinstance(value, str) and value.strip():
+                    tool_args[key] = value.strip()
+            result = await service._call_tool_server(function_name, tool_args)
+
+        elif function_name == "k8s_find_resource":
+            tool_args = {"query": str(function_args.get("query", "")).strip()}
+            kinds = function_args.get("kinds")
+            if isinstance(kinds, list) and kinds:
+                tool_args["kinds"] = [str(k).strip() for k in kinds if str(k).strip()]
+            elif isinstance(kinds, str) and kinds.strip():
+                tool_args["kinds"] = kinds.strip()
+            namespace = function_args.get("namespace")
+            if isinstance(namespace, str) and namespace.strip():
+                tool_args["namespace"] = namespace.strip()
+            if function_args.get("limit") is not None:
+                tool_args["limit"] = resolvers._coerce_limit(service, function_args.get("limit"), default=20, max_value=50)
+            result = await service._call_tool_server(function_name, tool_args)
+
+        elif function_name == "k8s_explain":
+            tool_args = {"resource": str(function_args.get("resource", "")).strip()}
+            api_version = function_args.get("api_version")
+            if isinstance(api_version, str) and api_version.strip():
+                tool_args["api_version"] = api_version.strip()
+            if _flag(function_args.get("recursive")):
+                tool_args["recursive"] = True
+            result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name == "k8s_get_available_api_resources":
             result = await service._call_tool_server(function_name, {})

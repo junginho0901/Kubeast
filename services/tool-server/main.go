@@ -144,6 +144,16 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleCheckServiceConnectivity,
 	})
 	register(ToolDefinition{
+		Name:        "k8s_find_resource",
+		Description: "Find resources by a name fragment or label across kinds and namespaces",
+		Handler:     handleFindResource,
+	})
+	register(ToolDefinition{
+		Name:        "k8s_explain",
+		Description: "Explain a resource type or field (kubectl explain)",
+		Handler:     handleExplain,
+	})
+	register(ToolDefinition{
 		Name:        "k8s_apply_manifest",
 		Description: "Apply a Kubernetes manifest (kubectl apply -f -)",
 		Handler:     handleApplyManifest,

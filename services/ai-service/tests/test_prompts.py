@@ -42,11 +42,26 @@ def test_tool_usage_guide():
         "k8s_describe_resource",
         "k8s_get_pod_logs",
         "k8s_get_events",
+        "k8s_find_resource",
+        "k8s_explain",
         "get_cluster_overview",
         "get_pod_metrics",
         "get_node_metrics",
     ]:
         assert tool in SYSTEM_MESSAGE, f"도구 이름 {tool} 이 프롬프트에서 사라짐"
+
+
+def test_not_found_protocol():
+    """not_found/unavailable 결과를 받은 뒤의 행동이 프롬프트에 있어야 한다 — 없으면
+    모델이 같은 이름을 네임스페이스만 바꿔 되묻는 옛 행동으로 돌아간다."""
+    assert "못 찾았을 때" in SYSTEM_MESSAGE
+    for keyword in ["not_found", "similar", "unknown_kind", "unavailable", "container_required", "no_previous"]:
+        assert keyword in SYSTEM_MESSAGE, f"{keyword} 처리 규칙이 프롬프트에 없음"
+    assert "반복하지 마세요" in SYSTEM_MESSAGE
+    assert "한 번만" in SYSTEM_MESSAGE
+    assert "all_namespaces=true" not in SYSTEM_MESSAGE.split("### 못 찾았을 때")[0].split("### 네임스페이스/리소스 식별 규칙")[1], (
+        "느슨한 이름은 k8s_find_resource로 찾는다 (옛 all_namespaces 규칙 제거)"
+    )
 
 
 def test_language_policy():

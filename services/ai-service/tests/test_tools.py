@@ -17,6 +17,8 @@ EXPECTED_READONLY_NAMES = {
     "k8s_get_cluster_configuration",
     "k8s_check_service_connectivity",
     "k8s_describe_resource",
+    "k8s_find_resource",
+    "k8s_explain",
 }
 
 EXPECTED_WRITE_NAMES = {
