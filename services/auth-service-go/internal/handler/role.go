@@ -295,6 +295,10 @@ func allPermissions() []map[string]interface{} {
 			{"ai.tool.k8s_tabular_query", "Read tool: a resource list as chosen columns"},
 			{"ai.tool.k8s_count", "Read tool: count objects, grouped by a field"},
 			{"ai.tool.k8s_diff", "Write tool: preview a manifest's changes (server dry run, nothing applied)"},
+			{"ai.tool.gitops_status", "Read tool: Argo CD Application status (sync, health, operation, conditions)"},
+			{"ai.tool.audit_search", "Admin tool: search the Kubeast audit log"},
+			{"ai.tool.nodes_stats_summary", "Admin tool: a node's kubelet stats summary (cpu, memory, fs, PSI, top pods)"},
+			{"ai.tool.nodes_log", "Admin tool: a node's kubelet and system logs"},
 			{"ai.tool.k8s_execute_command", "Run kubectl commands"},
 			{"ai.tool.helm_execute", "AI runs Helm commands (including writes)"},
 			{"ai.mcp.use", "Connect an external AI agent (MCP) to this cluster"},
@@ -325,6 +329,7 @@ func allPermissions() []map[string]interface{} {
 			{"admin.hygiene.signoff", "Sign off a cluster hygiene report"},
 			{"admin.investigations.read", "View alert investigation reports"},
 			{"admin.logsearch.query", "Run LogQL against the log store (the cluster and namespace matchers are added)"},
+			{"admin.nodes.read", "Read node internals through the API server proxy: kubelet stats summary and node logs"},
 		}},
 	}
 	return categories

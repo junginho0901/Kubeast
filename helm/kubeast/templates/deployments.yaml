@@ -452,6 +452,9 @@ spec:
             # k8s-service at runtime (no mounted kubeconfig, rollout-free).
             - name: K8S_SERVICE_URL
               value: http://k8s-service:8002
+            # the audit_search tool reads the audit log through auth-service as the user
+            - name: AUTH_SERVICE_URL
+              value: http://auth-service:8004
             # kubectl discovery cache; root fs is read-only
             - name: KUBECACHEDIR
               value: /tmp/kube-cache

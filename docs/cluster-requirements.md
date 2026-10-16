@@ -33,6 +33,7 @@ Kubeast는 클러스터에 **로그인한 사람으로**(impersonation) 요청�
 | 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 일 | 같은 파일 |
 | 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할·NS 한정 부여를 쓸 때 | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read가 비용·그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
+| Admin의 `nodes/proxy` get — AI 도구 `nodes_stats_summary`·`nodes_log` | 노드의 kubelet stats summary·로그 질의를 API 서버 프록시로 읽을 때. `kubeast:admin`(cluster-admin)에는 이미 들어 있고, 커스텀 역할로 Admin 도구를 쓰면 `nodes` get + `nodes/proxy` get을 넣어야 함. `nodes_log`는 kubelet 설정 `enableSystemLogHandler: true` + `enableSystemLogQuery: true`(NodeLogQuery, 1.36 GA)도 필요 — 꺼져 있으면 도구가 unavailable로 답함(kind 기본값은 query 꺼짐) | 차트 `impersonation-rbac`(cluster-admin) · kubelet 설정 |
 | 로그 파일 Namespace의 `pods/exec` | 로그 파일 보기를 켤 때(§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
 | 알림 조사 신원 `kubeast:investigator` — impersonate 허용 + 읽기 전용 ClusterRole(get·list·watch, Secret·exec·프록시·쓰기 없음) | 알림 → AI 조사를 켤 때. Kubeast가 사람 대신 이 신원으로 읽기 도구를 돌린다. 조사가 CRD(Kyverno PolicyReport·Argo Rollout 등)도 읽어야 하면 `features.alertInvestigation.extraRules`에 읽기 규칙을 더한다 — get·list·watch 외 동사, `apiGroups "*"`, Secret·exec·프록시·토큰은 렌더가 거부 | `features.alertInvestigation` → `templates/impersonation-investigator.yaml`(impersonation이 꺼져 있으면 렌더 실패) |
 
@@ -158,6 +159,7 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | Gateway 정책 | 라벨 `gateway.networking.k8s.io/policy`가 붙은 CRD(GEP-713), 또는 기본 목록 — BackendTLSPolicy, Envoy Gateway(`gateway.envoyproxy.io`의 BackendTraffic·ClientTraffic·Security·EnvoyPatch·EnvoyExtension Policy), Istio(AuthorizationPolicy·RequestAuthentication·PeerAuthentication·Telemetry·WasmPlugin·EnvoyFilter·DestinationRule) |
 | Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 서빙하지 않는 클러스터는 "설치 안 됨" |
 | Ingress 드로어 지연 | ingress-nginx 컨트롤러와 §3의 `nginx_ingress_controller_*` 수집 |
+| AI 도구 `gitops_status` | `applications.argoproj.io` CRD(Argo CD). Argo CD가 설치된 클러스터에만 있으므로 중앙 Argo CD면 관리 클러스터에서 호출 — 없으면 도구가 unavailable로 답함. 읽는 사람의 RBAC(`applications.argoproj.io` get/list)이 상한 |
 
 ## 8. Kubernetes 버전 조건
 

@@ -3474,6 +3474,10 @@
         "ai_tool_k8s_tabular_query": "읽기 도구: 고른 열만 표로 보기",
         "ai_tool_k8s_count": "읽기 도구: 개수·필드별 그룹 개수",
         "ai_tool_k8s_diff": "쓰기 도구: 매니페스트 변경 미리보기(서버 dry-run, 적용 없음)",
+        "ai_tool_gitops_status": "읽기 도구: Argo CD 애플리케이션 상태(sync·health·operation·오류 조건)",
+        "ai_tool_audit_search": "관리자 도구: Kubeast 감사 로그 검색",
+        "ai_tool_nodes_stats_summary": "관리자 도구: 노드 kubelet 통계 요약(CPU·메모리·fs·PSI·파드 상위)",
+        "ai_tool_nodes_log": "관리자 도구: 노드 kubelet·시스템 로그",
         "ai_tool_k8s_execute_command": "K8s 명령어 실행",
         "ai_tool_helm_execute": "AI가 Helm 명령 실행 (쓰기 포함)",
         "ai_mcp_use": "외부 AI 에이전트(MCP)를 이 클러스터에 연결",
@@ -3501,6 +3505,7 @@
         "admin_hygiene_export": "클러스터 위생 점검 내보내기(CSV·JSON)",
         "admin_hygiene_signoff": "클러스터 위생 점검 서명",
         "admin_logsearch_query": "로그 저장소에 LogQL 직접 질의(클러스터·네임스페이스 매처가 붙음)",
+        "admin_nodes_read": "API 서버 프록시로 노드 내부 읽기: kubelet 통계 요약·노드 로그",
         "admin_investigations_read": "알림 조사 보고서 보기"
       }
     },
