@@ -13,6 +13,7 @@ export interface ModelConfigCreate {
   options?: Record<string, unknown>   // generation options (temperature, top_p, num_ctx ...)
   enabled?: boolean
   is_default?: boolean
+  tier?: 'default' | 'economy'        // economy: history summaries and the floating assistant
 }
 
 export interface ModelConfigResponse {
@@ -30,6 +31,7 @@ export interface ModelConfigResponse {
   options: Record<string, unknown> | null
   enabled: boolean
   is_default: boolean
+  tier: 'default' | 'economy'
   created_at: string
   updated_at: string
 }

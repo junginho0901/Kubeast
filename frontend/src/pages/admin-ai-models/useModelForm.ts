@@ -19,6 +19,7 @@ export function useModelForm() {
   const [formApiKeyEnv, setFormApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
   const [formEnabled, setFormEnabled] = useState(true)
   const [formIsDefault, setFormIsDefault] = useState(false)
+  const [formTier, setFormTier] = useState<'default' | 'economy'>('default')
   // 로컬/셀프호스트 모델용 고급 설정
   const [formCaCert, setFormCaCert] = useState('')          // 자체 서명 CA (PEM)
   const [formOptions, setFormOptions] = useState('')        // 생성 옵션 (JSON 문자열)
@@ -112,6 +113,7 @@ export function useModelForm() {
     setFormApiKeyEnv(PROVIDER_CATALOG[0].defaultApiKeyEnv)
     setFormEnabled(true)
     setFormIsDefault(false)
+    setFormTier('default')
     setFormCaCert('')
     setFormOptions('')
     setFormOptionsError(null)
@@ -133,6 +135,7 @@ export function useModelForm() {
     setFormApiKeyEnv(cfg.api_key_env || provDef?.defaultApiKeyEnv || '')
     setFormEnabled(cfg.enabled)
     setFormIsDefault(cfg.is_default)
+    setFormTier(cfg.tier === 'economy' ? 'economy' : 'default')
     setFormCaCert(cfg.ca_cert || '')
     setFormOptions(cfg.options ? JSON.stringify(cfg.options, null, 2) : '')
     setFormOptionsError(null)
@@ -166,6 +169,7 @@ export function useModelForm() {
       base_url: formBaseUrl || undefined,
       enabled: formEnabled,
       is_default: formIsDefault,
+      tier: formTier,
     }
     if (currentProviderDef.needsApiKey !== false) {
       payload.api_key_env = formApiKeyEnv.trim() || null
@@ -256,6 +260,7 @@ export function useModelForm() {
     formApiKeyEnv, setFormApiKeyEnv,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
+    formTier, setFormTier,
     formCaCert, setFormCaCert,
     formOptions, setFormOptions,
     formOptionsError,

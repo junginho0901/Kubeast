@@ -407,7 +407,7 @@ async def session_chat_stream(
                         "summary_chars": len(_sum.text) if _sum else 0,
                         "notes": len(_sum.entries) if _sum else 0,
                         "compacted": summary_outcome.compacted,
-                        "model": getattr(service, "model", None),
+                        "model": getattr(service, "summary_model", None) or getattr(service, "model", None),
                         "model_calls": _u["model_calls"],
                         "prompt_tokens": _u["prompt_tokens"] if _u["seen"] else None,
                         "completion_tokens": _u["completion_tokens"] if _u["seen"] else None,
@@ -455,7 +455,7 @@ async def session_chat_stream(
             tools = tool_filter(tools)
 
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
-        yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role}}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"
 
         # ===== Multi-turn Tool Calling Loop =====
         max_iterations = 10  # 최대 10번까지 tool call 반복 허용

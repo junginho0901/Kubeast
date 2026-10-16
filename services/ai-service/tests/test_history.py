@@ -216,6 +216,16 @@ async def test_model_failure_keeps_the_previous_notes_and_reports_the_error():
 
 
 @pytest.mark.asyncio
+async def test_notes_are_written_by_the_economy_model_when_there_is_one():
+    service, chat_comp = _service("unused")
+    economy = FakeCompletions("Earlier: ns-1.")
+    service.summary_client = SimpleNamespace(chat=SimpleNamespace(completions=economy))
+    service.summary_model = "small-model"
+    out = await history.ensure_summary(service, FakeDB(), "s1", _history(2), sanitize, {})
+    assert out.created and chat_comp.calls == [] and economy.calls[0]["model"] == "small-model"
+
+
+@pytest.mark.asyncio
 async def test_per_message_input_is_capped():
     service, comp = _service("ok")
     older = [_msg(1, "user", "a" * 5000), _msg(2, "assistant", "b" * 10)]

@@ -193,7 +193,7 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **AI 에이전트 연결(MCP 서버)** — Claude Code·Cursor가 kubeconfig 대신 API 키로 연결해 같은 읽기 도구를
   **그 사람 권한으로만**, 마스킹·감사를 거쳐 사용(기본 꺼짐). 운영자가 켜면(`mcp.writeTools`) 상한이 Write인 키에 쓰기 도구와
   접근 요청 도구도 — 승인 카드 없이 그 사람 권한(영구·임시) 그대로, Argo CD 가드·감사 동일
-- **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트
+- **모델 설정** — `ModelConfig` CRD + DB로 관리, Admin UI에서 추가/테스트. 등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트가 그 (보통 더 싼) 모델을 쓰고 채팅은 기본 모델 그대로 — 스트림의 `model_info.tier`로 어느 쪽인지 보임. economy 설정이 없거나 키가 없어 못 쓰면 둘 다 기본 모델
 
 ### 🌐 멀티클러스터 & RBAC
 

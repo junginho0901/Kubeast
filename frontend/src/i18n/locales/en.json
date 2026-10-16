@@ -3729,7 +3729,12 @@
       "title": "AI Models",
       "modelsLoading": "Loading the provider's model list…",
       "modelsFromProvider": "From the provider ({{count}})",
-      "modelsBuiltIn": "Built-in list — the provider's list could not be read"
+      "modelsBuiltIn": "Built-in list — the provider's list could not be read",
+      "tier": "Tier",
+      "tierDefault": "Default",
+      "tierDefaultHint": "the chat",
+      "tierEconomy": "Economy",
+      "tierEconomyHint": "history summaries and the floating assistant"
     }
   },
   "adminAudit": {

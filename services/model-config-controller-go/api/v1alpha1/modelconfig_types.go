@@ -37,6 +37,7 @@ type ModelConfigSpec struct {
 	CACert            string                   `json:"caCert,omitempty"`
 	Enabled           *bool                    `json:"enabled,omitempty"`
 	IsDefault         *bool                    `json:"isDefault,omitempty"`
+	Tier              string                   `json:"tier,omitempty"` // "default" (empty) or "economy": the model chat summaries and the floating assistant use
 	ModelInfo         *ModelInfo               `json:"modelInfo,omitempty"`
 	OpenAI            *OpenAIConfig            `json:"openAI,omitempty"`
 	Anthropic         *AnthropicConfig         `json:"anthropic,omitempty"`

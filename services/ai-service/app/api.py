@@ -95,52 +95,77 @@ SESSION_SERVICE_URL = "http://session-service:8003/api/v1"
 # ── Singleton AIService — reuse client/connection pool across requests ──
 _cached_ai_config_hash: str = ""
 _cached_ai_service = None  # Optional[AIService]
+# The economy-tier model (history summaries, the floating assistant), when one is enabled.
+_cached_economy_hash: str = ""
+_cached_economy_service = None  # Optional[AIService]
 
 
 def _invalidate_caches():
     """Invalidate model config cache + singleton AIService after CRUD."""
-    global _cached_ai_config_hash, _cached_ai_service
+    global _cached_ai_config_hash, _cached_ai_service, _cached_economy_hash, _cached_economy_service
     from app.services.model_config_service import invalidate_model_config_cache
     invalidate_model_config_cache()
     _cached_ai_config_hash = ""
     _cached_ai_service = None
+    _cached_economy_hash = ""
+    _cached_economy_service = None
 
 
-async def _build_ai_service(authorization: str, cluster_name: Optional[str] = None):
-    """
-    Return an AIService that reuses the LLM client if the active model
-    config hasn't changed.  Only *role / authorization / cluster* differ per
-    user, so the heavy LLM client is shared while role-dependent parts
-    (tool_server URL) and the active cluster are resolved per call.
-    """
-    global _cached_ai_config_hash, _cached_ai_service
-
-    from app.services.model_config_service import resolve_model_config
-    from app.services.ai_service import AIService
-
-    resolved = await resolve_model_config()
-
-    # Compute a cheap identity hash for the resolved config
-    config_hash = (
+def _config_hash(resolved) -> str:
+    """A cheap identity for a resolved config: the LLM client is rebuilt only when it changes."""
+    return (
         f"{resolved.provider}|{resolved.model}|{resolved.base_url}|"
         f"{resolved.api_key[:8] if resolved.api_key else ''}|"
         f"{resolved.tls_verify}|{bool(resolved.ca_cert)}|{resolved.options}"
     )
 
+
+def _new_ai_service(resolved):
+    from app.services.ai_service import AIService
+    return AIService(
+        provider=resolved.provider,
+        model=resolved.model,
+        base_url=resolved.base_url,
+        api_key=resolved.api_key,
+        extra_headers=resolved.extra_headers,
+        tls_verify=resolved.tls_verify,
+        ca_cert=resolved.ca_cert,
+        options=resolved.options,
+    )
+
+
+async def _build_ai_service(authorization: str, cluster_name: Optional[str] = None, tier: str = "default"):
+    """
+    Return an AIService that reuses the LLM client if the active model
+    config hasn't changed.  Only *role / authorization / cluster* differ per
+    user, so the heavy LLM client is shared while role-dependent parts
+    (tool_server URL) and the active cluster are resolved per call.
+
+    tier="economy" (the floating assistant) runs on the enabled economy-tier
+    config when there is one; history summaries always use it when there is
+    one (``summary_client`` / ``summary_model``). Without one, both are the
+    active config.
+    """
+    global _cached_ai_config_hash, _cached_ai_service, _cached_economy_hash, _cached_economy_service
+
+    from app.services.model_config_service import resolve_economy_model_config, resolve_model_config
+
+    resolved = await resolve_model_config()
+    config_hash = _config_hash(resolved)
     if _cached_ai_service is None or config_hash != _cached_ai_config_hash:
         # Config changed or first call — build the LLM client once. The cached
         # instance carries no user: every request gets its own view below.
-        _cached_ai_service = AIService(
-            provider=resolved.provider,
-            model=resolved.model,
-            base_url=resolved.base_url,
-            api_key=resolved.api_key,
-            extra_headers=resolved.extra_headers,
-            tls_verify=resolved.tls_verify,
-            ca_cert=resolved.ca_cert,
-            options=resolved.options,
-        )
+        _cached_ai_service = _new_ai_service(resolved)
         _cached_ai_config_hash = config_hash
+
+    economy = await resolve_economy_model_config()
+    if economy is None:
+        _cached_economy_hash, _cached_economy_service = "", None
+    else:
+        economy_hash = _config_hash(economy)
+        if _cached_economy_service is None or economy_hash != _cached_economy_hash:
+            _cached_economy_service = _new_ai_service(economy)
+            _cached_economy_hash = economy_hash
 
     # A request-scoped view: the LLM client, model and per-session tool
     # contexts are shared by reference; the user's token, role, cluster and
@@ -158,7 +183,11 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail="k8s-service unavailable") from e
 
-    service = copy.copy(_cached_ai_service)
+    use_economy = tier == "economy" and _cached_economy_service is not None
+    service = copy.copy(_cached_economy_service if use_economy else _cached_ai_service)
+    service.tier = "economy" if use_economy else "default"
+    summary = _cached_economy_service or service
+    service.summary_client, service.summary_model = summary.client, summary.model
     service.update_authorization(authorization, cluster_name=cluster_name)
     return service
 
@@ -416,7 +445,7 @@ async def floating_session_chat(
     await _authorize_session_access(authorization, session_id)
     # step 14: the underlying AIService is cluster-scoped too (tool calls), not
     # just the floating prompt text.
-    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
+    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name, tier="economy")
     floating_service = FloatingAIService(ai_service=ai_service)
     audit_actor, audit_http = _extract_audit_meta(request, authorization)
 

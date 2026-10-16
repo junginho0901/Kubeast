@@ -72,6 +72,25 @@ func TestParseSpec_DefaultsAndBaseURL(t *testing.T) {
 	}
 }
 
+func TestParseSpec_Tier(t *testing.T) {
+	r := &ModelConfigReconciler{}
+	spec := func(tier string) *v1alpha1.ModelConfig {
+		return &v1alpha1.ModelConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: "mc"},
+			Spec:       v1alpha1.ModelConfigSpec{Model: "m", OpenAI: &v1alpha1.OpenAIConfig{}, Tier: tier},
+		}
+	}
+	for in, want := range map[string]string{"": "default", "default": "default", " Economy ": "economy"} {
+		data, err := r.parseSpec(spec(in))
+		if err != nil || data.Tier != want {
+			t.Fatalf("tier %q: got %q, %v; want %q", in, data.Tier, err, want)
+		}
+	}
+	if _, err := r.parseSpec(spec("cheap")); err == nil {
+		t.Fatalf("an unknown tier must be refused")
+	}
+}
+
 func TestParseSpec_RejectUnsupportedProvider(t *testing.T) {
 	r := &ModelConfigReconciler{}
 	mc := &v1alpha1.ModelConfig{

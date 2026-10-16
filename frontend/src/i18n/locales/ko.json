@@ -2627,7 +2627,12 @@
       "checkHealth": "서비스 상태 확인",
       "modelsLoading": "프로바이더의 모델 목록을 불러오는 중…",
       "modelsFromProvider": "프로바이더에서 불러온 목록({{count}}개)",
-      "modelsBuiltIn": "기본 목록 — 프로바이더 목록을 불러오지 못했습니다"
+      "modelsBuiltIn": "기본 목록 — 프로바이더 목록을 불러오지 못했습니다",
+      "tier": "등급",
+      "tierDefault": "기본",
+      "tierDefaultHint": "채팅",
+      "tierEconomy": "경제형",
+      "tierEconomyHint": "이력 요약·플로팅 어시스턴트"
     },
     "userClusterRoles": {
       "title": "클러스터 접근",

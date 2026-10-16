@@ -107,6 +107,8 @@ class ModelConfig(Base):
     options = Column(JSON, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
+    # "default" or "economy" — the cheaper model history summaries and the floating assistant use (00017)
+    tier = Column(String, nullable=False, default="default", server_default="default")
 
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
@@ -148,7 +150,7 @@ class AlertInvestigation(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 14
+REQUIRED_SCHEMA_VERSION = 17
 
 
 async def read_schema_version(engine) -> int:
@@ -395,12 +397,26 @@ class DatabaseService:
             return result.scalar_one_or_none()
 
     async def get_active_model_config(self) -> Optional[ModelConfig]:
+        """The chat's model: the default one, else a default-tier one, else the newest enabled."""
         async with self.async_session() as db:
             from sqlalchemy import select
             result = await db.execute(
                 select(ModelConfig)
                 .where(ModelConfig.enabled.is_(True))
-                .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc())
+                .order_by(ModelConfig.is_default.desc(), (ModelConfig.tier == "economy").asc(),
+                          ModelConfig.updated_at.desc())
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
+
+    async def get_economy_model_config(self) -> Optional[ModelConfig]:
+        """The newest enabled economy-tier config (history summaries, the floating assistant), or None."""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            result = await db.execute(
+                select(ModelConfig)
+                .where(ModelConfig.enabled.is_(True), ModelConfig.tier == "economy")
+                .order_by(ModelConfig.updated_at.desc())
                 .limit(1)
             )
             return result.scalar_one_or_none()

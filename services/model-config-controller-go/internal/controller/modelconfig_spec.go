@@ -27,6 +27,7 @@ type modelConfigData struct {
 	Options      map[string]string
 	Enabled      bool
 	IsDefault    bool
+	Tier         string
 }
 
 func (r *ModelConfigReconciler) parseSpec(mc *v1alpha1.ModelConfig) (modelConfigData, error) {
@@ -37,6 +38,10 @@ func (r *ModelConfigReconciler) parseSpec(mc *v1alpha1.ModelConfig) (modelConfig
 	}
 	if !v1alpha1.ProviderSet.Has(provider) {
 		return modelConfigData{}, fmt.Errorf("unsupported provider: %s", provider)
+	}
+	tier, err := tierOf(spec.Tier)
+	if err != nil {
+		return modelConfigData{}, err
 	}
 	if strings.TrimSpace(spec.Model) == "" {
 		return modelConfigData{}, fmt.Errorf("spec.model is required")
@@ -96,7 +101,19 @@ func (r *ModelConfigReconciler) parseSpec(mc *v1alpha1.ModelConfig) (modelConfig
 		Options:      options,
 		Enabled:      boolOrDefault(spec.Enabled, true),
 		IsDefault:    boolOrDefault(spec.IsDefault, false),
+		Tier:         tier,
 	}, nil
+}
+
+// tierOf: the CRD schema allows only these two; the check also covers a CR applied before the schema had the field.
+func tierOf(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "default":
+		return "default", nil
+	case "economy":
+		return "economy", nil
+	}
+	return "", fmt.Errorf("unsupported tier: %s (default or economy)", value)
 }
 
 func boolOrDefault(value *bool, def bool) bool {

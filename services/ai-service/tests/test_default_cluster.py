@@ -32,12 +32,18 @@ def builder(monkeypatch):
     async def fake_resolve():
         return resolved
 
+    async def no_economy():
+        return None
+
     import app.services.ai_service as ai_service_module
     import app.services.model_config_service as mcs
     monkeypatch.setattr(mcs, "resolve_model_config", fake_resolve)
+    monkeypatch.setattr(mcs, "resolve_economy_model_config", no_economy)
     monkeypatch.setattr(ai_service_module, "AIService", FakeAIService)
     api._cached_ai_service = None
     api._cached_ai_config_hash = ""
+    api._cached_economy_service = None
+    api._cached_economy_hash = ""
     return api
 
 

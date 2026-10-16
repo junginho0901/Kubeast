@@ -119,12 +119,12 @@ func (r *ModelConfigReconciler) upsertModelConfig(ctx context.Context, data mode
 INSERT INTO model_configs (
   name, provider, model, base_url,
   api_key_secret_name, api_key_secret_key, api_key_env,
-  extra_headers, tls_verify, ca_cert, options, enabled, is_default,
+  extra_headers, tls_verify, ca_cert, options, enabled, is_default, tier,
   created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4,
   $5, $6, $7,
-  $8, $9, $10, $11, $12, $13,
+  $8, $9, $10, $11, $12, $13, $14,
   NOW(), NOW()
 ) ON CONFLICT (name) DO UPDATE SET
   provider = EXCLUDED.provider,
@@ -139,6 +139,7 @@ INSERT INTO model_configs (
   options = EXCLUDED.options,
   enabled = EXCLUDED.enabled,
   is_default = EXCLUDED.is_default,
+  tier = EXCLUDED.tier,
   updated_at = NOW()
 RETURNING id;
 `
@@ -157,6 +158,7 @@ RETURNING id;
 		optionsArg,
 		data.Enabled,
 		data.IsDefault,
+		data.Tier,
 	).Scan(&id); err != nil {
 		return 0, err
 	}

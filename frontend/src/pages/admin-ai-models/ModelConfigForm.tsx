@@ -33,6 +33,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     formApiKeyEnv, setFormApiKeyEnv,
     formEnabled, setFormEnabled,
     formIsDefault, setFormIsDefault,
+    formTier, setFormTier,
     formCaCert, setFormCaCert,
     formOptions, setFormOptions,
     formOptionsError,
@@ -244,6 +245,17 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           </div>
         </details>
       )}
+
+      <CustomDropdown
+        label={tr('admin.aiModels.tier', 'Tier')}
+        options={[
+          { value: 'default', label: tr('admin.aiModels.tierDefault', 'Default'), hint: tr('admin.aiModels.tierDefaultHint', 'the chat') },
+          { value: 'economy', label: tr('admin.aiModels.tierEconomy', 'Economy'), hint: tr('admin.aiModels.tierEconomyHint', 'history summaries and the floating assistant') },
+        ]}
+        value={formTier}
+        onChange={(v) => setFormTier(v === 'economy' ? 'economy' : 'default')}
+        testId="tier-select"
+      />
 
       <div className="flex items-center gap-6 text-xs">
         <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">

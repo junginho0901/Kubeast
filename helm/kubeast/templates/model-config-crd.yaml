@@ -59,6 +59,10 @@ spec:
                 tlsVerify: { type: boolean }
                 enabled: { type: boolean }
                 isDefault: { type: boolean }
+                tier:
+                  type: string
+                  enum: ["default", "economy"]
+                  description: economy = the model chat history summaries and the floating assistant use when one is enabled
                 modelInfo:
                   type: object
                   properties:

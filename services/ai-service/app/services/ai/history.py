@@ -159,8 +159,10 @@ async def _ask(service: Any, body: str, cap: int) -> tuple[str, Any, int, Option
     ]
     chars = usage_acct.prompt_chars(messages)
     try:
-        resp = await service.client.chat.completions.create(
-            model=service.model, messages=messages, temperature=0.2,
+        # The economy-tier model when one is enabled (summary_client / summary_model, set by _build_ai_service).
+        client = getattr(service, "summary_client", None) or service.client
+        resp = await client.chat.completions.create(
+            model=getattr(service, "summary_model", None) or service.model, messages=messages, temperature=0.2,
             max_tokens=max(160, cap), timeout=60.0,
         )
     except Exception as e:

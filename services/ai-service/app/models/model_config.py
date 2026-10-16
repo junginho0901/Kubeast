@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict, field_serializer, model_validator
 
 
@@ -38,6 +38,8 @@ class ModelConfigCreate(BaseModel):
     options: Optional[Dict[str, Any]] = None
     enabled: bool = True
     is_default: bool = False
+    # "economy": the model chat history summaries and the floating assistant use when one is enabled
+    tier: Literal["default", "economy"] = "default"
 
     @model_validator(mode="before")
     @classmethod
@@ -62,6 +64,7 @@ class ModelConfigUpdate(BaseModel):
     options: Optional[Dict[str, Any]] = None
     enabled: Optional[bool] = None
     is_default: Optional[bool] = None
+    tier: Optional[Literal["default", "economy"]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -89,6 +92,7 @@ class ModelConfigResponse(BaseModel):
     options: Optional[Dict[str, Any]] = None
     enabled: bool
     is_default: bool
+    tier: str = "default"
 
     created_at: datetime
     updated_at: datetime

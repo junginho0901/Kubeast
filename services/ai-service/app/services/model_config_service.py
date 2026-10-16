@@ -150,11 +150,38 @@ async def resolve_model_config(config_id: Optional[int] = None) -> ResolvedModel
         return resolved
 
 
+_cached_economy: Optional[ResolvedModelConfig] = None
+_cached_economy_found = False  # a cached "no economy config" is an answer too
+_cached_economy_at = 0.0
+
+
+async def resolve_economy_model_config() -> Optional[ResolvedModelConfig]:
+    """The enabled economy-tier config (chat history summaries, the floating
+    assistant), cached like the active one; None when there is none or it
+    cannot be used (missing key, refused base_url) — callers fall back to the
+    active config."""
+    global _cached_economy, _cached_economy_found, _cached_economy_at
+    now = time.monotonic()
+    if _cached_economy_found and (now - _cached_economy_at) < _CACHE_TTL:
+        return _cached_economy
+    db = await get_db_service()
+    config = await db.get_economy_model_config()
+    resolved: Optional[ResolvedModelConfig] = None
+    if config is not None:
+        try:
+            resolved = _build_resolved(config)
+        except ValueError as e:
+            logger.warning("economy model config %s is not usable, using the active one: %s", getattr(config, "id", "?"), e)
+    _cached_economy, _cached_economy_found, _cached_economy_at = resolved, True, time.monotonic()
+    return resolved
+
+
 def invalidate_model_config_cache() -> None:
     """
     Call this after any ModelConfig CRUD operation to force the next
     resolve to re-query the database.
     """
-    global _cached_resolved, _cached_at
+    global _cached_resolved, _cached_at, _cached_economy, _cached_economy_found, _cached_economy_at
     _cached_resolved = None
     _cached_at = 0.0
+    _cached_economy, _cached_economy_found, _cached_economy_at = None, False, 0.0

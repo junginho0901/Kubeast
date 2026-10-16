@@ -61,6 +61,12 @@ export default function ModelConfigCard({
                 </span>
               )}
 
+              {cfg.tier === 'economy' && (
+                <span className="inline-flex rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-300" data-testid="tier-economy">
+                  {tr('admin.aiModels.tierEconomy', 'Economy')}
+                </span>
+              )}
+
               {!cfg.enabled && (
                 <span className="inline-flex rounded-full border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500">
                   {tr('admin.aiModels.disabled', 'Disabled')}
