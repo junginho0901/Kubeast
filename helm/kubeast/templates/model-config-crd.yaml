@@ -41,7 +41,7 @@ spec:
                 provider:
                   type: string
                   default: openai
-                  enum: [openai, anthropic, azureopenai, gemini, geminivertexai, anthropicvertexai, ollama, bedrock]
+                  enum: [openai, anthropic, azureopenai, gemini, geminivertexai, anthropicvertexai, ollama, bedrock, claude-code]
                 model:
                   type: string
                 baseURL:

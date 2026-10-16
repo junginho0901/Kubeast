@@ -454,3 +454,15 @@ async def test_run_one_masks_credentials_in_a_provider_error(monkeypatch):
     assert await runner.run_one(cfg(), None, row()) == "failed"
     assert "sk-proj-abcdefghijklmnop" not in finished[0]["error"] and "sk-proj-abcdefghijklmnop" not in audits[-1]["error"]
     assert finished[0]["error"].startswith("RuntimeError: Error code: 401")
+
+
+@pytest.mark.asyncio
+async def test_the_investigator_refuses_the_claude_subscription_provider(monkeypatch):
+    """Claude Code runs tools only in the AI chat: an investigation on provider claude-code stops with the fix."""
+    async def resolve(config_id=None):
+        return SimpleNamespace(provider="claude-code", model="claude-haiku-5-5", base_url=None, api_key="t",
+                               extra_headers={}, tls_verify=True, ca_cert=None, options=None)
+
+    monkeypatch.setattr("app.services.model_config_service.resolve_model_config", resolve)
+    with pytest.raises(runner.InvestigationError, match="features.alertInvestigation.model"):
+        await runner.build_service(InvestigationSettings(), "token", "self")

@@ -282,6 +282,41 @@ tests:
           path: data.MCP_WRITE_TOOLS
           value: "true"
 
+  - it: keeps the Claude subscription provider off by default with one run at a time
+    asserts:
+      - equal:
+          path: data.AI_CLAUDE_CODE_ENABLED
+          value: "false"
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_CONCURRENT
+          value: "1"
+      - equal:
+          path: data.AI_CLAUDE_CODE_TURN_TIMEOUT
+          value: "300"
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_TURNS
+          value: "10"
+
+  - it: takes the Claude subscription provider settings from ai.providers.claudeCode
+    set:
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.maxConcurrent: 2
+      ai.providers.claudeCode.turnTimeoutSeconds: 600
+      ai.providers.claudeCode.maxTurns: 20
+    asserts:
+      - equal:
+          path: data.AI_CLAUDE_CODE_ENABLED
+          value: "true"
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_CONCURRENT
+          value: "2"
+      - equal:
+          path: data.AI_CLAUDE_CODE_TURN_TIMEOUT
+          value: "600"
+      - equal:
+          path: data.AI_CLAUDE_CODE_MAX_TURNS
+          value: "20"
+
   - it: turns in-place resize on by default and off from features.inPlaceResize
     asserts:
       - equal:

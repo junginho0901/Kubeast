@@ -25,7 +25,7 @@ admin:
 # tool-server to sign write-tool approvals), INTERNAL_API_TOKEN (service token
 # tool-server and auth-service present on k8s-service's /internal routes; rotate
 # it by changing the value and rolling those three), OPENAI_API_KEY, ANTHROPIC_API_KEY,
-# GEMINI_API_KEY (may be empty) and, with auth.oidc enabled and no
+# GEMINI_API_KEY (may be empty), CLAUDE_CODE_OAUTH_TOKEN (optional) and, with auth.oidc enabled and no
 # auth.oidc.existingSecret, OIDC_CLIENT_SECRET. Pair it with
 # auth.signingKey.existingSecret for a fully deterministic render.
 secrets:
@@ -295,6 +295,9 @@ ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
+  # A Claude Pro/Max subscription's `claude setup-token` value, for provider
+  # claude-code (providers.claudeCode below); rendered as CLAUDE_CODE_OAUTH_TOKEN.
+  claudeCodeOAuthToken: ""
   apiKeysSecret: ""
   model: "gpt-4o-mini"
   baseUrl: ""
@@ -303,7 +306,8 @@ ai:
   # gateway) are refused unless listed here. Exact host, or ".suffix" for a
   # domain and its subdomains. Cloud metadata addresses are never allowed.
   # A config's api_key_env may only name OPENAI_API_KEY, ANTHROPIC_API_KEY,
-  # GEMINI_API_KEY or a KUBEAST_AI_KEY_* variable (add those to the secret).
+  # GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (provider claude-code only) or a
+  # KUBEAST_AI_KEY_* variable (add those to the secret).
   baseUrlAllowedHosts: []
   #  - ollama.ollama.svc
   #  - .corp.example.com
@@ -346,6 +350,23 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
+  # an API key. Claude Code makes each model call and the chat's own tools answer
+  # its tool calls (same tools, approval card for writes, masking and audit).
+  # Personal use only: Anthropic's terms keep a subscription to its owner, so turn
+  # this on only in an install one person uses. Needs an ai-service image built
+  # with --build-arg WITH_CLAUDE_CODE=true (about 250 MB more), the token in
+  # claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in apiKeysSecret), and a
+  # model config with that provider naming CLAUDE_CODE_OAUTH_TOKEN. Each running
+  # turn holds one Claude Code process; maxConcurrent caps them (raise
+  # resources.aiService.limits.memory with it). The alert investigator does not
+  # run on this provider.
+  providers:
+    claudeCode:
+      enabled: false
+      maxConcurrent: 1
+      turnTimeoutSeconds: 300
+      maxTurns: 10
 
 # MCP server at /api/v1/ai/mcp: an external AI agent (Claude Code, Cursor, ...)
 # connects with a Kubeast API key instead of a kubeconfig and gets the chat's

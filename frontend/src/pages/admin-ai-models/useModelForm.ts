@@ -82,7 +82,7 @@ export function useModelForm() {
   const providerModels = useQuery({
     queryKey: ['provider-models', formProvider, listBaseUrl, formApiKeyEnv, listCaCert],
     queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: formApiKeyEnv || undefined, ca_cert: listCaCert || undefined }),
-    enabled: formOpen && formProvider !== 'custom',
+    enabled: formOpen && formProvider !== 'custom' && formProvider !== 'claude-code',
     staleTime: 5 * 60_000,
     retry: false,
   })
@@ -96,6 +96,7 @@ export function useModelForm() {
     }
   }, [isCreating, formCustomModel, fetchedModels, formModel])
   const modelList = {
+    noList: formProvider === 'claude-code',  // Claude Code has no model list API
     loading: providerModels.isFetching,
     fromProvider: Boolean(fetchedModels?.length),
     count: fetchedModels?.length ?? 0,
@@ -222,7 +223,9 @@ export function useModelForm() {
       })
       setTestResult(result)
     } catch (e: any) {
-      setTestResult({ success: false, message: e?.message || 'Test failed' })
+      // ai-service says why in detail (e.g. the key variable is not set); axios' message only has the status
+      const detail = e?.response?.data?.detail
+      setTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || 'Test failed' })
     } finally {
       setTesting(false)
     }

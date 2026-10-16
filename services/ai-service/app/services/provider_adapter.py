@@ -131,8 +131,18 @@ class ProviderAdapter:
                 self.provider, "https://api.openai.com/v1"
             )
 
-        http_client = httpx.AsyncClient(verify=build_verify(tls_verify, ca_cert))
         self._default_options = options or None
+
+        if self.provider == "claude-code":
+            from app.services.claude_code import ClaudeCodeChat
+
+            self._openai_client = None
+            self.claude_code = ClaudeCodeChat(model=model, token=api_key)
+            self.chat = self.claude_code.chat
+            print(f"[Provider Adapter] provider=claude-code (Claude subscription), model={model}", flush=True)
+            return
+
+        http_client = httpx.AsyncClient(verify=build_verify(tls_verify, ca_cert))
 
         if self.provider == "anthropic":
             from app.services.anthropic_messages import AnthropicMessagesClient

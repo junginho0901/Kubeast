@@ -70,6 +70,22 @@ func TestParseSpec_DefaultsAndBaseURL(t *testing.T) {
 	if data.BaseURL != "http://ollama:11434" {
 		t.Fatalf("expected ollama host as baseURL, got %q", data.BaseURL)
 	}
+
+	mc = &v1alpha1.ModelConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: "mc-subscription"},
+		Spec: v1alpha1.ModelConfigSpec{
+			Provider:  "claude-code",
+			Model:     "claude-sonnet-5-5",
+			APIKeyEnv: "CLAUDE_CODE_OAUTH_TOKEN",
+		},
+	}
+	data, err = r.parseSpec(mc)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if data.Provider != "claude-code" || data.BaseURL != "" || data.APIKeyEnv != "CLAUDE_CODE_OAUTH_TOKEN" {
+		t.Fatalf("expected claude-code without a base URL, got %+v", data)
+	}
 }
 
 func TestParseSpec_Tier(t *testing.T) {

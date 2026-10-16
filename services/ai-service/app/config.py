@@ -70,7 +70,13 @@ class Settings(BaseSettings):
     # session's or the user's UTC-day ai.chat.complete total_tokens reach the limit.
     AI_CHAT_BUDGET_SESSION_TOKENS: int = 0
     AI_CHAT_BUDGET_USER_DAILY_TOKENS: int = 0
-    
+    # Provider claude-code: a Claude subscription's setup-token through Claude Code (app/services/claude_code.py,
+    # chart ai.providers.claudeCode.*). Off by default; the image needs --build-arg WITH_CLAUDE_CODE=true.
+    AI_CLAUDE_CODE_ENABLED: bool = False
+    AI_CLAUDE_CODE_MAX_CONCURRENT: int = 1
+    AI_CLAUDE_CODE_TURN_TIMEOUT: int = 300
+    AI_CLAUDE_CODE_MAX_TURNS: int = 10
+
     class Config:
         # 프로젝트 루트의 .env 파일 사용
         env_file = str(PROJECT_ROOT / ".env")

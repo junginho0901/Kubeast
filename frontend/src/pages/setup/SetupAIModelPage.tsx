@@ -8,6 +8,7 @@ import {
   type ProviderDef,
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
+import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
 
 interface SetupAIModelPageProps {
   navigatingRef: MutableRefObject<boolean>
@@ -68,7 +69,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       })
       setAiTestResult(result)
     } catch (e: any) {
-      setAiTestResult({ success: false, message: e?.message || 'Connection failed' })
+      const detail = e?.response?.data?.detail
+      setAiTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || 'Connection failed' })
     } finally {
       setAiTesting(false)
     }
@@ -145,6 +147,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
 
       {/* model config fields */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
+        {currentProviderDef.id === 'claude-code' && <ClaudeSubscriptionNotice />}
         {/* model selector — 2-tier dropdown */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -208,7 +211,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               type="text"
               value={aiApiKeyEnv}
               onChange={(e) => setAiApiKeyEnv(e.target.value)}
-              placeholder="OPENAI_API_KEY"
+              placeholder={currentProviderDef.defaultApiKeyEnv || 'OPENAI_API_KEY'}
               spellCheck={false}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />

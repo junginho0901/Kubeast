@@ -7,11 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY requirements.txt requirements-claude-code.txt ./
+# true adds Claude Code for provider claude-code (Claude subscription setup-token).
+ARG WITH_CLAUDE_CODE=false
 # Current packaging tools in the venv: the base image's pip/setuptools/wheel
 # carry known vulnerabilities (trivy) and would ship inside the image.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt \
+    && if [ "$WITH_CLAUDE_CODE" = "true" ]; then pip install --no-cache-dir -r requirements-claude-code.txt; fi \
     && pip uninstall -y pip setuptools wheel
 
 # ---- runtime stage: no compiler, non-root uid 65532 ----

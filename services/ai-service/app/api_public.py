@@ -16,7 +16,7 @@ import httpx
 
 from app.security import require_admin
 from app.services.ai.debug_dump import safe_error
-from app.services import model_config_policy
+from app.services import claude_code, model_config_policy
 from app.services.anthropic_messages import API_VERSION as ANTHROPIC_VERSION, api_root as anthropic_root
 from app.services.tls import build_verify
 
@@ -227,17 +227,23 @@ async def test_model_connection(request: dict = None):
     body = request or {}
     api_key = (body.get("api_key") or "").strip()
     api_key_env = (body.get("api_key_env") or "").strip()
+    provider = (body.get("provider") or "openai").strip().lower()
     try:
         model_config_policy.check_api_key_env(api_key_env)
         model_config_policy.check_extra_headers(body.get("extra_headers"))
+        model_config_policy.check_provider_fields(provider, (api_key_env,), body.get("base_url"))
     except model_config_policy.PolicyError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if provider == claude_code.PROVIDER:
+        # Before the key lookup: an install without the provider says so whatever the variable holds.
+        reason = claude_code.unavailable_reason()
+        if reason:
+            return {"success": False, "message": reason}
     if not api_key and api_key_env:
         api_key = (os.getenv(api_key_env) or "").strip()
         if not api_key:
             raise HTTPException(status_code=400, detail=f"environment variable {api_key_env} is not set in ai-service")
     model = body.get("model", "")
-    provider = (body.get("provider") or "openai").strip().lower()
     verify = build_verify(body.get("tls_verify", True), body.get("ca_cert"))
     user_base_url = (body.get("base_url") or "").strip()
 
@@ -251,7 +257,10 @@ async def test_model_connection(request: dict = None):
         raise HTTPException(status_code=400, detail="api_key_env (or api_key) is required")
 
     try:
-        if provider == "anthropic":
+        if provider == claude_code.PROVIDER:
+            return await claude_code.test_connection(model, api_key)
+
+        elif provider == "anthropic":
             base = user_base_url or "https://api.anthropic.com"
             return await _test_anthropic(api_key, model, base, verify)
 
@@ -320,6 +329,8 @@ async def list_provider_models(request: dict = None):
         model_config_policy.check_api_key_env(api_key_env)
     except model_config_policy.PolicyError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if provider == claude_code.PROVIDER:
+        return {"models": [], "error": "Claude Code has no model list; pick one or type its name"}
     if user_base_url:
         _validate_base_url(user_base_url)
     api_key = (os.getenv(api_key_env) or "").strip() if api_key_env else ""

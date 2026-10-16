@@ -255,6 +255,136 @@ async def _audit_chat_complete(
     )
 
 
+async def _call_tool(service, db, session, session_id, tools, tool_context, function_name, function_args, *,
+                     iteration, audit_actor, audit_http) -> tuple[list[str], dict, str]:
+    """Answer one tool call of the model: park a write for approval or run the tool, audit it, and return the
+    SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
+    Both the API-key loop and Claude Code (provider claude-code) call tools through here."""
+    from app.services.audit_writer import write_audit
+    from app.services.ai import permissions as _perm
+    from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
+
+    events: list[str] = []
+    # H2: a tool that changes the cluster is not run from the
+    # model's call. Record an approval request, tell the user
+    # (SSE) and the model (tool result), and move on.
+    pending_approval_id = None
+    if function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
+        # Not offered this turn (read-only widget) or not
+        # permitted for this user: no approval card, and the
+        # model is told so instead of running anything.
+        function_response = json.dumps({
+            "status": "not_permitted",
+            "message": f"{function_name} is not available in this conversation.",
+        }, ensure_ascii=False)
+    elif function_name in WRITE_TOOL_NAMES and write_approval_required():
+        approval = await db.create_tool_approval(
+            session_id=session_id,
+            user_id=(audit_actor or {}).get('user_id') or session.user_id,
+            user_email=(audit_actor or {}).get('email'),
+            cluster=_perm.effective_cluster(service),
+            tool=function_name,
+            args=function_args if isinstance(function_args, dict) else {},
+        )
+        pending_approval_id = approval.id
+        events.append(f"data: {json.dumps({'approval_required': approval.id, 'function': function_name, 'args': function_args, 'cluster': approval.cluster, 'expires_at': approval.expires_at.isoformat() + 'Z'}, ensure_ascii=False)}\n\n")
+        if audit_actor:
+            await write_audit(
+                action='ai.tool.approval_requested',
+                actor_user_id=audit_actor.get('user_id'),
+                actor_email=audit_actor.get('email'),
+                target_type='tool',
+                target_id=function_name,
+                namespace=function_args.get('namespace') if isinstance(function_args, dict) else None,
+                cluster=approval.cluster,
+                after={'session_id': session_id, 'approval_id': approval.id, 'cluster': approval.cluster, 'tool': function_name},
+                request_ip=(audit_http or {}).get('ip'),
+                user_agent=(audit_http or {}).get('user_agent'),
+                request_id=(audit_http or {}).get('request_id'),
+                path=(audit_http or {}).get('path'),
+            )
+        function_response = json.dumps({
+            "status": "pending_approval",
+            "approval_id": approval.id,
+            "message": "This action changes the cluster and is waiting for the user's approval in the chat. Do not call the tool again; tell the user it awaits their approval.",
+        }, ensure_ascii=False)
+    else:
+        function_response = await service._execute_function_with_context(
+            function_name, function_args, tool_context
+        )
+
+    log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
+
+    formatted_result, is_json, is_yaml = formatters._format_tool_result(
+        function_name, function_args, function_response,
+    )
+    display_result = formatters._build_tool_display(
+        function_name, function_args, formatted_result, is_json, is_yaml,
+    )
+
+    max_preview_len = 2500
+    result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
+    display_preview = None
+    if display_result is not None:
+        display_preview = display_result[:max_preview_len] + "\n... (truncated) ..." if len(display_result) > max_preview_len else display_result
+
+    payload = {
+        "function_result": function_name,
+        "result": result_preview,
+        "is_json": is_json,
+        "is_yaml": is_yaml,
+    }
+    if display_preview is not None:
+        payload["display"] = display_preview
+        payload["display_format"] = "kubectl"
+    events.append(f"data: {json.dumps(payload, ensure_ascii=False)}\n\n")
+
+    log_entry = {
+        'function': function_name,
+        'args': function_args,
+        'result': formatted_result,
+        'is_json': is_json,
+        'is_yaml': is_yaml,
+        'display': display_result,
+        'display_format': "kubectl" if display_result is not None else None,
+        # set when the call is parked for approval (H2) — the UI renders the card from this
+        'approval_id': pending_approval_id,
+    }
+
+    # audit: ai.tool.call (메타데이터만 — args/result 본문은 저장하지 않음)
+    if audit_actor:
+        ns_arg = function_args.get('namespace') if isinstance(function_args, dict) else None
+        target_id_arg = (
+            function_args.get('resource_name')
+            or function_args.get('name')
+            or function_args.get('pod_name')
+        ) if isinstance(function_args, dict) else None
+        target_type_arg = function_args.get('resource_type') if isinstance(function_args, dict) else None
+        await write_audit(
+            action='ai.tool.call',
+            actor_user_id=audit_actor.get('user_id'),
+            actor_email=audit_actor.get('email'),
+            target_type=target_type_arg or 'tool',
+            target_id=target_id_arg or function_name,
+            namespace=ns_arg,
+            cluster=_perm.effective_cluster(service),
+            after={
+                'session_id': session_id,
+                'tool': function_name,
+                'iteration': iteration,
+                'resource_type': target_type_arg,
+                # what tool-server masked before the result reached the model
+                'redacted': getattr(service.tool_server, 'last_redacted', None),
+            },
+            request_ip=(audit_http or {}).get('ip'),
+            user_agent=(audit_http or {}).get('user_agent'),
+            request_id=(audit_http or {}).get('request_id'),
+            path=(audit_http or {}).get('path'),
+        )
+
+    return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result)
+
+
 async def session_chat_stream(
     service: "AIService",
     session_id: str,
@@ -483,7 +613,50 @@ async def session_chat_stream(
         turn_tool_calls = 0
         turn_finish_reason = None
 
-        while iteration < max_iterations and not skip_llm:
+        delegated = getattr(service, "provider", None) == "claude-code" and not skip_llm
+        if delegated:
+            # Claude subscription: Claude Code runs this turn's model loop, and its tool calls come back to _call_tool.
+            from app.services.claude_code import TurnResult
+
+            cc_turn = TurnResult()
+
+            async def _cc_tool(name, args, turn_no):
+                events, entry, llm_text = await _call_tool(
+                    service, db, session, session_id, tools, tool_context, name, args,
+                    iteration=turn_no, audit_actor=audit_actor, audit_http=audit_http,
+                )
+                tool_calls_log.append(entry)
+                return events, llm_text
+
+            cc_prompt_chars = usage_acct.prompt_chars(messages, tools)
+            try:
+                async for event in service.client.claude_code.turn(messages=messages, tools=tools, run_tool=_cc_tool, out=cc_turn):
+                    yield event
+            except Exception as cc_error:
+                log.error("Claude Code turn failed: %s", safe_error(cc_error))
+                yield f"data: {json.dumps({'error': f'Claude Code 호출 실패: {safe_error(cc_error)}'}, ensure_ascii=False)}\n\n"
+                await _audit_chat_complete(
+                    service, session_id, audit_actor, audit_http,
+                    turn_usage=turn_usage, tool_calls=cc_turn.tool_calls, iterations=cc_turn.turns,
+                    started=turn_started, finish_reason=None, message_length=0,
+                    result="failure", error=safe_error(cc_error),
+                )
+                turn_completed = True
+                yield "data: [DONE]\n\n"
+                return
+            usage_acct.add_usage(turn_usage, cc_turn.usage, prompt_chars=cc_prompt_chars)
+            turn_usage["model_calls"] += max(0, cc_turn.turns - 1)  # one run, cc_turn.turns model calls
+            if cc_turn.usage is not None:
+                yield f"data: {json.dumps({'usage_phase': 'claude_code_turn', 'usage': usage_acct.usage_event(cc_turn.usage, prompt_chars=cc_prompt_chars)}, ensure_ascii=False)}\n\n"
+            iteration = max(1, cc_turn.turns)
+            turn_tool_calls = cc_turn.tool_calls
+            turn_finish_reason = cc_turn.finish_reason
+            assistant_content = cc_turn.text
+            if cc_turn.finish_reason == "max_turns":
+                assistant_content = "죄송합니다. 정보 수집 중 최대 반복 횟수에 도달했습니다. 더 구체적인 질문으로 다시 시도해주세요."
+                yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
+
+        while iteration < max_iterations and not skip_llm and not delegated:
             iteration += 1
             log.debug("[DEBUG] Iteration %s/%s", iteration, max_iterations)
             
@@ -590,7 +763,8 @@ async def session_chat_stream(
                     tc_list.append({
                         "id": tc["id"],
                         "type": "function",
-                        "function": {"name": tc["name"], "arguments": tc["arguments"]},
+                        # a call with no input streams no argument text (Anthropic adapter): "{}" as the providers expect
+                        "function": {"name": tc["name"], "arguments": tc["arguments"] or "{}"},
                     })
                 assistant_msg = {
                     "role": "assistant",
@@ -602,132 +776,25 @@ async def session_chat_stream(
 
                 for tc_dict in tc_list:
                     function_name = tc_dict["function"]["name"]
-                    function_args = json.loads(tc_dict["function"]["arguments"])
+                    try:
+                        function_args = json.loads(tc_dict["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        function_args = {}  # the tool answers what is missing instead of the whole turn failing
+                    if not isinstance(function_args, dict):
+                        function_args = {}
 
                     dump(f"[DUMP] Calling function {function_name} with args", function_args)
 
                     yield f"data: {json.dumps({'function': function_name, 'args': function_args}, ensure_ascii=False)}\n\n"
 
-                    # H2: a tool that changes the cluster is not run from the
-                    # model's call. Record an approval request, tell the user
-                    # (SSE) and the model (tool result), and move on.
-                    pending_approval_id = None
-                    from app.services.tool_whitelists import WRITE_TOOL_NAMES, write_approval_required
-                    from app.services.ai import permissions as _perm
-                    if function_name in WRITE_TOOL_NAMES and write_approval_required() and not _perm.may_request_approval(service, tools, function_name):
-                        # Not offered this turn (read-only widget) or not
-                        # permitted for this user: no approval card, and the
-                        # model is told so instead of running anything.
-                        function_response = json.dumps({
-                            "status": "not_permitted",
-                            "message": f"{function_name} is not available in this conversation.",
-                        }, ensure_ascii=False)
-                    elif function_name in WRITE_TOOL_NAMES and write_approval_required():
-                        approval = await db.create_tool_approval(
-                            session_id=session_id,
-                            user_id=(audit_actor or {}).get('user_id') or session.user_id,
-                            user_email=(audit_actor or {}).get('email'),
-                            cluster=_perm.effective_cluster(service),
-                            tool=function_name,
-                            args=function_args if isinstance(function_args, dict) else {},
-                        )
-                        pending_approval_id = approval.id
-                        yield f"data: {json.dumps({'approval_required': approval.id, 'function': function_name, 'args': function_args, 'cluster': approval.cluster, 'expires_at': approval.expires_at.isoformat() + 'Z'}, ensure_ascii=False)}\n\n"
-                        if audit_actor:
-                            await write_audit(
-                                action='ai.tool.approval_requested',
-                                actor_user_id=audit_actor.get('user_id'),
-                                actor_email=audit_actor.get('email'),
-                                target_type='tool',
-                                target_id=function_name,
-                                namespace=function_args.get('namespace') if isinstance(function_args, dict) else None,
-                                cluster=approval.cluster,
-                                after={'session_id': session_id, 'approval_id': approval.id, 'cluster': approval.cluster, 'tool': function_name},
-                                request_ip=(audit_http or {}).get('ip'),
-                                user_agent=(audit_http or {}).get('user_agent'),
-                                request_id=(audit_http or {}).get('request_id'),
-                                path=(audit_http or {}).get('path'),
-                            )
-                        function_response = json.dumps({
-                            "status": "pending_approval",
-                            "approval_id": approval.id,
-                            "message": "This action changes the cluster and is waiting for the user's approval in the chat. Do not call the tool again; tell the user it awaits their approval.",
-                        }, ensure_ascii=False)
-                    else:
-                        function_response = await service._execute_function_with_context(
-                            function_name, function_args, tool_context
-                        )
-
-                    log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
-
-                    formatted_result, is_json, is_yaml = formatters._format_tool_result(
-                        function_name, function_args, function_response,
+                    events, log_entry, tool_message_content = await _call_tool(
+                        service, db, session, session_id, tools, tool_context, function_name, function_args,
+                        iteration=iteration, audit_actor=audit_actor, audit_http=audit_http,
                     )
-                    display_result = formatters._build_tool_display(
-                        function_name, function_args, formatted_result, is_json, is_yaml,
-                    )
+                    for event in events:
+                        yield event
+                    tool_calls_log.append(log_entry)
 
-                    max_preview_len = 2500
-                    result_preview = formatted_result[:max_preview_len] + "\n... (truncated) ..." if len(formatted_result) > max_preview_len else formatted_result
-                    display_preview = None
-                    if display_result is not None:
-                        display_preview = display_result[:max_preview_len] + "\n... (truncated) ..." if len(display_result) > max_preview_len else display_result
-
-                    payload = {
-                        "function_result": function_name,
-                        "result": result_preview,
-                        "is_json": is_json,
-                        "is_yaml": is_yaml,
-                    }
-                    if display_preview is not None:
-                        payload["display"] = display_preview
-                        payload["display_format"] = "kubectl"
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-                    tool_calls_log.append({
-                        'function': function_name,
-                        'args': function_args,
-                        'result': formatted_result,
-                        'is_json': is_json,
-                        'is_yaml': is_yaml,
-                        'display': display_result,
-                        'display_format': "kubectl" if display_result is not None else None,
-                        # set when the call is parked for approval (H2) — the UI renders the card from this
-                        'approval_id': pending_approval_id,
-                    })
-
-                    # audit: ai.tool.call (메타데이터만 — args/result 본문은 저장하지 않음)
-                    if audit_actor:
-                        ns_arg = function_args.get('namespace') if isinstance(function_args, dict) else None
-                        target_id_arg = (
-                            function_args.get('resource_name')
-                            or function_args.get('name')
-                            or function_args.get('pod_name')
-                        ) if isinstance(function_args, dict) else None
-                        target_type_arg = function_args.get('resource_type') if isinstance(function_args, dict) else None
-                        await write_audit(
-                            action='ai.tool.call',
-                            actor_user_id=audit_actor.get('user_id'),
-                            actor_email=audit_actor.get('email'),
-                            target_type=target_type_arg or 'tool',
-                            target_id=target_id_arg or function_name,
-                            namespace=ns_arg,
-                            cluster=_perm.effective_cluster(service),
-                            after={
-                                'session_id': session_id,
-                                'tool': function_name,
-                                'iteration': iteration,
-                                'resource_type': target_type_arg,
-                                # what tool-server masked before the result reached the model
-                                'redacted': getattr(service.tool_server, 'last_redacted', None),
-                            },
-                            request_ip=(audit_http or {}).get('ip'),
-                            user_agent=(audit_http or {}).get('user_agent'),
-                            request_id=(audit_http or {}).get('request_id'),
-                            path=(audit_http or {}).get('path'),
-                        )
-
-                    tool_message_content = formatters._truncate_tool_result_for_llm(formatted_result)
                     messages.append({
                         "tool_call_id": tc_dict["id"],
                         "role": "tool",

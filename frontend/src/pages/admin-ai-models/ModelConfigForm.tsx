@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
+import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
 import {
   Check,
   AlertCircle,
@@ -125,7 +126,9 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                 testId="model-select"
               />
               <p className="mt-1 text-[10px] text-slate-500" data-testid="model-list-source" title={modelList.error}>
-                {modelList.loading
+                {modelList.noList
+                  ? tr('admin.aiModels.modelsNoList', 'Built-in list — Claude Code has no model list')
+                  : modelList.loading
                   ? tr('admin.aiModels.modelsLoading', 'Loading the provider\'s model list…')
                   : modelList.fromProvider
                     ? t('admin.aiModels.modelsFromProvider', { count: modelList.count, defaultValue: 'From the provider ({{count}})' })
@@ -167,7 +170,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               type="text"
               value={formApiKeyEnv}
               onChange={(e) => setFormApiKeyEnv(e.target.value)}
-              placeholder="OPENAI_API_KEY"
+              placeholder={currentProviderDef.defaultApiKeyEnv || 'OPENAI_API_KEY'}
               spellCheck={false}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
@@ -177,6 +180,8 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           </div>
         )}
       </div>
+
+      {currentProviderDef.id === 'claude-code' && <ClaudeSubscriptionNotice />}
 
       {/* tool calling warning */}
       {(() => {

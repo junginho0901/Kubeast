@@ -557,18 +557,32 @@ async def create_model_config(payload=Depends(require_auth), request: dict = Non
     return ModelConfigResponse.model_validate(config)
 
 
-def _check_model_config_policy(data: dict) -> None:
+def _check_model_config_policy(data: dict, current=None) -> None:
     """Where the key may come from, where it may go, what rides along
-    (app.services.model_config_policy) — before anything is stored."""
-    from app.services import model_config_policy
+    (app.services.model_config_policy) — before anything is stored. `current`
+    is the stored config an update applies to."""
+    from app.services import claude_code, model_config_policy
+
+    def field(name: str):
+        return data[name] if name in data else getattr(current, name, None)
 
     try:
         model_config_policy.check_api_key_env(data.get("api_key_env"))
         model_config_policy.check_api_key_env(data.get("api_key_secret_key"))
         model_config_policy.check_base_url(data.get("base_url"))
         model_config_policy.check_extra_headers(data.get("extra_headers"))
+        model_config_policy.check_provider_fields(
+            field("provider"), (field("api_key_env"), field("api_key_secret_key")), field("base_url"),
+        )
     except model_config_policy.PolicyError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # A new Claude subscription config only where this install can run it.
+    becomes_subscription = (data.get("provider") or "").strip().lower() == claude_code.PROVIDER and (
+        current is None or (current.provider or "").strip().lower() != claude_code.PROVIDER
+    )
+    reason = claude_code.unavailable_reason() if becomes_subscription else None
+    if reason:
+        raise HTTPException(status_code=400, detail=f"cannot use provider {claude_code.PROVIDER}: {reason}")
 
 
 # NOTE: test_model_connection has been moved to public_router (no auth required).
@@ -586,14 +600,14 @@ async def update_model_config(config_id: int, payload=Depends(require_auth), req
         data = ModelConfigUpdate(**(request or {})).model_dump(exclude_unset=True)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=_validation_message(e))
-    _check_model_config_policy(data)
     db = await get_db_service()
+    current = await db.get_model_config(config_id)
+    _check_model_config_policy(data, current)
     if data.get("extra_headers"):
         # Responses mask header values; a client echoing them back keeps the
         # stored value instead of overwriting it with the mask.
         from app.services.model_config_policy import MASK
 
-        current = await db.get_model_config(config_id)
         stored = (current.extra_headers or {}) if current else {}
         data["extra_headers"] = {k: (stored.get(k, v) if v == MASK else v) for k, v in data["extra_headers"].items()}
     config = await db.update_model_config(config_id, data)

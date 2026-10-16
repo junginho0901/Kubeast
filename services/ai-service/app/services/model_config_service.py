@@ -30,7 +30,7 @@ _cached_at: float = 0.0  # time.monotonic() of last resolve
 
 # API 키가 필수인 클라우드 프로바이더. 그 외(ollama, 셀프호스트, OpenAI-호환
 # 로컬 게이트웨이 등)는 키 없이 동작할 수 있으므로 키 누락을 허용한다.
-_PROVIDERS_REQUIRING_KEY = frozenset({"openai", "anthropic", "google", "gemini", "azure"})
+_PROVIDERS_REQUIRING_KEY = frozenset({"openai", "anthropic", "google", "gemini", "azure", "claude-code"})
 
 
 @dataclass(frozen=True)
@@ -80,7 +80,12 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
         )
 
     provider = (config.provider or "openai").strip().lower()
-    api_key = _resolve_api_key(config) or settings.OPENAI_API_KEY
+    # OPENAI_API_KEY is the old single-key fallback; a subscription config never borrows another vendor's key.
+    api_key = _resolve_api_key(config) or ("" if provider == model_config_policy.SUBSCRIPTION_PROVIDER else settings.OPENAI_API_KEY)
+    try:
+        model_config_policy.check_provider_fields(provider, (config.api_key_env, config.api_key_secret_key), config.base_url)
+    except model_config_policy.PolicyError as e:
+        raise ValueError(f"active model config is not allowed: {e}")
     # A provider error can repeat the key; masked by value from now on (redact.remember_secret).
     remember_secret(api_key)
     # 로컬/셀프호스트(Ollama 등)는 키 없이 동작. 클라우드 프로바이더만 키 필수.

@@ -71,6 +71,12 @@ async function waitFinished(request: APIRequestContext, admin: string, alertname
   return row as Row
 }
 
+// The investigator does not run on the Claude subscription provider (it stops with the reason).
+async function onSubscriptionModel(request: APIRequestContext, admin: string): Promise<boolean> {
+  const active = await (await request.get('/api/v1/ai/model-configs/active', { headers: bearer(admin) })).json()
+  return active?.provider === 'claude-code'
+}
+
 async function auditRows(request: APIRequestContext, admin: string, action: string, since: string) {
   const res = await request.get('/api/v1/auth/admin/audit-logs', { headers: bearer(admin), params: { action, since, limit: 50 } })
   expect(res.ok()).toBeTruthy()
@@ -101,6 +107,7 @@ test.describe('alert investigation', () => {
     test.setTimeout(420_000)
     const token = webhookToken()
     const admin = await login(request)
+    test.skip(await onSubscriptionModel(request, admin), 'the default model is a Claude subscription (claude-code): the investigator does not run on it')
     const since = new Date(Date.now() - 5_000).toISOString()
     const name = `E2EInvestigation${Date.now()}`
     const fp = `inv-${Date.now()}`
@@ -158,6 +165,7 @@ test.describe('alert investigation', () => {
   test('the real Alertmanager on the second cluster delivers an amtool alert and it is investigated there', async ({ request }) => {
     test.setTimeout(420_000)
     const admin = await login(request)
+    test.skip(await onSubscriptionModel(request, admin), 'the default model is a Claude subscription (claude-code): the investigator does not run on it')
     const name = `E2EAlertmanager${Date.now()}`
     kubectlFor('kubeast-b')(
       `-n monitoring exec deploy/alertmanager -- amtool alert add ${name} severity=warning namespace=kube-system ` +

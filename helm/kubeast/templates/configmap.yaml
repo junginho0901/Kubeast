@@ -122,6 +122,10 @@ data:
   AI_CHAT_SUMMARY_MAX_CHARS: {{ .Values.ai.chat.summary.maxChars | quote }}
   AI_CHAT_BUDGET_SESSION_TOKENS: {{ .Values.ai.chat.budget.sessionTokens | quote }}
   AI_CHAT_BUDGET_USER_DAILY_TOKENS: {{ .Values.ai.chat.budget.userDailyTokens | quote }}
+  AI_CLAUDE_CODE_ENABLED: {{ .Values.ai.providers.claudeCode.enabled | quote }}
+  AI_CLAUDE_CODE_MAX_CONCURRENT: {{ .Values.ai.providers.claudeCode.maxConcurrent | quote }}
+  AI_CLAUDE_CODE_TURN_TIMEOUT: {{ .Values.ai.providers.claudeCode.turnTimeoutSeconds | quote }}
+  AI_CLAUDE_CODE_MAX_TURNS: {{ .Values.ai.providers.claudeCode.maxTurns | quote }}
   MCP_ENABLED: {{ .Values.mcp.enabled | quote }}
   MCP_WRITE_TOOLS: {{ .Values.mcp.writeTools | quote }}
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}

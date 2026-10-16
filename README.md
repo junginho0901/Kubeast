@@ -172,6 +172,14 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **프롬프트 캐시**: 자동 캐시(`cache_control`)가 기본으로 켜집니다. 모델 설정 옵션 `prompt_cache: false`로 끕니다. 사용량의 입력 토큰은 캐시에서 읽은 토큰을 포함한 총 입력입니다.
 - 키는 지금처럼 `ANTHROPIC_API_KEY`(또는 `KUBEAST_AI_KEY_*`)에 둡니다. 예전 호환 주소(`https://api.anthropic.com/v1/`)가 base_url에 들어 있어도 그대로 동작합니다.
 
+**Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다. 구독 토큰은 Claude Code에서만 받아 주므로, ai-service가 모델 호출마다 Claude Code를 띄우고(Claude Agent SDK, `app/services/claude_code.py`) Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 안에서 처리합니다. 그래서 도구 목록, 쓰기 도구의 승인 카드, 마스킹, `ai.tool.call`·`ai.chat.complete` 감사(provider `claude-code`)가 API 키 경로와 같습니다.
+- **혼자 쓰는 설치에서만** 켭니다. Anthropic 약관은 구독을 본인 사용으로 한정합니다. 팀이나 여러 사용자가 쓰는 Kubeast에 넣으면 안 됩니다. 관리 화면은 이 프로바이더를 고르면 같은 경고를 보여 줍니다.
+- **켜는 법**: ① ai-service 이미지를 `--build-arg WITH_CLAUDE_CODE=true`로 빌드합니다(SDK가 Claude Code 실행 파일을 담아 약 250 MB 늘어남, 기본 이미지에는 없음). ② 본인 PC에서 `claude setup-token`으로 토큰(1년)을 만들어 `ai.claudeCodeOAuthToken`(또는 `apiKeysSecret`의 `CLAUDE_CODE_OAUTH_TOKEN` 키)에 넣고 `ai.providers.claudeCode.enabled: true`로 올립니다. ③ **Admin > AI Models**에서 "Claude subscription (setup-token)"을 고르면 변수 이름이 `CLAUDE_CODE_OAUTH_TOKEN`으로 채워집니다. 연결 테스트 후 저장합니다.
+- **격리**: 실행마다 임시 HOME·설정 디렉터리, Claude Code 기본 도구(Bash·파일·웹) 없음, 설정 파일·CLAUDE.md 안 읽음. ai-service가 받은 환경변수는 경로·프록시·CA 변수를 빼고 모두 빈 값으로 덮어 모델 키·DB 주소가 넘어가지 않습니다. 토큰은 `CLAUDE_CODE_OAUTH_TOKEN`으로만 갑니다.
+- **규칙**: `CLAUDE_CODE_OAUTH_TOKEN`은 claude-code만 쓸 수 있고, claude-code는 base_url과 다른 공급자 키 변수를 받지 않습니다. 꺼진 설치에서는 새 claude-code 설정 저장이 400으로 거절되고 연결 테스트가 이유를 보여 줍니다.
+- **한도**: 동시에 도는 턴은 `maxConcurrent`(기본 1, 나머지는 대기), 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 10회 모델 호출)까지입니다. 턴마다 Claude Code 프로세스가 하나 뜨므로 `maxConcurrent`를 올리면 `resources.aiService.limits.memory`도 올립니다.
+- **안 되는 것**: 알림 → AI 조사(조사기는 자체 도구 호출 방식이라 이 프로바이더에서 오류로 끝남)와 공급자 모델 목록(내장 목록 또는 이름 직접 입력).
+
 ---
 
 ## 주요 기능
@@ -482,9 +490,12 @@ ai:
   openaiApiKey: ""
   anthropicApiKey: ""
   geminiApiKey: ""
+  claudeCodeOAuthToken: ""  # Claude 구독 setup-token(provider claude-code, 개인용 — "4. AI 활성화" 참고)
   apiKeysSecret: ""
   model: "gpt-4o-mini"
-  baseUrlAllowedHosts: []  # 모델 설정 base_url이 사설 주소(클러스터 안 Ollama·사내 LLM 게이트웨이)면 여기 등록. api_key_env는 OPENAI/ANTHROPIC/GEMINI_API_KEY 또는 KUBEAST_AI_KEY_*
+  baseUrlAllowedHosts: []  # 모델 설정 base_url이 사설 주소(클러스터 안 Ollama·사내 LLM 게이트웨이)면 여기 등록. api_key_env는 OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN(claude-code 전용) 또는 KUBEAST_AI_KEY_*
+  providers:
+    claudeCode: { enabled: false, maxConcurrent: 1, turnTimeoutSeconds: 300, maxTurns: 10 }
 
 # 내장 PostgreSQL / Redis (false 면 외부 사용)
 postgresql:
@@ -572,7 +583,7 @@ kind 노드는 postgres·redis·nginx 이미지를 레지스트리에서 당기�
 AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니다. 노트북에서 Ollama를 돌린다면
 `kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:8b`, `host.docker.internal:11434`
 — dev 값이 그 주소를 `ai.baseUrlAllowedHosts`와 NetworkPolicy에서 허용)로 등록하면 되고, 리셋 뒤에도 다시 적용합니다.
-노트북에서 추론을 돌리지 않고 e2e를 전부 돌리려면 `scripts/kind-model-haiku.sh up <키 파일>`로 Anthropic Claude Haiku(`claude-haiku-5-5`, 가장 싼 모델)를 그 실행 동안의 기본 모델로 두고(키는 파일에서 Secret `kubeast-ai-keys`로만 들어가고 출력되지 않음), 끝나면 `down`으로 Ollama 기본·키 제거까지 되돌립니다.
+노트북에서 추론을 돌리지 않고 e2e를 전부 돌리려면 `scripts/kind-model-haiku.sh up <키 파일>`로 Anthropic Claude Haiku(`claude-haiku-5-5`, 가장 싼 모델)를 그 실행 동안의 기본 모델로 두고(키는 파일에서 Secret `kubeast-ai-keys`로만 들어가고 출력되지 않음), 끝나면 `down`으로 Ollama 기본·키 제거까지 되돌립니다. Claude 구독 프로바이더로 AI spec을 돌릴 때는 `scripts/kind-model-subscription.sh up <토큰 파일>`(ai-service를 `WITH_CLAUDE_CODE=true`로 빌드한 뒤, 토큰은 `claude setup-token` 값)·`down`을 같은 방식으로 씁니다. 그동안 알림 → AI 조사 spec은 건너뜁니다. 스크립트는 자기가 있는 체크아웃의 chart로 helm upgrade하므로 브랜치 작업 중에는 그 워크트리에서 실행합니다.
 
 ### E2E 테스트 (Playwright)
 

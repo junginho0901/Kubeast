@@ -22,6 +22,7 @@ var (
 		"anthropicvertexai",
 		"ollama",
 		"bedrock",
+		"claude-code",
 	)
 )
 

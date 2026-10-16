@@ -87,6 +87,20 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     ],
   },
   {
+    // A Claude Pro/Max subscription's `claude setup-token` value through Claude Code (personal use only)
+    id: 'claude-code',
+    label: 'Claude subscription (setup-token)',
+    icon: '🔑',
+    needsApiKey: true,
+    needsBaseUrl: false,
+    defaultApiKeyEnv: 'CLAUDE_CODE_OAUTH_TOKEN',
+    models: [
+      { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (recommended)', functionCalling: true },
+      { name: 'claude-opus-5-5', label: 'Claude Opus 5.5', functionCalling: true },
+      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (uses the least)', functionCalling: true },
+    ],
+  },
+  {
     id: 'gemini',
     label: 'Google Gemini',
     icon: '💎',

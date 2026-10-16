@@ -8,8 +8,9 @@ would hand the value over. These checks run when a config is created,
 updated, tested and resolved for use:
 
   - api_key_env: only the key variables the chart ships (OPENAI_API_KEY,
-    ANTHROPIC_API_KEY, GEMINI_API_KEY) or names starting with
-    KUBEAST_AI_KEY_ (operators add those to the secret).
+    ANTHROPIC_API_KEY, GEMINI_API_KEY, and CLAUDE_CODE_OAUTH_TOKEN for
+    provider claude-code only) or names starting with KUBEAST_AI_KEY_
+    (operators add those to the secret).
   - base_url: http(s) only, no credentials, and every address the host
     resolves to must be public — never cloud metadata, loopback, link-local
     or private ranges — unless the host is listed in
@@ -25,7 +26,10 @@ from typing import Callable, Dict, Iterable, List, Optional
 from urllib.parse import urlsplit
 
 API_KEY_ENV_PREFIX = "KUBEAST_AI_KEY_"
-API_KEY_ENV_NAMES = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"})
+# A Claude subscription token: only provider claude-code may name it (check_provider_fields).
+SUBSCRIPTION_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN"
+SUBSCRIPTION_PROVIDER = "claude-code"
+API_KEY_ENV_NAMES = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", SUBSCRIPTION_TOKEN_ENV})
 _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 AUTH_HEADERS = frozenset({
@@ -79,6 +83,22 @@ def check_api_key_env(name: Optional[str]) -> None:
     raise PolicyError(
         f"api_key_env must be one of {', '.join(sorted(API_KEY_ENV_NAMES))} or start with {API_KEY_ENV_PREFIX}"
     )
+
+
+def check_provider_fields(provider: Optional[str], key_envs: Iterable[Optional[str]], base_url: Optional[str]) -> None:
+    """A subscription token goes only to Claude Code (provider claude-code), which talks to Anthropic itself:
+    no other provider may name it, and claude-code takes no base URL and no provider API key variable."""
+    p = (provider or "").strip().lower()
+    names = [n for n in key_envs if n]
+    if p != SUBSCRIPTION_PROVIDER:
+        if SUBSCRIPTION_TOKEN_ENV in names:
+            raise PolicyError(f"{SUBSCRIPTION_TOKEN_ENV} holds a Claude subscription token; only provider {SUBSCRIPTION_PROVIDER} uses it")
+        return
+    if (base_url or "").strip():
+        raise PolicyError(f"provider {SUBSCRIPTION_PROVIDER} takes no base_url (Claude Code connects to Anthropic itself)")
+    for name in names:
+        if name != SUBSCRIPTION_TOKEN_ENV and not name.startswith(API_KEY_ENV_PREFIX):
+            raise PolicyError(f"provider {SUBSCRIPTION_PROVIDER} reads a setup-token from {SUBSCRIPTION_TOKEN_ENV} or a {API_KEY_ENV_PREFIX}* variable, not {name}")
 
 
 def check_extra_headers(headers: Optional[Dict[str, str]]) -> None:

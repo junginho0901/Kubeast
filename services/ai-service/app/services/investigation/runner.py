@@ -75,6 +75,9 @@ async def build_service(cfg: inv_settings.InvestigationSettings, token: str, clu
         if config_id is None:
             raise InvestigationError(f'model config "{cfg.model}" (features.alertInvestigation.model) not found')
     resolved = await resolve_model_config(config_id=config_id) if config_id is not None else await resolve_model_config()
+    if (resolved.provider or "").strip().lower() == "claude-code":
+        raise InvestigationError("the investigator does not run on provider claude-code (Claude subscription); "
+                                 "set features.alertInvestigation.model to a model config with an API key")
     service = AIService(
         provider=resolved.provider,
         model=resolved.model,
