@@ -78,6 +78,14 @@ def test_permission_gate_follows_what_k8s_service_asks_for():
     assert features.permitted_anywhere("k8s_diff", writer) is True
     assert features.permitted_anywhere("hygiene", reader) is False
     assert features.permitted_anywhere("k8s_count", reader) is True
+    # The Admin-only audit log and node tools need their global permission; the wildcard admin holds them.
+    for name, perm in [("audit_search", "admin.audit.read"), ("nodes_stats_summary", "admin.nodes.read"), ("nodes_log", "admin.nodes.read")]:
+        assert features.gated_names([name, "k8s_count"], feats, "self", reader) == ["k8s_count"]
+        assert features.gated_names([name], feats, "self", admin) == [name]
+        assert features.gated_names([name], feats, "self", _Token(set(), {perm})) == [name]
+        assert features.permitted_anywhere(name, reader) is False and features.permitted_anywhere(name, admin) is True
+    # gitops_status asks nothing beyond the cluster's own RBAC.
+    assert features.gated_names(["gitops_status"], feats, "self", bare) == ["gitops_status"]
     # filter_tools applies the same rule to tool definitions, in order.
     tools = _tools("hygiene", "k8s_get_pod_logs", "cost")
     assert _names(features.filter_tools(tools, feats, "self", reader)) == ["k8s_get_pod_logs", "cost"]

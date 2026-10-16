@@ -9,7 +9,7 @@ allowlist 방식 — 신규 tool 이 추가돼도 명시적으로 여기 넣기 
 from typing import Any, Dict, List
 
 
-# The same twenty-five names are the Read role's ai.tool.* permissions
+# The same twenty-six names are the Read role's ai.tool.* permissions
 # (auth-service repository.ReadAIToolPermissions) — keep the two lists the same.
 # The Admin-only read tool (hygiene, tools.ADMIN_READ_TOOLS) and the write preview
 # (k8s_diff, tools.WRITE_PREVIEW_TOOLS — needs the write's RBAC) are deliberately not here.
@@ -41,6 +41,7 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "k8s_jq_query",
         "k8s_tabular_query",
         "k8s_count",
+        "gitops_status",
     }
 )
 

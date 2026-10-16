@@ -181,6 +181,28 @@ async def test_query_and_diff_tools_pass_declared_arguments_only():
 
 
 @pytest.mark.asyncio
+async def test_gitops_and_admin_tools_pass_declared_arguments_only():
+    service = _service()
+    await execute_function_with_context(
+        service, "gitops_status", {"namespace": "argocd", "project": "shop", "only_problems": True, "limit": 20, "bogus": 1}, _ctx(),
+    )
+    service._call_tool_server.assert_awaited_once_with("gitops_status", {"namespace": "argocd", "project": "shop", "only_problems": True, "limit": 20})
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(
+        service, "audit_search", {"audit_action": "k8s.pod.delete", "since_time": "24h", "result": "failure", "all_clusters": True, "limit": 10, "offset": 20}, _ctx(),
+    )
+    service._call_tool_server.assert_awaited_once_with(
+        "audit_search", {"audit_action": "k8s.pod.delete", "since_time": "24h", "result": "failure", "all_clusters": True, "limit": 10, "offset": 20},
+    )
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "nodes_stats_summary", {"node": "n1", "rank_by": "cpu", "top": 5}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("nodes_stats_summary", {"node": "n1", "rank_by": "cpu", "top": 5})
+    service._call_tool_server.reset_mock()
+    await execute_function_with_context(service, "nodes_log", {"node": "n1", "source": "kubelet", "pattern": "error", "tail_lines": 100, "boot": -1}, _ctx())
+    service._call_tool_server.assert_awaited_once_with("nodes_log", {"node": "n1", "source": "kubelet", "pattern": "error", "tail_lines": 100, "boot": -1})
+
+
+@pytest.mark.asyncio
 async def test_new_read_tools_are_cached_like_the_others():
     service = _service()
     ctx = _ctx()

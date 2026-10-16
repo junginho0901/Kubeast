@@ -82,14 +82,16 @@ var clusterWideTools = map[string]struct{}{
 	"k8s_apply_manifest": {}, "k8s_create_resource": {},
 	"get_cluster_overview": {}, "get_node_metrics": {},
 	// PromQL is not bounded by a namespace; the hygiene report covers the cluster;
-	// a manifest preview names its own object.
+	// a manifest preview names its own object; the audit log and node internals
+	// are Admin-only and cluster-wide.
 	"prometheus_query": {}, "hygiene": {}, "k8s_diff": {},
+	"audit_search": {}, "nodes_stats_summary": {}, "nodes_log": {},
 }
 
 // namespaceAwareTools apply a namespace-scoped grant themselves — the handler
 // reads the token's "ns" claim and searches only those namespaces — so they
 // pass the gate without naming one.
-var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}}
+var namespaceAwareTools = map[string]struct{}{"k8s_find_resource": {}, "issues": {}, "cost": {}, "gitops_status": {}}
 
 // namespaceFreeTools return API schema, not object data, so a scoped grant
 // may call them without a namespace.

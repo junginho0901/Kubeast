@@ -17,7 +17,7 @@ const READ_TOOLS = new Set([
   'k8s_get_events', 'k8s_get_available_api_resources', 'k8s_get_cluster_configuration', 'k8s_check_service_connectivity', 'k8s_describe_resource',
   'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'logsearch',
   'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'resource_graph',
-  'k8s_jq_query', 'k8s_tabular_query', 'k8s_count',
+  'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
 ])
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 

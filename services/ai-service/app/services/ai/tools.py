@@ -506,6 +506,33 @@ K8S_READONLY_TOOLS: List[Dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "gitops_status",
+            "description": (
+                "Argo CD Application status in this cluster, read as the user: per application the sync status (Synced, OutOfSync, Unknown) "
+                "and revision, the health (Healthy, Progressing, Degraded, Suspended, Missing, Unknown) with its message, the last operation "
+                "(phase, message, times), error conditions, automated-sync settings and the resources that are out of sync or unhealthy "
+                "(at most 10), plus counts by sync and health status. Filter with namespace (the Application's own namespace, usually argocd), "
+                "name (needs namespace), project, destination_namespace, and only_problems=true to skip Synced+Healthy applications; problems "
+                "are listed first, at most limit (default 50, max 100). Use it for \"is the deploy in sync\", \"why is the app Degraded\", "
+                "\"what did the last sync fail on\". {\"status\":\"unavailable\"} means this cluster has no Argo CD (no applications.argoproj.io): "
+                "Applications live where Argo CD runs — when Argo CD is central, call it on the management cluster."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The Application's own namespace (usually argocd); empty = every namespace"},
+                    "name": {"type": "string", "description": "One Application (needs namespace)"},
+                    "project": {"type": "string", "description": "Only this Argo CD project"},
+                    "destination_namespace": {"type": "string", "description": "Only applications deploying into this namespace"},
+                    "only_problems": {"type": "boolean", "description": "Skip applications that are Synced and Healthy"},
+                    "limit": {"type": "integer", "description": "Applications to return (default 50, max 100)"},
+                },
+            },
+        },
+    },
 ]
 
 # Preview of a write, for users who may write: the server dry-runs the apply (the same RBAC as
@@ -556,6 +583,87 @@ ADMIN_READ_TOOLS: List[Dict] = [
                     "severity": {"type": "string", "description": "Only findings of this severity: critical, warning or info"},
                     "check": {"type": "string", "description": "Only findings of this check id (from the report's checks list)"},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "audit_search",
+            "description": (
+                "Kubeast's own audit log (Admin → Audit; permission admin.audit.read): who did what, when, with which result. Filters: "
+                "audit_action (the exact action, e.g. k8s.pod.delete, helm.release.rollback, ai.tool.execute, auth.login), service (auth, k8s, "
+                "helm, ai, admin), actor_email, target_id (the object or user the action targeted), namespace, result (success or failure), "
+                "since_time (a window such as 24h or 7d, at most 90d, or an RFC3339 time), until_time (RFC3339), limit (default 50, max 200) and offset; "
+                "the current cluster unless all_clusters=true (Kubeast-wide actions — auth.*, admin.*, user and role changes — carry no cluster, "
+                "so pass all_clusters=true for those). Each entry carries at, service, action, actor, target, cluster, namespace, "
+                "result, error and the before/after details cut to 500 characters. Use it for \"who deleted this\", \"what changed yesterday\", "
+                "\"which AI tool calls failed\". The read itself is recorded as admin.audit.read."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "audit_action": {"type": "string", "description": "Exact audit action, e.g. k8s.pod.delete"},
+                    "service": {"type": "string", "description": "auth, k8s, helm, ai or admin"},
+                    "actor_email": {"type": "string", "description": "Who acted"},
+                    "target_id": {"type": "string", "description": "What was acted on (object name, user id)"},
+                    "namespace": {"type": "string", "description": "Kubernetes namespace the action targeted"},
+                    "result": {"type": "string", "description": "success or failure"},
+                    "since_time": {"type": "string", "description": "Window such as 24h or 7d (max 90d), or an RFC3339 time"},
+                    "until_time": {"type": "string", "description": "RFC3339 end time"},
+                    "limit": {"type": "integer", "description": "Entries to return (default 50, max 200)"},
+                    "offset": {"type": "integer", "description": "Skip this many entries (paging)"},
+                    "all_clusters": {"type": "boolean", "description": "Every cluster instead of the current one"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "nodes_stats_summary",
+            "description": (
+                "The kubelet Summary API of a node through the API server proxy (Admin; permission admin.nodes.read, cluster RBAC nodes/proxy): "
+                "cpu cores used, memory working set / available / rss in MiB, root and image filesystem usage, network bytes and errors, "
+                "pressure stall information (PSI) for cpu, memory and io, swap, process count and the kubelet/runtime/pods system containers. "
+                "With node=<name> it adds the node's pods ranked by rank_by (memory, cpu or ephemeral_storage; top at most 20, default 10); "
+                "without node it reads every node (at most 20) at node level. Use it for \"what is eating memory on this node\", \"is the node "
+                "under pressure\", \"which pod fills ephemeral storage\". {\"status\":\"unavailable\"} means the API server could not reach the kubelet."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "node": {"type": "string", "description": "Node name; empty = every node at node level"},
+                    "top": {"type": "integer", "description": "Pods to list for the node (default 10, max 20)"},
+                    "rank_by": {"type": "string", "description": "memory (default), cpu or ephemeral_storage"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "nodes_log",
+            "description": (
+                "Node-level logs through the kubelet log query (Admin; permission admin.nodes.read, cluster RBAC nodes/proxy): source is a "
+                "service unit such as kubelet or containerd, or a file path under the node's log root such as /var/log/kubelet.log; narrow with "
+                "pattern (a regular expression), tail_lines (default 200, max 1000), since_time (24h, 7d or RFC3339), until_time (RFC3339) and boot (0 current, "
+                "-1 previous). Returns the raw lines (at most 64 KB). Use it when a node is NotReady, pods on one node fail to start, or the "
+                "kubelet reports image or volume errors. {\"status\":\"unavailable\"} means the kubelet does not answer log queries "
+                "(enableSystemLogQuery off — the reason says what to turn on); then fall back to k8s_get_events and nodes_stats_summary."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "node": {"type": "string", "description": "Node name"},
+                    "source": {"type": "string", "description": "Service unit (kubelet, containerd) or a log file path; default kubelet"},
+                    "pattern": {"type": "string", "description": "Regular expression the lines must match"},
+                    "tail_lines": {"type": "integer", "description": "Last N lines (default 200, max 1000)"},
+                    "since_time": {"type": "string", "description": "Window such as 1h, or an RFC3339 time"},
+                    "until_time": {"type": "string", "description": "RFC3339 end time"},
+                    "boot": {"type": "integer", "description": "System boot: 0 current, -1 previous"},
+                },
+                "required": ["node"],
             },
         },
     },
