@@ -37,6 +37,7 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.k8s_jq_query",
 	"ai.tool.k8s_tabular_query",
 	"ai.tool.k8s_count",
+	"ai.tool.gitops_status",
 }
 
 // InvestigatorPermissions is what the alert investigator's token carries: the

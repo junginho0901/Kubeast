@@ -57,6 +57,10 @@ REQUIRED_PERMISSIONS: Dict[str, tuple[str, str]] = {
     "helm_read": ("cluster", "resource.helm.read"),
     # A server dry run needs the write's RBAC; the Write role's edit permission stands for it.
     "k8s_diff": ("cluster", "resource.*.edit"),
+    # Admin-only: the audit log (auth-service asks for it) and node internals through nodes/proxy.
+    "audit_search": ("global", "admin.audit.read"),
+    "nodes_stats_summary": ("global", "admin.nodes.read"),
+    "nodes_log": ("global", "admin.nodes.read"),
 }
 
 
