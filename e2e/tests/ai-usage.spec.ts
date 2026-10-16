@@ -45,6 +45,12 @@ test.describe('AI usage accounting', () => {
     expect(after.model, 'model recorded').toBeTruthy()
     // tokens are either numbers (provider sent usage) or null (it did not) — never missing
     expect(['number', 'object']).toContain(typeof after.total_tokens)
+    // what ai-service sent is counted by itself, so it is always a number and never small for a real turn
+    expect(after.model_calls).toBeGreaterThanOrEqual(1)
+    expect(after.prompt_chars).toBeGreaterThan(1000)
+    // cache fields follow the token fields: numbers with usage, null without
+    expect(typeof after.cached_tokens).toBe(typeof after.total_tokens)
+    expect(typeof after.cache_creation_tokens).toBe(typeof after.total_tokens)
 
     // The aggregated view groups it under the admin user.
     const usage = await request.get('/api/v1/auth/admin/ai-usage', {
@@ -58,6 +64,8 @@ test.describe('AI usage accounting', () => {
     expect(mine, JSON.stringify(body.rows)).toBeTruthy()
     expect(mine!.requests).toBeGreaterThanOrEqual(1)
     expect(mine!.tool_calls).toBeGreaterThanOrEqual(0)
+    expect(mine!.prompt_chars).toBeGreaterThanOrEqual(after.prompt_chars)
+    expect(mine!.cached_tokens).toBeGreaterThanOrEqual(0)
 
     // Unknown group is rejected, not silently defaulted.
     const bad = await request.get('/api/v1/auth/admin/ai-usage', {

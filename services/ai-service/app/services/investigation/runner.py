@@ -143,7 +143,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
         if not final and tools:
             kwargs.update(tools=tools, tool_choice="auto")
         resp = await asyncio.wait_for(service.client.chat.completions.create(**kwargs, timeout=min(120.0, remaining())), timeout=remaining())
-        usage_acct.add_usage(usage, getattr(resp, "usage", None))
+        usage_acct.add_usage(usage, getattr(resp, "usage", None), prompt_chars=usage_acct.prompt_chars(messages, kwargs.get("tools")))
         msg = resp.choices[0].message
         calls = list(getattr(msg, "tool_calls", None) or []) if not final else []
         if not calls:

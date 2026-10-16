@@ -15,6 +15,8 @@ type AIUsageRow struct {
 	PromptTokens     int64   `json:"prompt_tokens"`
 	CompletionTokens int64   `json:"completion_tokens"`
 	TotalTokens      int64   `json:"total_tokens"`
+	CachedTokens     int64   `json:"cached_tokens"`  // prompt tokens the provider served from its cache
+	PromptChars      int64   `json:"prompt_chars"`   // what ai-service sent, counted by itself (system, tools, history, message)
 	TokenRequests    int64   `json:"token_requests"` // requests whose provider reported usage
 	ToolCalls        int64   `json:"tool_calls"`
 	AvgDurationMs    float64 `json:"avg_duration_ms"`
@@ -50,6 +52,8 @@ func (r *Repository) AIUsage(ctx context.Context, since, until time.Time, group 
                COALESCE(SUM((after->>'prompt_tokens')::bigint), 0),
                COALESCE(SUM((after->>'completion_tokens')::bigint), 0),
                COALESCE(SUM((after->>'total_tokens')::bigint), 0),
+               COALESCE(SUM((after->>'cached_tokens')::bigint), 0),
+               COALESCE(SUM((after->>'prompt_chars')::bigint), 0),
                COUNT(after->>'total_tokens') AS token_requests,
                COALESCE(SUM((after->>'tool_calls')::bigint), 0),
                COALESCE(AVG((after->>'duration_ms')::numeric), 0),
@@ -72,7 +76,7 @@ func (r *Repository) AIUsage(ctx context.Context, since, until time.Time, group 
 		var row AIUsageRow
 		var last time.Time
 		if err := rows.Scan(&row.Key, &row.Requests, &row.Failures, &row.PromptTokens, &row.CompletionTokens,
-			&row.TotalTokens, &row.TokenRequests, &row.ToolCalls, &row.AvgDurationMs, &last); err != nil {
+			&row.TotalTokens, &row.CachedTokens, &row.PromptChars, &row.TokenRequests, &row.ToolCalls, &row.AvgDurationMs, &last); err != nil {
 			return nil, fmt.Errorf("ai usage scan: %w", err)
 		}
 		row.LastAt = last.UTC().Format(time.RFC3339)

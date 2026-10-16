@@ -135,6 +135,7 @@ export default function AdminAIUsage() {
               <th className="px-3 py-2 text-left">{groupLabel[group]}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.requests', '요청')}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.promptTokens', '입력 토큰')}</th>
+              <th className="px-3 py-2 text-right">{tr('adminAIUsage.cachedTokens', '캐시 적중')}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.completionTokens', '출력 토큰')}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.totalTokens', '합계 토큰')}</th>
               <th className="px-3 py-2 text-right">{tr('adminAIUsage.toolCalls', '툴 호출')}</th>
@@ -146,13 +147,13 @@ export default function AdminAIUsage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
                   {tr('common.loading', '불러오는 중…')}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
                   {tr('common.noSearchResults', 'No results found.')}
                 </td>
               </tr>
@@ -161,7 +162,19 @@ export default function AdminAIUsage() {
                 <tr key={r.key} className="border-t border-slate-800 hover:bg-slate-900/40">
                   <td className="px-3 py-2 text-slate-100"><span className="block max-w-[240px] truncate" title={r.key || undefined}>{r.key || '-'}</span></td>
                   <td className="px-3 py-2 text-right text-slate-200">{fmtInt(r.requests)}</td>
-                  <td className="px-3 py-2 text-right text-slate-300">{fmtInt(r.prompt_tokens)}</td>
+                  <td
+                    className="px-3 py-2 text-right text-slate-300"
+                    title={tr('adminAIUsage.avgPromptChars', '보낸 프롬프트 평균 {{n}}자(시스템·도구 정의·이력·메시지)', { n: fmtInt(r.requests > 0 ? Math.round(r.prompt_chars / r.requests) : 0) })}
+                  >
+                    {fmtInt(r.prompt_tokens)}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right text-slate-300"
+                    title={tr('adminAIUsage.cachedShare', '입력 토큰 중 {{pct}}%가 제공자 캐시에서 왔습니다.', { pct: r.prompt_tokens > 0 ? Math.round((r.cached_tokens / r.prompt_tokens) * 100) : 0 })}
+                  >
+                    {fmtInt(r.cached_tokens)}
+                    {r.prompt_tokens > 0 ? <span className="ml-1 text-xs text-slate-500">{Math.round((r.cached_tokens / r.prompt_tokens) * 100)}%</span> : null}
+                  </td>
                   <td className="px-3 py-2 text-right text-slate-300">{fmtInt(r.completion_tokens)}</td>
                   <td className="px-3 py-2 text-right text-slate-100">
                     {fmtInt(r.total_tokens)}

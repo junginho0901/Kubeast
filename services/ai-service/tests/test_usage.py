@@ -34,3 +34,42 @@ def test_payload_carries_tokens_when_seen():
         usage=t, tool_calls=0, iterations=1, duration_ms=800,
     )
     assert (p["prompt_tokens"], p["completion_tokens"], p["total_tokens"]) == (10, 5, 15)
+    assert (p["cached_tokens"], p["cache_creation_tokens"], p["model_calls"]) == (0, 0, 1)
+
+
+def test_cached_tokens_and_prompt_size_are_summed_per_call():
+    t = usage.new_turn_usage()
+    # OpenAI-style object: prompt_tokens_details.cached_tokens
+    usage.add_usage(t, SimpleNamespace(prompt_tokens=1000, completion_tokens=20, total_tokens=1020,
+                                       prompt_tokens_details=SimpleNamespace(cached_tokens=800)), prompt_chars=4000)
+    # Anthropic adapter: the same field plus cache_creation_input_tokens
+    usage.add_usage(t, {"prompt_tokens": 1200, "completion_tokens": 30, "total_tokens": 1230,
+                        "prompt_tokens_details": {"cached_tokens": 0}, "cache_creation_input_tokens": 1100}, prompt_chars=4100)
+    # A provider without usage still counts the call and what we sent
+    usage.add_usage(t, None, prompt_chars=4200)
+    assert t["model_calls"] == 3 and t["prompt_chars"] == 12300
+    assert t["cached_tokens"] == 800 and t["cache_creation_tokens"] == 1100
+    assert t["prompt_tokens"] == 2200 and t["seen"] is True
+    p = usage.chat_complete_payload(session_id="s1", provider="anthropic", model="m", cluster="c", usage=t,
+                                    tool_calls=1, iterations=2, duration_ms=10)
+    assert p["cached_tokens"] == 800 and p["cache_creation_tokens"] == 1100 and p["prompt_chars"] == 12300 and p["model_calls"] == 3
+
+
+def test_payload_without_usage_keeps_prompt_chars_and_nulls_cache_fields():
+    t = usage.add_usage(usage.new_turn_usage(), None, prompt_chars=900)
+    p = usage.chat_complete_payload(session_id="s1", provider="ollama", model="m", cluster="c", usage=t,
+                                    tool_calls=0, iterations=1, duration_ms=10)
+    assert p["prompt_tokens"] is None and p["cached_tokens"] is None and p["cache_creation_tokens"] is None
+    assert p["prompt_chars"] == 900 and p["model_calls"] == 1
+
+
+def test_prompt_chars_counts_messages_and_tools_and_event_shape():
+    messages = [{"role": "system", "content": "You are Kubeast."}, {"role": "user", "content": "파드 상태"}]
+    tools = [{"type": "function", "function": {"name": "k8s_get_resources", "parameters": {"type": "object"}}}]
+    only_messages = usage.prompt_chars(messages)
+    assert only_messages > len("You are Kubeast.") + len("파드 상태")
+    assert usage.prompt_chars(messages, tools) > only_messages
+    assert usage.prompt_chars([], None) == 0
+    ev = usage.usage_event(SimpleNamespace(prompt_tokens=10, completion_tokens=2, total_tokens=0,
+                                           prompt_tokens_details=SimpleNamespace(cached_tokens=4)), prompt_chars=77)
+    assert ev == {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12, "cached_tokens": 4, "prompt_chars": 77}

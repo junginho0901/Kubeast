@@ -130,6 +130,7 @@ async def suggest_optimization_stream(
             + "\n\n"
         )
 
+        opt_prompt_chars = usage_acct.prompt_chars([{"role": "system", "content": system}, {"role": "user", "content": prompt}])
         if stream_usage is not None:
             yield (
                 "data: "
@@ -137,17 +138,13 @@ async def suggest_optimization_stream(
                     {
                         "kind": "usage",
                         "usage_phase": "suggest_optimization_stream",
-                        "usage": {
-                            "prompt_tokens": stream_usage.prompt_tokens,
-                            "completion_tokens": stream_usage.completion_tokens,
-                            "total_tokens": stream_usage.total_tokens,
-                        },
+                        "usage": usage_acct.usage_event(stream_usage, prompt_chars=opt_prompt_chars),
                     },
                     ensure_ascii=False,
                 )
                 + "\n\n"
             )
-        usage_acct.add_usage(turn_usage, stream_usage)
+        usage_acct.add_usage(turn_usage, stream_usage, prompt_chars=opt_prompt_chars)
     except (asyncio.CancelledError, GeneratorExit):
         # The client went away mid-stream (Starlette finalises the generator). The model has
         # spent tokens, so the call is still accounted for; nothing may be awaited or yielded here.
@@ -437,6 +434,10 @@ async def session_chat_stream(
                     timeout=60.0,
                     stream=True,
                 )
+                if service.provider == "openai" and session_id:
+                    # Routes the session's turns to the same cache shard on older OpenAI models; newer ones ignore it.
+                    _fc_kwargs["prompt_cache_key"] = f"kubeast-session-{session_id}"
+                call_prompt_chars = usage_acct.prompt_chars(messages, tools)
                 try:
                     stream = await service.client.chat.completions.create(**_fc_kwargs, tool_choice="auto", stream_options={"include_usage": True})
                 except Exception as tc_err:
@@ -484,19 +485,15 @@ async def session_chat_stream(
                                 collected_tool_calls[idx]["arguments"] += tc_delta.function.arguments
 
                 # usage 로그 + 턴 합계
-                usage_acct.add_usage(turn_usage, stream_usage)
+                usage_acct.add_usage(turn_usage, stream_usage, prompt_chars=call_prompt_chars)
                 if stream_usage is not None:
-                    log.debug("[TOKENS][session_chat iteration %s] prompt=%s, completion=%s, total=%s", iteration, stream_usage.prompt_tokens, stream_usage.completion_tokens, stream_usage.total_tokens)
+                    log.debug("[TOKENS][session_chat iteration %s] prompt=%s, completion=%s, total=%s, prompt_chars=%s", iteration, stream_usage.prompt_tokens, stream_usage.completion_tokens, stream_usage.total_tokens, call_prompt_chars)
                     yield (
                         "data: "
                         + json.dumps(
                             {
                                 "usage_phase": f"session_chat_iteration_{iteration}",
-                                "usage": {
-                                    "prompt_tokens": stream_usage.prompt_tokens,
-                                    "completion_tokens": stream_usage.completion_tokens,
-                                    "total_tokens": stream_usage.total_tokens,
-                                },
+                                "usage": usage_acct.usage_event(stream_usage, prompt_chars=call_prompt_chars),
                             },
                             ensure_ascii=False,
                         )

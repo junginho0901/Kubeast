@@ -1716,6 +1716,8 @@ export interface AIUsageRow {
   requests: number
   failures: number
   prompt_tokens: number
+  cached_tokens: number
+  prompt_chars: number
   completion_tokens: number
   total_tokens: number
   token_requests: number
