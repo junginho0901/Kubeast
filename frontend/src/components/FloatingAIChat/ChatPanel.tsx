@@ -11,6 +11,7 @@ import { api } from '@/services/api'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { PageContextSnapshot } from '@/components/PageContext'
 import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot'
+import { chatErrorText } from '@/utils/chatError'
 
 import { MessageList, type DisplayMessage } from './MessageList'
 import { InputArea } from './InputArea'
@@ -189,7 +190,9 @@ export function ChatPanel({
   }, [messages, isStreaming, streamState.userMessage, streamState.updatedAt])
 
   const streamingContent = isStreaming ? streamState.assistantContent : undefined
-  const error = streamState.status === 'error' ? streamState.error : null
+  const error = streamState.status === 'error' && streamState.error
+    ? chatErrorText(t, streamState.error, streamState.errorKey, streamState.errorArgs)
+    : null
   // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.
   const disabled = createSessionMutation.isPending
 

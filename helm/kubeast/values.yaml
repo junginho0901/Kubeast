@@ -330,11 +330,18 @@ ai:
   # into one running summary (same model, masked, at most summary.maxChars
   # characters) kept per session, so a long conversation keeps its earlier
   # facts without growing the prompt. Each summary is audited as ai.chat.summarize.
+  # budget: token limits per session (sessionTokens) and per user per UTC day
+  # (userDailyTokens), counted from the ai.chat.complete audit rows like the
+  # Admin AI usage view; a turn over a limit is refused before the model is
+  # called and audited as ai.chat.budget_exceeded. 0 turns a limit off.
   chat:
     historyMessages: 10
     summary:
       enabled: true
       maxChars: 1500
+    budget:
+      sessionTokens: 0
+      userDailyTokens: 0
   # Write model responses, tool arguments and tool results to the ai-service
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.

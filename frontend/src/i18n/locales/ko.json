@@ -1741,6 +1741,10 @@
     "deleteTitle": "대화 삭제",
     "confirmDeleteSelectedWithStreaming": "선택한 {{count}}개의 대화를 삭제하시겠습니까?\\n(현재 답변 생성 중인 대화가 포함되어 있어 중단 후 삭제됩니다.)",
     "confirmDeleteSelected": "선택한 {{count}}개의 대화를 삭제하시겠습니까?",
+    "error": {
+      "budgetSession": "이 대화는 토큰 {{used}}개를 써서 대화 예산 {{limit}}개를 넘었습니다. 이어서 하려면 새 대화를 시작하세요.",
+      "budgetUserDaily": "오늘(UTC) 토큰 {{used}}개를 써서 하루 예산 {{limit}}개를 넘었습니다. 예산은 UTC 00:00에 초기화됩니다."
+    },
     "errorAnswer": "죄송합니다. 답변을 생성하는 중 오류가 발생했습니다: {{error}}",
     "errorSessionCreate": "세션 생성에 실패했습니다: {{error}}",
     "quickQuestions": [

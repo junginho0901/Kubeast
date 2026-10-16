@@ -15,6 +15,9 @@ export interface ChatStreamState {
   toolCalls: any[]
   streamingPhase: StreamingPhase | null
   error: string | null
+  // A refusal the server writes for the screen (token budget): catalog key and values (utils/chatError)
+  errorKey: string | null
+  errorArgs: Record<string, unknown> | null
   updatedAt: number
 }
 
@@ -30,6 +33,8 @@ const initialState: ChatStreamState = {
   toolCalls: [],
   streamingPhase: null,
   error: null,
+  errorKey: null,
+  errorArgs: null,
   updatedAt: Date.now(),
 }
 
@@ -236,6 +241,8 @@ export class ChatStreamManager {
       toolCalls: [],
       streamingPhase: 'waiting',
       error: null,
+      errorKey: null,
+      errorArgs: null,
     })
 
     try {
@@ -417,6 +424,8 @@ export class ChatStreamManager {
                 status: 'error',
                 isStreaming: false,
                 error: String(data.error),
+                errorKey: typeof data.error_key === 'string' ? data.error_key : null,
+                errorArgs: data.error_args && typeof data.error_args === 'object' ? data.error_args : null,
                 streamingPhase: null,
               }, true)
               return

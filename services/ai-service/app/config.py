@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     AI_CHAT_HISTORY_MESSAGES: int = 10
     AI_CHAT_SUMMARY_ENABLED: bool = True
     AI_CHAT_SUMMARY_MAX_CHARS: int = 1500
+    # Chat token budgets, 0 = off (chart ai.chat.budget.*): a turn is refused before the model is called once the
+    # session's or the user's UTC-day ai.chat.complete total_tokens reach the limit.
+    AI_CHAT_BUDGET_SESSION_TOKENS: int = 0
+    AI_CHAT_BUDGET_USER_DAILY_TOKENS: int = 0
     
     class Config:
         # 프로젝트 루트의 .env 파일 사용

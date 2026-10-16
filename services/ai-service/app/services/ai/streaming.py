@@ -15,6 +15,7 @@ import json
 import time
 from typing import Callable, Optional, TYPE_CHECKING
 
+from app.services.ai import budget as budget_mod
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import usage as usage_acct
@@ -304,7 +305,29 @@ async def session_chat_stream(
         if not session:
             yield f"data: {json.dumps({'type': 'error', 'content': 'Session not found'})}\n\n"
             return
-        
+
+        # Token budget (ai.chat.budget.*, off by default): refused before the message is stored or the model called.
+        over = await budget_mod.check(db, session_id, (audit_actor or {}).get('user_id'))
+        if over is not None:
+            if audit_actor:
+                await write_audit(
+                    action='ai.chat.budget_exceeded',
+                    actor_user_id=audit_actor.get('user_id'),
+                    actor_email=audit_actor.get('email'),
+                    target_type='session',
+                    target_id=session_id,
+                    cluster=_perm.effective_cluster(service),
+                    after={'session_id': session_id, 'budget': over.budget, 'used': over.used, 'limit': over.limit},
+                    request_ip=(audit_http or {}).get('ip'),
+                    user_agent=(audit_http or {}).get('user_agent'),
+                    request_id=(audit_http or {}).get('request_id'),
+                    path=(audit_http or {}).get('path'),
+                    result='failure',
+                    error=over.message(),
+                )
+            yield f"data: {json.dumps(over.event(), ensure_ascii=False)}\n\n"
+            return
+
         # 사용자 메시지 저장
         await db.add_message(session_id, "user", message)
 
