@@ -174,6 +174,26 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handleHygiene,
 	})
 	register(ToolDefinition{
+		Name:        "gitops_status",
+		Description: "Argo CD Applications in this cluster: sync, health, last operation, error conditions, out-of-sync resources",
+		Handler:     handleGitopsStatus,
+	})
+	register(ToolDefinition{
+		Name:        "audit_search",
+		Description: "Kubeast audit log entries by action, actor, target, result and time — Admin",
+		Handler:     handleAuditSearch,
+	})
+	register(ToolDefinition{
+		Name:        "nodes_stats_summary",
+		Description: "Kubelet stats summary of a node (cpu, memory, fs, network, PSI, top pods) — Admin",
+		Handler:     handleNodesStatsSummary,
+	})
+	register(ToolDefinition{
+		Name:        "nodes_log",
+		Description: "Kubelet / system log lines of a node through the API server proxy — Admin",
+		Handler:     handleNodesLog,
+	})
+	register(ToolDefinition{
 		Name:        "policy_reports",
 		Description: "PolicyReport / ClusterPolicyReport summary or result rows (Kyverno, Trivy Operator …)",
 		Handler:     handlePolicyReports,
