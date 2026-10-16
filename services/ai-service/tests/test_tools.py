@@ -31,6 +31,7 @@ EXPECTED_READONLY_NAMES = {
     "k8s_jq_query",
     "k8s_tabular_query",
     "k8s_count",
+    "gitops_status",
 }
 
 EXPECTED_WRITE_NAMES = {

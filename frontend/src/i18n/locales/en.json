@@ -3374,6 +3374,10 @@
         "ai_tool_k8s_tabular_query": "Read tool: a resource list as chosen columns",
         "ai_tool_k8s_count": "Read tool: count objects, grouped by a field",
         "ai_tool_k8s_diff": "Write tool: preview a manifest's changes (server dry run, nothing applied)",
+        "ai_tool_gitops_status": "Read tool: Argo CD Application status (sync, health, operation, conditions)",
+        "ai_tool_audit_search": "Admin tool: search the Kubeast audit log",
+        "ai_tool_nodes_stats_summary": "Admin tool: a node's kubelet stats summary (cpu, memory, fs, PSI, top pods)",
+        "ai_tool_nodes_log": "Admin tool: a node's kubelet and system logs",
         "ai_tool_k8s_execute_command": "Run kubectl commands",
         "ai_tool_helm_execute": "AI runs Helm commands (including writes)",
         "ai_mcp_use": "Connect an external AI agent (MCP) to this cluster",
@@ -3401,6 +3405,7 @@
         "admin_hygiene_export": "Export the cluster hygiene report (CSV/JSON)",
         "admin_hygiene_signoff": "Sign off a cluster hygiene report",
         "admin_logsearch_query": "Run LogQL against the log store (cluster and namespace matchers are added)",
+        "admin_nodes_read": "Read node internals through the API server proxy: kubelet stats summary and node logs",
         "admin_investigations_read": "View alert investigation reports"
       }
     },

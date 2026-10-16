@@ -114,6 +114,19 @@ var argRules = map[string]argCheck{
 	"sort_by":        checkFieldPath,
 	"group_by":       checkFieldPath,
 	"label_selector": checkLabelSelector,
+	// Argo CD, the audit log and node internals.
+	"project":               checkObjectName,
+	"destination_namespace": checkDNSLabel,
+	"audit_action":          checkAuditAction,
+	"actor_email":           checkPrintable(200),
+	"target_id":             checkPrintable(200),
+	"result":                checkEnum("success", "failure"),
+	"since_time":            checkFromTime,
+	"until_time":            checkRFC3339,
+	"node":                  checkObjectName,
+	"rank_by":               checkEnum("memory", "cpu", "ephemeral_storage"),
+	"source":                checkLogSource,
+	"pattern":               checkPrintable(200),
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -158,6 +171,60 @@ func checkSince(field, v string) error {
 	d, err := time.ParseDuration(v)
 	if err != nil || d <= 0 || d > 7*24*time.Hour {
 		return badArg(field, v, "a duration between 1s and 7d")
+	}
+	return nil
+}
+
+var (
+	auditActionRe = regexp.MustCompile(`^[a-z][a-z0-9_.*-]{0,79}$`)
+	rfc3339Re     = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$`)
+	logSourceRe   = regexp.MustCompile(`^[A-Za-z0-9_/][A-Za-z0-9_./-]{0,119}$`)
+)
+
+func checkAuditAction(field, v string) error {
+	if !auditActionRe.MatchString(v) {
+		return badArg(field, v, "an audit action such as k8s.pod.delete or ai.tool.execute")
+	}
+	return nil
+}
+
+// checkPrintable accepts one line of printable text up to n characters.
+func checkPrintable(n int) argCheck {
+	return func(field, v string) error {
+		if len(v) > n || strings.ContainsAny(v, "\n\r\x00") {
+			return badArg(field, v, fmt.Sprintf("one line of at most %d characters", n))
+		}
+		for _, r := range v {
+			if r < 0x20 || r == 0x7f {
+				return badArg(field, v, "printable text")
+			}
+		}
+		return nil
+	}
+}
+
+func checkFromTime(field, v string) error {
+	if len(v) > 40 {
+		return badArg(field, v, "a window such as 24h or 7d, or an RFC3339 time")
+	}
+	if _, err := parseFromTime(v, time.Now()); err != nil {
+		return badArg(field, v, err.Error())
+	}
+	return nil
+}
+
+func checkRFC3339(field, v string) error {
+	if !rfc3339Re.MatchString(v) {
+		return badArg(field, v, "an RFC3339 time such as 2026-10-16T09:00:00Z")
+	}
+	return nil
+}
+
+// checkLogSource accepts a service name (kubelet, containerd) or an absolute
+// path under the kubelet's log root; ".." never passes.
+func checkLogSource(field, v string) error {
+	if !logSourceRe.MatchString(v) || strings.Contains(v, "..") {
+		return badArg(field, v, "a service name such as kubelet or a file path such as /var/log/kubelet.log")
 	}
 	return nil
 }

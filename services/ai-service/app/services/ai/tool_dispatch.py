@@ -33,11 +33,18 @@ def _flag(value) -> bool:
 
 # Feature tools (tool-server → k8s-service): the string, boolean and integer
 # arguments each one declares. Anything else the model sends is dropped.
+# Integer arguments that may be zero or negative (a system boot index: 0 current, -1 previous).
+SIGNED_INT_ARGS = {"boot"}
+
 FEATURE_TOOL_ARGS = {
     "issues": ({"namespace", "severity"}, set(), {"window_minutes"}),
     "prometheus_query": ({"promql", "since"}, {"range"}, {"step"}),
     "logsearch": ({"namespace", "text", "pod", "container", "workload_kind", "workload_name", "since"}, {"regex"}, {"limit"}),
     "hygiene": ({"severity", "check"}, set(), set()),
+    "gitops_status": ({"namespace", "name", "project", "destination_namespace"}, {"only_problems"}, {"limit"}),
+    "audit_search": ({"audit_action", "service", "actor_email", "target_id", "namespace", "result", "since_time", "until_time"}, {"all_clusters"}, {"limit", "offset"}),
+    "nodes_stats_summary": ({"node", "rank_by"}, set(), {"top"}),
+    "nodes_log": ({"node", "source", "pattern", "since_time", "until_time"}, set(), {"tail_lines", "boot"}),
     "policy_reports": ({"view", "namespace", "policy", "kind", "results", "severities", "search"}, set(), {"limit"}),
     "helm_read": ({"what", "namespace", "release", "status", "section"}, set(), {"revision", "from", "to"}),
     "cost": ({"window", "aggregate", "namespace"}, set(), set()),
@@ -447,8 +454,15 @@ async def execute_function_with_context(
                 if _flag(function_args.get(key)):
                     tool_args[key] = True
             for key in spec[2]:
-                if function_args.get(key) is not None:
-                    tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
+                if function_args.get(key) is None:
+                    continue
+                if key in SIGNED_INT_ARGS:
+                    try:
+                        tool_args[key] = int(function_args.get(key))  # type: ignore[arg-type]
+                    except (TypeError, ValueError):
+                        pass
+                    continue
+                tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
             result = await service._call_tool_server(function_name, tool_args)
 
         elif function_name == "k8s_get_available_api_resources":
