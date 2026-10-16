@@ -572,6 +572,7 @@ kind 노드는 postgres·redis·nginx 이미지를 레지스트리에서 당기�
 AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니다. 노트북에서 Ollama를 돌린다면
 `kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:8b`, `host.docker.internal:11434`
 — dev 값이 그 주소를 `ai.baseUrlAllowedHosts`와 NetworkPolicy에서 허용)로 등록하면 되고, 리셋 뒤에도 다시 적용합니다.
+노트북에서 추론을 돌리지 않고 e2e를 전부 돌리려면 `scripts/kind-model-haiku.sh up <키 파일>`로 Anthropic Claude Haiku(`claude-haiku-5-5`, 가장 싼 모델)를 그 실행 동안의 기본 모델로 두고(키는 파일에서 Secret `kubeast-ai-keys`로만 들어가고 출력되지 않음), 끝나면 `down`으로 Ollama 기본·키 제거까지 되돌립니다.
 
 ### E2E 테스트 (Playwright)
 

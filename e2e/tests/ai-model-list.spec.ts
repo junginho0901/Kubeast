@@ -2,7 +2,8 @@ import { test, expect, type Page } from '@playwright/test'
 
 // Admin → AI Models → Add Model: the model dropdown lists what the provider itself lists (the dev Ollama, through
 // ai-service), and falls back to the built-in list with a note when the provider's list cannot be read (Anthropic
-// without ANTHROPIC_API_KEY in the dev install). The models compared come from the same API the form calls.
+// without ANTHROPIC_API_KEY in the dev install; with the key — scripts/kind-model-haiku.sh up — Anthropic lists its
+// own models like Ollama does). The models compared come from the same API the form calls.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const OLLAMA = 'http://host.docker.internal:11434/v1'
@@ -15,7 +16,7 @@ async function openOptions(page: Page): Promise<string[]> {
 }
 
 test.describe('AI model list from the provider', () => {
-  test('Ollama lists its own models; Anthropic without a key falls back to the built-in list', async ({ page }) => {
+  test('Ollama lists its own models; Anthropic lists its own with a key and falls back to the built-in list without', async ({ page }) => {
     const res = await page.request.post('/api/v1/ai/model-configs/models', { headers: XRW, data: { provider: 'ollama', base_url: OLLAMA } })
     expect(res.status()).toBe(200)
     const listed = await res.json()
@@ -37,12 +38,17 @@ test.describe('AI model list from the provider', () => {
     const anthropic = await (await page.request.post('/api/v1/ai/model-configs/models', {
       headers: XRW, data: { provider: 'anthropic', api_key_env: 'ANTHROPIC_API_KEY' },
     })).json()
-    expect(anthropic.models).toEqual([])
-    expect(anthropic.error).toContain('ANTHROPIC_API_KEY')
-
     await page.getByTestId('provider-select').click()
     await page.getByTestId('provider-option-anthropic').click()
-    await expect(source).toHaveText(/Built-in list|기본 목록/, { timeout: 15_000 })
-    expect(await openOptions(page)).toContain('claude-haiku-5-5')
+    if (anthropic.models?.length) {
+      // The dev install has ANTHROPIC_API_KEY (scripts/kind-model-haiku.sh up): the provider's own list, as for Ollama.
+      await expect(source).toHaveText(new RegExp(`\\(${anthropic.models.length}\\)|${anthropic.models.length}개`), { timeout: 15_000 })
+      expect(await openOptions(page)).toEqual(anthropic.models.map((m: { name: string }) => m.name))
+      expect(anthropic.models.map((m: { name: string }) => m.name)).toContain('claude-haiku-5-5')
+    } else {
+      expect(anthropic.error).toContain('ANTHROPIC_API_KEY')
+      await expect(source).toHaveText(/Built-in list|기본 목록/, { timeout: 15_000 })
+      expect(await openOptions(page)).toContain('claude-haiku-5-5')
+    }
   })
 })
