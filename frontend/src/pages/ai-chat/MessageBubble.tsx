@@ -1,4 +1,5 @@
 import { Bot, User, Check, Copy } from 'lucide-react'
+import { turnUsageText } from '@/utils/turnUsage'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -24,6 +25,7 @@ interface Props {
 export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownloadJson, t }: Props) {
   const messageKey = message.id != null ? `db-${message.id}` : `tmp-${idx}`
   const showCopyButton = message.role === 'assistant' && !message.isTemporary && Boolean(message.content)
+  const usage = message.role === 'assistant' && !message.isTemporary ? turnUsageText(t, message.usage) : null
   const isCopied = copiedMessageKey === messageKey
   return (
     <div
@@ -123,6 +125,11 @@ export function MessageBubble({ message, idx, copiedMessageKey, onCopy, onDownlo
         })()}
         {message.role === 'assistant' && (
           <div className="not-prose mt-3 flex h-7 justify-end gap-2" data-testid="message-actions">
+            {usage && (
+              <span className="mr-auto self-center text-[11px] text-slate-400" title={usage.title} data-testid="turn-usage">
+                {usage.text}
+              </span>
+            )}
             {showCopyButton && (
               <button
                 type="button"

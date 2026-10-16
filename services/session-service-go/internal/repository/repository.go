@@ -187,7 +187,7 @@ func (r *Repository) DeleteSession(ctx context.Context, id string) error {
 // GetMessages retrieves messages for a session, ordered chronologically.
 func (r *Repository) GetMessages(ctx context.Context, sessionID string, limit int) ([]model.Message, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, session_id, role, content, tool_calls, created_at
+		`SELECT id, session_id, role, content, tool_calls, usage, created_at
 		FROM messages
 		WHERE session_id = $1
 		ORDER BY created_at DESC, id DESC
@@ -201,7 +201,7 @@ func (r *Repository) GetMessages(ctx context.Context, sessionID string, limit in
 	var messages []model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.ToolCalls, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.ToolCalls, &m.Usage, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		messages = append(messages, m)

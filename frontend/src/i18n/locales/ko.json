@@ -1752,7 +1752,12 @@
       "현재 Node 상태를 알려줘",
       "kube-system Namespace의 Pod 상태를 확인해줘",
       "default Namespace의 Service 목록을 조회해줘"
-    ]
+    ],
+    "turnUsage": {
+      "line": "입력 {{prompt}} · 출력 {{completion}} 토큰",
+      "cached": " · 캐시 {{pct}}%",
+      "calls": "모델 호출 {{count}}회 · {{model}}"
+    }
   },
   "cost": {
     "title": "Cost",

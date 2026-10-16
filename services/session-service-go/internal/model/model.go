@@ -23,6 +23,7 @@ type Message struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
 	ToolCalls *json.RawMessage `json:"tool_calls"`
+	Usage     *json.RawMessage `json:"usage,omitempty"` // the answered turn's tokens (assistant messages)
 	CreatedAt time.Time        `json:"created_at"`
 }
 
@@ -83,5 +84,6 @@ type MessageResponse struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
 	ToolCalls *json.RawMessage `json:"tool_calls"`
+	Usage     *json.RawMessage `json:"usage,omitempty"`
 	CreatedAt time.Time        `json:"created_at"`
 }

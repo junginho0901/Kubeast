@@ -42,6 +42,8 @@ class Message(Base):
     role = Column(String, nullable=False)  # user, assistant, tool
     content = Column(Text, nullable=False)
     tool_calls = Column(JSON, nullable=True)  # Function calling 정보
+    # The answered turn's token usage (00018): prompt/completion/cached tokens, model calls, model
+    usage = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
     
     # Relationships
@@ -150,7 +152,7 @@ class AlertInvestigation(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 17
+REQUIRED_SCHEMA_VERSION = 18
 
 
 async def read_schema_version(engine) -> int:
@@ -302,7 +304,8 @@ class DatabaseService:
         session_id: str,
         role: str,
         content: str,
-        tool_calls: Optional[List[Dict]] = None
+        tool_calls: Optional[List[Dict]] = None,
+        usage: Optional[Dict] = None,
     ) -> Message:
         """메시지 추가"""
         async with self.async_session() as db:
@@ -310,7 +313,8 @@ class DatabaseService:
                 session_id=session_id,
                 role=role,
                 content=content,
-                tool_calls=tool_calls
+                tool_calls=tool_calls,
+                usage=usage,
             )
             db.add(message)
             

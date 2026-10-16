@@ -1750,7 +1750,12 @@
       "Show current node status",
       "Check pod status in kube-system namespace",
       "List services in the default namespace"
-    ]
+    ],
+    "turnUsage": {
+      "line": "In {{prompt}} · out {{completion}} tokens",
+      "cached": " · {{pct}}% cached",
+      "calls": "Model calls: {{count}} · {{model}}"
+    }
   },
   "cost": {
     "title": "Cost",

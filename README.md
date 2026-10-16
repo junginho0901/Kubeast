@@ -179,7 +179,7 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 ### 🤖 AI 어시스턴트
 
 - **다중 LLM 지원** — OpenAI · Anthropic · Gemini · Ollama 등 (OpenAI 호환 어댑터로 통합, Anthropic은 Messages API)
-- **스트리밍 채팅** — SSE 기반 실시간 응답, 세션/히스토리 보존. 모델에는 최근 `ai.chat.historyMessages`(기본 10)개의 user/assistant 메시지가 그대로 가고, 그 앞의 대화는 같은 모델이 밀려난 턴마다 적은 메모를 덧붙인 **요약 하나**(`ai.chat.summary.enabled`, 기본 켬; 마스킹·`maxChars` 상한, 넘으면 오래된 메모를 합침)로 접혀 세션 컨텍스트에 남는다 — 긴 대화도 앞부분 사실을 잃지 않으면서 프롬프트가 커지지 않음. 요약은 창 밖으로 새 메시지가 밀릴 때만 증분 갱신되고 `ai.chat.summarize`로 감사됨
+- **스트리밍 채팅** — SSE 기반 실시간 응답, 세션/히스토리 보존. 모델에는 최근 `ai.chat.historyMessages`(기본 10)개의 user/assistant 메시지가 그대로 가고, 그 앞의 대화는 같은 모델이 밀려난 턴마다 적은 메모를 덧붙인 **요약 하나**(`ai.chat.summary.enabled`, 기본 켬; 마스킹·`maxChars` 상한, 넘으면 오래된 메모를 합침)로 접혀 세션 컨텍스트에 남는다 — 긴 대화도 앞부분 사실을 잃지 않으면서 프롬프트가 커지지 않음. 요약은 창 밖으로 새 메시지가 밀릴 때만 증분 갱신되고 `ai.chat.summarize`로 감사됨. 답마다 아래에 그 턴의 토큰("입력 · 출력 · 캐시 %", 툴팁에 모델 호출 수·모델)이 보이며, 메시지에 저장돼(`messages.usage`, 그 턴 `ai.chat.complete`와 같은 값) 새로고침 뒤에도 남음
 - **다중 라운드 Tool Calling** — AI가 화이트리스트 툴로 K8s를 조회·변경(최대 10라운드).
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 게이팅**. 읽기 도구 13종에는 이름 조각·레이블로 여러 종류·네임스페이스를 한 번에 찾는 `k8s_find_resource`, API 스키마를 묻는 `k8s_explain`, 죽은 컨테이너의 직전 로그(`previous`)·기간·전체 컨테이너·텍스트 필터가 있는 Pod 로그, 객체·종류·`type=Warning`으로 좁히는 이벤트가 들어 있다.
   없는 이름·없는 종류·없는 기능(metrics-server 등)은 kubectl 오류 대신 **`not_found`(비슷한 이름 목록 포함)·`unknown_kind`·`unavailable` 결과**로 돌아와, AI가 네임스페이스를 바꿔 가며 되묻지 않고 한 번 찾아본 뒤 어디를 봤는지 말하고 질문한다. 비슷한 이름은 그 사람의 네임스페이스 범위 안에서만 찾는다.

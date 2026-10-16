@@ -855,7 +855,10 @@ async def session_chat_stream(
         dump("[DUMP] Full message preview", full_message[:200])
         
         # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
-        await db.add_message(session_id, "assistant", full_message, tool_calls=tool_calls_log or None)
+        await db.add_message(
+            session_id, "assistant", full_message, tool_calls=tool_calls_log or None,
+            usage=usage_acct.message_usage(turn_usage, model=getattr(service, "model", None)),
+        )
         log.debug("[DEBUG] Message saved to DB")
 
         await _audit_chat_complete(

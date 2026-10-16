@@ -161,6 +161,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 			Role:      m.Role,
 			Content:   m.Content,
 			ToolCalls: m.ToolCalls,
+			Usage:     m.Usage,
 			CreatedAt: m.CreatedAt,
 		}
 	}

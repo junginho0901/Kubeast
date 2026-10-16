@@ -1770,6 +1770,7 @@ export interface SessionDetail {
     role: string
     content: string
     tool_calls?: any
+    usage?: { prompt_tokens: number; completion_tokens: number; cached_tokens?: number; model_calls?: number; model?: string | null } | null
     created_at: string
   }>
 }

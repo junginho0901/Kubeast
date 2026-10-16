@@ -72,6 +72,7 @@ export function useSessionDetailSync({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
         toolCalls: msg.tool_calls || undefined,
+        usage: msg.usage ?? null,
       }))
 
       // 스트리밍 직후(DB에 assistant가 아직 저장되기 전)에는 DB가 뒤처진 상태로 UI를 덮어쓰지 않도록 방어

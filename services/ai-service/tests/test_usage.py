@@ -73,3 +73,18 @@ def test_prompt_chars_counts_messages_and_tools_and_event_shape():
     ev = usage.usage_event(SimpleNamespace(prompt_tokens=10, completion_tokens=2, total_tokens=0,
                                            prompt_tokens_details=SimpleNamespace(cached_tokens=4)), prompt_chars=77)
     assert ev == {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12, "cached_tokens": 4, "prompt_chars": 77}
+
+
+def test_message_usage_keeps_the_turn_sums_or_nothing():
+    """messages.usage: the same sums as the turn's ai.chat.complete row, None when the provider sent no usage."""
+    totals = usage.new_turn_usage()
+    assert usage.message_usage(totals, model="m") is None
+    usage.add_usage(totals, SimpleNamespace(prompt_tokens=15000, completion_tokens=40, total_tokens=15040,
+                                            prompt_tokens_details=SimpleNamespace(cached_tokens=14900)), prompt_chars=53000)
+    usage.add_usage(totals, SimpleNamespace(prompt_tokens=300, completion_tokens=60, total_tokens=360), prompt_chars=900)
+    kept = usage.message_usage(totals, model="granite4.1:8b")
+    assert kept == {"prompt_tokens": 15300, "completion_tokens": 100, "cached_tokens": 14900, "model_calls": 2, "model": "granite4.1:8b"}
+    payload = usage.chat_complete_payload(session_id="s", provider="ollama", model="granite4.1:8b", cluster="self", usage=totals,
+                                          tool_calls=0, iterations=1, duration_ms=1)
+    assert (payload["prompt_tokens"], payload["completion_tokens"], payload["cached_tokens"], payload["model_calls"]) == \
+        (kept["prompt_tokens"], kept["completion_tokens"], kept["cached_tokens"], kept["model_calls"])

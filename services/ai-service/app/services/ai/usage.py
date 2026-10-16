@@ -93,6 +93,21 @@ def usage_event(usage: Any, *, prompt_chars: int = 0) -> dict[str, Any]:
     }
 
 
+def message_usage(usage: dict[str, Any], *, model: Optional[str]) -> Optional[dict[str, Any]]:
+    """What the answer message keeps of its turn (messages.usage, shown under the
+    answer): the same token sums as the turn's ai.chat.complete row, or None
+    when the provider sent no usage."""
+    if not usage.get("seen"):
+        return None
+    return {
+        "prompt_tokens": int(usage["prompt_tokens"]),
+        "completion_tokens": int(usage["completion_tokens"]),
+        "cached_tokens": int(usage.get("cached_tokens", 0)),
+        "model_calls": int(usage.get("model_calls", 0)),
+        "model": model,
+    }
+
+
 def chat_complete_payload(
     *,
     session_id: Optional[str],

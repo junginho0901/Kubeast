@@ -4,6 +4,8 @@
 // - toolCalls: assistant 메시지의 tool 호출 결과 (DB tool_calls 컬럼 그대로)
 // - streamingPhase: 임시 assistant 메시지의 스트리밍 단계 (waiting/tools/answer)
 
+import type { TurnUsage } from '@/utils/turnUsage'
+
 export interface Message {
   id?: number
   role: 'user' | 'assistant'
@@ -11,4 +13,5 @@ export interface Message {
   isTemporary?: boolean
   toolCalls?: any[]
   streamingPhase?: 'waiting' | 'tools' | 'answer'
+  usage?: TurnUsage | null    // the answered turn's tokens (DB messages.usage)
 }
