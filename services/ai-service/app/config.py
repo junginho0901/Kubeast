@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     MAX_REQUEST_BODY_BYTES: int = 1 << 20
     # Prometheus metrics at /metrics (app/metrics.py); the gateway never proxies it.
     METRICS_ENABLED: bool = True
+
+    # Chat history: the last AI_CHAT_HISTORY_MESSAGES user/assistant messages go to the
+    # model verbatim; everything before them is folded into one running summary kept in
+    # session_contexts.state (chart ai.chat.summary.enabled / ai.chat.historyMessages).
+    AI_CHAT_HISTORY_MESSAGES: int = 10
+    AI_CHAT_SUMMARY_ENABLED: bool = True
+    AI_CHAT_SUMMARY_MAX_CHARS: int = 1500
     
     class Config:
         # 프로젝트 루트의 .env 파일 사용

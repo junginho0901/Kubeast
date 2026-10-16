@@ -16,6 +16,7 @@ import time
 from typing import Callable, Optional, TYPE_CHECKING
 
 from app.services.ai import formatters
+from app.services.ai import history as history_mod
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
@@ -330,19 +331,72 @@ async def session_chat_stream(
         # 대화 히스토리 가져오기
         messages_history = await db.get_messages(session_id)
 
-        # GPT 메시지 형식으로 변환
-        # 👉 토큰 과사용을 막기 위해 user/assistant 히스토리를 최근 N개만 사용
-        MAX_HISTORY_MESSAGES = 10  # user/assistant 메시지 기준 (약 5턴)
+        # Tool Context 가져오기 또는 생성 — before the history: the summary below lives in its state,
+        # which this turn writes back to session_contexts when it ends.
+        if session_id not in service.tool_contexts:
+            service.tool_contexts[session_id] = ToolContext(session_id)
+            # DB에서 컨텍스트 복원
+            context_data = await db.get_context(session_id)
+            if context_data:
+                service.tool_contexts[session_id].state = context_data.state or {}
+                restored = context_data.cache or {}
+                tc = TTLCache()
+                tc.update(restored)
+                service.tool_contexts[session_id].cache = tc
+        tool_context = service.tool_contexts[session_id]
+
+        # The recent window goes verbatim; everything before it as one running summary
+        # (app/services/ai/history.py — AI_CHAT_HISTORY_MESSAGES, AI_CHAT_SUMMARY_ENABLED).
         history_for_model = [
             msg for msg in messages_history
             if msg.role in ["user", "assistant"]
         ]
-        recent_history = history_for_model[-MAX_HISTORY_MESSAGES:]
+        older_history, recent_history = history_mod.split_history(history_for_model)
 
         messages = [{
             "role": "system",
             "content": system_prompt_override or SYSTEM_MESSAGE,
         }]
+        summary_outcome = None
+        if older_history and history_mod.enabled():
+            summary_outcome = await history_mod.ensure_summary(
+                service, db, session_id, older_history, service._sanitize_history_content, tool_context.state,
+            )
+            if summary_outcome.summary is not None:
+                messages.append(history_mod.render_block(summary_outcome.summary))
+            if (summary_outcome.created or summary_outcome.error) and audit_actor:
+                from app.services.ai import permissions as _perm
+                from app.services.audit_writer import write_audit
+                _sum = summary_outcome.summary
+                _u = summary_outcome.usage_totals()
+                await write_audit(
+                    action="ai.chat.summarize",
+                    actor_user_id=audit_actor.get("user_id"),
+                    actor_email=audit_actor.get("email"),
+                    target_type="session",
+                    target_id=session_id,
+                    cluster=_perm.effective_cluster(service),
+                    after={
+                        "session_id": session_id,
+                        "messages_summarized": summary_outcome.new_messages,
+                        "messages_total": _sum.messages if _sum else None,
+                        "upto_message_id": _sum.upto_id if _sum else None,
+                        "summary_chars": len(_sum.text) if _sum else 0,
+                        "notes": len(_sum.entries) if _sum else 0,
+                        "compacted": summary_outcome.compacted,
+                        "model": getattr(service, "model", None),
+                        "model_calls": _u["model_calls"],
+                        "prompt_tokens": _u["prompt_tokens"] if _u["seen"] else None,
+                        "completion_tokens": _u["completion_tokens"] if _u["seen"] else None,
+                        "prompt_chars": _u["prompt_chars"],
+                    },
+                    request_ip=(audit_http or {}).get("ip"),
+                    user_agent=(audit_http or {}).get("user_agent"),
+                    request_id=(audit_http or {}).get("request_id"),
+                    path=(audit_http or {}).get("path"),
+                    result="failure" if summary_outcome.error else "success",
+                    error=summary_outcome.error,
+                )
         for msg in recent_history:
             messages.append({
                 "role": msg.role,
@@ -364,20 +418,6 @@ async def session_chat_stream(
                 "content": wrap_untrusted_context(extra_context_block),
             })
 
-        # Tool Context 가져오기 또는 생성
-        if session_id not in service.tool_contexts:
-            service.tool_contexts[session_id] = ToolContext(session_id)
-            # DB에서 컨텍스트 복원
-            context_data = await db.get_context(session_id)
-            if context_data:
-                service.tool_contexts[session_id].state = context_data.state or {}
-                restored = context_data.cache or {}
-                tc = TTLCache()
-                tc.update(restored)
-                service.tool_contexts[session_id].cache = tc
-        
-        tool_context = service.tool_contexts[session_id]
-        
         log.debug("[DEBUG] Session %s: %d messages, context state keys: %s", session_id, len(messages), list(tool_context.state.keys()))
         
         # Function definitions
@@ -413,6 +453,10 @@ async def session_chat_stream(
         # Per-turn usage accounting → ai.chat.complete audit (admin AI-usage view).
         turn_started = time.monotonic()
         turn_usage = usage_acct.new_turn_usage()
+        if summary_outcome is not None:
+            # The summarizer's calls count toward the turn like any other model call.
+            for _usage, _chars in summary_outcome.calls:
+                usage_acct.add_usage(turn_usage, _usage, prompt_chars=_chars)
         turn_tool_calls = 0
         turn_finish_reason = None
 

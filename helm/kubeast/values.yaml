@@ -325,6 +325,16 @@ ai:
     enabled: true
     pii: false
     disable: []
+  # Chat history sent to the model: the last historyMessages user/assistant
+  # messages verbatim; with summary.enabled, everything before them is folded
+  # into one running summary (same model, masked, at most summary.maxChars
+  # characters) kept per session, so a long conversation keeps its earlier
+  # facts without growing the prompt. Each summary is audited as ai.chat.summarize.
+  chat:
+    historyMessages: 10
+    summary:
+      enabled: true
+      maxChars: 1500
   # Write model responses, tool arguments and tool results to the ai-service
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.

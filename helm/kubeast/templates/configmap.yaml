@@ -117,6 +117,9 @@ data:
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
+  AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}
+  AI_CHAT_SUMMARY_ENABLED: {{ .Values.ai.chat.summary.enabled | quote }}
+  AI_CHAT_SUMMARY_MAX_CHARS: {{ .Values.ai.chat.summary.maxChars | quote }}
   MCP_ENABLED: {{ .Values.mcp.enabled | quote }}
   MCP_WRITE_TOOLS: {{ .Values.mcp.writeTools | quote }}
   AUDIT_STDOUT: {{ .Values.audit.stdout | quote }}

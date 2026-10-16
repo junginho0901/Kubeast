@@ -31,7 +31,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080',
     trace: 'retain-on-failure',
-    video: 'retain-on-failure',
+    // No video: it records every test (ffmpeg per test) and keeps only failures; the trace covers those.
+    video: 'off',
     screenshot: 'only-on-failure',
     // Avoid running into self-signed cert errors on kind.
     ignoreHTTPSErrors: true,
