@@ -286,7 +286,7 @@ service:
 | Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
 | Loki · OpenTelemetry Collector contrib | 3.7.8 · 0.162.0 | 10-14, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
-| OpenTelemetry Collector contrib `host_metrics` | 0.162.0 | 10-18, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
+| OpenTelemetry Collector contrib `host_metrics` | 0.162.0 | 10-17, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`) — 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워짐, 틀린 토큰은 상태에 401, 웹훅 연락처 시험으로 보낸 알림이 조사됨(e2e `grafana.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 
