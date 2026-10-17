@@ -5,14 +5,14 @@ import { useResourceDetail } from '../ResourceDetailContext'
 // The panel carries the markdown renderer; fetch it when first opened.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
 import { ToggleButton } from './ToggleButton'
+import { FLOATING_SESSION_KEY } from '@/services/floatingChatSession'
 
 const ANIM_MS = 200
-const SESSION_STORAGE_KEY = 'kubest.floatingChat.sessionId'
 
 function readPersistedSessionId(): string | null {
   if (typeof window === 'undefined') return null
   try {
-    return window.sessionStorage.getItem(SESSION_STORAGE_KEY)
+    return window.sessionStorage.getItem(FLOATING_SESSION_KEY)
   } catch {
     return null
   }
@@ -37,14 +37,14 @@ export default function FloatingAIChat() {
   // 토글 버튼은 패널의 반대 — 패널이 사라지는 동안 함께 페이드인
   const [toggleVisible, setToggleVisible] = useState(true)
   // 세션 id 는 부모에서 소유 → 패널 unmount/remount 에도 살아남음.
-  // sessionStorage 에 미러링하여 F5 새로고침에도 유지, 탭 닫으면 자동 정리.
+  // sessionStorage 에 미러링하여 F5 새로고침에도 유지, 탭 닫으면 자동 정리, 로그아웃 때 지움.
   const [sessionId, setSessionId] = useState<string | null>(() => readPersistedSessionId())
 
   const handleSessionIdChange = useCallback((id: string | null) => {
     setSessionId(id)
     try {
-      if (id) window.sessionStorage.setItem(SESSION_STORAGE_KEY, id)
-      else window.sessionStorage.removeItem(SESSION_STORAGE_KEY)
+      if (id) window.sessionStorage.setItem(FLOATING_SESSION_KEY, id)
+      else window.sessionStorage.removeItem(FLOATING_SESSION_KEY)
     } catch {
       // sessionStorage 사용 불가 (private 모드 등) — in-memory 만 유지
     }

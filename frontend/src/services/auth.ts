@@ -1,3 +1,5 @@
+import { forgetFloatingChat } from './floatingChatSession'
+
 const REDIRECT_AFTER_LOGIN_KEY = 'kubeast:redirect-after-login'
 
 // The session lives only in the HttpOnly cookie that POST /auth/login sets; the
@@ -12,9 +14,11 @@ export function getAuthHeaders(): Record<string, string> {
 }
 
 // Ends the server session (the cookie is cleared by the response). Best-effort:
-// if the call fails the cookie simply expires with the token.
+// if the call fails the cookie simply expires with the token. The tab's floating
+// chat conversation is forgotten too, so the next sign-in starts a new one.
 export function logoutSession(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
+  forgetFloatingChat()
   return fetch('/api/v1/auth/logout', {
     method: 'POST',
     headers: CSRF_HEADER,

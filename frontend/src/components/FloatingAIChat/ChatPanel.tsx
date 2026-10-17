@@ -73,12 +73,18 @@ export function ChatPanel({
   })
 
   // 메시지 히스토리
-  const { data: sessionDetail } = useQuery({
+  const { data: sessionDetail, error: sessionError } = useQuery({
     queryKey: ['floating-session-detail', sessionId],
     queryFn: () => api.getSession(sessionId!),
     enabled: !!sessionId,
     staleTime: 1000,
   })
+
+  // the tab remembers a conversation this account cannot open (another account's, or deleted): start a new one
+  useEffect(() => {
+    const status = (sessionError as { response?: { status?: number } } | null)?.response?.status
+    if (status === 404 || status === 403) setSessionId(null)
+  }, [sessionError, setSessionId])
 
   // 스트리밍 종료 직후 히스토리 리프레시
   useEffect(() => {
@@ -302,6 +308,7 @@ export function ChatPanel({
         onStop={handleStop}
         isStreaming={isStreaming}
         disabled={disabled}
+        onNewChat={sessionId ? () => setSessionId(null) : undefined}
       />
     </div>
   )

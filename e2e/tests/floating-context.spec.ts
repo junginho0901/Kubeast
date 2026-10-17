@@ -4,7 +4,8 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 // browser and read that body: no session is created and no model is called.
 
 type Layer = { source: string; summary: string; data?: Record<string, unknown> }
-type PageContext = { path: string; page_type: string; base?: Layer | null; overlays: Layer[] }
+// session: the conversation the question went to (stand-in ids e2e-floating-ctx-1, -2 …)
+type PageContext = { path: string; page_type: string; base?: Layer | null; overlays: Layer[]; session?: string }
 
 // Every menu with a screen of its own, on the cluster that has what it shows: self (the dev install) for most,
 // default (the second cluster) for the pages that need Kyverno, metrics-server or OpenCost. Advanced Search sends
@@ -29,20 +30,24 @@ const MENUS: [string, string][] = [
 
 async function captureFloating(page: Page) {
   const sent: PageContext[] = []
+  let created = 0
   await page.route(/\/api\/v1\/sessions(\?|$)/, (route) =>
     route.request().method() === 'POST'
-      ? route.fulfill({ json: { id: 'e2e-floating-ctx', title: 'New Chat', created_at: '', updated_at: '', message_count: 0 } })
+      ? route.fulfill({ json: { id: `e2e-floating-ctx-${++created}`, title: 'New Chat', created_at: '', updated_at: '', message_count: 0 } })
       : route.fallback(),
   )
-  await page.route(/\/api\/v1\/sessions\/e2e-floating-ctx(\?|$)/, (route) =>
+  await page.route(/\/api\/v1\/sessions\/(e2e-floating-ctx-\d+)(\?|$)/, (route) =>
     route.fulfill({ json: { id: 'e2e-floating-ctx', title: 'New Chat', created_at: '', updated_at: '', messages: [] } }),
   )
-  await page.route(/\/api\/v1\/ai\/sessions\/e2e-floating-ctx\/floating-chat/, (route) => {
-    sent.push(route.request().postDataJSON().page_context)
+  await page.route(/\/api\/v1\/ai\/sessions\/(e2e-floating-ctx-\d+)\/floating-chat/, (route) => {
+    const session = /sessions\/(e2e-floating-ctx-\d+)\//.exec(route.request().url())?.[1]
+    sent.push({ ...route.request().postDataJSON().page_context, session })
     return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"content":"ok"}\n\ndata: [DONE]\n\n' })
   })
   return sent
 }
+
+const remembered = (page: Page) => page.evaluate(() => sessionStorage.getItem('kubest.floatingChat.sessionId'))
 
 // client-side navigation, as a sidebar click does (page.goto would reload the app and its layers)
 async function navigate(page: Page, path: string) {
@@ -287,5 +292,54 @@ test.describe('floating chat — windows and admin screens', () => {
       const role = roles.find((r) => r.name === name)
       if (role) await request.delete(`/api/v1/auth/admin/roles/${role.id}`, { headers })
     }
+  })
+})
+
+test.describe('floating chat — a new conversation', () => {
+  test('the new chat button left of the input starts a new conversation', async ({ page }) => {
+    const sent = await captureFloating(page)
+    await page.goto('/?cluster=self')
+    await openChat(page)
+    const newChat = page.getByTestId('floating-new-chat')
+    await expect(newChat, 'nothing to start over before the first question').toHaveCount(0)
+
+    expect((await ask(page, sent)).session).toBe('e2e-floating-ctx-1')
+    expect((await ask(page, sent)).session, 'the next question continues it').toBe('e2e-floating-ctx-1')
+    const input = (await page.getByTestId('floating-chat-input').boundingBox())!
+    const button = (await newChat.boundingBox())!
+    expect(button.x + button.width, 'the button sits left of the input').toBeLessThanOrEqual(input.x)
+
+    await newChat.click()
+    await expect(newChat).toHaveCount(0)
+    expect(await remembered(page)).toBeNull()
+    expect((await ask(page, sent)).session, 'the question after it opens a new conversation').toBe('e2e-floating-ctx-2')
+  })
+
+  test('a conversation this account cannot open is replaced by a new one', async ({ page }) => {
+    const sent = await captureFloating(page)
+    await page.addInitScript(() => sessionStorage.setItem('kubest.floatingChat.sessionId', 'e2e-not-this-account'))
+    await page.goto('/?cluster=self')
+    await openChat(page)
+    // session-service answers 404 for a conversation that is not the caller's
+    await expect.poll(() => remembered(page)).toBeNull()
+    expect((await ask(page, sent)).session).toBe('e2e-floating-ctx-1')
+  })
+})
+
+test.describe('floating chat — signing out', () => {
+  // its own sign-in, so signing out does not end the session the other specs share
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test('signing out forgets the tab\'s floating conversation', async ({ page }) => {
+    const login = await page.request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
+    expect(login.ok()).toBeTruthy()
+    const sent = await captureFloating(page)
+    await page.goto('/?cluster=self')
+    await ask(page, sent)
+    expect(await remembered(page)).toBe('e2e-floating-ctx-1')
+
+    await page.getByRole('button', { name: 'Log out' }).click()
+    await page.waitForURL('**/login')
+    expect(await remembered(page)).toBeNull()
   })
 })

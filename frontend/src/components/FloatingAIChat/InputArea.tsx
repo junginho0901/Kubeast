@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, Square } from 'lucide-react'
+import { Plus, Send, Square } from 'lucide-react'
 import { useAutoGrowTextarea, useChatTextareaKeys } from '@/hooks/useChatTextarea'
 
 interface InputAreaProps {
@@ -8,12 +8,14 @@ interface InputAreaProps {
   onStop: () => void
   isStreaming: boolean
   disabled?: boolean
+  /** 대화가 있으면 입력칸 왼쪽에 "새 대화" — 닫기(X)와 떨어진 자리 */
+  onNewChat?: () => void
 }
 
 /**
  * 질문 입력 영역. 엔터로 전송, Shift+Enter 줄바꿈, 스트리밍 중엔 중지 버튼 표시.
  */
-export function InputArea({ onSubmit, onStop, isStreaming, disabled }: InputAreaProps) {
+export function InputArea({ onSubmit, onStop, isStreaming, disabled, onNewChat }: InputAreaProps) {
   const { t } = useTranslation()
   const [value, setValue] = useState('')
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -34,6 +36,22 @@ export function InputArea({ onSubmit, onStop, isStreaming, disabled }: InputArea
       onSubmit={handleSubmit}
       className="flex items-end gap-2 border-t border-slate-700 bg-slate-900/60 px-3 py-2"
     >
+      {onNewChat && (
+        <button
+          type="button"
+          data-testid="floating-new-chat"
+          onClick={() => {
+            onNewChat()
+            ref.current?.focus()
+          }}
+          disabled={isStreaming}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={t('aiChat.newChat', { defaultValue: 'New Chat' })}
+          title={t('aiChat.newChat', { defaultValue: 'New Chat' })}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      )}
       <textarea
         ref={ref}
         data-testid="floating-chat-input"
