@@ -16,7 +16,7 @@ metadata:
 data:
   config.yaml: |
     receivers:
-      filelog:
+      file_log:
         include: [/var/log/pods/*/*/*.log]
         exclude: [/var/log/pods/otel_*/*/*.log, /var/log/pods/loki_*/*/*.log]
         start_at: end
@@ -30,16 +30,16 @@ data:
       batch:
         timeout: 2s
     exporters:
-      otlphttp:
+      otlp_http:
         endpoint: LOKI_OTLP
     service:
       telemetry:
         logs: {level: warn}
       pipelines:
         logs:
-          receivers: [filelog]
+          receivers: [file_log]
           processors: [resource, batch]
-          exporters: [otlphttp]
+          exporters: [otlp_http]
 ---
 apiVersion: apps/v1
 kind: DaemonSet

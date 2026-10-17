@@ -232,7 +232,7 @@ receivers:
 
 Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 설치하지 않습니다.
 
-- **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것. 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `filelog` + `container` 파서 또는 `k8sattributes`, `otlphttp` → Loki `/otlp`). Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
+- **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 것. 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다 — 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`(OpenTelemetry Collector `file_log` + `container` 파서 또는 `k8sattributes`, `otlp_http` → Loki `/otlp`; 0.162 전 이름 `filelog`·`otlphttp`는 경고와 함께 아직 동작). Promtail·Alloy의 쿠버네티스 탐색식이면 `namespace`·`pod`·`container`로 바꿉니다.
 - **클러스터 라벨**: Loki 하나에 여러 클러스터를 넣으면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적습니다. 적지 않은 클러스터는 검색이 없습니다.
 - **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다(`features.logSearch.url`보다 먼저 쓰임). 라벨 이름은 배포 전체 값과 같아야 하므로 그 저장소의 수집기도 같은 라벨 이름으로 보내야 합니다. 그 저장소의 호스트·포트도 네트워크 정책(아래)에 넣습니다.
 - **권한**: 사용자 신원으로 `get pods/log`(그 Namespace, 전체 검색은 전체)를 묻습니다. `view`·`edit`에 들어 있으므로 §1의 Read·Write 그룹이면 됩니다. Namespace 범위 부여는 그 Namespace에 바인딩이 있어야 합니다.
@@ -243,7 +243,7 @@ Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 �
 ```yaml
 # OpenTelemetry Collector contrib 0.162.0 — 노드의 컨테이너 로그를 Loki로 (DaemonSet, /var/log/pods 읽기 전용 마운트)
 receivers:
-  filelog:
+  file_log:
     include: [/var/log/pods/*/*/*.log]
     include_file_path: true
     operators:
@@ -253,11 +253,11 @@ processors:
     attributes:
       - {key: k8s.cluster.name, value: prod-1, action: upsert}
 exporters:
-  otlphttp:
+  otlp_http:
     endpoint: https://loki.example.com/otlp
 service:
   pipelines:
-    logs: {receivers: [filelog], processors: [resource], exporters: [otlphttp]}
+    logs: {receivers: [file_log], processors: [resource], exporters: [otlp_http]}
 ```
 
 - **확인**: Loki에서 `/loki/api/v1/label/k8s_cluster_name/values`에 그 값이 보이는지, Kubeast에서 그 클러스터의 Pod 로그 검색이 줄을 돌려주는지. 개발용 전체 예시는 `scripts/kind-logsearch.sh`(`deploy/kind/logsearch-*.yaml`).
