@@ -45,7 +45,6 @@ export const modelConfigApi = {
     api_key_env?: string
     tls_verify?: boolean
     ca_cert?: string
-    azure_api_version?: string
   }): Promise<{ success: boolean; model?: string; message: string }> => {
     const { data } = await client.post('/ai/model-configs/test', payload)
     return data

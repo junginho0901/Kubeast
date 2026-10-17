@@ -85,6 +85,9 @@ type AnthropicConfig struct {
 	TopK        *int64 `json:"topK,omitempty"`
 }
 
+// AzureOpenAIConfig is read for its endpoint only: Kubeast talks to Azure OpenAI's v1 API, so
+// AzureEndpoint (or spec.baseURL) is https://<resource>.openai.azure.com/openai/v1/ and spec.model is the
+// deployment name. APIVersion, AzureDeployment and AzureADToken stay for kagent compatibility and are not used.
 type AzureOpenAIConfig struct {
 	APIVersion      string `json:"apiVersion,omitempty"`
 	AzureEndpoint   string `json:"azureEndpoint,omitempty"`

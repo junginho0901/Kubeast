@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import httpx
 
+from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
 from app.services.tls import build_verify
 
 
@@ -29,8 +30,7 @@ _PROVIDER_BASE_URLS: Dict[str, str] = {
     "google": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
     "ollama": "http://localhost:11434/v1",
-    # Azure는 사용자가 base_url을 직접 지정해야 함 (endpoint + deployment)
-    # "azure": "https://<resource>.openai.azure.com/openai/deployments/<deployment>/",
+    # Azure OpenAI는 기본값 없음 — 리소스마다 v1 주소(https://<resource>.openai.azure.com/openai/v1/)를 적어야 함
 }
 
 
@@ -123,6 +123,14 @@ class ProviderAdapter:
 
         # base_url 결정: 사용자 지정 > 프로바이더 기본값
         clean_base_url = (base_url or "").strip()
+
+        if self.provider in AZURE_PROVIDERS:
+            # The v1 API: an OpenAI-compatible endpoint per resource. Without one the
+            # key would go to api.openai.com. The key rides as the Bearer token (the
+            # OpenAI SDK) and as api-key (Azure's own header), so either form passes.
+            if not clean_base_url:
+                raise ValueError(f"Azure OpenAI needs its v1 endpoint as base_url ({AZURE_V1_URL_HINT})")
+            default_headers = {**(default_headers or {}), "api-key": api_key}
 
         if clean_base_url:
             resolved_base_url = clean_base_url

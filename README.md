@@ -6,7 +6,7 @@ LLM 기반 채팅으로 리소스 조회·진단·변경을 수행할 수 있습
 
 주요 특징:
 
-- 다중 LLM(OpenAI · Anthropic · Gemini · Ollama) AI 어시스턴트, Tool calling 기반 클러스터 조작
+- 다중 LLM(OpenAI · Anthropic · Gemini · Azure OpenAI · Ollama) AI 어시스턴트, Tool calling 기반 클러스터 조작
 - 멀티클러스터 관리 및 사용자×클러스터 단위 RBAC
 - Helm 릴리스 관리 (rollback / upgrade / uninstall / test)
 - GPU & DRA 모니터링, Prometheus 메트릭, 토폴로지 시각화, Node Shell
@@ -171,6 +171,13 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **thinking**: 모델 기본값을 따릅니다(Claude 5 계열은 기본으로 켜짐). 도구 호출 사이에는 그 턴의 thinking 블록을 그대로 돌려보냅니다(API 요건). thinking 토큰도 `max_tokens`에 들어가므로 Claude 5 계열(이름에 버전이 없는 모델 포함)에는 호출부의 `max_tokens`에 4,096을 더해 보냅니다 — 상한일 뿐 쓴 만큼만 과금됩니다.
 - **프롬프트 캐시**: 자동 캐시(`cache_control`)가 기본으로 켜집니다. 모델 설정 옵션 `prompt_cache: false`로 끕니다. 사용량의 입력 토큰은 캐시에서 읽은 토큰을 포함한 총 입력입니다.
 - 키는 지금처럼 `ANTHROPIC_API_KEY`(또는 `KUBEAST_AI_KEY_*`)에 둡니다. 예전 호환 주소(`https://api.anthropic.com/v1/`)가 base_url에 들어 있어도 그대로 동작합니다.
+
+**Azure OpenAI (provider `azure`, CRD `azureopenai`)** — Azure의 **v1 API**만 씁니다(2025-08부터, OpenAI 호환, 날짜 `api-version` 없음). **실계정 검증 전**: 연결·채팅은 같은 호출 코드이고 가짜 서버·OpenAI 호환 서버로만 확인했습니다.
+- **주소**: `https://<리소스>.openai.azure.com/openai/v1/`(`…services.ai.azure.com/openai/v1/`나 API Management 같은 게이트웨이 주소도 됨). 비워 둘 수 없습니다(키가 다른 곳으로 가지 않게).
+- **모델 칸**: 모델 이름이 아니라 **배포 이름**(Azure AI Foundry → 배포). 공급자 모델 목록은 없습니다(이름 직접 입력).
+- **키**: `KUBEAST_AI_KEY_*` 변수에 두면 `Authorization: Bearer`와 `api-key` 헤더 둘 다로 보냅니다.
+- **안 되는 것**: 옛 배포별 주소(`…/openai/deployments/<배포>`)와 날짜 `api-version` — 저장·연결 테스트에서 v1 주소를 알려 주며 거절합니다. Entra ID 토큰 인증도 아직 없습니다.
+- Private Link로 사설 주소가 나오는 리소스는 그 호스트를 `ai.baseUrlAllowedHosts`에 넣습니다. CRD로 만들 때는 `spec.baseURL`(또는 `azureOpenAI.azureEndpoint`)에 v1 주소, `spec.model`에 배포 이름을 넣습니다(`apiVersion`·`azureDeployment`·`azureAdToken`은 kagent 호환으로 남아 있지만 쓰지 않음).
 
 **Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다. 구독 토큰은 Claude Code에서만 받아 주므로, ai-service가 모델 호출마다 Claude Code를 띄우고(Claude Agent SDK, `app/services/claude_code.py`) Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 안에서 처리합니다. 그래서 도구 목록, 쓰기 도구의 승인 카드, 마스킹, `ai.tool.call`·`ai.chat.complete` 감사(provider `claude-code`)가 API 키 경로와 같습니다.
 - **혼자 쓰는 설치에서만** 켭니다. Anthropic 약관은 구독을 본인 사용으로 한정합니다. 팀이나 여러 사용자가 쓰는 Kubeast에 넣으면 안 됩니다. 관리 화면은 이 프로바이더를 고르면 같은 경고를 보여 줍니다.

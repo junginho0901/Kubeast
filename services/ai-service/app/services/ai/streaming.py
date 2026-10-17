@@ -43,7 +43,7 @@ def wrap_untrusted_context(block: str) -> str:
 
 PROVIDER_LABELS = {
     "openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Gemini", "google": "Gemini", "azure": "Azure OpenAI",
-    "ollama": "Ollama", "custom": "OpenAI-compatible", "claude-code": "Claude subscription",
+    "azureopenai": "Azure OpenAI", "ollama": "Ollama", "custom": "OpenAI-compatible", "claude-code": "Claude subscription",
 }
 
 

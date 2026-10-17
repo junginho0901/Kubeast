@@ -2623,6 +2623,8 @@
       "customModel": "모델 이름 직접 입력 →",
       "selectModel": "모델 선택",
       "modelPlaceholder": "예: gpt-4o-mini",
+      "azureDeploymentHint": "Azure OpenAI는 모델 이름이 아니라 배포 이름을 넣습니다(Azure AI Foundry → 배포).",
+      "azureEndpointHint": "/openai/v1/로 끝나는 v1 주소를 넣습니다. 옛 배포 주소와 api-version은 지원하지 않습니다.",
       "required": "(필수)",
       "apiKeyEnv": "API 키 환경변수 이름",
       "apiKeyEnvHint": "키를 담고 있는 ai-service 환경변수 이름입니다(Helm values ai.*ApiKey 또는 ai.apiKeysSecret). 키 자체는 DB에 저장되지 않습니다.",

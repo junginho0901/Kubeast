@@ -189,9 +189,12 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               type="text"
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              placeholder={tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
+              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
+          )}
+          {currentProviderDef.modelHintKey && (
+            <p className="mt-1 text-[10px] text-slate-500" data-testid="model-hint">{tr(currentProviderDef.modelHintKey, '')}</p>
           )}
         </div>
 
@@ -242,6 +245,9 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               placeholder={currentProviderDef.baseUrlPlaceholder || 'https://api.example.com/v1'}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
+            {currentProviderDef.baseUrlHintKey && (
+              <p className="mt-1 text-[10px] text-slate-500" data-testid="base-url-hint">{tr(currentProviderDef.baseUrlHintKey, '')}</p>
+            )}
           </div>
         )}
 

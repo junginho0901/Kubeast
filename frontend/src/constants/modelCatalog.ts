@@ -30,19 +30,16 @@ export interface ProviderDef {
   needsBaseUrl: boolean
   /** Placeholder for the base URL field */
   baseUrlPlaceholder?: string
+  /** i18n key of a line under the base URL field (the form a narrow field cuts off) */
+  baseUrlHintKey?: string
   /** Default base URL filled in on selection */
   defaultBaseUrl?: string
   /** The env var key for resolving the API key at runtime */
   defaultApiKeyEnv: string
-  /** Extra fields the provider needs (shown as additional form inputs) */
-  extraFields?: ExtraFieldDef[]
-}
-
-export interface ExtraFieldDef {
-  key: string
-  label: string
-  placeholder: string
-  required: boolean
+  /** Placeholder for the model field when the provider has no list (a name the user picks, e.g. an Azure deployment) */
+  modelPlaceholder?: string
+  /** i18n key of a line under the model field (what the provider calls the model) */
+  modelHintKey?: string
 }
 
 /* ═══════════════════════════════════════
@@ -123,17 +120,14 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     icon: '☁️',
     needsApiKey: true,
     needsBaseUrl: true,
-    baseUrlPlaceholder: 'https://<resource>.openai.azure.com/openai/deployments/<deployment>',
-    defaultApiKeyEnv: 'AZURE_API_KEY',
-    extraFields: [
-      { key: 'azure_api_version', label: 'API Version', placeholder: '2024-06-01', required: true },
-    ],
-    models: [
-      { name: 'gpt-4o', functionCalling: true },
-      { name: 'gpt-4o-mini', functionCalling: true },
-      { name: 'gpt-4', functionCalling: true },
-      { name: 'gpt-35-turbo', functionCalling: true },
-    ],
+    // The v1 API (OpenAI-compatible, no api-version); the model is the deployment name, which each resource names itself.
+    baseUrlPlaceholder: 'https://<resource>.openai.azure.com/openai/v1/',
+    baseUrlHintKey: 'admin.aiModels.azureEndpointHint',
+    // ai-service takes KUBEAST_AI_KEY_* for keys beyond the three built-in names (model_config_policy)
+    defaultApiKeyEnv: 'KUBEAST_AI_KEY_AZURE',
+    modelPlaceholder: 'my-gpt-deployment',
+    modelHintKey: 'admin.aiModels.azureDeploymentHint',
+    models: [],
   },
   {
     id: 'ollama',

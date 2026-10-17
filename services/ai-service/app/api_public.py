@@ -9,7 +9,7 @@ operator-supplied URL.
 import os
 import re
 import ssl
-from typing import Union
+from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 import httpx
@@ -152,34 +152,24 @@ _OPENAI_COMPATIBLE_DEFAULTS: dict[str, str] = {
 
 
 async def _test_azure_openai(
+    provider: str,
     api_key: str,
     model: str,
     base_url: str,
-    api_version: str = "2024-06-01",
-    verify: Union[bool, ssl.SSLContext] = True,
+    tls_verify: bool = True,
+    ca_cert: Optional[str] = None,
 ) -> dict:
-    """Test Azure OpenAI endpoint."""
-    # Azure base_url 형식: https://<resource>.openai.azure.com/openai/deployments/<deployment>
-    # OpenAI SDK는 Azure 형태 URL + api-key 헤더로 호출
-    from openai import AsyncOpenAI
+    """Azure OpenAI (v1 API): through the same ProviderAdapter the chat uses, so a passing
+    test means the chat reaches the deployment the same way."""
+    from app.services.provider_adapter import ProviderAdapter
 
-    # Azure는 /v1 대신 ?api-version= 사용
-    clean_base = base_url.rstrip("/")
-    if not clean_base:
-        return {"success": False, "message": "base_url is required for Azure OpenAI"}
-
-    client = AsyncOpenAI(
-        api_key=api_key,
-        base_url=clean_base,
-        default_headers={"api-key": api_key},
-        http_client=httpx.AsyncClient(verify=verify),
-        timeout=15.0,
-    )
-    resp = await client.chat.completions.create(
+    adapter = ProviderAdapter(provider=provider, model=model, api_key=api_key, base_url=base_url,
+                              tls_verify=tls_verify, ca_cert=ca_cert)
+    resp = await adapter.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": "ping"}],
         max_tokens=5,
-        extra_query={"api-version": api_version},
+        timeout=15.0,
     )
     return {"success": True, "model": resp.model or model, "message": "Connection successful"}
 
@@ -228,7 +218,7 @@ async def provider_availability():
 async def test_model_connection(request: dict = None):
     """
     모델 연결 테스트 (admin.ai_models.*).
-    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert?, azure_api_version? }
+    body: { provider, model, base_url?, api_key_env?, api_key?, tls_verify?, ca_cert? }
     api_key_env names an environment variable of this service (how saved
     configs reference keys); api_key is a literal for ad-hoc API use.
     """
@@ -275,9 +265,9 @@ async def test_model_connection(request: dict = None):
         elif provider in ("google", "gemini"):
             return await _test_google(api_key, model, verify)
 
-        elif provider == "azure":
-            api_version = body.get("azure_api_version", "2024-06-01")
-            return await _test_azure_openai(api_key, model, user_base_url, api_version, verify)
+        elif provider in model_config_policy.AZURE_PROVIDERS:
+            return await _test_azure_openai(provider, api_key, model, user_base_url,
+                                            body.get("tls_verify", True), body.get("ca_cert"))
 
         elif provider == "ollama":
             return await _test_ollama(model, user_base_url or "http://localhost:11434", verify)
@@ -352,7 +342,7 @@ async def list_provider_models(request: dict = None):
     elif provider == "ollama":
         base = (user_base_url or "http://localhost:11434").rstrip("/")
         base = base if base.endswith("/v1") else base + "/v1"
-    elif provider == "azure":
+    elif provider in model_config_policy.AZURE_PROVIDERS:
         return {"models": [], "error": "Azure OpenAI lists deployments, not models; type the deployment name"}
     else:
         base = user_base_url or _OPENAI_COMPATIBLE_DEFAULTS.get(provider, "")

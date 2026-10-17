@@ -30,7 +30,7 @@ _cached_at: float = 0.0  # time.monotonic() of last resolve
 
 # API 키가 필수인 클라우드 프로바이더. 그 외(ollama, 셀프호스트, OpenAI-호환
 # 로컬 게이트웨이 등)는 키 없이 동작할 수 있으므로 키 누락을 허용한다.
-_PROVIDERS_REQUIRING_KEY = frozenset({"openai", "anthropic", "google", "gemini", "azure", "claude-code"})
+_PROVIDERS_REQUIRING_KEY = frozenset({"openai", "anthropic", "google", "gemini", "azure", "azureopenai", "claude-code"})
 
 
 @dataclass(frozen=True)

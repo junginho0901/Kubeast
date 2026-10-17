@@ -3726,6 +3726,8 @@
     },
     "aiModels": {
       "add": "Add Model",
+      "azureDeploymentHint": "Azure OpenAI: the deployment name, not the model name (Azure AI Foundry → Deployments).",
+      "azureEndpointHint": "The v1 endpoint, ending in /openai/v1/. Deployment URLs and api-version are not supported.",
       "deleteConfirm": "Delete model \"{{name}}\"?",
       "deleteTitle": "Delete model",
       "advanced": "Advanced (local / self-hosted)",

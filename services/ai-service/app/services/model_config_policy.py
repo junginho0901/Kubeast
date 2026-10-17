@@ -17,6 +17,8 @@ updated, tested and resolved for use:
     AI_BASE_URL_ALLOWED_HOSTS (an in-cluster Ollama or LLM gateway).
   - extra_headers: no authentication headers (the key travels via
     api_key_env only), and they are masked in responses.
+  - Azure OpenAI: a base_url is required (the v1 endpoint), and deployment
+    URLs or an api-version are refused with the v1 form in the message.
 """
 import ipaddress
 import os
@@ -29,6 +31,10 @@ API_KEY_ENV_PREFIX = "KUBEAST_AI_KEY_"
 # A Claude subscription token: only provider claude-code may name it (check_provider_fields).
 SUBSCRIPTION_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN"
 SUBSCRIPTION_PROVIDER = "claude-code"
+# Azure OpenAI is its v1 API only: OpenAI-compatible, no api-version, the deployment name as the model.
+# "azureopenai" is the same provider as the kagent-compatible ModelConfig CRD names it.
+AZURE_PROVIDERS = frozenset({"azure", "azureopenai"})
+AZURE_V1_URL_HINT = "https://<resource>.openai.azure.com/openai/v1/"
 API_KEY_ENV_NAMES = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", SUBSCRIPTION_TOKEN_ENV})
 _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -85,11 +91,27 @@ def check_api_key_env(name: Optional[str]) -> None:
     )
 
 
+def _check_azure_base_url(base_url: Optional[str]) -> None:
+    url = (base_url or "").strip()
+    if not url:
+        # without one the key would go to the OpenAI default endpoint
+        raise PolicyError(f"Azure OpenAI needs its v1 endpoint as base_url ({AZURE_V1_URL_HINT})")
+    parts = urlsplit(url)
+    if "/openai/deployments" in parts.path.lower() or "api-version=" in parts.query.lower():
+        raise PolicyError(
+            f"Azure OpenAI uses the v1 API: base_url {AZURE_V1_URL_HINT} with the deployment name as the model; "
+            "deployment URLs and api-version are not supported"
+        )
+
+
 def check_provider_fields(provider: Optional[str], key_envs: Iterable[Optional[str]], base_url: Optional[str]) -> None:
     """A subscription token goes only to Claude Code (provider claude-code), which talks to Anthropic itself:
-    no other provider may name it, and claude-code takes no base URL and no provider API key variable."""
+    no other provider may name it, and claude-code takes no base URL and no provider API key variable.
+    Azure OpenAI takes its v1 endpoint only."""
     p = (provider or "").strip().lower()
     names = [n for n in key_envs if n]
+    if p in AZURE_PROVIDERS:
+        _check_azure_base_url(base_url)
     if p != SUBSCRIPTION_PROVIDER:
         if SUBSCRIPTION_TOKEN_ENV in names:
             raise PolicyError(f"{SUBSCRIPTION_TOKEN_ENV} holds a Claude subscription token; only provider {SUBSCRIPTION_PROVIDER} uses it")
