@@ -9,7 +9,7 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다(노�
 | 기능 | 대상 클러스터에 있어야 하는 것 | Kubeast 쪽 스위치(기본) | 없으면 |
 | --- | --- | --- | --- |
 | 전부 | Kubeast 권한(RBAC) — §1 | `auth.impersonation.enabled`(켬) | 사용자 요청이 클러스터에서 403 |
-| 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 안 오거나, 조사의 읽기 도구가 클러스터에서 403 |
+| 알림 → AI 조사 | 조사 신원 RBAC — §1, Kubeast로 웹훅을 보내는 Alertmanager 또는 Grafana 알림 — §13 | `features.alertInvestigation.enabled`(끔) | 알림이 안 오거나, 조사의 읽기 도구가 클러스터에서 403 |
 | 노드·파드 사용량, Monitoring, 최적화(대체) | metrics-server — §2 | — | 사용량 칸이 비고 최적화는 "없음" |
 | 드로어·대시보드 그래프, 최적화, 스토리지 분석 | Prometheus + 지표 수집기 — §3 | `features.prometheus.enabled`(**끔**) | 그래프 영역이 숨고 최적화는 metrics-server 순간값 |
 | 비용(Cost), 최적화 비용 열 | OpenCost — §4 | `features.cost.enabled`(켬) | "OpenCost 없음" 안내, 비용 열 없음 |
@@ -78,6 +78,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 - **Service 지정**(Admin → Clusters → 편집 "클러스터 안 Service", 또는 차트 `features.prometheus.service`): `namespace/service:port`(Lens·Headlamp와 같은 형식). API 서버 프록시로 읽고, 상태 API가 `/-/healthy`로 닿는지 알려 줍니다.
 - **클러스터 안 자동 발견**: ① 모든 Namespace에서 레이블로 — `kubeast.io/prometheus=true` → prometheus 차트 서버(`app.kubernetes.io/name=prometheus,app.kubernetes.io/component=server`, 포트 80) → Prometheus Operator의 `prometheus-operated`(`operated-prometheus=true`), Service의 포트를 모두 시험 ② 없으면 이름에 `prometheus`가 든 Service 중 **포트 9090**을 `monitoring` → `prometheus` → `jupyterhub` → `kube-system` → `gpu-operator` → `observability` → `default` 순서로. `/-/healthy`가 답하면 쓰고, 찾은 결과는 클러스터마다 10분 기억합니다. 찾기는 개요 캐시 식별자(`kubeast:cache`, `view`)로 하므로 모든 Namespace의 Service 목록을 읽을 수 있어야 합니다(§1 그대로).
 - **중앙 저장소**(Thanos·Mimir·VictoriaMetrics 등 Prometheus 호환 API): Admin → Clusters → 편집에 주소·인증·클러스터 레이블 값을 적습니다(README "Prometheus 소스"). 이때 아래 지표가 그 클러스터 레이블을 달고 있어야 합니다.
+- **Grafana를 거쳐**: 저장소 조회 API를 밖에 열지 않고 Grafana 데이터소스로만 둔 곳이면 주소에 Grafana 데이터소스 프록시 `https://<Grafana>/api/datasources/proxy/uid/<데이터소스 UID>`를, 인증에 Grafana 서비스 계정 토큰(Viewer, bearer)을 적습니다. Kubeast 질의는 모두 GET이라 Grafana의 Prometheus 프록시 제한(POST 일부만 허용)에 걸리지 않고, 질의 시간은 Grafana `dataproxy.timeout`(기본 30초)도 받습니다. Grafana OSS는 데이터소스별 권한이 없어 그 토큰으로 모든 데이터소스를 읽을 수 있으니 시크릿으로 다룹니다. 로그 저장소(§14)도 같은 방식입니다.
 - 자동 발견이 못 찾는 설치(다른 이름·레이블)는 Service에 `kubeast.io/prometheus=true`를 붙이거나 Service를 직접 적습니다.
 
 ### 있어야 하는 지표
@@ -192,9 +193,9 @@ Kubeast가 사용자 신원의 `pods/exec`로 `ls`·`tail`만 실행합니다.
 
 Argo CD가 배포한 객체에 추적 어노테이션(`argocd.argoproj.io/tracking-id`, Argo CD 3.x 기본 추적 방식)이 있어야 배지·경고가 붙습니다. 라벨 방식(`app.kubernetes.io/instance` 등)을 쓰는 설치는 `gitops.argocd.instanceLabel`에 그 키를 적습니다. Argo CD 자체가 대상 클러스터에 있을 필요는 없습니다.
 
-## 13. Alertmanager (알림 → AI 조사)
+## 13. Alertmanager 또는 Grafana 알림 (알림 → AI 조사)
 
-조사는 Alertmanager가 보내는 웹훅으로 시작합니다. Kubeast는 Alertmanager를 설치하지 않고, 알림 규칙도 만들지 않습니다.
+조사는 Alertmanager나 Grafana 알림이 보내는 웹훅으로 시작합니다. Kubeast는 알림 엔진을 설치하지 않고, 알림 규칙도 만들지 않습니다.
 
 - **보내는 곳**: `POST <Kubeast 주소>/api/v1/alerts/webhook?cluster=<Kubeast 클러스터 ID>` — 클러스터 ID는 Admin → Clusters의 ID. 클러스터마다 수신자(또는 `cluster` 값)를 따로 둡니다.
 - **인증**: `Authorization: Bearer <kubeast-secrets의 ALERT_WEBHOOK_TOKEN>`. 차트가 만들고 업그레이드 때 유지합니다(`secrets.existingSecret`이면 그 Secret에 넣어야 함).
@@ -216,7 +217,8 @@ receivers:
             credentials_file: /etc/alertmanager/kubeast/token
 ```
 
-- **확인**: Kubeast Admin → Investigations에 행이 생기는지(심각도 필터에 걸리면 행이 없음). 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved}`가 Alertmanager 로그에 남습니다. 개발용 전체 예시는 [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml).
+- **Grafana 알림**: 웹훅 연락처(Contact point → Webhook)의 URL을 위와 같이, Authorization 헤더 scheme `Bearer`·credentials에 토큰. Grafana 13의 웹훅 본문(`version` "1")에도 Kubeast가 읽는 필드(`alerts[]`의 `status`·`labels`·`annotations`·`startsAt`·`fingerprint`, `externalURL`)가 같은 이름으로 있어 그대로 받습니다. 알림 정책으로 클러스터마다 그 연락처로 보내고, 규칙 레이블에 `severity`(필요하면 `namespace`)를 둡니다.
+- **확인**: Kubeast Admin → Investigations에 행이 생기는지(심각도 필터에 걸리면 행이 없음). 웹훅 응답 `{accepted, duplicate, filtered, skipped, resolved}`가 Alertmanager 로그에 남습니다. 개발용 전체 예시는 [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml), Grafana는 `scripts/kind-grafana.sh`와 e2e `grafana.spec.ts`(연락처 시험으로 보낸 알림이 조사됨).
 
 ## 14. 로그 저장소 (로그 검색)
 
@@ -227,6 +229,7 @@ Kubeast는 Loki의 `query_range`를 읽기만 합니다. Loki와 수집기는 �
 - **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다(`features.logSearch.url`보다 먼저 쓰임). 라벨 이름은 배포 전체 값과 같아야 하므로 그 저장소의 수집기도 같은 라벨 이름으로 보내야 합니다. 그 저장소의 호스트·포트도 네트워크 정책(아래)에 넣습니다.
 - **권한**: 사용자 신원으로 `get pods/log`(그 Namespace, 전체 검색은 전체)를 묻습니다. `view`·`edit`에 들어 있으므로 §1의 Read·Write 그룹이면 됩니다. Namespace 범위 부여는 그 Namespace에 바인딩이 있어야 합니다.
 - **네트워크**: k8s-service에서 Loki로. `networkPolicy`가 켜져 있고 443이 아닌 포트면 `features.logSearch.egressCIDRs`.
+- **Grafana를 거쳐**(§3과 같음): 주소 = `https://<Grafana>/api/datasources/proxy/uid/<Loki 데이터소스 UID>`, 인증 = 서비스 계정 토큰, **테넌트는 비움** — 데이터소스에 설정한 `X-Scope-OrgID`를 Grafana가 붙입니다(Kubeast는 테넌트 칸이 비면 그 헤더를 보내지 않음).
 - **트레이스 링크**(`features.tracing`, 쓸 때): 줄의 trace ID를 Loki 라벨에서 먼저 읽습니다. 앱이 OTLP로 로그를 보내면 Loki가 trace ID를 구조화 메타데이터 `trace_id`로 줄과 함께 돌려주므로(Loki 3.x, 10-14 kind 실측) 따로 할 일이 없습니다. 위처럼 컨테이너 로그를 파일로 읽는 수집기는 trace ID를 모르므로 줄 글자(`trace_id=…` 등)에서 찾습니다 — 앱이 로그 문장에 trace ID를 쓰거나, 수집기에서 JSON 줄을 파싱해 trace 필드로 옮기면 됩니다. 트레이스 저장소(Jaeger·Tempo)는 브라우저가 링크로 여는 곳이라 Kubeast 쪽 통신은 없습니다.
 
 ```yaml
@@ -275,6 +278,7 @@ service:
 | Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
 | Loki · OpenTelemetry Collector contrib | 3.7.8 · 0.162.0 | 10-14, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
+| Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`) — 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워짐, 틀린 토큰은 상태에 401, 웹훅 연락처 시험으로 보낸 알림이 조사됨(e2e `grafana.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 
 kind 노드는 루트 파일시스템이 `mountpoint="/"`로 잡히지 않아 디스크 사용률이 비고, local-path 볼륨은 볼륨 통계가 없습니다 — 실제 노드·CSI 드라이버에서는 나오는 값입니다.

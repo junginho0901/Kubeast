@@ -4728,7 +4728,7 @@
   },
   "investigations": {
     "title": "Investigations",
-    "subtitle": "Alertmanager가 알림을 보냈을 때 AI가 읽기 도구로 조사한 결과입니다. 보고서를 열면 감사 기록이 남습니다.",
+    "subtitle": "Alertmanager나 Grafana가 알림을 보냈을 때 AI가 읽기 도구로 조사한 결과입니다. 보고서를 열면 감사 기록이 남습니다.",
     "refresh": "새로고침",
     "disabled": "이 설치에선 알림 조사가 꺼져 있습니다(features.alertInvestigation.enabled). 이전 보고서는 그대로 보입니다.",
     "filter": {
@@ -4778,7 +4778,8 @@
     "noAnnotations": "주석 없음",
     "noTools": "모델이 도구를 부르지 않고 답했습니다.",
     "link": {
-      "source": "원본 쿼리"
+      "source": "원본 쿼리",
+      "sender": "알림 보낸 곳"
     },
     "tool": {
       "name": "도구",

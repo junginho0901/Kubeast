@@ -94,7 +94,7 @@ export default function Investigations() {
           <div>
             <h1 className="text-3xl font-bold text-white">{tr('investigations.title', 'Investigations')}</h1>
             <p className="text-slate-400">
-              {tr('investigations.subtitle', 'What the AI found with read-only tools when Alertmanager sent an alert. Opening a report is audited.')}
+              {tr('investigations.subtitle', 'What the AI found with read-only tools when an alert came in (Alertmanager or Grafana). Opening a report is audited.')}
             </p>
           </div>
         </div>
@@ -319,7 +319,7 @@ function InvestigationModal({ id, onClose }: { id: string; onClose: () => void }
               )}
               {data.alertmanager_url && (
                 <a href={data.alertmanager_url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-primary-300 hover:underline">
-                  <ExternalLink className="w-3.5 h-3.5" /> Alertmanager
+                  <ExternalLink className="w-3.5 h-3.5" /> {tr('investigations.link.sender', 'Alert sender')}
                 </a>
               )}
             </div>

@@ -1,5 +1,5 @@
 // Alert investigation reports (ai-service, features.alertInvestigation): what the
-// AI found with the read-only tools when Alertmanager sent an alert. Listing
+// AI found with the read-only tools when Alertmanager or Grafana sent an alert. Listing
 // needs admin.investigations.read; opening one is audited (ai.investigation.view)
 // because a report can quote pod logs.
 

@@ -690,7 +690,8 @@ features:
   # answer 404 and the page is hidden.
   policyReports:
     enabled: true
-  # Alert → AI investigation (off by default). Alertmanager posts to
+  # Alert → AI investigation (off by default). Alertmanager, or a Grafana
+  # webhook contact point, posts to
   # /api/v1/alerts/webhook?cluster=<Kubeast cluster id> with
   # Authorization: Bearer <ALERT_WEBHOOK_TOKEN from the kubeast-secrets Secret>.
   # A firing alert whose severity label is listed is queued (a repeat of the

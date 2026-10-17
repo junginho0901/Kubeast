@@ -4099,7 +4099,7 @@
   },
   "investigations": {
     "title": "Investigations",
-    "subtitle": "What the AI found with read-only tools when Alertmanager sent an alert. Opening a report is audited.",
+    "subtitle": "What the AI found with read-only tools when an alert came in (Alertmanager or Grafana). Opening a report is audited.",
     "refresh": "Refresh",
     "disabled": "Alert investigation is off on this installation (features.alertInvestigation.enabled). Earlier reports stay listed.",
     "filter": {
@@ -4149,7 +4149,8 @@
     "noAnnotations": "No annotations",
     "noTools": "The model answered without calling a tool.",
     "link": {
-      "source": "Source query"
+      "source": "Source query",
+      "sender": "Alert sender"
     },
     "tool": {
       "name": "Tool",

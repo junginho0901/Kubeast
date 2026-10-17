@@ -138,6 +138,40 @@ async def test_gates_read_at_most_100_alerts(monkeypatch):
     assert counts["dropped"] == 20 and counts["filtered"] == 100
 
 
+# What Grafana 13.2.4 posts from a webhook contact point (captured from a contact point test; message shortened).
+GRAFANA_MESSAGE = {
+    "receiver": "webhook", "status": "firing",
+    "alerts": [{
+        "status": "firing",
+        "labels": {"alertname": "CaptureGrafana", "instance": "Grafana", "namespace": "kube-system", "severity": "warning"},
+        "annotations": {"summary": "capture"},
+        "startsAt": "2026-10-17T14:56:21.02938238Z", "endsAt": "0001-01-01T00:00:00Z", "generatorURL": "",
+        "fingerprint": "6813febb96d0adae",
+        "silenceURL": "http://kubeast-b-control-plane:31300/alerting/silence/new?alertmanager=grafana&matcher=alertname%3DCaptureGrafana",
+        "dashboardURL": "", "panelURL": "", "values": None, "valueString": "[ metric='foo' labels={instance=bar} value=10 ]",
+    }],
+    "groupLabels": {"alertname": "CaptureGrafana"}, "commonLabels": {"alertname": "CaptureGrafana"}, "commonAnnotations": {"summary": "capture"},
+    "externalURL": "http://kubeast-b-control-plane:31300/", "appVersion": "13.2.4", "version": "1",
+    "groupKey": "webhook-6813febb96d0adae-1792248981", "truncatedAlerts": 0, "orgId": 1,
+    "title": "[FIRING:1] CaptureGrafana Grafana kube-system warning ", "state": "alerting", "message": "**Firing**\n\nValue: [no value]\n",
+}
+
+
+@pytest.mark.asyncio
+async def test_gates_take_a_grafana_webhook_message(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    counts = await webhook.gate_and_queue(None, cfg(), "default", webhook.AmWebhook.model_validate(GRAFANA_MESSAGE), NOW)
+    assert counts["accepted"] == 1
+    row = fs.rows[0]
+    assert (row["alertname"], row["severity"], row["namespace"], row["fingerprint"]) == ("CaptureGrafana", "warning", "kube-system", "6813febb96d0adae")
+    assert row["starts_at"] == datetime(2026, 10, 17, 14, 56, 21, 29382)
+    assert row["alertmanager_url"] == "http://kubeast-b-control-plane:31300/" and row["group_key"] == "webhook-6813febb96d0adae-1792248981"
+    resolved = {**GRAFANA_MESSAGE, "status": "resolved", "alerts": [{**GRAFANA_MESSAGE["alerts"][0], "status": "resolved"}]}
+    counts = await webhook.gate_and_queue(None, cfg(), "default", webhook.AmWebhook.model_validate(resolved), NOW)
+    assert counts["resolved"] == 1 and len(fs.rows) == 1
+
+
 def webhook_client(monkeypatch, settings, known=True):
     monkeypatch.setattr(webhook.inv_settings, "load", lambda: settings)
 
