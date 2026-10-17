@@ -61,4 +61,10 @@ export const modelConfigApi = {
     const { data } = await client.post('/ai/model-configs/models', payload)
     return data
   },
+
+  // Providers this install cannot run (the Claude subscription without its image or switch), with the reason.
+  providerAvailability: async (): Promise<{ providers: Record<string, { available: boolean; reason?: string | null }> }> => {
+    const { data } = await client.get('/ai/model-configs/providers')
+    return data
+  },
 }

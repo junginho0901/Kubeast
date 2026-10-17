@@ -40,6 +40,16 @@ jobs:
             context: services/ai-service
             dockerfile: ""
             binary: /opt/venv/bin/python3
+          # The same image with Claude Code (provider claude-code), tagged
+          # <version>-claude-code; the chart runs it when
+          # ai.providers.claudeCode.enabled is on.
+          - name: ai-service-claude-code
+            image: ai-service
+            suffix: -claude-code
+            build_args: WITH_CLAUDE_CODE=true
+            context: services/ai-service
+            dockerfile: ""
+            binary: /opt/venv/bin/python3
           - name: k8s-service
             context: services
             dockerfile: k8s-service-go/Dockerfile
@@ -97,7 +107,8 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile != '' && format('{0}/{1}', matrix.context, matrix.dockerfile) || format('{0}/Dockerfile', matrix.context) }}
           platforms: linux/amd64,linux/arm64
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
+          build-args: ${{ matrix.build_args }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
 
       # Each platform variant must carry a binary of its own architecture: the
       # v0.3.0/v0.4.0 arm64 variants of two images shipped x86-64 binaries and
@@ -105,7 +116,7 @@ jobs:
       - name: Architecture check
         if: github.event_name == 'push'
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
           BINARY: ${{ matrix.binary }}
         run: |
@@ -128,7 +139,7 @@ jobs:
         if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}@${{ steps.build.outputs.digest }}
           scan-type: image
           scanners: vuln
           severity: CRITICAL,HIGH
@@ -140,7 +151,7 @@ jobs:
         if: github.event_name == 'push'
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          image: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          image: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}@${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: sbom-${{ matrix.name }}.spdx.json
           artifact-name: sbom-${{ matrix.name }}.spdx.json
@@ -149,7 +160,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           sbom-path: sbom-${{ matrix.name }}.spdx.json
           push-to-registry: true
@@ -158,7 +169,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
@@ -169,17 +180,18 @@ jobs:
         if: github.event_name == 'push'
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
 
       # Last: the release tag points at the digest that passed everything above.
       - name: Tag release
         if: github.event_name == 'push'
-        run: docker buildx imagetools create -t "${IMAGE}:${TAG}" "${IMAGE}@${DIGEST}"
+        run: docker buildx imagetools create -t "${IMAGE}:${TAG}${SUFFIX}" "${IMAGE}@${DIGEST}"
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.name }}
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           DIGEST: ${{ steps.build.outputs.digest }}
           TAG: ${{ steps.version.outputs.tag }}
+          SUFFIX: ${{ matrix.suffix }}
 
   helm-package:
     if: github.event_name == 'push'

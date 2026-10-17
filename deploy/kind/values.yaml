@@ -40,6 +40,11 @@ auth:
 ai:
   baseUrlAllowedHosts:
     - host.docker.internal
+  # rebuild-kind.sh loads one ai-service image under the local tag (with Claude Code when built
+  # WITH_CLAUDE_CODE=true), so scripts/kind-model-subscription.sh turns the provider on without a tag suffix.
+  providers:
+    claudeCode:
+      imageTagSuffix: ""
 # e2e/tests/mcp.spec.ts connects an MCP client with an API key.
 mcp:
   enabled: true

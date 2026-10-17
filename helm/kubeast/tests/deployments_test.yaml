@@ -97,3 +97,42 @@ tests:
             secret:
               secretName: rds-ca
         template: deployments.yaml
+
+  - it: runs the plain ai-service image while the Claude subscription provider is off
+    set:
+      global.imageTag: v1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/junginho0901/kubeast-ai-service:v1.2.3
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: runs the -claude-code image when the Claude subscription provider is on
+    set:
+      global.imageTag: v1.2.3
+      ai.providers.claudeCode.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/junginho0901/kubeast-ai-service:v1.2.3-claude-code
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service
+
+  - it: keeps a cleared suffix for an image built with Claude Code under the plain tag
+    set:
+      global.imageTag: local
+      ai.providers.claudeCode.enabled: true
+      ai.providers.claudeCode.imageTagSuffix: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/junginho0901/kubeast-ai-service:local
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: ai-service

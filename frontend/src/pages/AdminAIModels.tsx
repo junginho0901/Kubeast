@@ -5,11 +5,13 @@ import ModelConfigForm from './admin-ai-models/ModelConfigForm'
 import ModelConfigCard from './admin-ai-models/ModelConfigCard'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
+import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 
 export default function AdminAIModels() {
   const { t } = useTranslation()
   const tr = (key: string, fb: string) => t(key, { defaultValue: fb })
   const form = useModelForm()
+  const unavailableReason = useProviderAvailability()[form.formProvider] ?? null
   const {
     configs,
     isLoading,
@@ -59,7 +61,8 @@ export default function AdminAIModels() {
               <button type="button" onClick={resetForm} className={modalButton.cancel} disabled={form.isSaving}>
                 {tr('common.cancel', 'Cancel')}
               </button>
-              <button type="button" onClick={form.handleSubmit} disabled={form.isSaving || !form.formName || !form.formModel} className={modalButton.primary}>
+              <button type="button" onClick={form.handleSubmit} disabled={form.isSaving || !form.formName || !form.formModel || !!unavailableReason}
+                title={unavailableReason ?? undefined} className={modalButton.primary}>
                 {form.isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {tr('admin.aiModels.create', 'Create')}
               </button>

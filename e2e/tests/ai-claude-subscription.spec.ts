@@ -1,9 +1,10 @@
 import { test, expect, type APIResponse, type Page } from '@playwright/test'
 
-// Admin → AI Models with provider "Claude subscription (setup-token)" (claude-code): the form shows the
-// personal-use notice and the token variable, has no base URL or provider model list, and the connection test
-// reports what ai-service says — on the dev install, where ai.providers.claudeCode is off, the reason it is off.
-// Saving such a config is refused while the provider is off, and no other provider may name the token variable.
+// Admin → AI Models with provider "Claude subscription" (claude-code): the form shows the personal-use notice and
+// the token variable and has no base URL or provider model list. Where this install cannot run it (the chart switch
+// off, or an image without Claude Code) the entry is greyed out with "Not set up", and picking it shows the reason
+// and keeps Test and Create off; where it can, the connection test reports what ai-service says. Saving such a
+// config is refused by the API while the provider is off, and no other provider may name the token variable.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const TOKEN_ENV = 'CLAUDE_CODE_OAUTH_TOKEN'
@@ -16,7 +17,8 @@ async function dropIfCreated(page: Page, res: APIResponse) {
 }
 
 test.describe('Claude subscription provider', () => {
-  test('the form warns that it is for personal use and the test reports what ai-service says', async ({ page }) => {
+  test('the form warns that it is for personal use and says before Test or Save when it cannot run here', async ({ page }) => {
+    const availability = (await (await page.request.get('/api/v1/ai/model-configs/providers', { headers: XRW })).json()).providers['claude-code']
     const apiTest = await (await page.request.post('/api/v1/ai/model-configs/test', {
       headers: XRW, data: { provider: 'claude-code', model: 'claude-sonnet-5-5', api_key_env: TOKEN_ENV },
     })).json()
@@ -26,7 +28,10 @@ test.describe('Claude subscription provider', () => {
     const notice = page.getByTestId('claude-subscription-notice')
     await expect(notice).toHaveCount(0)
     await page.getByTestId('provider-select').click()
-    await page.getByTestId('provider-option-claude-code').click()
+    const option = page.getByTestId('provider-option-claude-code')
+    if (availability.available) await expect(option).not.toContainText(/Not set up|설정 안 됨/)
+    else await expect(option).toContainText(/Not set up|설정 안 됨/)
+    await option.click()
 
     await expect(notice).toContainText(/Personal use only|개인용으로만/)
     await expect(notice).toContainText(/Anthropic/)
@@ -36,14 +41,27 @@ test.describe('Claude subscription provider', () => {
     await expect(page.getByTestId('model-list-source')).toHaveText(/Claude Code has no model list|모델 목록을 제공하지 않습니다/)
     await expect(page.getByTestId('model-select')).toContainText('Claude Sonnet 5.5')
 
-    await page.getByRole('button', { name: /^(Test|연결 테스트)$/ }).click()
-    if (apiTest.success) {
-      await expect(page.getByText(/Connection successful/)).toBeVisible({ timeout: 120_000 })
+    const testButton = page.getByRole('button', { name: /^(Test|연결 테스트)$/ })
+    const createButton = page.getByRole('button', { name: /^(Create|생성)$/ })
+    if (!availability.available) {
+      // the reason the API gives, shown at once; nothing to fill in before learning it
+      expect(availability.reason).toMatch(/ai\.providers\.claudeCode\.enabled/)
+      expect(apiTest.message).toBe(availability.reason)
+      await expect(page.getByTestId('provider-unavailable')).toContainText(availability.reason)
+      await page.getByPlaceholder(/my-gpt4/).fill('e2e-sub-form')  // name and model set: only the provider holds them off
+      await expect(testButton).toBeDisabled()
+      await expect(createButton).toBeDisabled()
     } else {
-      // off: the reason; on without the token in ai-service: 400 naming the variable
-      const reason = apiTest.message ?? apiTest.detail
-      expect(reason).toMatch(/ai\.providers\.claudeCode\.enabled|WITH_CLAUDE_CODE|CLAUDE_CODE_OAUTH_TOKEN|Claude Code/)
-      await expect(page.getByText(reason, { exact: false })).toBeVisible({ timeout: 120_000 })
+      await expect(page.getByTestId('provider-unavailable')).toHaveCount(0)
+      await testButton.click()
+      if (apiTest.success) {
+        await expect(page.getByText(/Connection successful/)).toBeVisible({ timeout: 120_000 })
+      } else {
+        // on without the token in ai-service: 400 naming the variable
+        const reason = apiTest.message ?? apiTest.detail
+        expect(reason).toMatch(/CLAUDE_CODE_OAUTH_TOKEN|Claude Code/)
+        await expect(page.getByText(reason, { exact: false })).toBeVisible({ timeout: 120_000 })
+      }
     }
 
     await page.getByTestId('provider-select').click()

@@ -10,6 +10,9 @@
 #                                                         # claude-subscription as the default; the Ollama one stays, not default
 #   scripts/kind-model-subscription.sh down              # the Ollama ModelConfig default again; claude-subscription, the chart
 #                                                         # values and the Secret removed — run this when the e2e is over
+#
+# rebuild-kind.sh loads that image under the plain local tag, so the provider is turned on without the chart's
+# -claude-code tag suffix (deploy/kind/values.yaml clears it too; this keeps an older release's values right).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -40,7 +43,8 @@ case "${1:-}" in
     k create secret generic "$SECRET" --dry-run=client -o yaml \
       --from-file=CLAUDE_CODE_OAUTH_TOKEN=<(tr -d '[:space:]' < "$TOKEN_FILE") | k apply -f - >/dev/null
     echo "═══ Kubeast: ai.apiKeysSecret=$SECRET, ai.providers.claudeCode.enabled=true ═══"
-    helm_up --set ai.apiKeysSecret="$SECRET" --set ai.providers.claudeCode.enabled=true
+    helm_up --set ai.apiKeysSecret="$SECRET" --set ai.providers.claudeCode.enabled=true \
+      --set-string ai.providers.claudeCode.imageTagSuffix=
     echo "═══ ModelConfig claude-subscription ($MODEL) as the default ═══"
     set_default "$OLLAMA_MC" false
     k apply -f - <<EOF

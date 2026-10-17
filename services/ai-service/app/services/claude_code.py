@@ -81,9 +81,10 @@ def _sdk():
 def unavailable_reason() -> Optional[str]:
     """Why the provider cannot run here, or None."""
     if not enabled():
-        return "the Claude subscription provider is off (chart ai.providers.claudeCode.enabled)"
+        return "the Claude subscription provider is off: set chart value ai.providers.claudeCode.enabled=true"
     if _sdk() is None:
-        return "Claude Code is not in this ai-service image (build it with --build-arg WITH_CLAUDE_CODE=true)"
+        return ("Claude Code is not in this ai-service image: chart value ai.providers.claudeCode.enabled=true "
+                "runs the -claude-code image (a self-built image needs --build-arg WITH_CLAUDE_CODE=true)")
     return None
 
 

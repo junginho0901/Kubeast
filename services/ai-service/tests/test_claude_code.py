@@ -506,6 +506,21 @@ async def test_the_connection_test_route_says_why_before_reading_the_variable(mo
 
 
 @pytest.mark.asyncio
+async def test_the_forms_learn_whether_the_subscription_can_run_here(monkeypatch):
+    """Off, on without Claude Code in the image, on with it: the reason names the chart value and the image."""
+    from app import api_public
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_ENABLED", False, raising=False)
+    off = (await api_public.provider_availability())["providers"]["claude-code"]
+    assert off["available"] is False and "ai.providers.claudeCode.enabled=true" in off["reason"]
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_ENABLED", True, raising=False)
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", None)
+    no_image = (await api_public.provider_availability())["providers"]["claude-code"]
+    assert no_image["available"] is False and "-claude-code image" in no_image["reason"]
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", make_sdk([]))
+    assert (await api_public.provider_availability())["providers"]["claude-code"] == {"available": True, "reason": None}
+
+
+@pytest.mark.asyncio
 async def test_a_session_turn_through_claude_code_is_saved_and_audited_like_any_other(on, monkeypatch):
     from app.services.ai import streaming
 

@@ -216,6 +216,14 @@ async def _test_ollama(
         raise
 
 
+@admin_router.get("/model-configs/providers")
+async def provider_availability():
+    """Providers this install cannot run, with why, for the model forms (admin.ai_models.*): the form greys the
+    entry out and says how to turn it on instead of refusing the config only at Test or Save."""
+    reason = claude_code.unavailable_reason()
+    return {"providers": {claude_code.PROVIDER: {"available": reason is None, "reason": reason}}}
+
+
 @admin_router.post("/model-configs/test")
 async def test_model_connection(request: dict = None):
     """

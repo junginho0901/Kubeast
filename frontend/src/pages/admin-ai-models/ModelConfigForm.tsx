@@ -12,6 +12,7 @@ import {
   CircleDot,
   RefreshCw,
 } from 'lucide-react'
+import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 import { providerOptions } from './helpers'
 import type { ModelFormState } from './useModelForm'
 
@@ -52,6 +53,10 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     handleTest,
     handleRollout,
   } = form
+  const unavailable = useProviderAvailability()
+  const unavailableReason = unavailable[formProvider] ?? null
+  const providerChoices = providerOptions.map((o) =>
+    unavailable[o.value] ? { ...o, muted: true, hint: tr('admin.aiModels.providerNotSetUp', 'Not set up') } : o)
 
   return (
     <div className={inModal ? 'space-y-4' : 'rounded-xl border border-primary-500/30 bg-slate-900/80 p-5 space-y-4 mt-2 shadow-lg shadow-primary-500/5'}>
@@ -90,7 +95,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         {/* Provider — custom dropdown */}
         <CustomDropdown
           label={tr('admin.aiModels.provider', 'Provider')}
-          options={providerOptions}
+          options={providerChoices}
           value={formProvider}
           onChange={handleProviderChange}
           placeholder={tr('admin.aiModels.selectProvider', 'Select provider')}
@@ -181,7 +186,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         )}
       </div>
 
-      {currentProviderDef.id === 'claude-code' && <ClaudeSubscriptionNotice />}
+      {currentProviderDef.id === 'claude-code' && <ClaudeSubscriptionNotice unavailableReason={unavailableReason} />}
 
       {/* tool calling warning */}
       {(() => {
@@ -288,7 +293,8 @@ export default function ModelConfigForm({ form, inModal }: Props) {
       <div className="flex items-center gap-3 pt-2">
         <button
           onClick={handleTest}
-          disabled={testing || !formModel}
+          disabled={testing || !formModel || !!unavailableReason}
+          title={unavailableReason ?? undefined}
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600 disabled:opacity-50"
         >
           {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-yellow-400" />}
@@ -311,7 +317,8 @@ export default function ModelConfigForm({ form, inModal }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSaving || !formName || !formModel}
+            disabled={isSaving || !formName || !formModel || !!unavailableReason}
+            title={unavailableReason ?? undefined}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500 disabled:opacity-50"
           >
             {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

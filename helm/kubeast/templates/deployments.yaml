@@ -160,7 +160,7 @@ spec:
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "ai-service") | nindent 6 }}
       containers:
         - name: ai-service
-          image: "{{ .Values.images.aiService }}:{{ .Values.global.imageTag }}"
+          image: "{{ .Values.images.aiService }}:{{ .Values.global.imageTag }}{{ if .Values.ai.providers.claudeCode.enabled }}{{ .Values.ai.providers.claudeCode.imageTagSuffix }}{{ end }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           {{- include "kubeast.containerSecurityContext" . | nindent 10 }}
           {{- include "kubeast.resources" (dict "root" $ "key" "aiService") | nindent 10 }}

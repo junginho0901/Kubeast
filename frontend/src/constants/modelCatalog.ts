@@ -89,7 +89,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
   {
     // A Claude Pro/Max subscription's `claude setup-token` value through Claude Code (personal use only)
     id: 'claude-code',
-    label: 'Claude subscription (setup-token)',
+    label: 'Claude subscription',
     icon: '🔑',
     needsApiKey: true,
     needsBaseUrl: false,

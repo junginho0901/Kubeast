@@ -9,6 +9,7 @@ import {
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
 import ClaudeSubscriptionNotice from '@/components/ClaudeSubscriptionNotice'
+import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 
 interface SetupAIModelPageProps {
   navigatingRef: MutableRefObject<boolean>
@@ -43,6 +44,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   }
 
   const currentProviderDef: ProviderDef = getProvider(selectedProvider) ?? PROVIDER_CATALOG[0]
+  const unavailable = useProviderAvailability()
+  const unavailableReason = unavailable[selectedProvider] ?? null
 
   const modelDropdownOptions: DropdownOption[] = useMemo(
     () =>
@@ -131,23 +134,27 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
             key={p.id}
             type="button"
             onClick={() => handleProviderChange(p.id)}
+            data-testid={`setup-provider-${p.id}`}
             className={`rounded-2xl border px-4 py-4 text-left transition ${
               selectedProvider === p.id
                 ? 'border-primary-500/60 bg-primary-500/10'
                 : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
-            }`}
+            } ${unavailable[p.id] ? 'opacity-50' : ''}`}
           >
             <div className="flex items-center gap-2 text-sm font-semibold">
               <span className="text-lg">{p.icon}</span>
               {p.label}
             </div>
+            {unavailable[p.id] && (
+              <div className="mt-1 text-[10px] text-slate-400">{tr('admin.aiModels.providerNotSetUp', 'Not set up')}</div>
+            )}
           </button>
         ))}
       </div>
 
       {/* model config fields */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-        {currentProviderDef.id === 'claude-code' && <ClaudeSubscriptionNotice />}
+        {currentProviderDef.id === 'claude-code' && <ClaudeSubscriptionNotice unavailableReason={unavailableReason} />}
         {/* model selector — 2-tier dropdown */}
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -242,7 +249,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
           <button
             type="button"
             onClick={handleTestConnection}
-            disabled={aiTesting || !aiModel}
+            disabled={aiTesting || !aiModel || !!unavailableReason}
+            title={unavailableReason ?? undefined}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600 disabled:opacity-50"
           >
             {aiTesting ? (
@@ -295,7 +303,8 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
         <button
           type="button"
           onClick={handleSaveModel}
-          disabled={aiSaving || !aiModel}
+          disabled={aiSaving || !aiModel || !!unavailableReason}
+          title={unavailableReason ?? undefined}
           className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {aiSaving ? (

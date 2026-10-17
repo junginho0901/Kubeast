@@ -9,8 +9,11 @@ export interface DropdownOption {
   icon?: string
   /** Extra info displayed after the label (dimmed) */
   hint?: string
-  /** If true the option is rendered with dimmed style */
+  /** If true the option is dimmed and cannot be picked */
   disabled?: boolean
+  /** If true the option is dimmed but can still be picked (the form then says why it cannot be used yet); its hint
+   *  shows in the list, not in the closed field */
+  muted?: boolean
   /** Optional test id, applied to this option's button */
   testId?: string
 }
@@ -88,7 +91,7 @@ export default function CustomDropdown({
         <span className="flex items-center gap-2 font-medium truncate">
           {selected?.icon && <span className="text-base shrink-0">{selected.icon}</span>}
           <span className="truncate">{selected?.label ?? placeholder}</span>
-          {selected?.hint && (
+          {selected?.hint && !selected.muted && (
             <span className="text-[10px] text-slate-400 shrink-0">({selected.hint})</span>
           )}
         </span>
@@ -116,7 +119,7 @@ export default function CustomDropdown({
                   }
                 }}
                 className={`w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg ${
-                  opt.disabled ? 'opacity-40 cursor-not-allowed' : ''
+                  opt.disabled ? 'opacity-40 cursor-not-allowed' : opt.muted ? 'opacity-50' : ''
                 }`}
               >
                 {isSelected && (

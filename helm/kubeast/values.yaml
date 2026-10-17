@@ -354,16 +354,18 @@ ai:
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
   # Personal use only: Anthropic's terms keep a subscription to its owner, so turn
-  # this on only in an install one person uses. Needs an ai-service image built
-  # with --build-arg WITH_CLAUDE_CODE=true (about 250 MB more), the token in
-  # claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in apiKeysSecret), and a
-  # model config with that provider naming CLAUDE_CODE_OAUTH_TOKEN. Each running
-  # turn holds one Claude Code process; maxConcurrent caps the chat's (raise
-  # resources.aiService.limits.memory with it) and an alert investigation runs
-  # in one more slot of its own.
+  # this on only in an install one person uses. Turning it on runs the ai-service
+  # image tagged imageTagSuffix (the release builds it with Claude Code, about
+  # 250 MB more; "" for a self-built image with --build-arg WITH_CLAUDE_CODE=true).
+  # Also needs the token in claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in
+  # apiKeysSecret) and a model config with that provider naming
+  # CLAUDE_CODE_OAUTH_TOKEN. Each running turn holds one Claude Code process;
+  # maxConcurrent caps the chat's (raise resources.aiService.limits.memory with
+  # it) and an alert investigation runs in one more slot of its own.
   providers:
     claudeCode:
       enabled: false
+      imageTagSuffix: "-claude-code"
       maxConcurrent: 1
       turnTimeoutSeconds: 300
       maxTurns: 10
