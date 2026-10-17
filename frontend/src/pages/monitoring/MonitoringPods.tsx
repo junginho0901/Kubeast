@@ -93,7 +93,7 @@ export default function MonitoringPods({
 
   // 플로팅 AI 위젯용 스냅샷 — Pod 메트릭 요약
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(podMetrics) || podMetrics.length === 0) return null
+    if (!Array.isArray(podMetrics)) return null
     const items = [...podMetrics].sort((a, b) => {
       const aCpu = Number(String(a.cpu).replace(/[^0-9.]/g, '')) || 0
       const bCpu = Number(String(b.cpu).replace(/[^0-9.]/g, '')) || 0

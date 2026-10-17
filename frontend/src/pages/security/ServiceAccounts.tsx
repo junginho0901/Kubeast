@@ -216,7 +216,7 @@ export default function ServiceAccounts() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(serviceAccounts) || serviceAccounts.length === 0) return null
+    if (!Array.isArray(serviceAccounts)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = serviceAccounts.length
     return {

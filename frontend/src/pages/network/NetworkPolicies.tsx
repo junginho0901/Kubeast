@@ -174,7 +174,7 @@ export default function NetworkPolicies() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(policies) || policies.length === 0) return null
+    if (!Array.isArray(policies)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = policies.length
     const denyAll = policies.filter((p) => p.default_deny_ingress || p.default_deny_egress).length

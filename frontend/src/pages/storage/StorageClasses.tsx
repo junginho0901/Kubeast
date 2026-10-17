@@ -147,7 +147,7 @@ export default function StorageClasses() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(storageClasses) || storageClasses.length === 0) return null
+    if (!Array.isArray(storageClasses)) return null
     const total = storageClasses.length
     return {
       source: 'base' as const,

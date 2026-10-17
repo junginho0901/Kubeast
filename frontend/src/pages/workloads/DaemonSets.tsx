@@ -162,7 +162,7 @@ export default function DaemonSets() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(daemonsets) || daemonsets.length === 0) return null
+    if (!Array.isArray(daemonsets)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = daemonsets.length
     const unavailable = daemonsets.filter((d) => d.unavailable > 0 || d.misscheduled > 0).length

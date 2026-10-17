@@ -137,7 +137,7 @@ export default function IngressClasses() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(ingressClasses) || ingressClasses.length === 0) return null
+    if (!Array.isArray(ingressClasses)) return null
     const total = ingressClasses.length
     const defaults = ingressClasses.filter((c) => c.is_default).length
     return {

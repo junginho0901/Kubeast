@@ -187,7 +187,7 @@ export default function RuntimeClasses() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(runtimeClasses) || runtimeClasses.length === 0) return null
+    if (!Array.isArray(runtimeClasses)) return null
     const total = runtimeClasses.length
     return {
       source: 'base' as const,

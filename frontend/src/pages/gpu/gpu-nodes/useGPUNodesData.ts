@@ -141,7 +141,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
   }, [sortedNodes, currentPage, rowsPerPage])
 
   const aiSnapshot = useMemo(() => {
-    if (nodes.length === 0) return null
+    if (!data) return null
     const total = nodes.length
     const totalCapacity = nodes.reduce((s, n) => s + (n.gpu_capacity ?? 0), 0)
     const totalAlloc = nodes.reduce((s, n) => s + (n.gpu_allocatable ?? 0), 0)
@@ -167,7 +167,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
         }),
       },
     }
-  }, [nodes, pagedNodes, sortedNodes.length, currentPage, rowsPerPage, searchQuery])
+  }, [data, nodes, pagedNodes, sortedNodes.length, currentPage, rowsPerPage, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

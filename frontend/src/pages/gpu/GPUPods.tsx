@@ -171,7 +171,7 @@ export default function GPUPods() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (pods.length === 0) return null
+    if (!data) return null
     const total = pods.length
     const totalGpuRequested = pods.reduce((s, p) => s + (p.gpu_requested ?? 0), 0)
     const notRunning = pods.filter((p) => !/running/i.test(p.status)).length
@@ -196,7 +196,7 @@ export default function GPUPods() {
         }),
       },
     }
-  }, [pods, pagedPods, sortedPods.length, currentPage, rowsPerPage, searchQuery])
+  }, [data, pods, pagedPods, sortedPods.length, currentPage, rowsPerPage, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

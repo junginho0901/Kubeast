@@ -4,9 +4,8 @@ let stack: number[] = []
 let nextId = 1
 
 // Base z-index for the first (bottom-most) modal; each nested modal stacks
-// Z_STEP above the one it opened over. Keeps the first modal at the previous
-// fixed value (1200) so non-modal overlays (e.g. the floating chat) are
-// unaffected.
+// Z_STEP above the one it opened over. The floating chat sits above them all
+// (z 1300), so it can be asked about the window that is open.
 const Z_BASE = 1200
 const Z_STEP = 10
 
@@ -26,6 +25,11 @@ function isTopOf(id: number): boolean {
 
 function indexOf(id: number): number {
   return stack.indexOf(id)
+}
+
+// True while any modal or the detail drawer is open.
+export function modalOpen(): boolean {
+  return stack.length > 0
 }
 
 export interface ModalStackEntry {

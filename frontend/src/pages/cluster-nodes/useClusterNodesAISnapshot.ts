@@ -30,7 +30,7 @@ export function useClusterNodesAISnapshot({
   metricsMap,
 }: Params) {
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(nodes) || nodes.length === 0) return null
+    if (!Array.isArray(nodes)) return null
 
     const readyCount = nodes.filter((n) => /ready/i.test(n.status) && !/notready/i.test(n.status)).length
     const notReadyCount = nodes.length - readyCount

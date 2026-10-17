@@ -140,7 +140,7 @@ export default function GatewayClasses() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(gatewayClasses) || gatewayClasses.length === 0) return null
+    if (!Array.isArray(gatewayClasses)) return null
     const total = gatewayClasses.length
     return {
       source: 'base' as const,

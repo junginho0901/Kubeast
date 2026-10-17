@@ -175,7 +175,7 @@ export default function ClusterRoleBindings() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(clusterRoleBindings) || clusterRoleBindings.length === 0) return null
+    if (!Array.isArray(clusterRoleBindings)) return null
     const total = clusterRoleBindings.length
     return {
       source: 'base' as const,

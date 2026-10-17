@@ -217,7 +217,7 @@ spec:
 
   // 플로팅 AI 위젯용 스냅샷 — Pod 목록 요약 + 문제 항목 + interpretations
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(pods) || pods.length === 0) return null
+    if (!Array.isArray(pods)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const alertParts: string[] = []
     if (podStats.error > 0) alertParts.push(`오류 ${podStats.error}`)

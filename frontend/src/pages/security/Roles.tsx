@@ -203,7 +203,7 @@ export default function Roles() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(roles) || roles.length === 0) return null
+    if (!Array.isArray(roles)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = roles.length
     return {

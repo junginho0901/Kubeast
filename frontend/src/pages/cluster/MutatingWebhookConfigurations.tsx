@@ -182,7 +182,7 @@ export default function MutatingWebhookConfigurations() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(items) || items.length === 0) return null
+    if (!Array.isArray(items)) return null
     const total = items.length
     return {
       source: 'base' as const,

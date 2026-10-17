@@ -160,7 +160,7 @@ export default function Gateways() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(gateways) || gateways.length === 0) return null
+    if (!Array.isArray(gateways)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = gateways.length
     const notProgrammed = gateways.filter((g) => g.programmed === false).length

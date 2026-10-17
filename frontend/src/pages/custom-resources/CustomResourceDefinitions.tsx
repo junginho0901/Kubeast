@@ -190,7 +190,7 @@ export default function CustomResourceDefinitions() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(crds) || crds.length === 0) return null
+    if (!Array.isArray(crds)) return null
     const total = crds.length
     return {
       source: 'base' as const,

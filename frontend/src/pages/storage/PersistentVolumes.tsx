@@ -158,7 +158,7 @@ export default function PersistentVolumes() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(pvs) || pvs.length === 0) return null
+    if (!Array.isArray(pvs)) return null
     const total = pvs.length
     const released = pvs.filter((p) => /released/i.test(p.status)).length
     const failed = pvs.filter((p) => /fail/i.test(p.status)).length

@@ -133,7 +133,7 @@ export default function PDBs() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(pdbs) || pdbs.length === 0) return null
+    if (!Array.isArray(pdbs)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = pdbs.length
     const unhealthy = pdbs.filter((p) => p.current_healthy < p.desired_healthy).length

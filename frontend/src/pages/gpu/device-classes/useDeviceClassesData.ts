@@ -111,7 +111,7 @@ export function useDeviceClassesData({ searchQuery, sortKey, sortDir, currentPag
   }, [sortedDeviceClasses, currentPage, rowsPerPage])
 
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(deviceClasses) || deviceClasses.length === 0) return null
+    if (!Array.isArray(deviceClasses)) return null
     const total = deviceClasses.length
     return {
       source: 'base' as const,

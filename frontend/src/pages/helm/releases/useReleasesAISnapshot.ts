@@ -4,6 +4,7 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import type { HelmReleaseSummary } from '@/services/api'
 
 interface Params {
+  loaded: boolean
   items: HelmReleaseSummary[]
   paged: HelmReleaseSummary[]
   sortedCount: number
@@ -14,6 +15,7 @@ interface Params {
 }
 
 export function useReleasesAISnapshot({
+  loaded,
   items,
   paged,
   sortedCount,
@@ -23,7 +25,7 @@ export function useReleasesAISnapshot({
   searchQuery,
 }: Params) {
   const aiSnapshot = useMemo(() => {
-    if (items.length === 0) return null
+    if (!loaded) return null
     const total = items.length
     const failed = items.filter((r) => /fail|error/i.test(String(r.status))).length
     const pending = items.filter((r) => /pending/i.test(String(r.status))).length
@@ -46,7 +48,7 @@ export function useReleasesAISnapshot({
         }),
       },
     }
-  }, [items, paged, sortedCount, currentPage, rowsPerPage, namespace, searchQuery])
+  }, [loaded, items, paged, sortedCount, currentPage, rowsPerPage, namespace, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 }

@@ -171,7 +171,7 @@ export default function Endpoints() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(endpoints) || endpoints.length === 0) return null
+    if (!Array.isArray(endpoints)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = endpoints.length
     const notReady = endpoints.filter((e) => e.not_ready_count > 0).length

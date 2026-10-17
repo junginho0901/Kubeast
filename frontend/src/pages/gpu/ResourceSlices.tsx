@@ -201,7 +201,7 @@ export default function ResourceSlices() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped, DRA)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(resourceSlices) || resourceSlices.length === 0) return null
+    if (!Array.isArray(resourceSlices)) return null
     const total = resourceSlices.length
     return {
       source: 'base' as const,

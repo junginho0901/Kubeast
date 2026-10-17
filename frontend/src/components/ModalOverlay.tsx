@@ -1,20 +1,12 @@
 import { ReactNode, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useModalStackEntry } from '@/hooks/useModalStack'
+import { focusables } from '@/utils/focusables'
 
 interface ModalOverlayProps {
   children: ReactNode
   onClose?: () => void
   closeOnOverlayClick?: boolean
-}
-
-const FOCUSABLE = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled]):not([type="hidden"])', 'select:not([disabled])',
-  'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
-].join(',')
-
-function focusables(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0)
 }
 
 export function ModalOverlay({ children, onClose, closeOnOverlayClick = true }: ModalOverlayProps) {

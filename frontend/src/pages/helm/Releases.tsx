@@ -153,6 +153,7 @@ export default function HelmReleasesPage() {
   }, [sorted, currentPage, rowsPerPage])
 
   useReleasesAISnapshot({
+    loaded: data !== undefined,
     items,
     paged,
     sortedCount: sorted.length,

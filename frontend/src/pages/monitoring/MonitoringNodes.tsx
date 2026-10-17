@@ -91,7 +91,7 @@ export default function MonitoringNodes({
 
   // 플로팅 AI 위젯용 스냅샷 — 노드 메트릭 요약
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(nodeMetrics) || nodeMetrics.length === 0) return null
+    if (!Array.isArray(nodeMetrics)) return null
     const items = [...nodeMetrics].sort(
       (a, b) => (parsePercent(b.cpu_percent) ?? 0) - (parsePercent(a.cpu_percent) ?? 0),
     )

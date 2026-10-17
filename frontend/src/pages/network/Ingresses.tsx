@@ -162,7 +162,7 @@ export default function Ingresses() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(ingresses) || ingresses.length === 0) return null
+    if (!Array.isArray(ingresses)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = ingresses.length
     const noAddress = ingresses.filter((i) => !i.addresses || i.addresses.length === 0).length

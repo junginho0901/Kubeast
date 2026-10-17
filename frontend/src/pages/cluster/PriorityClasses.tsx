@@ -199,7 +199,7 @@ export default function PriorityClasses() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(priorityClasses) || priorityClasses.length === 0) return null
+    if (!Array.isArray(priorityClasses)) return null
     const total = priorityClasses.length
     const defaults = priorityClasses.filter((p) => p.global_default).length
     return {

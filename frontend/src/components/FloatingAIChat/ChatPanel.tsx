@@ -14,6 +14,8 @@ import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot
 import { chatErrorText } from '@/utils/chatError'
 
 import { MessageList, type DisplayMessage } from './MessageList'
+import { modalOpen } from '@/hooks/useModalStack'
+import { focusables } from '@/utils/focusables'
 import { useStickToBottom } from '@/hooks/useStickToBottom'
 import JumpToLatest from '@/components/JumpToLatest'
 import { InputArea } from './InputArea'
@@ -27,6 +29,8 @@ interface ChatPanelProps {
   currentPageType?: string
   /** 페이드/스케일 인-아웃 애니메이션 제어 (FloatingAIChat 에서 관리) */
   visible: boolean
+  /** 상세 드로어가 열려 있으면 드로어 왼쪽 바깥으로 */
+  docked: boolean
   /** 패널 닫고 다시 열어도 유지되도록 부모가 세션 id 를 소유 */
   sessionId: string | null
   onSessionIdChange: (id: string | null) => void
@@ -47,6 +51,7 @@ export function ChatPanel({
   currentPageTitle,
   currentPageType,
   visible,
+  docked,
   sessionId,
   onSessionIdChange,
 }: ChatPanelProps) {
@@ -210,9 +215,29 @@ export function ChatPanel({
   // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.
   const disabled = createSessionMutation.isPending
 
+  // Keys pressed in the panel stay here, so a modal or drawer under it does not close on Escape or take the focus on Tab.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
+      e.stopPropagation()
+      onClose()
+    } else if (e.key === 'Tab' && modalOpen()) {
+      e.stopPropagation()
+      const list = focusables(e.currentTarget)
+      if (list.length === 0) return
+      const first = list[0], last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+  }
+
   return (
     <div
-      className={`fixed bottom-6 right-6 z-1200 flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur-sm transition-all duration-200 ease-out origin-bottom-right ${
+      data-testid="floating-chat-panel"
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
+      className={`fixed bottom-6 right-6 z-1300 flex h-[min(70vh,640px)] w-[min(92vw,440px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 shadow-2xl shadow-black/40 backdrop-blur-sm transition-all duration-200 ease-out motion-reduce:transition-none origin-bottom-right focus:outline-hidden ${
+        docked ? 'min-[1348px]:right-[756px] min-[1348px]:w-[min(440px,calc(100vw-1028px))]' : ''
+      } ${
         visible
           ? 'opacity-100 scale-100 translate-y-0'
           : 'opacity-0 scale-95 translate-y-2 pointer-events-none'

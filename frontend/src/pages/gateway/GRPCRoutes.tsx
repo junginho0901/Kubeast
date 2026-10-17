@@ -160,7 +160,7 @@ export default function GRPCRoutes() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(grpcRoutes) || grpcRoutes.length === 0) return null
+    if (!Array.isArray(grpcRoutes)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = grpcRoutes.length
     const unresolved = grpcRoutes.filter((r) => r.resolved_refs === false).length

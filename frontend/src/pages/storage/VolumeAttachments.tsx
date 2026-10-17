@@ -160,7 +160,7 @@ export default function VolumeAttachments() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(volumeAttachments) || volumeAttachments.length === 0) return null
+    if (!Array.isArray(volumeAttachments)) return null
     const total = volumeAttachments.length
     const withError = volumeAttachments.filter((v) => !!(v.attach_error || v.detach_error)).length
     const prefix = withError > 0 ? '⚠️ ' : ''

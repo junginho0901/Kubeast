@@ -135,7 +135,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
   }, [sorted, currentPage, rowsPerPage])
 
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(items) || items.length === 0) return null
+    if (!Array.isArray(items)) return null
     return {
       source: 'base' as const,
       summary: `${kind} ${items.length}개`,

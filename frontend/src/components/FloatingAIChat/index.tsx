@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 
 import { usePageContext } from '../PageContext'
+import { useResourceDetail } from '../ResourceDetailContext'
 // The panel carries the markdown renderer; fetch it when first opened.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
 import { ToggleButton } from './ToggleButton'
@@ -23,9 +24,11 @@ function readPersistedSessionId(): string | null {
  * - `/ai-chat` 페이지에서는 숨김 (전체 AI 채팅 페이지와 중복 방지)
  * - 토글 버튼 ↔ 패널 전환 시 200ms fade + scale 애니메이션
  *   - mount/unmount 와 visible 상태를 분리하여 exit 애니메이션 후 DOM 제거
+ * - 모달 위(z 1300)에 뜨고, 상세 드로어(폭 740px)가 열려 있으면 드로어 왼쪽 바깥으로 옮김 — 1348px 미만 화면은 그대로
  */
 export default function FloatingAIChat() {
   const { pageType, pageTitle, getSnapshot, consumeContextChanged } = usePageContext()
+  const docked = !!useResourceDetail().target
   const [isOpen, setIsOpen] = useState(false)
   // 패널: isOpen=true 시 즉시 mount → 다음 frame 에 visible=true (enter 트랜지션)
   //       isOpen=false 시 visible=false → ANIM_MS 후 mount=false (exit 트랜지션)
@@ -76,7 +79,7 @@ export default function FloatingAIChat() {
 
   return (
     <>
-      <ToggleButton onClick={() => setIsOpen(true)} visible={toggleVisible} />
+      <ToggleButton onClick={() => setIsOpen(true)} visible={toggleVisible} docked={docked} />
       {panelMounted && (
         <Suspense fallback={null}>
           <ChatPanel
@@ -86,6 +89,7 @@ export default function FloatingAIChat() {
             currentPageTitle={pageTitle}
             currentPageType={pageType}
             visible={panelVisible}
+            docked={docked}
             sessionId={sessionId}
             onSessionIdChange={handleSessionIdChange}
           />

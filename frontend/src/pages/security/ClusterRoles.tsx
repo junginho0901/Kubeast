@@ -169,7 +169,7 @@ export default function ClusterRoles() {
 
   // 플로팅 AI 위젯용 스냅샷 (cluster-scoped)
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(clusterRoles) || clusterRoles.length === 0) return null
+    if (!Array.isArray(clusterRoles)) return null
     const total = clusterRoles.length
     return {
       source: 'base' as const,

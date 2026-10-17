@@ -203,7 +203,7 @@ export default function CustomResourceInstances() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(instances) || instances.length === 0) return null
+    if (!Array.isArray(instances)) return null
     const total = instances.length
     return {
       source: 'base' as const,

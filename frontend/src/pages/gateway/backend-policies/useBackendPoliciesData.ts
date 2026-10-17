@@ -152,7 +152,7 @@ export function useBackendPoliciesData<T extends BackendPolicyLike>({
   }, [sortedPolicies, currentPage, rowsPerPage])
 
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(policies) || policies.length === 0) return null
+    if (!Array.isArray(policies)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = policies.length
     return {

@@ -144,7 +144,7 @@ export default function Policies() {
   }, [sortedItems, currentPage, rowsPerPage])
 
   const aiSnapshot = useMemo(() => {
-    if (items.length === 0) return null
+    if (!data) return null
     return {
       source: 'base' as const,
       summary: `Gateway 정책 ${items.length}개${kindFilter ? ` · ${kindFilter}` : ''}`,
@@ -164,7 +164,7 @@ export default function Policies() {
         }),
       },
     }
-  }, [items, kinds, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, namespaceFilter, searchQuery])
+  }, [data, items, kinds, pagedItems, sortedItems.length, currentPage, rowsPerPage, kindFilter, namespaceFilter, searchQuery])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

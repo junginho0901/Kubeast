@@ -29,9 +29,9 @@ export function PageContextProvider({ children }: { children: ReactNode }) {
   const layersRef = useRef<Map<string, VisibleDataLayer>>(new Map())
   const contextChangedRef = useRef<boolean>(false)
 
-  // 경로 변경 시 이전 화면의 레이어 폐기 + contextChanged 플래그 set
+  // 경로 변경 시 contextChanged 플래그 set. 레이어는 각 화면이 언마운트 때 지운다 — 여기서 비우면
+  // 같은 커밋에서 먼저 등록된 새 화면과 열려 있는 드로어의 레이어까지 사라진다.
   useEffect(() => {
-    layersRef.current.clear()
     contextChangedRef.current = true
   }, [location.pathname])
 

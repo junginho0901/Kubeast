@@ -145,7 +145,7 @@ export default function Leases() {
 
   // 플로팅 AI 위젯용 스냅샷
   const aiSnapshot = useMemo(() => {
-    if (!Array.isArray(leases) || leases.length === 0) return null
+    if (!Array.isArray(leases)) return null
     const nsLabel = selectedNamespace === 'all' ? '전체 네임스페이스' : selectedNamespace
     const total = leases.length
     return {

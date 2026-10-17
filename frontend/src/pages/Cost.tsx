@@ -123,7 +123,7 @@ export default function Cost() {
   }, [sorted, currentPage, rowsPerPage])
 
   const aiSnapshot = useMemo(() => {
-    if (!cost.data || cost.data.rows.length === 0) return null
+    if (!cost.data) return null
     return {
       source: 'base' as const,
       summary: `Cost by ${aggregate}, window ${win}: ${cost.data.rows.length} rows, total ${formatMoney(cost.data.totals.total_cost, currency)}`,
