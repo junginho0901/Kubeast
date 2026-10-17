@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 
 import { resolveRouteMeta } from '@/utils/aiContext/routeMatcher'
+import { isPrivateScreen } from '@/utils/aiContext/privateScreens'
 import { PageContextCtx, type PageContextSnapshot, type PageContextValue, type VisibleDataLayer } from './PageContext'
 
 export function PageContextProvider({ children }: { children: ReactNode }) {
@@ -44,7 +45,8 @@ export function PageContextProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const getSnapshot = useCallback((): PageContextSnapshot => {
-    const all = Array.from(layersRef.current.values())
+    // nothing from a private screen, whatever window on it registered a layer
+    const all = isPrivateScreen(meta.path) ? [] : Array.from(layersRef.current.values())
     const base = all.find((l) => l.source === 'base')
     const overlays = all.filter((l) => l.source !== 'base')
     return {

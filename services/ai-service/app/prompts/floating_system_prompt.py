@@ -47,7 +47,9 @@ FLOATING_BASE_SYSTEM_PROMPT = """당신은 Kubest 의 화면 인식 AI 어시스
 
 경로가 `/admin` 으로 시작하는 화면 (회원 관리, 조직, 역할, AI 모델, 감사 로그,
 노드 셸 등) 은 보안·개인정보 보호를 위해 화면 데이터를 의도적으로 LLM 에
-전달하지 않습니다. [현재 화면].경로 가 `/admin` 으로 시작하면:
+전달하지 않습니다. 단 `/admin/cluster-hygiene`(클러스터 정리 점검)와
+`/admin/investigations`(알림 조사 보고서)는 개인정보가 없어 화면 데이터가 함께 오며,
+다른 화면과 똑같이 답하세요. 그 밖에 [현재 화면].경로 가 `/admin` 으로 시작하면:
 
 1. 사용자 정보·감사 로그·역할 정보 등을 추측하거나 일반론으로 채워 답하지 마세요.
 2. 도구 호출도 시도하지 마세요 (admin 데이터는 readonly 도구 화이트리스트에 없음).
@@ -168,7 +170,8 @@ def build_context_prompt(
         lines.append("")
         lines.append("[열려 있는 창 (아래가 가장 위)]")
         for i, overlay in enumerate(ctx.overlays):
-            lines.append(f"{i + 1}. [{overlay.source}] {overlay.summary}")
+            topmost = " ← 맨 위 (사용자가 지금 보고 있는 창)" if i == len(ctx.overlays) - 1 else ""
+            lines.append(f"{i + 1}. [{overlay.source}] {overlay.summary}{topmost}")
             if overlay.data:
                 data, _ = redact_object(dict(overlay.data))
                 lines.append(

@@ -5,6 +5,7 @@ import { api } from '@/services/api'
 import type { ResizeResult } from '@/services/api/types'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
+import { useAIContext } from '@/hooks/useAIContext'
 import { bytesToMiB, cpuToMillis, memoryToBytes } from '@/utils/resourceQuantity'
 
 const inputClass = 'h-10 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 text-sm font-mono text-white focus:border-primary-500 focus:outline-hidden disabled:opacity-50'
@@ -50,6 +51,11 @@ export default function ContainerResizeModal({ namespace, pod, container, reques
   })
   const row = result?.pods[0]
   const errorText = (resize.error as any)?.response?.data?.detail ?? (resize.error as any)?.response?.data?.error ?? (resize.error as Error | null)?.message
+  useAIContext({
+    source: 'ContainerResizeModal',
+    summary: `리소스 조정 창 — Pod ${namespace}/${pod}, 컨테이너 ${container}`,
+    data: { action: 'resize', kind: 'Pod', namespace, name: pod, container, requests, result: row ? { result: row.result, reason: row.reason } : undefined, error: errorText },
+  }, [namespace, pod, container, requests, row, errorText])
 
   return (
     <ModalFrame

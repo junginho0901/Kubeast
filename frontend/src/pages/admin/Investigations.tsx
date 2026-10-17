@@ -9,6 +9,7 @@ import { ExternalLink, FileSearch, RefreshCw, Siren } from 'lucide-react'
 import { api } from '@/services/api'
 import type { Investigation, InvestigationSummary } from '@/services/api/investigations'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
+import { useAIContext } from '@/hooks/useAIContext'
 import { alertInvestigationEnabled } from '@/utils/features'
 import CustomDropdown from '@/components/CustomDropdown'
 import { ModalFrame } from '@/components/ModalFrame'
@@ -70,6 +71,18 @@ export default function Investigations() {
 
   const statusTitle = (r: InvestigationSummary) =>
     r.status === 'skipped' ? tr('investigations.skipReason', 'Skipped: {{reason}}', { reason: r.skip_reason }) : undefined
+
+  useAIContext(data ? {
+    summary: `알림 조사 보고서 ${total}건${applied.status ? ` (상태 ${applied.status})` : ''}${applied.cluster ? ` (클러스터 ${applied.cluster})` : ''}`,
+    data: {
+      filters: { status: applied.status || undefined, cluster: applied.cluster || undefined, page },
+      items: rows.map((r) => ({
+        alertname: r.alertname, cluster: r.cluster, namespace: r.namespace, severity: r.severity, status: r.status,
+        skip_reason: r.skip_reason || undefined, received_at: r.received_at, repeat_count: r.repeat_count,
+        tool_call_count: r.tool_call_count, total_tokens: r.total_tokens,
+      })),
+    },
+  } : null, [data, total, applied, page, rows])
 
   return (
     <div className="page-scrolls space-y-6">
@@ -221,6 +234,16 @@ function InvestigationModal({ id, onClose }: { id: string; onClose: () => void }
     retry: false,
     staleTime: Infinity,
   })
+  useAIContext(data ? {
+    source: 'InvestigationModal',
+    summary: `알림 조사 보고서 — ${data.alertname} (${data.cluster}${data.namespace ? ` / ${data.namespace}` : ''}, ${data.status})`,
+    data: {
+      alertname: data.alertname, cluster: data.cluster, namespace: data.namespace, severity: data.severity, status: data.status,
+      labels: data.labels, received_at: data.received_at, model: data.model, iterations: data.iterations,
+      tool_calls: data.tool_calls.map((c) => ({ tool: c.tool, args: c.args, error: c.error })),
+      error: data.error || undefined, report: data.report.slice(0, 4096),
+    },
+  } : null, [data])
 
   return (
     <ModalFrame

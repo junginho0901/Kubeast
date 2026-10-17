@@ -11,6 +11,7 @@ import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
 import { TypeToConfirm, WarningBox } from '@/components/TypeToConfirm'
 import { systemObject } from '@/components/resource-detail/systemObject'
+import { useAIContext } from '@/hooks/useAIContext'
 import type { PodInfo } from '@/services/api'
 
 interface Props {
@@ -27,6 +28,11 @@ export function PodDeleteModal({ pod, force, error, isDeleting, onForceChange, o
   const { t } = useTranslation()
   // the typed name belongs to one pod: opening another starts empty
   const [typedFor, setTypedFor] = useState({ pod: '', value: '' })
+  useAIContext(pod ? {
+    source: 'PodDeleteModal',
+    summary: `삭제 확인 창 — Pod ${pod.namespace}/${pod.name}`,
+    data: { action: 'delete', kind: 'Pod', namespace: pod.namespace, name: pod.name, force, error: error ?? undefined },
+  } : null, [pod, force, error])
   if (!pod) return null
   const typed = typedFor.pod === pod.name ? typedFor.value : ''
   const setTyped = (value: string) => setTypedFor({ pod: pod.name, value })

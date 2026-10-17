@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api } from '@/services/api'
 import { isValidNsName } from './namespaceHelpers'
 
@@ -14,6 +15,12 @@ export default function NamespaceCreateDialog({ onClose, onCreated, tr }: Props)
   const [newNsName, setNewNsName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+
+  useAIContext({
+    source: 'NamespaceCreateDialog',
+    summary: '생성 창 — Namespace',
+    data: { action: 'create', kind: 'Namespace', error: createError ?? undefined },
+  }, [createError])
 
   const handleCreate = async () => {
     if (!isValidNsName(newNsName) || isCreating) return

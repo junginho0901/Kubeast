@@ -1,5 +1,7 @@
 import { Box, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 import { PodDetailTabs } from './PodDetailTabs'
 import { PodDetailTabBody } from './PodDetailTabBody'
 import { useClusterView } from './ClusterViewContext'
@@ -14,7 +16,21 @@ interface Props {
 }
 
 export function PodDetailModal({ isAdmin, manifest, describeData }: Props) {
-  const { selectedPod, closeDetailModal } = useClusterView()
+  const { selectedPod, closeDetailModal, activeTab } = useClusterView()
+
+  useAIContext(selectedPod ? {
+    source: 'PodDetailModal',
+    summary: `Pod ${selectedPod.name} (${selectedPod.namespace}) 상세 — ${activeTab} 탭`,
+    data: {
+      kind: 'Pod', name: selectedPod.name, namespace: selectedPod.namespace,
+      _link: buildResourceLink('Pod', selectedPod.namespace, selectedPod.name),
+      node: selectedPod.node, status: selectedPod.status, phase: selectedPod.phase, restart_count: selectedPod.restart_count,
+      created_at: selectedPod.created_at,
+      containers: selectedPod.containers.map((c) => ({ name: c.name, image: c.image, ready: c.ready, state: c.state, restart_count: c.restart_count })),
+      describe: activeTab === 'describe' ? describeData : undefined,
+      manifest: activeTab === 'manifest' && manifest ? manifest.slice(0, 4096) : undefined,
+    },
+  } : null, [selectedPod, activeTab, describeData, manifest])
 
   if (!selectedPod) return null
 

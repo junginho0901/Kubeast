@@ -26,6 +26,7 @@ import { api } from '@/services/api'
 import type { OptimizationResponse, OptimizationRow, ResizeResult } from '@/services/api/types'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
+import { useAIContext } from '@/hooks/useAIContext'
 import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
@@ -191,6 +192,21 @@ export function OptimizationModal({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isDropdownOpen, setIsDropdownOpen])
+
+  useAIContext(open && table ? {
+    source: 'OptimizationModal',
+    summary: `리소스 최적화 — ${table.namespace} 네임스페이스, ${table.rows.length}개 컨테이너 (관측 ${table.window_hours}시간, ${table.source})`,
+    data: {
+      totals: table.totals,
+      rows: table.rows.slice(0, 30).map((r) => ({
+        kind: r.kind, name: r.name, container: r.container, pods: r.pods, flags: r.flags,
+        cpu_request_m: r.cpu_request_m, cpu_usage_m: r.cpu_usage_m, cpu_recommend_m: r.cpu_recommend_m,
+        mem_request_bytes: r.mem_request_bytes, mem_usage_bytes: r.mem_usage_bytes, mem_recommend_bytes: r.mem_recommend_bytes,
+        saving_month_usd: r.saving_month_usd,
+      })),
+      ai_suggestion: answerContent ? answerContent.slice(0, 2000) : undefined,
+    },
+  } : null, [open, table, answerContent])
 
   if (!open) return null
 

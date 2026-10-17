@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, Loader2, XCircle } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api, type HelmTestResponse } from '@/services/api'
 
 // Runs helm test on the release on mount, then renders a per-hook
@@ -51,6 +52,15 @@ export default function TestResultModal({
   }, [runTest])
 
   const running = runMutation.isPending
+
+  useAIContext({
+    source: 'HelmTestResult',
+    summary: `Helm 릴리스 ${namespace}/${name} 테스트 — ${running ? '실행 중' : result ? (result.success ? '성공' : '실패') : error ? '실패' : '대기'}`,
+    data: {
+      release: name, namespace, running, success: result?.success, error: error ?? undefined,
+      hooks: result?.hooks.map((h) => ({ name: h.name, phase: h.phase, failed: h.failed, logs: h.logs?.slice(-1500) })),
+    },
+  }, [namespace, name, running, result, error])
 
   return (
     <ModalOverlay onClose={onClose}>

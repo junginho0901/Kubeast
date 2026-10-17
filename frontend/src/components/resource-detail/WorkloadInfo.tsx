@@ -320,6 +320,7 @@ export default function WorkloadInfo({ name, namespace, kind, rawJson, writesBlo
       )}
 
       <WorkloadDialogs
+        target={`${kind} ${namespace}/${name}`}
         triggerToast={triggerToast}
         triggerDialogOpen={triggerDialogOpen}
         setTriggerDialogOpen={setTriggerDialogOpen}

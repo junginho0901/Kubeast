@@ -1,6 +1,7 @@
 import { ReactNode, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmContext, type ConfirmFn, type ConfirmOptions } from '@/services/confirm'
+import { useAIContext } from '@/hooks/useAIContext'
 import { ModalFrame } from './ModalFrame'
 import { modalButton } from './modalStyles'
 import { TypeToConfirm, WarningBox } from './TypeToConfirm'
@@ -29,6 +30,11 @@ function ConfirmDialog({ options, onDone }: { options: ConfirmOptions; onDone: (
   const { t } = useTranslation()
   const [typed, setTyped] = useState('')
   const ready = !options.typeToConfirm || typed === options.typeToConfirm
+  useAIContext({
+    source: 'ConfirmDialog',
+    summary: `확인 창 — ${options.title}`,
+    data: { title: options.title, message: options.message, warning: options.warning, confirm_label: options.confirmLabel, type_to_confirm: options.typeToConfirm },
+  }, [options])
   return (
     <ModalFrame
       size="sm"

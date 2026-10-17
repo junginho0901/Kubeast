@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api, type HelmRollbackResponse } from '@/services/api'
 import DiffView from './DiffView'
 
@@ -21,6 +22,11 @@ export default function RollbackModal({
   const queryClient = useQueryClient()
   const [preview, setPreview] = useState<HelmRollbackResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useAIContext({
+    source: 'HelmRollbackModal',
+    summary: `롤백 확인 창 — Helm 릴리스 ${namespace}/${name}, 리비전 ${targetRevision}으로`,
+    data: { action: 'rollback', release: name, namespace, target_revision: targetRevision, error: error ?? undefined },
+  }, [namespace, name, targetRevision, error])
 
   // Auto-run dry-run on mount so the user sees the diff immediately.
   // Keeping it as a mutation (not a query) mirrors the apply mutation

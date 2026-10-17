@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Editor from '@/components/monaco/CodeEditor'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton, yamlEditorHeight } from '@/components/modalStyles'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api } from '@/services/api'
 
 const CLUSTER_SCOPED_KINDS = new Set([
@@ -35,6 +36,13 @@ export default function ResourceYamlCreateDialog({
   useEffect(() => {
     setYaml(initialYaml)
   }, [initialYaml])
+
+  // the action and where it goes, not the YAML being written
+  useAIContext({
+    source: 'ResourceYamlCreateDialog',
+    summary: `생성 창 — ${title}${namespace ? ` (${namespace})` : ''}`,
+    data: { action: 'create', title, namespace, error: error ?? undefined },
+  }, [title, namespace, error])
 
   // The namespace hint only makes sense for namespaced kinds; the sample YAML
   // every caller passes starts with the kind, so read it from there.

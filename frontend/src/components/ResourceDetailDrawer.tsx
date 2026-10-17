@@ -218,6 +218,11 @@ export default function ResourceDetailDrawer() {
   }, [target, tab, kind, name, ns, yamlData, effectiveRawJson])
 
   useAIContext(aiSnapshot, [aiSnapshot])
+  useAIContext(deleteDialogOpen && target ? {
+    source: 'DeleteConfirm',
+    summary: `삭제 확인 창 — ${displayKind} ${ns ? `${ns}/` : ''}${name}`,
+    data: { action: 'delete', kind: displayKind, namespace: ns, name, error: deleteError || undefined },
+  } : null, [deleteDialogOpen, target, displayKind, ns, name, deleteError])
 
 
 

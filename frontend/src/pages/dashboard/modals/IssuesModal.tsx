@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next'
 import { AlertCircle, CheckCircle, RefreshCw, Search, X } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 import type { IssueItem, IssueKind, IssueSeverity } from '../types'
 import { formatAge } from '../utils'
 
@@ -56,6 +58,20 @@ export function IssuesModal({
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
+
+  useAIContext(open && !isLoading ? {
+    source: 'IssuesModal',
+    summary: `클러스터 문제 목록 — 전체 ${issuesSummary.total}건 (critical ${issuesSummary.critical}, warning ${issuesSummary.warning}, info ${issuesSummary.info})`,
+    data: {
+      filters: { search: searchQuery || undefined, window_minutes: windowMinutes ?? defaultWindowMinutes, include_restart_history: includeRestartHistory },
+      generated_at: generatedAt,
+      error,
+      visible_items: sortedIssues.slice(0, 30).map((i) => ({
+        kind: i.kind, name: i.name, namespace: i.namespace, severity: i.severity, title: i.title, detail: i.subtitle,
+        count: i.count, last_seen: i.lastSeen, _link: i.name ? buildResourceLink(i.kind, i.namespace, i.name) : undefined,
+      })),
+    },
+  } : null, [open, isLoading, issuesSummary, sortedIssues, searchQuery, windowMinutes, defaultWindowMinutes, includeRestartHistory, generatedAt, error])
 
   if (!open) return null
 

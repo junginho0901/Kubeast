@@ -103,6 +103,8 @@ const STATIC_MAP: Record<string, StaticEntry> = {
   '/cluster-view':                        { pageType: 'cluster-view',                                    titleKey: 'nav.clusterView',             pageTitle: '클러스터 뷰' },
   '/ai-chat':                             { pageType: 'ai-chat',                                         titleKey: 'nav.aiChat',                  pageTitle: 'AI 챗' },
   '/account':                             { pageType: 'account',                                         titleKey: 'layout.account',              pageTitle: '설정' },
+  '/admin/cluster-hygiene':               { pageType: 'cluster-hygiene',                                 titleKey: 'nav.clusterHygiene',          pageTitle: 'Cluster Hygiene' },
+  '/admin/investigations':                { pageType: 'investigations',                                  titleKey: 'nav.investigations',          pageTitle: 'Investigations' },
 }
 
 // 동적 경로 매처 (path param 포함)

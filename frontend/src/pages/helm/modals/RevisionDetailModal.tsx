@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api, type HelmSection } from '@/services/api'
 import DiffView from './DiffView'
 
@@ -107,6 +108,11 @@ function SectionPane({
     queryKey: ['helm-revision-section', namespace, name, revision, section],
     queryFn: () => api.helm.getRevisionSection(namespace, name, revision, section),
   })
+  useAIContext(q.data ? {
+    source: 'HelmRevisionDetail',
+    summary: `Helm 릴리스 ${namespace}/${name} 리비전 ${revision} — ${section}`,
+    data: { release: name, namespace, revision, section, content: (q.data.content ?? '').slice(0, 4096) },
+  } : null, [q.data, namespace, name, revision, section])
 
   if (q.isLoading) {
     return (
@@ -139,6 +145,11 @@ function DiffPane({
     queryKey: ['helm-revision-diff', namespace, name, from, to],
     queryFn: () => api.helm.diff(namespace, name, { from, to, section: 'manifest' }),
   })
+  useAIContext(q.data ? {
+    source: 'HelmRevisionDetail',
+    summary: `Helm 릴리스 ${namespace}/${name} 리비전 ${from} → 현재 ${to} manifest 차이`,
+    data: { release: name, namespace, from, to, diff: (q.data.diff ?? '').slice(0, 4096) },
+  } : null, [q.data, namespace, name, from, to])
 
   if (q.isLoading) {
     return (

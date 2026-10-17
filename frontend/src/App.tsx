@@ -8,6 +8,8 @@ import RequirePermission from './components/RequirePermission'
 import RouteFallback from './components/RouteFallback'
 import Login from './pages/Login'
 import { ClusterProvider } from './contexts/ClusterProvider'
+import ConfirmProvider from './components/ConfirmProvider'
+import { PageContextProvider } from './components/PageContextProvider'
 
 // Every page is its own chunk, fetched on first navigation. Login stays in the
 // entry chunk because it is the first screen.
@@ -97,8 +99,11 @@ function TopologyRedirect() {
 }
 
 function App() {
+  // The confirm window sits under the page context too, so the floating chat can read which confirmation is open.
   return (
     <BrowserRouter>
+      <PageContextProvider>
+      <ConfirmProvider>
       <ClusterProvider>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
@@ -190,6 +195,8 @@ function App() {
           </Routes>
         </Suspense>
       </ClusterProvider>
+      </ConfirmProvider>
+      </PageContextProvider>
     </BrowserRouter>
   )
 }

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api, type HelmUninstallResponse, type HelmReleaseResource } from '@/services/api'
 
 export default function UninstallModal({
@@ -22,6 +23,11 @@ export default function UninstallModal({
   const [keepHistory, setKeepHistory] = useState(false)
   const [preview, setPreview] = useState<HelmUninstallResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useAIContext({
+    source: 'HelmUninstallModal',
+    summary: `언인스톨 확인 창 — Helm 릴리스 ${namespace}/${name}`,
+    data: { action: 'uninstall', release: name, namespace, keep_history: keepHistory, error: error ?? undefined },
+  }, [namespace, name, keepHistory, error])
 
   const dryRunMutation = useMutation({
     mutationFn: () =>

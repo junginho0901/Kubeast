@@ -9,7 +9,13 @@ import { Box, CheckCircle, RefreshCw, Search, X, XCircle } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 import type { ResourceType } from '../types'
+
+const KIND_BY_TYPE: Record<ResourceType, string> = {
+  namespaces: 'Namespace', pods: 'Pod', services: 'Service', deployments: 'Deployment', pvcs: 'PersistentVolumeClaim', nodes: 'Node',
+}
 
 interface SelectedStat {
   name: string
@@ -45,6 +51,17 @@ export function ResourceModal({
   const na = tr('common.notAvailable', 'N/A')
   const none = tr('common.none', 'None')
   const { open: openDetail } = useResourceDetail()
+
+  useAIContext(selectedResourceType && !isLoading ? {
+    source: 'ResourceModal',
+    summary: `${selectedStat?.name ?? selectedResourceType} 목록 — ${resourceCount}개${searchQuery ? ` (검색 "${searchQuery}")` : ''}`,
+    data: {
+      visible_items: filteredResources.slice(0, 30).map((r) => {
+        const kind = KIND_BY_TYPE[selectedResourceType]
+        return { kind, name: r.name, namespace: r.namespace, status: r.status ?? r.phase, _link: buildResourceLink(kind, r.namespace, r.name) }
+      }),
+    },
+  } : null, [selectedResourceType, isLoading, selectedStat?.name, resourceCount, searchQuery, filteredResources])
 
   if (!selectedResourceType) return null
 

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api, type HelmUpgradeResponse } from '@/services/api'
 import DiffView from './DiffView'
 
@@ -44,6 +45,12 @@ export default function UpgradePreviewModal({
   const diff = preview.diff ?? ''
   const noChange = diff.trim() === ''
   const applying = applyMutation.isPending
+
+  useAIContext({
+    source: 'HelmUpgradePreview',
+    summary: `Helm 릴리스 ${namespace}/${name} 업그레이드 미리보기 — 리비전 ${preview.fromRevision}에서, ${noChange ? '바뀌는 것 없음' : 'manifest 차이 있음'}`,
+    data: { release: name, namespace, from_revision: preview.fromRevision, chart_version: preview.chartVersion, diff: diff.slice(0, 4096), error: error ?? undefined },
+  }, [namespace, name, preview, diff, noChange, error])
 
   return (
     <ModalOverlay onClose={applying ? () => undefined : onClose}>

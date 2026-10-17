@@ -180,3 +180,112 @@ test.describe('floating chat screen data', () => {
     expect(await onTop(toggle)).toBe(true)
   })
 })
+
+const top = (ctx: PageContext) => ctx.overlays[ctx.overlays.length - 1]
+
+test.describe('floating chat — windows and admin screens', () => {
+  test('a window that shows information sends what it shows as the top layer', async ({ page }) => {
+    const sent = await captureFloating(page)
+    await page.goto('/?cluster=self')
+    await page.locator('button.card').filter({ hasText: /^Namespaces\d+$/ }).click()
+    await expect.poll(async () => top(await ask(page, sent))?.source).toBe('ResourceModal')
+    const list = top(sent[sent.length - 1])
+    const names = (list.data?.visible_items as Array<{ kind: string; name: string }>).map((i) => `${i.kind}/${i.name}`)
+    expect(names).toContain('Namespace/kube-system')
+
+    // Escape twice: the chat, then the list window under it
+    await page.getByTestId('floating-chat-input').focus()
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('floating-chat-panel')).toHaveCount(0)
+    await page.getByRole('button', { name: /Check issues/ }).click()
+    // the issues are collected when the window opens, which takes a few seconds
+    await expect.poll(async () => top(await ask(page, sent))?.source, { timeout: 20000 }).toBe('IssuesModal')
+    const issues = top(sent[sent.length - 1])
+    // the dev fixtures keep an unschedulable Deployment and a failed Job
+    expect(JSON.stringify(issues.data?.visible_items)).toMatch(/e2e-unschedulable|e2e-failing-job/)
+  })
+
+  test('a delete confirmation sends the action and its target, above the drawer', async ({ page }) => {
+    const sent = await captureFloating(page)
+    await page.goto('/configuration/configmaps?cluster=self')
+    await page.locator('tbody tr').filter({ has: page.getByText('kube-root-ca.crt', { exact: true }) }).first().click()
+    await page.getByRole('button', { name: 'Delete ConfigMap' }).click()
+    await expect(page.getByTestId('delete-dialog')).toBeVisible()
+    const ctx = await ask(page, sent)
+    // the drawer's own layers (the drawer, the ConfigMap section) under the confirmation
+    expect(ctx.overlays.map((o) => o.source)).toContain('ResourceDetailDrawer')
+    expect(top(ctx).source).toBe('DeleteConfirm')
+    expect(top(ctx).data).toMatchObject({ action: 'delete', kind: 'ConfigMap', name: 'kube-root-ca.crt' })
+
+    await page.getByTestId('floating-chat-input').focus()
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByTestId('delete-dialog')).toHaveCount(0)
+    expect(top(await ask(page, sent)).source, 'the closed confirmation is gone from the layers').toBe('ResourceDetailDrawer')
+  })
+
+  test('the shared confirm window sends its title and message', async ({ page }) => {
+    const sent = await captureFloating(page)
+    await page.goto('/configuration/configmaps?cluster=self')
+    await page.locator('tbody tr').filter({ has: page.getByText('kube-root-ca.crt', { exact: true }) }).first().click()
+    await page.getByRole('button', { name: 'YAML' }).click()
+    await page.getByRole('button', { name: 'Edit', exact: true }).click()
+    const editor = page.locator('.monaco-editor .view-lines').first()
+    await expect(editor).toContainText('kube-root-ca.crt')
+    await editor.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' ')
+    // leaving the edited YAML tab asks first
+    await page.getByRole('button', { name: 'Info' }).click()
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible()
+    const ctx = await ask(page, sent)
+    expect(top(ctx).source).toBe('ConfirmDialog')
+    expect(top(ctx).data).toMatchObject({ title: 'Unsaved YAML', confirm_label: 'Discard' })
+    await page.getByTestId('floating-chat-input').focus()
+    await page.keyboard.press('Escape')
+    await page.getByTestId('confirm-dialog-ok').click()
+  })
+
+  test('admin screens and the account page send nothing; cluster hygiene and investigations send their data', async ({ page }) => {
+    const sent = await captureFloating(page)
+    await page.goto('/?cluster=self')
+    await openChat(page)
+    for (const path of ['/admin/users', '/admin/roles', '/admin/audit', '/account']) {
+      await navigate(page, path)
+      await page.waitForTimeout(1500)
+      const ctx = await ask(page, sent)
+      expect(ctx.path).toBe(path)
+      expect({ base: ctx.base ?? null, overlays: ctx.overlays }, path).toEqual({ base: null, overlays: [] })
+    }
+    for (const path of ['/admin/cluster-hygiene', '/admin/investigations']) {
+      await navigate(page, path)
+      const ctx = await askForBase(page, sent, path, 20000)
+      expect(ctx.base?.summary, path).toBeTruthy()
+    }
+  })
+
+  test('a confirmation on an admin screen sends nothing', async ({ page, request }) => {
+    const login = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
+    const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const name = `E2EFloatingRole${Date.now()}`
+    const created = await request.post('/api/v1/auth/admin/roles', { headers, data: { name, description: 'floating-context.spec', permissions: ['menu.dashboard'] } })
+    expect(created.ok(), await created.text()).toBeTruthy()
+    try {
+      const sent = await captureFloating(page)
+      await page.goto('/admin/roles')
+      await page.locator('tr').filter({ hasText: name }).locator('button[title="Delete"]').click()
+      await expect(page.getByTestId('confirm-dialog')).toContainText(name)
+      const ctx = await ask(page, sent)
+      expect(ctx.overlays, 'the confirmation names a role on an admin screen').toEqual([])
+      await page.getByTestId('floating-chat-input').focus()
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('confirm-dialog')).toHaveCount(0)
+    } finally {
+      const roles = (await (await request.get('/api/v1/auth/roles', { headers })).json()) as Array<{ id: number; name: string }>
+      const role = roles.find((r) => r.name === name)
+      if (role) await request.delete(`/api/v1/auth/admin/roles/${role.id}`, { headers })
+    }
+  })
+})

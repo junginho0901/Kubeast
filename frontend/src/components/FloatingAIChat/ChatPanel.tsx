@@ -216,9 +216,16 @@ export function ChatPanel({
   const disabled = createSessionMutation.isPending
 
   // Keys pressed in the panel stay here, so a modal or drawer under it does not close on Escape or take the focus on Tab.
+  // Once Escape has closed it they pass on, also before the fade starts: a second Escape closes the window under it.
+  const closing = useRef(false)
+  useEffect(() => {
+    if (visible) closing.current = false
+  }, [visible])
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!visible || closing.current) return
     if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
       e.stopPropagation()
+      closing.current = true
       onClose()
     } else if (e.key === 'Tab' && modalOpen()) {
       e.stopPropagation()

@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next'
 import { CheckCircle, ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
+import { buildResourceLink } from '@/utils/resourceLink'
 
 import { formatBytes } from '../utils'
 
@@ -88,6 +90,22 @@ export function StorageModal({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isDropdownOpen, setIsDropdownOpen])
+
+  const pvTab = activeTab === 'pvs'
+  useAIContext(open && !isLoading ? {
+    source: 'StorageModal',
+    summary: `스토리지 분석 — PVC ${sortedPVCs.length}개, PV ${sortedPVs.length}개 (${activeTab} 탭${namespaceFilter !== 'all' ? `, ${namespaceFilter}` : ''})`,
+    data: {
+      filters: { tab: activeTab, namespace: namespaceFilter, search: searchQuery || undefined },
+      pvc_status_counts: pvcStatusCounts,
+      pv_status_counts: pvStatusCounts,
+      visible_items: (pvTab ? sortedPVs : sortedPVCs).slice(0, 30).map((v) => ({
+        kind: pvTab ? 'PersistentVolume' : 'PersistentVolumeClaim', name: v.name, namespace: v.namespace, status: v.status,
+        capacity: v.capacity, storage_class: v.storage_class, claim: v.claim_ref ?? v.volume_name,
+        _link: buildResourceLink(pvTab ? 'PersistentVolume' : 'PersistentVolumeClaim', v.namespace, v.name),
+      })),
+    },
+  } : null, [open, isLoading, sortedPVCs, sortedPVs, activeTab, namespaceFilter, searchQuery, pvcStatusCounts, pvStatusCounts])
 
   if (!open) return null
 

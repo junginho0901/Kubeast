@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Download, History, Loader2, RefreshCw, ShieldCheck, X } from 'lucide-react'
 
 import CustomDropdown from '@/components/CustomDropdown'
+import { useAIContext } from '@/hooks/useAIContext'
 import { api, clustersApi } from '@/services/api'
 import type { HygieneFinding, HygieneReport, HygieneReview, HygieneSeverity } from '@/services/api/hygiene'
 import { getCurrentClusterID } from '@/services/clusterRef'
@@ -119,6 +120,24 @@ export default function ClusterHygiene() {
     ...(report?.checks ?? []).map((c) => ({ value: c.id, label: `${checkTitle(c.id)} (${c.findings})` })),
   ]
   const counts = report?.counts
+
+  // who signed off and the sign-off notes stay out (people's names, free text)
+  useAIContext(report ? {
+    summary: `클러스터 정리 점검 — ${cluster}${viewId ? ' (지난 검토 시점 보고서)' : ''}: critical ${report.counts.critical}, warning ${report.counts.warning}, info ${report.counts.info}, 예외 ${report.counts.exempt}`,
+    data: {
+      cluster, tab, viewing_snapshot: !!viewId, generated_at: report.generated_at,
+      server_version: report.server_version, target_version: report.target_version,
+      next_due: live?.next_due, due: live?.due, last_reviewed_at: live?.last_review?.reviewed_at,
+      reviewed_at: tab === 'history' ? history.map((r) => r.reviewed_at) : undefined,
+      checks: report.checks.map((c) => ({ id: c.id, severity: c.severity, findings: c.findings, exempt: c.exempt })),
+      filters: { severity, check, search: search || undefined },
+      findings: findings.slice(0, 30).map((f) => ({
+        check: f.check, severity: f.severity, kind: f.kind, namespace: f.namespace, name: f.name, container: f.container,
+        message: f.message, exempt: f.exempt, exempt_reason: f.exempt_reason,
+      })),
+    },
+  } : null, [report, cluster, viewId, tab, live, history, severity, check, search, findings])
+
   const tabClass = (active: boolean) =>
     `rounded-sm px-3 py-1.5 text-sm flex items-center gap-1 ${active ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`
   const badge = (f: { severity: HygieneSeverity; exempt?: boolean }) => (

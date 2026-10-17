@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { ModalOverlay } from '@/components/ModalOverlay'
+import { useAIContext } from '@/hooks/useAIContext'
 import { fmtRel } from '../detailFormat'
 import { Tx } from '../DetailCommon'
 
@@ -9,6 +10,8 @@ interface TriggerToast {
 }
 
 interface Props {
+  // "<Kind> <namespace>/<name>", for the floating chat
+  target: string
   triggerToast: TriggerToast | null
   triggerDialogOpen: boolean
   setTriggerDialogOpen: (open: boolean) => void
@@ -22,6 +25,7 @@ interface Props {
 }
 
 export default function WorkloadDialogs({
+  target,
   triggerToast,
   triggerDialogOpen,
   setTriggerDialogOpen,
@@ -35,6 +39,12 @@ export default function WorkloadDialogs({
 }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, o?: Record<string, any>) => t(key, { defaultValue: fallback, ...o })
+  const action = triggerDialogOpen ? 'run now' : rollbackDialogOpen ? 'rollback' : null
+  useAIContext(action ? {
+    source: 'WorkloadDialogs',
+    summary: `${action === 'rollback' ? '롤백' : '지금 실행'} 확인 창 — ${target}`,
+    data: { action, target, selected_revision: action === 'rollback' ? selectedRevision : undefined },
+  } : null, [action, target, selectedRevision])
 
   return (
     <>

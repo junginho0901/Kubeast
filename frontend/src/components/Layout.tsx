@@ -40,7 +40,6 @@ import AccessHelp from './AccessHelp'
 import { ResourceDetailProvider } from './ResourceDetailProvider'
 import ResourceDetailDrawer from './LazyResourceDetailDrawer'
 import PendingApproval from './PendingApproval'
-import { PageContextProvider } from './PageContextProvider'
 import FloatingAIChat from './FloatingAIChat'
 import { BetaTag } from './BetaTag'
 import ClusterPicker from './ClusterPicker'
@@ -473,7 +472,6 @@ export default function Layout() {
 
   return (
     <ResourceDetailProvider>
-    <PageContextProvider>
     <div className="min-h-screen bg-slate-900">
       <ResourceDetailDrawer />
       {aiOn && <FloatingAIChat />}
@@ -648,7 +646,6 @@ export default function Layout() {
         </main>
       </div>
     </div>
-    </PageContextProvider>
     </ResourceDetailProvider>
   )
 }

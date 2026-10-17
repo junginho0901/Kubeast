@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import NodeShellTerminal from '@/components/NodeShellTerminal'
+import { useAIContext } from '@/hooks/useAIContext'
 import { usePermission } from '@/hooks/usePermission'
 import type { useNodeData } from './useNodeData'
 import { Tx } from '../DetailCommon'
@@ -36,6 +37,13 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
     nodeShellSettings,
     isLinuxNode,
   } = data
+
+  // the drain confirmation and the node shell window: which node, not the terminal's output
+  useAIContext(drainDialogOpen || showNodeShell ? {
+    source: 'NodeActions',
+    summary: drainDialogOpen ? `드레인 확인 창 — Node ${name}` : `노드 셸 창 — Node ${name}`,
+    data: { action: drainDialogOpen ? 'drain' : 'node shell', kind: 'Node', name, error: drainDialogOpen ? drainError || undefined : undefined },
+  } : null, [drainDialogOpen, showNodeShell, name, drainError])
 
   const showDrainStatus = drainStatus !== 'idle' || !!drainId || !!drainError
   const drainMeta = drainStatus === 'success'
