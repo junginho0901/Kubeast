@@ -161,8 +161,10 @@ def child_env(token: str, workdir: str) -> dict[str, str]:
 
 
 def _options(sdk, *, model: str, system_prompt: str, token: str, workdir: str, server=None,
-             allowed: Sequence[str] = (), turns: int = 1, stderr: Optional[Callable[[str], None]] = None):
+             allowed: Sequence[str] = (), turns: int = 1, stderr: Optional[Callable[[str], None]] = None,
+             partial: bool = False):
     return sdk.ClaudeAgentOptions(
+        include_partial_messages=partial,  # StreamEvents: the answer as it is written
         model=model,
         system_prompt=system_prompt or "",
         tools=[],              # no built-in tools (Bash, Read, Edit, web …)
@@ -254,6 +256,92 @@ async def complete(messages: Sequence[dict], *, model: str, token: str, lane: st
     return Completion(text=str(result.result or ""), usage=usage_of(result.usage))
 
 
+class _TextPieces:
+    """The answer's text as it is written: each text_delta StreamEvent as it comes, with a blank line where a
+    text block starts after earlier text (the paragraphs the API-key path shows). An assistant message whose text
+    came as deltas is not sent again; one without deltas is sent whole."""
+
+    def __init__(self, sdk):
+        self._sdk = sdk
+        self._sent = False       # some text went out
+        self._new_block = False  # the next piece opens a text block
+        self._deltas = False     # text deltas since the last assistant message
+
+    def feed(self, message) -> list[str]:
+        sdk = self._sdk
+        if isinstance(message, sdk.StreamEvent):
+            event = message.event or {}
+            kind = event.get("type")
+            if kind == "content_block_start" and (event.get("content_block") or {}).get("type") == "text":
+                self._new_block = True
+            elif kind == "content_block_delta" and (event.get("delta") or {}).get("type") == "text_delta":
+                text = event["delta"].get("text") or ""
+                if text:
+                    self._deltas = True
+                    return [self._piece(text)]
+            return []
+        if not isinstance(message, sdk.AssistantMessage):
+            return []
+        pieces = []
+        if not self._deltas:
+            for block in message.content:
+                if isinstance(block, sdk.TextBlock) and block.text:
+                    self._new_block = True
+                    pieces.append(self._piece(block.text))
+        self._deltas = False
+        return pieces
+
+    def _piece(self, text: str) -> str:
+        sep = "\n\n" if self._new_block and self._sent else ""
+        self._new_block, self._sent = False, True
+        return sep + text
+
+
+async def stream_complete(messages: Sequence[dict], *, model: str, token: str, lane: str = "chat") -> AsyncIterator[Any]:
+    """One plain completion as it is written: yields the text pieces (str), then the Completion."""
+    reason = unavailable_reason()
+    if reason:
+        raise ClaudeCodeError(reason)
+    sdk = _sdk()
+    system_prompt, prompt = split_messages(messages)
+    pieces = _TextPieces(sdk)
+    queue: asyncio.Queue = asyncio.Queue()
+    done = object()
+
+    def on_message(message) -> None:
+        for piece in pieces.feed(message):
+            queue.put_nowait(("text", piece))
+
+    async def pump() -> None:
+        stderr: deque = deque(maxlen=STDERR_LINES)
+        try:
+            with tempfile.TemporaryDirectory(prefix="kubeast-cc-") as workdir:
+                options = _options(sdk, model=model, system_prompt=system_prompt, token=token, workdir=workdir,
+                                   stderr=stderr.append, partial=True)
+                queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane)))
+        except Exception as e:  # handed to the consumer; cancellation is not caught
+            queue.put_nowait((done, e))
+
+    task = asyncio.create_task(pump())
+    sent: list[str] = []
+    try:
+        while True:
+            kind, value = await queue.get()
+            if kind is done:
+                if isinstance(value, Exception):
+                    raise value
+                text = str(value.result or "".join(sent))
+                if not sent and text:
+                    yield text  # nothing came in pieces
+                yield Completion(text=text, usage=usage_of(value.usage))
+                return
+            sent.append(value)
+            yield value
+    finally:
+        if not task.done():
+            task.cancel()  # the SDK stops the CLI when its query is cancelled
+
+
 def _usage_ns(usage: Optional[dict]):
     u = dict(usage or {})
     details = SimpleNamespace(**u.pop("prompt_tokens_details", {}))
@@ -270,19 +358,21 @@ class _Completions:
     async def create(self, *, messages, model: Optional[str] = None, tools=None, stream: bool = False, **_ignored):
         if tools:
             raise ClaudeCodeError("the Claude subscription provider runs tools only in the AI chat")
-        done = await complete(messages, model=model or self._model, token=self._token)
-        usage = _usage_ns(done.usage)
-        message = SimpleNamespace(content=done.text, tool_calls=None, role="assistant")
         if not stream:
+            done = await complete(messages, model=model or self._model, token=self._token)
+            message = SimpleNamespace(content=done.text, tool_calls=None, role="assistant")
             return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason="stop", index=0)],
-                                   usage=usage, model=model or self._model)
+                                   usage=_usage_ns(done.usage), model=model or self._model)
 
-        async def chunks():
-            delta = SimpleNamespace(content=done.text, tool_calls=None, role="assistant")
-            yield SimpleNamespace(choices=[SimpleNamespace(delta=delta, finish_reason=None, index=0)], usage=None)
-            end = SimpleNamespace(content=None, tool_calls=None, role=None)
-            yield SimpleNamespace(choices=[SimpleNamespace(delta=end, finish_reason="stop", index=0)], usage=None)
-            yield SimpleNamespace(choices=[], usage=usage)
+        async def chunks():  # the text as it is written, then the end and the usage, as an API stream ends
+            async for item in stream_complete(messages, model=model or self._model, token=self._token):
+                if isinstance(item, Completion):
+                    end = SimpleNamespace(content=None, tool_calls=None, role=None)
+                    yield SimpleNamespace(choices=[SimpleNamespace(delta=end, finish_reason="stop", index=0)], usage=None)
+                    yield SimpleNamespace(choices=[], usage=_usage_ns(item.usage))
+                    return
+                delta = SimpleNamespace(content=item, tool_calls=None, role="assistant")
+                yield SimpleNamespace(choices=[SimpleNamespace(delta=delta, finish_reason=None, index=0)], usage=None)
         return chunks()
 
 
@@ -355,14 +445,13 @@ class ClaudeCodeChat:
             names.append(name)
             sdk_tools.append(sdk.tool(name, fn.get("description") or "", tool_schema(fn.get("parameters")))(handler_for(name)))
         server = sdk.create_sdk_mcp_server(TOOL_SERVER, "1.0.0", sdk_tools) if sdk_tools else None
+        pieces = _TextPieces(sdk)
 
         def on_message(message) -> None:
-            if isinstance(message, sdk.AssistantMessage):
-                if state["fresh"]:
-                    state["turn"], state["fresh"] = state["turn"] + 1, False
-                for block in message.content:
-                    if isinstance(block, sdk.TextBlock) and block.text:
-                        queue.put_nowait(("text", block.text))
+            if isinstance(message, sdk.AssistantMessage) and state["fresh"]:
+                state["turn"], state["fresh"] = state["turn"] + 1, False
+            for piece in pieces.feed(message):
+                queue.put_nowait(("text", piece))
 
         async def pump() -> None:
             stderr: deque = deque(maxlen=STDERR_LINES)
@@ -370,13 +459,13 @@ class ClaudeCodeChat:
                 with tempfile.TemporaryDirectory(prefix="kubeast-cc-") as workdir:
                     options = _options(sdk, model=model or self.model, system_prompt=system_prompt, token=self._token,
                                        workdir=workdir, server=server, allowed=[TOOL_PREFIX + n for n in names],
-                                       turns=turn_limit or max_turns(), stderr=stderr.append)
+                                       turns=turn_limit or max_turns(), stderr=stderr.append, partial=True)
                     queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane)))
             except Exception as e:  # handed to the consumer; cancellation is not caught
                 queue.put_nowait((done, e))
 
         task = asyncio.create_task(pump())
-        streamed, answer = False, ""
+        answer = ""
         try:
             while True:
                 kind, value = await queue.get()
@@ -391,11 +480,9 @@ class ClaudeCodeChat:
                         out.finish_reason = "stop"
                         out.text = str(value.result or answer)
                     return
-                if kind == "text":
-                    piece = ("\n\n" if streamed else "") + value
-                    streamed = True
-                    answer = (answer + "\n\n" + value) if answer else value
-                    yield _sse({"content": piece})
+                if kind == "text":  # a piece carries its paragraph break; the saved answer starts without one
+                    answer = answer + value if answer else value.lstrip("\n")
+                    yield _sse({"content": value})
                 elif kind == "tool":
                     answer = ""  # the saved answer is what comes after the last tool call
                 else:

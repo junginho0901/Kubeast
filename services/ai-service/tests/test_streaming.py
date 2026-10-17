@@ -327,3 +327,15 @@ async def test_optimization_without_actor_writes_no_audit_row(monkeypatch):
 
     assert events[-1] == "data: [DONE]\n\n"
     assert rows == []
+
+
+def test_a_failed_model_call_names_its_provider_in_one_wording():
+    """Every provider's failure reads the same, with a catalog key the screen translates (not "OpenAI API" for all)."""
+    from app.services.ai.streaming import model_error
+
+    sub = model_error(SimpleNamespace(provider="claude-code"), RuntimeError("Claude Code failed: timeout"))
+    assert sub == {"error": "AI model call failed (Claude subscription): Claude Code failed: timeout", "error_key": "modelCall",
+                   "error_args": {"provider": "Claude subscription", "detail": "Claude Code failed: timeout"}}
+    assert model_error(SimpleNamespace(provider="Anthropic"), RuntimeError("529"))["error_args"]["provider"] == "Anthropic"
+    assert model_error(SimpleNamespace(provider="vllm-gw"), RuntimeError("x"))["error_args"]["provider"] == "vllm-gw"
+    assert model_error(SimpleNamespace(provider=None), RuntimeError("x"))["error_args"]["provider"] == "unknown"

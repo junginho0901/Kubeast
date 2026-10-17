@@ -19,9 +19,17 @@ describe('chatErrorText', () => {
     expect(chatErrorText(en_t, 'x', 'budgetUserDaily', { used: 250000, limit: 200000 })).toContain(`over the daily budget of ${(200000).toLocaleString()}`)
   })
 
+  it('names the provider of a failed model call in the screen language, the same wording on every provider', async () => {
+    const args = { provider: 'Claude subscription', detail: 'Claude Code failed: timeout' }
+    expect(chatErrorText(await tFor('ko'), 'AI model call failed (Claude subscription): Claude Code failed: timeout', 'modelCall', args))
+      .toBe('AI 모델을 호출하지 못했습니다 (Claude subscription): Claude Code failed: timeout')
+    expect(chatErrorText(await tFor('en'), 'x', 'modelCall', { provider: 'Anthropic', detail: '529 overloaded' }))
+      .toBe('AI model call failed (Anthropic): 529 overloaded')
+  })
+
   it('shows other errors as they came, and the server text for a key the catalog does not know', async () => {
     const t = await tFor('ko')
-    expect(chatErrorText(t, 'OpenAI API 호출 실패: timeout')).toBe('OpenAI API 호출 실패: timeout')
+    expect(chatErrorText(t, 'upstream timeout')).toBe('upstream timeout')
     expect(chatErrorText(t, 'Some new refusal.', 'notInTheCatalog', { used: 1 })).toBe('Some new refusal.')
   })
 })

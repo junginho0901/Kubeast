@@ -37,6 +37,14 @@ class AssistantMessage:
 
 
 @dataclass
+class StreamEvent:
+    event: dict
+    uuid: str = "u"
+    session_id: str = "s"
+    parent_tool_use_id: Optional[str] = None
+
+
+@dataclass
 class ResultMessage:
     subtype: str
     is_error: bool
@@ -53,10 +61,12 @@ class ProcessError(Exception):
 
 def make_sdk(script, *, record=None):
     """A stand-in claude_agent_sdk. `script` items: ("text", str) | ("call", tool, args) | ("result", ResultMessage)
-    | ("raise", Exception) | ("sleep", seconds). As Claude Code does, a tool call arrives as an assistant message
-    of its own (after the response's text) before the tool runs."""
+    | ("raise", Exception) | ("sleep", seconds) | ("stream", [pieces]). As Claude Code does, a tool call arrives as an
+    assistant message of its own (after the response's text) before the tool runs, and "stream" — with
+    include_partial_messages — sends a text block's start and its text_delta events before the whole block."""
     sdk = types.ModuleType("claude_agent_sdk")
     sdk.TextBlock, sdk.AssistantMessage, sdk.ResultMessage = TextBlock, AssistantMessage, ResultMessage
+    sdk.StreamEvent = StreamEvent
     state = {"options": [], "running": 0, "max_running": 0, "tool_results": []}
 
     class ClaudeAgentOptions:
@@ -81,6 +91,13 @@ def make_sdk(script, *, record=None):
                 kind = step[0]
                 if kind == "text":
                     yield AssistantMessage(content=[TextBlock(step[1])])
+                elif kind == "stream":
+                    if getattr(options, "include_partial_messages", False):
+                        yield StreamEvent({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
+                        for piece in step[1]:
+                            yield StreamEvent({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": piece}})
+                        yield StreamEvent({"type": "content_block_stop", "index": 0})
+                    yield AssistantMessage(content=[TextBlock("".join(step[1]))])
                 elif kind in ("call", "calls"):  # "calls": one response asking for several tools at once
                     calls = [step[1:]] if kind == "call" else step[1]
                     for name, args in calls:
@@ -222,6 +239,39 @@ async def test_a_chat_turn_runs_the_tools_here_and_streams_like_the_api_key_path
     assert opts.max_turns == 10 and opts.env["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-ant-oat01-token"
     assert sdk.state["cwd_existed"] and not os.path.exists(opts.cwd)  # a temporary directory, gone afterwards
     assert opts.mcp_servers["kubeast"]["tools"]["k8s_get_resources"].input_schema == {"type": "object", "properties": {}}
+
+
+@pytest.mark.asyncio
+async def test_a_chat_turn_streams_the_answer_as_it_is_written(on):
+    """With partial messages the text goes out piece by piece, as on the API-key path, and is not sent again whole;
+    a paragraph after a tool call starts with its blank line, and the saved answer is what follows the last call."""
+    sdk = on([("stream", ["Check", "ing."]), ("call", "list_clusters", {}), ("stream", ["You can use ", "2 clusters."]),
+              ("result", ResultMessage(subtype="success", is_error=False, num_turns=2, result=None, usage=USAGE))])
+
+    async def run_tool(name, args, turn):
+        return [], "[]"
+
+    out = claude_code.TurnResult()
+    events = sse([e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out)])
+    assert events == [{"content": "Check"}, {"content": "ing."}, {"function": "list_clusters", "args": {}},
+                      {"content": "\n\nYou can use "}, {"content": "2 clusters."}]
+    assert out.text == "You can use 2 clusters." and out.turns == 2
+    assert sdk.state["options"][0][1].include_partial_messages is True
+
+
+@pytest.mark.asyncio
+async def test_a_message_that_came_without_pieces_is_still_sent_whole(on):
+    """Pieces skip only their own message: a later message with no deltas goes out whole."""
+    on([("stream", ["Checking."]), ("call", "list_clusters", {}), ("text", "Two clusters."), ("result", OK)])
+
+    async def run_tool(name, args, turn):
+        return [], "[]"
+
+    out = claude_code.TurnResult()
+    events = sse([e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out)])
+    assert [e["content"] for e in events if "content" in e] == ["Checking.", "\n\nTwo clusters."]
 
 
 @pytest.mark.asyncio
@@ -375,6 +425,21 @@ async def test_plain_completions_answer_as_chat_completions(on):
 
     with pytest.raises(claude_code.ClaudeCodeError, match="only in the AI chat"):
         await completions.create(messages=[{"role": "user", "content": "x"}], tools=TOOLS)
+
+
+@pytest.mark.asyncio
+async def test_a_streamed_plain_completion_comes_piece_by_piece(on):
+    """The Optimization explanation's stream: the pieces as they are written, then the end and the usage."""
+    sdk = on([("stream", ["Scale ", "down ", "the job."]),
+              ("result", ResultMessage(subtype="success", is_error=False, num_turns=1, result="Scale down the job.", usage=USAGE))])
+    completions = claude_code.ClaudeCodeChat(model="m", token="t").chat.completions
+    chunks = [c async for c in await completions.create(messages=[{"role": "user", "content": "x"}], stream=True)]
+    assert [c.choices[0].delta.content for c in chunks[:3]] == ["Scale ", "down ", "the job."]
+    assert chunks[3].choices[0].finish_reason == "stop" and chunks[4].choices == [] and chunks[4].usage.completion_tokens == 57
+    assert sdk.state["options"][0][1].include_partial_messages is True
+
+    await completions.create(messages=[{"role": "user", "content": "x"}])
+    assert sdk.state["options"][1][1].include_partial_messages is False  # a plain answer needs no pieces
 
 
 @pytest.mark.asyncio

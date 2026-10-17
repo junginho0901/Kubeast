@@ -41,6 +41,21 @@ def wrap_untrusted_context(block: str) -> str:
     return f"{UNTRUSTED_CONTEXT_OPEN}\n{block}\n{UNTRUSTED_CONTEXT_CLOSE}\n{UNTRUSTED_CONTEXT_NOTE}"
 
 
+PROVIDER_LABELS = {
+    "openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Gemini", "google": "Gemini", "azure": "Azure OpenAI",
+    "ollama": "Ollama", "custom": "OpenAI-compatible", "claude-code": "Claude subscription",
+}
+
+
+def model_error(service, err: Exception) -> dict:
+    """The chat's error event for a failed model call: one wording on every provider, naming the one in use, with
+    a catalog key and values next to the English text so the screen shows it in its language."""
+    provider = (getattr(service, "provider", None) or "").strip().lower()
+    label, detail = PROVIDER_LABELS.get(provider, provider or "unknown"), safe_error(err)
+    return {"error": f"AI model call failed ({label}): {detail}", "error_key": "modelCall",
+            "error_args": {"provider": label, "detail": detail}}
+
+
 async def suggest_optimization_stream(
     service: "AIService",
     namespace: str,
@@ -634,7 +649,7 @@ async def session_chat_stream(
                     yield event
             except Exception as cc_error:
                 log.error("Claude Code turn failed: %s", safe_error(cc_error))
-                yield f"data: {json.dumps({'error': f'Claude Code 호출 실패: {safe_error(cc_error)}'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps(model_error(service, cc_error), ensure_ascii=False)}\n\n"
                 await _audit_chat_complete(
                     service, session_id, audit_actor, audit_http,
                     turn_usage=turn_usage, tool_calls=cc_turn.tool_calls, iterations=cc_turn.turns,
@@ -741,8 +756,8 @@ async def session_chat_stream(
                     )
 
             except Exception as api_error:
-                log.error("OpenAI API call failed: %s", safe_error(api_error))
-                yield f"data: {json.dumps({'error': f'OpenAI API 호출 실패: {safe_error(api_error)}'}, ensure_ascii=False)}\n\n"
+                log.error("model call failed (%s): %s", service.provider, safe_error(api_error))
+                yield f"data: {json.dumps(model_error(service, api_error), ensure_ascii=False)}\n\n"
                 await _audit_chat_complete(
                     service, session_id, audit_actor, audit_http,
                     turn_usage=turn_usage, tool_calls=turn_tool_calls, iterations=iteration,
