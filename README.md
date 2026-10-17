@@ -582,7 +582,7 @@ kind 노드는 postgres·redis·nginx 이미지를 레지스트리에서 당기�
 호스트 docker에 있는 같은 이미지를 노드에 넣습니다(미리 `docker pull` 해 두면 됨).
 
 AI 채팅과 AI e2e 스펙은 기본 모델이 하나 등록돼 있어야 합니다. 노트북에서 Ollama를 돌린다면
-`kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:8b`, `host.docker.internal:11434`
+`kubectl apply -f deploy/kind/modelconfig-ollama.yaml`(모델 `granite4.1:3b`, `host.docker.internal:11434`
 — dev 값이 그 주소를 `ai.baseUrlAllowedHosts`와 NetworkPolicy에서 허용)로 등록하면 되고, 리셋 뒤에도 다시 적용합니다.
 노트북에서 추론을 돌리지 않고 e2e를 전부 돌리려면 `scripts/kind-model-haiku.sh up <키 파일>`로 Anthropic Claude Haiku(`claude-haiku-5-5`, 가장 싼 모델)를 그 실행 동안의 기본 모델로 두고(키는 파일에서 Secret `kubeast-ai-keys`로만 들어가고 출력되지 않음), 끝나면 `down`으로 Ollama 기본·키 제거까지 되돌립니다. Claude 구독 프로바이더로 AI spec을 돌릴 때는 `scripts/kind-model-subscription.sh up <토큰 파일>`(ai-service를 `WITH_CLAUDE_CODE=true`로 빌드한 뒤, 토큰은 `claude setup-token` 값)·`down`을 같은 방식으로 씁니다. 그동안 알림 → AI 조사 spec은 건너뜁니다. 스크립트는 자기가 있는 체크아웃의 chart로 helm upgrade하므로 브랜치 작업 중에는 그 워크트리에서 실행합니다.
 

@@ -1,16 +1,16 @@
-# KubeAssist 시스템 프롬프트 — Anthropic/OpenAI 호환 LLM 호출의 system role 콘텐츠.
+# Kubeast 시스템 프롬프트 — Anthropic/OpenAI 호환 LLM 호출의 system role 콘텐츠.
 #
 # ai_service.py 의 `_get_system_message` 에서 추출. 단순 문자열 상수라 외부 의존
 # 없음 (self / instance 의존 X). 호출처에서 SYSTEM_MESSAGE 를 직접 import 해서
 # 사용하거나 system_prompt_override 로 덮어쓸 수 있다.
 #
 # 변경 시 주의: AI 응답의 형식·언어·도구 호출 정책이 모두 이 프롬프트에 의존.
-# 키워드 ("KubeAssist", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
+# 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
-당신은 **KubeAssist**입니다. Kubernetes 트러블슈팅 및 운영에 특화된 고급 AI 에이전트입니다.
+당신은 **Kubeast**입니다. Kubernetes 트러블슈팅 및 운영에 특화된 고급 AI 에이전트입니다.
 
 ## 핵심 역량
 

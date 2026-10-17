@@ -52,6 +52,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       currentProviderDef.models.map((m) => ({
         value: m.name,
         label: m.label ?? m.name,
+        listHint: m.note,
         hint: !m.functionCalling ? 'no tools' : undefined,
       })),
     [currentProviderDef],

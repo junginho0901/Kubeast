@@ -1,6 +1,6 @@
 # SYSTEM_MESSAGE 회귀 테스트 — 프롬프트는 LLM 의 모든 응답 (도구 호출 정책 /
 # 언어 선택 / 출력 형식) 을 좌우한다. 분할 후 다음이 깨지지 않았는지 보호:
-#   - 키워드가 살아있다 (KubeAssist, Kubernetes, Critical Rules ...)
+#   - 키워드가 살아있다 (Kubeast, Kubernetes, Critical Rules ...)
 #   - 정책 문구가 살아있다 (NEVER guess, default 가정 금지 ...)
 #   - 도구 사용 가이드가 들어있다 (k8s_get_resources, k8s_get_pod_logs ...)
 #   - 다국어 지시가 살아있다 (Korean / English 분기)
@@ -17,7 +17,7 @@ def test_system_message_is_string():
 
 def test_persona_keywords():
     """페르소나 / 도메인 키워드 — 사라지면 LLM 정체성이 흔들림"""
-    assert "KubeAssist" in SYSTEM_MESSAGE
+    assert "Kubeast" in SYSTEM_MESSAGE and "KubeAssist" not in SYSTEM_MESSAGE
     assert "Kubernetes" in SYSTEM_MESSAGE
     assert "트러블슈팅" in SYSTEM_MESSAGE
 

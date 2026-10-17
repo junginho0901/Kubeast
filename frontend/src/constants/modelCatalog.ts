@@ -11,6 +11,8 @@ export interface ModelDef {
   name: string
   /** Short display label shown in the dropdown */
   label?: string
+  /** A word or two shown after the label in the open list only (recommended, legacy …), so the closed field fits */
+  note?: string
   /** Does this model support function/tool calling? */
   functionCalling: boolean
 }
@@ -73,10 +75,10 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     needsBaseUrl: false,
     defaultApiKeyEnv: 'ANTHROPIC_API_KEY',
     models: [
-      { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (recommended)', functionCalling: true },
+      { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'recommended', functionCalling: true },
       { name: 'claude-opus-5-5', label: 'Claude Opus 5.5', functionCalling: true },
-      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (lowest cost)', functionCalling: true },
-      { name: 'claude-fable-5-1', label: 'Claude Fable 5.1 (most capable)', functionCalling: true },
+      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'lowest cost', functionCalling: true },
+      { name: 'claude-fable-5-1', label: 'Claude Fable 5.1', note: 'most capable', functionCalling: true },
       { name: 'claude-opus-5', label: 'Claude Opus 5', functionCalling: true },
       { name: 'claude-sonnet-5', label: 'Claude Sonnet 5', functionCalling: true },
       { name: 'claude-fable-5', label: 'Claude Fable 5', functionCalling: true },
@@ -95,9 +97,9 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     needsBaseUrl: false,
     defaultApiKeyEnv: 'CLAUDE_CODE_OAUTH_TOKEN',
     models: [
-      { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (recommended)', functionCalling: true },
+      { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'recommended', functionCalling: true },
       { name: 'claude-opus-5-5', label: 'Claude Opus 5.5', functionCalling: true },
-      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (uses the least)', functionCalling: true },
+      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'uses the least', functionCalling: true },
     ],
   },
   {
@@ -112,7 +114,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
       { name: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', functionCalling: true },
       { name: 'gemini-3-flash', label: 'Gemini 3 Flash', functionCalling: true },
       { name: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', functionCalling: true },
-      { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (legacy)', functionCalling: true },
+      { name: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'legacy', functionCalling: true },
     ],
   },
   {
@@ -143,8 +145,8 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     baseUrlPlaceholder: 'http://localhost:11434',
     defaultApiKeyEnv: '',
     models: [
-      { name: 'qwen2.5', label: 'qwen2.5 (7b, tools)', functionCalling: true },
-      { name: 'qwen2.5:14b', label: 'qwen2.5 (14b, tools)', functionCalling: true },
+      { name: 'qwen2.5', label: 'qwen2.5', note: '7b, tools', functionCalling: true },
+      { name: 'qwen2.5:14b', label: 'qwen2.5:14b', note: '14b, tools', functionCalling: true },
       { name: 'llama3.3', functionCalling: true },
       { name: 'llama3.1', functionCalling: true },
       { name: 'llama3.2', functionCalling: true },

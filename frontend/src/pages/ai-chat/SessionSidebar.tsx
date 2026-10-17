@@ -163,7 +163,9 @@ export function SessionSidebar({
             <div className="text-slate-400 text-sm text-center py-4">{t('aiChat.loading')}</div>
           ) : sessionsList.length > 0 ? (
             (() => {
-              const rowHeight = 76
+              // a card is as high as its title and message count (64 px), with 4 px between cards
+              const cardHeight = 64
+              const rowHeight = cardHeight + 4
               const totalRows = sessionsList.length + 1 // 마지막 행: 로딩/더보기
               const overscan = 12
               const startIndex = Math.max(0, Math.floor(sessionsScrollTop / rowHeight) - overscan)
@@ -202,7 +204,7 @@ export function SessionSidebar({
                 rows.push(
                   <div
                     key={session.id}
-                    style={{ position: 'absolute', top: index * rowHeight, left: 0, right: 0, height: rowHeight }}
+                    style={{ position: 'absolute', top: index * rowHeight, left: 0, right: 0, height: cardHeight }}
                     onClick={() => handleSelectSession(session.id)}
                     onContextMenu={(e) => handleContextMenu(session, e)}
                     className={`group relative rounded-lg cursor-pointer transition-colors overflow-hidden ${

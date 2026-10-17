@@ -9,6 +9,8 @@ export interface DropdownOption {
   icon?: string
   /** Extra info displayed after the label (dimmed) */
   hint?: string
+  /** Extra info displayed after the label in the open list only, not in the closed field */
+  listHint?: string
   /** If true the option is dimmed and cannot be picked */
   disabled?: boolean
   /** If true the option is dimmed but can still be picked (the form then says why it cannot be used yet); its hint
@@ -72,6 +74,7 @@ export default function CustomDropdown({
     return () => document.removeEventListener('mousedown', handle)
   }, [isOpen])
 
+  const hasListHints = options.some((o) => o.listHint)
   const selected = options.find((o) => o.value === value)
 
   return (
@@ -102,9 +105,9 @@ export default function CustomDropdown({
         />
       </button>
 
-      {/* dropdown panel */}
+      {/* dropdown panel: the field's width; a list with notes may grow to fit them on one line (up to 24rem) */}
       {isOpen && (
-        <div className={`absolute ${placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'} left-0 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-200 max-h-[260px] overflow-y-auto`}>
+        <div className={`absolute ${placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'} left-0 ${hasListHints ? 'min-w-full w-max max-w-[min(24rem,90vw)]' : 'w-full'} bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-200 max-h-[260px] overflow-y-auto`}>
           {options.map((opt) => {
             const isSelected = opt.value === value
             return (
@@ -118,7 +121,7 @@ export default function CustomDropdown({
                     setIsOpen(false)
                   }
                 }}
-                className={`w-full px-4 py-2.5 text-left text-sm text-white hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg ${
+                className={`w-full px-4 py-2.5 text-left text-sm text-white ${hasListHints ? 'whitespace-nowrap' : ''} hover:bg-slate-600 transition-colors flex items-center gap-2 first:rounded-t-lg last:rounded-b-lg ${
                   opt.disabled ? 'opacity-40 cursor-not-allowed' : opt.muted ? 'opacity-50' : ''
                 }`}
               >
@@ -128,10 +131,10 @@ export default function CustomDropdown({
                 {opt.icon && !isSelected && (
                   <span className="text-base shrink-0">{opt.icon}</span>
                 )}
-                <span className={isSelected ? 'font-medium' : ''}>{opt.label}</span>
-                {opt.hint && (
-                  <span className="ml-auto text-[10px] text-slate-400 shrink-0">
-                    {opt.hint}
+                <span className={`${hasListHints ? 'min-w-0 truncate' : ''} ${isSelected ? 'font-medium' : ''}`} title={hasListHints ? opt.label : undefined}>{opt.label}</span>
+                {(opt.listHint || opt.hint) && (
+                  <span className="ml-auto pl-4 text-[10px] text-slate-400 shrink-0">
+                    {[opt.listHint, opt.hint].filter(Boolean).join(' · ')}
                   </span>
                 )}
               </button>

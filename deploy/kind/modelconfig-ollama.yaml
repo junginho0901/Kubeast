@@ -8,7 +8,7 @@ metadata:
   namespace: kubeast
 spec:
   provider: ollama
-  model: granite4.1:8b
+  model: granite4.1:3b
   baseURL: http://host.docker.internal:11434/v1
   enabled: true
   isDefault: true

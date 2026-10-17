@@ -13,6 +13,7 @@ export function modelOptions(provDef: ProviderDef, fetched?: { name: string; lab
     return provDef.models.map((m) => ({
       value: m.name,
       label: m.label ?? m.name,
+      listHint: m.note,
       hint: !m.functionCalling ? 'no tools' : undefined,
       testId: `model-option-${m.name}`,
     }))
@@ -23,6 +24,7 @@ export function modelOptions(provDef: ProviderDef, fetched?: { name: string; lab
     return {
       value: f.name,
       label: f.label ?? known?.label ?? f.name,
+      listHint: f.label ? undefined : known?.note,
       hint: known && !known.functionCalling ? 'no tools' : undefined,
       testId: `model-option-${f.name}`,
     }
