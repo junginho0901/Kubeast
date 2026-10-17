@@ -105,7 +105,7 @@ export class ChatStreamManager {
   private _typewriterTimer: number | null = null
   private _streamDone = false          // SSE [DONE] 수신 여부
   private _pendingDonePatch: Partial<ChatStreamState> | null = null
-  private static readonly TICK_MS = 30 // 드레인 간격 (ms)
+  private static readonly TICK_MS = 16 // 드레인 간격 (ms) — one screen refresh
 
   constructor(options: ChatStreamManagerOptions = {}) {
     this.options = options
@@ -141,7 +141,7 @@ export class ChatStreamManager {
     }
     // 적응형 배치: 큐 길이에 비례해서 한번에 꺼냄
     // 짧으면 1글자씩 (부드러움), 길면 많이 (따라잡기)
-    const batch = Math.max(1, Math.ceil(this._charQueue.length / 8))
+    const batch = Math.max(1, Math.ceil(this._charQueue.length / 4))
     const chars = this._charQueue.splice(0, batch).join('')
     this.state = {
       ...this.state,

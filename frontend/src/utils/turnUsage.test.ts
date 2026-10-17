@@ -31,4 +31,12 @@ describe('turnUsageText', () => {
     expect(turnUsageText(t, null)).toBeNull()
     expect(turnUsageText(t, { model: 'm' } as never)).toBeNull()
   })
+
+  it('says a stopped answer has no usage to show, in both languages', async () => {
+    expect(turnUsageText(await tFor('ko'), { stopped: true })?.text).toBe('멈춤 · 사용량을 표시할 수 없음')
+    expect(turnUsageText(await tFor('en'), { stopped: true })).toEqual({
+      text: 'Stopped · usage not available',
+      title: 'The answer was stopped before the provider reported its tokens.',
+    })
+  })
 })

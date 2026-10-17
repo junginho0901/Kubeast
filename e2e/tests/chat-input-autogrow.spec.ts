@@ -41,7 +41,7 @@ test.describe('Chat input grows with its lines', () => {
 
   test('floating assistant: up to 128 px', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /Open AI Assistant|AI 어시스턴트 열기/i }).click()
+    await page.getByRole('button', { name: /Open AI Chat|AI Chat 열기/i }).click()
     const input = page.getByTestId('floating-chat-input')
     await expect(input).toBeVisible()
     await checkGrowth(input, 128)

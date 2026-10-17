@@ -226,8 +226,8 @@ test.describe('Dashboard refactor — UI verification', () => {
   test('AI floating widget — useDashboardAIContext 등록 후 page error 0', async ({ page }) => {
     const errors = await gotoDashboard(page)
 
-    // 화면 우측 하단 floating button (aria-label="Open AI Assistant" — 기존 root HTML 에서 확인)
-    const aiBtn = page.locator('button[aria-label*="AI Assistant" i], button[aria-label*="AI" i]').first()
+    // 화면 우측 하단 floating button (aria-label="Open AI Chat" — 기존 root HTML 에서 확인)
+    const aiBtn = page.locator('button[aria-label*="AI Chat" i], button[aria-label*="AI" i]').first()
     if ((await aiBtn.count()) === 0) {
       // floating button 진입점 못 찾음 — useAIContext register 자체는 page error 0 로 확인
       assertNoCriticalErrors(errors)

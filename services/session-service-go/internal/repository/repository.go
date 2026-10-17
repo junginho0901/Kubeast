@@ -219,7 +219,7 @@ func (r *Repository) GetMessages(ctx context.Context, sessionID string, limit in
 }
 
 // AddMessage adds a message and updates the session's updated_at.
-func (r *Repository) AddMessage(ctx context.Context, sessionID, role, content string, toolCalls *json.RawMessage) (*model.Message, error) {
+func (r *Repository) AddMessage(ctx context.Context, sessionID, role, content string, toolCalls, usage *json.RawMessage) (*model.Message, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -230,9 +230,9 @@ func (r *Repository) AddMessage(ctx context.Context, sessionID, role, content st
 
 	var m model.Message
 	err = tx.QueryRow(ctx,
-		`INSERT INTO messages (session_id, role, content, tool_calls, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING id, session_id, role, content, tool_calls, created_at`,
-		sessionID, role, content, toolCalls, now,
-	).Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.ToolCalls, &m.CreatedAt)
+		`INSERT INTO messages (session_id, role, content, tool_calls, usage, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, session_id, role, content, tool_calls, usage, created_at`,
+		sessionID, role, content, toolCalls, usage, now,
+	).Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.ToolCalls, &m.Usage, &m.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

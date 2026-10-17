@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
@@ -14,6 +14,8 @@ import { serializeSnapshotForBackend } from '@/utils/aiContext/serializeSnapshot
 import { chatErrorText } from '@/utils/chatError'
 
 import { MessageList, type DisplayMessage } from './MessageList'
+import { useStickToBottom } from '@/hooks/useStickToBottom'
+import JumpToLatest from '@/components/JumpToLatest'
 import { InputArea } from './InputArea'
 import { SuggestedQuestions } from './SuggestedQuestions'
 
@@ -129,7 +131,9 @@ export function ChatPanel({
 
     await floatingChatStreamManager.stop()
 
-    const assistantContent = snapshot.functionCallsContent + snapshot.assistantContent
+    // read after stop, so the letters still queued for the typewriter are saved as shown
+    const stopped = floatingChatStreamManager.getState()
+    const assistantContent = stopped.functionCallsContent + stopped.assistantContent
     if (!assistantContent) return
 
     try {
@@ -141,9 +145,10 @@ export function ChatPanel({
             {
               role: 'assistant',
               content: assistantContent,
-              tool_calls: snapshot.toolCalls && snapshot.toolCalls.length > 0
-                ? snapshot.toolCalls
+              tool_calls: stopped.toolCalls && stopped.toolCalls.length > 0
+                ? stopped.toolCalls
                 : undefined,
+              stopped: true,
             },
           ],
         }),
@@ -190,6 +195,15 @@ export function ChatPanel({
   }, [messages, isStreaming, streamState.userMessage, streamState.updatedAt])
 
   const streamingContent = isStreaming ? streamState.assistantContent : undefined
+  // follows new text only while the reader is at the bottom; a new question scrolls back smoothly
+  const { ref: listRef, atBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>([visibleMessages, streamingContent])
+  const questions = visibleMessages.filter((m) => m.role === 'user').length
+  const lastQuestions = useRef(questions)
+  useEffect(() => {
+    // a question just sent scrolls smoothly; a history that loads jumps at once
+    if (questions > lastQuestions.current) scrollToBottom(isStreaming ? undefined : { instant: true })
+    lastQuestions.current = questions
+  }, [questions, isStreaming, scrollToBottom])
   const error = streamState.status === 'error' && streamState.error
     ? chatErrorText(t, streamState.error, streamState.errorKey, streamState.errorArgs)
     : null
@@ -206,8 +220,9 @@ export function ChatPanel({
     >
       <header className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">
-            {t('floatingChat.title', { defaultValue: 'AI Assistant' })}
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            <img src="/icon.svg" alt="" className="h-4 w-4 shrink-0" data-testid="floating-title-icon" />
+            {t('floatingChat.title', { defaultValue: 'AI Chat' })}
           </div>
           <div className="truncate text-xs text-slate-400">
             {currentPageTitle
@@ -225,7 +240,8 @@ export function ChatPanel({
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={listRef} className="flex-1 overflow-y-auto" data-testid="floating-messages">
         {disabled ? (
           <div className="flex h-full items-center justify-center text-xs text-slate-500">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -235,6 +251,7 @@ export function ChatPanel({
           <MessageList
             messages={visibleMessages}
             streamingContent={streamingContent}
+            streaming={isStreaming}
             error={error}
             emptyExtras={
               <SuggestedQuestions
@@ -244,6 +261,8 @@ export function ChatPanel({
             }
           />
         )}
+      </div>
+      {!atBottom && <JumpToLatest onClick={() => scrollToBottom()} />}
       </div>
 
       <InputArea

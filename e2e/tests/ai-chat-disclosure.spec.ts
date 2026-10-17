@@ -1,9 +1,9 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
 // AI chat: a tool call's <details> opens and closes with the sidebar groups' height transition (the closed body is
-// zero high and inert), and the Copy row sits under the answer with its height kept while the answer streams, so the
-// message does not grow when the answer ends. The disclosure test stores a conversation through the session API, so
-// it needs no model; the streaming test needs the dev default model.
+// zero high and inert), and the action row (usage, Copy) sits under the answer: closed while the answer comes, opened
+// with the same transition when it ends, its contents fading in after. The disclosure test stores a conversation
+// through the session API, so it needs no model; the streaming test needs the dev default model.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
@@ -96,7 +96,7 @@ test.describe('AI chat — tool disclosure and the action row', () => {
     }
   })
 
-  test('the action row keeps its height while the answer streams, so the message does not grow at the end', async ({ page }) => {
+  test('the action row stays closed while the answer comes, then opens and its usage and Copy fade in', async ({ page }) => {
     test.setTimeout(150_000)
     await page.goto('/ai-chat')
     await page.waitForLoadState('networkidle')
@@ -105,14 +105,18 @@ test.describe('AI chat — tool disclosure and the action row', () => {
     await page.getByRole('button', { name: /전송|send/i }).click()
     await expect(input).toBeDisabled({ timeout: 15_000 })
 
-    const actions = page.locator(ASSISTANT).last().getByTestId('message-actions')
-    const streaming = await actions.evaluate((el) => ({ height: el.getBoundingClientRect().height, buttons: el.querySelectorAll('button').length }))
-    expect(streaming.buttons).toBe(0) // no Copy before the answer is complete
-    expect(streaming.height).toBe(28)
+    const bubble = page.locator(ASSISTANT).last()
+    const row = bubble.getByTestId('message-actions-row')
+    const actions = bubble.getByTestId('message-actions')
+    // no space kept for it while the answer comes, and nothing in it can be reached
+    expect(await row.evaluate((el) => el.getBoundingClientRect().height)).toBe(0)
+    expect(await actions.evaluate((el) => (el as HTMLElement).inert)).toBe(true)
 
     await expect(input).toBeEnabled({ timeout: 120_000 })
-    const done = page.locator(ASSISTANT).last().getByTestId('message-actions')
-    await expect(done.getByRole('button', { name: /^copy$|^복사$/i })).toBeVisible()
-    expect(await done.evaluate((el) => el.getBoundingClientRect().height)).toBe(streaming.height)
+    // the space opens (mt-3 + the 28 px row) and then the row fades in where it stands
+    await expect.poll(() => row.evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBe(40)
+    await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
+    await expect(actions.getByRole('button', { name: /^copy$|^복사$/i })).toBeVisible()
+    await expect(actions.getByTestId('turn-usage')).toHaveText(/tokens|토큰/)
   })
 })

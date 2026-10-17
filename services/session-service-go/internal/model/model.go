@@ -53,6 +53,8 @@ type MessageRequest struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
 	ToolCalls *json.RawMessage `json:"tool_calls,omitempty"`
+	// Stopped: an answer the user stopped part way; stored as usage {"stopped": true} (no token counts are taken here).
+	Stopped bool `json:"stopped,omitempty"`
 }
 
 // SaveMessagesRequest is the request body for saving messages.

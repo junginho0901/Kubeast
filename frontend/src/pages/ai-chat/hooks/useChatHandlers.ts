@@ -5,6 +5,7 @@ import type { Session } from '@/services/api'
 import { chatStreamManager, ChatStreamState } from '@/services/chatStreamManager'
 import { getAuthHeaders, handleUnauthorized } from '@/services/auth'
 import type { Message } from '../types'
+import { markStoppedAnswer } from './useStreamEndSync'
 import { useConfirm } from '@/services/confirm'
 
 // AIChat 의 메인 핸들러 swarm: send / stop / new chat / select / delete /
@@ -74,7 +75,9 @@ export function useChatHandlers({
 
     await chatStreamManager.stop()
 
-    const assistantContent = snapshot.functionCallsContent + snapshot.assistantContent
+    // read after stop: the letters still queued for the typewriter are on screen by now, so they are saved too
+    const stopped = chatStreamManager.getState()
+    const assistantContent = stopped.functionCallsContent + stopped.assistantContent
     if (assistantContent) {
       try {
         // DB에 중단된 assistant 메시지만 저장 (user 메시지는 백엔드에서 이미 저장)
@@ -86,7 +89,8 @@ export function useChatHandlers({
               {
                 role: 'assistant',
                 content: assistantContent,
-                tool_calls: snapshot.toolCalls && snapshot.toolCalls.length > 0 ? snapshot.toolCalls : undefined,
+                tool_calls: stopped.toolCalls && stopped.toolCalls.length > 0 ? stopped.toolCalls : undefined,
+                stopped: true,
               },
             ],
           }),
@@ -106,8 +110,8 @@ export function useChatHandlers({
       }
     }
 
-    // 임시 플래그 제거하여 현재 화면에 유지
-    setMessages((prev) => prev.map((msg) => ({ ...msg, isTemporary: false })))
+    // 임시 플래그 제거하여 현재 화면에 유지, 멈춘 답에는 멈춤 표시
+    setMessages((prev) => markStoppedAnswer(prev.map((msg) => ({ ...msg, isTemporary: false }))))
   }
 
   const handleSend = async (messageToSend?: string) => {

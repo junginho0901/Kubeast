@@ -33,7 +33,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     const errors = await gotoAIChat(page)
 
     // Sidebar (좌측)
-    const sidebar = page.locator('text=/AI Chat|AI Assistant|AI 어시스턴트/i').first()
+    const sidebar = page.locator('text=/AI Chat/i').first()
     await expect(sidebar).toBeVisible()
 
     // Welcome (메시지 0개) — quick questions 보임

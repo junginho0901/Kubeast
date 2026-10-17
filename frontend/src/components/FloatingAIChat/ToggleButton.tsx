@@ -26,7 +26,7 @@ export function ToggleButton({ onClick, visible }: ToggleButtonProps) {
           ? 'opacity-100 scale-100 hover:scale-105 pointer-events-auto'
           : 'opacity-0 scale-90 pointer-events-none'
       }`}
-      aria-label={t('floatingChat.openAriaLabel', { defaultValue: 'Open AI Assistant' })}
+      aria-label={t('floatingChat.openAriaLabel', { defaultValue: 'Open AI Chat' })}
     >
       <MessageSquare className="h-5 w-5" />
     </button>

@@ -256,7 +256,7 @@ func (h *SessionHandler) SaveMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, msg := range req.Messages {
-		if _, err := h.repo.AddMessage(r.Context(), sessionID, msg.Role, msg.Content, msg.ToolCalls); err != nil {
+		if _, err := h.repo.AddMessage(r.Context(), sessionID, msg.Role, msg.Content, msg.ToolCalls, StoppedUsage(msg)); err != nil {
 			slog.Error("add message failed", "error", err)
 			response.InternalError(w, r, err)
 			return

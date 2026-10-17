@@ -1755,8 +1755,11 @@
     "turnUsage": {
       "line": "In {{prompt}} · out {{completion}} tokens",
       "cached": " · {{pct}}% cached",
-      "calls": "Model calls: {{count}} · {{model}}"
-    }
+      "calls": "Model calls: {{count}} · {{model}}",
+      "stopped": "Stopped · usage not available",
+      "stoppedTitle": "The answer was stopped before the provider reported its tokens."
+    },
+    "jumpToLatest": "Jump to latest"
   },
   "cost": {
     "title": "Cost",
@@ -3545,9 +3548,11 @@
     }
   },
   "floatingChat": {
-    "title": "AI Assistant",
-    "openAriaLabel": "Open AI Assistant",
+    "title": "AI Chat",
+    "openAriaLabel": "Open AI Chat",
     "closeAriaLabel": "Close",
+    "copy": "Copy",
+    "copied": "Copied",
     "currentPage": "Current page: {{title}}",
     "contextIncluded": "Current page context included",
     "sessionLoading": "Preparing session...",

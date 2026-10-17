@@ -250,6 +250,28 @@ body {
   }
 }
 
+/* Tables in chat answers (AI chat, floating): row and column lines; a wide table scrolls sideways in its own box
+   (components/MarkdownTable.tsx), and in the narrow floating panel a tall one scrolls under a fixed header row. */
+.prose .chat-table-wrap {
+  @apply my-3 overflow-x-auto;
+}
+.prose .chat-table-wrap table {
+  @apply my-0 border-collapse;
+}
+.prose .chat-table-wrap th,
+.prose .chat-table-wrap td {
+  @apply border border-slate-600 px-2.5 py-1.5;
+}
+.prose .chat-table-wrap thead th {
+  @apply bg-slate-800;
+}
+.floating-md .chat-table-wrap {
+  @apply max-h-72 overflow-auto;
+}
+.floating-md .chat-table-wrap thead th {
+  @apply sticky top-0 z-1;
+}
+
 /* Tool Call 스타일 - KAgent 스타일 (components/MarkdownDisclosure.tsx) */
 .prose .md-details {
   @apply my-2 rounded-lg border border-slate-600 bg-slate-800/50 overflow-hidden;

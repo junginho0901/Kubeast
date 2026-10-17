@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { settleMessages } from './useStreamEndSync'
+import { markStoppedAnswer, settleMessages } from './useStreamEndSync'
 import type { Message } from '../types'
 
 const user: Message = { role: 'user', content: '안녕', isTemporary: true }
@@ -18,5 +18,25 @@ describe('settleMessages', () => {
     expect(settleMessages([user, tools], true)).toHaveLength(2)
     expect(settleMessages([user, placeholder], false).every((m) => m.isTemporary === false)).toBe(true)
     expect(settleMessages([user, placeholder], false)).toHaveLength(2)
+  })
+})
+
+describe('markStoppedAnswer', () => {
+  it('marks the last assistant answer as stopped and leaves the rest', () => {
+    const msgs = [
+      { role: 'user' as const, content: 'q1' },
+      { role: 'assistant' as const, content: 'a1', usage: { prompt_tokens: 10, completion_tokens: 2 } },
+      { role: 'user' as const, content: 'q2' },
+      { role: 'assistant' as const, content: 'part of a2' },
+    ]
+    const out = markStoppedAnswer(msgs)
+    expect(out[3].usage).toEqual({ stopped: true })
+    expect(out[1].usage).toEqual({ prompt_tokens: 10, completion_tokens: 2 })
+    expect(out.slice(0, 3)).toEqual(msgs.slice(0, 3))
+  })
+
+  it('marks nothing when the stopped turn has no answer text yet', () => {
+    const msgs = [{ role: 'user' as const, content: 'q' }, { role: 'assistant' as const, content: '' }]
+    expect(markStoppedAnswer(msgs)).toBe(msgs)
   })
 })
