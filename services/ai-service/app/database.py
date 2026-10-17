@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, create_engine
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+import asyncio
 import json
 
 Base = declarative_base()
@@ -612,6 +613,19 @@ class DatabaseService:
 # 전역 데이터베이스 서비스 인스턴스
 db_service: Optional[DatabaseService] = None
 db_initialized: bool = False
+# Requests that arrive together on a cold service share one initialisation (two
+# sqlite create_all calls collide on "table already exists"). One lock per event
+# loop: a Lock that has waited on one loop cannot be awaited on another.
+_init_lock: Optional[asyncio.Lock] = None
+_init_lock_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _db_init_lock() -> asyncio.Lock:
+    global _init_lock, _init_lock_loop
+    loop = asyncio.get_running_loop()
+    if _init_lock is None or _init_lock_loop is not loop:
+        _init_lock, _init_lock_loop = asyncio.Lock(), loop
+    return _init_lock
 
 
 async def get_db_service() -> DatabaseService:
@@ -621,7 +635,9 @@ async def get_db_service() -> DatabaseService:
         db_service = DatabaseService()
         db_initialized = False
     if not db_initialized:
-        await db_service.init_db()
-        await db_service.ensure_default_model_config()
-        db_initialized = True
+        async with _db_init_lock():
+            if not db_initialized:
+                await db_service.init_db()
+                await db_service.ensure_default_model_config()
+                db_initialized = True
     return db_service

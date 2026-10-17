@@ -69,9 +69,13 @@ async def test_build_ai_service_returns_request_scoped_views(monkeypatch):
     async def fake_resolve():
         return resolved
 
+    async def no_economy():
+        return None
+
     import app.services.model_config_service as mcs
     import app.services.ai_service as ai_service_module
     monkeypatch.setattr(mcs, "resolve_model_config", fake_resolve)
+    monkeypatch.setattr(mcs, "resolve_economy_model_config", no_economy)
     monkeypatch.setattr(ai_service_module, "AIService", FakeAIService)
     api._cached_ai_service = None
     api._cached_ai_config_hash = ""
