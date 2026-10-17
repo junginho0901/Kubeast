@@ -86,7 +86,7 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 | 지표 | 내는 곳 | 쓰는 화면 |
 | --- | --- | --- |
 | `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`(라벨 `namespace`·`pod`·`container`) | kubelet의 cAdvisor(`/metrics/cadvisor`) | 최적화 표, Pod·워크로드·Service·Namespace 드로어 |
-| `node_cpu_seconds_total`, `node_memory_MemAvailable_bytes`·`MemTotal_bytes`, `node_filesystem_avail_bytes`·`size_bytes`(`mountpoint="/"`), `node_load1`, `node_network_*_bytes_total`, `node_disk_*_bytes_total` | node-exporter | 대시보드, 노드 드로어 |
+| `node_cpu_seconds_total`, `node_memory_MemAvailable_bytes`·`MemTotal_bytes`, `node_filesystem_avail_bytes`·`size_bytes`(`mountpoint="/"`), `node_load1`, `node_network_*_bytes_total`, `node_disk_*_bytes_total` — 또는 아래 hostmetrics 이름 | node-exporter 또는 OpenTelemetry Collector `hostmetrics` | 대시보드, 노드 드로어 |
 | `kube_pod_info`, `kube_pod_container_status_restarts_total`, `kube_horizontalpodautoscaler_status_current_replicas` | kube-state-metrics | 대시보드, Namespace·워크로드·HPA 드로어 |
 | `kubelet_volume_stats_used_bytes`·`capacity_bytes`·`available_bytes` | kubelet `/metrics` — CSI 드라이버가 볼륨 통계를 내야 함(hostPath·local-path는 안 냄 → N/A) | 스토리지 분석 |
 | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`·`FB_FREE`, `DCGM_FI_DEV_MEMORY_TEMP` | NVIDIA DCGM exporter | GPU 화면 |
@@ -94,6 +94,14 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 | OpenCost가 내는 지표 | OpenCost(§4) | 비용 |
 
 **노드 드로어의 노드별 값**: node-exporter 시리즈의 `instance`가 **노드 이름이나 노드 주소(InternalIP·ExternalIP)**여야(포트는 있어도 없어도 됨) 그 노드의 값을 고릅니다. 아래 두 차트의 기본값 `instance=<노드 IP>:9100`은 그대로 맞습니다. 그 밖의 형식(예: node-exporter 파드 IP)이면 노드 드로어의 카드와 24시간 추세가 비어 보입니다 — 다른 노드 값으로 대신 채우지 않습니다. 그때는 scrape 설정의 `relabelings`로 `instance`를 노드 이름(`__meta_kubernetes_pod_node_name`)으로 바꿉니다. 디스크·네트워크 I/O는 그 노드 장치를 합친 값(`device!="lo"`, node-exporter node-mixin과 같은 방식)입니다. 대시보드처럼 클러스터 전체를 합치는 값은 영향이 없습니다.
+
+**node-exporter 대신 OpenTelemetry `hostmetrics`**: 노드 질의는 모두 "node-exporter 식 `or` hostmetrics 식"이라 저장소에 있는 쪽이 나옵니다(둘 다 있으면 node-exporter). 고르는 설정은 없습니다. hostmetrics로 갈 때 맞출 것:
+
+- **이름**: Prometheus식 이름 변환 그대로 — `system_cpu_time_seconds_total{state}`와 `system_cpu_logical_count`(CPU 사용률 = 1 − 유휴 초 ÷ 논리 CPU 수, node-exporter와 같은 셈), `system_memory_usage_bytes{state="used"}`와 `system_memory_limit_bytes`, `system_filesystem_usage_bytes{mountpoint="/",state}`, `system_cpu_load_average_1m`, `system_network_io_bytes_total{direction,device}`, `system_disk_io_bytes_total{direction,device}`. OTel `prometheus_remote_write` exporter(0.162 전 이름 `prometheusremotewrite`)와 Prometheus의 OTLP 수신은 기본이 이 이름이고, VictoriaMetrics에 OTLP로 보내면 `-opentelemetry.usePrometheusNaming`을 줘야 합니다(기본은 점 이름 그대로).
+- **`system.memory.limit` 켜기**(기본 꺼짐): 메모리 사용률 = `used ÷ limit`. 수신기의 MemAvailable 게이트(0.137부터 기본 켬)로 `used` = 전체 − MemAvailable이라 node-exporter의 `1 − MemAvailable/MemTotal`과 같은 값입니다. state들을 더해도 전체가 되지 않으므로 합으로 나누지 않습니다.
+- **노드 레이블 `k8s_node_name`** = 노드 이름: 리소스 속성 `k8s.node.name`(downward API `spec.nodeName`)을 레이블로 — `prometheus_remote_write`의 `resource_constant_labels.included: [k8s.node.name]`, Prometheus OTLP면 `promote_resource_attributes`.
+- **호스트 읽기**: `root_path: /hostfs`에 호스트 `/`를 읽기 전용으로 마운트(opentelemetry-collector 차트의 hostMetrics 프리셋과 같음). 네트워크는 `hostNetwork: true`일 때만 노드 인터페이스 값입니다 — 아니면 수집기 파드 자기 트래픽이 되므로 그때는 `network` 스크레이퍼를 끄세요(Kubeast는 그 칸을 숨김). 디스크는 node-exporter 기본 제외(파티션·loop·ram)와 같은 장치를 뺍니다.
+- **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml)(contrib 0.162.0, `scripts/kind-hostmetrics.sh`).
 
 ### 예시
 
@@ -278,6 +286,7 @@ service:
 | Kyverno | 1.19.1(차트 3.9.1) | 개발용 2번 클러스터 |
 | Alertmanager | v0.34.1 | 개발용 2번 클러스터 — `amtool alert add`로 넣은 알림이 웹훅으로 와서 조사됨(e2e `alert-investigation.spec.ts`) |
 | Loki · OpenTelemetry Collector contrib | 3.7.8 · 0.162.0 | 10-14, 개발용 2번 클러스터의 Loki 하나에 두 클러스터 수집기 — Job 로그를 텍스트·워크로드로 찾고 다른 클러스터에선 0줄, Job 삭제 뒤에도 찾음(e2e `log-search.spec.ts`) |
+| OpenTelemetry Collector contrib `host_metrics` | 0.162.0 | 10-18, 개발용 1번 클러스터(node-exporter 없음, `scripts/kind-hostmetrics.sh`) → 2번 클러스터 Prometheus remote write — 같은 커널을 보는 2번 클러스터 node-exporter와 메모리 70.6% / 70.7%, 전체 메모리 같은 바이트, Load 6.72 / 6.66, CPU 13.3% / 13.5%, 노드 드로어·대시보드가 채워짐(e2e `node-hostmetrics.spec.ts`). 0.162에선 `hostmetrics`·`prometheusremotewrite` 이름이 폐기 예정 별칭이라 `host_metrics`·`prometheus_remote_write`로 씀 |
 | Grafana | 13.2.4 | 10-17, 개발용 2번 클러스터(`scripts/kind-grafana.sh`) — 데이터소스 프록시로 읽은 지표·로그가 직접 읽은 값과 같고 대시보드·노드 드로어가 채워짐, 틀린 토큰은 상태에 401, 웹훅 연락처 시험으로 보낸 알림이 조사됨(e2e `grafana.spec.ts`) |
 | GPU·DRA·VPA·Gateway API·ingress-nginx | — | 코드 기준, 실제 클러스터 검증 안 함 |
 

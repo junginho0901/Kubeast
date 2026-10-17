@@ -1,7 +1,7 @@
 import { usePrometheusQueries, usePrometheusRangeQuery } from '@/hooks/usePrometheusQuery'
 import { PrometheusSection, MetricCard, Sparkline } from '../PrometheusMetrics'
 import { Tx } from '../DetailCommon'
-import { nodeInstanceSelector, nodeQueries } from '@/utils/nodeMetrics'
+import { nodeQueries } from '@/utils/nodeMetrics'
 
 interface NodePrometheusMetricsProps {
   name: string
@@ -11,10 +11,10 @@ interface NodePrometheusMetricsProps {
 }
 
 export default function NodePrometheusMetrics({ name, addresses = [], tr }: NodePrometheusMetricsProps) {
-  const sel = nodeInstanceSelector(name, addresses)
+  const queries = nodeQueries(name, addresses)
   const promNodeMetrics = usePrometheusQueries(
-    ['node-detail', name, sel],
-    Object.entries(nodeQueries(sel)).map(([metric, promql]) => ({ name: metric, promql })),
+    ['node-detail', name, ...addresses],
+    Object.entries(queries).map(([metric, promql]) => ({ name: metric, promql })),
     { enabled: !!name },
   )
 
@@ -41,7 +41,7 @@ export default function NodePrometheusMetrics({ name, addresses = [], tr }: Node
           <MetricCard label="Load (1m)" value={findNodeValue('load1')!} unit="" thresholds={{ warn: 4, danger: 8 }} />
         )}
       </div>
-      <NodeResourceTrend name={name} sel={sel} />
+      <NodeResourceTrend name={name} cpuQuery={queries.cpu} memoryQuery={queries.memory} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(findNodeValue('disk_read') !== null || findNodeValue('disk_write') !== null) && (
@@ -84,10 +84,9 @@ export default function NodePrometheusMetrics({ name, addresses = [], tr }: Node
 }
 
 // NodeResourceTrend — last-24h CPU% / Memory% sparklines for the selected node. Hidden if there's no data.
-function NodeResourceTrend({ name, sel }: { name: string; sel: string }) {
-  const q = nodeQueries(sel)
-  const cpu = usePrometheusRangeQuery(['node-cpu-24h', name, sel], q.cpu, { step: 300 })
-  const mem = usePrometheusRangeQuery(['node-mem-24h', name, sel], q.memory, { step: 300 })
+function NodeResourceTrend({ name, cpuQuery, memoryQuery }: { name: string; cpuQuery: string; memoryQuery: string }) {
+  const cpu = usePrometheusRangeQuery(['node-cpu-24h', name, cpuQuery], cpuQuery, { step: 300 })
+  const mem = usePrometheusRangeQuery(['node-mem-24h', name, memoryQuery], memoryQuery, { step: 300 })
 
   const pickSeries = (resp: typeof cpu.data) => {
     if (!resp?.available || !resp.results?.length) return null

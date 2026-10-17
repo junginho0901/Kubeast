@@ -1,0 +1,99 @@
+# Node values without node-exporter on kind: an OpenTelemetry Collector per node with the hostmetrics
+# receiver reading the host through /hostfs, the node name as k8s.node.name, written to a Prometheus with
+# remote write — the way a company collector feeds a central store. The receiver settings follow the
+# opentelemetry-collector chart's hostMetrics preset; system.memory.limit is turned on because Kubeast's
+# memory figure is used / limit. hostNetwork, so the network scraper reads the node's interfaces instead of
+# the pod's. scripts/kind-hostmetrics.sh fills CLUSTER_NAME (the cluster label) and STORE_WRITE.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hostmetrics
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hostmetrics
+  namespace: hostmetrics
+data:
+  config.yaml: |
+    receivers:
+      host_metrics:
+        root_path: /hostfs
+        collection_interval: 15s
+        scrapers:
+          cpu: {}
+          load: {}
+          memory:
+            metrics:
+              system.memory.limit: {enabled: true}
+          disk: {}
+          network: {}
+          filesystem:
+            exclude_mount_points:
+              mount_points: [/dev/*, /proc/*, /sys/*, /run/k3s/containerd/*, /var/lib/docker/*, /var/lib/kubelet/*, /snap/*]
+              match_type: regexp
+            exclude_fs_types:
+              fs_types: [autofs, binfmt_misc, bpf, cgroup2, configfs, debugfs, devpts, devtmpfs, fusectl, hugetlbfs, iso9660, mqueue, nsfs, overlay, proc, procfs, pstore, rpc_pipefs, securityfs, selinuxfs, squashfs, sysfs, tracefs]
+              match_type: strict
+    processors:
+      resource:
+        attributes:
+          - {key: k8s.node.name, value: "${env:K8S_NODE_NAME}", action: upsert}
+      batch:
+        timeout: 5s
+    exporters:
+      prometheus_remote_write:
+        endpoint: STORE_WRITE
+        external_labels:
+          cluster: CLUSTER_NAME
+        resource_constant_labels:
+          included: [k8s.node.name]
+    service:
+      telemetry:
+        logs: {level: warn}
+        metrics: {level: none}
+      pipelines:
+        metrics:
+          receivers: [host_metrics]
+          processors: [resource, batch]
+          exporters: [prometheus_remote_write]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hostmetrics
+  namespace: hostmetrics
+spec:
+  selector:
+    matchLabels: {app: hostmetrics}
+  template:
+    metadata:
+      labels: {app: hostmetrics}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.162.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otel/config.yaml"]
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef: {fieldPath: spec.nodeName}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/otel}
+            - {name: hostfs, mountPath: /hostfs, readOnly: true, mountPropagation: HostToContainer}
+      volumes:
+        - name: config
+          configMap: {name: hostmetrics}
+        - name: hostfs
+          hostPath: {path: /}

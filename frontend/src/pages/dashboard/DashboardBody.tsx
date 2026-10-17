@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useClusterFeatures, usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { clusterNodeQueries } from '@/utils/nodeMetrics'
 import { useDashboard } from './DashboardContext'
 import { DashboardSkeleton } from './DashboardSkeleton'
 import { DashboardHeader } from './DashboardHeader'
@@ -25,6 +26,8 @@ import { useDashboardStorage } from './hooks/useDashboardStorage'
 import { useDashboardAIContext } from './hooks/useDashboardAIContext'
 import type { IssueItem, ResourceType } from './types'
 import { unwrapOuterMarkdownFence, makeStreamingMarkdownRenderFriendly } from './utils'
+
+const clusterNodes = clusterNodeQueries()
 
 // Dashboard 의 거대 body. DashboardProvider 안에서만 mount.
 // Provider 분리 (Dashboard.tsx) + body 분리 (이 파일) 로 root container 와
@@ -133,9 +136,9 @@ export function DashboardBody() {
   const promCluster = usePrometheusQueries(
     ['cluster-dashboard'],
     [
-      { name: 'cpu', promql: '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)' },
-      { name: 'memory', promql: '(1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)) * 100' },
-      { name: 'disk', promql: '(1 - sum(node_filesystem_avail_bytes{mountpoint="/"}) / sum(node_filesystem_size_bytes{mountpoint="/"})) * 100' },
+      { name: 'cpu', promql: clusterNodes.cpu },
+      { name: 'memory', promql: clusterNodes.memory },
+      { name: 'disk', promql: clusterNodes.filesystem },
       { name: 'pod_count', promql: 'count(kube_pod_info)' },
     ],
     { refetchInterval: 30000 },

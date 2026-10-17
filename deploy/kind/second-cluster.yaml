@@ -140,6 +140,8 @@ spec:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus
             - --storage.tsdb.retention.time=2h
+            # scripts/kind-hostmetrics.sh: the first cluster's hostmetrics collector writes here.
+            - --web.enable-remote-write-receiver
           ports:
             - name: http
               containerPort: 9090

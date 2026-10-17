@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nodeInstanceSelector, nodeQueries } from './nodeMetrics'
+import { clusterNodeQueries, nodeInstanceSelector, nodeQueries } from './nodeMetrics'
 
 // The regular expression inside the PromQL string, as Prometheus reads it.
 function regexOf(sel: string): RegExp {
@@ -37,10 +37,45 @@ describe('nodeInstanceSelector', () => {
 })
 
 describe('nodeQueries', () => {
-  it('puts the selector in every query and adds up disk and network devices', () => {
-    const q = nodeQueries('instance=~"x"')
-    for (const promql of Object.values(q)) expect(promql).toContain('instance=~"x"')
-    expect(q.network_rx).toBe('sum by(instance)(rate(node_network_receive_bytes_total{device!="lo",instance=~"x"}[5m]))')
-    expect(q.disk_read.startsWith('sum by(instance)(')).toBe(true)
+  const q = nodeQueries('node-1', ['10.0.1.1'])
+
+  it('asks node-exporter by instance or hostmetrics by k8s_node_name, each reduced to one series', () => {
+    for (const promql of Object.values(q)) {
+      const [left, right] = promql.split(') or (')
+      expect(left).toContain(nodeInstanceSelector('node-1', ['10.0.1.1']))
+      expect(right).toContain('k8s_node_name="node-1"')
+      expect(left).not.toMatch(/\bsystem_/)
+      expect(right).not.toMatch(/\bnode_/)
+      expect(promql).not.toMatch(/ by ?\(/)
+    }
+    expect(q.network_rx).toBe(
+      '(sum(rate(node_network_receive_bytes_total{device!="lo",instance=~"(?:node-1|10\\\\.0\\\\.1\\\\.1)(?::[0-9]+)?"}[5m]))) or ' +
+        '(sum(rate(system_network_io_bytes_total{direction="receive",device!="lo",k8s_node_name="node-1"}[5m])))',
+    )
+  })
+
+  it('takes CPU as idle per logical CPU, memory as used over system.memory.limit, the root filesystem as free over its states', () => {
+    expect(q.cpu).toContain('(100 * (1 - sum(rate(system_cpu_time_seconds_total{state="idle",k8s_node_name="node-1"}[5m])) / sum(system_cpu_logical_count{k8s_node_name="node-1"})))')
+    expect(q.memory).toContain('100 * sum(system_memory_usage_bytes{state="used",k8s_node_name="node-1"}) / sum(system_memory_limit_bytes{k8s_node_name="node-1"})')
+    expect(q.filesystem).toContain('sum(system_filesystem_usage_bytes{state="free",mountpoint="/",k8s_node_name="node-1"}) / sum(system_filesystem_usage_bytes{mountpoint="/",k8s_node_name="node-1"})')
+  })
+
+  it('leaves out the disk devices node-exporter leaves out', () => {
+    const quoted = /device!~("(?:[^"\\]|\\.)*")/.exec(q.disk_read)![1]
+    const re = new RegExp(`^(?:${JSON.parse(quoted)})$`)
+    for (const dev of ['sda1', 'vda2', 'xvda1', 'nvme0n1p1', 'loop0', 'ram0', 'zram0']) expect(re.test(dev), dev).toBe(true)
+    for (const dev of ['sda', 'vda', 'xvda', 'nvme0n1', 'nvme10n1', 'dm-0']) expect(re.test(dev), dev).toBe(false)
+  })
+})
+
+describe('clusterNodeQueries', () => {
+  it('adds up every node, node-exporter first, with no empty selector', () => {
+    const c = clusterNodeQueries()
+    expect(c.cpu.startsWith('(100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) or (')).toBe(true)
+    expect(c.memory).toContain('sum(system_memory_limit_bytes)')
+    for (const promql of Object.values(c)) {
+      expect(promql).not.toContain('{}')
+      expect(promql).not.toContain(',}')
+    }
   })
 })
