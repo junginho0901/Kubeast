@@ -41,8 +41,6 @@ test.describe.serial('Admin → Investigations', () => {
   test.beforeAll(async ({ request }) => {
     test.setTimeout(300_000)
     const admin = await login(request)
-    const active = await (await request.get('/api/v1/ai/model-configs/active', { headers: bearer(admin) })).json()
-    test.skip(active?.provider === 'claude-code', 'the default model is a Claude subscription (claude-code): the investigator does not run on it')
     const res = await request.post('/api/v1/alerts/webhook?cluster=self', {
       headers: { Authorization: `Bearer ${webhookToken()}` },
       data: {

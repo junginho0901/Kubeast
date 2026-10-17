@@ -177,8 +177,9 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **켜는 법**: ① ai-service 이미지를 `--build-arg WITH_CLAUDE_CODE=true`로 빌드합니다(SDK가 Claude Code 실행 파일을 담아 약 250 MB 늘어남, 기본 이미지에는 없음). ② 본인 PC에서 `claude setup-token`으로 토큰(1년)을 만들어 `ai.claudeCodeOAuthToken`(또는 `apiKeysSecret`의 `CLAUDE_CODE_OAUTH_TOKEN` 키)에 넣고 `ai.providers.claudeCode.enabled: true`로 올립니다. ③ **Admin > AI Models**에서 "Claude subscription (setup-token)"을 고르면 변수 이름이 `CLAUDE_CODE_OAUTH_TOKEN`으로 채워집니다. 연결 테스트 후 저장합니다.
 - **격리**: 실행마다 임시 HOME·설정 디렉터리, Claude Code 기본 도구(Bash·파일·웹) 없음, 설정 파일·CLAUDE.md 안 읽음. ai-service가 받은 환경변수는 경로·프록시·CA 변수를 빼고 모두 빈 값으로 덮어 모델 키·DB 주소가 넘어가지 않습니다. 토큰은 `CLAUDE_CODE_OAUTH_TOKEN`으로만 갑니다.
 - **규칙**: `CLAUDE_CODE_OAUTH_TOKEN`은 claude-code만 쓸 수 있고, claude-code는 base_url과 다른 공급자 키 변수를 받지 않습니다. 꺼진 설치에서는 새 claude-code 설정 저장이 400으로 거절되고 연결 테스트가 이유를 보여 줍니다.
-- **한도**: 동시에 도는 턴은 `maxConcurrent`(기본 1, 나머지는 대기), 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 10회 모델 호출)까지입니다. 턴마다 Claude Code 프로세스가 하나 뜨므로 `maxConcurrent`를 올리면 `resources.aiService.limits.memory`도 올립니다.
-- **안 되는 것**: 알림 → AI 조사(조사기는 자체 도구 호출 방식이라 이 프로바이더에서 오류로 끝남)와 공급자 모델 목록(내장 목록 또는 이름 직접 입력).
+- **한도**: 동시에 도는 턴은 `maxConcurrent`(기본 1, 나머지는 대기), 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 10회 모델 호출)까지입니다. 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나 뜨므로 `maxConcurrent`를 올리면 `resources.aiService.limits.memory`도 올립니다.
+- **알림 → AI 조사**도 이 프로바이더로 돕니다. 조사는 채팅과 따로 한 칸을 써서(조사기는 한 번에 하나) 조사 중에도 채팅이 기다리지 않습니다 — 그래서 조사가 켜져 있으면 Claude Code 프로세스가 `maxConcurrent` + 1개까지 뜹니다. 단계 상한은 `maxSteps`(마지막 단계는 도구 없이 보고서)로 API 키일 때와 같습니다.
+- **안 되는 것**: 공급자 모델 목록(내장 목록 또는 이름 직접 입력).
 
 ---
 

@@ -71,10 +71,8 @@ async function waitFinished(request: APIRequestContext, admin: string, alertname
   return row as Row
 }
 
-// The investigator does not run on the Claude subscription provider (it stops with the reason).
-async function onSubscriptionModel(request: APIRequestContext, admin: string): Promise<boolean> {
-  const active = await (await request.get('/api/v1/ai/model-configs/active', { headers: bearer(admin) })).json()
-  return active?.provider === 'claude-code'
+async function activeModel(request: APIRequestContext, admin: string): Promise<{ provider: string; model: string }> {
+  return (await request.get('/api/v1/ai/model-configs/active', { headers: bearer(admin) })).json()
 }
 
 async function auditRows(request: APIRequestContext, admin: string, action: string, since: string) {
@@ -107,7 +105,7 @@ test.describe('alert investigation', () => {
     test.setTimeout(420_000)
     const token = webhookToken()
     const admin = await login(request)
-    test.skip(await onSubscriptionModel(request, admin), 'the default model is a Claude subscription (claude-code): the investigator does not run on it')
+    const active = await activeModel(request, admin)
     const since = new Date(Date.now() - 5_000).toISOString()
     const name = `E2EInvestigation${Date.now()}`
     const fp = `inv-${Date.now()}`
@@ -122,7 +120,8 @@ test.describe('alert investigation', () => {
     expect(d.status, `investigation error: ${d.error}`).toBe('done')
     expect(d.report.length).toBeGreaterThan(40)
     expect(d.namespace).toBe('default')
-    expect(d.model).toBeTruthy()
+    // The default model ran it, whichever provider that is (an API key or the Claude subscription).
+    expect([d.provider, d.model]).toEqual([active.provider, active.model])
     expect(d.iterations).toBeGreaterThanOrEqual(1)
     for (const call of d.tool_calls as Array<{ tool: string }>) expect(READ_TOOLS.has(call.tool), `tool ${call.tool}`).toBe(true)
 
@@ -165,7 +164,6 @@ test.describe('alert investigation', () => {
   test('the real Alertmanager on the second cluster delivers an amtool alert and it is investigated there', async ({ request }) => {
     test.setTimeout(420_000)
     const admin = await login(request)
-    test.skip(await onSubscriptionModel(request, admin), 'the default model is a Claude subscription (claude-code): the investigator does not run on it')
     const name = `E2EAlertmanager${Date.now()}`
     kubectlFor('kubeast-b')(
       `-n monitoring exec deploy/alertmanager -- amtool alert add ${name} severity=warning namespace=kube-system ` +

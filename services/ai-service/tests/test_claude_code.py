@@ -25,6 +25,12 @@ class TextBlock:
 
 
 @dataclass
+class ToolUseBlock:
+    name: str
+    input: dict
+
+
+@dataclass
 class AssistantMessage:
     content: list
     model: str = "claude-haiku-5-5"
@@ -47,7 +53,8 @@ class ProcessError(Exception):
 
 def make_sdk(script, *, record=None):
     """A stand-in claude_agent_sdk. `script` items: ("text", str) | ("call", tool, args) | ("result", ResultMessage)
-    | ("raise", Exception) | ("sleep", seconds)."""
+    | ("raise", Exception) | ("sleep", seconds). As Claude Code does, a tool call arrives as an assistant message
+    of its own (after the response's text) before the tool runs."""
     sdk = types.ModuleType("claude_agent_sdk")
     sdk.TextBlock, sdk.AssistantMessage, sdk.ResultMessage = TextBlock, AssistantMessage, ResultMessage
     state = {"options": [], "running": 0, "max_running": 0, "tool_results": []}
@@ -74,10 +81,13 @@ def make_sdk(script, *, record=None):
                 kind = step[0]
                 if kind == "text":
                     yield AssistantMessage(content=[TextBlock(step[1])])
-                elif kind == "call":
+                elif kind in ("call", "calls"):  # "calls": one response asking for several tools at once
+                    calls = [step[1:]] if kind == "call" else step[1]
+                    for name, args in calls:
+                        yield AssistantMessage(content=[ToolUseBlock(name, args)])
                     server = options.mcp_servers[claude_code.TOOL_SERVER]
-                    answer = await server["tools"][step[1]].handler(step[2])
-                    state["tool_results"].append(answer)
+                    for name, args in calls:
+                        state["tool_results"].append(await server["tools"][name].handler(args))
                 elif kind == "result":
                     yield step[1]
                 elif kind == "raise":
@@ -102,9 +112,9 @@ TOOLS = [
 
 @pytest.fixture
 def on(monkeypatch):
-    """The provider switched on, with a fresh concurrency limit."""
+    """The provider switched on, with fresh concurrency limits."""
     monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_ENABLED", True, raising=False)
-    monkeypatch.setattr(claude_code, "_semaphore", None)
+    monkeypatch.setattr(claude_code, "_semaphores", {})
 
     def install(script):
         sdk = make_sdk(script)
@@ -249,7 +259,8 @@ async def test_a_failure_without_a_result_reports_the_error(on):
 
 @pytest.mark.asyncio
 async def test_max_turns_ends_the_turn_without_an_answer(on):
-    on([("call", "list_clusters", {}), ("result", ResultMessage(subtype="error_max_turns", is_error=True, num_turns=10))])
+    # Measured 10-17 on Claude Code 2.1.301: max_turns=N stops after N tool calls and reports num_turns N+1.
+    on([("call", "list_clusters", {}), ("result", ResultMessage(subtype="error_max_turns", is_error=True, num_turns=2))])
 
     async def run_tool(name, args, turn):
         return [], "[]"
@@ -257,7 +268,24 @@ async def test_max_turns_ends_the_turn_without_an_answer(on):
     out = claude_code.TurnResult()
     [e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
         messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out)]
-    assert out.finish_reason == "max_turns" and out.text == "" and out.turns == 10
+    assert out.finish_reason == "max_turns" and out.text == "" and out.turns == 1  # the responses seen
+
+
+@pytest.mark.asyncio
+async def test_a_response_numbers_its_tool_calls_as_one_iteration(on):
+    """Text, then two tools asked at once, then the answer: the tools carry iteration 1, the turn counts 2 responses."""
+    on([("text", "Checking both."), ("calls", [("list_clusters", {}), ("k8s_get_resources", {"resource_type": "pods"})]),
+        ("text", "Both fine."), ("result", OK)])
+    seen = []
+
+    async def run_tool(name, args, turn):
+        seen.append((name, turn))
+        return [], "[]"
+
+    out = claude_code.TurnResult()
+    [e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out)]
+    assert seen == [("list_clusters", 1), ("k8s_get_resources", 1)] and out.turns == 2
 
 
 @pytest.mark.asyncio
@@ -274,6 +302,48 @@ async def test_runs_wait_for_the_concurrency_limit(on):
     sdk = on([("sleep", 0.05), ("result", OK)])
     await asyncio.gather(*(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t") for _ in range(3)))
     assert sdk.state["max_running"] == 1 and len(sdk.state["options"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_an_investigation_has_its_own_slot_beside_the_chat(on):
+    """The investigator's lane never takes the chat's slot: one chat run and one investigation run side by side."""
+    sdk = on([("sleep", 0.05), ("result", OK)])
+    ask = [{"role": "user", "content": "x"}]
+    await asyncio.gather(
+        claude_code.complete(ask, model="m", token="t"),
+        claude_code.complete(ask, model="m", token="t", lane="investigation"),
+        claude_code.complete(ask, model="m", token="t", lane="investigation"),
+    )
+    assert sdk.state["max_running"] == 2  # chat + one investigation; the second investigation waited
+
+
+@pytest.mark.asyncio
+async def test_an_investigation_turn_runs_in_its_own_lane(on):
+    sdk = on([("sleep", 0.05), ("result", OK)])
+
+    async def run_tool(name, args, turn):
+        return [], "[]"
+
+    async def investigation_turn():
+        out = claude_code.TurnResult()
+        return [e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
+            messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out, lane="investigation")]
+
+    await asyncio.gather(investigation_turn(), claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    assert sdk.state["max_running"] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_turn_limit_overrides_the_configured_max_turns(on):
+    sdk = on([("result", OK)])
+
+    async def run_tool(name, args, turn):
+        return [], "[]"
+
+    out = claude_code.TurnResult()
+    [e async for e in claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=TOOLS, run_tool=run_tool, out=out, turn_limit=7)]
+    assert sdk.state["options"][0][1].max_turns == 7
 
 
 @pytest.mark.asyncio

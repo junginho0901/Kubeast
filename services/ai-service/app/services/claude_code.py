@@ -6,14 +6,16 @@ to Claude Code through the Claude Agent SDK (pip ``claude-agent-sdk``, which car
 * a plain completion (history notes, the Optimization explanation): no tools;
 * a chat turn: Claude Code runs the model loop, and each tool call it makes is answered by a function in
   this process that runs the chat's own tool code — the same tools, approval card for writes, masking and
-  ``ai.tool.call`` audit as with an API key.
+  ``ai.tool.call`` audit as with an API key;
+* an alert investigation: the same turn with the investigator's read-only tools (app.services.ai.tool_turn).
 
 Every run is isolated: a temporary HOME and config directory, only that tool server, no built-in tools, no
 settings files, and every variable this service inherited blanked except PATH, locale and proxy settings,
 so the model keys and the database URL never reach it. The token reaches it only as
 ``CLAUDE_CODE_OAUTH_TOKEN``. Off by default (``AI_CLAUDE_CODE_ENABLED``, chart
 ``ai.providers.claudeCode.enabled``) and meant for an install one person uses with their own subscription:
-Anthropic's terms keep subscriptions to individual use. The alert investigator is not supported.
+Anthropic's terms keep subscriptions to individual use. Runs wait for a free slot: the chat's
+(``AI_CLAUDE_CODE_MAX_CONCURRENT``) or the investigator's own one, so an investigation never holds up a chat.
 """
 from __future__ import annotations
 
@@ -43,7 +45,8 @@ KEEP_ENV = frozenset({"PATH", "LANG", "LC_ALL", "TZ", "HTTPS_PROXY", "HTTP_PROXY
 # (tool name, arguments, model turn) → (chat SSE events after the call, the result text the model reads)
 ToolRunner = Callable[[str, dict, int], Awaitable[tuple[list[str], str]]]
 
-_semaphore: Optional[asyncio.Semaphore] = None
+# Concurrency lanes: "chat" (chat, floating assistant, plain completions) and "investigation" (one worker, one run).
+_semaphores: dict[str, asyncio.Semaphore] = {}
 
 
 class ClaudeCodeError(RuntimeError):
@@ -84,11 +87,10 @@ def unavailable_reason() -> Optional[str]:
     return None
 
 
-def _sem() -> asyncio.Semaphore:
-    global _semaphore
-    if _semaphore is None:
-        _semaphore = asyncio.Semaphore(max_concurrent())
-    return _semaphore
+def _sem(lane: str = "chat") -> asyncio.Semaphore:
+    if lane not in _semaphores:
+        _semaphores[lane] = asyncio.Semaphore(max_concurrent() if lane == "chat" else 1)
+    return _semaphores[lane]
 
 
 def _content_text(content: Any) -> str:
@@ -205,10 +207,10 @@ def _result_error(result) -> Optional[ClaudeCodeError]:
     return ClaudeCodeError(f"Claude Code{status}: {message.strip()[:600]}")
 
 
-async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque):
-    """One Claude Code run within the concurrency limit and the turn timeout; returns its result message."""
+async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat"):
+    """One Claude Code run within its lane's concurrency limit and the turn timeout; returns its result message."""
     result = None
-    async with _sem():
+    async with _sem(lane):
         try:
             async with asyncio.timeout(turn_timeout()):
                 async for message in sdk.query(prompt=prompt, options=options):
@@ -237,7 +239,7 @@ class Completion:
     usage: Optional[dict] = None
 
 
-async def complete(messages: Sequence[dict], *, model: str, token: str) -> Completion:
+async def complete(messages: Sequence[dict], *, model: str, token: str, lane: str = "chat") -> Completion:
     """One plain completion: no tools."""
     reason = unavailable_reason()
     if reason:
@@ -248,7 +250,7 @@ async def complete(messages: Sequence[dict], *, model: str, token: str) -> Compl
     with tempfile.TemporaryDirectory(prefix="kubeast-cc-") as workdir:
         options = _options(sdk, model=model, system_prompt=system_prompt, token=token, workdir=workdir,
                            stderr=stderr.append)
-        result = await _run(sdk, prompt, options, lambda _m: None, stderr)
+        result = await _run(sdk, prompt, options, lambda _m: None, stderr, lane)
     return Completion(text=str(result.result or ""), usage=usage_of(result.usage))
 
 
@@ -259,8 +261,8 @@ def _usage_ns(usage: Optional[dict]):
 
 
 class _Completions:
-    """chat.completions for the provider adapter: plain completions only. A chat turn with tools goes
-    through ClaudeCodeChat.turn; any other caller that sends tools (the alert investigator) is refused."""
+    """chat.completions for the provider adapter: plain completions only. A turn with tools goes through
+    ClaudeCodeChat.turn (the chat, app.services.ai.tool_turn); a caller that sends tools here is refused."""
 
     def __init__(self, model: str, token: str):
         self._model, self._token = model, token
@@ -288,7 +290,7 @@ class _Completions:
 class TurnResult:
     text: str = ""                 # the answer: the text after the last tool call, as the API-key path saves
     tool_calls: int = 0
-    turns: int = 0
+    turns: int = 0                 # the model responses seen: a response's tool calls share its number
     finish_reason: Optional[str] = None
     usage: Optional[dict] = None
 
@@ -311,10 +313,15 @@ class ClaudeCodeChat:
         self.model, self._token = model, token
         self.chat = SimpleNamespace(completions=_Completions(model, token))
 
+    async def complete(self, messages: Sequence[dict], *, lane: str = "chat") -> Completion:
+        return await complete(messages, model=self.model, token=self._token, lane=lane)
+
     async def turn(self, *, messages: Sequence[dict], tools: Sequence[dict], run_tool: ToolRunner,
-                   out: TurnResult, model: Optional[str] = None) -> AsyncIterator[str]:
+                   out: TurnResult, model: Optional[str] = None, turn_limit: Optional[int] = None,
+                   lane: str = "chat") -> AsyncIterator[str]:
         """One chat turn: yields the chat's SSE events (answer text; for each tool call a `function` event,
-        then whatever run_tool returns) and fills `out`. Raises ClaudeCodeError when the run fails."""
+        then whatever run_tool returns) and fills `out`. Raises ClaudeCodeError when the run fails.
+        turn_limit caps the model turns (default AI_CLAUDE_CODE_MAX_TURNS)."""
         reason = unavailable_reason()
         if reason:
             raise ClaudeCodeError(reason)
@@ -322,7 +329,9 @@ class ClaudeCodeChat:
         system_prompt, prompt = split_messages(messages)
         queue: asyncio.Queue = asyncio.Queue()
         done = object()
-        state = {"turn": 0}
+        # A response arrives as several assistant messages (text, each tool call); the next response starts
+        # with the first one after a tool result. Its number is what the API-key path calls the iteration.
+        state = {"turn": 0, "fresh": True}
 
         def handler_for(name: str):
             async def handler(args: dict) -> dict:
@@ -330,6 +339,7 @@ class ClaudeCodeChat:
                 args = args if isinstance(args, dict) else {}
                 queue.put_nowait(("sse", _sse({"function": name, "args": args})))  # the chat shows the call at once
                 events, text = await run_tool(name, args, max(1, state["turn"]))
+                state["fresh"] = True
                 for event in events:
                     queue.put_nowait(("sse", event))
                 queue.put_nowait(("tool", None))
@@ -348,7 +358,8 @@ class ClaudeCodeChat:
 
         def on_message(message) -> None:
             if isinstance(message, sdk.AssistantMessage):
-                state["turn"] += 1
+                if state["fresh"]:
+                    state["turn"], state["fresh"] = state["turn"] + 1, False
                 for block in message.content:
                     if isinstance(block, sdk.TextBlock) and block.text:
                         queue.put_nowait(("text", block.text))
@@ -359,8 +370,8 @@ class ClaudeCodeChat:
                 with tempfile.TemporaryDirectory(prefix="kubeast-cc-") as workdir:
                     options = _options(sdk, model=model or self.model, system_prompt=system_prompt, token=self._token,
                                        workdir=workdir, server=server, allowed=[TOOL_PREFIX + n for n in names],
-                                       turns=max_turns(), stderr=stderr.append)
-                    queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr)))
+                                       turns=turn_limit or max_turns(), stderr=stderr.append)
+                    queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane)))
             except Exception as e:  # handed to the consumer; cancellation is not caught
                 queue.put_nowait((done, e))
 
@@ -373,7 +384,7 @@ class ClaudeCodeChat:
                     if isinstance(value, Exception):
                         raise value
                     out.usage = usage_of(value.usage)
-                    out.turns = int(value.num_turns or 0)
+                    out.turns = state["turn"]  # Claude Code's num_turns counts one more on a run cut at max_turns
                     if value.subtype == "error_max_turns":
                         out.finish_reason, out.text = "max_turns", ""
                     else:

@@ -457,12 +457,84 @@ async def test_run_one_masks_credentials_in_a_provider_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_the_investigator_refuses_the_claude_subscription_provider(monkeypatch):
-    """Claude Code runs tools only in the AI chat: an investigation on provider claude-code stops with the fix."""
+async def test_the_investigator_builds_a_claude_subscription_service(monkeypatch):
     async def resolve(config_id=None):
         return SimpleNamespace(provider="claude-code", model="claude-haiku-5-5", base_url=None, api_key="t",
                                extra_headers={}, tls_verify=True, ca_cert=None, options=None)
 
     monkeypatch.setattr("app.services.model_config_service.resolve_model_config", resolve)
-    with pytest.raises(runner.InvestigationError, match="features.alertInvestigation.model"):
-        await runner.build_service(InvestigationSettings(), "token", "self")
+    service = await runner.build_service(InvestigationSettings(), "token", "self")
+    assert service.provider == "claude-code" and hasattr(service.client, "claude_code")
+
+
+class FakeClaudeCode:
+    """ClaudeCodeChat.turn's contract: run_tool for each call, then fill `out`; complete() for a plain answer."""
+
+    def __init__(self, calls, *, text="", finish="stop", turns=2, closing="## Summary\nfrom the tool results"):
+        self.calls, self.text, self.finish, self.turns, self.closing = calls, text, finish, turns, closing
+        self.turn_kw, self.completed = {}, []
+
+    async def turn(self, *, messages, tools, run_tool, out, turn_limit=None, lane="chat", model=None):
+        self.turn_kw = {"tools": [t["function"]["name"] for t in tools], "turn_limit": turn_limit, "lane": lane}
+        for name, args in self.calls:
+            events, _text = await run_tool(name, args, 1)
+            for e in events:
+                yield e
+        out.text, out.finish_reason, out.turns = self.text, self.finish, self.turns
+        out.usage = {"prompt_tokens": 30, "completion_tokens": 5, "total_tokens": 35, "prompt_tokens_details": {"cached_tokens": 20}}
+
+    async def complete(self, messages, *, lane="chat"):
+        self.completed.append((messages, lane))
+        return SimpleNamespace(text=self.closing, usage={"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12})
+
+
+class FakeSubscriptionService(FakeService):
+    provider, model = "claude-code", "claude-haiku-5-5"
+
+    def __init__(self, cc):
+        super().__init__([])
+        self.client = SimpleNamespace(chat=SimpleNamespace(completions=self.completions), claude_code=cc)
+
+
+@pytest.mark.asyncio
+async def test_an_investigation_runs_on_a_claude_subscription(monkeypatch):
+    """Claude Code runs the loop; the tools, the read-only check and the audit are the API-key path's."""
+    cc = FakeClaudeCode([("k8s_get_resources", {"resource_type": "pods", "namespace": "apps"}),
+                         ("k8s_delete_resource", {"resource_type": "pod", "resource_name": "pod-1"})],
+                        text="## Summary\nCrash looping.", turns=3)
+    service = FakeSubscriptionService(cc)
+    audits = []
+    install_loop(monkeypatch, service, audits)
+    out = await runner.investigate(cfg(max_steps=5), row())
+    assert out["report"] == "## Summary\nCrash looping." and out["iterations"] == 3 and out["total_tokens"] == 35
+    assert out["provider"] == "claude-code" and service.completions.calls == []  # no API-key loop
+    assert service.executed == [("k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]
+    assert out["tool_calls"][1]["error"] == "not a read-only tool"
+    assert cc.turn_kw["lane"] == "investigation" and cc.turn_kw["turn_limit"] == 4  # the last step is the answer
+    assert "k8s_delete_resource" not in cc.turn_kw["tools"]
+    assert [a["action"] for a in audits] == ["ai.tool.call", "ai.tool.call"] and audits[0]["actor_email"] == "kubeast:investigator"
+
+
+@pytest.mark.asyncio
+async def test_a_subscription_investigation_stopped_at_the_limit_still_reports(monkeypatch):
+    """As the API-key path's last step: one call without tools writes the report from what the tools returned."""
+    cc = FakeClaudeCode([("k8s_get_pod_logs", {"namespace": "apps", "pod_name": "p"})], finish="max_turns", turns=4)
+    service = FakeSubscriptionService(cc)
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(max_steps=5), row())
+    assert out["report"] == "## Summary\nfrom the tool results" and out["iterations"] == 5
+    closing, lane = cc.completed[0]
+    assert lane == "investigation"
+    assert "Tool results so far" in closing[-1]["content"] and "NAME READY" in closing[-1]["content"]
+    assert closing[-1]["content"].endswith(inv_prompt.final_step_message())
+    assert out["total_tokens"] == 47
+
+
+@pytest.mark.asyncio
+async def test_text_before_the_limit_is_not_taken_as_the_report(monkeypatch):
+    """A run cut off at the limit may have written a plan ("let me check the logs"): the report is the closing call's."""
+    cc = FakeClaudeCode([("k8s_get_pod_logs", {"namespace": "apps", "pod_name": "p"})], text="Let me check the logs.",
+                        finish="max_turns", turns=4)
+    install_loop(monkeypatch, FakeSubscriptionService(cc), [])
+    out = await runner.investigate(cfg(max_steps=5), row())
+    assert out["report"] == "## Summary\nfrom the tool results" and len(cc.completed) == 1

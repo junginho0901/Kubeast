@@ -10,8 +10,6 @@
 #                                                         # claude-subscription as the default; the Ollama one stays, not default
 #   scripts/kind-model-subscription.sh down              # the Ollama ModelConfig default again; claude-subscription, the chart
 #                                                         # values and the Secret removed — run this when the e2e is over
-#
-# The alert investigator does not run on this provider: its specs skip while it is the default.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

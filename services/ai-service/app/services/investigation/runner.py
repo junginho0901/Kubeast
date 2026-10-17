@@ -5,8 +5,9 @@ oldest queued row, asks auth-service for the investigator's token for that
 cluster (and the alert's namespace), and runs the read-only tools through the
 same path the chat uses — tool-server checks the token's ai.tool.* rights and
 namespace, the cluster sees kubeast:investigator. At most max_steps model calls;
-the last one gets no tools, so it must answer (as HolmesGPT does). The whole run
-is bounded by timeout_seconds.
+the last one gets no tools, so it must answer (as HolmesGPT does) — the loop is
+app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
+The whole run is bounded by timeout_seconds.
 """
 
 from __future__ import annotations
@@ -75,9 +76,6 @@ async def build_service(cfg: inv_settings.InvestigationSettings, token: str, clu
         if config_id is None:
             raise InvestigationError(f'model config "{cfg.model}" (features.alertInvestigation.model) not found')
     resolved = await resolve_model_config(config_id=config_id) if config_id is not None else await resolve_model_config()
-    if (resolved.provider or "").strip().lower() == "claude-code":
-        raise InvestigationError("the investigator does not run on provider claude-code (Claude subscription); "
-                                 "set features.alertInvestigation.model to a model config with an API key")
     service = AIService(
         provider=resolved.provider,
         model=resolved.model,
@@ -112,7 +110,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
     """Run one investigation; return the fields to store. Raises on failure."""
     from app.services.ai import formatters
     from app.services.ai import permissions as perm
-    from app.services.ai import usage as usage_acct
+    from app.services.ai.tool_turn import run_tool_turn
     from app.services.ai_service import ToolContext
     from app.services.tool_whitelists import READONLY_TOOL_NAMES, readonly_tool_filter
 
@@ -133,80 +131,52 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row) -> dict[str,
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row))},
     ]
-    usage = usage_acct.new_turn_usage()
     tool_log: list[dict[str, Any]] = []
-    report = ""
-    iterations = 0
-    for step in range(1, cfg.max_steps + 1):
-        iterations = step
-        final = step == cfg.max_steps
-        if final:
-            messages.append({"role": "user", "content": inv_prompt.final_step_message()})
-        kwargs: dict[str, Any] = dict(model=service.model, messages=messages, temperature=0.2, max_tokens=2048)
-        if not final and tools:
-            kwargs.update(tools=tools, tool_choice="auto")
-        resp = await asyncio.wait_for(service.client.chat.completions.create(**kwargs, timeout=min(120.0, remaining())), timeout=remaining())
-        usage_acct.add_usage(usage, getattr(resp, "usage", None), prompt_chars=usage_acct.prompt_chars(messages, kwargs.get("tools")))
-        msg = resp.choices[0].message
-        calls = list(getattr(msg, "tool_calls", None) or []) if not final else []
-        if not calls:
-            report = (msg.content or "").strip()
-            break
-        messages.append({
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": [
-                {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments or "{}"}}
-                for c in calls
-            ],
-        })
-        for c in calls:
-            name = c.function.name
+
+    async def run_tool(name: str, args: dict, step: int) -> str:
+        entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
+        if name not in READONLY_TOOL_NAMES:
+            result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
+            entry["error"] = "not a read-only tool"
+        else:
             try:
-                args = json.loads(c.function.arguments or "{}")
-                if not isinstance(args, dict):
-                    args = {}
-            except json.JSONDecodeError:
-                args = {}
-            entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
-            if name not in READONLY_TOOL_NAMES:
-                result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
-                entry["error"] = "not a read-only tool"
-            else:
-                try:
-                    raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
-                    formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
-                    result = formatters._truncate_tool_result_for_llm(formatted)
-                    entry["result_chars"] = len(formatted)
-                except InvestigationError:
-                    raise
-                except Exception as e:  # a tool error is the model's to read, not the end of the run
-                    result = json.dumps({"error": clean_error(e)})
-                    entry["error"] = clean_error(e)
-            tool_log.append(entry)
-            await write_audit(
-                action="ai.tool.call",
-                actor_user_id=ACTOR_ID,
-                actor_email=ACTOR_EMAIL,
-                target_type=args.get("resource_type") or "tool",
-                target_id=args.get("resource_name") or args.get("name") or args.get("pod_name") or name,
-                namespace=args.get("namespace") or row.namespace or None,
-                cluster=perm.effective_cluster(service),
-                after={
-                    "investigation_id": row.id,
-                    "tool": name,
-                    "iteration": step,
-                    "resource_type": args.get("resource_type"),
-                    "redacted": getattr(service.tool_server, "last_redacted", None),
-                },
-            )
-            messages.append({"role": "tool", "tool_call_id": c.id, "content": result})
-    if not report:
+                raw = await asyncio.wait_for(service._execute_function_with_context(name, args, context), timeout=remaining())
+                formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
+                result = formatters._truncate_tool_result_for_llm(formatted)
+                entry["result_chars"] = len(formatted)
+            except InvestigationError:
+                raise
+            except Exception as e:  # a tool error is the model's to read, not the end of the run
+                result = json.dumps({"error": clean_error(e)})
+                entry["error"] = clean_error(e)
+        tool_log.append(entry)
+        await write_audit(
+            action="ai.tool.call",
+            actor_user_id=ACTOR_ID,
+            actor_email=ACTOR_EMAIL,
+            target_type=args.get("resource_type") or "tool",
+            target_id=args.get("resource_name") or args.get("name") or args.get("pod_name") or name,
+            namespace=args.get("namespace") or row.namespace or None,
+            cluster=perm.effective_cluster(service),
+            after={
+                "investigation_id": row.id,
+                "tool": name,
+                "iteration": step,
+                "resource_type": args.get("resource_type"),
+                "redacted": getattr(service.tool_server, "last_redacted", None),
+            },
+        )
+        return result
+
+    turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,
+                               final_message=inv_prompt.final_step_message(), remaining=remaining, lane="investigation")
+    usage = turn.usage
+    if not turn.answer:
         raise InvestigationError("the model returned no report")
     return {
-        "report": report,
+        "report": turn.answer,
         "tool_calls": tool_log,
-        "iterations": iterations,
+        "iterations": turn.steps,
         "provider": service.provider or "",
         "model": service.model or "",
         "prompt_tokens": usage["prompt_tokens"] if usage["seen"] else None,

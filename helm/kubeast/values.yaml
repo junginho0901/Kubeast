@@ -358,9 +358,9 @@ ai:
   # with --build-arg WITH_CLAUDE_CODE=true (about 250 MB more), the token in
   # claudeCodeOAuthToken (or CLAUDE_CODE_OAUTH_TOKEN in apiKeysSecret), and a
   # model config with that provider naming CLAUDE_CODE_OAUTH_TOKEN. Each running
-  # turn holds one Claude Code process; maxConcurrent caps them (raise
-  # resources.aiService.limits.memory with it). The alert investigator does not
-  # run on this provider.
+  # turn holds one Claude Code process; maxConcurrent caps the chat's (raise
+  # resources.aiService.limits.memory with it) and an alert investigation runs
+  # in one more slot of its own.
   providers:
     claudeCode:
       enabled: false
