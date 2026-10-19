@@ -238,7 +238,8 @@ test.describe('AI trace tools', () => {
     const now = Math.floor(Date.now() / 1000)
     const window = { start: String(now - 900), end: String(now + 60) }
     const found = await tool(request, admin, 'traces_search', { cluster: CLUSTER, namespace: NS, traceql: `{ resource.service.name = "${svc}" && status = error }`, since: '15m' })
-    const ids = (viaGrafana('/api/search', { q: found.effective_query, ...window }).traces as { traceID: string }[]).map((t) => t.traceID).sort()
+    // Tempo itself writes IDs without their leading zeros; Kubeast pads them to 32
+    const ids = (viaGrafana('/api/search', { q: found.effective_query, ...window }).traces as { traceID: string }[]).map((t) => t.traceID.padStart(32, '0')).sort()
     expect(ids).toEqual((found.traces as Found[]).map((t) => t.traceId).sort())
 
     const values = viaGrafana('/api/v2/search/tag/resource.service.name/values', { q: '{ resource.k8s.cluster.name = "kubeast" }', ...window })
