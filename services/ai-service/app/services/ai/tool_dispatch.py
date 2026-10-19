@@ -38,7 +38,11 @@ SIGNED_INT_ARGS = {"boot"}
 
 FEATURE_TOOL_ARGS = {
     "issues": ({"namespace", "severity"}, set(), {"window_minutes"}),
-    "prometheus_query": ({"promql", "since"}, {"range"}, {"step"}),
+    "prometheus_query": ({"promql", "since", "since_time", "until_time"}, {"range"}, {"step"}),
+    "prometheus_metrics": ({"pattern"}, set(), {"limit"}),
+    "prometheus_labels": ({"selector", "label", "since"}, set(), {"limit"}),
+    "prometheus_rules": ({"rule", "rule_type"}, {"active_only"}, set()),
+    "prometheus_targets": ({"health", "job"}, set(), set()),
     "logsearch": ({"namespace", "text", "pod", "container", "workload_kind", "workload_name", "since"}, {"regex"}, {"limit"}),
     "hygiene": ({"severity", "check"}, set(), set()),
     "gitops_status": ({"namespace", "name", "project", "destination_namespace"}, {"only_problems"}, {"limit"}),

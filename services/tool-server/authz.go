@@ -84,7 +84,8 @@ var clusterWideTools = map[string]struct{}{
 	// PromQL is not bounded by a namespace; the hygiene report covers the cluster;
 	// a manifest preview names its own object; the audit log and node internals
 	// are Admin-only and cluster-wide.
-	"prometheus_query": {}, "hygiene": {}, "k8s_diff": {},
+	"prometheus_query": {}, "prometheus_metrics": {}, "prometheus_labels": {}, "prometheus_rules": {}, "prometheus_targets": {},
+	"hygiene": {}, "k8s_diff": {},
 	"audit_search": {}, "nodes_stats_summary": {}, "nodes_log": {},
 }
 

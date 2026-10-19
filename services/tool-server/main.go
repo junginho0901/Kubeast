@@ -159,6 +159,26 @@ func buildToolRegistry() map[string]ToolDefinition {
 		Handler:     handlePrometheusQuery,
 	})
 	register(ToolDefinition{
+		Name:        "prometheus_metrics",
+		Description: "Find metric names in the cluster's Prometheus, with type and help text",
+		Handler:     handlePrometheusMetrics,
+	})
+	register(ToolDefinition{
+		Name:        "prometheus_labels",
+		Description: "Label names on the series a selector matches, or the values of one label",
+		Handler:     handlePrometheusLabels,
+	})
+	register(ToolDefinition{
+		Name:        "prometheus_rules",
+		Description: "Alerting and recording rules of the cluster's Prometheus, with state and active alerts",
+		Handler:     handlePrometheusRules,
+	})
+	register(ToolDefinition{
+		Name:        "prometheus_targets",
+		Description: "Scrape targets of the cluster's Prometheus and their health",
+		Handler:     handlePrometheusTargets,
+	})
+	register(ToolDefinition{
 		Name:        "logsearch",
 		Description: "Search the cluster's log store (Loki) through Kubeast — also pods that no longer exist",
 		Handler:     handleLogSearch,

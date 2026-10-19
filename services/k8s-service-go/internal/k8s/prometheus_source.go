@@ -197,10 +197,10 @@ func (e *promExternal) healthy(ctx context.Context) (bool, string) {
 func (s *Service) prometheusExternal(ctx context.Context, e *promExternal, promPath string) ([]map[string]interface{}, error) {
 	body, code, err := e.do(ctx, promPath)
 	if err != nil {
-		return nil, fmt.Errorf("prometheus request failed: %w", err)
+		return nil, fmt.Errorf("%w: prometheus request failed: %v", ErrPrometheusUpstream, err)
 	}
 	if code != http.StatusOK {
-		return nil, fmt.Errorf("prometheus request failed (status %d): %s", code, strings.TrimSpace(string(body[:min(len(body), 200)])))
+		return nil, fmt.Errorf("%w: prometheus request failed (status %d): %s", ErrPrometheusUpstream, code, strings.TrimSpace(string(body[:min(len(body), 200)])))
 	}
 	var resp prometheusResponse
 	if err := json.Unmarshal(body, &resp); err != nil {

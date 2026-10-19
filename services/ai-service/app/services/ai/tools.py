@@ -246,21 +246,101 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "name": "prometheus_query",
             "description": (
                 "Run a PromQL expression against the Prometheus Kubeast reads for this cluster (its own Prometheus Service, or the external store "
-                "registered for it — Kubeast adds the cluster matcher). Instant by default; range=true returns points over since (default 1h; step "
-                "automatic, at least 15s) for a trend. Use it for usage history, error rates and saturation: container_cpu_usage_seconds_total, "
-                "container_memory_working_set_bytes, kube_pod_container_status_restarts_total, node_* from node-exporter. Results are capped at 100 series "
-                "and 120 points each. {\"status\":\"unavailable\"} means no Prometheus reaches this cluster: use get_pod_metrics / get_node_metrics for "
-                "current values and say that history is unavailable. The tool is only offered when the cluster has the Prometheus feature."
+                "registered for it — Kubeast adds the cluster matcher). Instant by default; range=true returns points over since (default 1h, at most "
+                "168h), or over since_time–until_time for a fixed window; step is automatic (at least 15s). Do not guess metric or label names: find "
+                "them first with prometheus_metrics and prometheus_labels. Aggregate when many series may match (sum by (namespace), topk(10, …)): "
+                "results are capped at 100 series and 120 points each, and a result marked truncated must not be answered from — narrow it and query "
+                "again. {\"status\":\"unavailable\"} means no Prometheus reaches this cluster: use get_pod_metrics / get_node_metrics for current "
+                "values and say that history is unavailable. The tool is only offered when the cluster has the Prometheus feature."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "promql": {"type": "string", "description": "PromQL expression, e.g. sum(rate(container_cpu_usage_seconds_total{namespace=\"shop\"}[5m])) by (pod)"},
                     "range": {"type": "boolean", "description": "Return a series of points over since instead of one value"},
-                    "since": {"type": "string", "description": "Range window, e.g. 30m, 6h, 2d (default 1h, max 7d)"},
+                    "since": {"type": "string", "description": "Range window back from now, e.g. 30m, 6h, 48h (default 1h, max 168h)"},
+                    "since_time": {"type": "string", "description": "Start of a fixed window: 2d, 24h or an RFC3339 time (makes it a range query)"},
+                    "until_time": {"type": "string", "description": "End of that window, an RFC3339 time (default now)"},
                     "step": {"type": "integer", "description": "Seconds between points (default: window/120, at least 15)"},
                 },
                 "required": ["promql"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prometheus_metrics",
+            "description": (
+                "Find metric names in this cluster's Prometheus (seen in the last hour) whose name contains pattern, with type and help text when "
+                "the store keeps them. Call it before writing PromQL for a metric you have not seen in a result — it is the quickest way to learn "
+                "what exists. Node metrics are node_* (node-exporter) or system_* (OpenTelemetry hostmetrics, node in the k8s_node_name label): "
+                "check which one is there. Returns total and up to limit names; truncated means narrow the pattern."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Part of the metric name, case-insensitive, e.g. memory, http_requests, restarts"},
+                    "limit": {"type": "integer", "description": "Names to return (default 50, max 200)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prometheus_labels",
+            "description": (
+                "List the label names on the series a selector matches, or the values of one label (label=namespace, pod, job, …), within since "
+                "(default 1h). Use it to learn how series are labelled before filtering — e.g. which namespaces or pods report "
+                "container_memory_working_set_bytes. selector is a plain series selector such as up{job=\"kubelet\"}, not an expression."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "Series selector, e.g. container_cpu_usage_seconds_total{namespace=\"shop\"} (empty = every series)"},
+                    "label": {"type": "string", "description": "Return this label's values instead of the label names"},
+                    "since": {"type": "string", "description": "Window back from now, e.g. 1h, 24h (default 1h, max 168h)"},
+                    "limit": {"type": "integer", "description": "Maximum names or values (default and max 200)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prometheus_rules",
+            "description": (
+                "List the alerting and recording rules of this cluster's Prometheus with their expression, for duration, labels, annotations, state "
+                "(firing, pending, inactive) and active alerts. When investigating an alert, call this first with rule=<alert name> and check the same "
+                "expression with prometheus_query. On a store shared by several clusters the rules may cover every cluster, but the alerts and states "
+                "shown are this cluster's. unavailable = the store serves no rules."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "rule": {"type": "string", "description": "Part of the rule name, case-insensitive, e.g. KubePodCrashLooping"},
+                    "rule_type": {"type": "string", "description": "alert or record (default both)"},
+                    "active_only": {"type": "boolean", "description": "Only rules that are firing or pending"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "prometheus_targets",
+            "description": (
+                "Scrape targets of this cluster's Prometheus and whether the last scrape worked (health up/down, last error), the down ones first. "
+                "Use it when a metric is missing or a graph is empty: a down target explains it. On a shared store or one without a targets API the "
+                "health comes from the up series."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "health": {"type": "string", "description": "Only targets with this health: up, down or unknown"},
+                    "job": {"type": "string", "description": "Only jobs whose name contains this, case-insensitive"},
+                },
             },
         },
     },

@@ -56,6 +56,7 @@ data:
       # cluster as if it were such a store.
       external_labels:
         cluster: kubeast-b
+    rule_files: [/etc/prometheus/rules.yml]
     scrape_configs:
       - job_name: prometheus
         static_configs:
@@ -116,6 +117,23 @@ data:
         static_configs:
           - targets: [opencost.opencost.svc:9003]
             labels: {cluster: kubeast-b}
+  # Rules for the AI's prometheus_rules tool (ai-prometheus-discovery.spec.ts): one alert that always
+  # fires with this cluster's label, one that never fires, one recording rule. No Alertmanager is
+  # configured here, so nothing is sent.
+  rules.yml: |
+    groups:
+      - name: kubeast-e2e
+        rules:
+          - alert: KubeastE2EPrometheusUp
+            expr: sum by (cluster) (up{job="prometheus"}) > 0
+            labels: {severity: none}
+            annotations: {summary: This Prometheus scrapes itself.}
+          - alert: KubeastE2ENeverFires
+            expr: absent(up{job="prometheus"})
+            for: 5m
+            labels: {severity: warning}
+          - record: kubeast_e2e:up:sum
+            expr: sum by (job) (up)
 ---
 apiVersion: apps/v1
 kind: Deployment

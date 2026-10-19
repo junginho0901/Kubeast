@@ -103,6 +103,8 @@ kubectl --context <cluster> auth can-i get secrets -A --as=kubeast:investigator 
 - **호스트 읽기**: `root_path: /hostfs`에 호스트 `/`를 읽기 전용으로 마운트(opentelemetry-collector 차트의 hostMetrics 프리셋과 같음). 네트워크는 `hostNetwork: true`일 때만 노드 인터페이스 값입니다 — 아니면 수집기 파드 자기 트래픽이 되므로 그때는 `network` 스크레이퍼를 끄세요(Kubeast는 그 칸을 숨김). 디스크는 node-exporter 기본 제외(파티션·loop·ram)와 같은 장치를 뺍니다.
 - **예시**: [`deploy/kind/hostmetrics-collector.yaml`](../deploy/kind/hostmetrics-collector.yaml)(contrib 0.162.0, `scripts/kind-hostmetrics.sh`).
 
+**AI 도구가 더 읽는 경로**(Prometheus 찾기 도구, 질의와 같은 저장소·같은 클러스터 범위): `/api/v1/label/__name__/values`·`/api/v1/labels`·`/api/v1/label/<이름>/values`(늘 최근 1시간 등 `start`·`end`, 여러 클러스터가 쓰는 저장소면 `match[]`에 클러스터 레이블), `/api/v1/metadata`(없으면 이름만), `/api/v1/rules`(VictoriaMetrics는 조회 쪽에 `-vmalert.proxyURL`이 있을 때만 — 없으면 도구가 "규칙 없음"으로 답함), `/api/v1/targets`(클러스터 자기 Prometheus일 때만 — 여러 클러스터가 쓰는 저장소는 `up` 지표로 대신). 모두 GET이라 Grafana 데이터소스 프록시로도 읽힙니다.
+
 ### 예시
 
 - **prometheus-community/prometheus 차트** — [`prometheus-values.yaml`](../deploy/examples/target-cluster/prometheus-values.yaml). 서버 Service는 레이블로 찾으므로 Namespace·포트(기본 80)와 상관없습니다 — 예시는 Read 프록시 값(`cluster-values.yaml`의 `viewerProxyServices`)과 맞추려고 9090으로 둡니다. 기본 수집 작업(cAdvisor·kubelet·kube-state-metrics·node-exporter)에 OpenCost를 더합니다.

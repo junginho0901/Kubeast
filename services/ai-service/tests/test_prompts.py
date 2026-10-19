@@ -46,6 +46,10 @@ def test_tool_usage_guide():
         "k8s_explain",
         "issues",
         "prometheus_query",
+        "prometheus_metrics",
+        "prometheus_labels",
+        "prometheus_rules",
+        "prometheus_targets",
         "logsearch",
         "helm_read",
         "policy_reports",
@@ -80,6 +84,10 @@ def test_not_found_protocol():
     # Feature tools: the state question starts with issues, trends go to Prometheus, gone pods to the log store.
     assert "`issues` **한 번**으로 시작" in SYSTEM_MESSAGE
     assert "prometheus_query`(range=true)" in SYSTEM_MESSAGE
+    # Prometheus: find before querying, aggregate, never answer from a cut result, rules first for an alert, both node metric families.
+    rules = SYSTEM_MESSAGE.split("**Prometheus는 찾고 나서 질의하세요**")[1].split("\n")[0]
+    for phrase in ("`prometheus_metrics`·`prometheus_labels`로 먼저", "`topk(10, …)`", "`truncated`", "`prometheus_rules`로 그 규칙의 식부터", "`system_*`", "`k8s_node_name`", "`prometheus_targets`"):
+        assert phrase in rules, phrase
     assert "`logsearch`로" in SYSTEM_MESSAGE
     assert "all_namespaces=true" not in SYSTEM_MESSAGE.split("### 못 찾았을 때")[0].split("### 네임스페이스/리소스 식별 규칙")[1], (
         "느슨한 이름은 k8s_find_resource로 찾는다 (옛 all_namespaces 규칙 제거)"

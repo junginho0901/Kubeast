@@ -124,14 +124,17 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 	}
 	q := url.Values{"query": {promql}}
 	path := "/prometheus/query"
-	isRange := argBool(args, "range")
+	sinceTime, untilTime := argString(args, "since_time", ""), argString(args, "until_time", "")
+	isRange := argBool(args, "range") || sinceTime != "" || untilTime != ""
 	var since time.Duration
+	var start, end time.Time
 	step := 0
 	if isRange {
-		since, _ = time.ParseDuration(argString(args, "since", "1h"))
-		if since <= 0 {
-			since = time.Hour
+		var err error
+		if start, end, err = promWindow(argString(args, "since", ""), sinceTime, untilTime, time.Now()); err != nil {
+			return "", wrapBadRequest(err.Error())
 		}
+		since = end.Sub(start)
 		step = argInt(args, "step", 0)
 		if step <= 0 {
 			step = int(since.Seconds()) / promPointsCap
@@ -139,8 +142,7 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 		if step < promMinStepSecond {
 			step = promMinStepSecond
 		}
-		end := time.Now()
-		q.Set("start", strconv.FormatInt(end.Add(-since).Unix(), 10))
+		q.Set("start", strconv.FormatInt(start.Unix(), 10))
 		q.Set("end", strconv.FormatInt(end.Unix(), 10))
 		q.Set("step", strconv.Itoa(step))
 		path = "/prometheus/query_range"
@@ -188,15 +190,54 @@ func handlePrometheusQuery(ctx context.Context, args map[string]interface{}, hea
 	}
 	if isRange {
 		result["since"] = since.String()
+		result["start"] = start.UTC().Format(time.RFC3339)
+		result["end"] = end.UTC().Format(time.RFC3339)
 		result["step_seconds"] = step
 	}
 	if truncated {
 		result["truncated"] = true
+		result["hint"] = "The result is cut: do not answer from it. Aggregate (sum by (…), topk(10, …)) or add matchers and query again."
 	}
 	if len(reply.Results) == 0 {
-		result["hint"] = "The query matched no series. Check the metric name and labels (the cluster may not run the exporter that produces it)."
+		result["hint"] = "The query matched no series. Find the metric with prometheus_metrics and its labels with prometheus_labels instead of guessing (the cluster may not run the exporter that produces it)."
 	}
 	return marshalJSON(result)
+}
+
+// promWindow is a range query's span: since_time (24h, 7d or an RFC3339 time)
+// to until_time (RFC3339, default now), else since (a duration, default 1h)
+// back from now; at most 7 days.
+func promWindow(since, sinceTime, untilTime string, now time.Time) (time.Time, time.Time, error) {
+	end := now
+	if untilTime != "" {
+		t, err := time.Parse(time.RFC3339, untilTime)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("until_time must be an RFC3339 time")
+		}
+		end = t
+	}
+	var start time.Time
+	switch {
+	case sinceTime != "":
+		t, err := parseFromTime(sinceTime, end)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("since_time: %v", err)
+		}
+		start = t
+	default:
+		d, _ := time.ParseDuration(since)
+		if d <= 0 {
+			d = time.Hour
+		}
+		start = end.Add(-d)
+	}
+	if !start.Before(end) {
+		return time.Time{}, time.Time{}, fmt.Errorf("since_time must be before until_time")
+	}
+	if end.Sub(start) > 7*24*time.Hour {
+		return time.Time{}, time.Time{}, fmt.Errorf("a range of at most 7 days")
+	}
+	return start, end, nil
 }
 
 // thin keeps at most n points of a series, evenly spaced, the last one always.

@@ -42,6 +42,10 @@ def _policy_reports_on(features: Dict[str, Any], cluster: str) -> bool:
 # tool name → does this cluster serve it. Tools not listed are always offered.
 GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_query": _prometheus_on,
+    "prometheus_metrics": _prometheus_on,
+    "prometheus_labels": _prometheus_on,
+    "prometheus_rules": _prometheus_on,
+    "prometheus_targets": _prometheus_on,
     "logsearch": _logsearch_on,
     "cost": _cost_on,
     "policy_reports": _policy_reports_on,

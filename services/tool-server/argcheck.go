@@ -127,6 +127,13 @@ var argRules = map[string]argCheck{
 	"rank_by":               checkEnum("memory", "cpu", "ephemeral_storage"),
 	"source":                checkLogSource,
 	"pattern":               checkPrintable(200),
+	// Prometheus discovery: a series selector, a label name, a rule name, a job.
+	"selector":  checkPromQL,
+	"label":     checkPromLabel,
+	"rule":      checkPrintable(200),
+	"rule_type": checkEnum("alert", "record"),
+	"health":    checkEnum("up", "down", "unknown"),
+	"job":       checkPrintable(200),
 }
 
 // validateToolArgs rejects any argument that would not be read by kubectl as
@@ -298,6 +305,15 @@ func checkGrep(field, v string) error {
 func checkPromQL(field, v string) error {
 	if len(v) > 2000 || strings.IndexFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return badArg(field, v, "a PromQL expression of at most 2000 printable characters")
+	}
+	return nil
+}
+
+var promLabelRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$`)
+
+func checkPromLabel(field, v string) error {
+	if !promLabelRe.MatchString(v) {
+		return badArg(field, v, "a label name such as namespace or k8s_node_name")
 	}
 	return nil
 }

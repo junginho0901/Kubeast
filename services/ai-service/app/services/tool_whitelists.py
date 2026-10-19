@@ -31,6 +31,10 @@ READONLY_TOOL_NAMES: frozenset[str] = frozenset(
         # Feature tools: Kubeast's own APIs through tool-server (app/services/ai/features.py gates them by cluster).
         "issues",
         "prometheus_query",
+        "prometheus_metrics",
+        "prometheus_labels",
+        "prometheus_rules",
+        "prometheus_targets",
         "logsearch",
         "policy_reports",
         "helm_read",

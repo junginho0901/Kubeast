@@ -36,7 +36,8 @@ def test_gated_names_by_feature_and_cluster():
     assert features.gated_names(names, None, "self") == ["k8s_get_resources", "issues"]
     # The gate knows every feature tool the whitelist carries.
     gated = {t["function"]["name"] for t in K8S_READONLY_TOOLS if t["function"]["name"] in features.GATES}
-    assert gated == {"prometheus_query", "logsearch", "cost", "policy_reports"}
+    assert gated == {"prometheus_query", "prometheus_metrics", "prometheus_labels", "prometheus_rules", "prometheus_targets",
+                     "logsearch", "cost", "policy_reports"}
     feats = {"cost": {"enabled": True}, "policyReports": {"enabled": False}}
     assert features.gated_names(["cost", "policy_reports", "helm_read"], feats, "self") == ["cost", "helm_read"]
 

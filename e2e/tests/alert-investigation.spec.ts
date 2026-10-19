@@ -15,7 +15,8 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const READ_TOOLS = new Set([
   'get_cluster_overview', 'get_pod_metrics', 'get_node_metrics', 'k8s_get_resources', 'k8s_get_resource_yaml', 'k8s_get_pod_logs',
   'k8s_get_events', 'k8s_get_available_api_resources', 'k8s_get_cluster_configuration', 'k8s_check_service_connectivity', 'k8s_describe_resource',
-  'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'logsearch',
+  'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'prometheus_metrics', 'prometheus_labels',
+  'prometheus_rules', 'prometheus_targets', 'logsearch',
   'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'resource_graph',
   'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
 ])

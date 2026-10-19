@@ -8,6 +8,8 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 )
 
 func TestStatusForError(t *testing.T) {
@@ -31,6 +33,11 @@ func TestStatusForError(t *testing.T) {
 		{"text unreachable", errors.New("dial tcp: connection refused"), http.StatusServiceUnavailable},
 		{"yaml parse", fmt.Errorf("parse YAML: %w", errors.New("yaml: unmarshal errors: line 16: mapping key already defined")), http.StatusBadRequest},
 		{"unknown", errors.New("boom"), http.StatusInternalServerError},
+		// The metrics store: its own error is not this service's (502), a missing API is 404, a bad selector 400.
+		{"metrics store 401", fmt.Errorf("%w: prometheus request failed (status 401): Invalid API key", k8s.ErrPrometheusUpstream), http.StatusBadGateway},
+		{"metrics store unreachable", fmt.Errorf("%w: prometheus request failed: dial tcp: connection refused", k8s.ErrPrometheusUpstream), http.StatusBadGateway},
+		{"metrics store without rules", fmt.Errorf("%w: /api/v1/rules", k8s.ErrPrometheusNotServed), http.StatusNotFound},
+		{"bad selector", fmt.Errorf("%w: sum(up) is an expression", k8s.ErrBadSelector), http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

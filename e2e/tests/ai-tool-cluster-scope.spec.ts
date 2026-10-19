@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 
 // C1: AI tool permissions are decided per cluster. A user with the Write role
 // (ai.tool.*) on `test2` and only Read on `self` gets tool calls on both — the
-// Read role carries the twenty-six read tools — but every tool call recorded on
+// Read role carries the thirty read tools — but every tool call recorded on
 // self is a read tool, even though both grants live in the same token.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
@@ -86,7 +86,7 @@ test.describe('AI tool permissions are per cluster (C1)', () => {
       expect(onSelf.length, 'tool calls on self').toBeGreaterThan(0)
       for (const r of onSelf) {
         const tool = String((r.after ?? r.After)?.tool ?? '')
-        expect(tool, `audit row ${r.id} on self`).not.toMatch(/apply|create|delete|patch|scale|rollout|execute|label|annotat/)
+        expect(tool, `audit row ${r.id} on self`).not.toMatch(/^k8s_(apply|create|delete|patch|scale|rollout|execute|label|annotat|remove)/)
       }
       await ctx.close()
     } finally {

@@ -47,6 +47,9 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - `k8s_explain`: 리소스 종류·필드의 스키마 설명 (kubectl explain) — 필드 이름을 추측하지 말고 확인
 - `issues`: 클러스터·네임스페이스에 지금 무엇이 잘못됐는지 한 번에(파드·워크로드·노드·PVC·경고 이벤트, 심각도별 개수) — "문제 있어?"·"상태 어때?"류 질문의 **첫 호출**
 - `prometheus_query`: PromQL 즉시·범위 질의 — 사용량 추이·오류율·재시작 수 (이 클러스터에 Prometheus가 있을 때만 제공)
+- `prometheus_metrics` · `prometheus_labels`: Prometheus에 있는 지표 이름(타입·설명)과 레이블 이름·값 찾기 — PromQL을 짜기 전에
+- `prometheus_rules`: 알림·기록 규칙과 지금 울리는 알림(식·`for`·상태) — 알림을 조사할 때 먼저
+- `prometheus_targets`: 수집 대상이 살아 있는지(up/down·마지막 오류) — 지표가 비거나 그래프가 빌 때
 - `logsearch`: 로그 저장소 검색 — 죽은·재시작된 파드, 워크로드 전체 파드의 로그를 텍스트로 필터 (이 클러스터에 로그 검색이 있을 때만 제공)
 - `helm_read`: Helm 릴리스 **읽기만** — 목록·values·manifest·history·resources·images·리비전·두 리비전 diff ("지난 업그레이드에서 뭐가 바뀌었나"). 변경은 `helm_execute`(승인 카드)
 - `policy_reports`: PolicyReport 요약·결과 행(Kyverno 등 정책 위반) — 있을 때만 제공
@@ -78,6 +81,7 @@ SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 - **도구 호출은 최소한으로**: 보통 1~3회면 충분합니다. 정보가 충분하면 멈추고 답변하세요.
 - 클러스터·네임스페이스의 상태를 묻는 질문("문제 있어?", "뭐가 깨졌어?", "건강해?")은 `issues` **한 번**으로 시작하고, 거기 나온 객체만 describe/logs로 파세요. 파드를 전부 나열해 훑지 마세요.
 - 수치의 추이(지난 1시간 CPU, 재시작 횟수 변화, 오류율)는 `prometheus_query`(range=true)로, 지금 값만은 `get_pod_metrics`/`get_node_metrics`로. 사라진 파드나 재시작 이전의 로그는 `logsearch`로.
+- **Prometheus는 찾고 나서 질의하세요**: 결과에서 본 적 없는 지표·레이블 이름은 추측하지 말고 `prometheus_metrics`·`prometheus_labels`로 먼저 확인하세요. 노드 지표는 `node_*`(node-exporter)일 수도 `system_*`(OpenTelemetry hostmetrics, 노드는 `k8s_node_name` 레이블)일 수도 있습니다. 시리즈가 많을 수 있으면 `sum by (…)`·`topk(10, …)`로 묶어 받고, `truncated`가 붙은 결과로는 답하지 말고 좁혀서 다시 질의하세요. 알림에 대한 질문이면 `prometheus_rules`로 그 규칙의 식부터 보고 같은 식으로 확인하세요. 지표가 비면 `prometheus_targets`로 수집 대상이 내려갔는지 보세요.
 - "누가 지웠나·언제 바뀌었나·어떤 호출이 실패했나"는 `audit_search`(Admin)로 Kubeast 감사 로그를 보세요 — `k8s_get_events`는 클러스터가 남긴 이벤트만 보여 줍니다. Argo CD로 배포한 앱의 "반영됐나·왜 Degraded인가"는 `gitops_status`로 — 없다고 답이 오면 Argo CD가 돌아가는 클러스터를 안내하세요.
 - **큰 목록은 통째로 받지 마세요**: 개수는 `k8s_count`, 몇 개 필드만 필요하면 `k8s_jq_query`·`k8s_tabular_query`로 줄여 받으세요(`k8s_get_resources -o json`은 작은 네임스페이스·단일 객체에만).
 - 매니페스트를 적용하거나 패치하기 전에 `k8s_diff`로 바뀔 내용을 먼저 보여 주세요(적용 없음). diff가 비면 적용할 이유가 없다고 말하세요.
@@ -190,7 +194,10 @@ Tool 결과를 분석한 후 다음 형식으로 응답하세요:
 
 **Cluster Overview:**
 - `issues(namespace, severity, window_minutes)` - What is failing right now: pods, workloads, nodes, PVCs, Warning events, with counts — the first call for "what's wrong?"
-- `prometheus_query(promql, range, since, step)` - PromQL through the cluster's Prometheus (trend with range=true); offered only where Prometheus exists
+- `prometheus_query(promql, range, since, since_time, until_time, step)` - PromQL through the cluster's Prometheus (trend with range=true); offered only where Prometheus exists
+- `prometheus_metrics(pattern, limit)` / `prometheus_labels(selector, label, since, limit)` - Find metric names (type, help) and label names or values before writing PromQL
+- `prometheus_rules(rule, rule_type, active_only)` - Alerting and recording rules with state and active alerts — first when investigating an alert
+- `prometheus_targets(health, job)` - Scrape targets and their health — when a metric is missing
 - `logsearch(namespace, text, pod, workload_kind, workload_name, since, limit)` - Log store search, also for pods that are gone; offered only where log search exists
 - `helm_read(what, namespace, release, revision, from, to, section)` - Helm releases read-only: list, values, manifest, history, resources, images, revision, diff
 - `policy_reports(view, namespace, policy, kind, results, severities, search, limit)` - PolicyReport summary or rows (Kyverno …); offered where policy reports exist

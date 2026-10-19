@@ -177,6 +177,13 @@ func statusForError(err error) int {
 		return http.StatusBadRequest
 	case apierrors.IsTimeout(err), apierrors.IsServerTimeout(err), apierrors.IsServiceUnavailable(err):
 		return http.StatusServiceUnavailable
+	case errors.Is(err, k8s.ErrPrometheusNotServed):
+		return http.StatusNotFound
+	case errors.Is(err, k8s.ErrBadSelector):
+		return http.StatusBadRequest
+	case errors.Is(err, k8s.ErrPrometheusUpstream):
+		// The metrics store answered with an error (or not at all): not this service's fault.
+		return http.StatusBadGateway
 	}
 	msg := err.Error()
 	switch {

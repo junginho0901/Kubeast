@@ -116,6 +116,21 @@ async def test_feature_tools_pass_declared_arguments_only():
     )
     service._call_tool_server.assert_awaited_once_with("prometheus_query", {"promql": "up", "since": "2h", "range": True, "step": 30})
 
+    # The discovery tools and the absolute window pass their own arguments, nothing else.
+    for tool, given, sent in [
+        ("prometheus_query", {"promql": "up", "since_time": "2d", "until_time": "2026-10-19T00:00:00Z", "namespace": "x"},
+         {"promql": "up", "since_time": "2d", "until_time": "2026-10-19T00:00:00Z"}),
+        ("prometheus_metrics", {"pattern": " memory ", "limit": "20", "promql": "x"}, {"pattern": "memory", "limit": 20}),
+        ("prometheus_labels", {"selector": 'up{job="k"}', "label": "pod", "since": "6h", "limit": 50, "bogus": 1},
+         {"selector": 'up{job="k"}', "label": "pod", "since": "6h", "limit": 50}),
+        ("prometheus_rules", {"rule": "Crash", "rule_type": "alert", "active_only": "true", "limit": 3},
+         {"rule": "Crash", "rule_type": "alert", "active_only": True}),
+        ("prometheus_targets", {"health": "down", "job": "kubelet", "cluster": "y"}, {"health": "down", "job": "kubelet"}),
+    ]:
+        service._call_tool_server.reset_mock()
+        await execute_function_with_context(service, tool, given, _ctx())
+        service._call_tool_server.assert_awaited_once_with(tool, sent)
+
     service._call_tool_server.reset_mock()
     await execute_function_with_context(
         service, "logsearch", {"namespace": "shop", "text": "error", "regex": False, "workload_kind": "Deployment", "workload_name": "web", "limit": 50}, _ctx(),
