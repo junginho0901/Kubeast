@@ -86,11 +86,12 @@ test.describe('AI Prometheus discovery tools', () => {
     expect(metrics.metrics.every((m: { name: string }) => m.name.includes('memory_working'))).toBe(true)
     expect(metrics.total).toBe(metrics.metrics.length)
 
-    // Every namespace label value names a namespace of that cluster, and the ones with pods are there.
+    // Every namespace label value is one that Prometheus, asked directly, holds for the series (a namespace another spec
+    // deleted within the hour is still there), and the ones with long-lived pods are there.
     const labels = await tool(request, token, 'prometheus_labels', { cluster: 'default', selector: 'container_memory_working_set_bytes', label: 'namespace' })
-    const namespaces = kubectlSecond(`get ns -o jsonpath='{.items[*].metadata.name}'`).split(' ')
+    const held = promAPI(`/api/v1/label/namespace/values?match[]=container_memory_working_set_bytes&start=${Math.floor(Date.now() / 1000) - 7200}`) as string[]
     expect(labels.values.length).toBeGreaterThan(1)
-    for (const v of labels.values) expect(namespaces, v).toContain(v)
+    for (const v of labels.values) expect(held, v).toContain(v)
     expect(labels.values).toEqual(expect.arrayContaining(['kube-system', 'monitoring']))
     const names = await tool(request, token, 'prometheus_labels', { cluster: 'default', selector: 'kube_pod_info' })
     expect(names.names).toEqual(expect.arrayContaining(['namespace', 'pod', 'node']))
