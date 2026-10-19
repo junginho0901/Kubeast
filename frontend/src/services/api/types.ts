@@ -805,11 +805,11 @@ export interface LogSearchResult {
   oldest?: string
   newest?: string
   bytes: number
-  // A LogQL query as sent: the admin's with the cluster and namespace matchers added.
+  // A LogQL query as sent: the one written with the cluster and namespace matchers added.
   effectiveQuery?: string
 }
 
-// GET /cluster/namespaces/{ns}/logsearch/query — LogQL written by an admin (admin.logsearch.query).
+// GET /cluster/namespaces/{ns}/logsearch/query — LogQL written by hand (features.logSearch.logql).
 export interface LogQLParams {
   namespace: string
   q: string

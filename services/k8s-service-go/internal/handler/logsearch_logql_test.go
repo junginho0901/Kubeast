@@ -42,7 +42,8 @@ func newLogQLFixture(t *testing.T, loki http.HandlerFunc) *logSearchFixture {
 	return f
 }
 
-var logqlAdmin = auth.TokenPayload{UserID: "a1", Email: "admin@example.com", Perms: auth.PermissionMatrix{"*": {"resource.pod.read", auth.PermLogSearchQuery}}}
+// Anyone who may search logs writes LogQL: pod read is the only permission asked.
+var logqlUser = auth.TokenPayload{UserID: "a1", Email: "dev@example.com", Perms: auth.PermissionMatrix{"*": {"resource.pod.read"}}}
 
 func (f *logSearchFixture) logql(r *http.Request, namespace string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
@@ -61,7 +62,7 @@ func logqlTarget(path, q, rest string) string {
 func TestLogQLRunsWithTheScopeAddedAndAudits(t *testing.T) {
 	f := newLogQLFixture(t, lokiAnswers("panic: boom"))
 	raw := `{app="web"} |= "boom"`
-	w := f.logql(logSearchRequestAs(logqlTarget("/api/v1/namespaces/apps/logsearch/query", raw, "&since=30m"), "self", "apps", logqlAdmin), "apps")
+	w := f.logql(logSearchRequestAs(logqlTarget("/api/v1/namespaces/apps/logsearch/query", raw, "&since=30m"), "self", "apps", logqlUser), "apps")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d %s", w.Code, w.Body)
 	}
@@ -88,14 +89,15 @@ func TestLogQLRunsWithTheScopeAddedAndAudits(t *testing.T) {
 	}
 
 	// every namespace, for an unscoped admin: the cluster matcher only
-	w = f.logql(logSearchRequestAs(logqlTarget("/api/v1/logsearch/query", raw, ""), "self", "", logqlAdmin), "")
+	w = f.logql(logSearchRequestAs(logqlTarget("/api/v1/logsearch/query", raw, ""), "self", "", logqlUser), "")
 	if w.Code != http.StatusOK || f.queries[1] != `{k8s_cluster_name="kubeast", app="web"} |= "boom"` {
 		t.Fatalf("every namespace: %d %s sent %q", w.Code, w.Body, f.queries[1])
 	}
 }
 
 func TestLogQLRefusals(t *testing.T) {
-	scoped := logqlAdmin
+	noPodRead := auth.TokenPayload{UserID: "u3", Perms: auth.PermissionMatrix{"*": {"resource.deployment.read"}}}
+	scoped := logqlUser
 	scoped.Namespaces = map[string][]string{"self": {"apps"}}
 	metric := func(w http.ResponseWriter, _ *http.Request) {
 		// Loki's samples carry a number timestamp, unlike a stream's [string, string] values
@@ -113,18 +115,18 @@ func TestLogQLRefusals(t *testing.T) {
 		auditFail bool
 		detail    string
 	}{
-		{"LogQL off", newLogSearchFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, "self", "apps", logqlAdmin, 404, false, "features.logSearch.logql"},
-		{"cluster without log search", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, "test2", "apps", logqlAdmin, 404, false, "not configured"},
-		{"no admin.logsearch.query", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, "self", "apps", podReader, 403, false, "admin.logsearch.query"},
+		{"LogQL off", newLogSearchFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, "self", "apps", logqlUser, 404, false, "features.logSearch.logql"},
+		{"cluster without log search", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, "test2", "apps", logqlUser, 404, false, "not configured"},
+		{"no pod read", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, "self", "apps", noPodRead, 403, false, ""},
 		{"every namespace with a scoped grant", newLogQLFixture(t, lokiAnswers()), "/api/v1/logsearch/query", `{app="web"}`, "self", "", scoped, 403, false, "limited to namespaces"},
-		{"refused by the cluster", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/secret-team/logsearch/query", `{app="web"}`, "self", "secret-team", logqlAdmin, 403, true, "does not let you read pod logs"},
-		{"no stream selector", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `|= "x"`, "self", "apps", logqlAdmin, 400, true, "no stream selector"},
-		{"unterminated selector", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"`, "self", "apps", logqlAdmin, 400, true, "unterminated"},
-		{"a metric query", newLogQLFixture(t, metric), "/api/v1/namespaces/apps/logsearch/query", `sum(rate({app="web"}[5m]))`, "self", "apps", logqlAdmin, 400, true, "metric"},
+		{"refused by the cluster", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/secret-team/logsearch/query", `{app="web"}`, "self", "secret-team", logqlUser, 403, true, "does not let you read pod logs"},
+		{"no stream selector", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `|= "x"`, "self", "apps", logqlUser, 400, true, "no stream selector"},
+		{"unterminated selector", newLogQLFixture(t, lokiAnswers()), "/api/v1/namespaces/apps/logsearch/query", `{app="web"`, "self", "apps", logqlUser, 400, true, "unterminated"},
+		{"a metric query", newLogQLFixture(t, metric), "/api/v1/namespaces/apps/logsearch/query", `sum(rate({app="web"}[5m]))`, "self", "apps", logqlUser, 400, true, "metric"},
 		{"a store that refuses", newLogQLFixture(t, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte("parse error"))
-		}), "/api/v1/namespaces/apps/logsearch/query", `{app="web"} | nonsense`, "self", "apps", logqlAdmin, 502, true, "parse error"},
+		}), "/api/v1/namespaces/apps/logsearch/query", `{app="web"} | nonsense`, "self", "apps", logqlUser, 502, true, "parse error"},
 	}
 	for _, c := range cases {
 		w := c.fixture.logql(logSearchRequestAs(logqlTarget(c.path, c.q, ""), c.clusterID, c.namespace, c.payload), c.namespace)
@@ -147,7 +149,7 @@ func TestLogQLRateLimit(t *testing.T) {
 	f := newLogQLFixture(t, lokiAnswers("x"))
 	var last int
 	for i := 0; i < 6; i++ {
-		last = f.logql(logSearchRequestAs(logqlTarget("/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, ""), "self", "apps", logqlAdmin), "apps").Code
+		last = f.logql(logSearchRequestAs(logqlTarget("/api/v1/namespaces/apps/logsearch/query", `{app="web"}`, ""), "self", "apps", logqlUser), "apps").Code
 	}
 	if last != http.StatusTooManyRequests {
 		t.Fatalf("the 6th query in a minute: %d", last)

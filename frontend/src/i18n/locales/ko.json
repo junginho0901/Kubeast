@@ -2386,7 +2386,7 @@
       "traces": "트레이스",
       "tracesTitle": "새 탭에서 {{service}}의 트레이스를 찾습니다.",
       "logql": "LogQL",
-      "logqlTitle": "질의를 직접 씁니다(관리자). 클러스터·Namespace 매처는 모든 선택자에 서버가 더합니다.",
+      "logqlTitle": "질의를 직접 씁니다. 클러스터·Namespace 매처는 모든 선택자에 서버가 더합니다.",
       "logqlLabel": "LogQL 질의",
       "logqlPlaceholder": "{} |= \"error\" | json | level=\"error\"",
       "effective": "보낸 질의: {{query}}",
@@ -3541,7 +3541,6 @@
         "admin_hygiene_read": "클러스터 위생 점검 보고서 보기",
         "admin_hygiene_export": "클러스터 위생 점검 내보내기(CSV·JSON)",
         "admin_hygiene_signoff": "클러스터 위생 점검 서명",
-        "admin_logsearch_query": "로그 저장소에 LogQL 직접 질의(클러스터·네임스페이스 매처가 붙음)",
         "admin_nodes_read": "API 서버 프록시로 노드 내부 읽기: kubelet 통계 요약·노드 로그",
         "admin_investigations_read": "알림 조사 보고서 보기"
       }

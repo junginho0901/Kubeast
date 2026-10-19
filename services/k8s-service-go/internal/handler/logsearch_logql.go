@@ -27,11 +27,11 @@ func (h *Handler) LogQLAll(w http.ResponseWriter, r *http.Request) {
 	h.serveLogQL(w, r, "")
 }
 
-// serveLogQL runs a LogQL query an admin wrote (features.logSearch.logql,
-// admin.logsearch.query) on the request's cluster. The cluster and namespace
-// matchers are added to every stream selector before it leaves (so the query
-// cannot reach past them); the rest of the door is the structured search's:
-// resource.pod.read, get pods/log as the user, the per-user rate, the audit.
+// serveLogQL runs a LogQL query a person wrote (features.logSearch.logql) on
+// the request's cluster, behind the structured search's door: resource.pod.read,
+// get pods/log as the user, the per-user rate, the audit. The cluster and
+// namespace matchers are added to every stream selector before it leaves, so
+// the query reads no more than a structured search would.
 func (h *Handler) serveLogQL(w http.ResponseWriter, r *http.Request, namespace string) {
 	id, _ := cluster.FromContext(r.Context())
 	if h.logSearch == nil || !h.logSearch.Config().LogQLEnabled {
@@ -40,10 +40,6 @@ func (h *Handler) serveLogQL(w http.ResponseWriter, r *http.Request, namespace s
 	}
 	if !h.logSearch.Configured(r.Context(), string(id)) {
 		response.Error(w, http.StatusNotFound, "log search is not configured for this cluster")
-		return
-	}
-	if err := h.requirePermissionForCluster(r, auth.PermLogSearchQuery); err != nil {
-		h.handleError(w, err)
 		return
 	}
 	if err := h.requirePermissionForCluster(r, "resource.pod.read"); err != nil {

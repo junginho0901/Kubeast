@@ -187,9 +187,8 @@ func (h *Handler) serveLogPatterns(w http.ResponseWriter, r *http.Request, names
 
 // serveLogQLSearch runs LogQL through the structured search's door: a log
 // query answers lines, a metric query series (?step= seconds). The cluster
-// and namespace matchers go into every selector, as for an admin's query
-// (/logsearch/query, admin.logsearch.query), so it reads no more than a
-// structured search would.
+// and namespace matchers go into every selector, as on the screen's LogQL
+// (/logsearch/query), so it reads no more than a structured search would.
 func (h *Handler) serveLogQLSearch(w http.ResponseWriter, r *http.Request, namespace string) {
 	id, _ := cluster.FromContext(r.Context())
 	req := logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: r.URL.Query().Get("q"), Metric: true}

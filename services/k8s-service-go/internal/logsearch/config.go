@@ -54,9 +54,9 @@ type Config struct {
 	// empty Labels.Cluster the store holds one cluster: the single entry names
 	// it and its value is unused.
 	Clusters map[string]string
-	// LogQLEnabled lets admins (admin.logsearch.query) run LogQL they write,
-	// with the cluster and namespace matchers added to every selector (chart
-	// features.logSearch.logql).
+	// LogQLEnabled lets anyone who may search logs run LogQL they write on the
+	// screen, with the cluster and namespace matchers added to every selector
+	// (chart features.logSearch.logql).
 	LogQLEnabled bool
 	// TraceID finds a line's trace ID in its labels or text (features.tracing);
 	// nil leaves lines without one.

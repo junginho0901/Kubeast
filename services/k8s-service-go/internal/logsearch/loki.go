@@ -37,7 +37,7 @@ type Result struct {
 	Newest    time.Time `json:"newest,omitempty"`
 	Bytes     int64     `json:"bytes"`
 	Query     string    `json:"-"`
-	// EffectiveQuery is the LogQL actually sent for a query an admin wrote
+	// EffectiveQuery is the LogQL actually sent for a query someone wrote
 	// (Searcher.Query): theirs with the cluster and namespace matchers added.
 	EffectiveQuery string `json:"effectiveQuery,omitempty"`
 	// ResultType is set for a query run with QueryRequest.Metric: "streams"

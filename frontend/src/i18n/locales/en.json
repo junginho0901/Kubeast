@@ -2371,7 +2371,7 @@
       "traces": "Traces",
       "tracesTitle": "Search the traces of {{service}} in a new tab",
       "logql": "LogQL",
-      "logqlTitle": "Write the query yourself (admins). The cluster and namespace matchers are added to every selector.",
+      "logqlTitle": "Write the query yourself. The cluster and namespace matchers are added to every selector.",
       "logqlLabel": "LogQL query",
       "logqlPlaceholder": "{} |= \"error\" | json | level=\"error\"",
       "effective": "Sent: {{query}}",
@@ -3428,7 +3428,6 @@
         "admin_hygiene_read": "View the cluster hygiene report",
         "admin_hygiene_export": "Export the cluster hygiene report (CSV/JSON)",
         "admin_hygiene_signoff": "Sign off a cluster hygiene report",
-        "admin_logsearch_query": "Run LogQL against the log store (cluster and namespace matchers are added)",
         "admin_nodes_read": "Read node internals through the API server proxy: kubelet stats summary and node logs",
         "admin_investigations_read": "View alert investigation reports"
       }

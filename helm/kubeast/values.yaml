@@ -809,10 +809,11 @@ features:
     maxLines: 1000
     timeout: 15s
     perUserPerMinute: 20
-    # LogQL written by hand, for admins holding admin.logsearch.query: the
-    # cluster and namespace matchers are added to every stream selector
+    # LogQL written by hand on the screen, for anyone who may search logs:
+    # the cluster and namespace matchers are added to every stream selector
     # before the query leaves, log queries only, audited as
-    # k8s.pod.logs.logql. Off unless asked.
+    # k8s.pod.logs.logql. Off unless asked. (The AI's loki_* tools do not
+    # depend on this switch.)
     logql: false
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here.

@@ -68,7 +68,7 @@ export const podsApi = {
     return data
   },
 
-  // LogQL written by an admin (features.logSearch.logql): the server adds the cluster and namespace matchers.
+  // LogQL written by hand (features.logSearch.logql): the server adds the cluster and namespace matchers.
   queryLogQL: async ({ namespace, ...params }: LogQLParams): Promise<LogSearchResult> => {
     const { data } = await client.get(`/cluster/namespaces/${encodeURIComponent(namespace)}/logsearch/query`, { params })
     return data

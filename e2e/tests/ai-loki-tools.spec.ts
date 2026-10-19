@@ -7,7 +7,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 // The AI's LogQL tools — loki_query, loki_labels, loki_patterns — driven through the MCP endpoint so the checks are
 // exact, against the kind setup of scripts/kind-logsearch.sh (one Loki for both clusters, its pattern ingester on).
-// A Job prints 60 error lines and 35 info lines (Loki lists a pattern only from 30 lines in the window). A Read user — no admin.logsearch.query — counts the errors with a
+// A Job prints 60 error lines and 35 info lines (Loki lists a pattern only from 30 lines in the window). A Read user counts the errors with a
 // metric query, reads the info lines with a log query and gets both shapes as patterns, always inside this cluster
 // and namespace; a grant limited to one namespace cannot reach another; through Grafana's data source proxy the
 // tools answer the same as on the direct path.

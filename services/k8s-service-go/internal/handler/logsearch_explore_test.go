@@ -14,7 +14,7 @@ import (
 )
 
 // The loki_* tools' reads go through the structured search's door: a pod
-// reader without admin.logsearch.query gets them, with the scope added.
+// reader gets them, with the scope added.
 
 func (f *logSearchFixture) serve(handler func(http.ResponseWriter, *http.Request), r *http.Request) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()

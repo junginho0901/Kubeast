@@ -11,7 +11,6 @@ import { api } from '@/services/api'
 import type { LogSearchLine } from '@/services/api/types'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
-import { usePermission } from '@/hooks/usePermission'
 import { formatBytes, highlightParts, rangeOptions } from '@/utils/logSearch'
 import { traceTemplates } from '@/utils/features'
 import { fillTraceTemplate } from '@/utils/traceLinks'
@@ -34,7 +33,7 @@ interface Submitted {
   ignoreCase: boolean
   start: string
   end: string
-  // LogQL written by an admin (features.logSearch.logql): the server adds the scope matchers.
+  // LogQL written by hand (features.logSearch.logql): the server adds the scope matchers.
   logql?: string
 }
 
@@ -42,8 +41,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
   const { t } = useTranslation()
   const { currentCluster } = useCluster()
   const { data: features } = useClusterFeatures()
-  const { has } = usePermission()
-  const logqlAllowed = !!features?.logSearch?.logql && has('admin.logsearch.query')
+  const logqlAllowed = !!features?.logSearch?.logql
   const maxMinutes = features?.logSearch?.maxRangeMinutes || 1440
   const traceUrl = traceTemplates(features)?.traceUrl
   const traceHref = (l: LogSearchLine) =>
@@ -196,7 +194,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
               type="button"
               data-testid="logsearch-logql"
               aria-pressed={logql}
-              title={t('clusterView.logSearch.logqlTitle', 'Write the query yourself (admins). The cluster and namespace matchers are added to every selector.')}
+              title={t('clusterView.logSearch.logqlTitle', 'Write the query yourself. The cluster and namespace matchers are added to every selector.')}
               onClick={() => setLogql((v) => !v)}
               className={`${sm ? 'h-8 px-2 text-xs' : 'h-10 px-3 text-sm'} rounded-lg border font-mono transition-colors ${logql ? toggleOn : toggleOff}`}
             >

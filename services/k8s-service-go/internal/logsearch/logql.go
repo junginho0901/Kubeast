@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-// MaxLogQLLength caps a LogQL query written by an admin.
+// MaxLogQLLength caps a LogQL query written by hand or by the AI.
 const MaxLogQLLength = 4096
 
 // ErrInvalidLogQL is a query the injector could not rewrite safely.

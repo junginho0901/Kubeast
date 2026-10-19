@@ -109,7 +109,7 @@ func (s *Searcher) Search(ctx context.Context, req Request) (Result, error) {
 	return s.store.search(ctx, req, store, value)
 }
 
-// QueryRequest is a LogQL query written by an admin, run on one cluster (and
+// QueryRequest is a LogQL query written by hand or by the AI, run on one cluster (and
 // one namespace, when Namespace is set) with the range already normalized.
 type QueryRequest struct {
 	Cluster   string

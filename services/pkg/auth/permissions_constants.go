@@ -10,7 +10,4 @@ const (
 	PermClustersCreate = "admin.clusters.create"
 	PermClustersDelete = "admin.clusters.delete"
 	PermClustersUpdate = "admin.clusters.update"
-	// PermLogSearchQuery lets an admin run LogQL they write against the log
-	// store (the cluster and namespace matchers are added).
-	PermLogSearchQuery = "admin.logsearch.query"
 )

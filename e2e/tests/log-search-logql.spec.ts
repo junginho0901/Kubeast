@@ -1,11 +1,12 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
-// LogQL written by an admin (features.logSearch.logql, admin.logsearch.query), against the kind setup of
-// scripts/kind-logsearch.sh: one Loki holding both clusters. A Job prints a unique line; the admin finds it
-// with a hand-written query, and the query actually sent (effectiveQuery) carries the cluster and namespace
-// matchers. A query naming the other cluster's label returns nothing from this cluster (the matcher is ANDed)
-// and lines from the other one; a metric query and a broken query are refused; a Read user gets 403; every
-// query leaves an audit row with the query as written and as sent; the Pod drawer's LogQL toggle runs it.
+// LogQL written by hand (features.logSearch.logql) by anyone who may search logs, against the kind setup of
+// scripts/kind-logsearch.sh: one Loki holding both clusters. A Job prints a unique line; a hand-written query
+// finds it, and the query actually sent (effectiveQuery) carries the cluster and namespace matchers. A query
+// naming the other cluster's label returns nothing from this cluster (the matcher is ANDed) and lines from the
+// other one; a metric query and a broken query are refused; a Read user runs it with no other permission and a
+// user with no grant on the cluster is refused; every query leaves an audit row with the query as written and as
+// sent; the Pod drawer's LogQL toggle runs it.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -26,7 +27,7 @@ const logql = (request: APIRequestContext, token: string, cluster: string, q: st
 const logqlAll = (request: APIRequestContext, token: string, cluster: string, q: string, rest = '&since=1h') =>
   request.get(`/api/v1/cluster/logsearch/query?cluster=${cluster}&q=${encodeURIComponent(q)}${rest}`, { headers: bearer(token), failOnStatusCode: false })
 
-test.describe('LogQL written by an admin', () => {
+test.describe('LogQL written by hand', () => {
   let admin = ''
   const job = `e2e-logql-${Date.now().toString(36)}`
   const marker = `${job}-marker`
@@ -100,7 +101,7 @@ test.describe('LogQL written by an admin', () => {
     expect(thereBody.lines.length).toBeGreaterThan(0)
   })
 
-  test('a metric query, a broken query and a Read user are refused', async ({ request }) => {
+  test('a metric query and a broken query are refused', async ({ request }) => {
     const metric = await logql(request, admin, CLUSTER, `sum(rate({k8s_container_name="say"}[5m]))`)
     expect(metric.status()).toBe(400)
     expect(await metric.text()).toContain('metric')
@@ -109,7 +110,9 @@ test.describe('LogQL written by an admin', () => {
     expect(await broken.text()).toContain('unterminated')
     const hidden = await logql(request, admin, CLUSTER, `{k8s_container_name="say"} /* " */ {b="c"} /* " */`)
     expect([400, 502]).toContain(hidden.status())
+  })
 
+  test('a Read user runs LogQL without another permission and sees the toggle; no grant on the cluster is refused', async ({ request, browser }) => {
     const id = Date.now().toString(36)
     const email = `e2e-logql-${id}@kubeast.local`
     let userId = ''
@@ -119,45 +122,42 @@ test.describe('LogQL written by an admin', () => {
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E logql', email, password: PW, role_id: member.id } })
       expect(created.status()).toBe(201)
       userId = (await created.json()).id
+      const before = await login(request, email, PW)
+      const refused = await logql(request, before, CLUSTER, `{k8s_container_name="say"} |= "${marker}"`)
+      expect(refused.status(), 'no grant on the cluster').toBe(403)
       const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
       expect(grant.ok(), await grant.text()).toBeTruthy()
-      const user = await login(request, email, PW)
-      const res = await logql(request, user, CLUSTER, `{k8s_container_name="say"}`)
-      expect(res.status()).toBe(403)
-      expect(await res.text()).toContain('admin.logsearch.query')
+      const reader = await login(request, email, PW)
+      const res = await logql(request, reader, CLUSTER, `{k8s_container_name="say"} |= "${marker}"`)
+      expect(res.status(), await res.text()).toBe(200)
+      const body = await res.json()
+      expect(body.lines).toHaveLength(2)
+      expect(body.effectiveQuery).toBe(`{k8s_cluster_name="kubeast", k8s_namespace_name="${NS}", k8s_container_name="say"} |= "${marker}"`)
+
+      // the Pod drawer offers the LogQL toggle to this Read user too
+      const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL })
+      try {
+        expect((await ctx.request.post('/api/v1/auth/login', { data: { email, password: PW } })).ok()).toBeTruthy()
+        const page = await ctx.newPage()
+        await page.goto(`/workloads/pods?cluster=${CLUSTER}`)
+        await page.locator('tbody:not([aria-hidden="true"]) tr', { hasText: pod }).first().click()
+        await page.getByTestId('log-source-search').click()
+        await expect(page.getByTestId('logsearch-logql')).toBeVisible({ timeout: 20000 })
+      } finally {
+        await ctx.close()
+      }
     } finally {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
 
-  test('a non-admin whose global role carries admin.logsearch.query alone runs LogQL with a Read grant', async ({ request }) => {
-    // The global role puts its admin.* permissions in the token for every cluster; the cluster is still asked as the
-    // Read group, which the standard RBAC binds — no other admin feature opens.
-    const id = Date.now().toString(36)
-    const email = `e2e-logql-dev-${id}@kubeast.local`
-    let userId = ''
-    let roleId = 0
-    try {
-      const role = await request.post('/api/v1/auth/admin/roles', {
-        headers: bearer(admin), data: { name: `e2e-logql-dev-${id}`, description: 'e2e', permissions: ['admin.logsearch.query'] },
-      })
-      expect(role.status(), await role.text()).toBe(201)
-      roleId = (await role.json()).id
-      const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E logql dev', email, password: PW, role_id: roleId } })
-      expect(created.status(), await created.text()).toBe(201)
-      userId = (await created.json()).id
-      const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
-      expect(grant.ok(), await grant.text()).toBeTruthy()
-      const dev = await login(request, email, PW)
-      const res = await logql(request, dev, CLUSTER, `{k8s_container_name="say"} |= "${marker}"`)
-      expect(res.status(), await res.text()).toBe(200)
-      expect((await res.json()).lines).toHaveLength(2)
-      const users = await request.get('/api/v1/auth/admin/users', { headers: bearer(dev), failOnStatusCode: false })
-      expect(users.status(), 'another admin feature stays closed').toBe(403)
-    } finally {
-      if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
-      if (roleId) await request.delete(`/api/v1/auth/admin/roles/${roleId}`, { headers: bearer(admin), failOnStatusCode: false })
-    }
+  test('the old permission admin.logsearch.query is gone from the catalog', async ({ request }) => {
+    const res = await request.post('/api/v1/auth/admin/roles', {
+      headers: bearer(admin), data: { name: `e2e-logql-old-${Date.now().toString(36)}`, description: 'e2e', permissions: ['admin.logsearch.query'] },
+      failOnStatusCode: false,
+    })
+    expect(res.status()).toBe(400)
+    expect(await res.text()).toContain('Unknown permissions: admin.logsearch.query')
   })
 
   test('the Pod drawer runs a LogQL query and shows what was sent', async ({ page }) => {
